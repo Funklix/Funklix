@@ -16,6 +16,11 @@
           <button class="nav-item">AI Brain</button>
           <button class="nav-item">Insights</button>
         </nav>
+
+        <section class="list-view">
+          <h3>Nodes nach Kategorie</h3>
+          <div id="node-list-view"></div>
+        </section>
       </aside>
 
       <main class="workspace-wrap">
@@ -38,6 +43,9 @@
             <div class="empty-state" id="empty-state">
               Noch keine Nodes vorhanden. Klicke auf <strong>+ Add node</strong> oder auf das <strong>+</strong> in einer Node.
             </div>
+          </div>
+          <div id="context-menu" class="context-menu hidden">
+            <button id="add-postit-comment-btn" type="button">Post-it Kommentar hinzufügen</button>
           </div>
         </section>
       </main>
@@ -83,23 +91,12 @@
 
           <button id="delete-node-btn" type="button" class="danger">Delete node</button>
         </form>
-
-        <section class="comments-panel">
-          <h3>Kommentare</h3>
-          <div id="comments-list" class="comments-list"></div>
-          <div class="comment-inputs">
-            <input id="comment-user" placeholder="User Name" />
-            <textarea id="comment-text" rows="2" placeholder="Kommentar hinterlassen..."></textarea>
-            <button id="add-comment-btn" type="button">Kommentar hinzufügen</button>
-          </div>
-        </section>
       </aside>
     </div>
 
     <template id="node-template">
       <article class="node" tabindex="0">
         <div class="node-controls">
-          <button class="control-btn drag-handle" title="Node verschieben">⋮⋮</button>
           <button class="control-btn add-child-btn" title="Child Node erstellen">＋</button>
           <button class="control-btn connect-btn" title="Node verbinden">⤴</button>
         </div>
@@ -109,6 +106,17 @@
         <div class="social-preview hidden"></div>
         <div class="tags"></div>
         <div class="ab-tests"></div>
+      </article>
+    </template>
+
+    <template id="postit-template">
+      <article class="postit">
+        <header>
+          <strong class="postit-user"></strong>
+          <time class="postit-time"></time>
+          <input class="postit-color" type="color" value="#ffe082" />
+        </header>
+        <textarea class="postit-text" placeholder="Kommentar (auch mit Emojis 😊)"></textarea>
       </article>
     </template>
 

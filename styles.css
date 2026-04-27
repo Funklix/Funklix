@@ -18,18 +18,21 @@ body {
   font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
   color: var(--text);
   background: var(--bg);
+  height: 100vh;
+  overflow: hidden;
 }
 
 .app-shell {
   display: grid;
-  grid-template-columns: 200px 1fr 330px;
-  min-height: 100vh;
+  grid-template-columns: 240px minmax(0, 1fr) 340px;
+  height: 100vh;
 }
 
 .sidebar,
 .inspector {
   background: var(--panel);
   padding: 18px;
+  overflow: auto;
 }
 
 .sidebar {
@@ -38,7 +41,6 @@ body {
 
 .inspector {
   border-left: 1px solid var(--border);
-  overflow: auto;
 }
 
 .logo {
@@ -50,7 +52,7 @@ body {
   color: #fff;
   background: linear-gradient(150deg, #7f63ff, #4d7cff);
   font-weight: 700;
-  margin-bottom: 24px;
+  margin-bottom: 18px;
 }
 
 .nav-item {
@@ -71,9 +73,40 @@ body {
   color: var(--primary);
 }
 
+.list-view {
+  margin-top: 16px;
+}
+
+.list-view h3 {
+  font-size: 0.86rem;
+  color: var(--muted);
+}
+
+.list-group h4 {
+  margin: 10px 0 6px;
+  font-size: 0.82rem;
+}
+
+.list-group ul {
+  margin: 0;
+  padding-left: 16px;
+}
+
+.list-group li {
+  margin-bottom: 5px;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+.list-empty {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
 .workspace-wrap {
   display: flex;
   flex-direction: column;
+  min-width: 0;
 }
 
 .topbar {
@@ -83,29 +116,31 @@ body {
   padding: 16px 20px;
   border-bottom: 1px solid var(--border);
   background: var(--panel);
+  gap: 10px;
 }
 
 .topbar h1 {
   margin: 0;
-  font-size: 1.15rem;
+  font-size: 1.12rem;
 }
 
 .topbar p {
   margin: 4px 0 0;
   color: var(--muted);
-  font-size: 0.9rem;
+  font-size: 0.86rem;
 }
 
 .actions {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
 }
 
 .actions button {
   border: 1px solid var(--border);
   background: #fff;
   border-radius: 10px;
-  padding: 9px 12px;
+  padding: 8px 11px;
   margin-left: 8px;
   cursor: pointer;
 }
@@ -121,27 +156,16 @@ body {
   position: relative;
   flex: 1;
   overflow: auto;
-  padding: 20px;
+  padding: 14px;
   background-image: radial-gradient(#dcdff1 1px, transparent 1px);
   background-size: 18px 18px;
 }
 
 .zoom-layer {
   position: relative;
-  width: 2400px;
-  height: 1600px;
-}
-
-.empty-state {
-  position: absolute;
-  left: 50%;
-  top: 45%;
-  transform: translate(-50%, -50%);
-  color: var(--muted);
-  background: rgba(255, 255, 255, 0.9);
-  border: 1px dashed var(--border);
-  border-radius: 12px;
-  padding: 18px 22px;
+  width: 100%;
+  height: 100%;
+  min-height: 680px;
 }
 
 .links {
@@ -152,9 +176,22 @@ body {
   pointer-events: none;
 }
 
+.empty-state {
+  position: absolute;
+  left: 50%;
+  top: 46%;
+  transform: translate(-50%, -50%);
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  padding: 16px 20px;
+  text-align: center;
+}
+
 .node {
   position: absolute;
-  width: 300px;
+  width: 285px;
   background: var(--panel);
   border: 1px solid #c8bfff;
   border-radius: 14px;
@@ -175,14 +212,6 @@ body {
   width: 28px;
   height: 28px;
   cursor: pointer;
-}
-
-.drag-handle {
-  cursor: grab;
-}
-
-.drag-handle:active {
-  cursor: grabbing;
 }
 
 .node.selected {
@@ -209,21 +238,6 @@ body {
   background: #f8f6ff;
 }
 
-.tags,
-.ab-tests {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.tag,
-.variant {
-  background: #f2f3fa;
-  border-radius: 999px;
-  padding: 4px 9px;
-  font-size: 0.74rem;
-}
-
 .social-preview {
   margin: 8px 0;
   border: 1px solid #e6e8f4;
@@ -239,12 +253,82 @@ body {
   margin-top: 4px;
 }
 
-.hidden {
-  display: none;
+.tags,
+.ab-tests {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tag,
+.variant {
+  background: #f2f3fa;
+  border-radius: 999px;
+  padding: 4px 9px;
+  font-size: 0.74rem;
+}
+
+.postit {
+  position: absolute;
+  width: 180px;
+  min-height: 130px;
+  border-radius: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  padding: 8px;
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.12);
+}
+
+.postit header {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 6px;
+  font-size: 0.68rem;
+}
+
+.postit-color {
+  width: 26px;
+  height: 22px;
+  border: none;
+  background: transparent;
+  padding: 0;
+}
+
+.postit-text {
+  width: 100%;
+  min-height: 74px;
+  resize: vertical;
+  border: none;
+  background: transparent;
+  outline: none;
+  line-height: 1.25;
+}
+
+.context-menu {
+  position: absolute;
+  z-index: 40;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 10px 18px rgba(0, 0, 0, 0.12);
+  padding: 6px;
+}
+
+.context-menu button {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 8px 10px;
+  border-radius: 6px;
+}
+
+.context-menu button:hover {
+  background: #f2f4ff;
 }
 
 .meta {
-  font-size: 0.9rem;
+  font-size: 0.88rem;
   color: var(--muted);
   margin-bottom: 14px;
 }
@@ -255,23 +339,18 @@ body {
   gap: 7px;
 }
 
-.node-form label,
-.comments-panel h3 {
-  font-size: 0.82rem;
+.node-form label {
+  font-size: 0.8rem;
   color: var(--muted);
-  margin: 0;
 }
 
 .node-form input,
 .node-form textarea,
 .node-form select,
-.node-form button,
-.comment-inputs input,
-.comment-inputs textarea,
-.comment-inputs button {
+.node-form button {
   border: 1px solid var(--border);
   border-radius: 10px;
-  padding: 9px;
+  padding: 8px;
   font: inherit;
 }
 
@@ -281,55 +360,17 @@ body {
   border-color: #f0caca;
 }
 
-.comments-panel {
-  margin-top: 18px;
-}
-
-.comments-list {
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: #fafbff;
-  padding: 8px;
-  min-height: 100px;
-  max-height: 200px;
-  overflow: auto;
-}
-
-.comment-card {
-  border-bottom: 1px solid #e4e7f5;
-  padding: 6px 0;
-}
-
-.comment-card:last-child {
-  border-bottom: none;
-}
-
-.comment-card header {
-  display: flex;
-  justify-content: space-between;
-  font-size: 0.78rem;
-  color: var(--muted);
-}
-
-.comment-card p,
-.comment-empty {
-  margin: 4px 0 0;
-  font-size: 0.87rem;
-}
-
-.comment-inputs {
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-  margin-top: 10px;
+.hidden {
+  display: none;
 }
 
 @media (max-width: 1300px) {
   .app-shell {
-    grid-template-columns: 84px 1fr;
+    grid-template-columns: 88px minmax(0, 1fr);
   }
 
   .sidebar .nav-item,
+  .sidebar .list-view,
   .inspector {
     display: none;
   }

@@ -14,22 +14,22 @@ const canvas = document.getElementById("canvas");
 const zoomLayer = document.getElementById("zoom-layer");
 const links = document.getElementById("links");
 const template = document.getElementById("node-template");
-const addNodeButton = document.getElementById("add-node-btn");
+const postitTemplate = document.getElementById("postit-template");
 const emptyState = document.getElementById("empty-state");
+const nodeListView = document.getElementById("node-list-view");
 
+const addNodeButton = document.getElementById("add-node-btn");
 const zoomInButton = document.getElementById("zoom-in-btn");
 const zoomOutButton = document.getElementById("zoom-out-btn");
 const zoomLabel = document.getElementById("zoom-label");
+
+const contextMenu = document.getElementById("context-menu");
+const addPostitCommentButton = document.getElementById("add-postit-comment-btn");
 
 const inspectorMeta = document.getElementById("inspector-meta");
 const nodeForm = document.getElementById("node-form");
 const socialFields = document.getElementById("social-fields");
 const deleteNodeButton = document.getElementById("delete-node-btn");
-
-const commentsList = document.getElementById("comments-list");
-const commentUser = document.getElementById("comment-user");
-const commentText = document.getElementById("comment-text");
-const addCommentButton = document.getElementById("add-comment-btn");
 
 const inputs = {
   type: document.getElementById("node-type"),
@@ -47,6 +47,7 @@ let nodeCounter = 1;
 let selectedNodeId = null;
 let sourceForConnection = null;
 let zoom = 1;
+let contextPosition = { x: 0, y: 0 };
 
 function populateTypeSelect() {
   Object.keys(NODE_TYPES).forEach((type) => {
@@ -79,6 +80,63 @@ function getNode(nodeId) {
   return nodes.find((node) => node.id === nodeId) || null;
 }
 
+function colorForType(type) {
+  return NODE_TYPES[type]?.color || "#5f6a82";
+}
+
+function showContextMenu(clientX, clientY) {
+  const canvasRect = canvas.getBoundingClientRect();
+  const x = Math.max(12, Math.min(clientX - canvasRect.left, canvasRect.width - 220));
+  const y = Math.max(12, Math.min(clientY - canvasRect.top, canvasRect.height - 80));
+
+  contextPosition = { x, y };
+  contextMenu.style.left = `${x}px`;
+  contextMenu.style.top = `${y}px`;
+  contextMenu.classList.remove("hidden");
+}
+
+function hideContextMenu() {
+  contextMenu.classList.add("hidden");
+}
+
+function updateListView() {
+  nodeListView.innerHTML = "";
+
+  const grouped = nodes.reduce((acc, node) => {
+    if (!acc[node.type]) acc[node.type] = [];
+    acc[node.type].push(node);
+    return acc;
+  }, {});
+
+  if (Object.keys(grouped).length === 0) {
+    nodeListView.innerHTML = '<p class="list-empty">Keine Nodes vorhanden.</p>';
+    return;
+  }
+
+  Object.keys(grouped)
+    .sort()
+    .forEach((type) => {
+      const block = document.createElement("section");
+      block.className = "list-group";
+
+      const title = document.createElement("h4");
+      title.textContent = `${type} (${grouped[type].length})`;
+      title.style.color = colorForType(type);
+      block.appendChild(title);
+
+      const list = document.createElement("ul");
+      grouped[type].forEach((node) => {
+        const item = document.createElement("li");
+        item.textContent = node.title;
+        item.addEventListener("click", () => selectNode(node.id));
+        list.appendChild(item);
+      });
+
+      block.appendChild(list);
+      nodeListView.appendChild(block);
+    });
+}
+
 function createNode({ type = "Idea", parentId = null } = {}) {
   const parent = parentId ? getNode(parentId) : null;
 
@@ -95,37 +153,35 @@ function createNode({ type = "Idea", parentId = null } = {}) {
       hashtags: [],
       preview: ""
     },
-    comments: [],
+    postits: [],
     level: parent ? parent.level + 1 : 0,
     position: {
-      x: parent ? parent.position.x + 20 : 220 + (nodes.length % 3) * 320,
-      y: parent ? parent.position.y + 230 : 80 + Math.floor(nodes.length / 3) * 220
+      x: parent ? parent.position.x + 24 : 120 + (nodes.length % 3) * 290,
+      y: parent ? parent.position.y + 210 : 80 + Math.floor(nodes.length / 3) * 210
     }
   };
 
   nodes.push(node);
   renderNode(node);
 
-  if (parent) {
-    addEdge(parent.id, node.id);
-  }
+  if (parent) addEdge(parent.id, node.id);
 
   setEmptyStateVisibility();
+  updateListView();
   selectNode(node.id);
   drawLinks();
-  return node;
 }
 
 function addEdge(from, to) {
   if (from === to) return;
-  const exists = edges.some((edge) => edge[0] === from && edge[1] === to);
-  if (!exists) edges.push([from, to]);
+  if (edges.some((edge) => edge[0] === from && edge[1] === to)) return;
+  edges.push([from, to]);
 
   const source = getNode(from);
   const target = getNode(to);
   if (source && target) {
     target.level = Math.max(target.level, source.level + 1);
-    target.position.y = Math.max(target.position.y, source.position.y + 210);
+    target.position.y = Math.max(target.position.y, source.position.y + 190);
     updateNodeCard(target);
   }
 }
@@ -148,11 +204,47 @@ function removeNode(nodeId) {
   }
 
   setEmptyStateVisibility();
+  updateListView();
   drawLinks();
 }
 
-function colorForType(type) {
-  return NODE_TYPES[type]?.color || "#5f6a82";
+function postitFontSize(text) {
+  const length = text.length;
+  if (length > 280) return "0.66rem";
+  if (length > 180) return "0.76rem";
+  if (length > 100) return "0.86rem";
+  return "0.96rem";
+}
+
+function renderPostits(node, element) {
+  element.querySelectorAll(".postit").forEach((note) => note.remove());
+
+  node.postits.forEach((postit) => {
+    const note = postitTemplate.content.firstElementChild.cloneNode(true);
+    note.style.left = `${postit.x}px`;
+    note.style.top = `${postit.y}px`;
+    note.style.background = postit.color;
+
+    note.querySelector(".postit-user").textContent = postit.user;
+    note.querySelector(".postit-time").textContent = postit.time;
+
+    const colorInput = note.querySelector(".postit-color");
+    colorInput.value = postit.color;
+    colorInput.addEventListener("input", () => {
+      postit.color = colorInput.value;
+      note.style.background = postit.color;
+    });
+
+    const textArea = note.querySelector(".postit-text");
+    textArea.value = postit.text;
+    textArea.style.fontSize = postitFontSize(postit.text);
+    textArea.addEventListener("input", () => {
+      postit.text = textArea.value;
+      textArea.style.fontSize = postitFontSize(postit.text);
+    });
+
+    element.appendChild(note);
+  });
 }
 
 function updateNodeCard(node) {
@@ -202,18 +294,8 @@ function updateNodeCard(node) {
       <em>${node.social.preview || "Kein Preview-Text"}</em>
     `;
   }
-}
 
-function selectNode(nodeId) {
-  selectedNodeId = nodeId;
-  const selected = getNode(nodeId);
-
-  zoomLayer
-    .querySelectorAll(".node")
-    .forEach((el) => el.classList.toggle("selected", el.dataset.id === nodeId));
-
-  fillInspector(selected);
-  renderComments(selected);
+  renderPostits(node, element);
 }
 
 function fillInspector(node) {
@@ -240,38 +322,27 @@ function fillInspector(node) {
   socialFields.classList.toggle("hidden", node.type !== "Social Media Posting");
 }
 
-function renderComments(node) {
-  commentsList.innerHTML = "";
+function selectNode(nodeId) {
+  selectedNodeId = nodeId;
+  const selected = getNode(nodeId);
 
-  if (!node) {
-    commentsList.innerHTML = `<p class="comment-empty">Keine Node ausgewählt.</p>`;
-    return;
-  }
+  zoomLayer
+    .querySelectorAll(".node")
+    .forEach((el) => el.classList.toggle("selected", el.dataset.id === nodeId));
 
-  if (node.comments.length === 0) {
-    commentsList.innerHTML = `<p class="comment-empty">Noch keine Kommentare vorhanden.</p>`;
-    return;
-  }
-
-  node.comments.forEach((comment) => {
-    const card = document.createElement("article");
-    card.className = "comment-card";
-    card.innerHTML = `
-      <header>
-        <strong>${comment.user}</strong>
-        <time>${comment.date}</time>
-      </header>
-      <p>${comment.text}</p>
-    `;
-    commentsList.appendChild(card);
-  });
+  fillInspector(selected);
 }
 
 function enableDragging(element, node) {
-  const handle = element.querySelector(".drag-handle");
+  element.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0) return;
 
-  handle.addEventListener("pointerdown", (event) => {
-    event.preventDefault();
+    const interactive = event.target.closest("button, input, textarea, select");
+    if (interactive) return;
+
+    const editable = event.target.closest("[contenteditable='true']");
+    if (editable) return;
+
     selectNode(node.id);
 
     const startX = event.clientX;
@@ -301,7 +372,6 @@ function enableDragging(element, node) {
 function renderNode(node) {
   const element = template.content.firstElementChild.cloneNode(true);
   element.dataset.id = node.id;
-
   element.addEventListener("click", () => selectNode(node.id));
 
   const titleElement = element.querySelector(".title");
@@ -310,6 +380,7 @@ function renderNode(node) {
   titleElement.addEventListener("input", () => {
     node.title = titleElement.textContent.trim() || node.type;
     if (selectedNodeId === node.id) inputs.title.value = node.title;
+    updateListView();
   });
 
   contentElement.addEventListener("input", () => {
@@ -351,23 +422,23 @@ function centerOf(nodeId) {
 
 function drawLinks() {
   links.innerHTML = "";
+
   edges.forEach(([from, to]) => {
     const a = centerOf(from);
     const b = centerOf(to);
     if (!a || !b) return;
 
-    const line = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
     const midpointY = (a.y + b.y) / 2;
-
-    line.setAttribute(
+    path.setAttribute(
       "d",
       `M ${a.x} ${a.y} C ${a.x} ${midpointY}, ${b.x} ${midpointY}, ${b.x} ${b.y}`
     );
-    line.setAttribute("fill", "none");
-    line.setAttribute("stroke", "#8f80ff");
-    line.setAttribute("stroke-width", "2");
-    line.setAttribute("stroke-linecap", "round");
-    links.appendChild(line);
+    path.setAttribute("fill", "none");
+    path.setAttribute("stroke", "#8f80ff");
+    path.setAttribute("stroke-width", "2");
+    path.setAttribute("stroke-linecap", "round");
+    links.appendChild(path);
   });
 }
 
@@ -375,15 +446,46 @@ zoomLayer.addEventListener("click", (event) => {
   const targetNode = event.target.closest(".node");
   if (!targetNode || !sourceForConnection) return;
 
-  const toId = targetNode.dataset.id;
-  addEdge(sourceForConnection, toId);
+  addEdge(sourceForConnection, targetNode.dataset.id);
   sourceForConnection = null;
   drawLinks();
 });
 
-nodeForm.addEventListener("input", (event) => {
+canvas.addEventListener("contextmenu", (event) => {
+  event.preventDefault();
+  showContextMenu(event.clientX, event.clientY);
+});
+
+document.addEventListener("click", (event) => {
+  if (!contextMenu.contains(event.target)) hideContextMenu();
+});
+
+addPostitCommentButton.addEventListener("click", () => {
+  hideContextMenu();
   if (!selectedNodeId) return;
 
+  const node = getNode(selectedNodeId);
+  if (!node) return;
+
+  const user =
+    window.prompt("Nutzername für den Kommentar:", "Felix")?.trim() ||
+    "Anonymous";
+
+  node.postits.push({
+    id: crypto.randomUUID(),
+    user,
+    time: formatDate(new Date()),
+    text: "",
+    color: "#ffe082",
+    x: contextPosition.x / zoom - node.position.x + 24,
+    y: contextPosition.y / zoom - node.position.y + 24
+  });
+
+  updateNodeCard(node);
+});
+
+nodeForm.addEventListener("input", (event) => {
+  if (!selectedNodeId) return;
   const selected = getNode(selectedNodeId);
   if (!selected) return;
 
@@ -400,26 +502,7 @@ nodeForm.addEventListener("input", (event) => {
 
   socialFields.classList.toggle("hidden", selected.type !== "Social Media Posting");
   updateNodeCard(selected);
-});
-
-addCommentButton.addEventListener("click", () => {
-  if (!selectedNodeId) return;
-
-  const node = getNode(selectedNodeId);
-  if (!node) return;
-
-  const user = commentUser.value.trim() || "Anonymous";
-  const text = commentText.value.trim();
-  if (!text) return;
-
-  node.comments.unshift({
-    user,
-    text,
-    date: formatDate(new Date())
-  });
-
-  commentText.value = "";
-  renderComments(node);
+  updateListView();
 });
 
 deleteNodeButton.addEventListener("click", () => {
@@ -438,7 +521,7 @@ addNodeButton.addEventListener("click", () => {
 });
 
 function setZoom(nextZoom) {
-  zoom = Math.min(1.8, Math.max(0.5, nextZoom));
+  zoom = Math.min(1.6, Math.max(0.7, nextZoom));
   zoomLayer.style.transform = `scale(${zoom})`;
   zoomLayer.style.transformOrigin = "0 0";
   zoomLabel.textContent = `${Math.round(zoom * 100)}%`;
@@ -450,7 +533,7 @@ window.addEventListener("resize", drawLinks);
 
 populateTypeSelect();
 fillInspector(null);
-renderComments(null);
 setEmptyStateVisibility();
+updateListView();
 setZoom(1);
 drawLinks();
