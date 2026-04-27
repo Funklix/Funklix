@@ -16,24 +16,16 @@
           <button class="nav-item">AI Brain</button>
           <button class="nav-item">Insights</button>
         </nav>
-        <section class="campaign-list">
-          <h3>Kampagnen</h3>
-          <ul>
-            <li class="active">Solar Launch Campaign</li>
-            <li>Q3 Brand Awareness</li>
-            <li>Black Friday</li>
-          </ul>
-        </section>
       </aside>
 
       <main class="workspace-wrap">
         <header class="topbar">
           <div>
-            <h1>Campaign Canvas — Idea → Campaign</h1>
-            <p>Node-based Creative Collaboration Space für Teams</p>
+            <h1>Campaign Canvas — Blank Space</h1>
+            <p>Starte ohne Inhalte und baue Nodes gemeinsam auf.</p>
           </div>
           <div class="actions">
-            <button>+ Add node</button>
+            <button id="add-node-btn">+ Add node</button>
             <button>AI Assistant</button>
             <button class="primary">Share</button>
           </div>
@@ -41,39 +33,43 @@
 
         <section class="canvas" id="canvas">
           <svg class="links" id="links" aria-hidden="true"></svg>
+          <div class="empty-state" id="empty-state">
+            Noch keine Nodes vorhanden. Klicke auf <strong>+ Add node</strong>, um zu starten.
+          </div>
         </section>
       </main>
 
       <aside class="inspector">
-        <h2 id="inspector-title">Node Details</h2>
-        <div class="meta" id="inspector-meta">Wähle einen Node auf dem Canvas</div>
+        <h2>Node Konfiguration</h2>
+        <div class="meta" id="inspector-meta">Wähle oder erstelle einen Node.</div>
 
-        <h3>AI Actions</h3>
-        <div class="ai-actions">
-          <button data-action="generate">Generate</button>
-          <button data-action="improve">Improve</button>
-          <button data-action="tone">Adapt tone</button>
-        </div>
+        <form id="node-form" class="node-form" autocomplete="off">
+          <label for="node-type">Typ</label>
+          <input id="node-type" name="type" placeholder="z. B. Idea, Angle, Ad" />
 
-        <h3>Collaboration</h3>
-        <div id="comments"></div>
-        <div class="assignment">
-          <label for="assignee">Assign to</label>
-          <select id="assignee">
-            <option>Team</option>
-            <option>Copywriter</option>
-            <option>Designer</option>
-            <option>Performance</option>
-          </select>
-        </div>
+          <label for="node-title">Titel</label>
+          <input id="node-title" name="title" placeholder="Node Titel" />
+
+          <label for="node-content">Inhalt</label>
+          <textarea id="node-content" name="content" rows="4" placeholder="Beschreibung, Prompt, Task ..."></textarea>
+
+          <label for="node-tags">Tags (Komma getrennt)</label>
+          <input id="node-tags" name="tags" placeholder="Audience, Goal, Channel" />
+
+          <label for="node-variants">A/B Varianten (Komma getrennt)</label>
+          <input id="node-variants" name="variants" placeholder="A: Hook 1, B: Hook 2" />
+
+          <button id="delete-node-btn" type="button" class="danger">Delete node</button>
+        </form>
       </aside>
     </div>
 
     <template id="node-template">
       <article class="node" tabindex="0">
+        <div class="drag-handle" title="Drag node">⋮⋮</div>
         <span class="type"></span>
-        <h3 class="title"></h3>
-        <p class="content"></p>
+        <h3 class="title" contenteditable="true"></h3>
+        <p class="content" contenteditable="true"></p>
         <div class="tags"></div>
         <div class="ab-tests"></div>
       </article>

@@ -1,17 +1,15 @@
 # Campaign Canvas MVP
 
-Ein klickbarer MVP für einen **Creative Collaboration Space**, in dem Teams gemeinsam node-basiert Kampagnen planen können.
+Ein klickbarer MVP für einen **Creative Collaboration Space** mit leerem Startzustand.
 
 ## Enthaltene Kernfeatures
 
-- Node-based campaign builder (Idea → Angles → Outputs → Insights)
-- AI-generierte Messaging-Angles (als Knoten modelliert)
-- Multi-Channel Content Nodes (Social, Ads, UGC)
-- Content Variations & A/B Testing Tags pro Node
-- Drag-and-drop-nahe Canvas-Struktur (visuelle Workflow-Verknüpfung)
-- Kollaboration über Comments und Assignments im Inspector
-- AI Actions pro Node (Generate, Improve, Adapt Tone)
-- Performance Feedback Loop als separater Insights-Node
+- Blank Canvas beim Laden (keine vorausgefüllten Inhalte)
+- `+ Add node` erstellt neue Nodes
+- Node Konfiguration im Inspector (Typ, Titel, Inhalt, Tags, Varianten)
+- Inhalte sind editierbar (direkt auf der Karte + im Inspector)
+- Drag-and-drop Verschiebung über den Node-Handle
+- Node kann im Inspector gelöscht werden
 
 ## Start
 
@@ -22,4 +20,3 @@ python3 -m http.server 4173
 Danach im Browser öffnen:
 
 - http://localhost:4173
-
