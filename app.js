@@ -7,264 +7,167 @@ const NODE_TYPES = {
   "Email Campaign": { color: "#d8961a" }
 };
 
-const nodes = [];
-const edges = [];
+const NODE_WIDTH = 285;
+const NODE_HEIGHT = 200;
 
-const canvas = document.getElementById("canvas");
-const zoomLayer = document.getElementById("zoom-layer");
-const links = document.getElementById("links");
-const template = document.getElementById("node-template");
-const postitTemplate = document.getElementById("postit-template");
-const emptyState = document.getElementById("empty-state");
-const nodeListView = document.getElementById("node-list-view");
-const boardListView = document.getElementById("board-list-view");
-const toggleListViewButton = document.getElementById("toggle-list-view-btn");
-
-const addNodeButton = document.getElementById("add-node-btn");
-const nodeTypePicker = document.getElementById("node-type-picker");
-const nodeTypeOptions = document.getElementById("node-type-options");
-const zoomInButton = document.getElementById("zoom-in-btn");
-const zoomOutButton = document.getElementById("zoom-out-btn");
-const zoomLabel = document.getElementById("zoom-label");
-
-const contextMenu = document.getElementById("context-menu");
-const addContextNodeButton = document.getElementById("add-context-node-btn");
-const addPostitCommentButton = document.getElementById("add-postit-comment-btn");
-
-const inspectorMeta = document.getElementById("inspector-meta");
-const nodeForm = document.getElementById("node-form");
-const socialFields = document.getElementById("social-fields");
-const contentUploadFields = document.getElementById("content-upload-fields");
-const nodeImageUpload = document.getElementById("node-image-upload");
-const deleteNodeButton = document.getElementById("delete-node-btn");
-
-const inputs = {
-  type: document.getElementById("node-type"),
-  title: document.getElementById("node-title"),
-  content: document.getElementById("node-content"),
-  tags: document.getElementById("node-tags"),
-  variants: document.getElementById("node-variants"),
-  platform: document.getElementById("node-platform"),
-  caption: document.getElementById("node-caption"),
-  hashtags: document.getElementById("node-hashtags"),
-  preview: document.getElementById("node-preview"),
-  audience: document.getElementById("node-audience"),
-  goal: document.getElementById("node-goal"),
-  channel: document.getElementById("node-channel")
+const state = {
+  nodes: [],
+  edges: [],
+  selectedIds: new Set(),
+  selectedPrimary: null,
+  zoom: 1.2,
+  nodeCounter: 1,
+  postitCounter: 1,
+  activeConnection: null,
+  contextBoardPoint: { x: 0, y: 0 }
 };
 
-let nodeCounter = 1;
-let postitCounter = 1;
-let selectedNodeId = null;
-let selectedNodeIds = new Set();
-let marqueeSelection = null;
-let zoom = 1;
-let contextPosition = { x: 0, y: 0 };
-let isListView = false;
-let activeConnection = null;
+const el = {
+  canvas: document.getElementById("canvas"),
+  zoomLayer: document.getElementById("zoom-layer"),
+  links: document.getElementById("links"),
+  emptyState: document.getElementById("empty-state"),
+  nodeListView: document.getElementById("node-list-view"),
+  boardListView: document.getElementById("board-list-view"),
+  toggleListViewButton: document.getElementById("toggle-list-view-btn"),
+  addNodeButton: document.getElementById("add-node-btn"),
+  zoomInButton: document.getElementById("zoom-in-btn"),
+  zoomOutButton: document.getElementById("zoom-out-btn"),
+  zoomLabel: document.getElementById("zoom-label"),
+  nodeTemplate: document.getElementById("node-template"),
+  postitTemplate: document.getElementById("postit-template"),
+  contextMenu: document.getElementById("context-menu"),
+  addContextNodeButton: document.getElementById("add-context-node-btn"),
+  addPostitCommentButton: document.getElementById("add-postit-comment-btn"),
+  picker: document.getElementById("node-type-picker"),
+  pickerOptions: document.getElementById("node-type-options"),
+  inspectorMeta: document.getElementById("inspector-meta"),
+  nodeForm: document.getElementById("node-form"),
+  socialFields: document.getElementById("social-fields"),
+  contentUploadFields: document.getElementById("content-upload-fields"),
+  imageUpload: document.getElementById("node-image-upload"),
+  deleteNodeButton: document.getElementById("delete-node-btn"),
+  inputs: {
+    type: document.getElementById("node-type"),
+    title: document.getElementById("node-title"),
+    content: document.getElementById("node-content"),
+    tags: document.getElementById("node-tags"),
+    variants: document.getElementById("node-variants"),
+    platform: document.getElementById("node-platform"),
+    caption: document.getElementById("node-caption"),
+    hashtags: document.getElementById("node-hashtags"),
+    preview: document.getElementById("node-preview"),
+    audience: document.getElementById("node-audience"),
+    goal: document.getElementById("node-goal"),
+    channel: document.getElementById("node-channel")
+  }
+};
 
-function populateTypeSelect() {
-  Object.keys(NODE_TYPES).forEach((type) => {
-    const option = document.createElement("option");
-    option.value = type;
-    option.textContent = type;
-    inputs.type.appendChild(option);
-  });
+Object.keys(NODE_TYPES).forEach((type) => {
+  const option = document.createElement("option");
+  option.value = type;
+  option.textContent = type;
+  el.inputs.type.appendChild(option);
+});
+
+function nowString() {
+  return new Intl.DateTimeFormat("de-DE", { dateStyle: "short", timeStyle: "short" }).format(new Date());
 }
 
-function setEmptyStateVisibility() {
-  emptyState.hidden = nodes.length > 0;
+function boardPointFromClient(clientX, clientY) {
+  const rect = el.canvas.getBoundingClientRect();
+  return {
+    x: (clientX - rect.left + el.canvas.scrollLeft) / state.zoom,
+    y: (clientY - rect.top + el.canvas.scrollTop) / state.zoom
+  };
 }
 
-function parseList(value) {
-  return value
-    .split(",")
-    .map((entry) => entry.trim())
-    .filter(Boolean);
+function viewportCenterBoard() {
+  return {
+    x: (el.canvas.scrollLeft + el.canvas.clientWidth / 2) / state.zoom,
+    y: (el.canvas.scrollTop + el.canvas.clientHeight / 2) / state.zoom
+  };
 }
 
-function formatDate(date) {
-  return new Intl.DateTimeFormat("de-DE", {
-    dateStyle: "short",
-    timeStyle: "short"
-  }).format(date);
+function getNode(id) {
+  return state.nodes.find((n) => n.id === id) || null;
 }
 
-function getNode(nodeId) {
-  return nodes.find((node) => node.id === nodeId) || null;
-}
-
-function colorForType(type) {
-  return NODE_TYPES[type]?.color || "#5f6a82";
-}
-function getConnectedNodeIds() {
+function connectedIds() {
   const ids = new Set();
-  edges.forEach(([from, to]) => {
-    ids.add(from);
-    ids.add(to);
+  state.edges.forEach(([a, b]) => {
+    ids.add(a);
+    ids.add(b);
   });
   return ids;
 }
 
-function updateNodeSelectionUI() {
-  zoomLayer.querySelectorAll(".node").forEach((el) => {
-    el.classList.toggle("selected", selectedNodeIds.has(el.dataset.id));
-  });
+function updateEmptyState() {
+  el.emptyState.hidden = state.nodes.length > 0;
 }
 
-function applyInheritedAttributes(source, target) {
+function setZoom(nextZoom, centerClient = null) {
+  const oldZoom = state.zoom;
+  const newZoom = Math.min(2, Math.max(0.4, nextZoom));
+  if (newZoom === oldZoom) return;
+
+  const rect = el.canvas.getBoundingClientRect();
+  const cx = centerClient?.x ?? rect.left + el.canvas.clientWidth / 2;
+  const cy = centerClient?.y ?? rect.top + el.canvas.clientHeight / 2;
+
+  const boardX = (cx - rect.left + el.canvas.scrollLeft) / oldZoom;
+  const boardY = (cy - rect.top + el.canvas.scrollTop) / oldZoom;
+
+  state.zoom = newZoom;
+  el.zoomLayer.style.transform = `scale(${state.zoom})`;
+  el.zoomLayer.style.transformOrigin = "0 0";
+
+  el.canvas.scrollLeft = boardX * state.zoom - (cx - rect.left);
+  el.canvas.scrollTop = boardY * state.zoom - (cy - rect.top);
+
+  el.zoomLabel.textContent = `${Math.round(state.zoom * 100)}%`;
+  drawLinks();
+}
+
+function openTypePicker(onSelect, preferred = "Idea") {
+  el.pickerOptions.innerHTML = "";
+  Object.keys(NODE_TYPES).forEach((type) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "picker-option";
+    btn.textContent = type;
+    btn.style.borderColor = `${NODE_TYPES[type].color}66`;
+    btn.addEventListener("click", () => {
+      el.picker.classList.add("hidden");
+      onSelect(type);
+    });
+    el.pickerOptions.appendChild(btn);
+  });
+  el.picker.classList.remove("hidden");
+  const pref = [...el.pickerOptions.children].find((b) => b.textContent === preferred);
+  pref?.focus();
+}
+
+function focusNodeInViewport(nodeId) {
+  const nodeEl = el.zoomLayer.querySelector(`[data-id='${nodeId}']`);
+  if (!nodeEl) return;
+  const x = nodeEl.offsetLeft * state.zoom - el.canvas.clientWidth / 2 + nodeEl.offsetWidth / 2;
+  const y = nodeEl.offsetTop * state.zoom - el.canvas.clientHeight / 2 + nodeEl.offsetHeight / 2;
+  el.canvas.scrollTo({ left: Math.max(0, x), top: Math.max(0, y) });
+}
+
+function applyInherited(source, target) {
   if (!target.audience && source.audience) target.audience = source.audience;
   if (!target.goal && source.goal) target.goal = source.goal;
   if (!target.channel && source.channel) target.channel = source.channel;
 }
-const NODE_TYPE_VALUES = Object.keys(NODE_TYPES);
-
-function openNodeTypePicker(onSelect, preferred = "Idea") {
-  nodeTypeOptions.innerHTML = "";
-
-  NODE_TYPE_VALUES.forEach((type) => {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.textContent = type;
-    button.className = "picker-option";
-    button.style.borderColor = `${colorForType(type)}66`;
-    button.addEventListener("click", () => {
-      nodeTypePicker.classList.add("hidden");
-      onSelect(type);
-    });
-    nodeTypeOptions.appendChild(button);
-  });
-
-  nodeTypePicker.classList.remove("hidden");
-  const preferredButton = [...nodeTypeOptions.children].find((btn) => btn.textContent === preferred);
-  if (preferredButton) preferredButton.focus();
-}
-
-function toBoardCoordinates(clientX, clientY) {
-  const rect = canvas.getBoundingClientRect();
-  return {
-    x: (clientX - rect.left + canvas.scrollLeft) / zoom,
-    y: (clientY - rect.top + canvas.scrollTop) / zoom
-  };
-}
-
-function getBoardViewportCenter() {
-  return {
-    x: (canvas.scrollLeft + canvas.clientWidth / 2) / zoom,
-    y: (canvas.scrollTop + canvas.clientHeight / 2) / zoom
-  };
-}
-
-function showContextMenu(clientX, clientY) {
-  const rect = canvas.getBoundingClientRect();
-  const x = Math.max(12, Math.min(clientX - rect.left, rect.width - 220));
-  const y = Math.max(12, Math.min(clientY - rect.top, rect.height - 80));
-
-  contextPosition = { x: x + canvas.scrollLeft, y: y + canvas.scrollTop };
-  contextMenu.style.left = `${x}px`;
-  contextMenu.style.top = `${y}px`;
-  contextMenu.classList.remove("hidden");
-}
-
-function hideContextMenu() {
-  contextMenu.classList.add("hidden");
-}
-
-function updateListView() {
-  nodeListView.innerHTML = "";
-
-  const grouped = nodes.reduce((acc, node) => {
-    if (!acc[node.type]) acc[node.type] = [];
-    acc[node.type].push(node);
-    return acc;
-  }, {});
-
-  if (Object.keys(grouped).length === 0) {
-    nodeListView.innerHTML = '<p class="list-empty">Keine Nodes vorhanden.</p>';
-    return;
-  }
-
-  Object.keys(grouped)
-    .sort()
-    .forEach((type) => {
-      const block = document.createElement("section");
-      block.className = "list-group";
-
-      const title = document.createElement("h4");
-      title.textContent = `${type} (${grouped[type].length})`;
-      title.style.color = colorForType(type);
-      block.appendChild(title);
-
-      const list = document.createElement("ul");
-      grouped[type].forEach((node) => {
-        const item = document.createElement("li");
-        item.textContent = node.title || "(ohne Titel)";
-        item.addEventListener("click", () => {
-          toggleListMode(false);
-          selectNode(node.id);
-          focusNodeInView(node.id);
-        });
-        list.appendChild(item);
-      });
-
-      block.appendChild(list);
-      nodeListView.appendChild(block);
-    });
-}
-
-function focusNodeInView(nodeId) {
-  const element = zoomLayer.querySelector(`[data-id="${nodeId}"]`);
-  if (!element) return;
-
-  const targetX = element.offsetLeft * zoom - canvas.clientWidth / 2 + element.offsetWidth / 2;
-  const targetY = element.offsetTop * zoom - canvas.clientHeight / 2 + element.offsetHeight / 2;
-  canvas.scrollTo({ left: Math.max(0, targetX), top: Math.max(0, targetY), behavior: "smooth" });
-}
-function getNodesBounds() {
-  if (nodes.length === 0) return null;
-
-  const width = 285;
-  const height = 180;
-
-  const minX = Math.min(...nodes.map((node) => node.position.x));
-  const minY = Math.min(...nodes.map((node) => node.position.y));
-  const maxX = Math.max(...nodes.map((node) => node.position.x + width));
-  const maxY = Math.max(...nodes.map((node) => node.position.y + height));
-  return { minX, minY, maxX, maxY, width: maxX - minX, height: maxY - minY };
-}
-
-function focusOnExistingNodes({ adjustZoom = true } = {}) {
-  const bounds = getNodesBounds();
-  if (!bounds) {
-    if (adjustZoom) setZoom(1.2);
-    return;
-  }
-
-  if (adjustZoom) {
-    const padding = 140;
-    const scaleX = (canvas.clientWidth - padding) / Math.max(320, bounds.width);
-    const scaleY = (canvas.clientHeight - padding) / Math.max(240, bounds.height);
-    const nextZoom = Math.min(1.6, Math.max(0.6, Math.min(scaleX, scaleY)));
-    setZoom(nextZoom);
-  }
-
-  const centerX = (bounds.minX + bounds.maxX) / 2;
-  const centerY = (bounds.minY + bounds.maxY) / 2;
-
-  canvas.scrollTo({
-    left: Math.max(0, centerX * zoom - canvas.clientWidth / 2),
-    top: Math.max(0, centerY * zoom - canvas.clientHeight / 2),
-    behavior: "smooth"
-  });
-}
-
 
 function createNode({ type = "Idea", parentId = null, position = null, images = [] } = {}) {
   const parent = parentId ? getNode(parentId) : null;
-  const center = getBoardViewportCenter();
+  const center = viewportCenterBoard();
 
   const node = {
-    id: `node-${nodeCounter++}`,
+    id: `node-${state.nodeCounter++}`,
     type,
     title: "",
     content: "",
@@ -274,724 +177,683 @@ function createNode({ type = "Idea", parentId = null, position = null, images = 
     goal: "",
     channel: "",
     images: [...images],
-    social: {
-      platform: "Instagram",
-      caption: "",
-      hashtags: [],
-      preview: ""
-    },
+    social: { platform: "Instagram", caption: "", hashtags: [], preview: "" },
     postits: [],
-    level: parent ? parent.level + 1 : 0,
+    justConnectedAt: null,
     position: position || {
-      x: parent ? parent.position.x + 24 : center.x - 140,
-      y: parent ? parent.position.y + 230 : center.y - 120
+      x: parent ? parent.position.x + 24 : center.x - NODE_WIDTH / 2,
+      y: parent ? parent.position.y + 240 : center.y - NODE_HEIGHT / 2
     }
   };
 
   if (parent) {
-    if (node.type === "Social Media Posting") node.images = [...parent.images];
-    if (!node.audience) node.audience = parent.audience;
-    if (!node.goal) node.goal = parent.goal;
-    if (!node.channel) node.channel = parent.channel;
+    applyInherited(parent, node);
+    if (node.type === "Social Media Posting" && node.images.length === 0) {
+      node.images = [...parent.images];
+    }
   }
 
-  nodes.push(node);
+  state.nodes.push(node);
   renderNode(node);
 
   if (parent) addEdge(parent.id, node.id);
 
-  setEmptyStateVisibility();
+  state.selectedIds.clear();
+  state.selectedIds.add(node.id);
+  state.selectedPrimary = node.id;
+
+  updateSelectionClasses();
+  fillInspector(node);
   updateListView();
-  selectNode(node.id);
+  updateEmptyState();
   drawLinks();
   runNetworkImpulse();
-  if (!parent) focusNodeInView(node.id);
-}
-
-function addImagesToNode(node, files) {
-  const images = files
-    .filter((file) => file.type.startsWith("image/"))
-    .map((file) => ({
-      id: crypto.randomUUID(),
-      name: file.name,
-      url: URL.createObjectURL(file)
-    }));
-
-  if (images.length === 0) return;
-  node.images.push(...images);
-  updateNodeCard(node);
-}
-
-function addEdge(from, to) {
-  if (from === to) return;
-  if (edges.some((edge) => edge[0] === from && edge[1] === to)) return;
-  edges.push([from, to]);
-
-  const source = getNode(from);
-  const target = getNode(to);
-  if (source && target) {
-    target.level = Math.max(target.level, source.level + 1);
-    target.position.y = Math.max(target.position.y, source.position.y + 190);
-    if (target.type === "Social Media Posting" && target.images.length === 0) {
-      target.images = [...source.images];
-    }
-    applyInheritedAttributes(source, target);
-    target.justConnectedAt = Date.now();
-    source.justConnectedAt = Date.now();
-    updateNodeCard(target);
-    updateNodeCard(source);
-    if (selectedNodeId === target.id) fillInspector(target);
-    setTimeout(() => drawLinks(), 850);
-  }
+  focusNodeInViewport(node.id);
 }
 
 function removeNode(nodeId) {
-  const index = nodes.findIndex((node) => node.id === nodeId);
-  if (index === -1) return;
+  const idx = state.nodes.findIndex((n) => n.id === nodeId);
+  if (idx === -1) return;
 
-  const [removed] = nodes.splice(index, 1);
+  const [removed] = state.nodes.splice(idx, 1);
   removed.images.forEach((img) => URL.revokeObjectURL(img.url));
 
-  const element = zoomLayer.querySelector(`[data-id="${nodeId}"]`);
-  if (element) element.remove();
+  state.edges = state.edges.filter(([a, b]) => a !== nodeId && b !== nodeId);
 
-  for (let i = edges.length - 1; i >= 0; i -= 1) {
-    if (edges[i][0] === nodeId || edges[i][1] === nodeId) edges.splice(i, 1);
-  }
+  el.zoomLayer.querySelector(`[data-id='${nodeId}']`)?.remove();
+  state.selectedIds.delete(nodeId);
+  if (state.selectedPrimary === nodeId) state.selectedPrimary = null;
 
-  if (selectedNodeId === nodeId) {
-    selectedNodeId = null;
-    fillInspector(null);
-  }
-
-  setEmptyStateVisibility();
+  updateSelectionClasses();
+  fillInspector(state.selectedPrimary ? getNode(state.selectedPrimary) : null);
   updateListView();
+  updateEmptyState();
   drawLinks();
-  focusOnExistingNodes();
 }
 
-function postitFontSize(text) {
-  const length = text.length;
-  if (length > 280) return "0.66rem";
-  if (length > 180) return "0.76rem";
-  if (length > 100) return "0.86rem";
-  return "0.96rem";
-}
+function addEdge(fromId, toId) {
+  if (!fromId || !toId || fromId === toId) return;
+  if (state.edges.some(([a, b]) => a === fromId && b === toId)) return;
+  state.edges.push([fromId, toId]);
 
-function enablePostitDragging(note, postit) {
-  note.addEventListener("pointerdown", (event) => {
-    if (event.button !== 0) return;
-    if (event.target.closest("textarea, input, button")) return;
-
-    const startX = event.clientX;
-    const startY = event.clientY;
-    const originX = postit.x;
-    const originY = postit.y;
-
-    function onMove(moveEvent) {
-      const deltaX = (moveEvent.clientX - startX) / zoom;
-      const deltaY = (moveEvent.clientY - startY) / zoom;
-      postit.x = originX + deltaX;
-      postit.y = originY + deltaY;
-      note.style.left = `${postit.x}px`;
-      note.style.top = `${postit.y}px`;
+  const source = getNode(fromId);
+  const target = getNode(toId);
+  if (source && target) {
+    applyInherited(source, target);
+    if (target.type === "Social Media Posting" && target.images.length === 0) {
+      target.images = [...source.images];
     }
-
-    function onUp() {
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onUp);
-    }
-
-    window.addEventListener("pointermove", onMove);
-    window.addEventListener("pointerup", onUp);
-  });
-}
-
-function renderPostits(node, element) {
-  element.querySelectorAll(".postit").forEach((note) => note.remove());
-
-  node.postits.forEach((postit) => {
-    const note = postitTemplate.content.firstElementChild.cloneNode(true);
-    note.style.left = `${postit.x}px`;
-    note.style.top = `${postit.y}px`;
-    note.style.background = postit.color;
-
-    note.querySelector(".postit-user").textContent = postit.user;
-    note.querySelector(".postit-time").textContent = postit.time;
-
-    const colorInput = note.querySelector(".postit-color");
-    colorInput.value = postit.color;
-    colorInput.addEventListener("input", () => {
-      postit.color = colorInput.value;
-      note.style.background = postit.color;
-    });
-
-    const deleteButton = note.querySelector(".postit-delete");
-    deleteButton.addEventListener("click", () => {
-      node.postits = node.postits.filter((entry) => entry.id !== postit.id);
-      renderPostits(node, element);
-    });
-
-    const textArea = note.querySelector(".postit-text");
-    textArea.value = postit.text;
-    textArea.style.fontSize = postitFontSize(postit.text);
-    textArea.addEventListener("input", () => {
-      postit.text = textArea.value;
-      textArea.style.fontSize = postitFontSize(postit.text);
-    });
-
-    enablePostitDragging(note, postit);
-    element.appendChild(note);
-  });
-}
-
-function updateNodeCard(node) {
-  const element = zoomLayer.querySelector(`[data-id="${node.id}"]`);
-  if (!element) return;
-
-  const tone = colorForType(node.type);
-  const connectedIds = getConnectedNodeIds();
-  const isConnected = connectedIds.has(node.id);
-
-  element.style.left = `${node.position.x}px`;
-  element.style.top = `${node.position.y}px`;
-  element.style.borderColor = `${tone}66`;
-  element.style.boxShadow = isConnected ? `0 8px 18px ${tone}22` : `0 5px 10px rgba(80,80,120,0.08)`;
-  element.style.opacity = isConnected ? "1" : "0.62";
-  element.classList.toggle("just-connected", Boolean(node.justConnectedAt && Date.now() - node.justConnectedAt < 700));
-
-  const typeElement = element.querySelector(".type");
-  typeElement.textContent = node.type;
-  typeElement.style.color = tone;
-
-  element.querySelector(".title").textContent = node.title;
-  element.querySelector(".content").textContent = node.content;
-
-  const strip = element.querySelector(".image-strip");
-  strip.innerHTML = "";
-  node.images.forEach((img) => {
-    const wrapper = document.createElement("button");
-    wrapper.type = "button";
-    wrapper.className = "image-thumb";
-
-    const image = document.createElement("img");
-    image.src = img.url;
-    image.alt = img.name;
-
-    const zoomHint = document.createElement("span");
-    zoomHint.className = "zoom-hint";
-    zoomHint.textContent = "🔍";
-
-    wrapper.appendChild(image);
-    wrapper.appendChild(zoomHint);
-
-    wrapper.addEventListener("click", (event) => {
-      event.stopPropagation();
-      wrapper.classList.add("expanded");
-    });
-
-    wrapper.addEventListener("mouseleave", () => {
-      wrapper.classList.remove("expanded");
-    });
-
-    strip.appendChild(wrapper);
-  });
-
-  const tagsContainer = element.querySelector(".tags");
-  tagsContainer.innerHTML = "";
-  const derivedTags = [...node.tags];
-  if (node.audience) derivedTags.unshift(`Audience: ${node.audience}`);
-  if (node.goal) derivedTags.unshift(`Goal: ${node.goal}`);
-  if (node.channel) derivedTags.unshift(`Channel: ${node.channel}`);
-
-  derivedTags.forEach((tag) => {
-    const chip = document.createElement("span");
-    chip.className = "tag";
-    chip.textContent = tag;
-    tagsContainer.appendChild(chip);
-  });
-
-  const variantsContainer = element.querySelector(".ab-tests");
-  variantsContainer.innerHTML = "";
-  node.variants.forEach((variant) => {
-    const chip = document.createElement("span");
-    chip.className = "variant";
-    chip.textContent = variant;
-    variantsContainer.appendChild(chip);
-  });
-
-  const socialPreview = element.querySelector(".social-preview");
-  const isSocial = node.type === "Social Media Posting";
-  socialPreview.classList.toggle("hidden", !isSocial);
-  if (isSocial) {
-    const hashtags = node.social.hashtags.join(" ");
-    socialPreview.innerHTML = `
-      <strong>${node.social.platform} Preview</strong>
-      <p>${node.social.caption || ""}</p>
-      <small>${hashtags}</small>
-      <em>${node.social.preview || ""}</em>
-    `;
+    source.justConnectedAt = Date.now();
+    target.justConnectedAt = Date.now();
+    updateNodeCard(source);
+    updateNodeCard(target);
+    if (state.selectedPrimary === target.id) fillInspector(target);
   }
 
-  renderPostits(node, element);
-}
-
-function fillInspector(node) {
-  if (!node) {
-    inspectorMeta.textContent = "Wähle oder erstelle einen Node.";
-    nodeForm.reset();
-    deleteNodeButton.disabled = true;
-    socialFields.classList.add("hidden");
-    contentUploadFields.classList.add("hidden");
-    return;
-  }
-
-  inspectorMeta.textContent = `Bearbeite ${node.id} (Level ${node.level})`;
-  inputs.type.value = node.type;
-  inputs.title.value = node.title;
-  inputs.content.value = node.content;
-  inputs.tags.value = node.tags.join(", ");
-  inputs.variants.value = node.variants.join(", ");
-  inputs.platform.value = node.social.platform;
-  inputs.caption.value = node.social.caption;
-  inputs.hashtags.value = node.social.hashtags.join(", ");
-  inputs.preview.value = node.social.preview;
-  inputs.audience.value = node.audience;
-  inputs.goal.value = node.goal;
-  inputs.channel.value = node.channel;
-  deleteNodeButton.disabled = false;
-
-  socialFields.classList.toggle("hidden", node.type !== "Social Media Posting");
-  const uploadVisible = node.type === "Content" || node.type === "Social Media Posting";
-  contentUploadFields.classList.toggle("hidden", !uploadVisible);
-}
-
-function selectNode(nodeId, append = false) {
-  selectedNodeId = nodeId;
-  if (!append) selectedNodeIds.clear();
-  selectedNodeIds.add(nodeId);
-  const selected = getNode(nodeId);
-  updateNodeSelectionUI();
-  fillInspector(selected);
-}
-
-function enableDragging(element, node) {
-  element.addEventListener("pointerdown", (event) => {
-    if (event.button !== 0) return;
-    if (event.target.closest("button, input, textarea, select")) return;
-
-    selectNode(node.id, event.shiftKey);
-
-    const movingIds = selectedNodeIds.has(node.id)
-      ? [...selectedNodeIds]
-      : [node.id];
-
-    const startX = event.clientX;
-    const startY = event.clientY;
-    const origins = movingIds.map((id) => ({ id, node: getNode(id), x: getNode(id).position.x, y: getNode(id).position.y }));
-
-    function onMove(moveEvent) {
-      const deltaX = (moveEvent.clientX - startX) / zoom;
-      const deltaY = (moveEvent.clientY - startY) / zoom;
-      origins.forEach((entry) => {
-        entry.node.position.x = entry.x + deltaX;
-        entry.node.position.y = entry.y + deltaY;
-        updateNodeCard(entry.node);
-      });
-      drawLinks();
-    }
-
-    function onUp() {
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onUp);
-    }
-
-    window.addEventListener("pointermove", onMove);
-    window.addEventListener("pointerup", onUp);
-  });
-}
-
-function startConnectionDrag(nodeId, event) {
-  event.preventDefault();
-  event.stopPropagation();
-
-  const start = centerOf(nodeId);
-  if (!start) return;
-
-  activeConnection = {
-    fromId: nodeId,
-    start,
-    current: start
-  };
   drawLinks();
-
-  function onMove(moveEvent) {
-    activeConnection.current = toBoardCoordinates(moveEvent.clientX, moveEvent.clientY);
-    drawLinks();
-  }
-
-  function onUp(upEvent) {
-    window.removeEventListener("pointermove", onMove);
-    window.removeEventListener("pointerup", onUp);
-
-    const target = document.elementFromPoint(upEvent.clientX, upEvent.clientY)?.closest(".node");
-    if (target) {
-      const toId = target.dataset.id;
-      if (toId && toId !== nodeId) addEdge(nodeId, toId);
-    }
-
-    activeConnection = null;
-    drawLinks();
-  }
-
-  window.addEventListener("pointermove", onMove);
-  window.addEventListener("pointerup", onUp);
 }
 
-function renderNode(node) {
-  const element = template.content.firstElementChild.cloneNode(true);
-  element.dataset.id = node.id;
-  element.addEventListener("click", () => selectNode(node.id));
-
-  const titleElement = element.querySelector(".title");
-  const contentElement = element.querySelector(".content");
-
-  titleElement.addEventListener("input", () => {
-    node.title = titleElement.textContent.trim();
-    if (selectedNodeId === node.id) inputs.title.value = node.title;
-    updateListView();
-  });
-
-  contentElement.addEventListener("input", () => {
-    node.content = contentElement.textContent.trim();
-    if (selectedNodeId === node.id) inputs.content.value = node.content;
-  });
-
-  element.querySelector(".add-child-btn").addEventListener("click", (event) => {
-    event.stopPropagation();
-    openNodeTypePicker((selectedType) => {
-      createNode({ type: selectedType, parentId: node.id });
-    }, "Content");
-  });
-
-  element.querySelector(".connector-handle").addEventListener("pointerdown", (event) => {
-    startConnectionDrag(node.id, event);
-  });
-
-  zoomLayer.appendChild(element);
-  enableDragging(element, node);
-  updateNodeCard(node);
+function edgePath(fromPoint, toPoint) {
+  const midY = (fromPoint.y + toPoint.y) / 2;
+  return `M ${fromPoint.x} ${fromPoint.y} C ${fromPoint.x} ${midY}, ${toPoint.x} ${midY}, ${toPoint.x} ${toPoint.y}`;
 }
 
-function centerOf(nodeId) {
-  const element = zoomLayer.querySelector(`[data-id="${nodeId}"]`);
-  if (!element) return null;
-
+function nodeBottomCenter(nodeId) {
+  const nodeEl = el.zoomLayer.querySelector(`[data-id='${nodeId}']`);
+  if (!nodeEl) return null;
   return {
-    x: element.offsetLeft + element.offsetWidth / 2,
-    y: element.offsetTop + element.offsetHeight
+    x: nodeEl.offsetLeft + nodeEl.offsetWidth / 2,
+    y: nodeEl.offsetTop + nodeEl.offsetHeight
   };
-}
-
-function appendPath(fromPoint, toPoint, dashed = false, edgeIndex = null) {
-  const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-  const midpointY = (fromPoint.y + toPoint.y) / 2;
-  path.setAttribute(
-    "d",
-    `M ${fromPoint.x} ${fromPoint.y} C ${fromPoint.x} ${midpointY}, ${toPoint.x} ${midpointY}, ${toPoint.x} ${toPoint.y}`
-  );
-  path.setAttribute("fill", "none");
-  path.setAttribute("stroke", "#8f80ff");
-  path.setAttribute("stroke-width", "2");
-  path.setAttribute("stroke-linecap", "round");
-  if (dashed) {
-    path.setAttribute("stroke-dasharray", "6 5");
-    path.style.pointerEvents = "none";
-  } else {
-    path.style.cursor = "pointer";
-    path.style.pointerEvents = "stroke";
-    if (edgeIndex !== null) {
-      path.dataset.edgeIndex = String(edgeIndex);
-      path.title = "Click to delete connection";
-      path.addEventListener("click", (event) => {
-        event.stopPropagation();
-        edges.splice(edgeIndex, 1);
-        drawLinks();
-      });
-    }
-  }
-  links.appendChild(path);
 }
 
 function drawLinks() {
-  links.innerHTML = "";
+  el.links.innerHTML = "";
 
-  edges.forEach(([from, to], index) => {
-    const a = centerOf(from);
-    const b = centerOf(to);
+  state.edges.forEach(([from, to], edgeIndex) => {
+    const a = nodeBottomCenter(from);
+    const b = nodeBottomCenter(to);
     if (!a || !b) return;
-    appendPath(a, b, false, index);
-  });
 
-  if (activeConnection) {
-    appendPath(activeConnection.start, activeConnection.current, true);
-  }
-}
-
-function toggleListMode(force) {
-  isListView = typeof force === "boolean" ? force : !isListView;
-  canvas.classList.toggle("hidden", isListView);
-  boardListView.classList.toggle("hidden", !isListView);
-  toggleListViewButton.textContent = isListView ? "Board View" : "List View";
-}
-
-canvas.addEventListener("contextmenu", (event) => {
-  event.preventDefault();
-  showContextMenu(event.clientX, event.clientY);
-});
-
-document.addEventListener("click", (event) => {
-  if (!contextMenu.contains(event.target)) hideContextMenu();
-});
-
-addContextNodeButton.addEventListener("click", () => {
-  hideContextMenu();
-  openNodeTypePicker((selectedType) => {
-    createNode({
-      type: selectedType,
-      position: {
-        x: contextPosition.x / zoom - 140,
-        y: contextPosition.y / zoom - 90
-      }
+    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    path.setAttribute("d", edgePath(a, b));
+    path.setAttribute("fill", "none");
+    path.setAttribute("stroke", "#8f80ff");
+    path.setAttribute("stroke-width", "2");
+    path.style.cursor = "pointer";
+    path.style.pointerEvents = "stroke";
+    path.addEventListener("click", (event) => {
+      event.stopPropagation();
+      state.edges.splice(edgeIndex, 1);
+      drawLinks();
+      state.nodes.forEach(updateNodeCard);
     });
-  }, "Idea");
-});
-
-addPostitCommentButton.addEventListener("click", () => {
-  hideContextMenu();
-  if (!selectedNodeId) return;
-
-  const node = getNode(selectedNodeId);
-  if (!node) return;
-
-  const user = window.prompt("Nutzername für den Kommentar:", "Felix")?.trim() || "Anonymous";
-  node.postits.push({
-    id: `postit-${postitCounter++}`,
-    user,
-    time: formatDate(new Date()),
-    text: "",
-    color: "#ffe082",
-    x: contextPosition.x / zoom - node.position.x,
-    y: contextPosition.y / zoom - node.position.y
+    el.links.appendChild(path);
   });
 
-  updateNodeCard(node);
-});
-
-nodeForm.addEventListener("input", (event) => {
-  if (!selectedNodeId) return;
-  const selected = getNode(selectedNodeId);
-  if (!selected) return;
-
-  if (event.target === inputs.type) selected.type = inputs.type.value;
-  if (event.target === inputs.title) selected.title = inputs.title.value.trim();
-  if (event.target === inputs.content) selected.content = inputs.content.value;
-  if (event.target === inputs.tags) selected.tags = parseList(inputs.tags.value);
-  if (event.target === inputs.variants) selected.variants = parseList(inputs.variants.value);
-
-  if (event.target === inputs.platform) selected.social.platform = inputs.platform.value;
-  if (event.target === inputs.caption) selected.social.caption = inputs.caption.value;
-  if (event.target === inputs.hashtags) selected.social.hashtags = parseList(inputs.hashtags.value);
-  if (event.target === inputs.preview) selected.social.preview = inputs.preview.value;
-  if (event.target === inputs.audience) selected.audience = inputs.audience.value.trim();
-  if (event.target === inputs.goal) selected.goal = inputs.goal.value.trim();
-  if (event.target === inputs.channel) selected.channel = inputs.channel.value.trim();
-
-  socialFields.classList.toggle("hidden", selected.type !== "Social Media Posting");
-  const uploadVisible = selected.type === "Content" || selected.type === "Social Media Posting";
-  contentUploadFields.classList.toggle("hidden", !uploadVisible);
-  updateNodeCard(selected);
-  updateListView();
-});
-
-nodeImageUpload.addEventListener("change", () => {
-  if (!selectedNodeId) return;
-  const node = getNode(selectedNodeId);
-  if (!node) return;
-
-  addImagesToNode(node, [...nodeImageUpload.files]);
-  nodeImageUpload.value = "";
-});
-
-deleteNodeButton.addEventListener("click", () => {
-  if (!selectedNodeId) return;
-  removeNode(selectedNodeId);
-});
-
-addNodeButton.addEventListener("click", () => {
-  toggleListMode(false);
-  openNodeTypePicker((selectedType) => {
-    createNode({ type: selectedType });
-  }, "Idea");
-});
-
-toggleListViewButton.addEventListener("click", () => toggleListMode());
-
-function setZoom(nextZoom, centerClient = null) {
-  const oldZoom = zoom;
-  const clamped = Math.min(2, Math.max(0.4, nextZoom));
-  if (clamped === oldZoom) return;
-
-  const rect = canvas.getBoundingClientRect();
-  const cx = centerClient ? centerClient.x : rect.left + canvas.clientWidth / 2;
-  const cy = centerClient ? centerClient.y : rect.top + canvas.clientHeight / 2;
-  const boardX = (cx - rect.left + canvas.scrollLeft) / oldZoom;
-  const boardY = (cy - rect.top + canvas.scrollTop) / oldZoom;
-
-  zoom = clamped;
-  zoomLayer.style.transform = `scale(${zoom})`;
-  zoomLayer.style.transformOrigin = "0 0";
-
-  canvas.scrollLeft = boardX * zoom - (cx - rect.left);
-  canvas.scrollTop = boardY * zoom - (cy - rect.top);
-  zoomLabel.textContent = `${Math.round(zoom * 100)}%`;
-  drawLinks();
+  if (state.activeConnection) {
+    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    path.setAttribute("d", edgePath(state.activeConnection.start, state.activeConnection.current));
+    path.setAttribute("fill", "none");
+    path.setAttribute("stroke", "#8f80ff");
+    path.setAttribute("stroke-width", "2");
+    path.setAttribute("stroke-dasharray", "6 5");
+    path.style.pointerEvents = "none";
+    el.links.appendChild(path);
+  }
 }
-
-zoomInButton.addEventListener("click", () => setZoom(zoom + 0.1));
-zoomOutButton.addEventListener("click", () => setZoom(zoom - 0.1));
-
-canvas.addEventListener(
-  "wheel",
-  (event) => {
-    if (event.ctrlKey) {
-      event.preventDefault();
-      const factor = event.deltaY < 0 ? 0.1 : -0.1;
-      setZoom(zoom + factor, { x: event.clientX, y: event.clientY });
-      return;
-    }
-
-    canvas.scrollLeft += event.deltaX;
-    canvas.scrollTop += event.deltaY;
-  },
-  { passive: false }
-);
-
-canvas.addEventListener("dragover", (event) => {
-  event.preventDefault();
-});
-
-canvas.addEventListener("drop", (event) => {
-  event.preventDefault();
-
-  const files = [...event.dataTransfer.files].filter((file) => file.type.startsWith("image/"));
-  if (files.length === 0) return;
-
-  const point = toBoardCoordinates(event.clientX, event.clientY);
-  createNode({
-    type: "Content",
-    position: { x: point.x - 120, y: point.y - 90 },
-    images: files.map((file) => ({ id: crypto.randomUUID(), name: file.name, url: URL.createObjectURL(file) }))
-  });
-});
-
-canvas.addEventListener("pointerdown", (event) => {
-  if (event.button !== 0) return;
-  if (event.target.closest(".node, .context-menu, button, input, textarea, select")) return;
-
-  const startX = event.clientX;
-  const startY = event.clientY;
-  const box = document.createElement("div");
-  box.className = "selection-box";
-  canvas.appendChild(box);
-  marqueeSelection = { box, startX, startY };
-
-  function updateBox(moveEvent) {
-    const x = Math.min(startX, moveEvent.clientX);
-    const y = Math.min(startY, moveEvent.clientY);
-    const w = Math.abs(moveEvent.clientX - startX);
-    const h = Math.abs(moveEvent.clientY - startY);
-    const rect = canvas.getBoundingClientRect();
-
-    box.style.left = `${x - rect.left}px`;
-    box.style.top = `${y - rect.top}px`;
-    box.style.width = `${w}px`;
-    box.style.height = `${h}px`;
-
-    selectedNodeIds.clear();
-    nodes.forEach((node) => {
-      const nodeX = node.position.x * zoom - canvas.scrollLeft;
-      const nodeY = node.position.y * zoom - canvas.scrollTop;
-      const nodeW = 285 * zoom;
-      const nodeH = 180 * zoom;
-      const intersects =
-        nodeX < x - rect.left + w && nodeX + nodeW > x - rect.left &&
-        nodeY < y - rect.top + h && nodeY + nodeH > y - rect.top;
-      if (intersects) selectedNodeIds.add(node.id);
-    });
-    updateNodeSelectionUI();
-  }
-
-  function stopSelection() {
-    window.removeEventListener("pointermove", updateBox);
-    window.removeEventListener("pointerup", stopSelection);
-    box.remove();
-    marqueeSelection = null;
-    selectedNodeId = [...selectedNodeIds][0] || null;
-    fillInspector(selectedNodeId ? getNode(selectedNodeId) : null);
-  }
-
-  window.addEventListener("pointermove", updateBox);
-  window.addEventListener("pointerup", stopSelection);
-});
 
 function runNetworkImpulse() {
-  if (edges.length === 0) return;
-  const pulsePaths = [];
-  const roots = nodes.filter((node) => !edges.some((edge) => edge[1] === node.id));
-  const startId = roots[0]?.id || nodes[0]?.id;
-  if (!startId) return;
+  if (state.edges.length === 0) return;
+  const roots = state.nodes.filter((n) => !state.edges.some(([, to]) => to === n.id));
+  const rootId = roots[0]?.id;
+  if (!rootId) return;
 
-  const queue = [{ id: startId, delay: 0 }];
+  const queue = [{ id: rootId, delay: 0 }];
   const seen = new Set();
+  const pulses = [];
+
   while (queue.length) {
     const { id, delay } = queue.shift();
     if (seen.has(id)) continue;
     seen.add(id);
 
-    edges.forEach(([from, to]) => {
+    state.edges.forEach(([from, to]) => {
       if (from !== id) return;
-      const a = centerOf(from);
-      const b = centerOf(to);
+      const a = nodeBottomCenter(from);
+      const b = nodeBottomCenter(to);
       if (!a || !b) return;
+
       const pulse = document.createElementNS("http://www.w3.org/2000/svg", "path");
-      const mid = (a.y + b.y) / 2;
-      pulse.setAttribute("d", `M ${a.x} ${a.y} C ${a.x} ${mid}, ${b.x} ${mid}, ${b.x} ${b.y}`);
+      pulse.setAttribute("d", edgePath(a, b));
       pulse.setAttribute("fill", "none");
       pulse.setAttribute("stroke", "#c8bfff");
       pulse.setAttribute("stroke-width", "4");
       pulse.setAttribute("class", "impulse-path");
       pulse.style.animationDelay = `${delay}ms`;
-      links.appendChild(pulse);
-      pulsePaths.push(pulse);
-      queue.push({ id: to, delay: delay + 130 });
+      el.links.appendChild(pulse);
+      pulses.push(pulse);
+      queue.push({ id: to, delay: delay + 110 });
     });
   }
 
-  setTimeout(() => pulsePaths.forEach((p) => p.remove()), 1400);
+  setTimeout(() => pulses.forEach((p) => p.remove()), 1400);
 }
+
+function updateSelectionClasses() {
+  el.zoomLayer.querySelectorAll(".node").forEach((nodeEl) => {
+    nodeEl.classList.toggle("selected", state.selectedIds.has(nodeEl.dataset.id));
+  });
+}
+
+function parseList(value) {
+  return value
+    .split(",")
+    .map((v) => v.trim())
+    .filter(Boolean);
+}
+
+function updateNodeCard(node) {
+  const nodeEl = el.zoomLayer.querySelector(`[data-id='${node.id}']`);
+  if (!nodeEl) return;
+
+  const tone = NODE_TYPES[node.type]?.color || "#5f6a82";
+  const isConnected = connectedIds().has(node.id);
+
+  nodeEl.style.left = `${node.position.x}px`;
+  nodeEl.style.top = `${node.position.y}px`;
+  nodeEl.style.borderColor = `${tone}66`;
+  nodeEl.style.boxShadow = isConnected ? `0 8px 18px ${tone}22` : "0 5px 10px rgba(80,80,120,0.08)";
+  nodeEl.style.opacity = isConnected ? "1" : "0.62";
+  nodeEl.classList.toggle("just-connected", !!node.justConnectedAt && Date.now() - node.justConnectedAt < 700);
+
+  nodeEl.querySelector(".type").textContent = node.type;
+  nodeEl.querySelector(".type").style.color = tone;
+  nodeEl.querySelector(".title").textContent = node.title;
+  nodeEl.querySelector(".content").textContent = node.content;
+
+  const tags = [];
+  if (node.channel) tags.push(`Channel: ${node.channel}`);
+  if (node.goal) tags.push(`Goal: ${node.goal}`);
+  if (node.audience) tags.push(`Audience: ${node.audience}`);
+  tags.push(...node.tags);
+
+  const tagsWrap = nodeEl.querySelector(".tags");
+  tagsWrap.innerHTML = "";
+  tags.forEach((tag) => {
+    const chip = document.createElement("span");
+    chip.className = "tag";
+    chip.textContent = tag;
+    tagsWrap.appendChild(chip);
+  });
+
+  const variantsWrap = nodeEl.querySelector(".ab-tests");
+  variantsWrap.innerHTML = "";
+  node.variants.forEach((variant) => {
+    const chip = document.createElement("span");
+    chip.className = "variant";
+    chip.textContent = variant;
+    variantsWrap.appendChild(chip);
+  });
+
+  const imageStrip = nodeEl.querySelector(".image-strip");
+  imageStrip.innerHTML = "";
+  node.images.forEach((img) => {
+    const thumb = document.createElement("button");
+    thumb.type = "button";
+    thumb.className = "image-thumb";
+
+    const image = document.createElement("img");
+    image.src = img.url;
+    image.alt = img.name;
+
+    const hint = document.createElement("span");
+    hint.className = "zoom-hint";
+    hint.textContent = "🔍";
+
+    thumb.append(image, hint);
+    thumb.addEventListener("click", (event) => {
+      event.stopPropagation();
+      thumb.classList.add("expanded");
+    });
+    thumb.addEventListener("mouseleave", () => thumb.classList.remove("expanded"));
+
+    imageStrip.appendChild(thumb);
+  });
+
+  const social = nodeEl.querySelector(".social-preview");
+  const isSocial = node.type === "Social Media Posting";
+  social.classList.toggle("hidden", !isSocial);
+  if (isSocial) {
+    social.innerHTML = `<strong>${node.social.platform} Preview</strong><p>${node.social.caption || ""}</p><small>${node.social.hashtags.join(" ")}</small><em>${node.social.preview || ""}</em>`;
+  }
+
+  renderPostits(node, nodeEl);
+}
+
+function renderPostits(node, nodeEl) {
+  nodeEl.querySelectorAll(".postit").forEach((p) => p.remove());
+
+  node.postits.forEach((note) => {
+    const postit = el.postitTemplate.content.firstElementChild.cloneNode(true);
+    postit.style.left = `${note.x}px`;
+    postit.style.top = `${note.y}px`;
+    postit.style.background = note.color;
+
+    postit.querySelector(".postit-user").textContent = note.user;
+    postit.querySelector(".postit-time").textContent = note.time;
+
+    const color = postit.querySelector(".postit-color");
+    color.value = note.color;
+    color.addEventListener("input", () => {
+      note.color = color.value;
+      postit.style.background = color.value;
+    });
+
+    const area = postit.querySelector(".postit-text");
+    area.value = note.text;
+    area.style.fontSize = note.text.length > 220 ? "0.7rem" : note.text.length > 120 ? "0.82rem" : "0.96rem";
+    area.addEventListener("input", () => {
+      note.text = area.value;
+      area.style.fontSize = note.text.length > 220 ? "0.7rem" : note.text.length > 120 ? "0.82rem" : "0.96rem";
+    });
+
+    postit.querySelector(".postit-delete").addEventListener("click", () => {
+      node.postits = node.postits.filter((n) => n.id !== note.id);
+      renderPostits(node, nodeEl);
+    });
+
+    enablePostitDrag(postit, note);
+    nodeEl.appendChild(postit);
+  });
+}
+
+function enablePostitDrag(postit, note) {
+  postit.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0 || event.target.closest("textarea,input,button")) return;
+
+    const startX = event.clientX;
+    const startY = event.clientY;
+    const ox = note.x;
+    const oy = note.y;
+
+    function move(ev) {
+      note.x = ox + (ev.clientX - startX) / state.zoom;
+      note.y = oy + (ev.clientY - startY) / state.zoom;
+      postit.style.left = `${note.x}px`;
+      postit.style.top = `${note.y}px`;
+    }
+
+    function up() {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+    }
+
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  });
+}
+
+function fillInspector(node) {
+  if (!node) {
+    el.inspectorMeta.textContent = "Wähle oder erstelle einen Node.";
+    el.nodeForm.reset();
+    el.deleteNodeButton.disabled = true;
+    el.socialFields.classList.add("hidden");
+    el.contentUploadFields.classList.add("hidden");
+    return;
+  }
+
+  el.inspectorMeta.textContent = `Bearbeite ${node.id}`;
+  el.inputs.type.value = node.type;
+  el.inputs.title.value = node.title;
+  el.inputs.content.value = node.content;
+  el.inputs.tags.value = node.tags.join(", ");
+  el.inputs.variants.value = node.variants.join(", ");
+  el.inputs.platform.value = node.social.platform;
+  el.inputs.caption.value = node.social.caption;
+  el.inputs.hashtags.value = node.social.hashtags.join(", ");
+  el.inputs.preview.value = node.social.preview;
+  el.inputs.audience.value = node.audience;
+  el.inputs.goal.value = node.goal;
+  el.inputs.channel.value = node.channel;
+
+  el.deleteNodeButton.disabled = false;
+  el.socialFields.classList.toggle("hidden", node.type !== "Social Media Posting");
+  el.contentUploadFields.classList.toggle("hidden", !(node.type === "Content" || node.type === "Social Media Posting"));
+}
+
+function updateListView() {
+  el.nodeListView.innerHTML = "";
+
+  const groups = state.nodes.reduce((acc, node) => {
+    if (!acc[node.type]) acc[node.type] = [];
+    acc[node.type].push(node);
+    return acc;
+  }, {});
+
+  const types = Object.keys(groups).sort();
+  if (types.length === 0) {
+    el.nodeListView.innerHTML = '<p class="list-empty">Keine Nodes vorhanden.</p>';
+    return;
+  }
+
+  types.forEach((type) => {
+    const section = document.createElement("section");
+    section.className = "list-group";
+    const h = document.createElement("h4");
+    h.textContent = `${type} (${groups[type].length})`;
+    h.style.color = NODE_TYPES[type]?.color || "#333";
+    section.appendChild(h);
+
+    const ul = document.createElement("ul");
+    groups[type].forEach((node) => {
+      const li = document.createElement("li");
+      li.textContent = node.title || "(ohne Titel)";
+      li.addEventListener("click", () => {
+        toggleListMode(false);
+        state.selectedIds.clear();
+        state.selectedIds.add(node.id);
+        state.selectedPrimary = node.id;
+        updateSelectionClasses();
+        fillInspector(node);
+        focusNodeInViewport(node.id);
+      });
+      ul.appendChild(li);
+    });
+    section.appendChild(ul);
+    el.nodeListView.appendChild(section);
+  });
+}
+
+function renderNode(node) {
+  const nodeEl = el.nodeTemplate.content.firstElementChild.cloneNode(true);
+  nodeEl.dataset.id = node.id;
+
+  nodeEl.addEventListener("click", (event) => {
+    const append = event.shiftKey;
+    if (!append) state.selectedIds.clear();
+    state.selectedIds.add(node.id);
+    state.selectedPrimary = node.id;
+    updateSelectionClasses();
+    fillInspector(node);
+  });
+
+  nodeEl.querySelector(".add-child-btn").addEventListener("click", (event) => {
+    event.stopPropagation();
+    openTypePicker((type) => createNode({ type, parentId: node.id }), "Content");
+  });
+
+  nodeEl.querySelector(".connector-handle").addEventListener("pointerdown", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const start = nodeBottomCenter(node.id);
+    if (!start) return;
+    state.activeConnection = { fromId: node.id, start, current: start };
+    drawLinks();
+
+    function move(ev) {
+      state.activeConnection.current = boardPointFromClient(ev.clientX, ev.clientY);
+      drawLinks();
+    }
+
+    function up(ev) {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      const target = document.elementFromPoint(ev.clientX, ev.clientY)?.closest(".node");
+      if (target && target.dataset.id !== node.id) addEdge(node.id, target.dataset.id);
+      state.activeConnection = null;
+      drawLinks();
+    }
+
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  });
+
+  const title = nodeEl.querySelector(".title");
+  const content = nodeEl.querySelector(".content");
+  title.addEventListener("input", () => {
+    node.title = title.textContent.trim();
+    if (state.selectedPrimary === node.id) el.inputs.title.value = node.title;
+    updateListView();
+  });
+  content.addEventListener("input", () => {
+    node.content = content.textContent.trim();
+    if (state.selectedPrimary === node.id) el.inputs.content.value = node.content;
+  });
+
+  enableNodeDrag(nodeEl, node);
+  el.zoomLayer.appendChild(nodeEl);
+  updateNodeCard(node);
+}
+
+function enableNodeDrag(nodeEl, node) {
+  nodeEl.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0) return;
+    if (event.target.closest("button,input,textarea,select")) return;
+
+    if (!state.selectedIds.has(node.id)) {
+      state.selectedIds.clear();
+      state.selectedIds.add(node.id);
+      state.selectedPrimary = node.id;
+      updateSelectionClasses();
+      fillInspector(node);
+    }
+
+    const moveIds = [...state.selectedIds];
+    const origins = moveIds.map((id) => ({ id, x: getNode(id).position.x, y: getNode(id).position.y }));
+    const sx = event.clientX;
+    const sy = event.clientY;
+
+    function move(ev) {
+      const dx = (ev.clientX - sx) / state.zoom;
+      const dy = (ev.clientY - sy) / state.zoom;
+      origins.forEach((o) => {
+        const n = getNode(o.id);
+        n.position.x = o.x + dx;
+        n.position.y = o.y + dy;
+        updateNodeCard(n);
+      });
+      drawLinks();
+    }
+
+    function up() {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+    }
+
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  });
+}
+
+function toggleListMode(force) {
+  const active = typeof force === "boolean" ? force : el.canvas.classList.contains("hidden") === false;
+  const next = typeof force === "boolean" ? force : !active;
+  el.canvas.classList.toggle("hidden", next);
+  el.boardListView.classList.toggle("hidden", !next);
+  el.toggleListViewButton.textContent = next ? "Board View" : "List View";
+}
+
+// Events
+el.addNodeButton.addEventListener("click", () => {
+  toggleListMode(false);
+  openTypePicker((type) => createNode({ type }), "Idea");
+});
+
+el.toggleListViewButton.addEventListener("click", () => {
+  const isHidden = el.canvas.classList.contains("hidden");
+  toggleListMode(!isHidden);
+});
+
+el.zoomInButton.addEventListener("click", () => setZoom(state.zoom + 0.1));
+el.zoomOutButton.addEventListener("click", () => setZoom(state.zoom - 0.1));
+
+el.canvas.addEventListener(
+  "wheel",
+  (event) => {
+    if (event.ctrlKey) {
+      event.preventDefault();
+      setZoom(state.zoom + (event.deltaY < 0 ? 0.1 : -0.1), { x: event.clientX, y: event.clientY });
+      return;
+    }
+    el.canvas.scrollLeft += event.deltaX;
+    el.canvas.scrollTop += event.deltaY;
+  },
+  { passive: false }
+);
+
+el.canvas.addEventListener("contextmenu", (event) => {
+  event.preventDefault();
+  const point = boardPointFromClient(event.clientX, event.clientY);
+  state.contextBoardPoint = point;
+
+  const rect = el.canvas.getBoundingClientRect();
+  el.contextMenu.style.left = `${Math.max(10, Math.min(event.clientX - rect.left, rect.width - 220))}px`;
+  el.contextMenu.style.top = `${Math.max(10, Math.min(event.clientY - rect.top, rect.height - 100))}px`;
+  el.contextMenu.classList.remove("hidden");
+});
+
+document.addEventListener("click", (event) => {
+  if (!el.contextMenu.contains(event.target)) el.contextMenu.classList.add("hidden");
+});
+
+el.addContextNodeButton.addEventListener("click", () => {
+  el.contextMenu.classList.add("hidden");
+  openTypePicker((type) => {
+    createNode({
+      type,
+      position: { x: state.contextBoardPoint.x - NODE_WIDTH / 2, y: state.contextBoardPoint.y - NODE_HEIGHT / 2 }
+    });
+  }, "Idea");
+});
+
+el.addPostitCommentButton.addEventListener("click", () => {
+  el.contextMenu.classList.add("hidden");
+  if (!state.selectedPrimary) return;
+  const node = getNode(state.selectedPrimary);
+  if (!node) return;
+
+  const user = window.prompt("Nutzername für den Kommentar:", "Felix")?.trim() || "Anonymous";
+  node.postits.push({
+    id: `postit-${state.postitCounter++}`,
+    user,
+    time: nowString(),
+    text: "",
+    color: "#ffe082",
+    x: state.contextBoardPoint.x - node.position.x,
+    y: state.contextBoardPoint.y - node.position.y
+  });
+  updateNodeCard(node);
+});
+
+el.nodeForm.addEventListener("input", (event) => {
+  const node = getNode(state.selectedPrimary);
+  if (!node) return;
+
+  if (event.target === el.inputs.type) node.type = el.inputs.type.value;
+  if (event.target === el.inputs.title) node.title = el.inputs.title.value.trim();
+  if (event.target === el.inputs.content) node.content = el.inputs.content.value;
+  if (event.target === el.inputs.tags) node.tags = parseList(el.inputs.tags.value);
+  if (event.target === el.inputs.variants) node.variants = parseList(el.inputs.variants.value);
+  if (event.target === el.inputs.platform) node.social.platform = el.inputs.platform.value;
+  if (event.target === el.inputs.caption) node.social.caption = el.inputs.caption.value;
+  if (event.target === el.inputs.hashtags) node.social.hashtags = parseList(el.inputs.hashtags.value);
+  if (event.target === el.inputs.preview) node.social.preview = el.inputs.preview.value;
+  if (event.target === el.inputs.audience) node.audience = el.inputs.audience.value.trim();
+  if (event.target === el.inputs.goal) node.goal = el.inputs.goal.value.trim();
+  if (event.target === el.inputs.channel) node.channel = el.inputs.channel.value.trim();
+
+  updateNodeCard(node);
+  updateListView();
+  fillInspector(node);
+});
+
+el.imageUpload.addEventListener("change", () => {
+  const node = getNode(state.selectedPrimary);
+  if (!node) return;
+  [...el.imageUpload.files]
+    .filter((file) => file.type.startsWith("image/"))
+    .forEach((file) => node.images.push({ id: crypto.randomUUID(), name: file.name, url: URL.createObjectURL(file) }));
+  el.imageUpload.value = "";
+  updateNodeCard(node);
+});
+
+el.deleteNodeButton.addEventListener("click", () => {
+  if (!state.selectedPrimary) return;
+  removeNode(state.selectedPrimary);
+});
+
+el.canvas.addEventListener("dragover", (event) => event.preventDefault());
+el.canvas.addEventListener("drop", (event) => {
+  event.preventDefault();
+  const files = [...event.dataTransfer.files].filter((f) => f.type.startsWith("image/"));
+  if (files.length === 0) return;
+  const point = boardPointFromClient(event.clientX, event.clientY);
+  createNode({
+    type: "Content",
+    position: { x: point.x - NODE_WIDTH / 2, y: point.y - NODE_HEIGHT / 2 },
+    images: files.map((f) => ({ id: crypto.randomUUID(), name: f.name, url: URL.createObjectURL(f) }))
+  });
+});
+
+el.canvas.addEventListener("pointerdown", (event) => {
+  if (event.button !== 0) return;
+  if (event.target.closest(".node, .context-menu, button, input, textarea, select")) return;
+
+  const rect = el.canvas.getBoundingClientRect();
+  const sx = event.clientX - rect.left;
+  const sy = event.clientY - rect.top;
+
+  const box = document.createElement("div");
+  box.className = "selection-box";
+  el.canvas.appendChild(box);
+
+  function move(ev) {
+    const cx = ev.clientX - rect.left;
+    const cy = ev.clientY - rect.top;
+    const left = Math.min(sx, cx);
+    const top = Math.min(sy, cy);
+    const width = Math.abs(cx - sx);
+    const height = Math.abs(cy - sy);
+    box.style.left = `${left}px`;
+    box.style.top = `${top}px`;
+    box.style.width = `${width}px`;
+    box.style.height = `${height}px`;
+
+    state.selectedIds.clear();
+    state.nodes.forEach((node) => {
+      const nx = node.position.x * state.zoom - el.canvas.scrollLeft;
+      const ny = node.position.y * state.zoom - el.canvas.scrollTop;
+      const nw = NODE_WIDTH * state.zoom;
+      const nh = NODE_HEIGHT * state.zoom;
+      const hit = nx < left + width && nx + nw > left && ny < top + height && ny + nh > top;
+      if (hit) state.selectedIds.add(node.id);
+    });
+    state.selectedPrimary = [...state.selectedIds][0] || null;
+    updateSelectionClasses();
+  }
+
+  function up() {
+    window.removeEventListener("pointermove", move);
+    window.removeEventListener("pointerup", up);
+    box.remove();
+    fillInspector(state.selectedPrimary ? getNode(state.selectedPrimary) : null);
+  }
+
+  window.addEventListener("pointermove", move);
+  window.addEventListener("pointerup", up);
+});
+
+el.picker.addEventListener("click", (event) => {
+  if (event.target === el.picker) el.picker.classList.add("hidden");
+});
 
 window.addEventListener("resize", drawLinks);
 
-nodeTypePicker.addEventListener("click", (event) => {
-  if (event.target === nodeTypePicker) nodeTypePicker.classList.add("hidden");
-});
-
-populateTypeSelect();
-fillInspector(null);
-setEmptyStateVisibility();
+// init
+setZoom(state.zoom);
+updateEmptyState();
 updateListView();
-toggleListMode(false);
-setZoom(1.2);
-focusOnExistingNodes({ adjustZoom: false });
-drawLinks();
+fillInspector(null);
