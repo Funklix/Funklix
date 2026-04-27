@@ -16,11 +16,6 @@
           <button class="nav-item">AI Brain</button>
           <button class="nav-item">Insights</button>
         </nav>
-
-        <section class="list-view">
-          <h3>Nodes nach Kategorie</h3>
-          <div id="node-list-view"></div>
-        </section>
       </aside>
 
       <main class="workspace-wrap">
@@ -30,6 +25,7 @@
             <p>Top-down Hierarchie: Idea → Variations → Content → Social Posts.</p>
           </div>
           <div class="actions">
+            <button id="toggle-list-view-btn">List View</button>
             <button id="add-node-btn">+ Add node</button>
             <button id="zoom-out-btn">− Zoom</button>
             <button id="zoom-in-btn">+ Zoom</button>
@@ -47,6 +43,11 @@
           <div id="context-menu" class="context-menu hidden">
             <button id="add-postit-comment-btn" type="button">Post-it Kommentar hinzufügen</button>
           </div>
+        </section>
+
+        <section id="board-list-view" class="board-list-view hidden">
+          <h2>Node List View</h2>
+          <div id="node-list-view"></div>
         </section>
       </main>
 
@@ -83,6 +84,11 @@
             <textarea id="node-preview" name="preview" rows="2" placeholder="So sieht der Post im Feed aus..."></textarea>
           </div>
 
+          <div id="content-upload-fields" class="hidden">
+            <label for="node-image-upload">Bilder Upload (Content/Social)</label>
+            <input id="node-image-upload" type="file" accept="image/*" multiple />
+          </div>
+
           <label for="node-tags">Tags (Komma getrennt)</label>
           <input id="node-tags" name="tags" placeholder="Audience, Goal, Channel" />
 
@@ -101,8 +107,9 @@
           <button class="control-btn connect-btn" title="Node verbinden">⤴</button>
         </div>
         <span class="type"></span>
-        <h3 class="title" contenteditable="true"></h3>
-        <p class="content" contenteditable="true"></p>
+        <h3 class="title" contenteditable="true" data-placeholder="Node Titel"></h3>
+        <p class="content" contenteditable="true" data-placeholder="Node Inhalt"></p>
+        <div class="image-strip"></div>
         <div class="social-preview hidden"></div>
         <div class="tags"></div>
         <div class="ab-tests"></div>
@@ -115,6 +122,7 @@
           <strong class="postit-user"></strong>
           <time class="postit-time"></time>
           <input class="postit-color" type="color" value="#ffe082" />
+          <button class="postit-delete" type="button">✕</button>
         </header>
         <textarea class="postit-text" placeholder="Kommentar (auch mit Emojis 😊)"></textarea>
       </article>

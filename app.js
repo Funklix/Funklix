@@ -17,6 +17,8 @@ const template = document.getElementById("node-template");
 const postitTemplate = document.getElementById("postit-template");
 const emptyState = document.getElementById("empty-state");
 const nodeListView = document.getElementById("node-list-view");
+const boardListView = document.getElementById("board-list-view");
+const toggleListViewButton = document.getElementById("toggle-list-view-btn");
 
 const addNodeButton = document.getElementById("add-node-btn");
 const zoomInButton = document.getElementById("zoom-in-btn");
@@ -29,6 +31,8 @@ const addPostitCommentButton = document.getElementById("add-postit-comment-btn")
 const inspectorMeta = document.getElementById("inspector-meta");
 const nodeForm = document.getElementById("node-form");
 const socialFields = document.getElementById("social-fields");
+const contentUploadFields = document.getElementById("content-upload-fields");
+const nodeImageUpload = document.getElementById("node-image-upload");
 const deleteNodeButton = document.getElementById("delete-node-btn");
 
 const inputs = {
@@ -44,10 +48,12 @@ const inputs = {
 };
 
 let nodeCounter = 1;
+let postitCounter = 1;
 let selectedNodeId = null;
 let sourceForConnection = null;
 let zoom = 1;
 let contextPosition = { x: 0, y: 0 };
+let isListView = false;
 
 function populateTypeSelect() {
   Object.keys(NODE_TYPES).forEach((type) => {
@@ -84,12 +90,20 @@ function colorForType(type) {
   return NODE_TYPES[type]?.color || "#5f6a82";
 }
 
-function showContextMenu(clientX, clientY) {
-  const canvasRect = canvas.getBoundingClientRect();
-  const x = Math.max(12, Math.min(clientX - canvasRect.left, canvasRect.width - 220));
-  const y = Math.max(12, Math.min(clientY - canvasRect.top, canvasRect.height - 80));
+function toBoardCoordinates(clientX, clientY) {
+  const rect = canvas.getBoundingClientRect();
+  return {
+    x: (clientX - rect.left + canvas.scrollLeft) / zoom,
+    y: (clientY - rect.top + canvas.scrollTop) / zoom
+  };
+}
 
-  contextPosition = { x, y };
+function showContextMenu(clientX, clientY) {
+  const rect = canvas.getBoundingClientRect();
+  const x = Math.max(12, Math.min(clientX - rect.left, rect.width - 220));
+  const y = Math.max(12, Math.min(clientY - rect.top, rect.height - 80));
+
+  contextPosition = { x: x + canvas.scrollLeft, y: y + canvas.scrollTop };
   contextMenu.style.left = `${x}px`;
   contextMenu.style.top = `${y}px`;
   contextMenu.classList.remove("hidden");
@@ -127,8 +141,12 @@ function updateListView() {
       const list = document.createElement("ul");
       grouped[type].forEach((node) => {
         const item = document.createElement("li");
-        item.textContent = node.title;
-        item.addEventListener("click", () => selectNode(node.id));
+        item.textContent = node.title || "(ohne Titel)";
+        item.addEventListener("click", () => {
+          toggleListMode(false);
+          selectNode(node.id);
+          focusNodeInView(node.id);
+        });
         list.appendChild(item);
       });
 
@@ -137,16 +155,26 @@ function updateListView() {
     });
 }
 
-function createNode({ type = "Idea", parentId = null } = {}) {
+function focusNodeInView(nodeId) {
+  const element = zoomLayer.querySelector(`[data-id="${nodeId}"]`);
+  if (!element) return;
+
+  const targetX = element.offsetLeft * zoom - canvas.clientWidth / 2 + element.offsetWidth / 2;
+  const targetY = element.offsetTop * zoom - canvas.clientHeight / 2 + element.offsetHeight / 2;
+  canvas.scrollTo({ left: Math.max(0, targetX), top: Math.max(0, targetY), behavior: "smooth" });
+}
+
+function createNode({ type = "Idea", parentId = null, position = null, images = [] } = {}) {
   const parent = parentId ? getNode(parentId) : null;
 
   const node = {
     id: `node-${nodeCounter++}`,
     type,
-    title: type,
-    content: "Inhalt bearbeiten...",
+    title: "",
+    content: "",
     tags: [],
     variants: [],
+    images: [...images],
     social: {
       platform: "Instagram",
       caption: "",
@@ -155,11 +183,15 @@ function createNode({ type = "Idea", parentId = null } = {}) {
     },
     postits: [],
     level: parent ? parent.level + 1 : 0,
-    position: {
-      x: parent ? parent.position.x + 24 : 120 + (nodes.length % 3) * 290,
-      y: parent ? parent.position.y + 210 : 80 + Math.floor(nodes.length / 3) * 210
+    position: position || {
+      x: parent ? parent.position.x + 24 : 4600 + (nodes.length % 3) * 300,
+      y: parent ? parent.position.y + 230 : 4600 + Math.floor(nodes.length / 3) * 230
     }
   };
+
+  if (parent && node.type === "Social Media Posting") {
+    node.images = [...parent.images];
+  }
 
   nodes.push(node);
   renderNode(node);
@@ -172,6 +204,20 @@ function createNode({ type = "Idea", parentId = null } = {}) {
   drawLinks();
 }
 
+function addImagesToNode(node, files) {
+  const images = files
+    .filter((file) => file.type.startsWith("image/"))
+    .map((file) => ({
+      id: crypto.randomUUID(),
+      name: file.name,
+      url: URL.createObjectURL(file)
+    }));
+
+  if (images.length === 0) return;
+  node.images.push(...images);
+  updateNodeCard(node);
+}
+
 function addEdge(from, to) {
   if (from === to) return;
   if (edges.some((edge) => edge[0] === from && edge[1] === to)) return;
@@ -182,6 +228,9 @@ function addEdge(from, to) {
   if (source && target) {
     target.level = Math.max(target.level, source.level + 1);
     target.position.y = Math.max(target.position.y, source.position.y + 190);
+    if (target.type === "Social Media Posting" && target.images.length === 0) {
+      target.images = [...source.images];
+    }
     updateNodeCard(target);
   }
 }
@@ -190,7 +239,9 @@ function removeNode(nodeId) {
   const index = nodes.findIndex((node) => node.id === nodeId);
   if (index === -1) return;
 
-  nodes.splice(index, 1);
+  const [removed] = nodes.splice(index, 1);
+  removed.images.forEach((img) => URL.revokeObjectURL(img.url));
+
   const element = zoomLayer.querySelector(`[data-id="${nodeId}"]`);
   if (element) element.remove();
 
@@ -216,6 +267,35 @@ function postitFontSize(text) {
   return "0.96rem";
 }
 
+function enablePostitDragging(note, postit) {
+  note.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0) return;
+    if (event.target.closest("textarea, input, button")) return;
+
+    const startX = event.clientX;
+    const startY = event.clientY;
+    const originX = postit.x;
+    const originY = postit.y;
+
+    function onMove(moveEvent) {
+      const deltaX = (moveEvent.clientX - startX) / zoom;
+      const deltaY = (moveEvent.clientY - startY) / zoom;
+      postit.x = Math.max(-150, originX + deltaX);
+      postit.y = Math.max(-150, originY + deltaY);
+      note.style.left = `${postit.x}px`;
+      note.style.top = `${postit.y}px`;
+    }
+
+    function onUp() {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    }
+
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  });
+}
+
 function renderPostits(node, element) {
   element.querySelectorAll(".postit").forEach((note) => note.remove());
 
@@ -235,6 +315,12 @@ function renderPostits(node, element) {
       note.style.background = postit.color;
     });
 
+    const deleteButton = note.querySelector(".postit-delete");
+    deleteButton.addEventListener("click", () => {
+      node.postits = node.postits.filter((entry) => entry.id !== postit.id);
+      renderPostits(node, element);
+    });
+
     const textArea = note.querySelector(".postit-text");
     textArea.value = postit.text;
     textArea.style.fontSize = postitFontSize(postit.text);
@@ -243,6 +329,7 @@ function renderPostits(node, element) {
       textArea.style.fontSize = postitFontSize(postit.text);
     });
 
+    enablePostitDragging(note, postit);
     element.appendChild(note);
   });
 }
@@ -261,8 +348,19 @@ function updateNodeCard(node) {
   typeElement.textContent = node.type;
   typeElement.style.color = tone;
 
-  element.querySelector(".title").textContent = node.title;
-  element.querySelector(".content").textContent = node.content;
+  const titleEl = element.querySelector(".title");
+  const contentEl = element.querySelector(".content");
+  titleEl.textContent = node.title;
+  contentEl.textContent = node.content;
+
+  const strip = element.querySelector(".image-strip");
+  strip.innerHTML = "";
+  node.images.forEach((img) => {
+    const image = document.createElement("img");
+    image.src = img.url;
+    image.alt = img.name;
+    strip.appendChild(image);
+  });
 
   const tagsContainer = element.querySelector(".tags");
   tagsContainer.innerHTML = "";
@@ -289,9 +387,9 @@ function updateNodeCard(node) {
     const hashtags = node.social.hashtags.join(" ");
     socialPreview.innerHTML = `
       <strong>${node.social.platform} Preview</strong>
-      <p>${node.social.caption || "Keine Caption"}</p>
+      <p>${node.social.caption || ""}</p>
       <small>${hashtags}</small>
-      <em>${node.social.preview || "Kein Preview-Text"}</em>
+      <em>${node.social.preview || ""}</em>
     `;
   }
 
@@ -304,6 +402,7 @@ function fillInspector(node) {
     nodeForm.reset();
     deleteNodeButton.disabled = true;
     socialFields.classList.add("hidden");
+    contentUploadFields.classList.add("hidden");
     return;
   }
 
@@ -320,6 +419,8 @@ function fillInspector(node) {
   deleteNodeButton.disabled = false;
 
   socialFields.classList.toggle("hidden", node.type !== "Social Media Posting");
+  const uploadVisible = node.type === "Content" || node.type === "Social Media Posting";
+  contentUploadFields.classList.toggle("hidden", !uploadVisible);
 }
 
 function selectNode(nodeId) {
@@ -336,12 +437,7 @@ function selectNode(nodeId) {
 function enableDragging(element, node) {
   element.addEventListener("pointerdown", (event) => {
     if (event.button !== 0) return;
-
-    const interactive = event.target.closest("button, input, textarea, select");
-    if (interactive) return;
-
-    const editable = event.target.closest("[contenteditable='true']");
-    if (editable) return;
+    if (event.target.closest("button, input, textarea, select")) return;
 
     selectNode(node.id);
 
@@ -353,8 +449,8 @@ function enableDragging(element, node) {
     function onMove(moveEvent) {
       const deltaX = (moveEvent.clientX - startX) / zoom;
       const deltaY = (moveEvent.clientY - startY) / zoom;
-      node.position.x = Math.max(10, originX + deltaX);
-      node.position.y = Math.max(10, originY + deltaY);
+      node.position.x = originX + deltaX;
+      node.position.y = originY + deltaY;
       updateNodeCard(node);
       drawLinks();
     }
@@ -378,7 +474,7 @@ function renderNode(node) {
   const contentElement = element.querySelector(".content");
 
   titleElement.addEventListener("input", () => {
-    node.title = titleElement.textContent.trim() || node.type;
+    node.title = titleElement.textContent.trim();
     if (selectedNodeId === node.id) inputs.title.value = node.title;
     updateListView();
   });
@@ -442,6 +538,13 @@ function drawLinks() {
   });
 }
 
+function toggleListMode(force) {
+  isListView = typeof force === "boolean" ? force : !isListView;
+  canvas.classList.toggle("hidden", isListView);
+  boardListView.classList.toggle("hidden", !isListView);
+  toggleListViewButton.textContent = isListView ? "Board View" : "List View";
+}
+
 zoomLayer.addEventListener("click", (event) => {
   const targetNode = event.target.closest(".node");
   if (!targetNode || !sourceForConnection) return;
@@ -467,18 +570,15 @@ addPostitCommentButton.addEventListener("click", () => {
   const node = getNode(selectedNodeId);
   if (!node) return;
 
-  const user =
-    window.prompt("Nutzername für den Kommentar:", "Felix")?.trim() ||
-    "Anonymous";
-
+  const user = window.prompt("Nutzername für den Kommentar:", "Felix")?.trim() || "Anonymous";
   node.postits.push({
-    id: crypto.randomUUID(),
+    id: `postit-${postitCounter++}`,
     user,
     time: formatDate(new Date()),
     text: "",
     color: "#ffe082",
-    x: contextPosition.x / zoom - node.position.x + 24,
-    y: contextPosition.y / zoom - node.position.y + 24
+    x: contextPosition.x / zoom - node.position.x,
+    y: contextPosition.y / zoom - node.position.y
   });
 
   updateNodeCard(node);
@@ -490,7 +590,7 @@ nodeForm.addEventListener("input", (event) => {
   if (!selected) return;
 
   if (event.target === inputs.type) selected.type = inputs.type.value;
-  if (event.target === inputs.title) selected.title = inputs.title.value.trim() || selected.type;
+  if (event.target === inputs.title) selected.title = inputs.title.value.trim();
   if (event.target === inputs.content) selected.content = inputs.content.value;
   if (event.target === inputs.tags) selected.tags = parseList(inputs.tags.value);
   if (event.target === inputs.variants) selected.variants = parseList(inputs.variants.value);
@@ -501,8 +601,19 @@ nodeForm.addEventListener("input", (event) => {
   if (event.target === inputs.preview) selected.social.preview = inputs.preview.value;
 
   socialFields.classList.toggle("hidden", selected.type !== "Social Media Posting");
+  const uploadVisible = selected.type === "Content" || selected.type === "Social Media Posting";
+  contentUploadFields.classList.toggle("hidden", !uploadVisible);
   updateNodeCard(selected);
   updateListView();
+});
+
+nodeImageUpload.addEventListener("change", () => {
+  if (!selectedNodeId) return;
+  const node = getNode(selectedNodeId);
+  if (!node) return;
+
+  addImagesToNode(node, [...nodeImageUpload.files]);
+  nodeImageUpload.value = "";
 });
 
 deleteNodeButton.addEventListener("click", () => {
@@ -520,8 +631,10 @@ addNodeButton.addEventListener("click", () => {
   createNode({ type: finalType });
 });
 
+toggleListViewButton.addEventListener("click", () => toggleListMode());
+
 function setZoom(nextZoom) {
-  zoom = Math.min(1.6, Math.max(0.7, nextZoom));
+  zoom = Math.min(2, Math.max(0.4, nextZoom));
   zoomLayer.style.transform = `scale(${zoom})`;
   zoomLayer.style.transformOrigin = "0 0";
   zoomLabel.textContent = `${Math.round(zoom * 100)}%`;
@@ -529,11 +642,52 @@ function setZoom(nextZoom) {
 
 zoomInButton.addEventListener("click", () => setZoom(zoom + 0.1));
 zoomOutButton.addEventListener("click", () => setZoom(zoom - 0.1));
+
+canvas.addEventListener(
+  "wheel",
+  (event) => {
+    if (event.ctrlKey) {
+      event.preventDefault();
+      const factor = event.deltaY < 0 ? 0.1 : -0.1;
+      setZoom(zoom + factor);
+      return;
+    }
+
+    if (!event.shiftKey) {
+      canvas.scrollLeft += event.deltaX;
+      canvas.scrollTop += event.deltaY;
+    }
+  },
+  { passive: false }
+);
+
+canvas.addEventListener("dragover", (event) => {
+  event.preventDefault();
+});
+
+canvas.addEventListener("drop", (event) => {
+  event.preventDefault();
+
+  const files = [...event.dataTransfer.files].filter((file) => file.type.startsWith("image/"));
+  if (files.length === 0) return;
+
+  const point = toBoardCoordinates(event.clientX, event.clientY);
+  createNode({
+    type: "Content",
+    position: { x: point.x - 120, y: point.y - 90 },
+    images: files.map((file) => ({ id: crypto.randomUUID(), name: file.name, url: URL.createObjectURL(file) }))
+  });
+});
+
 window.addEventListener("resize", drawLinks);
 
 populateTypeSelect();
 fillInspector(null);
 setEmptyStateVisibility();
 updateListView();
+toggleListMode(false);
 setZoom(1);
+
+canvas.scrollLeft = 4200;
+canvas.scrollTop = 4200;
 drawLinks();
