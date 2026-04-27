@@ -47,12 +47,17 @@ const inputs = {
   platform: document.getElementById("node-platform"),
   caption: document.getElementById("node-caption"),
   hashtags: document.getElementById("node-hashtags"),
-  preview: document.getElementById("node-preview")
+  preview: document.getElementById("node-preview"),
+  audience: document.getElementById("node-audience"),
+  goal: document.getElementById("node-goal"),
+  channel: document.getElementById("node-channel")
 };
 
 let nodeCounter = 1;
 let postitCounter = 1;
 let selectedNodeId = null;
+let selectedNodeIds = new Set();
+let marqueeSelection = null;
 let zoom = 1;
 let contextPosition = { x: 0, y: 0 };
 let isListView = false;
@@ -91,6 +96,26 @@ function getNode(nodeId) {
 
 function colorForType(type) {
   return NODE_TYPES[type]?.color || "#5f6a82";
+}
+function getConnectedNodeIds() {
+  const ids = new Set();
+  edges.forEach(([from, to]) => {
+    ids.add(from);
+    ids.add(to);
+  });
+  return ids;
+}
+
+function updateNodeSelectionUI() {
+  zoomLayer.querySelectorAll(".node").forEach((el) => {
+    el.classList.toggle("selected", selectedNodeIds.has(el.dataset.id));
+  });
+}
+
+function applyInheritedAttributes(source, target) {
+  if (!target.audience && source.audience) target.audience = source.audience;
+  if (!target.goal && source.goal) target.goal = source.goal;
+  if (!target.channel && source.channel) target.channel = source.channel;
 }
 const NODE_TYPE_VALUES = Object.keys(NODE_TYPES);
 
@@ -245,6 +270,9 @@ function createNode({ type = "Idea", parentId = null, position = null, images = 
     content: "",
     tags: [],
     variants: [],
+    audience: "",
+    goal: "",
+    channel: "",
     images: [...images],
     social: {
       platform: "Instagram",
@@ -260,8 +288,11 @@ function createNode({ type = "Idea", parentId = null, position = null, images = 
     }
   };
 
-  if (parent && node.type === "Social Media Posting") {
-    node.images = [...parent.images];
+  if (parent) {
+    if (node.type === "Social Media Posting") node.images = [...parent.images];
+    if (!node.audience) node.audience = parent.audience;
+    if (!node.goal) node.goal = parent.goal;
+    if (!node.channel) node.channel = parent.channel;
   }
 
   nodes.push(node);
@@ -273,6 +304,7 @@ function createNode({ type = "Idea", parentId = null, position = null, images = 
   updateListView();
   selectNode(node.id);
   drawLinks();
+  runNetworkImpulse();
   if (!parent) focusNodeInView(node.id);
 }
 
@@ -303,7 +335,13 @@ function addEdge(from, to) {
     if (target.type === "Social Media Posting" && target.images.length === 0) {
       target.images = [...source.images];
     }
+    applyInheritedAttributes(source, target);
+    target.justConnectedAt = Date.now();
+    source.justConnectedAt = Date.now();
     updateNodeCard(target);
+    updateNodeCard(source);
+    if (selectedNodeId === target.id) fillInspector(target);
+    setTimeout(() => drawLinks(), 850);
   }
 }
 
@@ -412,10 +450,15 @@ function updateNodeCard(node) {
   if (!element) return;
 
   const tone = colorForType(node.type);
+  const connectedIds = getConnectedNodeIds();
+  const isConnected = connectedIds.has(node.id);
+
   element.style.left = `${node.position.x}px`;
   element.style.top = `${node.position.y}px`;
   element.style.borderColor = `${tone}66`;
-  element.style.boxShadow = `0 8px 18px ${tone}22`;
+  element.style.boxShadow = isConnected ? `0 8px 18px ${tone}22` : `0 5px 10px rgba(80,80,120,0.08)`;
+  element.style.opacity = isConnected ? "1" : "0.62";
+  element.classList.toggle("just-connected", Boolean(node.justConnectedAt && Date.now() - node.justConnectedAt < 700));
 
   const typeElement = element.querySelector(".type");
   typeElement.textContent = node.type;
@@ -456,7 +499,12 @@ function updateNodeCard(node) {
 
   const tagsContainer = element.querySelector(".tags");
   tagsContainer.innerHTML = "";
-  node.tags.forEach((tag) => {
+  const derivedTags = [...node.tags];
+  if (node.audience) derivedTags.unshift(`Audience: ${node.audience}`);
+  if (node.goal) derivedTags.unshift(`Goal: ${node.goal}`);
+  if (node.channel) derivedTags.unshift(`Channel: ${node.channel}`);
+
+  derivedTags.forEach((tag) => {
     const chip = document.createElement("span");
     chip.className = "tag";
     chip.textContent = tag;
@@ -508,6 +556,9 @@ function fillInspector(node) {
   inputs.caption.value = node.social.caption;
   inputs.hashtags.value = node.social.hashtags.join(", ");
   inputs.preview.value = node.social.preview;
+  inputs.audience.value = node.audience;
+  inputs.goal.value = node.goal;
+  inputs.channel.value = node.channel;
   deleteNodeButton.disabled = false;
 
   socialFields.classList.toggle("hidden", node.type !== "Social Media Posting");
@@ -515,14 +566,12 @@ function fillInspector(node) {
   contentUploadFields.classList.toggle("hidden", !uploadVisible);
 }
 
-function selectNode(nodeId) {
+function selectNode(nodeId, append = false) {
   selectedNodeId = nodeId;
+  if (!append) selectedNodeIds.clear();
+  selectedNodeIds.add(nodeId);
   const selected = getNode(nodeId);
-
-  zoomLayer
-    .querySelectorAll(".node")
-    .forEach((el) => el.classList.toggle("selected", el.dataset.id === nodeId));
-
+  updateNodeSelectionUI();
   fillInspector(selected);
 }
 
@@ -531,19 +580,24 @@ function enableDragging(element, node) {
     if (event.button !== 0) return;
     if (event.target.closest("button, input, textarea, select")) return;
 
-    selectNode(node.id);
+    selectNode(node.id, event.shiftKey);
+
+    const movingIds = selectedNodeIds.has(node.id)
+      ? [...selectedNodeIds]
+      : [node.id];
 
     const startX = event.clientX;
     const startY = event.clientY;
-    const originX = node.position.x;
-    const originY = node.position.y;
+    const origins = movingIds.map((id) => ({ id, node: getNode(id), x: getNode(id).position.x, y: getNode(id).position.y }));
 
     function onMove(moveEvent) {
       const deltaX = (moveEvent.clientX - startX) / zoom;
       const deltaY = (moveEvent.clientY - startY) / zoom;
-      node.position.x = originX + deltaX;
-      node.position.y = originY + deltaY;
-      updateNodeCard(node);
+      origins.forEach((entry) => {
+        entry.node.position.x = entry.x + deltaX;
+        entry.node.position.y = entry.y + deltaY;
+        updateNodeCard(entry.node);
+      });
       drawLinks();
     }
 
@@ -749,6 +803,9 @@ nodeForm.addEventListener("input", (event) => {
   if (event.target === inputs.caption) selected.social.caption = inputs.caption.value;
   if (event.target === inputs.hashtags) selected.social.hashtags = parseList(inputs.hashtags.value);
   if (event.target === inputs.preview) selected.social.preview = inputs.preview.value;
+  if (event.target === inputs.audience) selected.audience = inputs.audience.value.trim();
+  if (event.target === inputs.goal) selected.goal = inputs.goal.value.trim();
+  if (event.target === inputs.channel) selected.channel = inputs.channel.value.trim();
 
   socialFields.classList.toggle("hidden", selected.type !== "Social Media Posting");
   const uploadVisible = selected.type === "Content" || selected.type === "Social Media Posting";
@@ -780,11 +837,25 @@ addNodeButton.addEventListener("click", () => {
 
 toggleListViewButton.addEventListener("click", () => toggleListMode());
 
-function setZoom(nextZoom) {
-  zoom = Math.min(2, Math.max(0.4, nextZoom));
+function setZoom(nextZoom, centerClient = null) {
+  const oldZoom = zoom;
+  const clamped = Math.min(2, Math.max(0.4, nextZoom));
+  if (clamped === oldZoom) return;
+
+  const rect = canvas.getBoundingClientRect();
+  const cx = centerClient ? centerClient.x : rect.left + canvas.clientWidth / 2;
+  const cy = centerClient ? centerClient.y : rect.top + canvas.clientHeight / 2;
+  const boardX = (cx - rect.left + canvas.scrollLeft) / oldZoom;
+  const boardY = (cy - rect.top + canvas.scrollTop) / oldZoom;
+
+  zoom = clamped;
   zoomLayer.style.transform = `scale(${zoom})`;
   zoomLayer.style.transformOrigin = "0 0";
+
+  canvas.scrollLeft = boardX * zoom - (cx - rect.left);
+  canvas.scrollTop = boardY * zoom - (cy - rect.top);
   zoomLabel.textContent = `${Math.round(zoom * 100)}%`;
+  drawLinks();
 }
 
 zoomInButton.addEventListener("click", () => setZoom(zoom + 0.1));
@@ -796,7 +867,7 @@ canvas.addEventListener(
     if (event.ctrlKey) {
       event.preventDefault();
       const factor = event.deltaY < 0 ? 0.1 : -0.1;
-      setZoom(zoom + factor);
+      setZoom(zoom + factor, { x: event.clientX, y: event.clientY });
       return;
     }
 
@@ -823,6 +894,92 @@ canvas.addEventListener("drop", (event) => {
     images: files.map((file) => ({ id: crypto.randomUUID(), name: file.name, url: URL.createObjectURL(file) }))
   });
 });
+
+canvas.addEventListener("pointerdown", (event) => {
+  if (event.button !== 0) return;
+  if (event.target.closest(".node, .context-menu, button, input, textarea, select")) return;
+
+  const startX = event.clientX;
+  const startY = event.clientY;
+  const box = document.createElement("div");
+  box.className = "selection-box";
+  canvas.appendChild(box);
+  marqueeSelection = { box, startX, startY };
+
+  function updateBox(moveEvent) {
+    const x = Math.min(startX, moveEvent.clientX);
+    const y = Math.min(startY, moveEvent.clientY);
+    const w = Math.abs(moveEvent.clientX - startX);
+    const h = Math.abs(moveEvent.clientY - startY);
+    const rect = canvas.getBoundingClientRect();
+
+    box.style.left = `${x - rect.left}px`;
+    box.style.top = `${y - rect.top}px`;
+    box.style.width = `${w}px`;
+    box.style.height = `${h}px`;
+
+    selectedNodeIds.clear();
+    nodes.forEach((node) => {
+      const nodeX = node.position.x * zoom - canvas.scrollLeft;
+      const nodeY = node.position.y * zoom - canvas.scrollTop;
+      const nodeW = 285 * zoom;
+      const nodeH = 180 * zoom;
+      const intersects =
+        nodeX < x - rect.left + w && nodeX + nodeW > x - rect.left &&
+        nodeY < y - rect.top + h && nodeY + nodeH > y - rect.top;
+      if (intersects) selectedNodeIds.add(node.id);
+    });
+    updateNodeSelectionUI();
+  }
+
+  function stopSelection() {
+    window.removeEventListener("pointermove", updateBox);
+    window.removeEventListener("pointerup", stopSelection);
+    box.remove();
+    marqueeSelection = null;
+    selectedNodeId = [...selectedNodeIds][0] || null;
+    fillInspector(selectedNodeId ? getNode(selectedNodeId) : null);
+  }
+
+  window.addEventListener("pointermove", updateBox);
+  window.addEventListener("pointerup", stopSelection);
+});
+
+function runNetworkImpulse() {
+  if (edges.length === 0) return;
+  const pulsePaths = [];
+  const roots = nodes.filter((node) => !edges.some((edge) => edge[1] === node.id));
+  const startId = roots[0]?.id || nodes[0]?.id;
+  if (!startId) return;
+
+  const queue = [{ id: startId, delay: 0 }];
+  const seen = new Set();
+  while (queue.length) {
+    const { id, delay } = queue.shift();
+    if (seen.has(id)) continue;
+    seen.add(id);
+
+    edges.forEach(([from, to]) => {
+      if (from !== id) return;
+      const a = centerOf(from);
+      const b = centerOf(to);
+      if (!a || !b) return;
+      const pulse = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      const mid = (a.y + b.y) / 2;
+      pulse.setAttribute("d", `M ${a.x} ${a.y} C ${a.x} ${mid}, ${b.x} ${mid}, ${b.x} ${b.y}`);
+      pulse.setAttribute("fill", "none");
+      pulse.setAttribute("stroke", "#c8bfff");
+      pulse.setAttribute("stroke-width", "4");
+      pulse.setAttribute("class", "impulse-path");
+      pulse.style.animationDelay = `${delay}ms`;
+      links.appendChild(pulse);
+      pulsePaths.push(pulse);
+      queue.push({ id: to, delay: delay + 130 });
+    });
+  }
+
+  setTimeout(() => pulsePaths.forEach((p) => p.remove()), 1400);
+}
 
 window.addEventListener("resize", drawLinks);
 

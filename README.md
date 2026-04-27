@@ -27,6 +27,11 @@ Ein klickbarer MVP für einen **Creative Collaboration Space** mit blankem Start
 - Drag & Drop von Nodes per linker Maustaste
 - Placeholder-/Beispieltexte erscheinen nur wenn Feld leer und nicht fokussiert
 - Node löschen über Inspector
+- Multi-Select per Drag-Selection und Gruppenverschiebung
+- Zoom skaliert gleichmäßig aus der Mitte des aktuellen Viewports
+- Audience/Goal/Channel werden top-down entlang von Verbindungen vererbt (bleiben editierbar)
+- Unverbundene Nodes erscheinen blasser, verbundene Nodes flashen beim Verbinden
+- Impuls-Effekt läuft von Top-Node über das Netzwerk bei neuer Node-Erstellung
 
 ## Start
 

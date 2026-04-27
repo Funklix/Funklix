@@ -501,6 +501,36 @@ body {
   background: #f0f3ff;
 }
 
+
+.node.just-connected {
+  animation: nodeFlash 0.7s ease;
+}
+
+@keyframes nodeFlash {
+  0% { filter: brightness(1); }
+  40% { filter: brightness(1.45); }
+  100% { filter: brightness(1); }
+}
+
+.selection-box {
+  position: absolute;
+  border: 1px dashed #6b4eff;
+  background: rgba(107, 78, 255, 0.12);
+  pointer-events: none;
+  z-index: 50;
+}
+
+.impulse-path {
+  stroke-dasharray: 14 8;
+  animation: impulseMove 0.7s linear forwards;
+  pointer-events: none;
+}
+
+@keyframes impulseMove {
+  from { stroke-dashoffset: 60; opacity: 0.9; }
+  to { stroke-dashoffset: 0; opacity: 0; }
+}
+
 .hidden {
   display: none;
 }
