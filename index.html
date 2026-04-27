@@ -21,20 +21,23 @@
       <main class="workspace-wrap">
         <header class="topbar">
           <div>
-            <h1>Campaign Canvas — Blank Space</h1>
-            <p>Starte ohne Inhalte und baue Nodes gemeinsam auf.</p>
+            <h1>Campaign Canvas — Collaborative Flow</h1>
+            <p>Top-down Hierarchie: Idea → Variations → Content → Social Posts.</p>
           </div>
           <div class="actions">
             <button id="add-node-btn">+ Add node</button>
-            <button>AI Assistant</button>
-            <button class="primary">Share</button>
+            <button id="zoom-out-btn">− Zoom</button>
+            <button id="zoom-in-btn">+ Zoom</button>
+            <span id="zoom-label">100%</span>
           </div>
         </header>
 
         <section class="canvas" id="canvas">
-          <svg class="links" id="links" aria-hidden="true"></svg>
-          <div class="empty-state" id="empty-state">
-            Noch keine Nodes vorhanden. Klicke auf <strong>+ Add node</strong>, um zu starten.
+          <div class="zoom-layer" id="zoom-layer">
+            <svg class="links" id="links" aria-hidden="true"></svg>
+            <div class="empty-state" id="empty-state">
+              Noch keine Nodes vorhanden. Klicke auf <strong>+ Add node</strong> oder auf das <strong>+</strong> in einer Node.
+            </div>
           </div>
         </section>
       </main>
@@ -45,13 +48,32 @@
 
         <form id="node-form" class="node-form" autocomplete="off">
           <label for="node-type">Typ</label>
-          <input id="node-type" name="type" placeholder="z. B. Idea, Angle, Ad" />
+          <select id="node-type" name="type"></select>
 
           <label for="node-title">Titel</label>
           <input id="node-title" name="title" placeholder="Node Titel" />
 
           <label for="node-content">Inhalt</label>
-          <textarea id="node-content" name="content" rows="4" placeholder="Beschreibung, Prompt, Task ..."></textarea>
+          <textarea id="node-content" name="content" rows="3" placeholder="Beschreibung, Prompt, Task ..."></textarea>
+
+          <div id="social-fields" class="social-fields hidden">
+            <label for="node-platform">Plattform Preview</label>
+            <select id="node-platform" name="platform">
+              <option>Instagram</option>
+              <option>TikTok</option>
+              <option>YouTube</option>
+              <option>X</option>
+            </select>
+
+            <label for="node-caption">Caption</label>
+            <textarea id="node-caption" name="caption" rows="2" placeholder="Social Caption"></textarea>
+
+            <label for="node-hashtags">Hashtags (Komma getrennt)</label>
+            <input id="node-hashtags" name="hashtags" placeholder="#solar, #greenenergy" />
+
+            <label for="node-preview">Preview Text</label>
+            <textarea id="node-preview" name="preview" rows="2" placeholder="So sieht der Post im Feed aus..."></textarea>
+          </div>
 
           <label for="node-tags">Tags (Komma getrennt)</label>
           <input id="node-tags" name="tags" placeholder="Audience, Goal, Channel" />
@@ -61,15 +83,30 @@
 
           <button id="delete-node-btn" type="button" class="danger">Delete node</button>
         </form>
+
+        <section class="comments-panel">
+          <h3>Kommentare</h3>
+          <div id="comments-list" class="comments-list"></div>
+          <div class="comment-inputs">
+            <input id="comment-user" placeholder="User Name" />
+            <textarea id="comment-text" rows="2" placeholder="Kommentar hinterlassen..."></textarea>
+            <button id="add-comment-btn" type="button">Kommentar hinzufügen</button>
+          </div>
+        </section>
       </aside>
     </div>
 
     <template id="node-template">
       <article class="node" tabindex="0">
-        <div class="drag-handle" title="Drag node">⋮⋮</div>
+        <div class="node-controls">
+          <button class="control-btn drag-handle" title="Node verschieben">⋮⋮</button>
+          <button class="control-btn add-child-btn" title="Child Node erstellen">＋</button>
+          <button class="control-btn connect-btn" title="Node verbinden">⤴</button>
+        </div>
         <span class="type"></span>
         <h3 class="title" contenteditable="true"></h3>
         <p class="content" contenteditable="true"></p>
+        <div class="social-preview hidden"></div>
         <div class="tags"></div>
         <div class="ab-tests"></div>
       </article>

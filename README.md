@@ -1,15 +1,24 @@
 # Campaign Canvas MVP
 
-Ein klickbarer MVP für einen **Creative Collaboration Space** mit leerem Startzustand.
+Ein klickbarer MVP für einen **Creative Collaboration Space** mit blankem Startzustand und Hierarchie-Workflow.
 
 ## Enthaltene Kernfeatures
 
-- Blank Canvas beim Laden (keine vorausgefüllten Inhalte)
-- `+ Add node` erstellt neue Nodes
-- Node Konfiguration im Inspector (Typ, Titel, Inhalt, Tags, Varianten)
-- Inhalte sind editierbar (direkt auf der Karte + im Inspector)
-- Drag-and-drop Verschiebung über den Node-Handle
-- Node kann im Inspector gelöscht werden
+- Blank Canvas beim Laden
+- `+ Add node` in der Topbar + `+` pro Node für direkte Child-Erstellung
+- Node-Typen mit Farbcodierung:
+  - Idea
+  - Campaign Variation
+  - Content
+  - Social Media Posting
+  - Landing Page
+  - Email Campaign
+- Node-Verbindungen (Connect-Button pro Node + Zielnode anklicken)
+- Top-down Hierarchie durch Parent-Child Erstellung/Verbindung
+- Social-Media-Posting Felder: Plattform, Caption, Hashtags, Preview
+- Kommentare pro Node inkl. Username und Datum/Uhrzeit
+- Zoom In/Out auf dem Canvas
+- Node löschen über Inspector
 
 ## Start
 
