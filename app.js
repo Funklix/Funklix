@@ -21,6 +21,8 @@ const boardListView = document.getElementById("board-list-view");
 const toggleListViewButton = document.getElementById("toggle-list-view-btn");
 
 const addNodeButton = document.getElementById("add-node-btn");
+const nodeTypePicker = document.getElementById("node-type-picker");
+const nodeTypeOptions = document.getElementById("node-type-options");
 const zoomInButton = document.getElementById("zoom-in-btn");
 const zoomOutButton = document.getElementById("zoom-out-btn");
 const zoomLabel = document.getElementById("zoom-label");
@@ -89,6 +91,28 @@ function getNode(nodeId) {
 
 function colorForType(type) {
   return NODE_TYPES[type]?.color || "#5f6a82";
+}
+const NODE_TYPE_VALUES = Object.keys(NODE_TYPES);
+
+function openNodeTypePicker(onSelect, preferred = "Idea") {
+  nodeTypeOptions.innerHTML = "";
+
+  NODE_TYPE_VALUES.forEach((type) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = type;
+    button.className = "picker-option";
+    button.style.borderColor = `${colorForType(type)}66`;
+    button.addEventListener("click", () => {
+      nodeTypePicker.classList.add("hidden");
+      onSelect(type);
+    });
+    nodeTypeOptions.appendChild(button);
+  });
+
+  nodeTypePicker.classList.remove("hidden");
+  const preferredButton = [...nodeTypeOptions.children].find((btn) => btn.textContent === preferred);
+  if (preferredButton) preferredButton.focus();
 }
 
 function toBoardCoordinates(clientX, clientY) {
@@ -403,10 +427,31 @@ function updateNodeCard(node) {
   const strip = element.querySelector(".image-strip");
   strip.innerHTML = "";
   node.images.forEach((img) => {
+    const wrapper = document.createElement("button");
+    wrapper.type = "button";
+    wrapper.className = "image-thumb";
+
     const image = document.createElement("img");
     image.src = img.url;
     image.alt = img.name;
-    strip.appendChild(image);
+
+    const zoomHint = document.createElement("span");
+    zoomHint.className = "zoom-hint";
+    zoomHint.textContent = "🔍";
+
+    wrapper.appendChild(image);
+    wrapper.appendChild(zoomHint);
+
+    wrapper.addEventListener("click", (event) => {
+      event.stopPropagation();
+      wrapper.classList.add("expanded");
+    });
+
+    wrapper.addEventListener("mouseleave", () => {
+      wrapper.classList.remove("expanded");
+    });
+
+    strip.appendChild(wrapper);
   });
 
   const tagsContainer = element.querySelector(".tags");
@@ -570,13 +615,9 @@ function renderNode(node) {
 
   element.querySelector(".add-child-btn").addEventListener("click", (event) => {
     event.stopPropagation();
-    const type = window.prompt(
-      "Neuen Node-Typ eingeben: Idea, Campaign Variation, Content, Social Media Posting, Landing Page, Email Campaign",
-      "Content"
-    );
-
-    const finalType = NODE_TYPES[type] ? type : "Content";
-    createNode({ type: finalType, parentId: node.id });
+    openNodeTypePicker((selectedType) => {
+      createNode({ type: selectedType, parentId: node.id });
+    }, "Content");
   });
 
   element.querySelector(".connector-handle").addEventListener("pointerdown", (event) => {
@@ -598,7 +639,7 @@ function centerOf(nodeId) {
   };
 }
 
-function appendPath(fromPoint, toPoint, dashed = false) {
+function appendPath(fromPoint, toPoint, dashed = false, edgeIndex = null) {
   const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
   const midpointY = (fromPoint.y + toPoint.y) / 2;
   path.setAttribute(
@@ -609,18 +650,33 @@ function appendPath(fromPoint, toPoint, dashed = false) {
   path.setAttribute("stroke", "#8f80ff");
   path.setAttribute("stroke-width", "2");
   path.setAttribute("stroke-linecap", "round");
-  if (dashed) path.setAttribute("stroke-dasharray", "6 5");
+  if (dashed) {
+    path.setAttribute("stroke-dasharray", "6 5");
+    path.style.pointerEvents = "none";
+  } else {
+    path.style.cursor = "pointer";
+    path.style.pointerEvents = "stroke";
+    if (edgeIndex !== null) {
+      path.dataset.edgeIndex = String(edgeIndex);
+      path.title = "Click to delete connection";
+      path.addEventListener("click", (event) => {
+        event.stopPropagation();
+        edges.splice(edgeIndex, 1);
+        drawLinks();
+      });
+    }
+  }
   links.appendChild(path);
 }
 
 function drawLinks() {
   links.innerHTML = "";
 
-  edges.forEach(([from, to]) => {
+  edges.forEach(([from, to], index) => {
     const a = centerOf(from);
     const b = centerOf(to);
     if (!a || !b) return;
-    appendPath(a, b, false);
+    appendPath(a, b, false, index);
   });
 
   if (activeConnection) {
@@ -646,18 +702,15 @@ document.addEventListener("click", (event) => {
 
 addContextNodeButton.addEventListener("click", () => {
   hideContextMenu();
-  const type = window.prompt(
-    "Node-Typ auswählen: Idea, Campaign Variation, Content, Social Media Posting, Landing Page, Email Campaign",
-    "Idea"
-  );
-  const finalType = NODE_TYPES[type] ? type : "Idea";
-  createNode({
-    type: finalType,
-    position: {
-      x: contextPosition.x / zoom - 140,
-      y: contextPosition.y / zoom - 90
-    }
-  });
+  openNodeTypePicker((selectedType) => {
+    createNode({
+      type: selectedType,
+      position: {
+        x: contextPosition.x / zoom - 140,
+        y: contextPosition.y / zoom - 90
+      }
+    });
+  }, "Idea");
 });
 
 addPostitCommentButton.addEventListener("click", () => {
@@ -719,13 +772,10 @@ deleteNodeButton.addEventListener("click", () => {
 });
 
 addNodeButton.addEventListener("click", () => {
-  const type = window.prompt(
-    "Node-Typ auswählen: Idea, Campaign Variation, Content, Social Media Posting, Landing Page, Email Campaign",
-    "Idea"
-  );
-
-  const finalType = NODE_TYPES[type] ? type : "Idea";
-  createNode({ type: finalType });
+  toggleListMode(false);
+  openNodeTypePicker((selectedType) => {
+    createNode({ type: selectedType });
+  }, "Idea");
 });
 
 toggleListViewButton.addEventListener("click", () => toggleListMode());
@@ -775,6 +825,10 @@ canvas.addEventListener("drop", (event) => {
 });
 
 window.addEventListener("resize", drawLinks);
+
+nodeTypePicker.addEventListener("click", (event) => {
+  if (event.target === nodeTypePicker) nodeTypePicker.classList.add("hidden");
+});
 
 populateTypeSelect();
 fillInspector(null);
