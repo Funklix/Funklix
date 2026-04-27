@@ -26,6 +26,7 @@ const zoomOutButton = document.getElementById("zoom-out-btn");
 const zoomLabel = document.getElementById("zoom-label");
 
 const contextMenu = document.getElementById("context-menu");
+const addContextNodeButton = document.getElementById("add-context-node-btn");
 const addPostitCommentButton = document.getElementById("add-postit-comment-btn");
 
 const inspectorMeta = document.getElementById("inspector-meta");
@@ -170,6 +171,44 @@ function focusNodeInView(nodeId) {
   const targetY = element.offsetTop * zoom - canvas.clientHeight / 2 + element.offsetHeight / 2;
   canvas.scrollTo({ left: Math.max(0, targetX), top: Math.max(0, targetY), behavior: "smooth" });
 }
+function getNodesBounds() {
+  if (nodes.length === 0) return null;
+
+  const width = 285;
+  const height = 180;
+
+  const minX = Math.min(...nodes.map((node) => node.position.x));
+  const minY = Math.min(...nodes.map((node) => node.position.y));
+  const maxX = Math.max(...nodes.map((node) => node.position.x + width));
+  const maxY = Math.max(...nodes.map((node) => node.position.y + height));
+  return { minX, minY, maxX, maxY, width: maxX - minX, height: maxY - minY };
+}
+
+function focusOnExistingNodes({ adjustZoom = true } = {}) {
+  const bounds = getNodesBounds();
+  if (!bounds) {
+    if (adjustZoom) setZoom(1.2);
+    return;
+  }
+
+  if (adjustZoom) {
+    const padding = 140;
+    const scaleX = (canvas.clientWidth - padding) / Math.max(320, bounds.width);
+    const scaleY = (canvas.clientHeight - padding) / Math.max(240, bounds.height);
+    const nextZoom = Math.min(1.6, Math.max(0.6, Math.min(scaleX, scaleY)));
+    setZoom(nextZoom);
+  }
+
+  const centerX = (bounds.minX + bounds.maxX) / 2;
+  const centerY = (bounds.minY + bounds.maxY) / 2;
+
+  canvas.scrollTo({
+    left: Math.max(0, centerX * zoom - canvas.clientWidth / 2),
+    top: Math.max(0, centerY * zoom - canvas.clientHeight / 2),
+    behavior: "smooth"
+  });
+}
+
 
 function createNode({ type = "Idea", parentId = null, position = null, images = [] } = {}) {
   const parent = parentId ? getNode(parentId) : null;
@@ -210,6 +249,7 @@ function createNode({ type = "Idea", parentId = null, position = null, images = 
   updateListView();
   selectNode(node.id);
   drawLinks();
+  if (!parent) focusNodeInView(node.id);
 }
 
 function addImagesToNode(node, files) {
@@ -265,6 +305,7 @@ function removeNode(nodeId) {
   setEmptyStateVisibility();
   updateListView();
   drawLinks();
+  focusOnExistingNodes();
 }
 
 function postitFontSize(text) {
@@ -603,6 +644,22 @@ document.addEventListener("click", (event) => {
   if (!contextMenu.contains(event.target)) hideContextMenu();
 });
 
+addContextNodeButton.addEventListener("click", () => {
+  hideContextMenu();
+  const type = window.prompt(
+    "Node-Typ auswählen: Idea, Campaign Variation, Content, Social Media Posting, Landing Page, Email Campaign",
+    "Idea"
+  );
+  const finalType = NODE_TYPES[type] ? type : "Idea";
+  createNode({
+    type: finalType,
+    position: {
+      x: contextPosition.x / zoom - 140,
+      y: contextPosition.y / zoom - 90
+    }
+  });
+});
+
 addPostitCommentButton.addEventListener("click", () => {
   hideContextMenu();
   if (!selectedNodeId) return;
@@ -724,8 +781,6 @@ fillInspector(null);
 setEmptyStateVisibility();
 updateListView();
 toggleListMode(false);
-setZoom(1);
-
-canvas.scrollLeft = 4200;
-canvas.scrollTop = 4200;
+setZoom(1.2);
+focusOnExistingNodes({ adjustZoom: false });
 drawLinks();
