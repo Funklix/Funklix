@@ -1,0 +1,243 @@
+:root {
+  --bg: #f6f7fb;
+  --panel: #ffffff;
+  --text: #22253a;
+  --muted: #6f748f;
+  --primary: #6950ef;
+  --primary-soft: #ece8ff;
+  --border: #dfe3f2;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  color: var(--text);
+  background: var(--bg);
+}
+
+.app-shell {
+  display: grid;
+  grid-template-columns: 240px 1fr 300px;
+  min-height: 100vh;
+}
+
+.sidebar,
+.inspector {
+  background: var(--panel);
+  border-right: 1px solid var(--border);
+  padding: 18px;
+}
+
+.inspector {
+  border-left: 1px solid var(--border);
+  border-right: none;
+}
+
+.logo {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  background: linear-gradient(150deg, #7f63ff, #4d7cff);
+  font-weight: 700;
+  margin-bottom: 24px;
+}
+
+.nav-item {
+  width: 100%;
+  border: none;
+  background: transparent;
+  text-align: left;
+  padding: 10px 12px;
+  border-radius: 10px;
+  margin-bottom: 6px;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.nav-item.active,
+.nav-item:hover {
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+
+.campaign-list {
+  margin-top: 24px;
+}
+
+.campaign-list h3,
+.inspector h3 {
+  font-size: 0.9rem;
+  margin-bottom: 10px;
+  color: var(--muted);
+}
+
+.campaign-list ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.campaign-list li {
+  padding: 8px;
+  border-radius: 8px;
+  margin-bottom: 4px;
+}
+
+.campaign-list li.active {
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+
+.workspace-wrap {
+  display: flex;
+  flex-direction: column;
+}
+
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 18px 24px;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+}
+
+.topbar h1 {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+.topbar p {
+  margin: 3px 0 0;
+  color: var(--muted);
+}
+
+.actions button,
+.ai-actions button {
+  border: 1px solid var(--border);
+  background: #fff;
+  border-radius: 10px;
+  padding: 10px 14px;
+  margin-left: 8px;
+  cursor: pointer;
+}
+
+.actions .primary {
+  color: #fff;
+  border-color: var(--primary);
+  background: var(--primary);
+}
+
+.canvas {
+  position: relative;
+  flex: 1;
+  padding: 20px;
+  overflow: auto;
+  background-image: radial-gradient(#dcdff1 1px, transparent 1px);
+  background-size: 18px 18px;
+}
+
+.links {
+  position: absolute;
+  inset: 0;
+  width: 1800px;
+  height: 900px;
+  pointer-events: none;
+}
+
+.node {
+  position: absolute;
+  width: 280px;
+  background: var(--panel);
+  border: 1px solid #c8bfff;
+  border-radius: 14px;
+  padding: 12px;
+  box-shadow: 0 8px 18px rgba(82, 67, 170, 0.08);
+  cursor: pointer;
+}
+
+.node.selected {
+  outline: 2px solid var(--primary);
+}
+
+.node .type {
+  display: inline-block;
+  color: var(--primary);
+  font-weight: 700;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+}
+
+.node h3 {
+  margin: 8px 0;
+  font-size: 1rem;
+}
+
+.node p {
+  margin: 0 0 8px;
+  color: #2f3557;
+  font-size: 0.94rem;
+  line-height: 1.4;
+}
+
+.tags,
+.ab-tests {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.tag,
+.variant {
+  background: #f2f3fa;
+  border-radius: 999px;
+  padding: 4px 9px;
+  font-size: 0.76rem;
+}
+
+#comments {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  min-height: 130px;
+  padding: 10px;
+  background: #fafbff;
+  color: var(--muted);
+}
+
+.assignment {
+  margin-top: 12px;
+}
+
+.assignment select {
+  width: 100%;
+  margin-top: 6px;
+  padding: 10px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+}
+
+@media (max-width: 1300px) {
+  .app-shell {
+    grid-template-columns: 84px 1fr;
+  }
+
+  .sidebar {
+    padding: 12px;
+  }
+
+  .sidebar .campaign-list,
+  .sidebar .nav-item {
+    display: none;
+  }
+
+  .inspector {
+    display: none;
+  }
+}

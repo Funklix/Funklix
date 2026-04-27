@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Campaign Canvas MVP</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="logo">CC</div>
+        <nav>
+          <button class="nav-item active">Campaign Canvas</button>
+          <button class="nav-item">Content Workspace</button>
+          <button class="nav-item">AI Brain</button>
+          <button class="nav-item">Insights</button>
+        </nav>
+        <section class="campaign-list">
+          <h3>Kampagnen</h3>
+          <ul>
+            <li class="active">Solar Launch Campaign</li>
+            <li>Q3 Brand Awareness</li>
+            <li>Black Friday</li>
+          </ul>
+        </section>
+      </aside>
+
+      <main class="workspace-wrap">
+        <header class="topbar">
+          <div>
+            <h1>Campaign Canvas — Idea → Campaign</h1>
+            <p>Node-based Creative Collaboration Space für Teams</p>
+          </div>
+          <div class="actions">
+            <button>+ Add node</button>
+            <button>AI Assistant</button>
+            <button class="primary">Share</button>
+          </div>
+        </header>
+
+        <section class="canvas" id="canvas">
+          <svg class="links" id="links" aria-hidden="true"></svg>
+        </section>
+      </main>
+
+      <aside class="inspector">
+        <h2 id="inspector-title">Node Details</h2>
+        <div class="meta" id="inspector-meta">Wähle einen Node auf dem Canvas</div>
+
+        <h3>AI Actions</h3>
+        <div class="ai-actions">
+          <button data-action="generate">Generate</button>
+          <button data-action="improve">Improve</button>
+          <button data-action="tone">Adapt tone</button>
+        </div>
+
+        <h3>Collaboration</h3>
+        <div id="comments"></div>
+        <div class="assignment">
+          <label for="assignee">Assign to</label>
+          <select id="assignee">
+            <option>Team</option>
+            <option>Copywriter</option>
+            <option>Designer</option>
+            <option>Performance</option>
+          </select>
+        </div>
+      </aside>
+    </div>
+
+    <template id="node-template">
+      <article class="node" tabindex="0">
+        <span class="type"></span>
+        <h3 class="title"></h3>
+        <p class="content"></p>
+        <div class="tags"></div>
+        <div class="ab-tests"></div>
+      </article>
+    </template>
+
+    <script src="app.js"></script>
+  </body>
+</html>
