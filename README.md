@@ -9,9 +9,10 @@ Ein klickbarer MVP für einen **Creative Collaboration Space** mit blankem Start
   - Pinch-to-Zoom über Touchpad-Geste
 - Zoom nur im Collaboration Space
 - Umschaltbarer List View per Button in der Topbar
-- `+ Add node` in der Topbar + `+` pro Node für direkte Child-Erstellung
+- Hervorgehobener grüner `+ Add node` Button ganz links in der Topbar
+- `+` pro Node für direkte Child-Erstellung
 - Node-Typen mit Farbcodierung (Idea, Campaign Variation, Content, Social Media Posting, Landing Page, Email Campaign)
-- Node-Verbindungen (Connect-Button pro Node + Zielnode anklicken)
+- Manuelle Node-Verbindung per unterem `+`-Connector: ziehen, dynamische Linie, loslassen auf Zielnode
 - Top-down Hierarchie durch Parent-Child Erstellung/Verbindung
 - Content/Social Image Upload im Inspector
 - Bilder per Drag-and-Drop auf das Board erzeugen Content-Nodes mit Bildern

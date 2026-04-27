@@ -50,10 +50,10 @@ const inputs = {
 let nodeCounter = 1;
 let postitCounter = 1;
 let selectedNodeId = null;
-let sourceForConnection = null;
 let zoom = 1;
 let contextPosition = { x: 0, y: 0 };
 let isListView = false;
+let activeConnection = null;
 
 function populateTypeSelect() {
   Object.keys(NODE_TYPES).forEach((type) => {
@@ -95,6 +95,13 @@ function toBoardCoordinates(clientX, clientY) {
   return {
     x: (clientX - rect.left + canvas.scrollLeft) / zoom,
     y: (clientY - rect.top + canvas.scrollTop) / zoom
+  };
+}
+
+function getBoardViewportCenter() {
+  return {
+    x: (canvas.scrollLeft + canvas.clientWidth / 2) / zoom,
+    y: (canvas.scrollTop + canvas.clientHeight / 2) / zoom
   };
 }
 
@@ -166,6 +173,7 @@ function focusNodeInView(nodeId) {
 
 function createNode({ type = "Idea", parentId = null, position = null, images = [] } = {}) {
   const parent = parentId ? getNode(parentId) : null;
+  const center = getBoardViewportCenter();
 
   const node = {
     id: `node-${nodeCounter++}`,
@@ -184,8 +192,8 @@ function createNode({ type = "Idea", parentId = null, position = null, images = 
     postits: [],
     level: parent ? parent.level + 1 : 0,
     position: position || {
-      x: parent ? parent.position.x + 24 : 4600 + (nodes.length % 3) * 300,
-      y: parent ? parent.position.y + 230 : 4600 + Math.floor(nodes.length / 3) * 230
+      x: parent ? parent.position.x + 24 : center.x - 140,
+      y: parent ? parent.position.y + 230 : center.y - 120
     }
   };
 
@@ -280,8 +288,8 @@ function enablePostitDragging(note, postit) {
     function onMove(moveEvent) {
       const deltaX = (moveEvent.clientX - startX) / zoom;
       const deltaY = (moveEvent.clientY - startY) / zoom;
-      postit.x = Math.max(-150, originX + deltaX);
-      postit.y = Math.max(-150, originY + deltaY);
+      postit.x = originX + deltaX;
+      postit.y = originY + deltaY;
       note.style.left = `${postit.x}px`;
       note.style.top = `${postit.y}px`;
     }
@@ -348,10 +356,8 @@ function updateNodeCard(node) {
   typeElement.textContent = node.type;
   typeElement.style.color = tone;
 
-  const titleEl = element.querySelector(".title");
-  const contentEl = element.querySelector(".content");
-  titleEl.textContent = node.title;
-  contentEl.textContent = node.content;
+  element.querySelector(".title").textContent = node.title;
+  element.querySelector(".content").textContent = node.content;
 
   const strip = element.querySelector(".image-strip");
   strip.innerHTML = "";
@@ -465,6 +471,43 @@ function enableDragging(element, node) {
   });
 }
 
+function startConnectionDrag(nodeId, event) {
+  event.preventDefault();
+  event.stopPropagation();
+
+  const start = centerOf(nodeId);
+  if (!start) return;
+
+  activeConnection = {
+    fromId: nodeId,
+    start,
+    current: start
+  };
+  drawLinks();
+
+  function onMove(moveEvent) {
+    activeConnection.current = toBoardCoordinates(moveEvent.clientX, moveEvent.clientY);
+    drawLinks();
+  }
+
+  function onUp(upEvent) {
+    window.removeEventListener("pointermove", onMove);
+    window.removeEventListener("pointerup", onUp);
+
+    const target = document.elementFromPoint(upEvent.clientX, upEvent.clientY)?.closest(".node");
+    if (target) {
+      const toId = target.dataset.id;
+      if (toId && toId !== nodeId) addEdge(nodeId, toId);
+    }
+
+    activeConnection = null;
+    drawLinks();
+  }
+
+  window.addEventListener("pointermove", onMove);
+  window.addEventListener("pointerup", onUp);
+}
+
 function renderNode(node) {
   const element = template.content.firstElementChild.cloneNode(true);
   element.dataset.id = node.id;
@@ -495,10 +538,8 @@ function renderNode(node) {
     createNode({ type: finalType, parentId: node.id });
   });
 
-  element.querySelector(".connect-btn").addEventListener("click", (event) => {
-    event.stopPropagation();
-    sourceForConnection = node.id;
-    inspectorMeta.textContent = `Verbindungsmodus: Zielnode anklicken für ${node.id}`;
+  element.querySelector(".connector-handle").addEventListener("pointerdown", (event) => {
+    startConnectionDrag(node.id, event);
   });
 
   zoomLayer.appendChild(element);
@@ -512,8 +553,23 @@ function centerOf(nodeId) {
 
   return {
     x: element.offsetLeft + element.offsetWidth / 2,
-    y: element.offsetTop + element.offsetHeight / 2
+    y: element.offsetTop + element.offsetHeight
   };
+}
+
+function appendPath(fromPoint, toPoint, dashed = false) {
+  const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  const midpointY = (fromPoint.y + toPoint.y) / 2;
+  path.setAttribute(
+    "d",
+    `M ${fromPoint.x} ${fromPoint.y} C ${fromPoint.x} ${midpointY}, ${toPoint.x} ${midpointY}, ${toPoint.x} ${toPoint.y}`
+  );
+  path.setAttribute("fill", "none");
+  path.setAttribute("stroke", "#8f80ff");
+  path.setAttribute("stroke-width", "2");
+  path.setAttribute("stroke-linecap", "round");
+  if (dashed) path.setAttribute("stroke-dasharray", "6 5");
+  links.appendChild(path);
 }
 
 function drawLinks() {
@@ -523,19 +579,12 @@ function drawLinks() {
     const a = centerOf(from);
     const b = centerOf(to);
     if (!a || !b) return;
-
-    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-    const midpointY = (a.y + b.y) / 2;
-    path.setAttribute(
-      "d",
-      `M ${a.x} ${a.y} C ${a.x} ${midpointY}, ${b.x} ${midpointY}, ${b.x} ${b.y}`
-    );
-    path.setAttribute("fill", "none");
-    path.setAttribute("stroke", "#8f80ff");
-    path.setAttribute("stroke-width", "2");
-    path.setAttribute("stroke-linecap", "round");
-    links.appendChild(path);
+    appendPath(a, b, false);
   });
+
+  if (activeConnection) {
+    appendPath(activeConnection.start, activeConnection.current, true);
+  }
 }
 
 function toggleListMode(force) {
@@ -544,15 +593,6 @@ function toggleListMode(force) {
   boardListView.classList.toggle("hidden", !isListView);
   toggleListViewButton.textContent = isListView ? "Board View" : "List View";
 }
-
-zoomLayer.addEventListener("click", (event) => {
-  const targetNode = event.target.closest(".node");
-  if (!targetNode || !sourceForConnection) return;
-
-  addEdge(sourceForConnection, targetNode.dataset.id);
-  sourceForConnection = null;
-  drawLinks();
-});
 
 canvas.addEventListener("contextmenu", (event) => {
   event.preventDefault();
@@ -653,10 +693,8 @@ canvas.addEventListener(
       return;
     }
 
-    if (!event.shiftKey) {
-      canvas.scrollLeft += event.deltaX;
-      canvas.scrollTop += event.deltaY;
-    }
+    canvas.scrollLeft += event.deltaX;
+    canvas.scrollTop += event.deltaY;
   },
   { passive: false }
 );

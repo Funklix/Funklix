@@ -115,6 +115,18 @@ body {
   cursor: pointer;
 }
 
+
+.actions .primary-add {
+  background: #23b26d;
+  border-color: #23b26d;
+  color: #fff;
+  font-weight: 700;
+}
+
+.actions .primary-add:hover {
+  background: #1ca45f;
+}
+
 #zoom-label {
   margin-left: 10px;
   min-width: 46px;
@@ -222,6 +234,22 @@ body {
   width: 28px;
   height: 28px;
   cursor: pointer;
+}
+
+
+.connector-handle {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: -13px;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  border: 1px solid #8f80ff;
+  background: #fff;
+  color: #6b4eff;
+  font-weight: 700;
+  cursor: crosshair;
 }
 
 .node.selected {

@@ -25,8 +25,8 @@
             <p>Top-down Hierarchie: Idea → Variations → Content → Social Posts.</p>
           </div>
           <div class="actions">
+            <button id="add-node-btn" class="primary-add">+ Add node</button>
             <button id="toggle-list-view-btn">List View</button>
-            <button id="add-node-btn">+ Add node</button>
             <button id="zoom-out-btn">− Zoom</button>
             <button id="zoom-in-btn">+ Zoom</button>
             <span id="zoom-label">100%</span>
@@ -104,7 +104,6 @@
       <article class="node" tabindex="0">
         <div class="node-controls">
           <button class="control-btn add-child-btn" title="Child Node erstellen">＋</button>
-          <button class="control-btn connect-btn" title="Node verbinden">⤴</button>
         </div>
         <span class="type"></span>
         <h3 class="title" contenteditable="true" data-placeholder="Node Titel"></h3>
@@ -113,6 +112,7 @@
         <div class="social-preview hidden"></div>
         <div class="tags"></div>
         <div class="ab-tests"></div>
+        <button class="connector-handle" title="Verbindung ziehen">+</button>
       </article>
     </template>
 
