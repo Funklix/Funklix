@@ -1,3 +1,4 @@
+console.info("Campaign Canvas build: 2026-04-27-fix");
 const NODE_TYPES = {
   Idea: { color: "#6b4eff" },
   "Campaign Variation": { color: "#2f7ef7" },
@@ -19,6 +20,7 @@ const state = {
   nodeCounter: 1,
   postitCounter: 1,
   activeConnection: null,
+  connectorCreateMode: null,
   contextBoardPoint: { x: 0, y: 0 }
 };
 
@@ -298,6 +300,16 @@ function drawLinks() {
     path.setAttribute("stroke", "#8f80ff");
     path.setAttribute("stroke-width", "2");
     path.setAttribute("stroke-dasharray", "6 5");
+    path.style.pointerEvents = "none";
+    el.links.appendChild(path);
+  }
+  if (state.connectorCreateMode) {
+    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    path.setAttribute("d", edgePath(state.connectorCreateMode.start, state.connectorCreateMode.current));
+    path.setAttribute("fill", "none");
+    path.setAttribute("stroke", "#36c08b");
+    path.setAttribute("stroke-width", "2");
+    path.setAttribute("stroke-dasharray", "7 5");
     path.style.pointerEvents = "none";
     el.links.appendChild(path);
   }
@@ -590,25 +602,42 @@ function renderNode(node) {
 
     const start = nodeBottomCenter(node.id);
     if (!start) return;
-    state.activeConnection = { fromId: node.id, start, current: start };
-    drawLinks();
 
-    function move(ev) {
-      state.activeConnection.current = boardPointFromClient(ev.clientX, ev.clientY);
+    openTypePicker((type) => {
+      state.connectorCreateMode = { fromId: node.id, type, start, current: start };
       drawLinks();
-    }
 
-    function up(ev) {
-      window.removeEventListener("pointermove", move);
-      window.removeEventListener("pointerup", up);
-      const target = document.elementFromPoint(ev.clientX, ev.clientY)?.closest(".node");
-      if (target && target.dataset.id !== node.id) addEdge(node.id, target.dataset.id);
-      state.activeConnection = null;
-      drawLinks();
-    }
+      function move(ev) {
+        if (!state.connectorCreateMode) return;
+        state.connectorCreateMode.current = boardPointFromClient(ev.clientX, ev.clientY);
+        drawLinks();
+      }
 
-    window.addEventListener("pointermove", move);
-    window.addEventListener("pointerup", up);
+      function place(ev) {
+        if (!state.connectorCreateMode) return;
+        ev.preventDefault();
+        const point = boardPointFromClient(ev.clientX, ev.clientY);
+        const fromId = state.connectorCreateMode.fromId;
+        const nodeType = state.connectorCreateMode.type;
+
+        state.connectorCreateMode = null;
+        window.removeEventListener("pointermove", move);
+        el.canvas.removeEventListener("click", place, true);
+
+        const prevCount = state.nodes.length;
+        createNode({
+          type: nodeType,
+          position: { x: point.x - NODE_WIDTH / 2, y: point.y - NODE_HEIGHT / 2 }
+        });
+        const newNode = state.nodes[state.nodes.length - 1];
+        if (state.nodes.length > prevCount && newNode) {
+          addEdge(fromId, newNode.id);
+        }
+      }
+
+      window.addEventListener("pointermove", move);
+      el.canvas.addEventListener("click", place, true);
+    }, "Content");
   });
 
   const title = nodeEl.querySelector(".title");
@@ -710,8 +739,8 @@ el.canvas.addEventListener("contextmenu", (event) => {
   state.contextBoardPoint = point;
 
   const rect = el.canvas.getBoundingClientRect();
-  el.contextMenu.style.left = `${Math.max(10, Math.min(event.clientX - rect.left, rect.width - 220))}px`;
-  el.contextMenu.style.top = `${Math.max(10, Math.min(event.clientY - rect.top, rect.height - 100))}px`;
+  el.contextMenu.style.left = `${event.clientX - rect.left}px`;
+  el.contextMenu.style.top = `${event.clientY - rect.top}px`;
   el.contextMenu.classList.remove("hidden");
 });
 
@@ -722,10 +751,7 @@ document.addEventListener("click", (event) => {
 el.addContextNodeButton.addEventListener("click", () => {
   el.contextMenu.classList.add("hidden");
   openTypePicker((type) => {
-    createNode({
-      type,
-      position: { x: state.contextBoardPoint.x - NODE_WIDTH / 2, y: state.contextBoardPoint.y - NODE_HEIGHT / 2 }
-    });
+    createNode({ type });
   }, "Idea");
 });
 
