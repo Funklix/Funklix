@@ -202,6 +202,7 @@ function createNode({ type = "Idea", parentId = null, position = null, images = 
 
   state.nodes.push(node);
   renderNode(node);
+  toggleListMode(false);
 
   if (parent) addEdge(parent.id, node.id);
 
@@ -216,6 +217,7 @@ function createNode({ type = "Idea", parentId = null, position = null, images = 
   drawLinks();
   runNetworkImpulse();
   forceNodeVisible(node.id);
+  setTimeout(() => forceNodeVisible(node.id), 30);
 }
 
 function removeNode(nodeId) {
@@ -575,6 +577,7 @@ function updateListView() {
         updateSelectionClasses();
         fillInspector(node);
         forceNodeVisible(node.id);
+  setTimeout(() => forceNodeVisible(node.id), 30);
       });
       ul.appendChild(li);
     });
@@ -717,12 +720,11 @@ function enableNodeDrag(nodeEl, node) {
   });
 }
 
-function toggleListMode(force) {
-  const active = typeof force === "boolean" ? force : el.canvas.classList.contains("hidden") === false;
-  const next = typeof force === "boolean" ? force : !active;
-  el.canvas.classList.toggle("hidden", next);
-  el.boardListView.classList.toggle("hidden", !next);
-  el.toggleListViewButton.textContent = next ? "Board View" : "List View";
+function toggleListMode(showList) {
+  const shouldShowList = typeof showList === "boolean" ? showList : !el.canvas.classList.contains("hidden");
+  el.canvas.classList.toggle("hidden", shouldShowList);
+  el.boardListView.classList.toggle("hidden", !shouldShowList);
+  el.toggleListViewButton.textContent = shouldShowList ? "Board View" : "List View";
 }
 
 // Events
@@ -735,8 +737,7 @@ el.addNodeButton.addEventListener("click", () => {
 });
 
 el.toggleListViewButton.addEventListener("click", () => {
-  const isHidden = el.canvas.classList.contains("hidden");
-  toggleListMode(!isHidden);
+  toggleListMode();
 });
 
 el.zoomInButton.addEventListener("click", () => setZoom(state.zoom + 0.1));
@@ -916,3 +917,4 @@ setZoom(state.zoom);
 updateEmptyState();
 updateListView();
 fillInspector(null);
+toggleListMode(false);
