@@ -162,6 +162,21 @@ function forceNodeVisible(nodeId) {
   requestAnimationFrame(() => focusNodeInViewport(nodeId));
 }
 
+function ensureNodeActuallyVisible(node) {
+  const nodeEl = el.zoomLayer.querySelector(`[data-id='${node.id}']`);
+  if (!nodeEl) return;
+
+  const c = el.canvas.getBoundingClientRect();
+  const n = nodeEl.getBoundingClientRect();
+  const intersects = !(n.right < c.left || n.left > c.right || n.bottom < c.top || n.top > c.bottom);
+  if (intersects) return;
+
+  const center = viewportCenterBoard();
+  node.position.x = center.x - NODE_WIDTH / 2;
+  node.position.y = center.y - NODE_HEIGHT / 2;
+  updateNodeCard(node);
+  forceNodeVisible(node.id);
+}
 
 function applyInherited(source, target) {
   if (!target.audience && source.audience) target.audience = source.audience;
@@ -217,7 +232,7 @@ function createNode({ type = "Idea", parentId = null, position = null, images = 
   drawLinks();
   runNetworkImpulse();
   forceNodeVisible(node.id);
-  setTimeout(() => forceNodeVisible(node.id), 30);
+  setTimeout(() => { forceNodeVisible(node.id); ensureNodeActuallyVisible(node); }, 30);
 }
 
 function removeNode(nodeId) {
@@ -383,7 +398,7 @@ function updateNodeCard(node) {
   nodeEl.style.top = `${node.position.y}px`;
   nodeEl.style.borderColor = `${tone}66`;
   nodeEl.style.boxShadow = isConnected ? `0 8px 18px ${tone}22` : "0 5px 10px rgba(80,80,120,0.08)";
-  nodeEl.style.opacity = isConnected ? "1" : "0.62";
+  nodeEl.style.opacity = isConnected ? "1" : "0.9";
   nodeEl.classList.toggle("just-connected", !!node.justConnectedAt && Date.now() - node.justConnectedAt < 700);
 
   nodeEl.querySelector(".type").textContent = node.type;
@@ -577,7 +592,6 @@ function updateListView() {
         updateSelectionClasses();
         fillInspector(node);
         forceNodeVisible(node.id);
-  setTimeout(() => forceNodeVisible(node.id), 30);
       });
       ul.appendChild(li);
     });
