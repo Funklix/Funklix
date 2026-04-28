@@ -21,6 +21,7 @@ const state = {
   postitCounter: 1,
   activeConnection: null,
   connectorCreateMode: null,
+  connectorGhostEl: null,
   contextBoardPoint: { x: 0, y: 0 }
 };
 
@@ -157,6 +158,11 @@ function focusNodeInViewport(nodeId) {
   const y = nodeEl.offsetTop * state.zoom - el.canvas.clientHeight / 2 + nodeEl.offsetHeight / 2;
   el.canvas.scrollTo({ left: Math.max(0, x), top: Math.max(0, y) });
 }
+function forceNodeVisible(nodeId) {
+  focusNodeInViewport(nodeId);
+  requestAnimationFrame(() => focusNodeInViewport(nodeId));
+}
+
 
 function applyInherited(source, target) {
   if (!target.audience && source.audience) target.audience = source.audience;
@@ -210,7 +216,7 @@ function createNode({ type = "Idea", parentId = null, position = null, images = 
   updateEmptyState();
   drawLinks();
   runNetworkImpulse();
-  focusNodeInViewport(node.id);
+  forceNodeVisible(node.id);
 }
 
 function removeNode(nodeId) {
@@ -569,7 +575,7 @@ function updateListView() {
         state.selectedPrimary = node.id;
         updateSelectionClasses();
         fillInspector(node);
-        focusNodeInViewport(node.id);
+        forceNodeVisible(node.id);
       });
       ul.appendChild(li);
     });
@@ -605,11 +611,22 @@ function renderNode(node) {
 
     openTypePicker((type) => {
       state.connectorCreateMode = { fromId: node.id, type, start, current: start };
+
+      const ghost = document.createElement("article");
+      ghost.className = "node node-ghost";
+      ghost.innerHTML = `<span class="type">${type}</span><h3>${type}</h3>`;
+      el.zoomLayer.appendChild(ghost);
+      state.connectorGhostEl = ghost;
       drawLinks();
 
       function move(ev) {
         if (!state.connectorCreateMode) return;
-        state.connectorCreateMode.current = boardPointFromClient(ev.clientX, ev.clientY);
+        const point = boardPointFromClient(ev.clientX, ev.clientY);
+        state.connectorCreateMode.current = point;
+        if (state.connectorGhostEl) {
+          state.connectorGhostEl.style.left = `${point.x - NODE_WIDTH / 2}px`;
+          state.connectorGhostEl.style.top = `${point.y - NODE_HEIGHT / 2}px`;
+        }
         drawLinks();
       }
 
@@ -621,6 +638,10 @@ function renderNode(node) {
         const nodeType = state.connectorCreateMode.type;
 
         state.connectorCreateMode = null;
+        if (state.connectorGhostEl) {
+          state.connectorGhostEl.remove();
+          state.connectorGhostEl = null;
+        }
         window.removeEventListener("pointermove", move);
         el.canvas.removeEventListener("click", place, true);
 
@@ -708,7 +729,10 @@ function toggleListMode(force) {
 // Events
 el.addNodeButton.addEventListener("click", () => {
   toggleListMode(false);
-  openTypePicker((type) => createNode({ type }), "Idea");
+  openTypePicker((type) => {
+    const center = viewportCenterBoard();
+    createNode({ type, position: { x: center.x - NODE_WIDTH / 2, y: center.y - NODE_HEIGHT / 2 } });
+  }, "Idea");
 });
 
 el.toggleListViewButton.addEventListener("click", () => {
@@ -751,7 +775,8 @@ document.addEventListener("click", (event) => {
 el.addContextNodeButton.addEventListener("click", () => {
   el.contextMenu.classList.add("hidden");
   openTypePicker((type) => {
-    createNode({ type });
+    const center = viewportCenterBoard();
+    createNode({ type, position: { x: center.x - NODE_WIDTH / 2, y: center.y - NODE_HEIGHT / 2 } });
   }, "Idea");
 });
 
@@ -877,6 +902,15 @@ el.picker.addEventListener("click", (event) => {
 });
 
 window.addEventListener("resize", drawLinks);
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && state.connectorCreateMode) {
+    state.connectorCreateMode = null;
+    state.connectorGhostEl?.remove();
+    state.connectorGhostEl = null;
+    drawLinks();
+  }
+});
 
 // init
 setZoom(state.zoom);

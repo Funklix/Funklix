@@ -252,6 +252,13 @@ body {
   cursor: crosshair;
 }
 
+
+.node-ghost {
+  opacity: 0.82 !important;
+  pointer-events: none;
+  border-style: dashed;
+}
+
 .node.selected {
   outline: 2px solid var(--primary);
 }
