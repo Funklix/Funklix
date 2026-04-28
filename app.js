@@ -101,18 +101,12 @@ function viewportCenterBoard() {
 }
 
 function clampNodePosition(rawX, rawY) {
-  const b = visibleBoardBounds();
-  const minX = b.left + 20;
-  const maxX = b.right - NODE_WIDTH - 20;
-  const minY = b.top + 20;
-  const maxY = b.bottom - NODE_HEIGHT - 20;
-
-  const x = Number.isFinite(rawX) ? rawX : b.left + 300;
-  const y = Number.isFinite(rawY) ? rawY : b.top + 150;
+  const x = Number.isFinite(rawX) ? rawX : 320;
+  const y = Number.isFinite(rawY) ? rawY : 180;
 
   return {
-    x: Math.max(0, Math.min(BOARD_WIDTH - NODE_WIDTH, Math.max(minX, Math.min(maxX, x)))),
-    y: Math.max(0, Math.min(BOARD_HEIGHT - NODE_HEIGHT, Math.max(minY, Math.min(maxY, y))))
+    x: Math.max(40, Math.min(1600, x)),
+    y: Math.max(40, Math.min(1200, y))
   };
 }
 
@@ -203,6 +197,31 @@ function ensureNodeActuallyVisible(node) {
   forceNodeVisible(node.id);
 }
 
+function defaultGridPosition() {
+  const index = state.nodes.length;
+  return {
+    x: 280 + (index % 3) * 320,
+    y: 160 + Math.floor(index / 3) * 240
+  };
+}
+
+function connectorSpawnPositionFromPoint(point) {
+  const candidateX = point.x - NODE_WIDTH / 2;
+  const candidateY = point.y - NODE_HEIGHT / 2;
+  const isSafe =
+    Number.isFinite(candidateX) &&
+    Number.isFinite(candidateY) &&
+    candidateX >= 80 &&
+    candidateX <= 1560 &&
+    candidateY >= 80 &&
+    candidateY <= 1160;
+
+  if (!isSafe) {
+    return { x: 320, y: 180 };
+  }
+  return { x: candidateX, y: candidateY };
+}
+
 function applyInherited(source, target) {
   if (!target.audience && source.audience) target.audience = source.audience;
   if (!target.goal && source.goal) target.goal = source.goal;
@@ -211,10 +230,9 @@ function applyInherited(source, target) {
 
 function createNode({ type = "Idea", parentId = null, position = null, images = [] } = {}) {
   const parent = parentId ? getNode(parentId) : null;
-  const center = viewportCenterBoard();
   const defaultPos = parent
-    ? { x: parent.position.x + 24, y: parent.position.y + 240 }
-    : { x: center.x - NODE_WIDTH / 2, y: visibleBoardBounds().top + 120 };
+    ? { x: parent.position.x + 320, y: parent.position.y + 80 }
+    : defaultGridPosition();
 
   const safePos = clampNodePosition(
     (position || defaultPos).x,
@@ -247,6 +265,17 @@ function createNode({ type = "Idea", parentId = null, position = null, images = 
 
   state.nodes.push(node);
   renderNode(node);
+  const nodeEl = el.zoomLayer.querySelector(`[data-id='${node.id}']`);
+  if (nodeEl) {
+    nodeEl.style.position = "absolute";
+    nodeEl.style.left = `${node.position.x}px`;
+    nodeEl.style.top = `${node.position.y}px`;
+    nodeEl.style.display = "block";
+    nodeEl.style.visibility = "visible";
+    nodeEl.style.opacity = "1";
+    nodeEl.style.zIndex = "10";
+  }
+  updateNodeCard(node);
   toggleListMode(false);
 
   if (parent) addEdge(parent.id, node.id);
@@ -260,6 +289,10 @@ function createNode({ type = "Idea", parentId = null, position = null, images = 
   updateListView();
   updateEmptyState();
   drawLinks();
+  console.log("CREATED NODE", node.id, node.position);
+  if (nodeEl) {
+    console.log("NODE RECT", nodeEl.getBoundingClientRect());
+  }
   runNetworkImpulse();
   forceNodeVisible(node.id);
   setTimeout(() => { forceNodeVisible(node.id); ensureNodeActuallyVisible(node); }, 30);
@@ -695,7 +728,7 @@ function renderNode(node) {
         const prevCount = state.nodes.length;
         createNode({
           type: nodeType,
-          position: { x: point.x - NODE_WIDTH / 2, y: point.y - NODE_HEIGHT / 2 }
+          position: connectorSpawnPositionFromPoint(point)
         });
         const newNode = state.nodes[state.nodes.length - 1];
         if (state.nodes.length > prevCount && newNode) {
@@ -784,8 +817,7 @@ function toggleListMode(showList) {
 el.addNodeButton.addEventListener("click", () => {
   toggleListMode(false);
   openTypePicker((type) => {
-    const center = viewportCenterBoard();
-    createNode({ type, position: { x: center.x - NODE_WIDTH / 2, y: center.y - NODE_HEIGHT / 2 } });
+    createNode({ type });
   }, "Idea");
 });
 
@@ -828,8 +860,7 @@ document.addEventListener("click", (event) => {
 el.addContextNodeButton.addEventListener("click", () => {
   el.contextMenu.classList.add("hidden");
   openTypePicker((type) => {
-    const center = viewportCenterBoard();
-    createNode({ type, position: { x: center.x - NODE_WIDTH / 2, y: center.y - NODE_HEIGHT / 2 } });
+    createNode({ type });
   }, "Idea");
 });
 
@@ -964,6 +995,11 @@ document.addEventListener("keydown", (event) => {
     drawLinks();
   }
 });
+
+window.debugNodes = () => {
+  console.log("STATE NODES", state.nodes);
+  console.log("DOM NODES", [...document.querySelectorAll(".node")].map((n) => n.getBoundingClientRect()));
+};
 
 // init
 setZoom(state.zoom);
