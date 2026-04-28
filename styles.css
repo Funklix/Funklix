@@ -123,6 +123,17 @@ body {
   font-weight: 700;
 }
 
+.actions .create-campaign-btn {
+  background: #2a6fff;
+  border-color: #2a6fff;
+  color: #fff;
+  font-weight: 700;
+}
+
+.actions .create-campaign-btn:hover {
+  background: #215fe0;
+}
+
 .actions .primary-add:hover {
   background: #1ca45f;
 }

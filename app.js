@@ -24,6 +24,7 @@ const state = {
   activeConnection: null,
   activeConnectionMoveHandler: null,
   activeConnectionPlaceHandler: null,
+  lastAutoZoomAt: 0,
   connectorCreateMode: null,
   connectorGhostEl: null,
   contextBoardPoint: { x: 0, y: 0 }
@@ -37,6 +38,7 @@ const el = {
   nodeListView: document.getElementById("node-list-view"),
   boardListView: document.getElementById("board-list-view"),
   toggleListViewButton: document.getElementById("toggle-list-view-btn"),
+  createCampaignButton: document.getElementById("create-campaign-btn"),
   addNodeButton: document.getElementById("add-node-btn"),
   zoomInButton: document.getElementById("zoom-in-btn"),
   zoomOutButton: document.getElementById("zoom-out-btn"),
@@ -299,6 +301,69 @@ function createNode({ type = "Idea", parentId = null, position = null, images = 
   runNetworkImpulse();
   forceNodeVisible(node.id);
   setTimeout(() => { forceNodeVisible(node.id); ensureNodeActuallyVisible(node); }, 30);
+  autoZoomOutIfBoardCrowded();
+  return node;
+}
+
+function autoZoomOutIfBoardCrowded() {
+  if (state.nodes.length < 2) return;
+  const now = Date.now();
+  if (now - state.lastAutoZoomAt < 250) return;
+
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+
+  state.nodes.forEach((node) => {
+    minX = Math.min(minX, node.position.x);
+    minY = Math.min(minY, node.position.y);
+    maxX = Math.max(maxX, node.position.x + NODE_WIDTH);
+    maxY = Math.max(maxY, node.position.y + NODE_HEIGHT);
+  });
+
+  const bounds = visibleBoardBounds();
+  const spanW = Math.max(1, maxX - minX);
+  const spanH = Math.max(1, maxY - minY);
+  const fillW = spanW / Math.max(1, bounds.width);
+  const fillH = spanH / Math.max(1, bounds.height);
+
+  if (fillW >= 0.9 || fillH >= 0.9) {
+    state.lastAutoZoomAt = now;
+    setZoom(state.zoom * 0.9);
+  }
+}
+
+function createCampaignSetup() {
+  toggleListMode(false);
+
+  const idea = createNode({ type: "Idea", position: { x: 280, y: 160 } });
+  const landing = createNode({ type: "Landing Page", position: { x: 620, y: 120 } });
+  const newsletter = createNode({ type: "Email Campaign", position: { x: 960, y: 120 } });
+
+  const variationA = createNode({ type: "Campaign Variation", position: { x: 620, y: 360 } });
+  const variationB = createNode({ type: "Campaign Variation", position: { x: 620, y: 600 } });
+  const contentA = createNode({ type: "Content", position: { x: 960, y: 360 } });
+  const contentB = createNode({ type: "Content", position: { x: 960, y: 600 } });
+  const social = createNode({ type: "Social Media Posting", position: { x: 1300, y: 480 } });
+
+  addEdge(idea.id, landing.id);
+  addEdge(landing.id, newsletter.id);
+  addEdge(idea.id, variationA.id);
+  addEdge(idea.id, variationB.id);
+  addEdge(variationA.id, contentA.id);
+  addEdge(variationB.id, contentB.id);
+  addEdge(contentA.id, social.id);
+  addEdge(contentB.id, social.id);
+
+  state.selectedIds.clear();
+  state.selectedIds.add(idea.id);
+  state.selectedPrimary = idea.id;
+  updateSelectionClasses();
+  fillInspector(idea);
+  updateListView();
+  updateEmptyState();
+  drawLinks();
 }
 
 function removeNode(nodeId) {
@@ -932,6 +997,10 @@ el.addNodeButton.addEventListener("click", () => {
   }, "Idea");
 });
 
+el.createCampaignButton.addEventListener("click", () => {
+  createCampaignSetup();
+});
+
 el.toggleListViewButton.addEventListener("click", () => {
   toggleListMode();
 });
@@ -947,8 +1016,11 @@ el.canvas.addEventListener(
       setZoom(state.zoom + (event.deltaY < 0 ? 0.1 : -0.1), { x: event.clientX, y: event.clientY });
       return;
     }
+    event.preventDefault();
+    if (Math.abs(event.deltaY) >= Math.abs(event.deltaX)) {
+      el.canvas.scrollTop += event.deltaY;
+    }
     el.canvas.scrollLeft += event.deltaX;
-    el.canvas.scrollTop += event.deltaY;
   },
   { passive: false }
 );
