@@ -735,11 +735,6 @@ function renderNode(node) {
     fillInspector(node);
   });
 
-  nodeEl.querySelector(".add-child-btn").addEventListener("click", (event) => {
-    event.stopPropagation();
-    openTypePicker((type) => createNode({ type, parentId: node.id }), "Content");
-  });
-
   nodeEl.querySelector(".connector-handle").addEventListener("pointerdown", (event) => {
     event.preventDefault();
     event.stopPropagation();
@@ -845,6 +840,13 @@ function startExistingNodeConnection(fromId) {
   const move = (ev) => {
     if (!state.activeConnection) return;
     state.activeConnection.current = boardPointFromClient(ev.clientX, ev.clientY);
+    const hoverNode = ev.target.closest?.(".node");
+    const toId = hoverNode?.dataset?.id;
+    if (toId && toId !== fromId) {
+      addEdge(fromId, toId);
+      stopExistingNodeConnection();
+      return;
+    }
     drawLinks();
   };
 
