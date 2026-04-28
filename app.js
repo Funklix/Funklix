@@ -10,6 +10,8 @@ const NODE_TYPES = {
 
 const NODE_WIDTH = 285;
 const NODE_HEIGHT = 200;
+const BOARD_WIDTH = 10000;
+const BOARD_HEIGHT = 10000;
 
 const state = {
   nodes: [],
@@ -85,10 +87,32 @@ function boardPointFromClient(clientX, clientY) {
   };
 }
 
+function visibleBoardBounds() {
+  const left = el.canvas.scrollLeft / state.zoom;
+  const top = el.canvas.scrollTop / state.zoom;
+  const width = el.canvas.clientWidth / state.zoom;
+  const height = el.canvas.clientHeight / state.zoom;
+  return { left, top, width, height, right: left + width, bottom: top + height };
+}
+
 function viewportCenterBoard() {
+  const b = visibleBoardBounds();
+  return { x: b.left + b.width / 2, y: b.top + b.height / 2 };
+}
+
+function clampNodePosition(rawX, rawY) {
+  const b = visibleBoardBounds();
+  const minX = b.left + 20;
+  const maxX = b.right - NODE_WIDTH - 20;
+  const minY = b.top + 20;
+  const maxY = b.bottom - NODE_HEIGHT - 20;
+
+  const x = Number.isFinite(rawX) ? rawX : b.left + 300;
+  const y = Number.isFinite(rawY) ? rawY : b.top + 150;
+
   return {
-    x: (el.canvas.scrollLeft + el.canvas.clientWidth / 2) / state.zoom,
-    y: (el.canvas.scrollTop + el.canvas.clientHeight / 2) / state.zoom
+    x: Math.max(0, Math.min(BOARD_WIDTH - NODE_WIDTH, Math.max(minX, Math.min(maxX, x)))),
+    y: Math.max(0, Math.min(BOARD_HEIGHT - NODE_HEIGHT, Math.max(minY, Math.min(maxY, y))))
   };
 }
 
@@ -168,12 +192,13 @@ function ensureNodeActuallyVisible(node) {
 
   const c = el.canvas.getBoundingClientRect();
   const n = nodeEl.getBoundingClientRect();
-  const intersects = !(n.right < c.left || n.left > c.right || n.bottom < c.top || n.top > c.bottom);
-  if (intersects) return;
+  const outside = n.right < c.left || n.left > c.right || n.bottom < c.top || n.top > c.bottom;
+  if (!outside) return;
 
-  const center = viewportCenterBoard();
-  node.position.x = center.x - NODE_WIDTH / 2;
-  node.position.y = center.y - NODE_HEIGHT / 2;
+  const b = visibleBoardBounds();
+  const fallback = clampNodePosition(b.left + 300, b.top + 150);
+  node.position.x = fallback.x;
+  node.position.y = fallback.y;
   updateNodeCard(node);
   forceNodeVisible(node.id);
 }
@@ -187,6 +212,14 @@ function applyInherited(source, target) {
 function createNode({ type = "Idea", parentId = null, position = null, images = [] } = {}) {
   const parent = parentId ? getNode(parentId) : null;
   const center = viewportCenterBoard();
+  const defaultPos = parent
+    ? { x: parent.position.x + 24, y: parent.position.y + 240 }
+    : { x: center.x - NODE_WIDTH / 2, y: visibleBoardBounds().top + 120 };
+
+  const safePos = clampNodePosition(
+    (position || defaultPos).x,
+    (position || defaultPos).y
+  );
 
   const node = {
     id: `node-${state.nodeCounter++}`,
@@ -202,10 +235,7 @@ function createNode({ type = "Idea", parentId = null, position = null, images = 
     social: { platform: "Instagram", caption: "", hashtags: [], preview: "" },
     postits: [],
     justConnectedAt: null,
-    position: position || {
-      x: parent ? parent.position.x + 24 : center.x - NODE_WIDTH / 2,
-      y: parent ? parent.position.y + 240 : center.y - NODE_HEIGHT / 2
-    }
+    position: safePos
   };
 
   if (parent) {
@@ -592,6 +622,7 @@ function updateListView() {
         updateSelectionClasses();
         fillInspector(node);
         forceNodeVisible(node.id);
+        ensureNodeActuallyVisible(node);
       });
       ul.appendChild(li);
     });
@@ -739,6 +770,14 @@ function toggleListMode(showList) {
   el.canvas.classList.toggle("hidden", shouldShowList);
   el.boardListView.classList.toggle("hidden", !shouldShowList);
   el.toggleListViewButton.textContent = shouldShowList ? "Board View" : "List View";
+
+  if (!shouldShowList && state.selectedPrimary) {
+    const selected = getNode(state.selectedPrimary);
+    if (selected) {
+      forceNodeVisible(selected.id);
+      ensureNodeActuallyVisible(selected);
+    }
+  }
 }
 
 // Events
