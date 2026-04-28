@@ -16,7 +16,7 @@ const state = {
   edges: [],
   selectedIds: new Set(),
   selectedPrimary: null,
-  zoom: 1.2,
+  zoom: 1,
   nodeCounter: 1,
   postitCounter: 1,
   activeConnection: null,
@@ -112,7 +112,6 @@ function updateEmptyState() {
 function setZoom(nextZoom, centerClient = null) {
   const oldZoom = state.zoom;
   const newZoom = Math.min(2, Math.max(0.4, nextZoom));
-  if (newZoom === oldZoom) return;
 
   const rect = el.canvas.getBoundingClientRect();
   const cx = centerClient?.x ?? rect.left + el.canvas.clientWidth / 2;
