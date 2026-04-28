@@ -22,6 +22,8 @@ const state = {
   nodeCounter: 1,
   postitCounter: 1,
   activeConnection: null,
+  activeConnectionMoveHandler: null,
+  activeConnectionPlaceHandler: null,
   connectorCreateMode: null,
   connectorGhostEl: null,
   contextBoardPoint: { x: 0, y: 0 }
@@ -51,6 +53,7 @@ const el = {
   socialFields: document.getElementById("social-fields"),
   contentUploadFields: document.getElementById("content-upload-fields"),
   imageUpload: document.getElementById("node-image-upload"),
+  inspectorImageList: document.getElementById("inspector-image-list"),
   deleteNodeButton: document.getElementById("delete-node-btn"),
   inputs: {
     type: document.getElementById("node-type"),
@@ -303,7 +306,7 @@ function removeNode(nodeId) {
   if (idx === -1) return;
 
   const [removed] = state.nodes.splice(idx, 1);
-  removed.images.forEach((img) => URL.revokeObjectURL(img.url));
+  removed.images.forEach(revokeImageObjectUrl);
 
   state.edges = state.edges.filter(([a, b]) => a !== nodeId && b !== nodeId);
 
@@ -509,6 +512,16 @@ function updateNodeCard(node) {
     hint.textContent = "🔍";
 
     thumb.append(image, hint);
+    const deleteBtn = document.createElement("button");
+    deleteBtn.type = "button";
+    deleteBtn.className = "image-delete-btn";
+    deleteBtn.textContent = "✕";
+    deleteBtn.addEventListener("click", (event) => {
+      event.stopPropagation();
+      removeNodeImage(node, img.id);
+    });
+
+    thumb.appendChild(deleteBtn);
     thumb.addEventListener("click", (event) => {
       event.stopPropagation();
       thumb.classList.add("expanded");
@@ -598,6 +611,7 @@ function fillInspector(node) {
     el.deleteNodeButton.disabled = true;
     el.socialFields.classList.add("hidden");
     el.contentUploadFields.classList.add("hidden");
+    el.inspectorImageList.innerHTML = "";
     return;
   }
 
@@ -618,6 +632,50 @@ function fillInspector(node) {
   el.deleteNodeButton.disabled = false;
   el.socialFields.classList.toggle("hidden", node.type !== "Social Media Posting");
   el.contentUploadFields.classList.toggle("hidden", !(node.type === "Content" || node.type === "Social Media Posting"));
+  renderInspectorImages(node);
+}
+
+function revokeImageObjectUrl(img) {
+  if (!img?.url) return;
+  if (img.url.startsWith("blob:")) URL.revokeObjectURL(img.url);
+}
+
+function removeNodeImage(node, imageId) {
+  const idx = node.images.findIndex((img) => img.id === imageId);
+  if (idx === -1) return;
+  const [removed] = node.images.splice(idx, 1);
+  revokeImageObjectUrl(removed);
+  updateNodeCard(node);
+  if (state.selectedPrimary === node.id) fillInspector(node);
+}
+
+function renderInspectorImages(node) {
+  el.inspectorImageList.innerHTML = "";
+  if (!node.images.length) {
+    const empty = document.createElement("p");
+    empty.className = "inspector-image-name";
+    empty.textContent = "Keine Bilder hochgeladen.";
+    el.inspectorImageList.appendChild(empty);
+    return;
+  }
+
+  node.images.forEach((img) => {
+    const row = document.createElement("div");
+    row.className = "inspector-image-item";
+
+    const name = document.createElement("span");
+    name.className = "inspector-image-name";
+    name.textContent = img.name || "Bild";
+
+    const deleteBtn = document.createElement("button");
+    deleteBtn.type = "button";
+    deleteBtn.className = "inspector-image-delete";
+    deleteBtn.textContent = "Bild löschen";
+    deleteBtn.addEventListener("click", () => removeNodeImage(node, img.id));
+
+    row.append(name, deleteBtn);
+    el.inspectorImageList.appendChild(row);
+  });
 }
 
 function updateListView() {
@@ -685,6 +743,7 @@ function renderNode(node) {
   nodeEl.querySelector(".connector-handle").addEventListener("pointerdown", (event) => {
     event.preventDefault();
     event.stopPropagation();
+    stopExistingNodeConnection();
 
     const start = nodeBottomCenter(node.id);
     if (!start) return;
@@ -741,6 +800,12 @@ function renderNode(node) {
     }, "Content");
   });
 
+  nodeEl.querySelector(".connector-link-handle").addEventListener("pointerdown", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    startExistingNodeConnection(node.id);
+  });
+
   const title = nodeEl.querySelector(".title");
   const content = nodeEl.querySelector(".content");
   title.addEventListener("input", () => {
@@ -756,6 +821,50 @@ function renderNode(node) {
   enableNodeDrag(nodeEl, node);
   el.zoomLayer.appendChild(nodeEl);
   updateNodeCard(node);
+}
+
+function stopExistingNodeConnection() {
+  if (state.activeConnectionMoveHandler) {
+    window.removeEventListener("pointermove", state.activeConnectionMoveHandler);
+    state.activeConnectionMoveHandler = null;
+  }
+  if (state.activeConnectionPlaceHandler) {
+    el.canvas.removeEventListener("click", state.activeConnectionPlaceHandler, true);
+    state.activeConnectionPlaceHandler = null;
+  }
+  state.activeConnection = null;
+  drawLinks();
+}
+
+function startExistingNodeConnection(fromId) {
+  stopExistingNodeConnection();
+  const start = nodeBottomCenter(fromId);
+  if (!start) return;
+  state.activeConnection = { fromId, start, current: start };
+
+  const move = (ev) => {
+    if (!state.activeConnection) return;
+    state.activeConnection.current = boardPointFromClient(ev.clientX, ev.clientY);
+    drawLinks();
+  };
+
+  const place = (ev) => {
+    if (!state.activeConnection) return;
+    const targetEl = ev.target.closest(".node");
+    if (targetEl) {
+      const toId = targetEl.dataset.id;
+      if (toId && toId !== fromId) {
+        addEdge(fromId, toId);
+      }
+    }
+    stopExistingNodeConnection();
+  };
+
+  state.activeConnectionMoveHandler = move;
+  state.activeConnectionPlaceHandler = place;
+  window.addEventListener("pointermove", move);
+  setTimeout(() => el.canvas.addEventListener("click", place, true), 0);
+  drawLinks();
 }
 
 function enableNodeDrag(nodeEl, node) {
@@ -913,6 +1022,7 @@ el.imageUpload.addEventListener("change", () => {
     .forEach((file) => node.images.push({ id: crypto.randomUUID(), name: file.name, url: URL.createObjectURL(file) }));
   el.imageUpload.value = "";
   updateNodeCard(node);
+  fillInspector(node);
 });
 
 el.deleteNodeButton.addEventListener("click", () => {
@@ -993,7 +1103,9 @@ document.addEventListener("keydown", (event) => {
     state.connectorGhostEl?.remove();
     state.connectorGhostEl = null;
     drawLinks();
+    return;
   }
+  if (event.key === "Escape" && state.activeConnection) stopExistingNodeConnection();
 });
 
 window.debugNodes = () => {
