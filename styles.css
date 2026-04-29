@@ -510,6 +510,21 @@ body {
   font-size: 0.7rem;
 }
 
+.postit-reply-editor {
+  margin-top: 6px;
+  display: grid;
+  gap: 4px;
+}
+
+.postit-reply-name,
+.postit-reply-input {
+  width: 100%;
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  border-radius: 6px;
+  padding: 4px 6px;
+  font-size: 0.72rem;
+}
+
 .context-menu {
   position: absolute;
   z-index: 40;
@@ -553,6 +568,7 @@ body {
 }
 
 .reaction-pill {
+  cursor: pointer;
   font-size: 0.76rem;
   background: #f2f4ff;
   border: 1px solid #d6dcff;

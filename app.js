@@ -749,7 +749,8 @@ function updateNodeCard(node) {
     const bar = document.createElement("div");
     bar.className = "reaction-bar";
     reactionEntries.forEach(([emoji, count]) => {
-      const item = document.createElement("span");
+      const item = document.createElement("button");
+      item.type = "button";
       item.className = "reaction-pill";
       item.textContent = `${emoji} ${count}`;
       item.title = "Click to remove one reaction";
@@ -815,11 +816,18 @@ function renderPostits(node, nodeEl) {
     addReplyBtn.className = "inspector-image-delete";
     addReplyBtn.textContent = "Reply";
     addReplyBtn.addEventListener("click", () => {
-      const user = window.prompt("Your name:", "Teammate")?.trim() || "Anonymous";
-      const text = window.prompt("Response:")?.trim();
-      if (!text) return;
-      note.replies.push({ user, text, time: nowString() });
-      renderPostits(node, nodeEl);
+      if (postit.querySelector(".postit-reply-editor")) return;
+      const editor = document.createElement("div");
+      editor.className = "postit-reply-editor";
+      editor.innerHTML = `<input class="postit-reply-name" placeholder="Name" /><textarea class="postit-reply-input" rows="2" placeholder="Write a reply..."></textarea><button type="button" class="inspector-image-delete">Send</button>`;
+      editor.querySelector("button").addEventListener("click", () => {
+        const user = editor.querySelector(".postit-reply-name").value.trim() || "Anonymous";
+        const text = editor.querySelector(".postit-reply-input").value.trim();
+        if (!text) return;
+        note.replies.push({ user, text, time: nowString() });
+        renderPostits(node, nodeEl);
+      });
+      postit.appendChild(editor);
     });
 
     postit.append(repliesWrap, addReplyBtn);
@@ -1432,10 +1440,10 @@ el.canvas.addEventListener("pointerdown", (event) => {
     const panDy = ev.clientY - panY;
     const holdMs = Date.now() - downAt;
     const movedEnough = Math.abs(panDx) > 4 || Math.abs(panDy) > 4;
-    if (!selectionLocked && !forcePan && movedEnough && holdMs < 450) {
+    if (appendSelection && !selectionLocked && movedEnough) {
       selectionLocked = true;
     }
-    if (!selectionLocked && (forcePan || holdMs > 450) && movedEnough) {
+    if (!appendSelection && !selectionLocked && (forcePan || holdMs > 450) && movedEnough) {
       panning = true;
       el.canvas.scrollLeft = startLeft - panDx;
       el.canvas.scrollTop = startTop - panDy;
