@@ -13,6 +13,7 @@ const NODE_HEIGHT = 200;
 const BOARD_WIDTH = 10000;
 const BOARD_HEIGHT = 10000;
 const STORAGE_KEY = "campaign_canvas_state_v1";
+const BRAND_CORE_STORAGE_KEY = "campaign_canvas_brand_core_v1";
 
 const state = {
   nodes: [],
@@ -80,6 +81,16 @@ const el = {
   propagateDescendantsButton: document.getElementById("propagate-descendants-btn"),
   resetBoardButton: document.getElementById("reset-board-btn"),
   saveStatus: document.getElementById("save-status"),
+  brandCoreButton: document.getElementById("brand-core-btn"),
+  brandCoreOverlay: document.getElementById("brand-core-overlay"),
+  brandCoreCloseButton: document.getElementById("brand-core-close-btn"),
+  brandNameInput: document.getElementById("brand-name-input"),
+  brandDescriptionInput: document.getElementById("brand-description-input"),
+  brandAudienceInput: document.getElementById("brand-audience-input"),
+  brandToneInput: document.getElementById("brand-tone-input"),
+  brandPillarsInput: document.getElementById("brand-pillars-input"),
+  brandGuidelinesInput: document.getElementById("brand-guidelines-input"),
+  brandReferenceInput: document.getElementById("brand-reference-input"),
   inputs: {
     type: document.getElementById("node-type"),
     title: document.getElementById("node-title"),
@@ -194,6 +205,36 @@ function resetBoardState() {
   localStorage.removeItem(STORAGE_KEY);
   state.nodes = []; state.edges = []; state.nodeCounter = 1; state.postitCounter = 1; state.selectedIds.clear(); state.selectedPrimary = null;
   el.zoomLayer.querySelectorAll(".node").forEach((n) => n.remove()); fillInspector(null); updateListView(); updateEmptyState(); drawLinks(); setSaveStatus("Unsaved changes");
+}
+
+function getBrandCoreData() {
+  return {
+    brandName: el.brandNameInput.value,
+    shortDescription: el.brandDescriptionInput.value,
+    targetAudience: el.brandAudienceInput.value,
+    toneOfVoice: el.brandToneInput.value,
+    messagingPillars: el.brandPillarsInput.value,
+    guidelines: el.brandGuidelinesInput.value,
+    referenceStyle: el.brandReferenceInput.value
+  };
+}
+window.getBrandCoreData = getBrandCoreData;
+
+function saveBrandCore() {
+  localStorage.setItem(BRAND_CORE_STORAGE_KEY, JSON.stringify(getBrandCoreData()));
+}
+
+function restoreBrandCore() {
+  const raw = localStorage.getItem(BRAND_CORE_STORAGE_KEY);
+  if (!raw) return;
+  const data = JSON.parse(raw);
+  el.brandNameInput.value = data.brandName || "";
+  el.brandDescriptionInput.value = data.shortDescription || "";
+  el.brandAudienceInput.value = data.targetAudience || "";
+  el.brandToneInput.value = data.toneOfVoice || "";
+  el.brandPillarsInput.value = data.messagingPillars || "";
+  el.brandGuidelinesInput.value = data.guidelines || "";
+  el.brandReferenceInput.value = data.referenceStyle || "";
 }
 
 function connectedIds() {
@@ -1537,6 +1578,21 @@ el.postingDoneButton.addEventListener("click", () => {
   closePostingPlanner();
 });
 el.postingCancelButton.addEventListener("click", closePostingPlanner);
+el.brandCoreButton.addEventListener("click", () => {
+  el.brandCoreOverlay.classList.remove("hidden");
+});
+el.brandCoreCloseButton.addEventListener("click", () => {
+  el.brandCoreOverlay.classList.add("hidden");
+});
+[
+  el.brandNameInput,
+  el.brandDescriptionInput,
+  el.brandAudienceInput,
+  el.brandToneInput,
+  el.brandPillarsInput,
+  el.brandGuidelinesInput,
+  el.brandReferenceInput
+].forEach((input) => input.addEventListener("input", saveBrandCore));
 
 window.addEventListener("resize", drawLinks);
 
@@ -1564,5 +1620,6 @@ updateListView();
 fillInspector(null);
 setActiveView("board");
 if (!restoreBoardState()) setSaveStatus("Unsaved changes");
+restoreBrandCore();
 window.addEventListener("beforeunload", saveBoardState);
 el.resetBoardButton.addEventListener("click", resetBoardState);
