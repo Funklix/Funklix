@@ -12,6 +12,7 @@ const NODE_WIDTH = 285;
 const NODE_HEIGHT = 200;
 const BOARD_WIDTH = 10000;
 const BOARD_HEIGHT = 10000;
+const STORAGE_KEY = "campaign_canvas_state_v1";
 
 const state = {
   nodes: [],
@@ -77,6 +78,8 @@ const el = {
   deleteSelectedButton: document.getElementById("delete-selected-btn"),
   disconnectSelectedButton: document.getElementById("disconnect-selected-btn"),
   propagateDescendantsButton: document.getElementById("propagate-descendants-btn"),
+  resetBoardButton: document.getElementById("reset-board-btn"),
+  saveStatus: document.getElementById("save-status"),
   inputs: {
     type: document.getElementById("node-type"),
     title: document.getElementById("node-title"),
@@ -167,6 +170,30 @@ function restoreLastSnapshot() {
   updateListView();
   updateEmptyState();
   drawLinks();
+  markUnsaved();
+}
+
+
+function setSaveStatus(text) { el.saveStatus.textContent = text; }
+function serializeState() {
+  return {
+    nodes: state.nodes.map((n) => ({ ...n, images: (n.images || []).filter((img) => img.url && !img.url.startsWith("blob:")) })),
+    edges: state.edges, nodeCounter: state.nodeCounter, postitCounter: state.postitCounter, zoom: state.zoom
+  };
+}
+function saveBoardState() { localStorage.setItem(STORAGE_KEY, JSON.stringify(serializeState())); setSaveStatus("Saved"); }
+function markUnsaved() { setSaveStatus("Unsaved changes"); clearTimeout(state._saveTimer); state._saveTimer = setTimeout(saveBoardState, 150); }
+function restoreBoardState() {
+  const raw = localStorage.getItem(STORAGE_KEY); if (!raw) return false;
+  const saved = JSON.parse(raw);
+  state.nodes = saved.nodes || []; state.edges = saved.edges || []; state.nodeCounter = saved.nodeCounter || 1; state.postitCounter = saved.postitCounter || 1;
+  state.selectedIds.clear(); state.selectedPrimary = null; el.zoomLayer.querySelectorAll(".node").forEach((n) => n.remove()); state.nodes.forEach(renderNode);
+  updateListView(); updateEmptyState(); drawLinks(); if (saved.zoom) setZoom(saved.zoom); setSaveStatus("Restored from local storage"); return true;
+}
+function resetBoardState() {
+  localStorage.removeItem(STORAGE_KEY);
+  state.nodes = []; state.edges = []; state.nodeCounter = 1; state.postitCounter = 1; state.selectedIds.clear(); state.selectedPrimary = null;
+  el.zoomLayer.querySelectorAll(".node").forEach((n) => n.remove()); fillInspector(null); updateListView(); updateEmptyState(); drawLinks(); setSaveStatus("Unsaved changes");
 }
 
 function connectedIds() {
@@ -202,6 +229,7 @@ function setZoom(nextZoom, centerClient = null) {
 
   el.zoomLabel.textContent = `${Math.round(state.zoom * 100)}%`;
   drawLinks();
+  markUnsaved();
 }
 
 function openTypePicker(onSelect, preferred = "Idea") {
@@ -353,6 +381,7 @@ function createNode({ type = "Idea", parentId = null, position = null, images = 
   forceNodeVisible(node.id);
   setTimeout(() => { forceNodeVisible(node.id); ensureNodeActuallyVisible(node); }, 30);
   autoZoomOutIfBoardCrowded();
+  markUnsaved();
   return node;
 }
 
@@ -1534,3 +1563,6 @@ updateEmptyState();
 updateListView();
 fillInspector(null);
 setActiveView("board");
+if (!restoreBoardState()) setSaveStatus("Unsaved changes");
+window.addEventListener("beforeunload", saveBoardState);
+el.resetBoardButton.addEventListener("click", resetBoardState);
