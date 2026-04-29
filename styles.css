@@ -527,6 +527,22 @@ body {
   background: #fff !important;
 }
 
+.reaction-bar {
+  margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.reaction-pill {
+  font-size: 0.76rem;
+  background: #f2f4ff;
+  border: 1px solid #d6dcff;
+  color: #36407a;
+  border-radius: 999px;
+  padding: 3px 8px;
+}
+
 .meta {
   font-size: 0.88rem;
   color: var(--muted);

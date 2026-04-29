@@ -307,6 +307,7 @@ function createNode({ type = "Idea", parentId = null, position = null, images = 
     channel: "",
     images: [...images],
     social: { platform: "Instagram", caption: "", hashtags: [], preview: "", scheduledAt: "" },
+    reactions: {},
     postits: [],
     justConnectedAt: null,
     position: safePos
@@ -740,6 +741,21 @@ function updateNodeCard(node) {
       openPostingPlanner(node.id);
     });
     social.appendChild(planBtn);
+  }
+
+  const existingBar = nodeEl.querySelector(".reaction-bar");
+  if (existingBar) existingBar.remove();
+  const reactionEntries = Object.entries(node.reactions || {}).filter(([, count]) => count > 0);
+  if (reactionEntries.length) {
+    const bar = document.createElement("div");
+    bar.className = "reaction-bar";
+    reactionEntries.forEach(([emoji, count]) => {
+      const item = document.createElement("span");
+      item.className = "reaction-pill";
+      item.textContent = `${emoji} ${count}`;
+      bar.appendChild(item);
+    });
+    nodeEl.appendChild(bar);
   }
 
   renderPostits(node, nodeEl);
@@ -1229,10 +1245,9 @@ el.canvas.addEventListener("contextmenu", (event) => {
   event.preventDefault();
   const point = boardPointFromClient(event.clientX, event.clientY);
   state.contextBoardPoint = point;
-
-  const rect = el.canvas.getBoundingClientRect();
-  el.contextMenu.style.left = `${event.clientX - rect.left}px`;
-  el.contextMenu.style.top = `${event.clientY - rect.top}px`;
+  el.contextMenu.style.left = `${event.clientX}px`;
+  el.contextMenu.style.top = `${event.clientY}px`;
+  el.contextMenu.style.position = "fixed";
   el.contextMenu.classList.remove("hidden");
 });
 
@@ -1271,15 +1286,8 @@ el.contextMenu.querySelectorAll(".emoji-quick").forEach((btn) => {
     if (!state.selectedPrimary) return;
     const node = getNode(state.selectedPrimary);
     if (!node) return;
-    node.postits.push({
-      id: `postit-${state.postitCounter++}`,
-      user: "Quick Reaction",
-      time: nowString(),
-      text: btn.dataset.emoji || "👍",
-      color: "#fff2a8",
-      x: state.contextBoardPoint.x - node.position.x,
-      y: state.contextBoardPoint.y - node.position.y
-    });
+    const emoji = btn.dataset.emoji || "👍";
+    node.reactions[emoji] = (node.reactions[emoji] || 0) + 1;
     updateNodeCard(node);
   });
 });
