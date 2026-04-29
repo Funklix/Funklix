@@ -28,6 +28,7 @@
             <button id="create-campaign-btn" class="create-campaign-btn">Create campaign</button>
             <button id="add-node-btn" class="primary-add">+ Add node</button>
             <button id="toggle-list-view-btn">List View</button>
+            <button id="toggle-calendar-view-btn">Calendar View</button>
             <button id="zoom-out-btn">− Zoom</button>
             <button id="zoom-in-btn">+ Zoom</button>
             <span id="zoom-label">100%</span>
@@ -50,6 +51,14 @@
         <section id="board-list-view" class="board-list-view hidden">
           <h2>Node List View</h2>
           <div id="node-list-view"></div>
+        </section>
+        <section id="calendar-view" class="board-list-view hidden">
+          <div class="calendar-header">
+            <button id="calendar-prev-month-btn" type="button">◀</button>
+            <h2 id="calendar-title">Calendar</h2>
+            <button id="calendar-next-month-btn" type="button">▶</button>
+          </div>
+          <div id="calendar-grid" class="calendar-grid"></div>
         </section>
       </main>
 
@@ -146,6 +155,20 @@
       <div class="picker-panel">
         <h3>Node-Typ auswählen</h3>
         <div id="node-type-options" class="picker-options"></div>
+      </div>
+    </div>
+
+    <div id="posting-plan-overlay" class="node-type-picker hidden">
+      <div class="picker-panel posting-panel">
+        <h3>Add to Posting Plan</h3>
+        <label>Datum</label>
+        <input id="posting-date-input" type="date" />
+        <label>Uhrzeit</label>
+        <input id="posting-time-input" type="time" />
+        <div class="posting-actions">
+          <button id="posting-done-btn" type="button">Done</button>
+          <button id="posting-cancel-btn" type="button">Cancel</button>
+        </div>
       </div>
     </div>
 

@@ -27,7 +27,10 @@ const state = {
   lastAutoZoomAt: 0,
   connectorCreateMode: null,
   connectorGhostEl: null,
-  contextBoardPoint: { x: 0, y: 0 }
+  contextBoardPoint: { x: 0, y: 0 },
+  activeView: "board",
+  calendarMonth: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
+  postingPlannerNodeId: null
 };
 
 const el = {
@@ -37,7 +40,13 @@ const el = {
   emptyState: document.getElementById("empty-state"),
   nodeListView: document.getElementById("node-list-view"),
   boardListView: document.getElementById("board-list-view"),
+  calendarView: document.getElementById("calendar-view"),
   toggleListViewButton: document.getElementById("toggle-list-view-btn"),
+  toggleCalendarViewButton: document.getElementById("toggle-calendar-view-btn"),
+  calendarGrid: document.getElementById("calendar-grid"),
+  calendarTitle: document.getElementById("calendar-title"),
+  calendarPrevMonthButton: document.getElementById("calendar-prev-month-btn"),
+  calendarNextMonthButton: document.getElementById("calendar-next-month-btn"),
   createCampaignButton: document.getElementById("create-campaign-btn"),
   addNodeButton: document.getElementById("add-node-btn"),
   zoomInButton: document.getElementById("zoom-in-btn"),
@@ -57,6 +66,11 @@ const el = {
   imageUpload: document.getElementById("node-image-upload"),
   inspectorImageList: document.getElementById("inspector-image-list"),
   deleteNodeButton: document.getElementById("delete-node-btn"),
+  postingPlanOverlay: document.getElementById("posting-plan-overlay"),
+  postingDateInput: document.getElementById("posting-date-input"),
+  postingTimeInput: document.getElementById("posting-time-input"),
+  postingDoneButton: document.getElementById("posting-done-btn"),
+  postingCancelButton: document.getElementById("posting-cancel-btn"),
   inputs: {
     type: document.getElementById("node-type"),
     title: document.getElementById("node-title"),
@@ -255,7 +269,7 @@ function createNode({ type = "Idea", parentId = null, position = null, images = 
     goal: "",
     channel: "",
     images: [...images],
-    social: { platform: "Instagram", caption: "", hashtags: [], preview: "" },
+    social: { platform: "Instagram", caption: "", hashtags: [], preview: "", scheduledAt: "" },
     postits: [],
     justConnectedAt: null,
     position: safePos
@@ -335,17 +349,17 @@ function autoZoomOutIfBoardCrowded() {
 }
 
 function createCampaignSetup() {
-  toggleListMode(false);
+  setActiveView("board");
 
-  const idea = createNode({ type: "Idea", position: { x: 280, y: 160 } });
-  const landing = createNode({ type: "Landing Page", position: { x: 620, y: 120 } });
-  const newsletter = createNode({ type: "Email Campaign", position: { x: 960, y: 120 } });
-
-  const variationA = createNode({ type: "Campaign Variation", position: { x: 620, y: 360 } });
-  const variationB = createNode({ type: "Campaign Variation", position: { x: 620, y: 600 } });
-  const contentA = createNode({ type: "Content", position: { x: 960, y: 360 } });
-  const contentB = createNode({ type: "Content", position: { x: 960, y: 600 } });
-  const social = createNode({ type: "Social Media Posting", position: { x: 1300, y: 480 } });
+  const idea = createNode({ type: "Idea", position: { x: 640, y: 120 } });
+  const variationA = createNode({ type: "Campaign Variation", position: { x: 360, y: 330 } });
+  const variationB = createNode({ type: "Campaign Variation", position: { x: 920, y: 330 } });
+  const landing = createNode({ type: "Landing Page", position: { x: 220, y: 560 } });
+  const newsletter = createNode({ type: "Email Campaign", position: { x: 560, y: 560 } });
+  const contentA = createNode({ type: "Content", position: { x: 920, y: 560 } });
+  const contentB = createNode({ type: "Content", position: { x: 1260, y: 560 } });
+  const socialA = createNode({ type: "Social Media Posting", position: { x: 860, y: 860 } });
+  const socialB = createNode({ type: "Social Media Posting", position: { x: 1220, y: 860 } });
 
   addEdge(idea.id, landing.id);
   addEdge(landing.id, newsletter.id);
@@ -353,8 +367,8 @@ function createCampaignSetup() {
   addEdge(idea.id, variationB.id);
   addEdge(variationA.id, contentA.id);
   addEdge(variationB.id, contentB.id);
-  addEdge(contentA.id, social.id);
-  addEdge(contentB.id, social.id);
+  addEdge(contentA.id, socialA.id);
+  addEdge(contentB.id, socialB.id);
 
   state.selectedIds.clear();
   state.selectedIds.add(idea.id);
@@ -364,6 +378,25 @@ function createCampaignSetup() {
   updateListView();
   updateEmptyState();
   drawLinks();
+}
+
+function openPostingPlanner(nodeId) {
+  state.postingPlannerNodeId = nodeId;
+  const node = getNode(nodeId);
+  const existing = node?.social?.scheduledAt ? new Date(node.social.scheduledAt) : null;
+  if (existing && !Number.isNaN(existing.getTime())) {
+    el.postingDateInput.value = existing.toISOString().slice(0, 10);
+    el.postingTimeInput.value = `${String(existing.getHours()).padStart(2, "0")}:${String(existing.getMinutes()).padStart(2, "0")}`;
+  } else {
+    el.postingDateInput.value = "";
+    el.postingTimeInput.value = "09:00";
+  }
+  el.postingPlanOverlay.classList.remove("hidden");
+}
+
+function closePostingPlanner() {
+  state.postingPlannerNodeId = null;
+  el.postingPlanOverlay.classList.add("hidden");
 }
 
 function removeNode(nodeId) {
@@ -527,9 +560,10 @@ function updateNodeCard(node) {
 
   nodeEl.style.left = `${node.position.x}px`;
   nodeEl.style.top = `${node.position.y}px`;
-  nodeEl.style.borderColor = `${tone}66`;
-  nodeEl.style.boxShadow = isConnected ? `0 8px 18px ${tone}22` : "0 5px 10px rgba(80,80,120,0.08)";
-  nodeEl.style.opacity = isConnected ? "1" : "0.9";
+  nodeEl.style.borderColor = isConnected ? `${tone}88` : "#b8bdcb";
+  nodeEl.style.boxShadow = isConnected ? `0 10px 22px ${tone}44` : "0 5px 10px rgba(70,70,90,0.05)";
+  nodeEl.style.opacity = isConnected ? "1" : "0.62";
+  nodeEl.style.filter = isConnected ? "grayscale(0)" : "grayscale(1) saturate(0)";
   nodeEl.classList.toggle("just-connected", !!node.justConnectedAt && Date.now() - node.justConnectedAt < 700);
 
   nodeEl.querySelector(".type").textContent = node.type;
@@ -601,6 +635,21 @@ function updateNodeCard(node) {
   social.classList.toggle("hidden", !isSocial);
   if (isSocial) {
     social.innerHTML = `<strong>${node.social.platform} Preview</strong><p>${node.social.caption || ""}</p><small>${node.social.hashtags.join(" ")}</small><em>${node.social.preview || ""}</em>`;
+    if (node.social.scheduledAt) {
+      const when = new Date(node.social.scheduledAt);
+      const scheduled = document.createElement("small");
+      scheduled.textContent = `Geplant: ${when.toLocaleString("de-DE")}`;
+      social.appendChild(scheduled);
+    }
+    const planBtn = document.createElement("button");
+    planBtn.type = "button";
+    planBtn.className = "inspector-image-delete";
+    planBtn.textContent = "Add to Posting Plan";
+    planBtn.addEventListener("click", (event) => {
+      event.stopPropagation();
+      openPostingPlanner(node.id);
+    });
+    social.appendChild(planBtn);
   }
 
   renderPostits(node, nodeEl);
@@ -845,11 +894,11 @@ function renderNode(node) {
         el.canvas.removeEventListener("click", place, true);
 
         const prevCount = state.nodes.length;
-        createNode({
+        const created = createNode({
           type: nodeType,
-          position: connectorSpawnPositionFromPoint(point)
+          position: { x: point.x - NODE_WIDTH / 2, y: point.y - NODE_HEIGHT / 2 }
         });
-        const newNode = state.nodes[state.nodes.length - 1];
+        const newNode = created || state.nodes[state.nodes.length - 1];
         if (state.nodes.length > prevCount && newNode) {
           addEdge(fromId, newNode.id);
         }
@@ -989,9 +1038,60 @@ function toggleListMode(showList) {
   }
 }
 
+function renderCalendarView() {
+  const month = state.calendarMonth;
+  el.calendarTitle.textContent = month.toLocaleDateString("de-DE", { month: "long", year: "numeric" });
+  el.calendarGrid.innerHTML = "";
+  const start = new Date(month.getFullYear(), month.getMonth(), 1);
+  const end = new Date(month.getFullYear(), month.getMonth() + 1, 0);
+  const padStart = (start.getDay() + 6) % 7;
+  const today = new Date();
+  for (let i = 0; i < padStart; i++) {
+    const empty = document.createElement("div");
+    empty.className = "calendar-day";
+    empty.style.visibility = "hidden";
+    el.calendarGrid.appendChild(empty);
+  }
+  for (let d = 1; d <= end.getDate(); d++) {
+    const day = document.createElement("div");
+    day.className = "calendar-day";
+    if (today.getFullYear() === month.getFullYear() && today.getMonth() === month.getMonth() && today.getDate() === d) day.classList.add("today");
+    day.innerHTML = `<strong>${d}</strong>`;
+    const key = `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+    state.nodes.filter((n) => n.type === "Social Media Posting" && n.social.scheduledAt?.startsWith(key)).forEach((n) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "calendar-post";
+      const when = new Date(n.social.scheduledAt);
+      btn.textContent = `${n.title || n.id} · ${when.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}`;
+      btn.addEventListener("click", () => {
+        setActiveView("board");
+        state.selectedIds.clear();
+        state.selectedIds.add(n.id);
+        state.selectedPrimary = n.id;
+        updateSelectionClasses();
+        fillInspector(n);
+        forceNodeVisible(n.id);
+      });
+      day.appendChild(btn);
+    });
+    el.calendarGrid.appendChild(day);
+  }
+}
+
+function setActiveView(view) {
+  state.activeView = view;
+  el.canvas.classList.toggle("hidden", view !== "board");
+  el.boardListView.classList.toggle("hidden", view !== "list");
+  el.calendarView.classList.toggle("hidden", view !== "calendar");
+  el.toggleListViewButton.textContent = view === "list" ? "Board View" : "List View";
+  el.toggleCalendarViewButton.textContent = view === "calendar" ? "Board View" : "Calendar View";
+  if (view === "calendar") renderCalendarView();
+}
+
 // Events
 el.addNodeButton.addEventListener("click", () => {
-  toggleListMode(false);
+  setActiveView("board");
   openTypePicker((type) => {
     createNode({ type });
   }, "Idea");
@@ -1002,7 +1102,19 @@ el.createCampaignButton.addEventListener("click", () => {
 });
 
 el.toggleListViewButton.addEventListener("click", () => {
-  toggleListMode();
+  setActiveView(state.activeView === "list" ? "board" : "list");
+});
+
+el.toggleCalendarViewButton.addEventListener("click", () => {
+  setActiveView(state.activeView === "calendar" ? "board" : "calendar");
+});
+el.calendarPrevMonthButton.addEventListener("click", () => {
+  state.calendarMonth = new Date(state.calendarMonth.getFullYear(), state.calendarMonth.getMonth() - 1, 1);
+  renderCalendarView();
+});
+el.calendarNextMonthButton.addEventListener("click", () => {
+  state.calendarMonth = new Date(state.calendarMonth.getFullYear(), state.calendarMonth.getMonth() + 1, 1);
+  renderCalendarView();
 });
 
 el.zoomInButton.addEventListener("click", () => setZoom(state.zoom + 0.1));
@@ -1168,6 +1280,17 @@ el.canvas.addEventListener("pointerdown", (event) => {
 el.picker.addEventListener("click", (event) => {
   if (event.target === el.picker) el.picker.classList.add("hidden");
 });
+el.postingDoneButton.addEventListener("click", () => {
+  const node = getNode(state.postingPlannerNodeId);
+  if (!node) return closePostingPlanner();
+  if (!el.postingDateInput.value || !el.postingTimeInput.value) return;
+  node.social.scheduledAt = `${el.postingDateInput.value}T${el.postingTimeInput.value}:00`;
+  updateNodeCard(node);
+  fillInspector(node);
+  renderCalendarView();
+  closePostingPlanner();
+});
+el.postingCancelButton.addEventListener("click", closePostingPlanner);
 
 window.addEventListener("resize", drawLinks);
 
@@ -1192,4 +1315,4 @@ setZoom(state.zoom);
 updateEmptyState();
 updateListView();
 fillInspector(null);
-toggleListMode(false);
+setActiveView("board");

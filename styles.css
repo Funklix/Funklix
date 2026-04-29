@@ -590,13 +590,13 @@ body {
 
 
 .node.just-connected {
-  animation: nodeFlash 0.7s ease;
+  animation: nodeFlash 0.9s ease;
 }
 
 @keyframes nodeFlash {
-  0% { filter: brightness(1); }
-  40% { filter: brightness(1.45); }
-  100% { filter: brightness(1); }
+  0% { filter: brightness(1); transform: scale(1); }
+  35% { filter: brightness(2.2) saturate(1.8); transform: scale(1.04); }
+  100% { filter: brightness(1); transform: scale(1); }
 }
 
 .selection-box {
@@ -620,6 +620,44 @@ body {
 
 .hidden {
   display: none;
+}
+
+.calendar-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.calendar-day {
+  min-height: 120px;
+  border: 1px solid #e3e7f4;
+  border-radius: 10px;
+  padding: 8px;
+  background: #fff;
+}
+
+.calendar-day.today {
+  border-color: #6b4eff;
+  box-shadow: 0 0 0 2px #6b4eff33 inset;
+}
+
+.calendar-post {
+  margin-top: 6px;
+  width: 100%;
+  font-size: 0.74rem;
+  border: 1px solid #f3c9bc;
+  background: #fff3ef;
+  border-radius: 6px;
+  padding: 4px 6px;
+  text-align: left;
+  cursor: pointer;
 }
 
 @media (max-width: 1300px) {
