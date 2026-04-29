@@ -11,7 +11,7 @@
       <aside class="sidebar">
         <div class="logo">CC</div>
         <nav>
-          <button class="nav-item active">Campaign Canvas</button>
+          <button id="campaign-canvas-nav-btn" class="nav-item active">Campaign Canvas</button>
           <button class="nav-item">Content Workspace</button>
           <button id="brand-core-nav-btn" class="nav-item">Brand Core</button>
           <button class="nav-item">AI Brain</button>
@@ -80,37 +80,40 @@
         </section>
         <section id="brand-core-workspace" class="brand-core-workspace hidden">
           <div class="brand-core-canvas">
-            <article class="bc-node bc-main">BRAND CORE</article>
+            <svg class="bc-links" viewBox="0 0 1000 700" preserveAspectRatio="none">
+              <path d="M500 110 C500 160, 200 160, 200 230" />
+              <path d="M500 110 C500 160, 400 160, 400 230" />
+              <path d="M500 110 C500 160, 600 160, 600 230" />
+              <path d="M500 110 C500 160, 800 160, 800 230" />
+              <path d="M400 320 C400 370, 160 370, 160 470" />
+              <path d="M400 320 C400 370, 360 370, 360 470" />
+              <path d="M600 320 C600 370, 560 370, 560 470" />
+              <path d="M800 320 C800 370, 760 370, 760 470" />
+            </svg>
+            <article class="bc-node bc-main selected" data-bc-key="brandName">BRAND CORE</article>
             <div class="bc-row">
-              <article class="bc-node">TONE OF VOICE</article>
-              <article class="bc-node">MESSAGING PILLARS</article>
-              <article class="bc-node">VALUE PROPOSITION</article>
-              <article class="bc-node">PERSONAS</article>
+              <article class="bc-node" data-bc-key="toneOfVoice">TONE OF VOICE</article>
+              <article class="bc-node" data-bc-key="messagingPillars">MESSAGING PILLARS</article>
+              <article class="bc-node" data-bc-key="valueProposition">VALUE PROPOSITION</article>
+              <article class="bc-node" data-bc-key="personas">PERSONAS</article>
             </div>
             <div class="bc-row">
-              <article class="bc-node">CONTENT GUIDELINES</article>
-              <article class="bc-node">DO'S & DON'TS</article>
-              <article class="bc-node">BRAND VOICE EXAMPLES</article>
-              <article class="bc-node">KEYWORDS</article>
+              <article class="bc-node" data-bc-key="contentGuidelines">CONTENT GUIDELINES</article>
+              <article class="bc-node" data-bc-key="guidelines">DO'S & DON'TS</article>
+              <article class="bc-node" data-bc-key="referenceStyle">BRAND VOICE EXAMPLES</article>
+              <article class="bc-node" data-bc-key="keywords">KEYWORDS</article>
             </div>
             <article class="bc-node bc-assets">BRAND ASSETS</article>
           </div>
           <aside class="brand-core-side">
-            <h3>BRAND CORE</h3>
-            <label>Brand name</label>
-            <input id="brand-name-input" />
-            <label>Short description</label>
-            <textarea id="brand-description-input" rows="2"></textarea>
-            <label>Target audience</label>
-            <textarea id="brand-audience-input" rows="2"></textarea>
-            <label>Tone of voice</label>
-            <input id="brand-tone-input" />
-            <label>Messaging pillars</label>
-            <textarea id="brand-pillars-input" rows="2"></textarea>
-            <label>Do / Don’t guidelines</label>
-            <textarea id="brand-guidelines-input" rows="3"></textarea>
-            <label>Example content / reference style</label>
-            <textarea id="brand-reference-input" rows="3"></textarea>
+            <h3 id="bc-editor-title">BRAND CORE</h3>
+            <label id="bc-editor-label">Details</label>
+            <textarea id="bc-editor-input" rows="5"></textarea>
+            <div class="posting-actions">
+              <input id="bc-list-input" placeholder="Add item and press +"/>
+              <button id="bc-add-item-btn" type="button">+</button>
+            </div>
+            <ul id="bc-list"></ul>
           </aside>
         </section>
       </main>

@@ -35,6 +35,12 @@ const state = {
   postingPlannerNodeId: null
   ,history: []
   ,forcePanNextDrag: false
+  ,brandCore: {
+    brandName: "", shortDescription: "", targetAudience: "",
+    toneOfVoice: [], messagingPillars: [], valueProposition: "",
+    personas: [], contentGuidelines: [], guidelines: [], referenceStyle: "", keywords: []
+  },
+  brandCoreSelectedKey: "brandName"
 };
 
 const el = {
@@ -87,13 +93,13 @@ const el = {
   resetBoardButton: document.getElementById("reset-board-btn"),
   saveStatus: document.getElementById("save-status"),
   brandCoreButton: document.getElementById("brand-core-nav-btn"),
-  brandNameInput: document.getElementById("brand-name-input"),
-  brandDescriptionInput: document.getElementById("brand-description-input"),
-  brandAudienceInput: document.getElementById("brand-audience-input"),
-  brandToneInput: document.getElementById("brand-tone-input"),
-  brandPillarsInput: document.getElementById("brand-pillars-input"),
-  brandGuidelinesInput: document.getElementById("brand-guidelines-input"),
-  brandReferenceInput: document.getElementById("brand-reference-input"),
+  campaignCanvasNavButton: document.getElementById("campaign-canvas-nav-btn"),
+  brandEditorTitle: document.getElementById("bc-editor-title"),
+  brandEditorLabel: document.getElementById("bc-editor-label"),
+  brandEditorInput: document.getElementById("bc-editor-input"),
+  brandListInput: document.getElementById("bc-list-input"),
+  brandList: document.getElementById("bc-list"),
+  brandAddItemButton: document.getElementById("bc-add-item-btn"),
   inputs: {
     type: document.getElementById("node-type"),
     title: document.getElementById("node-title"),
@@ -212,13 +218,17 @@ function resetBoardState() {
 
 function getBrandCoreData() {
   return {
-    brandName: el.brandNameInput.value,
-    shortDescription: el.brandDescriptionInput.value,
-    targetAudience: el.brandAudienceInput.value,
-    toneOfVoice: el.brandToneInput.value,
-    messagingPillars: el.brandPillarsInput.value,
-    guidelines: el.brandGuidelinesInput.value,
-    referenceStyle: el.brandReferenceInput.value
+    brandName: state.brandCore?.brandName || "",
+    shortDescription: state.brandCore?.shortDescription || "",
+    targetAudience: state.brandCore?.targetAudience || "",
+    toneOfVoice: state.brandCore?.toneOfVoice || [],
+    messagingPillars: state.brandCore?.messagingPillars || [],
+    valueProposition: state.brandCore?.valueProposition || "",
+    personas: state.brandCore?.personas || [],
+    contentGuidelines: state.brandCore?.contentGuidelines || [],
+    guidelines: state.brandCore?.guidelines || [],
+    referenceStyle: state.brandCore?.referenceStyle || "",
+    keywords: state.brandCore?.keywords || []
   };
 }
 window.getBrandCoreData = getBrandCoreData;
@@ -230,14 +240,33 @@ function saveBrandCore() {
 function restoreBrandCore() {
   const raw = localStorage.getItem(BRAND_CORE_STORAGE_KEY);
   if (!raw) return;
-  const data = JSON.parse(raw);
-  el.brandNameInput.value = data.brandName || "";
-  el.brandDescriptionInput.value = data.shortDescription || "";
-  el.brandAudienceInput.value = data.targetAudience || "";
-  el.brandToneInput.value = data.toneOfVoice || "";
-  el.brandPillarsInput.value = data.messagingPillars || "";
-  el.brandGuidelinesInput.value = data.guidelines || "";
-  el.brandReferenceInput.value = data.referenceStyle || "";
+  state.brandCore = JSON.parse(raw);
+}
+
+function renderBrandCoreEditor() {
+  const key = state.brandCoreSelectedKey;
+  const labelMap = {
+    brandName: "Brand Core", toneOfVoice: "Tone of Voice", messagingPillars: "Messaging Pillars",
+    valueProposition: "Value Proposition", personas: "Personas", contentGuidelines: "Content Guidelines",
+    guidelines: "Do / Don't", referenceStyle: "Brand Voice Examples", keywords: "Keywords"
+  };
+  el.brandEditorTitle.textContent = labelMap[key] || "Brand Core";
+  el.brandEditorLabel.textContent = "Details";
+  const value = state.brandCore[key];
+  el.brandEditorInput.value = Array.isArray(value) ? "" : (value || "");
+  el.brandList.innerHTML = "";
+  if (Array.isArray(value)) {
+    value.forEach((item, idx) => {
+      const li = document.createElement("li");
+      li.textContent = item;
+      li.addEventListener("click", () => {
+        state.brandCore[key].splice(idx, 1);
+        saveBrandCore();
+        renderBrandCoreEditor();
+      });
+      el.brandList.appendChild(li);
+    });
+  }
 }
 
 function connectedIds() {
@@ -1301,6 +1330,8 @@ function setActiveView(view) {
   el.boardListView.classList.toggle("hidden", view !== "list");
   el.calendarView.classList.toggle("hidden", view !== "calendar");
   el.brandCoreWorkspace.classList.toggle("hidden", view !== "brand-core");
+  el.campaignCanvasNavButton.classList.toggle("active", view !== "brand-core");
+  el.brandCoreButton.classList.toggle("active", view === "brand-core");
   el.cycleViewButton.textContent =
     view === "board" ? "Board View" : view === "list" ? "List View" : view === "calendar" ? "Calendar View" : "Brand Core";
   if (view === "calendar") renderCalendarView();
@@ -1592,15 +1623,31 @@ el.postingCancelButton.addEventListener("click", closePostingPlanner);
 el.brandCoreButton.addEventListener("click", () => {
   setActiveView("brand-core");
 });
-[
-  el.brandNameInput,
-  el.brandDescriptionInput,
-  el.brandAudienceInput,
-  el.brandToneInput,
-  el.brandPillarsInput,
-  el.brandGuidelinesInput,
-  el.brandReferenceInput
-].forEach((input) => input.addEventListener("input", saveBrandCore));
+el.campaignCanvasNavButton.addEventListener("click", () => setActiveView("board"));
+document.querySelectorAll(".bc-node[data-bc-key]").forEach((n) => {
+  n.addEventListener("click", () => {
+    document.querySelectorAll(".bc-node.selected").forEach((x) => x.classList.remove("selected"));
+    n.classList.add("selected");
+    state.brandCoreSelectedKey = n.dataset.bcKey;
+    renderBrandCoreEditor();
+  });
+});
+el.brandEditorInput.addEventListener("input", () => {
+  const key = state.brandCoreSelectedKey;
+  if (Array.isArray(state.brandCore[key])) return;
+  state.brandCore[key] = el.brandEditorInput.value;
+  saveBrandCore();
+});
+el.brandAddItemButton.addEventListener("click", () => {
+  const key = state.brandCoreSelectedKey;
+  if (!Array.isArray(state.brandCore[key])) return;
+  const v = el.brandListInput.value.trim();
+  if (!v) return;
+  state.brandCore[key].push(v);
+  el.brandListInput.value = "";
+  saveBrandCore();
+  renderBrandCoreEditor();
+});
 
 window.addEventListener("resize", drawLinks);
 
@@ -1629,5 +1676,6 @@ fillInspector(null);
 setActiveView("board");
 if (!restoreBoardState()) setSaveStatus("Unsaved changes");
 restoreBrandCore();
+renderBrandCoreEditor();
 window.addEventListener("beforeunload", saveBoardState);
 el.resetBoardButton.addEventListener("click", resetBoardState);
