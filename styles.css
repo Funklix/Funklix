@@ -134,6 +134,7 @@ body {
   display: grid;
   gap: 4px;
 }
+#view-menu.hidden { display: none; }
 
 #view-menu button {
   text-align: left;
@@ -143,6 +144,46 @@ body {
   width: min(720px, 92vw);
   display: grid;
   gap: 8px;
+}
+
+.brand-core-shell {
+  width: min(1320px, 95vw) !important;
+  grid-template-columns: 2.2fr 1fr;
+  gap: 16px;
+}
+
+.brand-core-board {
+  background: #f8f8fc;
+  border: 1px solid #e3e6f2;
+  border-radius: 14px;
+  padding: 16px;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.brand-core-card {
+  min-height: 90px;
+  border: 1px solid #d9ddf0;
+  border-radius: 12px;
+  background: #fff;
+  padding: 10px;
+  color: #6554f1;
+  font-weight: 700;
+}
+
+.brand-core-card.main {
+  grid-column: 2 / span 2;
+  min-height: 120px;
+}
+
+.brand-core-form {
+  border: 1px solid #e3e6f2;
+  border-radius: 12px;
+  padding: 12px;
+  background: #fff;
+  display: grid;
+  gap: 6px;
 }
 
 
