@@ -193,6 +193,22 @@ body {
   padding: 14px;
   background: #f3f4f8;
   height: 100%;
+  animation: fadeMode 0.2s ease;
+}
+
+.brand-mode-header {
+  grid-column: 1 / -1;
+  margin: 0 0 6px;
+}
+
+.brand-mode-header h1 {
+  margin: 0;
+  font-size: 1.35rem;
+}
+
+@keyframes fadeMode {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .brand-core-canvas {

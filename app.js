@@ -41,10 +41,14 @@ const state = {
     personas: [], contentGuidelines: [], guidelines: [], referenceStyle: "", keywords: []
   },
   brandCoreSelectedKey: "brandName"
+  ,appMode: "canvas"
 };
 
 const el = {
+  workspaceWrap: document.querySelector(".workspace-wrap"),
   canvas: document.getElementById("canvas"),
+  canvasTopbar: document.getElementById("canvas-topbar"),
+  inspectorPanel: document.getElementById("inspector-panel"),
   zoomLayer: document.getElementById("zoom-layer"),
   links: document.getElementById("links"),
   emptyState: document.getElementById("empty-state"),
@@ -1337,6 +1341,16 @@ function setActiveView(view) {
   if (view === "calendar") renderCalendarView();
 }
 
+function setAppMode(mode) {
+  state.appMode = mode;
+  const brand = mode === "brand";
+  el.canvasTopbar.classList.toggle("hidden", brand);
+  el.inspectorPanel.classList.toggle("hidden", brand);
+  el.workspaceWrap?.classList?.toggle("brand-mode", brand);
+  if (brand) setActiveView("brand-core");
+  else if (state.activeView === "brand-core") setActiveView("board");
+}
+
 // Events
 el.addNodeButton.addEventListener("click", () => {
   setActiveView("board");
@@ -1621,9 +1635,12 @@ el.postingDoneButton.addEventListener("click", () => {
 });
 el.postingCancelButton.addEventListener("click", closePostingPlanner);
 el.brandCoreButton.addEventListener("click", () => {
-  setActiveView("brand-core");
+  setAppMode("brand");
 });
-el.campaignCanvasNavButton.addEventListener("click", () => setActiveView("board"));
+el.campaignCanvasNavButton.addEventListener("click", () => {
+  setAppMode("canvas");
+  setActiveView("board");
+});
 document.querySelectorAll(".bc-node[data-bc-key]").forEach((n) => {
   n.addEventListener("click", () => {
     document.querySelectorAll(".bc-node.selected").forEach((x) => x.classList.remove("selected"));
@@ -1673,6 +1690,7 @@ centerBoardStartPosition();
 updateEmptyState();
 updateListView();
 fillInspector(null);
+setAppMode("canvas");
 setActiveView("board");
 if (!restoreBoardState()) setSaveStatus("Unsaved changes");
 restoreBrandCore();
