@@ -31,6 +31,7 @@ const state = {
   activeView: "board",
   calendarMonth: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
   postingPlannerNodeId: null
+  ,history: []
 };
 
 const el = {
@@ -71,6 +72,9 @@ const el = {
   postingTimeInput: document.getElementById("posting-time-input"),
   postingDoneButton: document.getElementById("posting-done-btn"),
   postingCancelButton: document.getElementById("posting-cancel-btn"),
+  undoButton: document.getElementById("undo-btn"),
+  deleteSelectedButton: document.getElementById("delete-selected-btn"),
+  disconnectSelectedButton: document.getElementById("disconnect-selected-btn"),
   inputs: {
     type: document.getElementById("node-type"),
     title: document.getElementById("node-title"),
@@ -131,6 +135,37 @@ function clampNodePosition(rawX, rawY) {
 
 function getNode(id) {
   return state.nodes.find((n) => n.id === id) || null;
+}
+
+function pushHistorySnapshot() {
+  const snapshot = JSON.stringify({
+    nodes: state.nodes,
+    edges: state.edges,
+    nodeCounter: state.nodeCounter,
+    postitCounter: state.postitCounter
+  });
+  state.history.push(snapshot);
+  if (state.history.length > 5) state.history.shift();
+}
+
+function restoreLastSnapshot() {
+  const last = state.history.pop();
+  if (!last) return;
+  state.nodes.forEach((n) => (n.images || []).forEach(revokeImageObjectUrl));
+  const parsed = JSON.parse(last);
+  state.nodes = parsed.nodes;
+  state.edges = parsed.edges;
+  state.nodeCounter = parsed.nodeCounter;
+  state.postitCounter = parsed.postitCounter;
+  state.selectedIds.clear();
+  state.selectedPrimary = null;
+  el.zoomLayer.querySelectorAll(".node").forEach((n) => n.remove());
+  state.nodes.forEach(renderNode);
+  updateSelectionClasses();
+  fillInspector(null);
+  updateListView();
+  updateEmptyState();
+  drawLinks();
 }
 
 function connectedIds() {
@@ -400,6 +435,7 @@ function closePostingPlanner() {
 }
 
 function removeNode(nodeId) {
+  pushHistorySnapshot();
   const idx = state.nodes.findIndex((n) => n.id === nodeId);
   if (idx === -1) return;
 
@@ -420,6 +456,7 @@ function removeNode(nodeId) {
 }
 
 function addEdge(fromId, toId) {
+  pushHistorySnapshot();
   if (!fromId || !toId || fromId === toId) return;
   if (state.edges.some(([a, b]) => a === fromId && b === toId)) return;
   state.edges.push([fromId, toId]);
@@ -551,6 +588,32 @@ function parseList(value) {
     .filter(Boolean);
 }
 
+function downstreamNodeIds(startId) {
+  const out = new Set();
+  const q = [startId];
+  while (q.length) {
+    const id = q.shift();
+    state.edges.forEach(([from, to]) => {
+      if (from !== id || out.has(to)) return;
+      out.add(to);
+      q.push(to);
+    });
+  }
+  return [...out];
+}
+
+function propagateNodeChangesDownward(node) {
+  const targets = downstreamNodeIds(node.id).map(getNode).filter(Boolean);
+  targets.forEach((t) => {
+    if (node.channel) t.channel = node.channel;
+    if (node.goal) t.goal = node.goal;
+    if (node.audience) t.audience = node.audience;
+    if (node.tags.length) t.tags = [...new Set([...t.tags, ...node.tags])];
+    updateNodeCard(t);
+  });
+  runNetworkImpulse();
+}
+
 function updateNodeCard(node) {
   const nodeEl = el.zoomLayer.querySelector(`[data-id='${node.id}']`);
   if (!nodeEl) return;
@@ -583,6 +646,29 @@ function updateNodeCard(node) {
     const chip = document.createElement("span");
     chip.className = "tag";
     chip.textContent = tag;
+    if (!tag.startsWith("Channel: ") && !tag.startsWith("Goal: ") && !tag.startsWith("Audience: ")) {
+      const x = document.createElement("button");
+      x.type = "button";
+      x.className = "image-delete-btn";
+      x.textContent = "✕";
+      x.style.width = "14px";
+      x.style.height = "14px";
+      x.style.fontSize = "0.56rem";
+      x.style.top = "-4px";
+      x.style.right = "-4px";
+      x.style.display = "none";
+      chip.style.position = "relative";
+      chip.addEventListener("mouseenter", () => { x.style.display = "inline-flex"; });
+      chip.addEventListener("mouseleave", () => { x.style.display = "none"; });
+      x.addEventListener("click", (event) => {
+        event.stopPropagation();
+        pushHistorySnapshot();
+        node.tags = node.tags.filter((t) => t !== tag);
+        updateNodeCard(node);
+        if (state.selectedPrimary === node.id) fillInspector(node);
+      });
+      chip.appendChild(x);
+    }
     tagsWrap.appendChild(chip);
   });
 
@@ -1129,9 +1215,7 @@ el.canvas.addEventListener(
       return;
     }
     event.preventDefault();
-    if (Math.abs(event.deltaY) >= Math.abs(event.deltaX)) {
-      el.canvas.scrollTop += event.deltaY;
-    }
+    el.canvas.scrollTop += event.deltaY;
     el.canvas.scrollLeft += event.deltaX;
   },
   { passive: false }
@@ -1198,6 +1282,28 @@ el.nodeForm.addEventListener("input", (event) => {
   updateNodeCard(node);
   updateListView();
   fillInspector(node);
+  if (downstreamNodeIds(node.id).length > 0) {
+    const ok = window.confirm("Änderungen auf alle verbundenen untergeordneten Nodes anwenden?");
+    if (ok) {
+      pushHistorySnapshot();
+      propagateNodeChangesDownward(node);
+    }
+  }
+});
+el.inputs.channel.addEventListener("keydown", (event) => {
+  const node = getNode(state.selectedPrimary);
+  if (!node) return;
+  if (event.key !== "Enter" && event.key !== " ") return;
+  event.preventDefault();
+  const value = el.inputs.channel.value.trim();
+  if (!value) return;
+  pushHistorySnapshot();
+  node.channel = value;
+  updateNodeCard(node);
+  fillInspector(node);
+});
+el.inputs.tags.addEventListener("keydown", (event) => {
+  if (event.key === ",") event.stopPropagation();
 });
 
 el.imageUpload.addEventListener("change", () => {
@@ -1215,6 +1321,19 @@ el.deleteNodeButton.addEventListener("click", () => {
   if (!state.selectedPrimary) return;
   removeNode(state.selectedPrimary);
 });
+el.deleteSelectedButton.addEventListener("click", () => {
+  if (!state.selectedIds.size) return;
+  pushHistorySnapshot();
+  [...state.selectedIds].forEach((id) => removeNode(id));
+});
+el.disconnectSelectedButton.addEventListener("click", () => {
+  if (!state.selectedIds.size) return;
+  pushHistorySnapshot();
+  state.edges = state.edges.filter(([a, b]) => !state.selectedIds.has(a) && !state.selectedIds.has(b));
+  state.nodes.forEach(updateNodeCard);
+  drawLinks();
+});
+el.undoButton.addEventListener("click", restoreLastSnapshot);
 
 el.canvas.addEventListener("dragover", (event) => event.preventDefault());
 el.canvas.addEventListener("drop", (event) => {
@@ -1233,6 +1352,12 @@ el.canvas.addEventListener("pointerdown", (event) => {
   if (event.button !== 0) return;
   if (event.target.closest(".node, .context-menu, button, input, textarea, select")) return;
 
+  const startLeft = el.canvas.scrollLeft;
+  const startTop = el.canvas.scrollTop;
+  const panX = event.clientX;
+  const panY = event.clientY;
+  let panning = false;
+
   const rect = el.canvas.getBoundingClientRect();
   const sx = event.clientX - rect.left;
   const sy = event.clientY - rect.top;
@@ -1242,6 +1367,14 @@ el.canvas.addEventListener("pointerdown", (event) => {
   el.canvas.appendChild(box);
 
   function move(ev) {
+    const panDx = ev.clientX - panX;
+    const panDy = ev.clientY - panY;
+    if (Math.abs(panDx) > 4 || Math.abs(panDy) > 4) {
+      panning = true;
+      el.canvas.scrollLeft = startLeft - panDx;
+      el.canvas.scrollTop = startTop - panDy;
+      return;
+    }
     const cx = ev.clientX - rect.left;
     const cy = ev.clientY - rect.top;
     const left = Math.min(sx, cx);
@@ -1270,7 +1403,7 @@ el.canvas.addEventListener("pointerdown", (event) => {
     window.removeEventListener("pointermove", move);
     window.removeEventListener("pointerup", up);
     box.remove();
-    fillInspector(state.selectedPrimary ? getNode(state.selectedPrimary) : null);
+    if (!panning) fillInspector(state.selectedPrimary ? getNode(state.selectedPrimary) : null);
   }
 
   window.addEventListener("pointermove", move);
