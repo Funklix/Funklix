@@ -45,6 +45,7 @@ const el = {
   nodeListView: document.getElementById("node-list-view"),
   boardListView: document.getElementById("board-list-view"),
   calendarView: document.getElementById("calendar-view"),
+  brandCoreWorkspace: document.getElementById("brand-core-workspace"),
   cycleViewButton: document.getElementById("cycle-view-btn"),
   viewMenuButton: document.getElementById("view-menu-btn"),
   viewMenu: document.getElementById("view-menu"),
@@ -86,8 +87,6 @@ const el = {
   resetBoardButton: document.getElementById("reset-board-btn"),
   saveStatus: document.getElementById("save-status"),
   brandCoreButton: document.getElementById("brand-core-nav-btn"),
-  brandCoreOverlay: document.getElementById("brand-core-overlay"),
-  brandCoreCloseButton: document.getElementById("brand-core-close-btn"),
   brandNameInput: document.getElementById("brand-name-input"),
   brandDescriptionInput: document.getElementById("brand-description-input"),
   brandAudienceInput: document.getElementById("brand-audience-input"),
@@ -1301,7 +1300,9 @@ function setActiveView(view) {
   el.canvas.classList.toggle("hidden", view !== "board");
   el.boardListView.classList.toggle("hidden", view !== "list");
   el.calendarView.classList.toggle("hidden", view !== "calendar");
-  el.cycleViewButton.textContent = view === "board" ? "Board View" : view === "list" ? "List View" : "Calendar View";
+  el.brandCoreWorkspace.classList.toggle("hidden", view !== "brand-core");
+  el.cycleViewButton.textContent =
+    view === "board" ? "Board View" : view === "list" ? "List View" : view === "calendar" ? "Calendar View" : "Brand Core";
   if (view === "calendar") renderCalendarView();
 }
 
@@ -1589,10 +1590,7 @@ el.postingDoneButton.addEventListener("click", () => {
 });
 el.postingCancelButton.addEventListener("click", closePostingPlanner);
 el.brandCoreButton.addEventListener("click", () => {
-  el.brandCoreOverlay.classList.remove("hidden");
-});
-el.brandCoreCloseButton.addEventListener("click", () => {
-  el.brandCoreOverlay.classList.add("hidden");
+  setActiveView("brand-core");
 });
 [
   el.brandNameInput,

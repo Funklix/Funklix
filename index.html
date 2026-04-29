@@ -78,6 +78,41 @@
           </div>
           <div id="calendar-grid" class="calendar-grid"></div>
         </section>
+        <section id="brand-core-workspace" class="brand-core-workspace hidden">
+          <div class="brand-core-canvas">
+            <article class="bc-node bc-main">BRAND CORE</article>
+            <div class="bc-row">
+              <article class="bc-node">TONE OF VOICE</article>
+              <article class="bc-node">MESSAGING PILLARS</article>
+              <article class="bc-node">VALUE PROPOSITION</article>
+              <article class="bc-node">PERSONAS</article>
+            </div>
+            <div class="bc-row">
+              <article class="bc-node">CONTENT GUIDELINES</article>
+              <article class="bc-node">DO'S & DON'TS</article>
+              <article class="bc-node">BRAND VOICE EXAMPLES</article>
+              <article class="bc-node">KEYWORDS</article>
+            </div>
+            <article class="bc-node bc-assets">BRAND ASSETS</article>
+          </div>
+          <aside class="brand-core-side">
+            <h3>BRAND CORE</h3>
+            <label>Brand name</label>
+            <input id="brand-name-input" />
+            <label>Short description</label>
+            <textarea id="brand-description-input" rows="2"></textarea>
+            <label>Target audience</label>
+            <textarea id="brand-audience-input" rows="2"></textarea>
+            <label>Tone of voice</label>
+            <input id="brand-tone-input" />
+            <label>Messaging pillars</label>
+            <textarea id="brand-pillars-input" rows="2"></textarea>
+            <label>Do / Don’t guidelines</label>
+            <textarea id="brand-guidelines-input" rows="3"></textarea>
+            <label>Example content / reference style</label>
+            <textarea id="brand-reference-input" rows="3"></textarea>
+          </aside>
+        </section>
       </main>
 
       <aside class="inspector">
@@ -191,41 +226,6 @@
       </div>
     </div>
 
-    <div id="brand-core-overlay" class="node-type-picker hidden">
-      <div class="picker-panel posting-panel brand-core-shell">
-        <div class="brand-core-board">
-          <article class="brand-core-card main">Brand Core</article>
-          <article class="brand-core-card">Tone of Voice</article>
-          <article class="brand-core-card">Messaging Pillars</article>
-          <article class="brand-core-card">Value Proposition</article>
-          <article class="brand-core-card">Personas</article>
-          <article class="brand-core-card">Content Guidelines</article>
-          <article class="brand-core-card">Do / Don’t</article>
-          <article class="brand-core-card">Brand Voice Examples</article>
-          <article class="brand-core-card">Keywords</article>
-        </div>
-        <div class="brand-core-form">
-          <h3>Brand Core</h3>
-          <label>Brand name</label>
-          <input id="brand-name-input" />
-          <label>Short description</label>
-          <textarea id="brand-description-input" rows="2"></textarea>
-          <label>Target audience</label>
-          <textarea id="brand-audience-input" rows="2"></textarea>
-          <label>Tone of voice</label>
-          <input id="brand-tone-input" />
-          <label>Messaging pillars</label>
-          <textarea id="brand-pillars-input" rows="2"></textarea>
-          <label>Do / Don’t guidelines</label>
-          <textarea id="brand-guidelines-input" rows="3"></textarea>
-          <label>Example content / reference style</label>
-          <textarea id="brand-reference-input" rows="3"></textarea>
-          <div class="posting-actions">
-            <button id="brand-core-close-btn" type="button">Close</button>
-          </div>
-        </div>
-      </div>
-    </div>
 
     <script src="app.js"></script>
   </body>
