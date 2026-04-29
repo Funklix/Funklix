@@ -1,0 +1,1681 @@
+console.info("Campaign Canvas build: 2026-04-27-fix");
+const NODE_TYPES = {
+  Idea: { color: "#6b4eff" },
+  "Campaign Variation": { color: "#2f7ef7" },
+  Content: { color: "#16a47b" },
+  "Social Media Posting": { color: "#f56f46" },
+  "Landing Page": { color: "#a04ad8" },
+  "Email Campaign": { color: "#d8961a" }
+};
+
+const NODE_WIDTH = 285;
+const NODE_HEIGHT = 200;
+const BOARD_WIDTH = 10000;
+const BOARD_HEIGHT = 10000;
+const STORAGE_KEY = "campaign_canvas_state_v1";
+const BRAND_CORE_STORAGE_KEY = "campaign_canvas_brand_core_v1";
+
+const state = {
+  nodes: [],
+  edges: [],
+  selectedIds: new Set(),
+  selectedPrimary: null,
+  zoom: 1,
+  nodeCounter: 1,
+  postitCounter: 1,
+  activeConnection: null,
+  activeConnectionMoveHandler: null,
+  activeConnectionPlaceHandler: null,
+  lastAutoZoomAt: 0,
+  connectorCreateMode: null,
+  connectorGhostEl: null,
+  contextBoardPoint: { x: 0, y: 0 },
+  activeView: "board",
+  calendarMonth: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
+  postingPlannerNodeId: null
+  ,history: []
+  ,forcePanNextDrag: false
+  ,brandCore: {
+    brandName: "", shortDescription: "", targetAudience: "",
+    toneOfVoice: [], messagingPillars: [], valueProposition: "",
+    personas: [], contentGuidelines: [], guidelines: [], referenceStyle: "", keywords: []
+  },
+  brandCoreSelectedKey: "brandName"
+};
+
+const el = {
+  canvas: document.getElementById("canvas"),
+  zoomLayer: document.getElementById("zoom-layer"),
+  links: document.getElementById("links"),
+  emptyState: document.getElementById("empty-state"),
+  nodeListView: document.getElementById("node-list-view"),
+  boardListView: document.getElementById("board-list-view"),
+  calendarView: document.getElementById("calendar-view"),
+  brandCoreWorkspace: document.getElementById("brand-core-workspace"),
+  cycleViewButton: document.getElementById("cycle-view-btn"),
+  viewMenuButton: document.getElementById("view-menu-btn"),
+  viewMenu: document.getElementById("view-menu"),
+  viewBoardButton: document.getElementById("view-board-btn"),
+  viewListButton: document.getElementById("view-list-btn"),
+  viewCalendarButton: document.getElementById("view-calendar-btn"),
+  calendarGrid: document.getElementById("calendar-grid"),
+  calendarTitle: document.getElementById("calendar-title"),
+  calendarPrevMonthButton: document.getElementById("calendar-prev-month-btn"),
+  calendarNextMonthButton: document.getElementById("calendar-next-month-btn"),
+  createCampaignButton: document.getElementById("create-campaign-btn"),
+  addNodeButton: document.getElementById("add-node-btn"),
+  zoomInButton: document.getElementById("zoom-in-btn"),
+  zoomOutButton: document.getElementById("zoom-out-btn"),
+  zoomLabel: document.getElementById("zoom-label"),
+  nodeTemplate: document.getElementById("node-template"),
+  postitTemplate: document.getElementById("postit-template"),
+  contextMenu: document.getElementById("context-menu"),
+  addContextNodeButton: document.getElementById("add-context-node-btn"),
+  addPostitCommentButton: document.getElementById("add-postit-comment-btn"),
+  picker: document.getElementById("node-type-picker"),
+  pickerOptions: document.getElementById("node-type-options"),
+  inspectorMeta: document.getElementById("inspector-meta"),
+  nodeForm: document.getElementById("node-form"),
+  socialFields: document.getElementById("social-fields"),
+  contentUploadFields: document.getElementById("content-upload-fields"),
+  imageUpload: document.getElementById("node-image-upload"),
+  inspectorImageList: document.getElementById("inspector-image-list"),
+  deleteNodeButton: document.getElementById("delete-node-btn"),
+  postingPlanOverlay: document.getElementById("posting-plan-overlay"),
+  postingDateInput: document.getElementById("posting-date-input"),
+  postingTimeInput: document.getElementById("posting-time-input"),
+  postingDoneButton: document.getElementById("posting-done-btn"),
+  postingCancelButton: document.getElementById("posting-cancel-btn"),
+  undoButton: document.getElementById("undo-btn"),
+  deleteSelectedButton: document.getElementById("delete-selected-btn"),
+  disconnectSelectedButton: document.getElementById("disconnect-selected-btn"),
+  propagateDescendantsButton: document.getElementById("propagate-descendants-btn"),
+  resetBoardButton: document.getElementById("reset-board-btn"),
+  saveStatus: document.getElementById("save-status"),
+  brandCoreButton: document.getElementById("brand-core-nav-btn"),
+  campaignCanvasNavButton: document.getElementById("campaign-canvas-nav-btn"),
+  brandEditorTitle: document.getElementById("bc-editor-title"),
+  brandEditorLabel: document.getElementById("bc-editor-label"),
+  brandEditorInput: document.getElementById("bc-editor-input"),
+  brandListInput: document.getElementById("bc-list-input"),
+  brandList: document.getElementById("bc-list"),
+  brandAddItemButton: document.getElementById("bc-add-item-btn"),
+  inputs: {
+    type: document.getElementById("node-type"),
+    title: document.getElementById("node-title"),
+    content: document.getElementById("node-content"),
+    variants: document.getElementById("node-variants"),
+    platform: document.getElementById("node-platform"),
+    caption: document.getElementById("node-caption"),
+    hashtags: document.getElementById("node-hashtags"),
+    preview: document.getElementById("node-preview"),
+    audience: document.getElementById("node-audience"),
+    goal: document.getElementById("node-goal"),
+    channel: document.getElementById("node-channel")
+  }
+};
+
+Object.keys(NODE_TYPES).forEach((type) => {
+  const option = document.createElement("option");
+  option.value = type;
+  option.textContent = type;
+  el.inputs.type.appendChild(option);
+});
+
+function nowString() {
+  return new Intl.DateTimeFormat("de-DE", { dateStyle: "short", timeStyle: "short" }).format(new Date());
+}
+
+function boardPointFromClient(clientX, clientY) {
+  const rect = el.canvas.getBoundingClientRect();
+  return {
+    x: (clientX - rect.left + el.canvas.scrollLeft) / state.zoom,
+    y: (clientY - rect.top + el.canvas.scrollTop) / state.zoom
+  };
+}
+
+function visibleBoardBounds() {
+  const left = el.canvas.scrollLeft / state.zoom;
+  const top = el.canvas.scrollTop / state.zoom;
+  const width = el.canvas.clientWidth / state.zoom;
+  const height = el.canvas.clientHeight / state.zoom;
+  return { left, top, width, height, right: left + width, bottom: top + height };
+}
+
+function viewportCenterBoard() {
+  const b = visibleBoardBounds();
+  return { x: b.left + b.width / 2, y: b.top + b.height / 2 };
+}
+
+function clampNodePosition(rawX, rawY) {
+  const x = Number.isFinite(rawX) ? rawX : 320;
+  const y = Number.isFinite(rawY) ? rawY : 180;
+
+  return {
+    x: Math.max(40, Math.min(1600, x)),
+    y: Math.max(40, Math.min(1200, y))
+  };
+}
+
+function getNode(id) {
+  return state.nodes.find((n) => n.id === id) || null;
+}
+
+function pushHistorySnapshot() {
+  const snapshot = JSON.stringify({
+    nodes: state.nodes,
+    edges: state.edges,
+    nodeCounter: state.nodeCounter,
+    postitCounter: state.postitCounter
+  });
+  state.history.push(snapshot);
+  if (state.history.length > 5) state.history.shift();
+}
+
+function restoreLastSnapshot() {
+  const last = state.history.pop();
+  if (!last) return;
+  state.nodes.forEach((n) => (n.images || []).forEach(revokeImageObjectUrl));
+  const parsed = JSON.parse(last);
+  state.nodes = parsed.nodes;
+  state.edges = parsed.edges;
+  state.nodeCounter = parsed.nodeCounter;
+  state.postitCounter = parsed.postitCounter;
+  state.selectedIds.clear();
+  state.selectedPrimary = null;
+  el.zoomLayer.querySelectorAll(".node").forEach((n) => n.remove());
+  state.nodes.forEach(renderNode);
+  updateSelectionClasses();
+  fillInspector(null);
+  updateListView();
+  updateEmptyState();
+  drawLinks();
+  markUnsaved();
+}
+
+
+function setSaveStatus(text) { el.saveStatus.textContent = text; }
+function serializeState() {
+  return {
+    nodes: state.nodes.map((n) => ({ ...n, images: (n.images || []).filter((img) => img.url && !img.url.startsWith("blob:")) })),
+    edges: state.edges, nodeCounter: state.nodeCounter, postitCounter: state.postitCounter, zoom: state.zoom
+  };
+}
+function saveBoardState() { localStorage.setItem(STORAGE_KEY, JSON.stringify(serializeState())); setSaveStatus("Saved"); }
+function markUnsaved() { setSaveStatus("Unsaved changes"); clearTimeout(state._saveTimer); state._saveTimer = setTimeout(saveBoardState, 150); }
+function restoreBoardState() {
+  const raw = localStorage.getItem(STORAGE_KEY); if (!raw) return false;
+  const saved = JSON.parse(raw);
+  state.nodes = saved.nodes || []; state.edges = saved.edges || []; state.nodeCounter = saved.nodeCounter || 1; state.postitCounter = saved.postitCounter || 1;
+  state.selectedIds.clear(); state.selectedPrimary = null; el.zoomLayer.querySelectorAll(".node").forEach((n) => n.remove()); state.nodes.forEach(renderNode);
+  updateListView(); updateEmptyState(); drawLinks(); if (saved.zoom) setZoom(saved.zoom); setSaveStatus("Restored from local storage"); return true;
+}
+function resetBoardState() {
+  localStorage.removeItem(STORAGE_KEY);
+  state.nodes = []; state.edges = []; state.nodeCounter = 1; state.postitCounter = 1; state.selectedIds.clear(); state.selectedPrimary = null;
+  el.zoomLayer.querySelectorAll(".node").forEach((n) => n.remove()); fillInspector(null); updateListView(); updateEmptyState(); drawLinks(); setSaveStatus("Unsaved changes");
+}
+
+function getBrandCoreData() {
+  return {
+    brandName: state.brandCore?.brandName || "",
+    shortDescription: state.brandCore?.shortDescription || "",
+    targetAudience: state.brandCore?.targetAudience || "",
+    toneOfVoice: state.brandCore?.toneOfVoice || [],
+    messagingPillars: state.brandCore?.messagingPillars || [],
+    valueProposition: state.brandCore?.valueProposition || "",
+    personas: state.brandCore?.personas || [],
+    contentGuidelines: state.brandCore?.contentGuidelines || [],
+    guidelines: state.brandCore?.guidelines || [],
+    referenceStyle: state.brandCore?.referenceStyle || "",
+    keywords: state.brandCore?.keywords || []
+  };
+}
+window.getBrandCoreData = getBrandCoreData;
+
+function saveBrandCore() {
+  localStorage.setItem(BRAND_CORE_STORAGE_KEY, JSON.stringify(getBrandCoreData()));
+}
+
+function restoreBrandCore() {
+  const raw = localStorage.getItem(BRAND_CORE_STORAGE_KEY);
+  if (!raw) return;
+  state.brandCore = JSON.parse(raw);
+}
+
+function renderBrandCoreEditor() {
+  const key = state.brandCoreSelectedKey;
+  const labelMap = {
+    brandName: "Brand Core", toneOfVoice: "Tone of Voice", messagingPillars: "Messaging Pillars",
+    valueProposition: "Value Proposition", personas: "Personas", contentGuidelines: "Content Guidelines",
+    guidelines: "Do / Don't", referenceStyle: "Brand Voice Examples", keywords: "Keywords"
+  };
+  el.brandEditorTitle.textContent = labelMap[key] || "Brand Core";
+  el.brandEditorLabel.textContent = "Details";
+  const value = state.brandCore[key];
+  el.brandEditorInput.value = Array.isArray(value) ? "" : (value || "");
+  el.brandList.innerHTML = "";
+  if (Array.isArray(value)) {
+    value.forEach((item, idx) => {
+      const li = document.createElement("li");
+      li.textContent = item;
+      li.addEventListener("click", () => {
+        state.brandCore[key].splice(idx, 1);
+        saveBrandCore();
+        renderBrandCoreEditor();
+      });
+      el.brandList.appendChild(li);
+    });
+  }
+}
+
+function connectedIds() {
+  const ids = new Set();
+  state.edges.forEach(([a, b]) => {
+    ids.add(a);
+    ids.add(b);
+  });
+  return ids;
+}
+
+function updateEmptyState() {
+  el.emptyState.hidden = state.nodes.length > 0;
+}
+
+function setZoom(nextZoom, centerClient = null) {
+  const oldZoom = state.zoom;
+  const newZoom = Math.min(2, Math.max(0.4, nextZoom));
+
+  const rect = el.canvas.getBoundingClientRect();
+  const cx = centerClient?.x ?? rect.left + el.canvas.clientWidth / 2;
+  const cy = centerClient?.y ?? rect.top + el.canvas.clientHeight / 2;
+
+  const boardX = (cx - rect.left + el.canvas.scrollLeft) / oldZoom;
+  const boardY = (cy - rect.top + el.canvas.scrollTop) / oldZoom;
+
+  state.zoom = newZoom;
+  el.zoomLayer.style.transform = `scale(${state.zoom})`;
+  el.zoomLayer.style.transformOrigin = "0 0";
+
+  el.canvas.scrollLeft = boardX * state.zoom - (cx - rect.left);
+  el.canvas.scrollTop = boardY * state.zoom - (cy - rect.top);
+
+  el.zoomLabel.textContent = `${Math.round(state.zoom * 100)}%`;
+  drawLinks();
+  markUnsaved();
+}
+
+function openTypePicker(onSelect, preferred = "Idea") {
+  el.pickerOptions.innerHTML = "";
+  Object.keys(NODE_TYPES).forEach((type) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "picker-option";
+    btn.textContent = type;
+    btn.style.borderColor = `${NODE_TYPES[type].color}66`;
+    btn.addEventListener("click", () => {
+      el.picker.classList.add("hidden");
+      onSelect(type);
+    });
+    el.pickerOptions.appendChild(btn);
+  });
+  el.picker.classList.remove("hidden");
+  const pref = [...el.pickerOptions.children].find((b) => b.textContent === preferred);
+  pref?.focus();
+}
+
+function focusNodeInViewport(nodeId) {
+  const nodeEl = el.zoomLayer.querySelector(`[data-id='${nodeId}']`);
+  if (!nodeEl) return;
+  const x = nodeEl.offsetLeft * state.zoom - el.canvas.clientWidth / 2 + nodeEl.offsetWidth / 2;
+  const y = nodeEl.offsetTop * state.zoom - el.canvas.clientHeight / 2 + nodeEl.offsetHeight / 2;
+  el.canvas.scrollTo({ left: Math.max(0, x), top: Math.max(0, y) });
+}
+function forceNodeVisible(nodeId) {
+  focusNodeInViewport(nodeId);
+  requestAnimationFrame(() => focusNodeInViewport(nodeId));
+}
+
+function ensureNodeActuallyVisible(node) {
+  const nodeEl = el.zoomLayer.querySelector(`[data-id='${node.id}']`);
+  if (!nodeEl) return;
+
+  const c = el.canvas.getBoundingClientRect();
+  const n = nodeEl.getBoundingClientRect();
+  const outside = n.right < c.left || n.left > c.right || n.bottom < c.top || n.top > c.bottom;
+  if (!outside) return;
+
+  const b = visibleBoardBounds();
+  const fallback = clampNodePosition(b.left + 300, b.top + 150);
+  node.position.x = fallback.x;
+  node.position.y = fallback.y;
+  updateNodeCard(node);
+  forceNodeVisible(node.id);
+}
+
+function defaultGridPosition() {
+  const index = state.nodes.length;
+  return {
+    x: 280 + (index % 3) * 320,
+    y: 160 + Math.floor(index / 3) * 240
+  };
+}
+
+function connectorSpawnPositionFromPoint(point) {
+  const candidateX = point.x - NODE_WIDTH / 2;
+  const candidateY = point.y - NODE_HEIGHT / 2;
+  const isSafe =
+    Number.isFinite(candidateX) &&
+    Number.isFinite(candidateY) &&
+    candidateX >= 80 &&
+    candidateX <= 1560 &&
+    candidateY >= 80 &&
+    candidateY <= 1160;
+
+  if (!isSafe) {
+    return { x: 320, y: 180 };
+  }
+  return { x: candidateX, y: candidateY };
+}
+
+function applyInherited(source, target) {
+  if (!target.audience && source.audience) target.audience = source.audience;
+  if (!target.goal && source.goal) target.goal = source.goal;
+  if (!target.channel && source.channel) target.channel = source.channel;
+}
+
+function createNode({ type = "Idea", parentId = null, position = null, images = [] } = {}) {
+  const parent = parentId ? getNode(parentId) : null;
+  const defaultPos = parent
+    ? { x: parent.position.x + 320, y: parent.position.y + 80 }
+    : defaultGridPosition();
+
+  const safePos = clampNodePosition(
+    (position || defaultPos).x,
+    (position || defaultPos).y
+  );
+
+  const node = {
+    id: `node-${state.nodeCounter++}`,
+    type,
+    title: "",
+    content: "",
+    tags: [],
+    variants: [],
+    audience: "",
+    goal: "",
+    channel: "",
+    images: [...images],
+    social: { platform: "Instagram", caption: "", hashtags: [], preview: "", scheduledAt: "" },
+    reactions: {},
+    postits: [],
+    justConnectedAt: null,
+    position: safePos
+  };
+
+  if (parent) {
+    applyInherited(parent, node);
+    if (node.type === "Social Media Posting" && node.images.length === 0) {
+      node.images = [...parent.images];
+    }
+  }
+
+  state.nodes.push(node);
+  renderNode(node);
+  const nodeEl = el.zoomLayer.querySelector(`[data-id='${node.id}']`);
+  if (nodeEl) {
+    nodeEl.style.position = "absolute";
+    nodeEl.style.left = `${node.position.x}px`;
+    nodeEl.style.top = `${node.position.y}px`;
+    nodeEl.style.display = "block";
+    nodeEl.style.visibility = "visible";
+    nodeEl.style.opacity = "1";
+    nodeEl.style.zIndex = "10";
+  }
+  updateNodeCard(node);
+  toggleListMode(false);
+
+  if (parent) addEdge(parent.id, node.id);
+
+  state.selectedIds.clear();
+  state.selectedIds.add(node.id);
+  state.selectedPrimary = node.id;
+
+  updateSelectionClasses();
+  fillInspector(node);
+  updateListView();
+  updateEmptyState();
+  drawLinks();
+  console.log("CREATED NODE", node.id, node.position);
+  if (nodeEl) {
+    console.log("NODE RECT", nodeEl.getBoundingClientRect());
+  }
+  runNetworkImpulse();
+  forceNodeVisible(node.id);
+  setTimeout(() => { forceNodeVisible(node.id); ensureNodeActuallyVisible(node); }, 30);
+  autoZoomOutIfBoardCrowded();
+  markUnsaved();
+  return node;
+}
+
+function autoZoomOutIfBoardCrowded() {
+  if (state.nodes.length < 2) return;
+  const now = Date.now();
+  if (now - state.lastAutoZoomAt < 250) return;
+
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+
+  state.nodes.forEach((node) => {
+    minX = Math.min(minX, node.position.x);
+    minY = Math.min(minY, node.position.y);
+    maxX = Math.max(maxX, node.position.x + NODE_WIDTH);
+    maxY = Math.max(maxY, node.position.y + NODE_HEIGHT);
+  });
+
+  const bounds = visibleBoardBounds();
+  const spanW = Math.max(1, maxX - minX);
+  const spanH = Math.max(1, maxY - minY);
+  const fillW = spanW / Math.max(1, bounds.width);
+  const fillH = spanH / Math.max(1, bounds.height);
+
+  if (fillW >= 0.9 || fillH >= 0.9) {
+    state.lastAutoZoomAt = now;
+    setZoom(state.zoom * 0.9);
+  }
+}
+
+function createCampaignSetup() {
+  setActiveView("board");
+  el.canvas.scrollLeft = 0;
+  el.canvas.scrollTop = 0;
+
+  const idea = createNode({ type: "Idea", position: { x: 640, y: 120 } });
+  const variationA = createNode({ type: "Campaign Variation", position: { x: 360, y: 330 } });
+  const variationB = createNode({ type: "Campaign Variation", position: { x: 920, y: 330 } });
+  const landing = createNode({ type: "Landing Page", position: { x: 220, y: 560 } });
+  const newsletter = createNode({ type: "Email Campaign", position: { x: 560, y: 560 } });
+  const contentA = createNode({ type: "Content", position: { x: 920, y: 560 } });
+  const contentB = createNode({ type: "Content", position: { x: 1260, y: 560 } });
+  const socialA = createNode({ type: "Social Media Posting", position: { x: 860, y: 860 } });
+  const socialB = createNode({ type: "Social Media Posting", position: { x: 1220, y: 860 } });
+
+  addEdge(idea.id, landing.id);
+  addEdge(landing.id, newsletter.id);
+  addEdge(idea.id, variationA.id);
+  addEdge(idea.id, variationB.id);
+  addEdge(variationA.id, contentA.id);
+  addEdge(variationB.id, contentB.id);
+  addEdge(contentA.id, socialA.id);
+  addEdge(contentB.id, socialB.id);
+
+  state.selectedIds.clear();
+  state.selectedIds.add(idea.id);
+  state.selectedPrimary = idea.id;
+  updateSelectionClasses();
+  fillInspector(idea);
+  updateListView();
+  updateEmptyState();
+  drawLinks();
+}
+
+function openPostingPlanner(nodeId) {
+  state.postingPlannerNodeId = nodeId;
+  const node = getNode(nodeId);
+  const existing = node?.social?.scheduledAt ? new Date(node.social.scheduledAt) : null;
+  if (existing && !Number.isNaN(existing.getTime())) {
+    el.postingDateInput.value = existing.toISOString().slice(0, 10);
+    el.postingTimeInput.value = `${String(existing.getHours()).padStart(2, "0")}:${String(existing.getMinutes()).padStart(2, "0")}`;
+  } else {
+    el.postingDateInput.value = "";
+    el.postingTimeInput.value = "09:00";
+  }
+  el.postingPlanOverlay.classList.remove("hidden");
+}
+
+function closePostingPlanner() {
+  state.postingPlannerNodeId = null;
+  el.postingPlanOverlay.classList.add("hidden");
+}
+
+function removeNode(nodeId) {
+  pushHistorySnapshot();
+  const idx = state.nodes.findIndex((n) => n.id === nodeId);
+  if (idx === -1) return;
+
+  const [removed] = state.nodes.splice(idx, 1);
+  removed.images.forEach(revokeImageObjectUrl);
+
+  state.edges = state.edges.filter(([a, b]) => a !== nodeId && b !== nodeId);
+
+  el.zoomLayer.querySelector(`[data-id='${nodeId}']`)?.remove();
+  state.selectedIds.delete(nodeId);
+  if (state.selectedPrimary === nodeId) state.selectedPrimary = null;
+
+  updateSelectionClasses();
+  fillInspector(state.selectedPrimary ? getNode(state.selectedPrimary) : null);
+  updateListView();
+  updateEmptyState();
+  drawLinks();
+}
+
+function addEdge(fromId, toId) {
+  pushHistorySnapshot();
+  if (!fromId || !toId || fromId === toId) return;
+  if (state.edges.some(([a, b]) => a === fromId && b === toId)) return;
+  state.edges.push([fromId, toId]);
+
+  const source = getNode(fromId);
+  const target = getNode(toId);
+  if (source && target) {
+    applyInherited(source, target);
+    if (target.type === "Social Media Posting" && target.images.length === 0) {
+      target.images = [...source.images];
+    }
+    source.justConnectedAt = Date.now();
+    target.justConnectedAt = Date.now();
+    updateNodeCard(source);
+    updateNodeCard(target);
+    if (state.selectedPrimary === target.id) fillInspector(target);
+  }
+
+  drawLinks();
+}
+
+function edgePath(fromPoint, toPoint) {
+  const midY = (fromPoint.y + toPoint.y) / 2;
+  return `M ${fromPoint.x} ${fromPoint.y} C ${fromPoint.x} ${midY}, ${toPoint.x} ${midY}, ${toPoint.x} ${toPoint.y}`;
+}
+
+function nodeBottomCenter(nodeId) {
+  const nodeEl = el.zoomLayer.querySelector(`[data-id='${nodeId}']`);
+  if (!nodeEl) return null;
+  return {
+    x: nodeEl.offsetLeft + nodeEl.offsetWidth / 2,
+    y: nodeEl.offsetTop + nodeEl.offsetHeight
+  };
+}
+
+function drawLinks() {
+  el.links.innerHTML = "";
+
+  state.edges.forEach(([from, to], edgeIndex) => {
+    const a = nodeBottomCenter(from);
+    const b = nodeBottomCenter(to);
+    if (!a || !b) return;
+
+    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    path.setAttribute("d", edgePath(a, b));
+    path.setAttribute("fill", "none");
+    path.setAttribute("stroke", "#8f80ff");
+    path.setAttribute("stroke-width", "2");
+    path.style.cursor = "pointer";
+    path.style.pointerEvents = "stroke";
+    path.addEventListener("click", (event) => {
+      event.stopPropagation();
+      state.edges.splice(edgeIndex, 1);
+      drawLinks();
+      state.nodes.forEach(updateNodeCard);
+    });
+    el.links.appendChild(path);
+  });
+
+  if (state.activeConnection) {
+    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    path.setAttribute("d", edgePath(state.activeConnection.start, state.activeConnection.current));
+    path.setAttribute("fill", "none");
+    path.setAttribute("stroke", "#8f80ff");
+    path.setAttribute("stroke-width", "2");
+    path.setAttribute("stroke-dasharray", "6 5");
+    path.style.pointerEvents = "none";
+    el.links.appendChild(path);
+  }
+  if (state.connectorCreateMode) {
+    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    path.setAttribute("d", edgePath(state.connectorCreateMode.start, state.connectorCreateMode.current));
+    path.setAttribute("fill", "none");
+    path.setAttribute("stroke", "#36c08b");
+    path.setAttribute("stroke-width", "2");
+    path.setAttribute("stroke-dasharray", "7 5");
+    path.style.pointerEvents = "none";
+    el.links.appendChild(path);
+  }
+}
+
+function runNetworkImpulse() {
+  if (state.edges.length === 0) return;
+  const roots = state.nodes.filter((n) => !state.edges.some(([, to]) => to === n.id));
+  const rootId = roots[0]?.id;
+  if (!rootId) return;
+
+  const queue = [{ id: rootId, delay: 0 }];
+  const seen = new Set();
+  const pulses = [];
+
+  while (queue.length) {
+    const { id, delay } = queue.shift();
+    if (seen.has(id)) continue;
+    seen.add(id);
+
+    state.edges.forEach(([from, to]) => {
+      if (from !== id) return;
+      const a = nodeBottomCenter(from);
+      const b = nodeBottomCenter(to);
+      if (!a || !b) return;
+
+      const pulse = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      pulse.setAttribute("d", edgePath(a, b));
+      pulse.setAttribute("fill", "none");
+      pulse.setAttribute("stroke", "#c8bfff");
+      pulse.setAttribute("stroke-width", "4");
+      pulse.setAttribute("class", "impulse-path");
+      pulse.style.animationDelay = `${delay}ms`;
+      el.links.appendChild(pulse);
+      pulses.push(pulse);
+      queue.push({ id: to, delay: delay + 110 });
+    });
+  }
+
+  setTimeout(() => pulses.forEach((p) => p.remove()), 1400);
+}
+
+function updateSelectionClasses() {
+  el.zoomLayer.querySelectorAll(".node").forEach((nodeEl) => {
+    nodeEl.classList.toggle("selected", state.selectedIds.has(nodeEl.dataset.id));
+  });
+}
+
+function parseList(value) {
+  return value
+    .split(",")
+    .map((v) => v.trim())
+    .filter(Boolean);
+}
+
+function downstreamNodeIds(startId) {
+  const out = new Set();
+  const q = [startId];
+  while (q.length) {
+    const id = q.shift();
+    state.edges.forEach(([from, to]) => {
+      if (from !== id || out.has(to)) return;
+      out.add(to);
+      q.push(to);
+    });
+  }
+  return [...out];
+}
+
+function propagateNodeChangesDownward(node) {
+  const targets = downstreamNodeIds(node.id).map(getNode).filter(Boolean);
+  targets.forEach((t) => {
+    if (node.channel) t.channel = node.channel;
+    if (node.goal) t.goal = node.goal;
+    if (node.audience) t.audience = node.audience;
+    if (node.tags.length) t.tags = [...new Set([...t.tags, ...node.tags])];
+    updateNodeCard(t);
+  });
+  runNetworkImpulse();
+}
+
+function updateNodeCard(node) {
+  const nodeEl = el.zoomLayer.querySelector(`[data-id='${node.id}']`);
+  if (!nodeEl) return;
+
+  const tone = NODE_TYPES[node.type]?.color || "#5f6a82";
+  const isConnected = connectedIds().has(node.id);
+
+  nodeEl.style.left = `${node.position.x}px`;
+  nodeEl.style.top = `${node.position.y}px`;
+  nodeEl.style.borderColor = isConnected ? `${tone}88` : "#b8bdcb";
+  nodeEl.style.boxShadow = isConnected ? `0 10px 22px ${tone}44` : "0 5px 10px rgba(70,70,90,0.05)";
+  nodeEl.style.opacity = isConnected ? "1" : "0.62";
+  nodeEl.style.filter = isConnected ? "grayscale(0)" : "grayscale(1) saturate(0)";
+  nodeEl.classList.toggle("just-connected", !!node.justConnectedAt && Date.now() - node.justConnectedAt < 700);
+
+  nodeEl.querySelector(".type").textContent = node.type;
+  nodeEl.querySelector(".type").style.color = tone;
+  nodeEl.querySelector(".title").textContent = node.title;
+  nodeEl.querySelector(".content").textContent = node.content;
+
+  const tags = [];
+  if (node.channel) tags.push(`Channel: ${node.channel}`);
+  if (node.goal) tags.push(`Goal: ${node.goal}`);
+  if (node.audience) tags.push(`Audience: ${node.audience}`);
+  tags.push(...node.tags);
+
+  const tagsWrap = nodeEl.querySelector(".tags");
+  tagsWrap.innerHTML = "";
+  tags.forEach((tag) => {
+    const chip = document.createElement("span");
+    chip.className = "tag";
+    chip.textContent = tag;
+    if (!tag.startsWith("Channel: ") && !tag.startsWith("Goal: ") && !tag.startsWith("Audience: ")) {
+      const x = document.createElement("button");
+      x.type = "button";
+      x.className = "image-delete-btn";
+      x.textContent = "✕";
+      x.style.width = "14px";
+      x.style.height = "14px";
+      x.style.fontSize = "0.56rem";
+      x.style.top = "-4px";
+      x.style.right = "-4px";
+      x.style.display = "none";
+      chip.style.position = "relative";
+      chip.addEventListener("mouseenter", () => { x.style.display = "inline-flex"; });
+      chip.addEventListener("mouseleave", () => { x.style.display = "none"; });
+      x.addEventListener("click", (event) => {
+        event.stopPropagation();
+        pushHistorySnapshot();
+        node.tags = node.tags.filter((t) => t !== tag);
+        updateNodeCard(node);
+        if (state.selectedPrimary === node.id) fillInspector(node);
+      });
+      chip.appendChild(x);
+    }
+    tagsWrap.appendChild(chip);
+  });
+
+  const variantsWrap = nodeEl.querySelector(".ab-tests");
+  variantsWrap.innerHTML = "";
+  node.variants.forEach((variant) => {
+    const chip = document.createElement("span");
+    chip.className = "variant";
+    chip.textContent = variant;
+    variantsWrap.appendChild(chip);
+  });
+
+  const imageStrip = nodeEl.querySelector(".image-strip");
+  imageStrip.innerHTML = "";
+  node.images.forEach((img) => {
+    const thumb = document.createElement("button");
+    thumb.type = "button";
+    thumb.className = "image-thumb";
+
+    const image = document.createElement("img");
+    image.src = img.url;
+    image.alt = img.name;
+
+    const hint = document.createElement("span");
+    hint.className = "zoom-hint";
+    hint.textContent = "🔍";
+
+    thumb.append(image, hint);
+    const deleteBtn = document.createElement("button");
+    deleteBtn.type = "button";
+    deleteBtn.className = "image-delete-btn";
+    deleteBtn.textContent = "✕";
+    deleteBtn.addEventListener("click", (event) => {
+      event.stopPropagation();
+      removeNodeImage(node, img.id);
+    });
+
+    thumb.appendChild(deleteBtn);
+    thumb.addEventListener("click", (event) => {
+      event.stopPropagation();
+      thumb.classList.add("expanded");
+    });
+    thumb.addEventListener("mouseleave", () => thumb.classList.remove("expanded"));
+
+    imageStrip.appendChild(thumb);
+  });
+
+  const social = nodeEl.querySelector(".social-preview");
+  const isSocial = node.type === "Social Media Posting";
+  social.classList.toggle("hidden", !isSocial);
+  if (isSocial) {
+    social.innerHTML = `<strong>${node.social.platform} Preview</strong><p>${node.social.caption || ""}</p><small>${node.social.hashtags.join(" ")}</small><em>${node.social.preview || ""}</em>`;
+    if (node.social.scheduledAt) {
+      const when = new Date(node.social.scheduledAt);
+      const scheduled = document.createElement("small");
+      scheduled.textContent = `Geplant: ${when.toLocaleString("de-DE")}`;
+      social.appendChild(scheduled);
+    }
+    const planBtn = document.createElement("button");
+    planBtn.type = "button";
+    planBtn.className = "inspector-image-delete";
+    planBtn.textContent = "Add to Posting Plan";
+    planBtn.addEventListener("click", (event) => {
+      event.stopPropagation();
+      openPostingPlanner(node.id);
+    });
+    social.appendChild(planBtn);
+  }
+
+  const existingBar = nodeEl.querySelector(".reaction-bar");
+  if (existingBar) existingBar.remove();
+  const reactionEntries = Object.entries(node.reactions || {}).filter(([, count]) => count > 0);
+  if (reactionEntries.length) {
+    const bar = document.createElement("div");
+    bar.className = "reaction-bar";
+    reactionEntries.forEach(([emoji, count]) => {
+      const item = document.createElement("button");
+      item.type = "button";
+      item.className = "reaction-pill";
+      item.textContent = `${emoji} ${count}`;
+      item.title = "Click to remove one reaction";
+      item.addEventListener("click", (event) => {
+        event.stopPropagation();
+        pushHistorySnapshot();
+        node.reactions[emoji] = Math.max(0, (node.reactions[emoji] || 0) - 1);
+        if (node.reactions[emoji] === 0) delete node.reactions[emoji];
+        updateNodeCard(node);
+      });
+      bar.appendChild(item);
+    });
+    nodeEl.appendChild(bar);
+  }
+
+  renderPostits(node, nodeEl);
+}
+
+function renderPostits(node, nodeEl) {
+  nodeEl.querySelectorAll(".postit").forEach((p) => p.remove());
+
+  node.postits.forEach((note) => {
+    if (!Array.isArray(note.replies)) note.replies = [];
+    const postit = el.postitTemplate.content.firstElementChild.cloneNode(true);
+    postit.style.left = `${note.x}px`;
+    postit.style.top = `${note.y}px`;
+    postit.style.background = note.color;
+
+    postit.querySelector(".postit-user").textContent = note.user;
+    postit.querySelector(".postit-time").textContent = note.time;
+
+    const color = postit.querySelector(".postit-color");
+    color.value = note.color;
+    color.addEventListener("input", () => {
+      note.color = color.value;
+      postit.style.background = color.value;
+    });
+
+    const area = postit.querySelector(".postit-text");
+    area.value = note.text;
+    area.style.fontSize = note.text.length > 220 ? "0.7rem" : note.text.length > 120 ? "0.82rem" : "0.96rem";
+    area.addEventListener("input", () => {
+      note.text = area.value;
+      area.style.fontSize = note.text.length > 220 ? "0.7rem" : note.text.length > 120 ? "0.82rem" : "0.96rem";
+    });
+
+    postit.querySelector(".postit-delete").addEventListener("click", () => {
+      node.postits = node.postits.filter((n) => n.id !== note.id);
+      renderPostits(node, nodeEl);
+    });
+
+    const repliesWrap = document.createElement("div");
+    repliesWrap.className = "postit-replies";
+    note.replies.forEach((reply) => {
+      const line = document.createElement("p");
+      line.className = "postit-reply";
+      line.textContent = `${reply.user} (${reply.time}): ${reply.text}`;
+      repliesWrap.appendChild(line);
+    });
+
+    const addReplyBtn = document.createElement("button");
+    addReplyBtn.type = "button";
+    addReplyBtn.className = "inspector-image-delete";
+    addReplyBtn.textContent = "Reply";
+    addReplyBtn.addEventListener("click", () => {
+      if (postit.querySelector(".postit-reply-editor")) return;
+      const editor = document.createElement("div");
+      editor.className = "postit-reply-editor";
+      editor.innerHTML = `<input class="postit-reply-name" placeholder="Name" /><textarea class="postit-reply-input" rows="2" placeholder="Write a reply..."></textarea><button type="button" class="inspector-image-delete">Send</button>`;
+      editor.querySelector("button").addEventListener("click", () => {
+        const user = editor.querySelector(".postit-reply-name").value.trim() || "Anonymous";
+        const text = editor.querySelector(".postit-reply-input").value.trim();
+        if (!text) return;
+        note.replies.push({ user, text, time: nowString() });
+        renderPostits(node, nodeEl);
+      });
+      postit.appendChild(editor);
+    });
+
+    postit.append(repliesWrap, addReplyBtn);
+
+    enablePostitDrag(postit, note);
+    nodeEl.appendChild(postit);
+  });
+}
+
+function enablePostitDrag(postit, note) {
+  postit.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0 || event.target.closest("textarea,input,button")) return;
+
+    const startX = event.clientX;
+    const startY = event.clientY;
+    const ox = note.x;
+    const oy = note.y;
+
+    function move(ev) {
+      note.x = ox + (ev.clientX - startX) / state.zoom;
+      note.y = oy + (ev.clientY - startY) / state.zoom;
+      postit.style.left = `${note.x}px`;
+      postit.style.top = `${note.y}px`;
+    }
+
+    function up() {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+    }
+
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  });
+}
+
+function fillInspector(node) {
+  if (!node) {
+    el.inspectorMeta.textContent = "Wähle oder erstelle einen Node.";
+    el.nodeForm.reset();
+    el.deleteNodeButton.disabled = true;
+    el.socialFields.classList.add("hidden");
+    el.contentUploadFields.classList.add("hidden");
+    el.inspectorImageList.innerHTML = "";
+    return;
+  }
+
+  el.inspectorMeta.textContent = `Bearbeite ${node.id}`;
+  el.inputs.type.value = node.type;
+  el.inputs.title.value = node.title;
+  el.inputs.content.value = node.content;
+  el.inputs.variants.value = node.variants.join(", ");
+  el.inputs.platform.value = node.social.platform;
+  el.inputs.caption.value = node.social.caption;
+  el.inputs.hashtags.value = node.social.hashtags.join(", ");
+  el.inputs.preview.value = node.social.preview;
+  el.inputs.audience.value = node.audience;
+  el.inputs.goal.value = node.goal;
+  el.inputs.channel.value = node.channel;
+
+  el.deleteNodeButton.disabled = false;
+  el.socialFields.classList.toggle("hidden", node.type !== "Social Media Posting");
+  el.contentUploadFields.classList.toggle("hidden", !(node.type === "Content" || node.type === "Social Media Posting"));
+  renderInspectorImages(node);
+}
+
+function revokeImageObjectUrl(img) {
+  if (!img?.url) return;
+  if (img.url.startsWith("blob:")) URL.revokeObjectURL(img.url);
+}
+
+function removeNodeImage(node, imageId) {
+  const idx = node.images.findIndex((img) => img.id === imageId);
+  if (idx === -1) return;
+  const [removed] = node.images.splice(idx, 1);
+  revokeImageObjectUrl(removed);
+  updateNodeCard(node);
+  if (state.selectedPrimary === node.id) fillInspector(node);
+}
+
+function renderInspectorImages(node) {
+  el.inspectorImageList.innerHTML = "";
+  if (!node.images.length) {
+    const empty = document.createElement("p");
+    empty.className = "inspector-image-name";
+    empty.textContent = "Keine Bilder hochgeladen.";
+    el.inspectorImageList.appendChild(empty);
+    return;
+  }
+
+  node.images.forEach((img) => {
+    const row = document.createElement("div");
+    row.className = "inspector-image-item";
+
+    const name = document.createElement("span");
+    name.className = "inspector-image-name";
+    name.textContent = img.name || "Bild";
+
+    const deleteBtn = document.createElement("button");
+    deleteBtn.type = "button";
+    deleteBtn.className = "inspector-image-delete";
+    deleteBtn.textContent = "Bild löschen";
+    deleteBtn.addEventListener("click", () => removeNodeImage(node, img.id));
+
+    row.append(name, deleteBtn);
+    el.inspectorImageList.appendChild(row);
+  });
+}
+
+function updateListView() {
+  el.nodeListView.innerHTML = "";
+
+  const groups = state.nodes.reduce((acc, node) => {
+    if (!acc[node.type]) acc[node.type] = [];
+    acc[node.type].push(node);
+    return acc;
+  }, {});
+
+  const types = Object.keys(groups).sort();
+  if (types.length === 0) {
+    el.nodeListView.innerHTML = '<p class="list-empty">Keine Nodes vorhanden.</p>';
+    return;
+  }
+
+  types.forEach((type) => {
+    const section = document.createElement("section");
+    section.className = "list-group";
+    const h = document.createElement("h4");
+    h.textContent = `${type} (${groups[type].length})`;
+    h.style.color = NODE_TYPES[type]?.color || "#333";
+    section.appendChild(h);
+
+    const ul = document.createElement("ul");
+    groups[type].forEach((node) => {
+      const li = document.createElement("li");
+      li.textContent = node.title || "(ohne Titel)";
+      li.addEventListener("click", () => {
+        toggleListMode(false);
+        state.selectedIds.clear();
+        state.selectedIds.add(node.id);
+        state.selectedPrimary = node.id;
+        updateSelectionClasses();
+        fillInspector(node);
+        forceNodeVisible(node.id);
+        ensureNodeActuallyVisible(node);
+      });
+      ul.appendChild(li);
+    });
+    section.appendChild(ul);
+    el.nodeListView.appendChild(section);
+  });
+}
+
+function renderNode(node) {
+  const nodeEl = el.nodeTemplate.content.firstElementChild.cloneNode(true);
+  nodeEl.dataset.id = node.id;
+
+  nodeEl.addEventListener("click", (event) => {
+    const append = event.shiftKey;
+    if (!append) state.selectedIds.clear();
+    state.selectedIds.add(node.id);
+    state.selectedPrimary = node.id;
+    updateSelectionClasses();
+    fillInspector(node);
+  });
+
+  nodeEl.querySelector(".connector-handle").addEventListener("pointerdown", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    stopExistingNodeConnection();
+
+    const start = nodeBottomCenter(node.id);
+    if (!start) return;
+
+    openTypePicker((type) => {
+      state.connectorCreateMode = { fromId: node.id, type, start, current: start };
+
+      const ghost = document.createElement("article");
+      ghost.className = "node node-ghost";
+      ghost.innerHTML = `<span class="type">${type}</span><h3>${type}</h3>`;
+      el.zoomLayer.appendChild(ghost);
+      state.connectorGhostEl = ghost;
+      drawLinks();
+
+      function move(ev) {
+        if (!state.connectorCreateMode) return;
+        const point = boardPointFromClient(ev.clientX, ev.clientY);
+        state.connectorCreateMode.current = point;
+        if (state.connectorGhostEl) {
+          state.connectorGhostEl.style.left = `${point.x - NODE_WIDTH / 2}px`;
+          state.connectorGhostEl.style.top = `${point.y - NODE_HEIGHT / 2}px`;
+        }
+        drawLinks();
+      }
+
+      function place(ev) {
+        if (!state.connectorCreateMode) return;
+        ev.preventDefault();
+        const point = boardPointFromClient(ev.clientX, ev.clientY);
+        const fromId = state.connectorCreateMode.fromId;
+        const nodeType = state.connectorCreateMode.type;
+
+        state.connectorCreateMode = null;
+        if (state.connectorGhostEl) {
+          state.connectorGhostEl.remove();
+          state.connectorGhostEl = null;
+        }
+        window.removeEventListener("pointermove", move);
+        el.canvas.removeEventListener("click", place, true);
+
+        const prevCount = state.nodes.length;
+        const created = createNode({
+          type: nodeType,
+          position: { x: point.x - NODE_WIDTH / 2, y: point.y - NODE_HEIGHT / 2 }
+        });
+        const newNode = created || state.nodes[state.nodes.length - 1];
+        if (state.nodes.length > prevCount && newNode) {
+          addEdge(fromId, newNode.id);
+        }
+      }
+
+      window.addEventListener("pointermove", move);
+      el.canvas.addEventListener("click", place, true);
+    }, "Content");
+  });
+
+  nodeEl.querySelector(".connector-link-handle").addEventListener("pointerdown", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    startExistingNodeConnection(node.id);
+  });
+
+  const title = nodeEl.querySelector(".title");
+  const content = nodeEl.querySelector(".content");
+  title.addEventListener("input", () => {
+    node.title = title.textContent.trim();
+    if (state.selectedPrimary === node.id) el.inputs.title.value = node.title;
+    updateListView();
+  });
+  content.addEventListener("input", () => {
+    node.content = content.textContent.trim();
+    if (state.selectedPrimary === node.id) el.inputs.content.value = node.content;
+  });
+
+  enableNodeDrag(nodeEl, node);
+  el.zoomLayer.appendChild(nodeEl);
+  updateNodeCard(node);
+}
+
+function stopExistingNodeConnection() {
+  if (state.activeConnectionMoveHandler) {
+    window.removeEventListener("pointermove", state.activeConnectionMoveHandler);
+    state.activeConnectionMoveHandler = null;
+  }
+  if (state.activeConnectionPlaceHandler) {
+    el.canvas.removeEventListener("click", state.activeConnectionPlaceHandler, true);
+    state.activeConnectionPlaceHandler = null;
+  }
+  state.activeConnection = null;
+  drawLinks();
+}
+
+function startExistingNodeConnection(fromId) {
+  stopExistingNodeConnection();
+  const start = nodeBottomCenter(fromId);
+  if (!start) return;
+  state.activeConnection = { fromId, start, current: start };
+
+  const move = (ev) => {
+    if (!state.activeConnection) return;
+    state.activeConnection.current = boardPointFromClient(ev.clientX, ev.clientY);
+    const hoverNode = ev.target.closest?.(".node");
+    const toId = hoverNode?.dataset?.id;
+    if (toId && toId !== fromId) {
+      addEdge(fromId, toId);
+      stopExistingNodeConnection();
+      return;
+    }
+    drawLinks();
+  };
+
+  const place = (ev) => {
+    if (!state.activeConnection) return;
+    const targetEl = ev.target.closest(".node");
+    if (targetEl) {
+      const toId = targetEl.dataset.id;
+      if (toId && toId !== fromId) {
+        addEdge(fromId, toId);
+      }
+    }
+    stopExistingNodeConnection();
+  };
+
+  state.activeConnectionMoveHandler = move;
+  state.activeConnectionPlaceHandler = place;
+  window.addEventListener("pointermove", move);
+  setTimeout(() => el.canvas.addEventListener("click", place, true), 0);
+  drawLinks();
+}
+
+function enableNodeDrag(nodeEl, node) {
+  nodeEl.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0) return;
+    if (event.target.closest("button,input,textarea,select")) return;
+
+    if (!state.selectedIds.has(node.id)) {
+      state.selectedIds.clear();
+      state.selectedIds.add(node.id);
+      state.selectedPrimary = node.id;
+      updateSelectionClasses();
+      fillInspector(node);
+    }
+
+    const moveIds = [...state.selectedIds];
+    const origins = moveIds.map((id) => ({ id, x: getNode(id).position.x, y: getNode(id).position.y }));
+    const sx = event.clientX;
+    const sy = event.clientY;
+
+    function move(ev) {
+      const dx = (ev.clientX - sx) / state.zoom;
+      const dy = (ev.clientY - sy) / state.zoom;
+      origins.forEach((o) => {
+        const n = getNode(o.id);
+        n.position.x = o.x + dx;
+        n.position.y = o.y + dy;
+        updateNodeCard(n);
+      });
+      drawLinks();
+    }
+
+    function up() {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+    }
+
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  });
+}
+
+function toggleListMode(showList) {
+  const shouldShowList = typeof showList === "boolean" ? showList : !el.canvas.classList.contains("hidden");
+  el.canvas.classList.toggle("hidden", shouldShowList);
+  el.boardListView.classList.toggle("hidden", !shouldShowList);
+
+  if (!shouldShowList && state.selectedPrimary) {
+    const selected = getNode(state.selectedPrimary);
+    if (selected) {
+      forceNodeVisible(selected.id);
+      ensureNodeActuallyVisible(selected);
+    }
+  }
+}
+
+function renderCalendarView() {
+  const month = state.calendarMonth;
+  el.calendarTitle.textContent = month.toLocaleDateString("de-DE", { month: "long", year: "numeric" });
+  el.calendarGrid.innerHTML = "";
+  const start = new Date(month.getFullYear(), month.getMonth(), 1);
+  const end = new Date(month.getFullYear(), month.getMonth() + 1, 0);
+  const padStart = (start.getDay() + 6) % 7;
+  const today = new Date();
+  for (let i = 0; i < padStart; i++) {
+    const empty = document.createElement("div");
+    empty.className = "calendar-day";
+    empty.style.visibility = "hidden";
+    el.calendarGrid.appendChild(empty);
+  }
+  for (let d = 1; d <= end.getDate(); d++) {
+    const day = document.createElement("div");
+    day.className = "calendar-day";
+    if (today.getFullYear() === month.getFullYear() && today.getMonth() === month.getMonth() && today.getDate() === d) day.classList.add("today");
+    day.innerHTML = `<strong>${d}</strong>`;
+    const key = `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+    state.nodes.filter((n) => n.type === "Social Media Posting" && n.social.scheduledAt?.startsWith(key)).forEach((n) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "calendar-post";
+      const when = new Date(n.social.scheduledAt);
+      btn.textContent = `${n.title || n.id} · ${when.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}`;
+      btn.addEventListener("click", () => {
+        setActiveView("board");
+        state.selectedIds.clear();
+        state.selectedIds.add(n.id);
+        state.selectedPrimary = n.id;
+        updateSelectionClasses();
+        fillInspector(n);
+        forceNodeVisible(n.id);
+      });
+      day.appendChild(btn);
+    });
+    el.calendarGrid.appendChild(day);
+  }
+}
+
+function setActiveView(view) {
+  state.activeView = view;
+  el.canvas.classList.toggle("hidden", view !== "board");
+  el.boardListView.classList.toggle("hidden", view !== "list");
+  el.calendarView.classList.toggle("hidden", view !== "calendar");
+  el.brandCoreWorkspace.classList.toggle("hidden", view !== "brand-core");
+  el.campaignCanvasNavButton.classList.toggle("active", view !== "brand-core");
+  el.brandCoreButton.classList.toggle("active", view === "brand-core");
+  el.cycleViewButton.textContent =
+    view === "board" ? "Board View" : view === "list" ? "List View" : view === "calendar" ? "Calendar View" : "Brand Core";
+  if (view === "calendar") renderCalendarView();
+}
+
+// Events
+el.addNodeButton.addEventListener("click", () => {
+  setActiveView("board");
+  openTypePicker((type) => {
+    createNode({ type });
+  }, "Idea");
+});
+
+el.createCampaignButton.addEventListener("click", () => {
+  createCampaignSetup();
+});
+
+el.cycleViewButton.addEventListener("click", () => {
+  const order = ["board", "list", "calendar"];
+  const idx = order.indexOf(state.activeView);
+  setActiveView(order[(idx + 1) % order.length]);
+});
+el.viewMenuButton.addEventListener("click", (event) => {
+  event.stopPropagation();
+  el.viewMenu.classList.toggle("hidden");
+});
+el.viewBoardButton.addEventListener("click", () => { setActiveView("board"); el.viewMenu.classList.add("hidden"); });
+el.viewListButton.addEventListener("click", () => { setActiveView("list"); el.viewMenu.classList.add("hidden"); });
+el.viewCalendarButton.addEventListener("click", () => { setActiveView("calendar"); el.viewMenu.classList.add("hidden"); });
+document.addEventListener("click", (event) => {
+  if (!event.target.closest(".view-switcher")) el.viewMenu.classList.add("hidden");
+});
+el.calendarPrevMonthButton.addEventListener("click", () => {
+  state.calendarMonth = new Date(state.calendarMonth.getFullYear(), state.calendarMonth.getMonth() - 1, 1);
+  renderCalendarView();
+});
+el.calendarNextMonthButton.addEventListener("click", () => {
+  state.calendarMonth = new Date(state.calendarMonth.getFullYear(), state.calendarMonth.getMonth() + 1, 1);
+  renderCalendarView();
+});
+
+el.zoomInButton.addEventListener("click", () => setZoom(state.zoom + 0.1));
+el.zoomOutButton.addEventListener("click", () => setZoom(state.zoom - 0.1));
+
+el.canvas.addEventListener(
+  "wheel",
+  (event) => {
+    if (event.ctrlKey) {
+      event.preventDefault();
+      setZoom(state.zoom + (event.deltaY < 0 ? 0.1 : -0.1), { x: event.clientX, y: event.clientY });
+      return;
+    }
+    event.preventDefault();
+    el.canvas.scrollTop += event.deltaY;
+    el.canvas.scrollLeft += event.deltaX;
+  },
+  { passive: false }
+);
+
+el.canvas.addEventListener("contextmenu", (event) => {
+  event.preventDefault();
+  const point = boardPointFromClient(event.clientX, event.clientY);
+  state.contextBoardPoint = point;
+  el.contextMenu.style.left = `${event.clientX}px`;
+  el.contextMenu.style.top = `${event.clientY}px`;
+  el.contextMenu.style.position = "fixed";
+  el.contextMenu.classList.remove("hidden");
+});
+
+document.addEventListener("click", (event) => {
+  if (!el.contextMenu.contains(event.target)) el.contextMenu.classList.add("hidden");
+});
+
+el.addContextNodeButton.addEventListener("click", () => {
+  el.contextMenu.classList.add("hidden");
+  openTypePicker((type) => {
+    createNode({ type });
+  }, "Idea");
+});
+
+el.addPostitCommentButton.addEventListener("click", () => {
+  el.contextMenu.classList.add("hidden");
+  if (!state.selectedPrimary) return;
+  const node = getNode(state.selectedPrimary);
+  if (!node) return;
+
+  const user = window.prompt("Nutzername für den Kommentar:", "Felix")?.trim() || "Anonymous";
+  node.postits.push({
+    id: `postit-${state.postitCounter++}`,
+    user,
+    time: nowString(),
+    text: "",
+    color: "#ffe082",
+    x: state.contextBoardPoint.x - node.position.x,
+    y: state.contextBoardPoint.y - node.position.y
+  });
+  updateNodeCard(node);
+});
+el.contextMenu.querySelectorAll(".emoji-quick").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    el.contextMenu.classList.add("hidden");
+    if (!state.selectedPrimary) return;
+    const node = getNode(state.selectedPrimary);
+    if (!node) return;
+    const emoji = btn.dataset.emoji || "👍";
+    node.reactions[emoji] = (node.reactions[emoji] || 0) + 1;
+    updateNodeCard(node);
+  });
+});
+
+el.nodeForm.addEventListener("input", (event) => {
+  const node = getNode(state.selectedPrimary);
+  if (!node) return;
+
+  if (event.target === el.inputs.type) node.type = el.inputs.type.value;
+  if (event.target === el.inputs.title) node.title = el.inputs.title.value.trim();
+  if (event.target === el.inputs.content) node.content = el.inputs.content.value;
+  if (event.target === el.inputs.variants) node.variants = parseList(el.inputs.variants.value);
+  if (event.target === el.inputs.platform) node.social.platform = el.inputs.platform.value;
+  if (event.target === el.inputs.caption) node.social.caption = el.inputs.caption.value;
+  if (event.target === el.inputs.hashtags) node.social.hashtags = parseList(el.inputs.hashtags.value);
+  if (event.target === el.inputs.preview) node.social.preview = el.inputs.preview.value;
+  if (event.target === el.inputs.audience) node.audience = el.inputs.audience.value.trim();
+  if (event.target === el.inputs.goal) node.goal = el.inputs.goal.value.trim();
+  if (event.target === el.inputs.channel) node.channel = el.inputs.channel.value.trim();
+
+  updateNodeCard(node);
+  updateListView();
+  fillInspector(node);
+});
+el.inputs.channel.addEventListener("keydown", (event) => {
+  const node = getNode(state.selectedPrimary);
+  if (!node) return;
+  if (event.key !== "Enter" && event.key !== " ") return;
+  event.preventDefault();
+  const value = el.inputs.channel.value.trim();
+  if (!value) return;
+  pushHistorySnapshot();
+  node.channel = value;
+  updateNodeCard(node);
+  fillInspector(node);
+});
+
+el.imageUpload.addEventListener("change", () => {
+  const node = getNode(state.selectedPrimary);
+  if (!node) return;
+  [...el.imageUpload.files]
+    .filter((file) => file.type.startsWith("image/"))
+    .forEach((file) => node.images.push({ id: crypto.randomUUID(), name: file.name, url: URL.createObjectURL(file) }));
+  el.imageUpload.value = "";
+  updateNodeCard(node);
+  fillInspector(node);
+});
+
+el.deleteNodeButton.addEventListener("click", () => {
+  if (!state.selectedPrimary) return;
+  removeNode(state.selectedPrimary);
+});
+el.deleteSelectedButton.addEventListener("click", () => {
+  if (!state.selectedIds.size) return;
+  pushHistorySnapshot();
+  [...state.selectedIds].forEach((id) => removeNode(id));
+});
+el.disconnectSelectedButton.addEventListener("click", () => {
+  if (!state.selectedIds.size) return;
+  pushHistorySnapshot();
+  state.edges = state.edges.filter(([a, b]) => !state.selectedIds.has(a) && !state.selectedIds.has(b));
+  state.nodes.forEach(updateNodeCard);
+  drawLinks();
+});
+el.propagateDescendantsButton.addEventListener("click", () => {
+  const node = getNode(state.selectedPrimary);
+  if (!node) return;
+  if (downstreamNodeIds(node.id).length === 0) return;
+  pushHistorySnapshot();
+  propagateNodeChangesDownward(node);
+  fillInspector(node);
+});
+el.undoButton.addEventListener("click", restoreLastSnapshot);
+
+el.canvas.addEventListener("dragover", (event) => event.preventDefault());
+el.canvas.addEventListener("drop", (event) => {
+  event.preventDefault();
+  const files = [...event.dataTransfer.files].filter((f) => f.type.startsWith("image/"));
+  if (files.length === 0) return;
+  const point = boardPointFromClient(event.clientX, event.clientY);
+  createNode({
+    type: "Content",
+    position: { x: point.x - NODE_WIDTH / 2, y: point.y - NODE_HEIGHT / 2 },
+    images: files.map((f) => ({ id: crypto.randomUUID(), name: f.name, url: URL.createObjectURL(f) }))
+  });
+});
+
+el.canvas.addEventListener("pointerdown", (event) => {
+  if (event.button !== 0) return;
+  if (event.target.closest(".node, .context-menu, button, input, textarea, select")) return;
+
+  const appendSelection = event.shiftKey;
+  const startLeft = el.canvas.scrollLeft;
+  const startTop = el.canvas.scrollTop;
+  const panX = event.clientX;
+  const panY = event.clientY;
+  const downAt = Date.now();
+  let panning = false;
+  let selectionLocked = false;
+  const forcePan = state.forcePanNextDrag;
+
+  const rect = el.canvas.getBoundingClientRect();
+  const sx = event.clientX - rect.left;
+  const sy = event.clientY - rect.top;
+
+  const box = document.createElement("div");
+  box.className = "selection-box";
+  el.canvas.appendChild(box);
+
+  function move(ev) {
+    const panDx = ev.clientX - panX;
+    const panDy = ev.clientY - panY;
+    const holdMs = Date.now() - downAt;
+    const movedEnough = Math.abs(panDx) > 4 || Math.abs(panDy) > 4;
+    if (appendSelection && !selectionLocked && movedEnough) {
+      selectionLocked = true;
+    }
+    if (!appendSelection && !selectionLocked && (forcePan || holdMs > 450) && movedEnough) {
+      panning = true;
+      el.canvas.scrollLeft = startLeft - panDx;
+      el.canvas.scrollTop = startTop - panDy;
+      return;
+    }
+    const cx = ev.clientX - rect.left;
+    const cy = ev.clientY - rect.top;
+    const left = Math.min(sx, cx);
+    const top = Math.min(sy, cy);
+    const width = Math.abs(cx - sx);
+    const height = Math.abs(cy - sy);
+    box.style.left = `${left}px`;
+    box.style.top = `${top}px`;
+    box.style.width = `${width}px`;
+    box.style.height = `${height}px`;
+
+    if (!appendSelection) state.selectedIds.clear();
+    state.nodes.forEach((node) => {
+      const nx = node.position.x * state.zoom - el.canvas.scrollLeft;
+      const ny = node.position.y * state.zoom - el.canvas.scrollTop;
+      const nw = NODE_WIDTH * state.zoom;
+      const nh = NODE_HEIGHT * state.zoom;
+      const hit = nx < left + width && nx + nw > left && ny < top + height && ny + nh > top;
+      if (hit) state.selectedIds.add(node.id);
+    });
+    state.selectedPrimary = [...state.selectedIds][0] || null;
+    updateSelectionClasses();
+  }
+
+  function up() {
+    window.removeEventListener("pointermove", move);
+    window.removeEventListener("pointerup", up);
+    box.remove();
+    if (!panning) {
+      fillInspector(state.selectedPrimary ? getNode(state.selectedPrimary) : null);
+      state.forcePanNextDrag = true;
+    } else {
+      state.forcePanNextDrag = false;
+    }
+  }
+
+  window.addEventListener("pointermove", move);
+  window.addEventListener("pointerup", up);
+});
+
+function centerBoardStartPosition() {
+  el.canvas.scrollLeft = 0;
+  el.canvas.scrollTop = 0;
+}
+
+el.picker.addEventListener("click", (event) => {
+  if (event.target === el.picker) el.picker.classList.add("hidden");
+});
+el.postingDoneButton.addEventListener("click", () => {
+  const node = getNode(state.postingPlannerNodeId);
+  if (!node) return closePostingPlanner();
+  if (!el.postingDateInput.value || !el.postingTimeInput.value) return;
+  node.social.scheduledAt = `${el.postingDateInput.value}T${el.postingTimeInput.value}:00`;
+  updateNodeCard(node);
+  fillInspector(node);
+  renderCalendarView();
+  closePostingPlanner();
+});
+el.postingCancelButton.addEventListener("click", closePostingPlanner);
+el.brandCoreButton.addEventListener("click", () => {
+  setActiveView("brand-core");
+});
+el.campaignCanvasNavButton.addEventListener("click", () => setActiveView("board"));
+document.querySelectorAll(".bc-node[data-bc-key]").forEach((n) => {
+  n.addEventListener("click", () => {
+    document.querySelectorAll(".bc-node.selected").forEach((x) => x.classList.remove("selected"));
+    n.classList.add("selected");
+    state.brandCoreSelectedKey = n.dataset.bcKey;
+    renderBrandCoreEditor();
+  });
+});
+el.brandEditorInput.addEventListener("input", () => {
+  const key = state.brandCoreSelectedKey;
+  if (Array.isArray(state.brandCore[key])) return;
+  state.brandCore[key] = el.brandEditorInput.value;
+  saveBrandCore();
+});
+el.brandAddItemButton.addEventListener("click", () => {
+  const key = state.brandCoreSelectedKey;
+  if (!Array.isArray(state.brandCore[key])) return;
+  const v = el.brandListInput.value.trim();
+  if (!v) return;
+  state.brandCore[key].push(v);
+  el.brandListInput.value = "";
+  saveBrandCore();
+  renderBrandCoreEditor();
+});
+
+window.addEventListener("resize", drawLinks);
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && state.connectorCreateMode) {
+    state.connectorCreateMode = null;
+    state.connectorGhostEl?.remove();
+    state.connectorGhostEl = null;
+    drawLinks();
+    return;
+  }
+  if (event.key === "Escape" && state.activeConnection) stopExistingNodeConnection();
+});
+
+window.debugNodes = () => {
+  console.log("STATE NODES", state.nodes);
+  console.log("DOM NODES", [...document.querySelectorAll(".node")].map((n) => n.getBoundingClientRect()));
+};
+
+// init
+setZoom(state.zoom);
+centerBoardStartPosition();
+updateEmptyState();
+updateListView();
+fillInspector(null);
+setActiveView("board");
+if (!restoreBoardState()) setSaveStatus("Unsaved changes");
+restoreBrandCore();
+renderBrandCoreEditor();
+window.addEventListener("beforeunload", saveBoardState);
+el.resetBoardButton.addEventListener("click", resetBoardState);
