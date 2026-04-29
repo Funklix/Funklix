@@ -81,7 +81,6 @@ const el = {
     type: document.getElementById("node-type"),
     title: document.getElementById("node-title"),
     content: document.getElementById("node-content"),
-    tags: document.getElementById("node-tags"),
     variants: document.getElementById("node-variants"),
     platform: document.getElementById("node-platform"),
     caption: document.getElementById("node-caption"),
@@ -753,6 +752,14 @@ function updateNodeCard(node) {
       const item = document.createElement("span");
       item.className = "reaction-pill";
       item.textContent = `${emoji} ${count}`;
+      item.title = "Click to remove one reaction";
+      item.addEventListener("click", (event) => {
+        event.stopPropagation();
+        pushHistorySnapshot();
+        node.reactions[emoji] = Math.max(0, (node.reactions[emoji] || 0) - 1);
+        if (node.reactions[emoji] === 0) delete node.reactions[emoji];
+        updateNodeCard(node);
+      });
       bar.appendChild(item);
     });
     nodeEl.appendChild(bar);
@@ -765,6 +772,7 @@ function renderPostits(node, nodeEl) {
   nodeEl.querySelectorAll(".postit").forEach((p) => p.remove());
 
   node.postits.forEach((note) => {
+    if (!Array.isArray(note.replies)) note.replies = [];
     const postit = el.postitTemplate.content.firstElementChild.cloneNode(true);
     postit.style.left = `${note.x}px`;
     postit.style.top = `${note.y}px`;
@@ -792,6 +800,29 @@ function renderPostits(node, nodeEl) {
       node.postits = node.postits.filter((n) => n.id !== note.id);
       renderPostits(node, nodeEl);
     });
+
+    const repliesWrap = document.createElement("div");
+    repliesWrap.className = "postit-replies";
+    note.replies.forEach((reply) => {
+      const line = document.createElement("p");
+      line.className = "postit-reply";
+      line.textContent = `${reply.user} (${reply.time}): ${reply.text}`;
+      repliesWrap.appendChild(line);
+    });
+
+    const addReplyBtn = document.createElement("button");
+    addReplyBtn.type = "button";
+    addReplyBtn.className = "inspector-image-delete";
+    addReplyBtn.textContent = "Reply";
+    addReplyBtn.addEventListener("click", () => {
+      const user = window.prompt("Your name:", "Teammate")?.trim() || "Anonymous";
+      const text = window.prompt("Response:")?.trim();
+      if (!text) return;
+      note.replies.push({ user, text, time: nowString() });
+      renderPostits(node, nodeEl);
+    });
+
+    postit.append(repliesWrap, addReplyBtn);
 
     enablePostitDrag(postit, note);
     nodeEl.appendChild(postit);
@@ -839,7 +870,6 @@ function fillInspector(node) {
   el.inputs.type.value = node.type;
   el.inputs.title.value = node.title;
   el.inputs.content.value = node.content;
-  el.inputs.tags.value = node.tags.join(", ");
   el.inputs.variants.value = node.variants.join(", ");
   el.inputs.platform.value = node.social.platform;
   el.inputs.caption.value = node.social.caption;
@@ -1299,7 +1329,6 @@ el.nodeForm.addEventListener("input", (event) => {
   if (event.target === el.inputs.type) node.type = el.inputs.type.value;
   if (event.target === el.inputs.title) node.title = el.inputs.title.value.trim();
   if (event.target === el.inputs.content) node.content = el.inputs.content.value;
-  if (event.target === el.inputs.tags) node.tags = parseList(el.inputs.tags.value);
   if (event.target === el.inputs.variants) node.variants = parseList(el.inputs.variants.value);
   if (event.target === el.inputs.platform) node.social.platform = el.inputs.platform.value;
   if (event.target === el.inputs.caption) node.social.caption = el.inputs.caption.value;
@@ -1322,19 +1351,6 @@ el.inputs.channel.addEventListener("keydown", (event) => {
   if (!value) return;
   pushHistorySnapshot();
   node.channel = value;
-  updateNodeCard(node);
-  fillInspector(node);
-});
-el.inputs.tags.addEventListener("keydown", (event) => {
-  if (event.key !== "," && event.key !== "Enter" && event.key !== " ") return;
-  event.preventDefault();
-  const node = getNode(state.selectedPrimary);
-  if (!node) return;
-  const raw = el.inputs.tags.value.trim().replace(/,$/, "");
-  if (!raw) return;
-  pushHistorySnapshot();
-  node.tags = [...new Set([...node.tags, ...raw.split(",").map((v) => v.trim()).filter(Boolean)])];
-  el.inputs.tags.value = "";
   updateNodeCard(node);
   fillInspector(node);
 });
@@ -1400,6 +1416,7 @@ el.canvas.addEventListener("pointerdown", (event) => {
   const panY = event.clientY;
   const downAt = Date.now();
   let panning = false;
+  let selectionLocked = false;
   const forcePan = state.forcePanNextDrag;
 
   const rect = el.canvas.getBoundingClientRect();
@@ -1414,7 +1431,11 @@ el.canvas.addEventListener("pointerdown", (event) => {
     const panDx = ev.clientX - panX;
     const panDy = ev.clientY - panY;
     const holdMs = Date.now() - downAt;
-    if ((forcePan || holdMs > 280) && (Math.abs(panDx) > 4 || Math.abs(panDy) > 4)) {
+    const movedEnough = Math.abs(panDx) > 4 || Math.abs(panDy) > 4;
+    if (!selectionLocked && !forcePan && movedEnough && holdMs < 450) {
+      selectionLocked = true;
+    }
+    if (!selectionLocked && (forcePan || holdMs > 450) && movedEnough) {
       panning = true;
       el.canvas.scrollLeft = startLeft - panDx;
       el.canvas.scrollTop = startTop - panDy;

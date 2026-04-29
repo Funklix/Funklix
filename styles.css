@@ -363,6 +363,13 @@ body {
   transform: scale(4);
 }
 
+.image-thumb.expanded .image-delete-btn,
+.image-thumb.expanded .zoom-hint {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
 .image-delete-btn {
   position: absolute;
   top: -6px;
@@ -490,6 +497,17 @@ body {
   background: transparent;
   outline: none;
   line-height: 1.25;
+}
+
+.postit-replies {
+  margin-top: 6px;
+  border-top: 1px dashed rgba(0, 0, 0, 0.2);
+  padding-top: 4px;
+}
+
+.postit-reply {
+  margin: 0 0 4px;
+  font-size: 0.7rem;
 }
 
 .context-menu {
