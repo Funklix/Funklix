@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Campaign Canvas MVP</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="logo">CC</div>
+        <nav>
+          <button class="nav-item active">Campaign Canvas</button>
+          <button class="nav-item">Content Workspace</button>
+          <button class="nav-item">AI Brain</button>
+          <button class="nav-item">Insights</button>
+        </nav>
+      </aside>
+
+      <main class="workspace-wrap">
+        <header class="topbar">
+          <div>
+            <h1>Campaign Canvas — Collaborative Flow</h1>
+            <p>Top-down Hierarchie: Idea → Variations → Content → Social Posts.</p>
+          </div>
+          <div class="actions">
+            <button id="create-campaign-btn" class="create-campaign-btn">Create campaign</button>
+            <button id="undo-btn" title="Rückgängig">↶</button>
+            <button id="add-node-btn" class="primary-add">+ Add node</button>
+            <button id="toggle-list-view-btn">List View</button>
+            <button id="toggle-calendar-view-btn">Calendar View</button>
+            <button id="zoom-out-btn">− Zoom</button>
+            <button id="zoom-in-btn">+ Zoom</button>
+            <span id="zoom-label">100%</span>
+          </div>
+        </header>
+
+        <section class="canvas" id="canvas">
+          <div class="zoom-layer" id="zoom-layer">
+            <svg class="links" id="links" aria-hidden="true"></svg>
+            <div class="empty-state" id="empty-state">
+              Noch keine Nodes vorhanden. Klicke auf <strong>+ Add node</strong> oder auf das <strong>+</strong> in einer Node.
+            </div>
+          </div>
+          <div id="context-menu" class="context-menu hidden">
+            <button id="add-context-node-btn" type="button">Neue Node erstellen</button>
+            <button id="add-postit-comment-btn" type="button">Post-it Kommentar hinzufügen</button>
+          </div>
+        </section>
+
+        <section id="board-list-view" class="board-list-view hidden">
+          <h2>Node List View</h2>
+          <div id="node-list-view"></div>
+        </section>
+        <section id="calendar-view" class="board-list-view hidden">
+          <div class="calendar-header">
+            <button id="calendar-prev-month-btn" type="button">◀</button>
+            <h2 id="calendar-title">Calendar</h2>
+            <button id="calendar-next-month-btn" type="button">▶</button>
+          </div>
+          <div id="calendar-grid" class="calendar-grid"></div>
+        </section>
+      </main>
+
+      <aside class="inspector">
+        <h2>Node Konfiguration</h2>
+        <div class="meta" id="inspector-meta">Wähle oder erstelle einen Node.</div>
+
+        <form id="node-form" class="node-form" autocomplete="off">
+          <label for="node-type">Typ</label>
+          <select id="node-type" name="type"></select>
+
+          <label for="node-title">Titel</label>
+          <input id="node-title" name="title" placeholder="Node Titel" />
+
+          <label for="node-content">Inhalt</label>
+          <textarea id="node-content" name="content" rows="3" placeholder="Beschreibung, Prompt, Task ..."></textarea>
+
+          <div id="social-fields" class="social-fields hidden">
+            <label for="node-platform">Plattform Preview</label>
+            <select id="node-platform" name="platform">
+              <option>Instagram</option>
+              <option>TikTok</option>
+              <option>YouTube</option>
+              <option>X</option>
+            </select>
+
+            <label for="node-caption">Caption</label>
+            <textarea id="node-caption" name="caption" rows="2" placeholder="Social Caption"></textarea>
+
+            <label for="node-hashtags">Hashtags (Komma getrennt)</label>
+            <input id="node-hashtags" name="hashtags" placeholder="#solar, #greenenergy" />
+
+            <label for="node-preview">Preview Text</label>
+            <textarea id="node-preview" name="preview" rows="2" placeholder="So sieht der Post im Feed aus..."></textarea>
+          </div>
+
+          <div id="content-upload-fields" class="hidden">
+            <label for="node-image-upload">Bilder Upload (Content/Social)</label>
+            <input id="node-image-upload" type="file" accept="image/*" multiple />
+            <div id="inspector-image-list" class="inspector-image-list"></div>
+          </div>
+
+
+          <label for="node-audience">Audience</label>
+          <input id="node-audience" name="audience" placeholder="z. B. Eco-conscious homeowners" />
+
+          <label for="node-goal">Goal</label>
+          <input id="node-goal" name="goal" placeholder="z. B. Product Launch" />
+
+          <label for="node-channel">Channel</label>
+          <input id="node-channel" name="channel" placeholder="z. B. Instagram" />
+
+          <label for="node-tags">Tags (Komma getrennt)</label>
+          <input id="node-tags" name="tags" placeholder="Audience, Goal, Channel" />
+
+          <label for="node-variants">A/B Varianten (Komma getrennt)</label>
+          <input id="node-variants" name="variants" placeholder="A: Hook 1, B: Hook 2" />
+
+          <button id="delete-node-btn" type="button" class="danger">Delete node</button>
+          <button id="delete-selected-btn" type="button" class="danger">Delete selected nodes</button>
+          <button id="disconnect-selected-btn" type="button">Disconnect selected</button>
+          <button id="propagate-descendants-btn" type="button">Propagate to descendants</button>
+        </form>
+      </aside>
+    </div>
+
+    <template id="node-template">
+      <article class="node" tabindex="0">
+        <span class="type"></span>
+        <h3 class="title" contenteditable="true" data-placeholder="Node Titel"></h3>
+        <p class="content" contenteditable="true" data-placeholder="Node Inhalt"></p>
+        <div class="image-strip"></div>
+        <div class="social-preview hidden"></div>
+        <div class="tags"></div>
+        <div class="ab-tests"></div>
+        <div class="connector-actions">
+          <button class="connector-handle" title="Neuen Node verbinden">+</button>
+          <button class="connector-link-handle" title="Bestehenden Node verbinden">—</button>
+        </div>
+      </article>
+    </template>
+
+    <template id="postit-template">
+      <article class="postit">
+        <header>
+          <strong class="postit-user"></strong>
+          <time class="postit-time"></time>
+          <input class="postit-color" type="color" value="#ffe082" />
+          <button class="postit-delete" type="button">✕</button>
+        </header>
+        <textarea class="postit-text" placeholder="Kommentar (auch mit Emojis 😊)"></textarea>
+      </article>
+    </template>
+
+
+    <div id="node-type-picker" class="node-type-picker hidden">
+      <div class="picker-panel">
+        <h3>Node-Typ auswählen</h3>
+        <div id="node-type-options" class="picker-options"></div>
+      </div>
+    </div>
+
+    <div id="posting-plan-overlay" class="node-type-picker hidden">
+      <div class="picker-panel posting-panel">
+        <h3>Add to Posting Plan</h3>
+        <label>Datum</label>
+        <input id="posting-date-input" type="date" />
+        <label>Uhrzeit</label>
+        <input id="posting-time-input" type="time" />
+        <div class="posting-actions">
+          <button id="posting-done-btn" type="button">Done</button>
+          <button id="posting-cancel-btn" type="button">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <script src="app.js"></script>
+  </body>
+</html>
