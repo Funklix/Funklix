@@ -13,6 +13,7 @@
         <nav>
           <button class="nav-item active">Campaign Canvas</button>
           <button class="nav-item">Content Workspace</button>
+          <button id="brand-core-nav-btn" class="nav-item">Brand Core</button>
           <button class="nav-item">AI Brain</button>
           <button class="nav-item">Insights</button>
         </nav>
@@ -29,9 +30,15 @@
             <button id="undo-btn" title="Rückgängig">↶</button>
             <button id="add-node-btn" class="primary-add">+ Add node</button>
             <button id="reset-board-btn">Reset Board</button>
-            <button id="brand-core-btn">Brand Core</button>
-            <button id="toggle-list-view-btn">List View</button>
-            <button id="toggle-calendar-view-btn">Calendar View</button>
+            <div class="view-switcher">
+              <button id="cycle-view-btn">Board View</button>
+              <button id="view-menu-btn" title="Choose view">▾</button>
+              <div id="view-menu" class="hidden">
+                <button id="view-board-btn" type="button">Board View</button>
+                <button id="view-list-btn" type="button">List View</button>
+                <button id="view-calendar-btn" type="button">Calendar View</button>
+              </div>
+            </div>
             <button id="zoom-out-btn">− Zoom</button>
             <button id="zoom-in-btn">+ Zoom</button>
             <span id="zoom-label">100%</span>

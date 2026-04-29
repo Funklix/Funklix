@@ -115,6 +115,36 @@ body {
   cursor: pointer;
 }
 
+.view-switcher {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+#view-menu {
+  position: absolute;
+  top: 110%;
+  right: 0;
+  background: #fff;
+  border: 1px solid #dfe3f2;
+  border-radius: 10px;
+  box-shadow: 0 10px 18px rgba(0, 0, 0, 0.12);
+  padding: 6px;
+  z-index: 80;
+  display: grid;
+  gap: 4px;
+}
+
+#view-menu button {
+  text-align: left;
+}
+
+#brand-core-overlay .picker-panel {
+  width: min(720px, 92vw);
+  display: grid;
+  gap: 8px;
+}
+
 
 .actions .primary-add {
   background: #23b26d;

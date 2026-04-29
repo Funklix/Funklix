@@ -45,8 +45,12 @@ const el = {
   nodeListView: document.getElementById("node-list-view"),
   boardListView: document.getElementById("board-list-view"),
   calendarView: document.getElementById("calendar-view"),
-  toggleListViewButton: document.getElementById("toggle-list-view-btn"),
-  toggleCalendarViewButton: document.getElementById("toggle-calendar-view-btn"),
+  cycleViewButton: document.getElementById("cycle-view-btn"),
+  viewMenuButton: document.getElementById("view-menu-btn"),
+  viewMenu: document.getElementById("view-menu"),
+  viewBoardButton: document.getElementById("view-board-btn"),
+  viewListButton: document.getElementById("view-list-btn"),
+  viewCalendarButton: document.getElementById("view-calendar-btn"),
   calendarGrid: document.getElementById("calendar-grid"),
   calendarTitle: document.getElementById("calendar-title"),
   calendarPrevMonthButton: document.getElementById("calendar-prev-month-btn"),
@@ -81,7 +85,7 @@ const el = {
   propagateDescendantsButton: document.getElementById("propagate-descendants-btn"),
   resetBoardButton: document.getElementById("reset-board-btn"),
   saveStatus: document.getElementById("save-status"),
-  brandCoreButton: document.getElementById("brand-core-btn"),
+  brandCoreButton: document.getElementById("brand-core-nav-btn"),
   brandCoreOverlay: document.getElementById("brand-core-overlay"),
   brandCoreCloseButton: document.getElementById("brand-core-close-btn"),
   brandNameInput: document.getElementById("brand-name-input"),
@@ -1241,7 +1245,6 @@ function toggleListMode(showList) {
   const shouldShowList = typeof showList === "boolean" ? showList : !el.canvas.classList.contains("hidden");
   el.canvas.classList.toggle("hidden", shouldShowList);
   el.boardListView.classList.toggle("hidden", !shouldShowList);
-  el.toggleListViewButton.textContent = shouldShowList ? "Board View" : "List View";
 
   if (!shouldShowList && state.selectedPrimary) {
     const selected = getNode(state.selectedPrimary);
@@ -1298,8 +1301,7 @@ function setActiveView(view) {
   el.canvas.classList.toggle("hidden", view !== "board");
   el.boardListView.classList.toggle("hidden", view !== "list");
   el.calendarView.classList.toggle("hidden", view !== "calendar");
-  el.toggleListViewButton.textContent = view === "list" ? "Board View" : "List View";
-  el.toggleCalendarViewButton.textContent = view === "calendar" ? "Board View" : "Calendar View";
+  el.cycleViewButton.textContent = view === "board" ? "Board View" : view === "list" ? "List View" : "Calendar View";
   if (view === "calendar") renderCalendarView();
 }
 
@@ -1315,12 +1317,20 @@ el.createCampaignButton.addEventListener("click", () => {
   createCampaignSetup();
 });
 
-el.toggleListViewButton.addEventListener("click", () => {
-  setActiveView(state.activeView === "list" ? "board" : "list");
+el.cycleViewButton.addEventListener("click", () => {
+  const order = ["board", "list", "calendar"];
+  const idx = order.indexOf(state.activeView);
+  setActiveView(order[(idx + 1) % order.length]);
 });
-
-el.toggleCalendarViewButton.addEventListener("click", () => {
-  setActiveView(state.activeView === "calendar" ? "board" : "calendar");
+el.viewMenuButton.addEventListener("click", (event) => {
+  event.stopPropagation();
+  el.viewMenu.classList.toggle("hidden");
+});
+el.viewBoardButton.addEventListener("click", () => { setActiveView("board"); el.viewMenu.classList.add("hidden"); });
+el.viewListButton.addEventListener("click", () => { setActiveView("list"); el.viewMenu.classList.add("hidden"); });
+el.viewCalendarButton.addEventListener("click", () => { setActiveView("calendar"); el.viewMenu.classList.add("hidden"); });
+document.addEventListener("click", (event) => {
+  if (!event.target.closest(".view-switcher")) el.viewMenu.classList.add("hidden");
 });
 el.calendarPrevMonthButton.addEventListener("click", () => {
   state.calendarMonth = new Date(state.calendarMonth.getFullYear(), state.calendarMonth.getMonth() - 1, 1);
