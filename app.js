@@ -75,6 +75,7 @@ const el = {
   undoButton: document.getElementById("undo-btn"),
   deleteSelectedButton: document.getElementById("delete-selected-btn"),
   disconnectSelectedButton: document.getElementById("disconnect-selected-btn"),
+  propagateDescendantsButton: document.getElementById("propagate-descendants-btn"),
   inputs: {
     type: document.getElementById("node-type"),
     title: document.getElementById("node-title"),
@@ -1282,13 +1283,6 @@ el.nodeForm.addEventListener("input", (event) => {
   updateNodeCard(node);
   updateListView();
   fillInspector(node);
-  if (downstreamNodeIds(node.id).length > 0) {
-    const ok = window.confirm("Änderungen auf alle verbundenen untergeordneten Nodes anwenden?");
-    if (ok) {
-      pushHistorySnapshot();
-      propagateNodeChangesDownward(node);
-    }
-  }
 });
 el.inputs.channel.addEventListener("keydown", (event) => {
   const node = getNode(state.selectedPrimary);
@@ -1333,6 +1327,14 @@ el.disconnectSelectedButton.addEventListener("click", () => {
   state.nodes.forEach(updateNodeCard);
   drawLinks();
 });
+el.propagateDescendantsButton.addEventListener("click", () => {
+  const node = getNode(state.selectedPrimary);
+  if (!node) return;
+  if (downstreamNodeIds(node.id).length === 0) return;
+  pushHistorySnapshot();
+  propagateNodeChangesDownward(node);
+  fillInspector(node);
+});
 el.undoButton.addEventListener("click", restoreLastSnapshot);
 
 el.canvas.addEventListener("dragover", (event) => event.preventDefault());
@@ -1352,10 +1354,12 @@ el.canvas.addEventListener("pointerdown", (event) => {
   if (event.button !== 0) return;
   if (event.target.closest(".node, .context-menu, button, input, textarea, select")) return;
 
+  const appendSelection = event.shiftKey;
   const startLeft = el.canvas.scrollLeft;
   const startTop = el.canvas.scrollTop;
   const panX = event.clientX;
   const panY = event.clientY;
+  const downAt = Date.now();
   let panning = false;
 
   const rect = el.canvas.getBoundingClientRect();
@@ -1369,7 +1373,8 @@ el.canvas.addEventListener("pointerdown", (event) => {
   function move(ev) {
     const panDx = ev.clientX - panX;
     const panDy = ev.clientY - panY;
-    if (Math.abs(panDx) > 4 || Math.abs(panDy) > 4) {
+    const holdMs = Date.now() - downAt;
+    if (holdMs > 180 && (Math.abs(panDx) > 4 || Math.abs(panDy) > 4)) {
       panning = true;
       el.canvas.scrollLeft = startLeft - panDx;
       el.canvas.scrollTop = startTop - panDy;
@@ -1386,7 +1391,7 @@ el.canvas.addEventListener("pointerdown", (event) => {
     box.style.width = `${width}px`;
     box.style.height = `${height}px`;
 
-    state.selectedIds.clear();
+    if (!appendSelection) state.selectedIds.clear();
     state.nodes.forEach((node) => {
       const nx = node.position.x * state.zoom - el.canvas.scrollLeft;
       const ny = node.position.y * state.zoom - el.canvas.scrollTop;
@@ -1409,6 +1414,11 @@ el.canvas.addEventListener("pointerdown", (event) => {
   window.addEventListener("pointermove", move);
   window.addEventListener("pointerup", up);
 });
+
+function centerBoardStartPosition() {
+  el.canvas.scrollLeft = (BOARD_WIDTH * state.zoom - el.canvas.clientWidth) / 2;
+  el.canvas.scrollTop = (BOARD_HEIGHT * state.zoom - el.canvas.clientHeight) / 2;
+}
 
 el.picker.addEventListener("click", (event) => {
   if (event.target === el.picker) el.picker.classList.add("hidden");
@@ -1445,6 +1455,7 @@ window.debugNodes = () => {
 
 // init
 setZoom(state.zoom);
+centerBoardStartPosition();
 updateEmptyState();
 updateListView();
 fillInspector(null);
