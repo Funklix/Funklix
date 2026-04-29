@@ -32,6 +32,7 @@ const state = {
   calendarMonth: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
   postingPlannerNodeId: null
   ,history: []
+  ,forcePanNextDrag: false
 };
 
 const el = {
@@ -386,6 +387,8 @@ function autoZoomOutIfBoardCrowded() {
 
 function createCampaignSetup() {
   setActiveView("board");
+  el.canvas.scrollLeft = 0;
+  el.canvas.scrollTop = 0;
 
   const idea = createNode({ type: "Idea", position: { x: 640, y: 120 } });
   const variationA = createNode({ type: "Campaign Variation", position: { x: 360, y: 330 } });
@@ -1262,6 +1265,24 @@ el.addPostitCommentButton.addEventListener("click", () => {
   });
   updateNodeCard(node);
 });
+el.contextMenu.querySelectorAll(".emoji-quick").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    el.contextMenu.classList.add("hidden");
+    if (!state.selectedPrimary) return;
+    const node = getNode(state.selectedPrimary);
+    if (!node) return;
+    node.postits.push({
+      id: `postit-${state.postitCounter++}`,
+      user: "Quick Reaction",
+      time: nowString(),
+      text: btn.dataset.emoji || "👍",
+      color: "#fff2a8",
+      x: state.contextBoardPoint.x - node.position.x,
+      y: state.contextBoardPoint.y - node.position.y
+    });
+    updateNodeCard(node);
+  });
+});
 
 el.nodeForm.addEventListener("input", (event) => {
   const node = getNode(state.selectedPrimary);
@@ -1297,7 +1318,17 @@ el.inputs.channel.addEventListener("keydown", (event) => {
   fillInspector(node);
 });
 el.inputs.tags.addEventListener("keydown", (event) => {
-  if (event.key === ",") event.stopPropagation();
+  if (event.key !== "," && event.key !== "Enter" && event.key !== " ") return;
+  event.preventDefault();
+  const node = getNode(state.selectedPrimary);
+  if (!node) return;
+  const raw = el.inputs.tags.value.trim().replace(/,$/, "");
+  if (!raw) return;
+  pushHistorySnapshot();
+  node.tags = [...new Set([...node.tags, ...raw.split(",").map((v) => v.trim()).filter(Boolean)])];
+  el.inputs.tags.value = "";
+  updateNodeCard(node);
+  fillInspector(node);
 });
 
 el.imageUpload.addEventListener("change", () => {
@@ -1361,6 +1392,7 @@ el.canvas.addEventListener("pointerdown", (event) => {
   const panY = event.clientY;
   const downAt = Date.now();
   let panning = false;
+  const forcePan = state.forcePanNextDrag;
 
   const rect = el.canvas.getBoundingClientRect();
   const sx = event.clientX - rect.left;
@@ -1374,7 +1406,7 @@ el.canvas.addEventListener("pointerdown", (event) => {
     const panDx = ev.clientX - panX;
     const panDy = ev.clientY - panY;
     const holdMs = Date.now() - downAt;
-    if (holdMs > 180 && (Math.abs(panDx) > 4 || Math.abs(panDy) > 4)) {
+    if ((forcePan || holdMs > 280) && (Math.abs(panDx) > 4 || Math.abs(panDy) > 4)) {
       panning = true;
       el.canvas.scrollLeft = startLeft - panDx;
       el.canvas.scrollTop = startTop - panDy;
@@ -1408,7 +1440,12 @@ el.canvas.addEventListener("pointerdown", (event) => {
     window.removeEventListener("pointermove", move);
     window.removeEventListener("pointerup", up);
     box.remove();
-    if (!panning) fillInspector(state.selectedPrimary ? getNode(state.selectedPrimary) : null);
+    if (!panning) {
+      fillInspector(state.selectedPrimary ? getNode(state.selectedPrimary) : null);
+      state.forcePanNextDrag = true;
+    } else {
+      state.forcePanNextDrag = false;
+    }
   }
 
   window.addEventListener("pointermove", move);
@@ -1416,8 +1453,8 @@ el.canvas.addEventListener("pointerdown", (event) => {
 });
 
 function centerBoardStartPosition() {
-  el.canvas.scrollLeft = (BOARD_WIDTH * state.zoom - el.canvas.clientWidth) / 2;
-  el.canvas.scrollTop = (BOARD_HEIGHT * state.zoom - el.canvas.clientHeight) / 2;
+  el.canvas.scrollLeft = 0;
+  el.canvas.scrollTop = 0;
 }
 
 el.picker.addEventListener("click", (event) => {
