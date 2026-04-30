@@ -212,16 +212,18 @@ function serializeState() {
     edges: state.edges, nodeCounter: state.nodeCounter, postitCounter: state.postitCounter, zoom: state.zoom
   };
 }
-function saveCampaignCanvasState() { const campaignState = serializeState(); localStorage.setItem(STORAGE_KEY, JSON.stringify(campaignState)); setSaveStatus("Saved"); }
+function saveCampaignCanvasState() { const campaignState = serializeState(); localStorage.setItem(STORAGE_KEY, JSON.stringify(campaignState)); setSaveStatus("Saved"); updateDebugPanel(); }
 function markUnsaved() { setSaveStatus("Unsaved changes"); saveCampaignCanvasState(); }
 function loadCampaignCanvasState() {
-  const raw = localStorage.getItem(STORAGE_KEY); if (!raw) return false;
+  const raw = localStorage.getItem(STORAGE_KEY); if (!raw) { updateDebugPanel(); return false; }
   const campaignState = JSON.parse(raw); console.log("Loaded campaignCanvasState", campaignState);
   state.nodes = campaignState.nodes || []; state.edges = campaignState.edges || []; state.nodeCounter = campaignState.nodeCounter || 1; state.postitCounter = campaignState.postitCounter || 1;
   state.selectedIds.clear(); state.selectedPrimary = null;
   el.zoomLayer.querySelectorAll(".node").forEach((n) => n.remove());
   state.nodes.forEach(renderNode);
-  updateListView(); updateEmptyState(); drawLinks(); if (campaignState.zoom) setZoom(campaignState.zoom); setSaveStatus("Restored from local storage"); return true;
+  updateListView(); updateEmptyState(); drawLinks(); if (campaignState.zoom) setZoom(campaignState.zoom); setSaveStatus("Restored from local storage");
+  updateDebugPanel();
+  return true;
 }
 
 function renderCampaignCanvasFromStateIfNeeded() {
@@ -238,6 +240,7 @@ function resetCampaignCanvasState() {
   localStorage.removeItem(STORAGE_KEY);
   state.nodes = []; state.edges = []; state.nodeCounter = 1; state.postitCounter = 1; state.selectedIds.clear(); state.selectedPrimary = null;
   el.zoomLayer.querySelectorAll(".node").forEach((n) => n.remove()); fillInspector(null); updateListView(); updateEmptyState(); drawLinks(); setSaveStatus("Reset");
+  updateDebugPanel();
 }
 
 function getBrandCoreData() {
@@ -248,6 +251,7 @@ window.getBrandCoreData = getBrandCoreData;
 function saveBrandBrainState() {
   const brandState = getBrandCoreData();
   localStorage.setItem(BRAND_CORE_STORAGE_KEY, JSON.stringify(brandState));
+  updateDebugPanel();
 }
 
 function loadBrandBrainState() {
@@ -255,6 +259,7 @@ function loadBrandBrainState() {
   if (raw) { state.brandCore = JSON.parse(raw); console.log("Loaded brandBrainState", state.brandCore); }
   else state.brandCore = DEFAULT_BRAND_CORE();
   if (!Array.isArray(state.brandCore.customTiles)) state.brandCore.customTiles = [];
+  updateDebugPanel();
 }
 
 function resetBrandBrainState() {
@@ -263,6 +268,38 @@ function resetBrandBrainState() {
   state.brandCore = DEFAULT_BRAND_CORE();
   renderBrandCoreTiles();
   renderBrandCoreEditor();
+  updateDebugPanel();
+}
+
+function createDebugPanel() {
+  const panel = document.createElement("aside");
+  panel.id = "debug-panel";
+  panel.style.cssText = "position:fixed;left:12px;bottom:12px;z-index:99999;background:#111;color:#fff;padding:10px;border-radius:8px;font:12px/1.35 monospace;max-width:320px;box-shadow:0 4px 14px rgba(0,0,0,.35)";
+  panel.innerHTML = `
+    <div id="debug-panel-meta"></div>
+    <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">
+      <button type="button" id="dbg-save-canvas">Test Save Canvas</button>
+      <button type="button" id="dbg-reset-canvas">Test Reset Canvas</button>
+      <button type="button" id="dbg-load-canvas">Test Load Canvas</button>
+    </div>`;
+  document.body.appendChild(panel);
+}
+
+function updateDebugPanel() {
+  const meta = document.getElementById("debug-panel-meta");
+  if (!meta) return;
+  const campaignExists = localStorage.getItem(STORAGE_KEY) ? "yes" : "no";
+  const brandExists = localStorage.getItem(BRAND_CORE_STORAGE_KEY) ? "yes" : "no";
+  meta.innerHTML = [
+    `build: ${new Date().toISOString()}`,
+    `campaignCanvasState exists: ${campaignExists}`,
+    `brandBrainState exists: ${brandExists}`,
+    `state.nodes.length: ${state.nodes.length}`,
+    `DOM .node count: ${document.querySelectorAll(".node").length}`,
+    `reset-board-btn found: ${document.getElementById("reset-board-btn") ? "yes" : "no"}`,
+    `reset-brand-core-btn found: ${document.getElementById("reset-brand-core-btn") ? "yes" : "no"}`,
+    `undo-btn found: ${document.getElementById("undo-btn") ? "yes" : "no"}`
+  ].join("<br>");
 }
 
 function renderBrandCoreEditor() {
@@ -1700,7 +1737,7 @@ el.propagateDescendantsButton.addEventListener("click", () => {
   fillInspector(node);
   saveCampaignCanvasState();
 });
-el.undoButton.addEventListener("click", restoreLastSnapshot);
+// undo handled by delegated click binding
 
 el.canvas.addEventListener("dragover", (event) => event.preventDefault());
 el.canvas.addEventListener("drop", (event) => {
@@ -1860,18 +1897,40 @@ window.resetBrandBrainState = resetBrandBrainState;
 function bindGlobalResetDelegation() {
   document.addEventListener("click", (event) => {
     if (event.target.closest("#reset-board-btn")) {
+      console.log("RESET BOARD CLICK DELEGATED");
       event.preventDefault();
       window.resetCampaignCanvasState();
     }
     if (event.target.closest("#reset-brand-core-btn")) {
+      console.log("RESET BRAND CLICK DELEGATED");
       event.preventDefault();
       window.resetBrandBrainState();
+    }
+    if (event.target.closest("#undo-btn")) {
+      console.log("UNDO CLICK DELEGATED");
+      event.preventDefault();
+      restoreLastSnapshot();
+      updateDebugPanel();
+    }
+    if (event.target.closest("#dbg-save-canvas")) {
+      event.preventDefault();
+      window.saveCampaignCanvasState();
+    }
+    if (event.target.closest("#dbg-reset-canvas")) {
+      event.preventDefault();
+      window.resetCampaignCanvasState();
+    }
+    if (event.target.closest("#dbg-load-canvas")) {
+      event.preventDefault();
+      window.loadCampaignCanvasState();
+      renderCampaignCanvasFromStateIfNeeded();
     }
   });
 }
 
 function bootApp() {
   console.log("BOOT");
+  createDebugPanel();
   setZoom(state.zoom);
   centerBoardStartPosition();
   updateEmptyState();
@@ -1888,6 +1947,7 @@ function bootApp() {
   console.log("Loaded campaign nodes:", state.nodes.length);
   console.log("DOM nodes after load:", document.querySelectorAll(".node").length);
   console.log("Loaded brand core:", state.brandCore);
+  updateDebugPanel();
 }
 
 if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", bootApp);
