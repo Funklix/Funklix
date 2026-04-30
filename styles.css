@@ -288,13 +288,21 @@ body {
   box-shadow: 0 6px 14px rgba(40, 50, 90, 0.08);
 }
 .bc-edit-list { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 6px; }
-.bc-edit-list li { background: #f4f6fc; border-radius: 8px; padding: 6px 8px; cursor: pointer; }
+.bc-edit-list li { background: #f6f8ff; border: 1px solid #e1e6f6; border-radius: 10px; padding: 8px 10px; cursor: pointer; }
 .bc-edit-list li { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
-.bc-edit-list li button { border: none; background: transparent; color: #8a90ab; cursor: pointer; }
+.bc-edit-list li button { border: none; background: #eef1fb; color: #7a83a8; cursor: pointer; width: 22px; height: 22px; border-radius: 999px; }
+.bc-edit-list li small { color: #8f95af; font-size: 0.72rem; }
 .brand-core-side label { font-size: 0.78rem; color: #707899; margin-top: 6px; }
 .brand-core-side input,
-.brand-core-side textarea { width: 100%; border: 1px solid #dfe4f2; border-radius: 8px; padding: 8px; font-size: 0.86rem; }
+.brand-core-side textarea { width: 100%; border: 1px solid #dfe4f2; border-radius: 10px; padding: 9px 10px; font-size: 0.86rem; }
+.brand-core-side input:focus,
+.brand-core-side textarea:focus { outline: none; border-color: #6f5bff; box-shadow: 0 0 0 2px #6f5bff2b; }
 .brand-core-side .posting-actions input { flex: 1; }
+.bc-add-row { gap: 8px; margin-top: 4px; }
+.bc-add-row button { border: 1px solid #c9befa; background: #6f5bff; color: #fff; border-radius: 9px; width: 34px; height: 34px; }
+.bc-editor-meta { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.bc-helper { margin: 0; font-size: 0.76rem; color: #8b92ad; }
+.bc-badge { background: #edeaff; color: #5e4bf4; border-radius: 999px; font-size: 0.73rem; padding: 3px 9px; }
 
 
 .actions .primary-add {

@@ -248,41 +248,54 @@ function renderBrandCoreEditor() {
   };
   el.brandEditorTitle.textContent = labelMap[key] || "Brand Core";
   const value = state.brandCore[key];
+  const count = Array.isArray(value)
+    ? `${value.length} items`
+    : key === "dosAndDonts"
+      ? `${value.dos.length + value.donts.length} rules`
+      : key === "brandVoiceExamples"
+        ? "2 examples"
+        : key === "brandAssets"
+          ? `${(value.colors || []).length} colors`
+          : "1 section";
   el.brandEditorPanel.innerHTML = "";
+  const meta = document.createElement("div");
+  meta.className = "bc-editor-meta";
+  meta.innerHTML = `<p class="bc-helper">Edit this section and preview updates live.</p><span class="bc-badge">${count}</span>`;
+  el.brandEditorPanel.appendChild(meta);
   if (key === "brandCore" || key === "valueProposition") {
-    el.brandEditorPanel.innerHTML = `<textarea id="bc-edit-text" rows="6">${value || ""}</textarea>`;
+    el.brandEditorPanel.insertAdjacentHTML("beforeend", `<textarea id="bc-edit-text" rows="6">${value || ""}</textarea>`);
     el.brandEditorPanel.querySelector("textarea").addEventListener("input", (e) => { state.brandCore[key] = e.target.value; saveBrandCore(); renderBrandCoreTiles(); });
   } else if (key === "toneOfVoice" || key === "messagingPillars" || key === "contentGuidelines") {
     const title = key === "toneOfVoice" ? "Add trait" : key === "messagingPillars" ? "Add pillar" : "Add guideline";
     const listPrefix = key === "messagingPillars" ? "ol" : "ul";
     const listItems = value.map((v, i) => `<li data-i="${i}">${v}<button type="button">✕</button></li>`).join("");
-    el.brandEditorPanel.innerHTML = `<label>${title}</label><div class="posting-actions"><input id="bc-list-add" placeholder="${title}"/><button type="button" id="bc-list-plus">+</button></div><${listPrefix} class="bc-edit-list">${listItems}</${listPrefix}>`;
+    el.brandEditorPanel.insertAdjacentHTML("beforeend", `<label>${title}</label><div class="posting-actions bc-add-row"><input id="bc-list-add" placeholder="${title}"/><button type="button" id="bc-list-plus">+</button></div><${listPrefix} class="bc-edit-list">${listItems}</${listPrefix}>`);
     el.brandEditorPanel.querySelector("button").addEventListener("click", () => { const v = el.brandEditorPanel.querySelector("#bc-list-add").value.trim(); if (!v) return; value.push(v); saveBrandCore(); renderBrandCoreEditor(); });
     el.brandEditorPanel.querySelectorAll("li button").forEach((btn) => btn.addEventListener("click", (e) => { const idx = Number(e.target.closest("li").dataset.i); value.splice(idx, 1); saveBrandCore(); renderBrandCoreEditor(); }));
   } else if (key === "dosAndDonts") {
     const d = value;
-    el.brandEditorPanel.innerHTML = `
-      <label>Do</label><div class="posting-actions"><input id="bc-do-add" placeholder="Add Do"/><button type="button">+</button></div>
+    el.brandEditorPanel.insertAdjacentHTML("beforeend", `
+      <label>Do</label><div class="posting-actions bc-add-row"><input id="bc-do-add" placeholder="Add Do"/><button type="button">+</button></div>
       <ul class="bc-edit-list">${d.dos.map((v, i) => `<li data-i="${i}" data-t="do">${v}<button type="button">✕</button></li>`).join("")}</ul>
-      <label>Don't</label><div class="posting-actions"><input id="bc-dont-add" placeholder="Add Don't"/><button type="button" id="bc-dont-plus">+</button></div>
-      <ul class="bc-edit-list">${d.donts.map((v, i) => `<li data-i="${i}" data-t="dont">${v}<button type="button">✕</button></li>`).join("")}</ul>`;
+      <label>Don't</label><div class="posting-actions bc-add-row"><input id="bc-dont-add" placeholder="Add Don't"/><button type="button" id="bc-dont-plus">+</button></div>
+      <ul class="bc-edit-list">${d.donts.map((v, i) => `<li data-i="${i}" data-t="dont">${v}<button type="button">✕</button></li>`).join("")}</ul>`);
     el.brandEditorPanel.querySelector("button").addEventListener("click", () => { const v = el.brandEditorPanel.querySelector("#bc-do-add").value.trim(); if (!v) return; d.dos.push(v); saveBrandCore(); renderBrandCoreEditor(); });
     el.brandEditorPanel.querySelector("#bc-dont-plus").addEventListener("click", () => { const v = el.brandEditorPanel.querySelector("#bc-dont-add").value.trim(); if (!v) return; d.donts.push(v); saveBrandCore(); renderBrandCoreEditor(); });
     el.brandEditorPanel.querySelectorAll("li button").forEach((btn) => btn.addEventListener("click", (e) => { const li = e.target.closest("li"); const idx = Number(li.dataset.i); if (li.dataset.t === "do") d.dos.splice(idx, 1); else d.donts.splice(idx, 1); saveBrandCore(); renderBrandCoreEditor(); }));
   } else if (key === "brandVoiceExamples") {
-    el.brandEditorPanel.innerHTML = `<label>Good example</label><textarea id="bc-good" rows="3">${value.good || ""}</textarea><label>Avoid example</label><textarea id="bc-avoid" rows="3">${value.avoid || ""}</textarea>`;
+    el.brandEditorPanel.insertAdjacentHTML("beforeend", `<label>Good example</label><textarea class="bc-good" id="bc-good" rows="3">${value.good || ""}</textarea><label>Avoid example</label><textarea class="bc-bad" id="bc-avoid" rows="3">${value.avoid || ""}</textarea>`);
     ["bc-good","bc-avoid"].forEach((id) => el.brandEditorPanel.querySelector(`#${id}`).addEventListener("input", () => { value.good = el.brandEditorPanel.querySelector("#bc-good").value; value.avoid = el.brandEditorPanel.querySelector("#bc-avoid").value; saveBrandCore(); renderBrandCoreTiles(); }));
   } else if (key === "brandAssets") {
-    el.brandEditorPanel.innerHTML = `<label>Domain URL</label><input id="bc-domain" value="${value.domain || ""}"/><label>Typography</label><input id="bc-typo" value="${value.typography || ""}"/><label>Logo URL</label><input id="bc-logo" value="${value.logo || ""}"/><label>Palette</label><div class="posting-actions"><input id="bc-color-add" placeholder="#AABBCC"/><button type="button">+</button></div><div class="bc-tags">${(value.colors||[]).map((c,i)=>`<span data-i="${i}">${c}</span>`).join("")}</div>`;
+    el.brandEditorPanel.insertAdjacentHTML("beforeend", `<label>Domain URL</label><input id="bc-domain" value="${value.domain || ""}"/><label>Typography</label><input id="bc-typo" value="${value.typography || ""}"/><label>Logo URL</label><input id="bc-logo" value="${value.logo || ""}"/><label>Palette</label><div class="posting-actions bc-add-row"><input id="bc-color-add" placeholder="#AABBCC"/><button type="button">+</button></div><div class="bc-tags">${(value.colors||[]).map((c,i)=>`<span data-i="${i}">${c}</span>`).join("")}</div>`);
     ["bc-domain","bc-typo","bc-logo"].forEach((id) => el.brandEditorPanel.querySelector(`#${id}`).addEventListener("input", () => { value.domain = el.brandEditorPanel.querySelector("#bc-domain").value; value.typography = el.brandEditorPanel.querySelector("#bc-typo").value; value.logo = el.brandEditorPanel.querySelector("#bc-logo").value; saveBrandCore(); renderBrandCoreTiles(); }));
     el.brandEditorPanel.querySelector("button").addEventListener("click", () => { const c = el.brandEditorPanel.querySelector("#bc-color-add").value.trim(); if (!c) return; value.colors.push(c); saveBrandCore(); renderBrandCoreEditor(); });
     el.brandEditorPanel.querySelectorAll(".bc-tags span").forEach((chip) => chip.addEventListener("click", () => { value.colors.splice(Number(chip.dataset.i),1); saveBrandCore(); renderBrandCoreEditor(); }));
   } else if (key === "personas") {
-    el.brandEditorPanel.innerHTML = `<div class="posting-actions"><input id="bc-p-name" placeholder="Persona"/><input id="bc-p-note" placeholder="Note"/><button type="button">+</button></div><ul class="bc-edit-list">${value.map((p, i) => `<li data-i="${i}">${p.name} — ${p.note}</li>`).join("")}</ul>`;
+    el.brandEditorPanel.insertAdjacentHTML("beforeend", `<div class="posting-actions bc-add-row"><input id="bc-p-name" placeholder="Persona"/><input id="bc-p-note" placeholder="Label"/><button type="button">+</button></div><ul class="bc-edit-list">${value.map((p, i) => `<li data-i="${i}">${p.name} <small>${p.note}</small><button type="button">✕</button></li>`).join("")}</ul>`);
     el.brandEditorPanel.querySelector("button").addEventListener("click", () => { const n = el.brandEditorPanel.querySelector("#bc-p-name").value.trim(); if (!n) return; value.push({ name: n, note: el.brandEditorPanel.querySelector("#bc-p-note").value.trim() }); saveBrandCore(); renderBrandCoreEditor(); });
-    el.brandEditorPanel.querySelectorAll("li").forEach((li) => li.addEventListener("click", () => { value.splice(Number(li.dataset.i), 1); saveBrandCore(); renderBrandCoreEditor(); }));
+    el.brandEditorPanel.querySelectorAll("li button").forEach((btn) => btn.addEventListener("click", (e) => { value.splice(Number(e.target.closest("li").dataset.i), 1); saveBrandCore(); renderBrandCoreEditor(); }));
   } else if (key === "keywords") {
-    el.brandEditorPanel.innerHTML = `<label>Keyword tags</label><input id="bc-keyword-input" placeholder="Type keyword and press Enter"/><div class="bc-tags">${value.map((t, i) => `<span data-i="${i}">${t}</span>`).join("")}</div>`;
+    el.brandEditorPanel.insertAdjacentHTML("beforeend", `<label>Keyword tags</label><input id="bc-keyword-input" placeholder="Type keyword and press Enter"/><div class="bc-tags">${value.map((t, i) => `<span data-i="${i}">${t}</span>`).join("")}</div>`);
     el.brandEditorPanel.querySelector("#bc-keyword-input").addEventListener("keydown", (event) => {
       if (event.key !== "Enter") return;
       event.preventDefault();
