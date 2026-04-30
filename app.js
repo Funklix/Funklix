@@ -221,6 +221,7 @@ function loadCampaignCanvasState() {
   updateListView(); updateEmptyState(); drawLinks(); if (campaignState.zoom) setZoom(campaignState.zoom); setSaveStatus("Restored from local storage"); return true;
 }
 function resetCampaignCanvasState() {
+  console.log("RESET BOARD CLICKED");
   localStorage.removeItem(STORAGE_KEY);
   state.nodes = []; state.edges = []; state.nodeCounter = 1; state.postitCounter = 1; state.selectedIds.clear(); state.selectedPrimary = null;
   el.zoomLayer.querySelectorAll(".node").forEach((n) => n.remove()); fillInspector(null); updateListView(); updateEmptyState(); drawLinks(); setSaveStatus("Unsaved changes");
@@ -244,6 +245,14 @@ function loadBrandBrainState() {
     state.brandCore = { brandCore: "", toneOfVoice: [], messagingPillars: [], valueProposition: "", personas: [], contentGuidelines: [], dosAndDonts: { dos: [], donts: [] }, brandVoiceExamples: { good: "", avoid: "" }, keywords: [], brandAssets: { domain: "", logo: "", colors: [], typography: "", references: [] }, customTiles: [] };
   }
   if (!Array.isArray(state.brandCore.customTiles)) state.brandCore.customTiles = [];
+}
+
+function resetBrandBrainState() {
+  console.log("RESET BRAND CORE CLICKED");
+  localStorage.removeItem(BRAND_CORE_STORAGE_KEY);
+  loadBrandBrainState();
+  renderBrandCoreTiles();
+  renderBrandCoreEditor();
 }
 
 function renderBrandCoreEditor() {
@@ -590,6 +599,7 @@ function createNode({ type = "Idea", parentId = null, position = null, images = 
   setTimeout(() => { forceNodeVisible(node.id); ensureNodeActuallyVisible(node); }, 30);
   autoZoomOutIfBoardCrowded();
   markUnsaved();
+  saveCampaignCanvasState();
   return node;
 }
 
@@ -654,6 +664,7 @@ function createCampaignSetup() {
   updateListView();
   updateEmptyState();
   drawLinks();
+  saveCampaignCanvasState();
 }
 
 function openPostingPlanner(nodeId) {
@@ -694,6 +705,7 @@ function removeNode(nodeId) {
   updateListView();
   updateEmptyState();
   drawLinks();
+  saveCampaignCanvasState();
 }
 
 function addEdge(fromId, toId) {
@@ -753,6 +765,7 @@ function drawLinks() {
       state.edges.splice(edgeIndex, 1);
       drawLinks();
       state.nodes.forEach(updateNodeCard);
+      saveCampaignCanvasState();
     });
     el.links.appendChild(path);
   });
@@ -1024,6 +1037,7 @@ function renderPostits(node, nodeEl) {
     color.addEventListener("input", () => {
       note.color = color.value;
       postit.style.background = color.value;
+      saveCampaignCanvasState();
     });
 
     const area = postit.querySelector(".postit-text");
@@ -1032,11 +1046,13 @@ function renderPostits(node, nodeEl) {
     area.addEventListener("input", () => {
       note.text = area.value;
       area.style.fontSize = note.text.length > 220 ? "0.7rem" : note.text.length > 120 ? "0.82rem" : "0.96rem";
+      saveCampaignCanvasState();
     });
 
     postit.querySelector(".postit-delete").addEventListener("click", () => {
       node.postits = node.postits.filter((n) => n.id !== note.id);
       renderPostits(node, nodeEl);
+      saveCampaignCanvasState();
     });
 
     const repliesWrap = document.createElement("div");
@@ -1063,6 +1079,7 @@ function renderPostits(node, nodeEl) {
         if (!text) return;
         note.replies.push({ user, text, time: nowString() });
         renderPostits(node, nodeEl);
+        saveCampaignCanvasState();
       });
       postit.appendChild(editor);
     });
@@ -1093,6 +1110,7 @@ function enablePostitDrag(postit, note) {
     function up() {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
+      saveCampaignCanvasState();
     }
 
     window.addEventListener("pointermove", move);
@@ -1302,10 +1320,12 @@ function renderNode(node) {
     node.title = title.textContent.trim();
     if (state.selectedPrimary === node.id) el.inputs.title.value = node.title;
     updateListView();
+    saveCampaignCanvasState();
   });
   content.addEventListener("input", () => {
     node.content = content.textContent.trim();
     if (state.selectedPrimary === node.id) el.inputs.content.value = node.content;
+    saveCampaignCanvasState();
   });
 
   enableNodeDrag(nodeEl, node);
@@ -1397,6 +1417,7 @@ function enableNodeDrag(nodeEl, node) {
     function up() {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
+      saveCampaignCanvasState();
     }
 
     window.addEventListener("pointermove", move);
@@ -1578,6 +1599,7 @@ el.addPostitCommentButton.addEventListener("click", () => {
     y: state.contextBoardPoint.y - node.position.y
   });
   updateNodeCard(node);
+  saveCampaignCanvasState();
 });
 el.contextMenu.querySelectorAll(".emoji-quick").forEach((btn) => {
   btn.addEventListener("click", () => {
@@ -1588,6 +1610,7 @@ el.contextMenu.querySelectorAll(".emoji-quick").forEach((btn) => {
     const emoji = btn.dataset.emoji || "👍";
     node.reactions[emoji] = (node.reactions[emoji] || 0) + 1;
     updateNodeCard(node);
+    saveCampaignCanvasState();
   });
 });
 
@@ -1610,6 +1633,7 @@ el.nodeForm.addEventListener("input", (event) => {
   updateNodeCard(node);
   updateListView();
   fillInspector(node);
+  saveCampaignCanvasState();
 });
 el.inputs.channel.addEventListener("keydown", (event) => {
   const node = getNode(state.selectedPrimary);
@@ -1622,6 +1646,7 @@ el.inputs.channel.addEventListener("keydown", (event) => {
   node.channel = value;
   updateNodeCard(node);
   fillInspector(node);
+  saveCampaignCanvasState();
 });
 
 el.imageUpload.addEventListener("change", () => {
@@ -1633,6 +1658,7 @@ el.imageUpload.addEventListener("change", () => {
   el.imageUpload.value = "";
   updateNodeCard(node);
   fillInspector(node);
+  saveCampaignCanvasState();
 });
 
 el.deleteNodeButton.addEventListener("click", () => {
@@ -1650,6 +1676,7 @@ el.disconnectSelectedButton.addEventListener("click", () => {
   state.edges = state.edges.filter(([a, b]) => !state.selectedIds.has(a) && !state.selectedIds.has(b));
   state.nodes.forEach(updateNodeCard);
   drawLinks();
+  saveCampaignCanvasState();
 });
 el.propagateDescendantsButton.addEventListener("click", () => {
   const node = getNode(state.selectedPrimary);
@@ -1658,6 +1685,7 @@ el.propagateDescendantsButton.addEventListener("click", () => {
   pushHistorySnapshot();
   propagateNodeChangesDownward(node);
   fillInspector(node);
+  saveCampaignCanvasState();
 });
 el.undoButton.addEventListener("click", restoreLastSnapshot);
 
@@ -1790,13 +1818,6 @@ el.brandEditorInput.addEventListener("input", () => {
   state.brandCore[key] = el.brandEditorInput.value;
   saveBrandBrainState();
 });
-el.resetBrandCoreButton.addEventListener("click", () => {
-  localStorage.removeItem(BRAND_CORE_STORAGE_KEY);
-  loadBrandBrainState();
-  renderBrandCoreTiles();
-  renderBrandCoreEditor();
-});
-
 window.addEventListener("resize", drawLinks);
 
 document.addEventListener("keydown", (event) => {
@@ -1816,6 +1837,11 @@ window.debugNodes = () => {
 };
 
 // init
+console.log("BOOT APP");
+console.log("reset board btn", el.resetBoardButton);
+console.log("reset brand btn", el.resetBrandCoreButton);
+console.log("Loaded campaignCanvasState", localStorage.getItem("campaignCanvasState"));
+console.log("Loaded brandBrainState", localStorage.getItem("brandBrainState"));
 setZoom(state.zoom);
 centerBoardStartPosition();
 updateEmptyState();
@@ -1832,3 +1858,4 @@ setInterval(() => {
   if (state.appMode === "canvas") saveCampaignCanvasState();
 }, 2000);
 el.resetBoardButton.addEventListener("click", resetCampaignCanvasState);
+el.resetBrandCoreButton.addEventListener("click", resetBrandBrainState);
