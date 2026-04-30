@@ -212,7 +212,9 @@ function serializeState() {
   };
 }
 function saveCampaignCanvasState() { const campaignState = serializeState(); console.log("Saving campaignCanvasState", campaignState); localStorage.setItem(STORAGE_KEY, JSON.stringify(campaignState)); setSaveStatus("Saved"); }
-function markUnsaved() { setSaveStatus("Unsaved changes"); clearTimeout(state._saveTimer); state._saveTimer = setTimeout(saveCampaignCanvasState, 150); }
+function markUnsaved() {
+  setSaveStatus("Unsaved changes");
+}
 function loadCampaignCanvasState() {
   const raw = localStorage.getItem(STORAGE_KEY); if (!raw) return false;
   const campaignState = JSON.parse(raw); console.log("Loaded campaignCanvasState", campaignState);
@@ -458,7 +460,7 @@ function setZoom(nextZoom, centerClient = null) {
 
   el.zoomLabel.textContent = `${Math.round(state.zoom * 100)}%`;
   drawLinks();
-  markUnsaved();
+  saveCampaignCanvasState();
 }
 
 function openTypePicker(onSelect, preferred = "Idea") {
@@ -610,7 +612,7 @@ function createNode({ type = "Idea", parentId = null, position = null, images = 
   forceNodeVisible(node.id);
   setTimeout(() => { forceNodeVisible(node.id); ensureNodeActuallyVisible(node); }, 30);
   autoZoomOutIfBoardCrowded();
-  markUnsaved();
+  setSaveStatus("Unsaved changes");
   saveCampaignCanvasState();
   return node;
 }
@@ -1702,7 +1704,7 @@ el.propagateDescendantsButton.addEventListener("click", () => {
   fillInspector(node);
   saveCampaignCanvasState();
 });
-el.undoButton.addEventListener("click", restoreLastSnapshot);
+// Undo is handled via delegated click binding in bindGlobalResetDelegation().
 
 el.canvas.addEventListener("dragover", (event) => event.preventDefault());
 el.canvas.addEventListener("drop", (event) => {
@@ -1828,12 +1830,7 @@ el.brandCoreCanvas.addEventListener("click", (event) => {
   state.brandCoreSelectedKey = n.dataset.bcKey;
   renderBrandCoreEditor();
 });
-el.brandEditorInput.addEventListener("input", () => {
-  const key = state.brandCoreSelectedKey;
-  if (Array.isArray(state.brandCore[key])) return;
-  state.brandCore[key] = el.brandEditorInput.value;
-  saveBrandBrainState();
-});
+// Removed: brandEditorInput does not exist. Brand Brain inputs are bound dynamically in renderBrandCoreEditor().
 window.addEventListener("resize", drawLinks);
 
 document.addEventListener("keydown", (event) => {
@@ -1852,31 +1849,54 @@ window.debugNodes = () => {
   console.log("DOM NODES", [...document.querySelectorAll(".node")].map((n) => n.getBoundingClientRect()));
 };
 
-// init
-console.log("BOOT APP");
-console.log("reset board btn", el.resetBoardButton);
-console.log("reset brand btn", el.resetBrandCoreButton);
-console.log("Loaded campaignCanvasState", localStorage.getItem("campaignCanvasState"));
-console.log("Loaded brandBrainState", localStorage.getItem("brandBrainState"));
-setZoom(state.zoom);
-centerBoardStartPosition();
-updateEmptyState();
-updateListView();
-fillInspector(null);
-setAppMode("canvas");
-setActiveView("board");
-if (!loadCampaignCanvasState()) setSaveStatus("Unsaved changes");
-renderCampaignCanvasFromStateIfNeeded();
-console.log("BOOT loaded campaign nodes:", state.nodes.length);
-console.log("DOM nodes after render:", document.querySelectorAll(".node").length);
-loadBrandBrainState();
-renderBrandCoreEditor();
-renderBrandCoreTiles();
-console.log("BOOT loaded brand:", state.brandCore);
-console.log("Active app mode:", state.appMode);
-window.addEventListener("beforeunload", saveCampaignCanvasState);
-setInterval(() => {
-  if (state.appMode === "canvas") saveCampaignCanvasState();
-}, 2000);
-el.resetBoardButton.addEventListener("click", resetCampaignCanvasState);
-el.resetBrandCoreButton.addEventListener("click", resetBrandBrainState);
+function createDebugPanel() {}
+
+function bindGlobalResetDelegation() {
+  document.addEventListener("click", (event) => {
+    if (event.target.closest("#reset-board-btn")) {
+      console.log("RESET BOARD CLICK DELEGATED");
+      event.preventDefault();
+      window.resetCampaignCanvasState();
+    }
+    if (event.target.closest("#reset-brand-core-btn")) {
+      console.log("RESET BRAND CLICK DELEGATED");
+      event.preventDefault();
+      window.resetBrandBrainState();
+    }
+    if (event.target.closest("#undo-btn")) {
+      console.log("UNDO CLICK DELEGATED");
+      event.preventDefault();
+      restoreLastSnapshot();
+    }
+  });
+}
+
+window.saveCampaignCanvasState = saveCampaignCanvasState;
+window.loadCampaignCanvasState = loadCampaignCanvasState;
+window.resetCampaignCanvasState = resetCampaignCanvasState;
+window.saveBrandBrainState = saveBrandBrainState;
+window.loadBrandBrainState = loadBrandBrainState;
+window.resetBrandBrainState = resetBrandBrainState;
+
+function bootApp() {
+  createDebugPanel();
+  bindGlobalResetDelegation();
+  loadBrandBrainState();
+  loadCampaignCanvasState();
+  centerBoardStartPosition();
+  el.zoomLayer.style.transform = `scale(${state.zoom})`;
+  el.zoomLayer.style.transformOrigin = "0 0";
+  el.zoomLabel.textContent = `${Math.round(state.zoom * 100)}%`;
+  renderCampaignCanvasFromStateIfNeeded();
+  renderBrandCoreTiles();
+  renderBrandCoreEditor();
+  updateEmptyState();
+  updateListView();
+  fillInspector(null);
+  setAppMode("canvas");
+  setActiveView("board");
+  drawLinks();
+}
+
+if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", bootApp);
+else bootApp();
