@@ -45,7 +45,8 @@ const state = {
     dosAndDonts: { dos: ["Focus on savings", "Use positive language", "Show real-life impact"], donts: ["Overpromise", "Use technical terms", "Sound salesy"] },
     brandVoiceExamples: { good: "Lower bills. Cleaner planet. Smarter choice.", avoid: "The most advanced solar technology in the industry!!!" },
     keywords: ["Solar", "Sustainable", "Savings", "Clean Energy", "Smart", "Future", "Home", "Reliable"],
-    brandAssets: { domain: "https://example.com", logo: "", colors: ["#1d3f3a", "#9bc015", "#bad61f"], typography: "Inter / Poppins", references: [] }
+    brandAssets: { domain: "https://example.com", logo: "", colors: ["#1d3f3a", "#9bc015", "#bad61f"], typography: "Inter / Poppins", references: [] },
+    customTiles: []
   },
   brandCoreSelectedKey: "brandCore"
   ,appMode: "canvas"
@@ -237,17 +238,36 @@ function saveBrandCore() {
 function restoreBrandCore() {
   const raw = localStorage.getItem(BRAND_CORE_STORAGE_KEY);
   if (raw) state.brandCore = JSON.parse(raw);
+  if (!Array.isArray(state.brandCore.customTiles)) state.brandCore.customTiles = [];
 }
 
 function renderBrandCoreEditor() {
-  const key = state.brandCoreSelectedKey;
+  const selectedKey = state.brandCoreSelectedKey;
+  if (selectedKey === "custom:add") {
+    state.brandCore.customTiles.push({ title: "New Custom Tile", content: "", items: [] });
+    state.brandCoreSelectedKey = `custom:${state.brandCore.customTiles.length - 1}`;
+    saveBrandCore();
+    renderBrandCoreTiles();
+  }
+  const activeKey = state.brandCoreSelectedKey;
+  if (activeKey.startsWith("custom:")) {
+    const idx = Number(activeKey.split(":")[1]);
+    const tile = state.brandCore.customTiles[idx];
+    el.brandEditorTitle.textContent = tile?.title || "Custom Tile";
+    el.brandEditorPanel.innerHTML = `<div class="bc-editor-meta"><p class="bc-helper">Custom Brand Tile</p><span class="bc-badge">custom</span></div><label>Title</label><input id="bc-custom-title" value="${tile?.title || ""}"/><label>Content</label><textarea id="bc-custom-content" rows="5">${tile?.content || ""}</textarea><button id="bc-custom-delete" type="button">Remove custom tile</button>`;
+    el.brandEditorPanel.querySelector("#bc-custom-title").addEventListener("input", (e) => { tile.title = e.target.value; saveBrandCore(); renderBrandCoreTiles(); });
+    el.brandEditorPanel.querySelector("#bc-custom-content").addEventListener("input", (e) => { tile.content = e.target.value; saveBrandCore(); renderBrandCoreTiles(); });
+    el.brandEditorPanel.querySelector("#bc-custom-delete").addEventListener("click", () => { state.brandCore.customTiles.splice(idx, 1); state.brandCoreSelectedKey = "brandCore"; saveBrandCore(); renderBrandCoreEditor(); });
+    return;
+  }
   const labelMap = {
     brandCore: "Brand Core", toneOfVoice: "Tone of Voice", messagingPillars: "Messaging Pillars",
     valueProposition: "Value Proposition", personas: "Personas", contentGuidelines: "Content Guidelines",
     dosAndDonts: "Do / Don't", brandVoiceExamples: "Brand Voice Examples", keywords: "Keywords", brandAssets: "Brand Assets"
   };
-  el.brandEditorTitle.textContent = labelMap[key] || "Brand Core";
-  const value = state.brandCore[key];
+  el.brandEditorTitle.textContent = labelMap[activeKey] || "Brand Core";
+  const value = state.brandCore[activeKey];
+  const key = activeKey;
   const count = Array.isArray(value)
     ? `${value.length} items`
     : key === "dosAndDonts"
@@ -330,6 +350,7 @@ function renderBrandCoreTiles() {
       </div>
       <article class="bc-node bc-assets" data-bc-key="brandAssets"></article>`;
   }
+  el.brandCoreCanvas.querySelectorAll(".bc-custom-row").forEach((n) => n.remove());
   const titleMap = { brandCore: "BRAND CORE", toneOfVoice: "TONE OF VOICE", messagingPillars: "MESSAGING PILLARS", valueProposition: "VALUE PROPOSITION", personas: "PERSONAS", contentGuidelines: "CONTENT GUIDELINES", dosAndDonts: "DO'S & DON'TS", brandVoiceExamples: "BRAND VOICE EXAMPLES", keywords: "KEYWORDS", brandAssets: "BRAND ASSETS" };
   document.querySelectorAll(".bc-node[data-bc-key]").forEach((tile) => {
     const key = tile.dataset.bcKey;
@@ -361,6 +382,21 @@ function renderBrandCoreTiles() {
     }
     tile.innerHTML = `<div class="bc-title">${title}</div><div class="bc-preview">${preview}</div><div class="bc-count">${count}</div>`;
   });
+  const customRow = document.createElement("div");
+  customRow.className = "bc-row bc-custom-row";
+  state.brandCore.customTiles.forEach((tile, idx) => {
+    const card = document.createElement("article");
+    card.className = "bc-node";
+    card.dataset.bcKey = `custom:${idx}`;
+    card.innerHTML = `<div class="bc-title">${tile.title || "Custom Tile"}</div><div class="bc-preview"><p>${(tile.content || "").slice(0, 120)}</p></div><div class="bc-count">custom</div>`;
+    customRow.appendChild(card);
+  });
+  const addCard = document.createElement("article");
+  addCard.className = "bc-node bc-add-custom";
+  addCard.dataset.bcKey = "custom:add";
+  addCard.innerHTML = `<div class="bc-title">+ Add custom tile</div><div class="bc-preview"><p>Create your own brand section.</p></div>`;
+  customRow.appendChild(addCard);
+  el.brandCoreCanvas.appendChild(customRow);
 }
 
 function connectedIds() {
@@ -1761,8 +1797,7 @@ el.brandAddItemButton.addEventListener("click", () => {
 });
 el.resetBrandCoreButton.addEventListener("click", () => {
   localStorage.removeItem(BRAND_CORE_STORAGE_KEY);
-  restoreBrandCore();
-  renderBrandCoreEditor();
+  window.location.reload();
 });
 
 window.addEventListener("resize", drawLinks);
@@ -1796,4 +1831,7 @@ restoreBrandCore();
 renderBrandCoreEditor();
 renderBrandCoreTiles();
 window.addEventListener("beforeunload", saveBoardState);
+setInterval(() => {
+  if (state.appMode === "canvas") saveBoardState();
+}, 2000);
 el.resetBoardButton.addEventListener("click", resetBoardState);
