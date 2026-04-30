@@ -104,6 +104,7 @@ const el = {
   brandListInput: document.getElementById("bc-list-input"),
   brandList: document.getElementById("bc-list"),
   brandAddItemButton: document.getElementById("bc-add-item-btn"),
+  resetBrandCoreButton: document.getElementById("reset-brand-core-btn"),
   inputs: {
     type: document.getElementById("node-type"),
     title: document.getElementById("node-title"),
@@ -243,7 +244,24 @@ function saveBrandCore() {
 
 function restoreBrandCore() {
   const raw = localStorage.getItem(BRAND_CORE_STORAGE_KEY);
-  if (!raw) return;
+  if (!raw) {
+    state.brandCore = {
+      brandName: "Our mission is to make solar energy simple, affordable, and accessible for every homeowner.",
+      shortDescription: "",
+      targetAudience: "",
+      toneOfVoice: ["Confident", "Positive", "Clear & Simple", "Non-Technical", "Future-Oriented"],
+      messagingPillars: ["Save money", "Sustainability", "Energy independence", "Better future"],
+      valueProposition: "We help homeowners save money and live sustainably through smart, beautiful, and reliable solar solutions.",
+      personas: ["Eco-conscious Homeowner", "Cost-Savvy Family", "Early Adopter"],
+      contentGuidelines: ["Use short sentences", "Speak to the reader", "Focus on benefits", "Avoid jargon", "Include clear CTA"],
+      guidelines: ["Do: Focus on savings", "Do: Use positive language", "Do: Show real-life impact", "Don't: Overpromise", "Don't: Use technical terms", "Don't: Sound salesy"],
+      referenceStyle: "Good: “Lower bills. Cleaner planet. Smarter choice.”\nAvoid: “The most advanced solar technology in the industry!!!”",
+      keywords: ["Solar", "Sustainable", "Savings", "Clean Energy", "Smart", "Future", "Home", "Reliable"],
+      brandAssets: "Domain: example.com\nTypography: Inter / Poppins"
+    };
+    saveBrandCore();
+    return;
+  }
   state.brandCore = JSON.parse(raw);
 }
 
@@ -271,6 +289,27 @@ function renderBrandCoreEditor() {
       el.brandList.appendChild(li);
     });
   }
+  renderBrandCoreTiles();
+}
+
+function renderBrandCoreTiles() {
+  document.querySelectorAll(".bc-node[data-bc-key]").forEach((tile) => {
+    const key = tile.dataset.bcKey;
+    const val = state.brandCore[key];
+    const title = tile.textContent.trim().split("\n")[0];
+    let preview = "";
+    let count = "";
+    if (Array.isArray(val)) {
+      preview = `<ul>${val.slice(0, 4).map((v) => `<li>${v}</li>`).join("")}</ul>`;
+      count = `${val.length} items`;
+    } else {
+      preview = `<p>${(val || "").slice(0, 120)}</p>`;
+      count = val ? "1 statement" : "0";
+    }
+    tile.innerHTML = `<div class="bc-title">${title}</div><div class="bc-preview">${preview}</div><div class="bc-count">${count}</div>`;
+  });
+  const assets = document.querySelector(".bc-assets");
+  if (assets) assets.innerHTML = `<div class="bc-title">BRAND ASSETS</div><div class="bc-preview"><p>${(state.brandCore.brandAssets || "").replace(/\n/g, "<br>")}</p></div>`;
 }
 
 function connectedIds() {
@@ -1663,6 +1702,11 @@ el.brandAddItemButton.addEventListener("click", () => {
   state.brandCore[key].push(v);
   el.brandListInput.value = "";
   saveBrandCore();
+  renderBrandCoreEditor();
+});
+el.resetBrandCoreButton.addEventListener("click", () => {
+  localStorage.removeItem(BRAND_CORE_STORAGE_KEY);
+  restoreBrandCore();
   renderBrandCoreEditor();
 });
 
