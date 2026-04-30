@@ -14,6 +14,8 @@ const BOARD_WIDTH = 10000;
 const BOARD_HEIGHT = 10000;
 const STORAGE_KEY = "campaignCanvasState";
 const BRAND_CORE_STORAGE_KEY = "brandBrainState";
+let isResetting = false;
+let isResettingBrand = false;
 
 const state = {
   nodes: [],
@@ -211,8 +213,8 @@ function serializeState() {
     edges: state.edges, nodeCounter: state.nodeCounter, postitCounter: state.postitCounter, zoom: state.zoom
   };
 }
-function saveCampaignCanvasState() { const campaignState = serializeState(); console.log("Saving campaignCanvasState", campaignState); localStorage.setItem(STORAGE_KEY, JSON.stringify(campaignState)); setSaveStatus("Saved"); }
-function markUnsaved() { setSaveStatus("Unsaved changes"); clearTimeout(state._saveTimer); state._saveTimer = setTimeout(saveCampaignCanvasState, 150); }
+function saveCampaignCanvasState() { if (isResetting) return; const campaignState = serializeState(); console.log("Saving campaignCanvasState", campaignState); localStorage.setItem(STORAGE_KEY, JSON.stringify(campaignState)); setSaveStatus("Saved"); }
+function markUnsaved() { if (isResetting) return; setSaveStatus("Unsaved changes"); clearTimeout(state._saveTimer); state._saveTimer = setTimeout(saveCampaignCanvasState, 150); }
 function loadCampaignCanvasState() {
   const raw = localStorage.getItem(STORAGE_KEY); if (!raw) return false;
   const campaignState = JSON.parse(raw); console.log("Loaded campaignCanvasState", campaignState);
@@ -234,9 +236,14 @@ function renderCampaignCanvasFromStateIfNeeded() {
 }
 function resetCampaignCanvasState() {
   console.log("RESET BOARD CLICKED");
+  isResetting = true;
+  clearTimeout(state._saveTimer);
+  console.log("Before reset campaign storage", localStorage.getItem("campaignCanvasState"));
   localStorage.removeItem(STORAGE_KEY);
+  console.log("After reset campaign storage", localStorage.getItem("campaignCanvasState"));
   state.nodes = []; state.edges = []; state.nodeCounter = 1; state.postitCounter = 1; state.selectedIds.clear(); state.selectedPrimary = null;
-  el.zoomLayer.querySelectorAll(".node").forEach((n) => n.remove()); fillInspector(null); updateListView(); updateEmptyState(); drawLinks(); setSaveStatus("Unsaved changes");
+  el.zoomLayer.querySelectorAll(".node").forEach((n) => n.remove()); fillInspector(null); updateListView(); updateEmptyState(); drawLinks(); setSaveStatus("Reset");
+  setTimeout(() => { isResetting = false; }, 200);
 }
 
 function getBrandCoreData() {
@@ -245,6 +252,7 @@ function getBrandCoreData() {
 window.getBrandCoreData = getBrandCoreData;
 
 function saveBrandBrainState() {
+  if (isResettingBrand) return;
   const brandState = getBrandCoreData();
   console.log("Saving brandBrainState", brandState);
   localStorage.setItem(BRAND_CORE_STORAGE_KEY, JSON.stringify(brandState));
@@ -261,10 +269,12 @@ function loadBrandBrainState() {
 
 function resetBrandBrainState() {
   console.log("RESET BRAND CORE CLICKED");
+  isResettingBrand = true;
   localStorage.removeItem(BRAND_CORE_STORAGE_KEY);
   loadBrandBrainState();
   renderBrandCoreTiles();
   renderBrandCoreEditor();
+  setTimeout(() => { isResettingBrand = false; }, 200);
 }
 
 function renderBrandCoreEditor() {
