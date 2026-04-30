@@ -12,8 +12,8 @@ const NODE_WIDTH = 285;
 const NODE_HEIGHT = 200;
 const BOARD_WIDTH = 10000;
 const BOARD_HEIGHT = 10000;
-const STORAGE_KEY = "campaign_canvas_state_v1";
-const BRAND_CORE_STORAGE_KEY = "campaign_canvas_brand_core_v1";
+const STORAGE_KEY = "campaignCanvasState";
+const BRAND_CORE_STORAGE_KEY = "brandBrainState";
 
 const state = {
   nodes: [],
@@ -36,16 +36,16 @@ const state = {
   ,history: []
   ,forcePanNextDrag: false
   ,brandCore: {
-    brandCore: "Our mission is to make solar energy simple, affordable, and accessible for every homeowner.",
-    toneOfVoice: ["Confident", "Positive", "Clear & Simple", "Non-Technical", "Future-Oriented"],
-    messagingPillars: ["Save money", "Sustainability", "Energy independence", "Better future"],
-    valueProposition: "We help homeowners save money and live sustainably through smart, beautiful, and reliable solar solutions.",
-    personas: [{ name: "Eco-conscious Homeowner", note: "Primary" }, { name: "Cost-Savvy Family", note: "Secondary" }, { name: "Early Adopter", note: "Tertiary" }],
-    contentGuidelines: ["Use short sentences", "Speak to the reader", "Focus on benefits", "Avoid jargon", "Include clear CTA"],
-    dosAndDonts: { dos: ["Focus on savings", "Use positive language", "Show real-life impact"], donts: ["Overpromise", "Use technical terms", "Sound salesy"] },
-    brandVoiceExamples: { good: "Lower bills. Cleaner planet. Smarter choice.", avoid: "The most advanced solar technology in the industry!!!" },
-    keywords: ["Solar", "Sustainable", "Savings", "Clean Energy", "Smart", "Future", "Home", "Reliable"],
-    brandAssets: { domain: "https://example.com", logo: "", colors: ["#1d3f3a", "#9bc015", "#bad61f"], typography: "Inter / Poppins", references: [] },
+    brandCore: "",
+    toneOfVoice: [],
+    messagingPillars: [],
+    valueProposition: "",
+    personas: [],
+    contentGuidelines: [],
+    dosAndDonts: { dos: [], donts: [] },
+    brandVoiceExamples: { good: "", avoid: "" },
+    keywords: [],
+    brandAssets: { domain: "", logo: "", colors: [], typography: "", references: [] },
     customTiles: []
   },
   brandCoreSelectedKey: "brandCore"
@@ -211,16 +211,16 @@ function serializeState() {
     edges: state.edges, nodeCounter: state.nodeCounter, postitCounter: state.postitCounter, zoom: state.zoom
   };
 }
-function saveBoardState() { localStorage.setItem(STORAGE_KEY, JSON.stringify(serializeState())); setSaveStatus("Saved"); }
-function markUnsaved() { setSaveStatus("Unsaved changes"); clearTimeout(state._saveTimer); state._saveTimer = setTimeout(saveBoardState, 150); }
-function restoreBoardState() {
+function saveCampaignCanvasState() { const campaignState = serializeState(); console.log("Saving campaignCanvasState", campaignState); localStorage.setItem(STORAGE_KEY, JSON.stringify(campaignState)); setSaveStatus("Saved"); }
+function markUnsaved() { setSaveStatus("Unsaved changes"); clearTimeout(state._saveTimer); state._saveTimer = setTimeout(saveCampaignCanvasState, 150); }
+function loadCampaignCanvasState() {
   const raw = localStorage.getItem(STORAGE_KEY); if (!raw) return false;
-  const saved = JSON.parse(raw);
-  state.nodes = saved.nodes || []; state.edges = saved.edges || []; state.nodeCounter = saved.nodeCounter || 1; state.postitCounter = saved.postitCounter || 1;
+  const campaignState = JSON.parse(raw); console.log("Loaded campaignCanvasState", campaignState);
+  state.nodes = campaignState.nodes || []; state.edges = campaignState.edges || []; state.nodeCounter = campaignState.nodeCounter || 1; state.postitCounter = campaignState.postitCounter || 1;
   state.selectedIds.clear(); state.selectedPrimary = null; el.zoomLayer.querySelectorAll(".node").forEach((n) => n.remove()); state.nodes.forEach(renderNode);
-  updateListView(); updateEmptyState(); drawLinks(); if (saved.zoom) setZoom(saved.zoom); setSaveStatus("Restored from local storage"); return true;
+  updateListView(); updateEmptyState(); drawLinks(); if (campaignState.zoom) setZoom(campaignState.zoom); setSaveStatus("Restored from local storage"); return true;
 }
-function resetBoardState() {
+function resetCampaignCanvasState() {
   localStorage.removeItem(STORAGE_KEY);
   state.nodes = []; state.edges = []; state.nodeCounter = 1; state.postitCounter = 1; state.selectedIds.clear(); state.selectedPrimary = null;
   el.zoomLayer.querySelectorAll(".node").forEach((n) => n.remove()); fillInspector(null); updateListView(); updateEmptyState(); drawLinks(); setSaveStatus("Unsaved changes");
@@ -231,13 +231,18 @@ function getBrandCoreData() {
 }
 window.getBrandCoreData = getBrandCoreData;
 
-function saveBrandCore() {
-  localStorage.setItem(BRAND_CORE_STORAGE_KEY, JSON.stringify(getBrandCoreData()));
+function saveBrandBrainState() {
+  const brandState = getBrandCoreData();
+  console.log("Saving brandBrainState", brandState);
+  localStorage.setItem(BRAND_CORE_STORAGE_KEY, JSON.stringify(brandState));
 }
 
-function restoreBrandCore() {
+function loadBrandBrainState() {
   const raw = localStorage.getItem(BRAND_CORE_STORAGE_KEY);
-  if (raw) state.brandCore = JSON.parse(raw);
+  if (raw) { state.brandCore = JSON.parse(raw); console.log("Loaded brandBrainState", state.brandCore); }
+  else {
+    state.brandCore = { brandCore: "", toneOfVoice: [], messagingPillars: [], valueProposition: "", personas: [], contentGuidelines: [], dosAndDonts: { dos: [], donts: [] }, brandVoiceExamples: { good: "", avoid: "" }, keywords: [], brandAssets: { domain: "", logo: "", colors: [], typography: "", references: [] }, customTiles: [] };
+  }
   if (!Array.isArray(state.brandCore.customTiles)) state.brandCore.customTiles = [];
 }
 
@@ -246,7 +251,7 @@ function renderBrandCoreEditor() {
   if (selectedKey === "custom:add") {
     state.brandCore.customTiles.push({ title: "New Custom Tile", content: "", items: [] });
     state.brandCoreSelectedKey = `custom:${state.brandCore.customTiles.length - 1}`;
-    saveBrandCore();
+    saveBrandBrainState();
     renderBrandCoreTiles();
   }
   const activeKey = state.brandCoreSelectedKey;
@@ -255,9 +260,9 @@ function renderBrandCoreEditor() {
     const tile = state.brandCore.customTiles[idx];
     el.brandEditorTitle.textContent = tile?.title || "Custom Tile";
     el.brandEditorPanel.innerHTML = `<div class="bc-editor-meta"><p class="bc-helper">Custom Brand Tile</p><span class="bc-badge">custom</span></div><label>Title</label><input id="bc-custom-title" value="${tile?.title || ""}"/><label>Content</label><textarea id="bc-custom-content" rows="5">${tile?.content || ""}</textarea><button id="bc-custom-delete" type="button">Remove custom tile</button>`;
-    el.brandEditorPanel.querySelector("#bc-custom-title").addEventListener("input", (e) => { tile.title = e.target.value; saveBrandCore(); renderBrandCoreTiles(); });
-    el.brandEditorPanel.querySelector("#bc-custom-content").addEventListener("input", (e) => { tile.content = e.target.value; saveBrandCore(); renderBrandCoreTiles(); });
-    el.brandEditorPanel.querySelector("#bc-custom-delete").addEventListener("click", () => { state.brandCore.customTiles.splice(idx, 1); state.brandCoreSelectedKey = "brandCore"; saveBrandCore(); renderBrandCoreEditor(); });
+    el.brandEditorPanel.querySelector("#bc-custom-title").addEventListener("input", (e) => { tile.title = e.target.value; saveBrandBrainState(); renderBrandCoreTiles(); });
+    el.brandEditorPanel.querySelector("#bc-custom-content").addEventListener("input", (e) => { tile.content = e.target.value; saveBrandBrainState(); renderBrandCoreTiles(); });
+    el.brandEditorPanel.querySelector("#bc-custom-delete").addEventListener("click", () => { state.brandCore.customTiles.splice(idx, 1); state.brandCoreSelectedKey = "brandCore"; saveBrandBrainState(); renderBrandCoreEditor(); });
     return;
   }
   const labelMap = {
@@ -284,14 +289,14 @@ function renderBrandCoreEditor() {
   el.brandEditorPanel.appendChild(meta);
   if (key === "brandCore" || key === "valueProposition") {
     el.brandEditorPanel.insertAdjacentHTML("beforeend", `<textarea id="bc-edit-text" rows="6">${value || ""}</textarea>`);
-    el.brandEditorPanel.querySelector("textarea").addEventListener("input", (e) => { state.brandCore[key] = e.target.value; saveBrandCore(); renderBrandCoreTiles(); });
+    el.brandEditorPanel.querySelector("textarea").addEventListener("input", (e) => { state.brandCore[key] = e.target.value; saveBrandBrainState(); renderBrandCoreTiles(); });
   } else if (key === "toneOfVoice" || key === "messagingPillars" || key === "contentGuidelines") {
     const title = key === "toneOfVoice" ? "Add trait" : key === "messagingPillars" ? "Add pillar" : "Add guideline";
     const listPrefix = key === "messagingPillars" ? "ol" : "ul";
     const listItems = value.map((v, i) => `<li data-i="${i}">${v}<button type="button">✕</button></li>`).join("");
     el.brandEditorPanel.insertAdjacentHTML("beforeend", `<label>${title}</label><div class="posting-actions bc-add-row"><input id="bc-list-add" placeholder="${title}"/><button type="button" id="bc-list-plus">+</button></div><${listPrefix} class="bc-edit-list">${listItems}</${listPrefix}>`);
-    el.brandEditorPanel.querySelector("button").addEventListener("click", () => { const v = el.brandEditorPanel.querySelector("#bc-list-add").value.trim(); if (!v) return; value.push(v); saveBrandCore(); renderBrandCoreEditor(); });
-    el.brandEditorPanel.querySelectorAll("li button").forEach((btn) => btn.addEventListener("click", (e) => { const idx = Number(e.target.closest("li").dataset.i); value.splice(idx, 1); saveBrandCore(); renderBrandCoreEditor(); }));
+    el.brandEditorPanel.querySelector("button").addEventListener("click", () => { const v = el.brandEditorPanel.querySelector("#bc-list-add").value.trim(); if (!v) return; value.push(v); saveBrandBrainState(); renderBrandCoreEditor(); });
+    el.brandEditorPanel.querySelectorAll("li button").forEach((btn) => btn.addEventListener("click", (e) => { const idx = Number(e.target.closest("li").dataset.i); value.splice(idx, 1); saveBrandBrainState(); renderBrandCoreEditor(); }));
   } else if (key === "dosAndDonts") {
     const d = value;
     el.brandEditorPanel.insertAdjacentHTML("beforeend", `
@@ -299,21 +304,21 @@ function renderBrandCoreEditor() {
       <ul class="bc-edit-list">${d.dos.map((v, i) => `<li data-i="${i}" data-t="do">${v}<button type="button">✕</button></li>`).join("")}</ul>
       <label>Don't</label><div class="posting-actions bc-add-row"><input id="bc-dont-add" placeholder="Add Don't"/><button type="button" id="bc-dont-plus">+</button></div>
       <ul class="bc-edit-list">${d.donts.map((v, i) => `<li data-i="${i}" data-t="dont">${v}<button type="button">✕</button></li>`).join("")}</ul>`);
-    el.brandEditorPanel.querySelector("button").addEventListener("click", () => { const v = el.brandEditorPanel.querySelector("#bc-do-add").value.trim(); if (!v) return; d.dos.push(v); saveBrandCore(); renderBrandCoreEditor(); });
-    el.brandEditorPanel.querySelector("#bc-dont-plus").addEventListener("click", () => { const v = el.brandEditorPanel.querySelector("#bc-dont-add").value.trim(); if (!v) return; d.donts.push(v); saveBrandCore(); renderBrandCoreEditor(); });
-    el.brandEditorPanel.querySelectorAll("li button").forEach((btn) => btn.addEventListener("click", (e) => { const li = e.target.closest("li"); const idx = Number(li.dataset.i); if (li.dataset.t === "do") d.dos.splice(idx, 1); else d.donts.splice(idx, 1); saveBrandCore(); renderBrandCoreEditor(); }));
+    el.brandEditorPanel.querySelector("button").addEventListener("click", () => { const v = el.brandEditorPanel.querySelector("#bc-do-add").value.trim(); if (!v) return; d.dos.push(v); saveBrandBrainState(); renderBrandCoreEditor(); });
+    el.brandEditorPanel.querySelector("#bc-dont-plus").addEventListener("click", () => { const v = el.brandEditorPanel.querySelector("#bc-dont-add").value.trim(); if (!v) return; d.donts.push(v); saveBrandBrainState(); renderBrandCoreEditor(); });
+    el.brandEditorPanel.querySelectorAll("li button").forEach((btn) => btn.addEventListener("click", (e) => { const li = e.target.closest("li"); const idx = Number(li.dataset.i); if (li.dataset.t === "do") d.dos.splice(idx, 1); else d.donts.splice(idx, 1); saveBrandBrainState(); renderBrandCoreEditor(); }));
   } else if (key === "brandVoiceExamples") {
     el.brandEditorPanel.insertAdjacentHTML("beforeend", `<label>Good example</label><textarea class="bc-good" id="bc-good" rows="3">${value.good || ""}</textarea><label>Avoid example</label><textarea class="bc-bad" id="bc-avoid" rows="3">${value.avoid || ""}</textarea>`);
-    ["bc-good","bc-avoid"].forEach((id) => el.brandEditorPanel.querySelector(`#${id}`).addEventListener("input", () => { value.good = el.brandEditorPanel.querySelector("#bc-good").value; value.avoid = el.brandEditorPanel.querySelector("#bc-avoid").value; saveBrandCore(); renderBrandCoreTiles(); }));
+    ["bc-good","bc-avoid"].forEach((id) => el.brandEditorPanel.querySelector(`#${id}`).addEventListener("input", () => { value.good = el.brandEditorPanel.querySelector("#bc-good").value; value.avoid = el.brandEditorPanel.querySelector("#bc-avoid").value; saveBrandBrainState(); renderBrandCoreTiles(); }));
   } else if (key === "brandAssets") {
     el.brandEditorPanel.insertAdjacentHTML("beforeend", `<label>Domain URL</label><input id="bc-domain" value="${value.domain || ""}"/><label>Typography</label><input id="bc-typo" value="${value.typography || ""}"/><label>Logo URL</label><input id="bc-logo" value="${value.logo || ""}"/><label>Palette</label><div class="posting-actions bc-add-row"><input id="bc-color-add" placeholder="#AABBCC"/><button type="button">+</button></div><div class="bc-tags">${(value.colors||[]).map((c,i)=>`<span data-i="${i}">${c}</span>`).join("")}</div>`);
-    ["bc-domain","bc-typo","bc-logo"].forEach((id) => el.brandEditorPanel.querySelector(`#${id}`).addEventListener("input", () => { value.domain = el.brandEditorPanel.querySelector("#bc-domain").value; value.typography = el.brandEditorPanel.querySelector("#bc-typo").value; value.logo = el.brandEditorPanel.querySelector("#bc-logo").value; saveBrandCore(); renderBrandCoreTiles(); }));
-    el.brandEditorPanel.querySelector("button").addEventListener("click", () => { const c = el.brandEditorPanel.querySelector("#bc-color-add").value.trim(); if (!c) return; value.colors.push(c); saveBrandCore(); renderBrandCoreEditor(); });
-    el.brandEditorPanel.querySelectorAll(".bc-tags span").forEach((chip) => chip.addEventListener("click", () => { value.colors.splice(Number(chip.dataset.i),1); saveBrandCore(); renderBrandCoreEditor(); }));
+    ["bc-domain","bc-typo","bc-logo"].forEach((id) => el.brandEditorPanel.querySelector(`#${id}`).addEventListener("input", () => { value.domain = el.brandEditorPanel.querySelector("#bc-domain").value; value.typography = el.brandEditorPanel.querySelector("#bc-typo").value; value.logo = el.brandEditorPanel.querySelector("#bc-logo").value; saveBrandBrainState(); renderBrandCoreTiles(); }));
+    el.brandEditorPanel.querySelector("button").addEventListener("click", () => { const c = el.brandEditorPanel.querySelector("#bc-color-add").value.trim(); if (!c) return; value.colors.push(c); saveBrandBrainState(); renderBrandCoreEditor(); });
+    el.brandEditorPanel.querySelectorAll(".bc-tags span").forEach((chip) => chip.addEventListener("click", () => { value.colors.splice(Number(chip.dataset.i),1); saveBrandBrainState(); renderBrandCoreEditor(); }));
   } else if (key === "personas") {
     el.brandEditorPanel.insertAdjacentHTML("beforeend", `<div class="posting-actions bc-add-row"><input id="bc-p-name" placeholder="Persona"/><input id="bc-p-note" placeholder="Label"/><button type="button">+</button></div><ul class="bc-edit-list">${value.map((p, i) => `<li data-i="${i}">${p.name} <small>${p.note}</small><button type="button">✕</button></li>`).join("")}</ul>`);
-    el.brandEditorPanel.querySelector("button").addEventListener("click", () => { const n = el.brandEditorPanel.querySelector("#bc-p-name").value.trim(); if (!n) return; value.push({ name: n, note: el.brandEditorPanel.querySelector("#bc-p-note").value.trim() }); saveBrandCore(); renderBrandCoreEditor(); });
-    el.brandEditorPanel.querySelectorAll("li button").forEach((btn) => btn.addEventListener("click", (e) => { value.splice(Number(e.target.closest("li").dataset.i), 1); saveBrandCore(); renderBrandCoreEditor(); }));
+    el.brandEditorPanel.querySelector("button").addEventListener("click", () => { const n = el.brandEditorPanel.querySelector("#bc-p-name").value.trim(); if (!n) return; value.push({ name: n, note: el.brandEditorPanel.querySelector("#bc-p-note").value.trim() }); saveBrandBrainState(); renderBrandCoreEditor(); });
+    el.brandEditorPanel.querySelectorAll("li button").forEach((btn) => btn.addEventListener("click", (e) => { value.splice(Number(e.target.closest("li").dataset.i), 1); saveBrandBrainState(); renderBrandCoreEditor(); }));
   } else if (key === "keywords") {
     el.brandEditorPanel.insertAdjacentHTML("beforeend", `<label>Keyword tags</label><input id="bc-keyword-input" placeholder="Type keyword and press Enter"/><div class="bc-tags">${value.map((t, i) => `<span data-i="${i}">${t}</span>`).join("")}</div>`);
     el.brandEditorPanel.querySelector("#bc-keyword-input").addEventListener("keydown", (event) => {
@@ -322,10 +327,10 @@ function renderBrandCoreEditor() {
       const v = event.target.value.trim();
       if (!v) return;
       value.push(v);
-      saveBrandCore();
+      saveBrandBrainState();
       renderBrandCoreEditor();
     });
-    el.brandEditorPanel.querySelectorAll(".bc-tags span").forEach((chip) => chip.addEventListener("click", () => { value.splice(Number(chip.dataset.i), 1); saveBrandCore(); renderBrandCoreEditor(); }));
+    el.brandEditorPanel.querySelectorAll(".bc-tags span").forEach((chip) => chip.addEventListener("click", () => { value.splice(Number(chip.dataset.i), 1); saveBrandBrainState(); renderBrandCoreEditor(); }));
   }
   renderBrandCoreTiles();
 }
@@ -1783,21 +1788,13 @@ el.brandEditorInput.addEventListener("input", () => {
   const key = state.brandCoreSelectedKey;
   if (Array.isArray(state.brandCore[key])) return;
   state.brandCore[key] = el.brandEditorInput.value;
-  saveBrandCore();
-});
-el.brandAddItemButton.addEventListener("click", () => {
-  const key = state.brandCoreSelectedKey;
-  if (!Array.isArray(state.brandCore[key])) return;
-  const v = el.brandListInput.value.trim();
-  if (!v) return;
-  state.brandCore[key].push(v);
-  el.brandListInput.value = "";
-  saveBrandCore();
-  renderBrandCoreEditor();
+  saveBrandBrainState();
 });
 el.resetBrandCoreButton.addEventListener("click", () => {
   localStorage.removeItem(BRAND_CORE_STORAGE_KEY);
-  window.location.reload();
+  loadBrandBrainState();
+  renderBrandCoreTiles();
+  renderBrandCoreEditor();
 });
 
 window.addEventListener("resize", drawLinks);
@@ -1826,12 +1823,12 @@ updateListView();
 fillInspector(null);
 setAppMode("canvas");
 setActiveView("board");
-if (!restoreBoardState()) setSaveStatus("Unsaved changes");
-restoreBrandCore();
+if (!loadCampaignCanvasState()) setSaveStatus("Unsaved changes");
+loadBrandBrainState();
 renderBrandCoreEditor();
 renderBrandCoreTiles();
-window.addEventListener("beforeunload", saveBoardState);
+window.addEventListener("beforeunload", saveCampaignCanvasState);
 setInterval(() => {
-  if (state.appMode === "canvas") saveBoardState();
+  if (state.appMode === "canvas") saveCampaignCanvasState();
 }, 2000);
-el.resetBoardButton.addEventListener("click", resetBoardState);
+el.resetBoardButton.addEventListener("click", resetCampaignCanvasState);
