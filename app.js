@@ -217,8 +217,20 @@ function loadCampaignCanvasState() {
   const raw = localStorage.getItem(STORAGE_KEY); if (!raw) return false;
   const campaignState = JSON.parse(raw); console.log("Loaded campaignCanvasState", campaignState);
   state.nodes = campaignState.nodes || []; state.edges = campaignState.edges || []; state.nodeCounter = campaignState.nodeCounter || 1; state.postitCounter = campaignState.postitCounter || 1;
-  state.selectedIds.clear(); state.selectedPrimary = null; el.zoomLayer.querySelectorAll(".node").forEach((n) => n.remove()); state.nodes.forEach(renderNode);
+  state.selectedIds.clear(); state.selectedPrimary = null;
+  el.zoomLayer.querySelectorAll(".node").forEach((n) => n.remove());
+  state.nodes.forEach(renderNode);
   updateListView(); updateEmptyState(); drawLinks(); if (campaignState.zoom) setZoom(campaignState.zoom); setSaveStatus("Restored from local storage"); return true;
+}
+
+function renderCampaignCanvasFromStateIfNeeded() {
+  const domNodes = el.zoomLayer.querySelectorAll(".node").length;
+  if (domNodes === 0 && state.nodes.length > 0) {
+    state.nodes.forEach(renderNode);
+  }
+  drawLinks();
+  updateListView();
+  updateEmptyState();
 }
 function resetCampaignCanvasState() {
   console.log("RESET BOARD CLICKED");
@@ -1504,7 +1516,10 @@ function setAppMode(mode) {
     renderBrandCoreTiles();
     renderBrandCoreEditor();
   }
-  else if (state.activeView === "brand-core") setActiveView("board");
+  else {
+    if (state.activeView === "brand-core") setActiveView("board");
+    renderCampaignCanvasFromStateIfNeeded();
+  }
 }
 
 // Events
@@ -1803,6 +1818,7 @@ el.brandCoreButton.addEventListener("click", () => {
 el.campaignCanvasNavButton.addEventListener("click", () => {
   setAppMode("canvas");
   setActiveView("board");
+  renderCampaignCanvasFromStateIfNeeded();
 });
 el.brandCoreCanvas.addEventListener("click", (event) => {
   const n = event.target.closest(".bc-node[data-bc-key]");
@@ -1850,9 +1866,14 @@ fillInspector(null);
 setAppMode("canvas");
 setActiveView("board");
 if (!loadCampaignCanvasState()) setSaveStatus("Unsaved changes");
+renderCampaignCanvasFromStateIfNeeded();
+console.log("BOOT loaded campaign nodes:", state.nodes.length);
+console.log("DOM nodes after render:", document.querySelectorAll(".node").length);
 loadBrandBrainState();
 renderBrandCoreEditor();
 renderBrandCoreTiles();
+console.log("BOOT loaded brand:", state.brandCore);
+console.log("Active app mode:", state.appMode);
 window.addEventListener("beforeunload", saveCampaignCanvasState);
 setInterval(() => {
   if (state.appMode === "canvas") saveCampaignCanvasState();
