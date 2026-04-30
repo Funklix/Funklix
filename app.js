@@ -14,8 +14,19 @@ const BOARD_WIDTH = 10000;
 const BOARD_HEIGHT = 10000;
 const STORAGE_KEY = "campaignCanvasState";
 const BRAND_CORE_STORAGE_KEY = "brandBrainState";
-let isResetting = false;
-let isResettingBrand = false;
+const DEFAULT_BRAND_CORE = () => ({
+  brandCore: "",
+  toneOfVoice: [],
+  messagingPillars: [],
+  valueProposition: "",
+  personas: [],
+  contentGuidelines: [],
+  dosAndDonts: { dos: [], donts: [] },
+  brandVoiceExamples: { good: "", avoid: "" },
+  keywords: [],
+  brandAssets: { domain: "", logo: "", colors: [], typography: "", references: [] },
+  customTiles: []
+});
 
 const state = {
   nodes: [],
@@ -37,19 +48,7 @@ const state = {
   postingPlannerNodeId: null
   ,history: []
   ,forcePanNextDrag: false
-  ,brandCore: {
-    brandCore: "",
-    toneOfVoice: [],
-    messagingPillars: [],
-    valueProposition: "",
-    personas: [],
-    contentGuidelines: [],
-    dosAndDonts: { dos: [], donts: [] },
-    brandVoiceExamples: { good: "", avoid: "" },
-    keywords: [],
-    brandAssets: { domain: "", logo: "", colors: [], typography: "", references: [] },
-    customTiles: []
-  },
+  ,brandCore: DEFAULT_BRAND_CORE(),
   brandCoreSelectedKey: "brandCore"
   ,appMode: "canvas"
 };
@@ -213,8 +212,8 @@ function serializeState() {
     edges: state.edges, nodeCounter: state.nodeCounter, postitCounter: state.postitCounter, zoom: state.zoom
   };
 }
-function saveCampaignCanvasState() { if (isResetting) return; const campaignState = serializeState(); console.log("Saving campaignCanvasState", campaignState); localStorage.setItem(STORAGE_KEY, JSON.stringify(campaignState)); setSaveStatus("Saved"); }
-function markUnsaved() { if (isResetting) return; setSaveStatus("Unsaved changes"); clearTimeout(state._saveTimer); state._saveTimer = setTimeout(saveCampaignCanvasState, 150); }
+function saveCampaignCanvasState() { const campaignState = serializeState(); localStorage.setItem(STORAGE_KEY, JSON.stringify(campaignState)); setSaveStatus("Saved"); }
+function markUnsaved() { setSaveStatus("Unsaved changes"); saveCampaignCanvasState(); }
 function loadCampaignCanvasState() {
   const raw = localStorage.getItem(STORAGE_KEY); if (!raw) return false;
   const campaignState = JSON.parse(raw); console.log("Loaded campaignCanvasState", campaignState);
@@ -235,15 +234,10 @@ function renderCampaignCanvasFromStateIfNeeded() {
   updateEmptyState();
 }
 function resetCampaignCanvasState() {
-  console.log("RESET BOARD CLICKED");
-  isResetting = true;
-  clearTimeout(state._saveTimer);
-  console.log("Before reset campaign storage", localStorage.getItem("campaignCanvasState"));
+  console.log("RESET BOARD FIRED");
   localStorage.removeItem(STORAGE_KEY);
-  console.log("After reset campaign storage", localStorage.getItem("campaignCanvasState"));
   state.nodes = []; state.edges = []; state.nodeCounter = 1; state.postitCounter = 1; state.selectedIds.clear(); state.selectedPrimary = null;
   el.zoomLayer.querySelectorAll(".node").forEach((n) => n.remove()); fillInspector(null); updateListView(); updateEmptyState(); drawLinks(); setSaveStatus("Reset");
-  setTimeout(() => { isResetting = false; }, 200);
 }
 
 function getBrandCoreData() {
@@ -252,29 +246,23 @@ function getBrandCoreData() {
 window.getBrandCoreData = getBrandCoreData;
 
 function saveBrandBrainState() {
-  if (isResettingBrand) return;
   const brandState = getBrandCoreData();
-  console.log("Saving brandBrainState", brandState);
   localStorage.setItem(BRAND_CORE_STORAGE_KEY, JSON.stringify(brandState));
 }
 
 function loadBrandBrainState() {
   const raw = localStorage.getItem(BRAND_CORE_STORAGE_KEY);
   if (raw) { state.brandCore = JSON.parse(raw); console.log("Loaded brandBrainState", state.brandCore); }
-  else {
-    state.brandCore = { brandCore: "", toneOfVoice: [], messagingPillars: [], valueProposition: "", personas: [], contentGuidelines: [], dosAndDonts: { dos: [], donts: [] }, brandVoiceExamples: { good: "", avoid: "" }, keywords: [], brandAssets: { domain: "", logo: "", colors: [], typography: "", references: [] }, customTiles: [] };
-  }
+  else state.brandCore = DEFAULT_BRAND_CORE();
   if (!Array.isArray(state.brandCore.customTiles)) state.brandCore.customTiles = [];
 }
 
 function resetBrandBrainState() {
-  console.log("RESET BRAND CORE CLICKED");
-  isResettingBrand = true;
+  console.log("RESET BRAND FIRED");
   localStorage.removeItem(BRAND_CORE_STORAGE_KEY);
-  loadBrandBrainState();
+  state.brandCore = DEFAULT_BRAND_CORE();
   renderBrandCoreTiles();
   renderBrandCoreEditor();
-  setTimeout(() => { isResettingBrand = false; }, 200);
 }
 
 function renderBrandCoreEditor() {
@@ -1862,31 +1850,45 @@ window.debugNodes = () => {
   console.log("DOM NODES", [...document.querySelectorAll(".node")].map((n) => n.getBoundingClientRect()));
 };
 
-// init
-console.log("BOOT APP");
-console.log("reset board btn", el.resetBoardButton);
-console.log("reset brand btn", el.resetBrandCoreButton);
-console.log("Loaded campaignCanvasState", localStorage.getItem("campaignCanvasState"));
-console.log("Loaded brandBrainState", localStorage.getItem("brandBrainState"));
-setZoom(state.zoom);
-centerBoardStartPosition();
-updateEmptyState();
-updateListView();
-fillInspector(null);
-setAppMode("canvas");
-setActiveView("board");
-if (!loadCampaignCanvasState()) setSaveStatus("Unsaved changes");
-renderCampaignCanvasFromStateIfNeeded();
-console.log("BOOT loaded campaign nodes:", state.nodes.length);
-console.log("DOM nodes after render:", document.querySelectorAll(".node").length);
-loadBrandBrainState();
-renderBrandCoreEditor();
-renderBrandCoreTiles();
-console.log("BOOT loaded brand:", state.brandCore);
-console.log("Active app mode:", state.appMode);
-window.addEventListener("beforeunload", saveCampaignCanvasState);
-setInterval(() => {
-  if (state.appMode === "canvas") saveCampaignCanvasState();
-}, 2000);
-el.resetBoardButton.addEventListener("click", resetCampaignCanvasState);
-el.resetBrandCoreButton.addEventListener("click", resetBrandBrainState);
+window.saveCampaignCanvasState = saveCampaignCanvasState;
+window.loadCampaignCanvasState = loadCampaignCanvasState;
+window.resetCampaignCanvasState = resetCampaignCanvasState;
+window.saveBrandBrainState = saveBrandBrainState;
+window.loadBrandBrainState = loadBrandBrainState;
+window.resetBrandBrainState = resetBrandBrainState;
+
+function bindGlobalResetDelegation() {
+  document.addEventListener("click", (event) => {
+    if (event.target.closest("#reset-board-btn")) {
+      event.preventDefault();
+      window.resetCampaignCanvasState();
+    }
+    if (event.target.closest("#reset-brand-core-btn")) {
+      event.preventDefault();
+      window.resetBrandBrainState();
+    }
+  });
+}
+
+function bootApp() {
+  console.log("BOOT");
+  setZoom(state.zoom);
+  centerBoardStartPosition();
+  updateEmptyState();
+  updateListView();
+  fillInspector(null);
+  setAppMode("canvas");
+  setActiveView("board");
+  window.loadCampaignCanvasState();
+  renderCampaignCanvasFromStateIfNeeded();
+  window.loadBrandBrainState();
+  renderBrandCoreTiles();
+  renderBrandCoreEditor();
+  bindGlobalResetDelegation();
+  console.log("Loaded campaign nodes:", state.nodes.length);
+  console.log("DOM nodes after load:", document.querySelectorAll(".node").length);
+  console.log("Loaded brand core:", state.brandCore);
+}
+
+if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", bootApp);
+else bootApp();
