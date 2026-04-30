@@ -289,6 +289,12 @@ body {
 }
 .bc-edit-list { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 6px; }
 .bc-edit-list li { background: #f4f6fc; border-radius: 8px; padding: 6px 8px; cursor: pointer; }
+.bc-edit-list li { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.bc-edit-list li button { border: none; background: transparent; color: #8a90ab; cursor: pointer; }
+.brand-core-side label { font-size: 0.78rem; color: #707899; margin-top: 6px; }
+.brand-core-side input,
+.brand-core-side textarea { width: 100%; border: 1px solid #dfe4f2; border-radius: 8px; padding: 8px; font-size: 0.86rem; }
+.brand-core-side .posting-actions input { flex: 1; }
 
 
 .actions .primary-add {
