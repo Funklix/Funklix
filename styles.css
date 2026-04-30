@@ -210,6 +210,13 @@ body {
   justify-content: space-between;
   align-items: center;
 }
+.brand-mode-header button {
+  border: 1px solid #d5d9ea;
+  background: #fff;
+  border-radius: 8px;
+  padding: 6px 10px;
+  color: #5c5f74;
+}
 
 @keyframes fadeMode {
   from { opacity: 0; transform: translateY(4px); }
@@ -250,6 +257,13 @@ body {
 .bc-title { color: #5e4bf4; font-size: 0.86rem; letter-spacing: 0.03em; }
 .bc-preview { margin-top: 8px; color: #2f3552; font-weight: 500; font-size: 0.83rem; line-height: 1.35; }
 .bc-preview ul { margin: 0; padding-left: 16px; }
+.bc-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.bc-tags span { background: #f1f3fb; border-radius: 999px; padding: 3px 8px; font-size: 0.74rem; }
+.bc-good { background: #eaf9ef; border-radius: 8px; padding: 6px; margin-bottom: 4px; }
+.bc-bad { background: #fdecec; border-radius: 8px; padding: 6px; }
+.bc-assets-preview { display: grid; gap: 6px; }
+.bc-colors { display: flex; gap: 6px; }
+.bc-colors i { width: 16px; height: 16px; border-radius: 4px; border: 1px solid #ccd2e8; display: inline-block; }
 .bc-count { position: absolute; right: 10px; bottom: 8px; font-size: 0.72rem; color: #8a90ab; background: #f1f3fb; border-radius: 999px; padding: 2px 8px; }
 
 .bc-main {
@@ -273,6 +287,8 @@ body {
   gap: 6px;
   box-shadow: 0 6px 14px rgba(40, 50, 90, 0.08);
 }
+.bc-edit-list { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 6px; }
+.bc-edit-list li { background: #f4f6fc; border-radius: 8px; padding: 6px 8px; cursor: pointer; }
 
 
 .actions .primary-add {

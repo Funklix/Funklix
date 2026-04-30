@@ -36,11 +36,18 @@ const state = {
   ,history: []
   ,forcePanNextDrag: false
   ,brandCore: {
-    brandName: "", shortDescription: "", targetAudience: "",
-    toneOfVoice: [], messagingPillars: [], valueProposition: "",
-    personas: [], contentGuidelines: [], guidelines: [], referenceStyle: "", keywords: []
+    brandCore: "Our mission is to make solar energy simple, affordable, and accessible for every homeowner.",
+    toneOfVoice: ["Confident", "Positive", "Clear & Simple", "Non-Technical", "Future-Oriented"],
+    messagingPillars: ["Save money", "Sustainability", "Energy independence", "Better future"],
+    valueProposition: "We help homeowners save money and live sustainably through smart, beautiful, and reliable solar solutions.",
+    personas: [{ name: "Eco-conscious Homeowner", note: "Primary" }, { name: "Cost-Savvy Family", note: "Secondary" }, { name: "Early Adopter", note: "Tertiary" }],
+    contentGuidelines: ["Use short sentences", "Speak to the reader", "Focus on benefits", "Avoid jargon", "Include clear CTA"],
+    dosAndDonts: { dos: ["Focus on savings", "Use positive language", "Show real-life impact"], donts: ["Overpromise", "Use technical terms", "Sound salesy"] },
+    brandVoiceExamples: { good: "Lower bills. Cleaner planet. Smarter choice.", avoid: "The most advanced solar technology in the industry!!!" },
+    keywords: ["Solar", "Sustainable", "Savings", "Clean Energy", "Smart", "Future", "Home", "Reliable"],
+    brandAssets: { domain: "https://example.com", logo: "", colors: ["#1d3f3a", "#9bc015", "#bad61f"], typography: "Inter / Poppins", references: [] }
   },
-  brandCoreSelectedKey: "brandName"
+  brandCoreSelectedKey: "brandCore"
   ,appMode: "canvas"
 };
 
@@ -99,11 +106,8 @@ const el = {
   brandCoreButton: document.getElementById("brand-core-nav-btn"),
   campaignCanvasNavButton: document.getElementById("campaign-canvas-nav-btn"),
   brandEditorTitle: document.getElementById("bc-editor-title"),
-  brandEditorLabel: document.getElementById("bc-editor-label"),
-  brandEditorInput: document.getElementById("bc-editor-input"),
-  brandListInput: document.getElementById("bc-list-input"),
-  brandList: document.getElementById("bc-list"),
-  brandAddItemButton: document.getElementById("bc-add-item-btn"),
+  brandCoreCanvas: document.getElementById("brand-core-canvas"),
+  brandEditorPanel: document.getElementById("bc-editor-panel"),
   resetBrandCoreButton: document.getElementById("reset-brand-core-btn"),
   inputs: {
     type: document.getElementById("node-type"),
@@ -222,19 +226,7 @@ function resetBoardState() {
 }
 
 function getBrandCoreData() {
-  return {
-    brandName: state.brandCore?.brandName || "",
-    shortDescription: state.brandCore?.shortDescription || "",
-    targetAudience: state.brandCore?.targetAudience || "",
-    toneOfVoice: state.brandCore?.toneOfVoice || [],
-    messagingPillars: state.brandCore?.messagingPillars || [],
-    valueProposition: state.brandCore?.valueProposition || "",
-    personas: state.brandCore?.personas || [],
-    contentGuidelines: state.brandCore?.contentGuidelines || [],
-    guidelines: state.brandCore?.guidelines || [],
-    referenceStyle: state.brandCore?.referenceStyle || "",
-    keywords: state.brandCore?.keywords || []
-  };
+  return state.brandCore;
 }
 window.getBrandCoreData = getBrandCoreData;
 
@@ -244,72 +236,93 @@ function saveBrandCore() {
 
 function restoreBrandCore() {
   const raw = localStorage.getItem(BRAND_CORE_STORAGE_KEY);
-  if (!raw) {
-    state.brandCore = {
-      brandName: "Our mission is to make solar energy simple, affordable, and accessible for every homeowner.",
-      shortDescription: "",
-      targetAudience: "",
-      toneOfVoice: ["Confident", "Positive", "Clear & Simple", "Non-Technical", "Future-Oriented"],
-      messagingPillars: ["Save money", "Sustainability", "Energy independence", "Better future"],
-      valueProposition: "We help homeowners save money and live sustainably through smart, beautiful, and reliable solar solutions.",
-      personas: ["Eco-conscious Homeowner", "Cost-Savvy Family", "Early Adopter"],
-      contentGuidelines: ["Use short sentences", "Speak to the reader", "Focus on benefits", "Avoid jargon", "Include clear CTA"],
-      guidelines: ["Do: Focus on savings", "Do: Use positive language", "Do: Show real-life impact", "Don't: Overpromise", "Don't: Use technical terms", "Don't: Sound salesy"],
-      referenceStyle: "Good: “Lower bills. Cleaner planet. Smarter choice.”\nAvoid: “The most advanced solar technology in the industry!!!”",
-      keywords: ["Solar", "Sustainable", "Savings", "Clean Energy", "Smart", "Future", "Home", "Reliable"],
-      brandAssets: "Domain: example.com\nTypography: Inter / Poppins"
-    };
-    saveBrandCore();
-    return;
-  }
-  state.brandCore = JSON.parse(raw);
+  if (raw) state.brandCore = JSON.parse(raw);
 }
 
 function renderBrandCoreEditor() {
   const key = state.brandCoreSelectedKey;
   const labelMap = {
-    brandName: "Brand Core", toneOfVoice: "Tone of Voice", messagingPillars: "Messaging Pillars",
+    brandCore: "Brand Core", toneOfVoice: "Tone of Voice", messagingPillars: "Messaging Pillars",
     valueProposition: "Value Proposition", personas: "Personas", contentGuidelines: "Content Guidelines",
-    guidelines: "Do / Don't", referenceStyle: "Brand Voice Examples", keywords: "Keywords"
+    dosAndDonts: "Do / Don't", brandVoiceExamples: "Brand Voice Examples", keywords: "Keywords", brandAssets: "Brand Assets"
   };
   el.brandEditorTitle.textContent = labelMap[key] || "Brand Core";
-  el.brandEditorLabel.textContent = "Details";
   const value = state.brandCore[key];
-  el.brandEditorInput.value = Array.isArray(value) ? "" : (value || "");
-  el.brandList.innerHTML = "";
-  if (Array.isArray(value)) {
-    value.forEach((item, idx) => {
-      const li = document.createElement("li");
-      li.textContent = item;
-      li.addEventListener("click", () => {
-        state.brandCore[key].splice(idx, 1);
-        saveBrandCore();
-        renderBrandCoreEditor();
-      });
-      el.brandList.appendChild(li);
-    });
+  el.brandEditorPanel.innerHTML = "";
+  if (typeof value === "string") {
+    el.brandEditorPanel.innerHTML = `<textarea id="bc-edit-text" rows="6">${value || ""}</textarea>`;
+    el.brandEditorPanel.querySelector("textarea").addEventListener("input", (e) => { state.brandCore[key] = e.target.value; saveBrandCore(); renderBrandCoreTiles(); });
+  } else if (Array.isArray(value)) {
+    el.brandEditorPanel.innerHTML = `<div class="posting-actions"><input id="bc-list-add" placeholder="Add item"/><button type="button">+</button></div><ul class="bc-edit-list">${value.map((v, i) => `<li data-i="${i}">${v}</li>`).join("")}</ul>`;
+    el.brandEditorPanel.querySelector("button").addEventListener("click", () => { const v = el.brandEditorPanel.querySelector("#bc-list-add").value.trim(); if (!v) return; value.push(v); saveBrandCore(); renderBrandCoreEditor(); });
+    el.brandEditorPanel.querySelectorAll("li").forEach((li) => li.addEventListener("click", () => { value.splice(Number(li.dataset.i), 1); saveBrandCore(); renderBrandCoreEditor(); }));
+  } else if (key === "dosAndDonts") {
+    const d = value;
+    el.brandEditorPanel.innerHTML = `<label>Do (one per line)</label><textarea id="bc-dos" rows="4">${d.dos.join("\n")}</textarea><label>Don't (one per line)</label><textarea id="bc-donts" rows="4">${d.donts.join("\n")}</textarea>`;
+    ["bc-dos","bc-donts"].forEach((id) => el.brandEditorPanel.querySelector(`#${id}`).addEventListener("input", () => { d.dos = el.brandEditorPanel.querySelector("#bc-dos").value.split("\n").map((x) => x.trim()).filter(Boolean); d.donts = el.brandEditorPanel.querySelector("#bc-donts").value.split("\n").map((x) => x.trim()).filter(Boolean); saveBrandCore(); renderBrandCoreTiles(); }));
+  } else if (key === "brandVoiceExamples") {
+    el.brandEditorPanel.innerHTML = `<label>Good example</label><textarea id="bc-good" rows="3">${value.good || ""}</textarea><label>Avoid example</label><textarea id="bc-avoid" rows="3">${value.avoid || ""}</textarea>`;
+    ["bc-good","bc-avoid"].forEach((id) => el.brandEditorPanel.querySelector(`#${id}`).addEventListener("input", () => { value.good = el.brandEditorPanel.querySelector("#bc-good").value; value.avoid = el.brandEditorPanel.querySelector("#bc-avoid").value; saveBrandCore(); renderBrandCoreTiles(); }));
+  } else if (key === "brandAssets") {
+    el.brandEditorPanel.innerHTML = `<label>Domain URL</label><input id="bc-domain" value="${value.domain || ""}"/><label>Typography</label><input id="bc-typo" value="${value.typography || ""}"/><label>Colors (comma-separated hex)</label><input id="bc-colors" value="${(value.colors||[]).join(", ")}"/><label>Logo URL</label><input id="bc-logo" value="${value.logo || ""}"/>`;
+    ["bc-domain","bc-typo","bc-colors","bc-logo"].forEach((id) => el.brandEditorPanel.querySelector(`#${id}`).addEventListener("input", () => { value.domain = el.brandEditorPanel.querySelector("#bc-domain").value; value.typography = el.brandEditorPanel.querySelector("#bc-typo").value; value.colors = el.brandEditorPanel.querySelector("#bc-colors").value.split(",").map((x) => x.trim()).filter(Boolean); value.logo = el.brandEditorPanel.querySelector("#bc-logo").value; saveBrandCore(); renderBrandCoreTiles(); }));
+  } else if (key === "personas") {
+    el.brandEditorPanel.innerHTML = `<div class="posting-actions"><input id="bc-p-name" placeholder="Persona"/><input id="bc-p-note" placeholder="Note"/><button type="button">+</button></div><ul class="bc-edit-list">${value.map((p, i) => `<li data-i="${i}">${p.name} — ${p.note}</li>`).join("")}</ul>`;
+    el.brandEditorPanel.querySelector("button").addEventListener("click", () => { const n = el.brandEditorPanel.querySelector("#bc-p-name").value.trim(); if (!n) return; value.push({ name: n, note: el.brandEditorPanel.querySelector("#bc-p-note").value.trim() }); saveBrandCore(); renderBrandCoreEditor(); });
+    el.brandEditorPanel.querySelectorAll("li").forEach((li) => li.addEventListener("click", () => { value.splice(Number(li.dataset.i), 1); saveBrandCore(); renderBrandCoreEditor(); }));
   }
   renderBrandCoreTiles();
 }
 
 function renderBrandCoreTiles() {
+  if (!el.brandCoreCanvas.querySelector(".bc-node")) {
+    el.brandCoreCanvas.innerHTML = `
+      <article class="bc-node bc-main selected" data-bc-key="brandCore"></article>
+      <div class="bc-row">
+        <article class="bc-node" data-bc-key="toneOfVoice"></article>
+        <article class="bc-node" data-bc-key="messagingPillars"></article>
+        <article class="bc-node" data-bc-key="valueProposition"></article>
+        <article class="bc-node" data-bc-key="personas"></article>
+      </div>
+      <div class="bc-row">
+        <article class="bc-node" data-bc-key="contentGuidelines"></article>
+        <article class="bc-node" data-bc-key="dosAndDonts"></article>
+        <article class="bc-node" data-bc-key="brandVoiceExamples"></article>
+        <article class="bc-node" data-bc-key="keywords"></article>
+      </div>
+      <article class="bc-node bc-assets" data-bc-key="brandAssets"></article>`;
+  }
+  const titleMap = { brandCore: "BRAND CORE", toneOfVoice: "TONE OF VOICE", messagingPillars: "MESSAGING PILLARS", valueProposition: "VALUE PROPOSITION", personas: "PERSONAS", contentGuidelines: "CONTENT GUIDELINES", dosAndDonts: "DO'S & DON'TS", brandVoiceExamples: "BRAND VOICE EXAMPLES", keywords: "KEYWORDS", brandAssets: "BRAND ASSETS" };
   document.querySelectorAll(".bc-node[data-bc-key]").forEach((tile) => {
     const key = tile.dataset.bcKey;
     const val = state.brandCore[key];
-    const title = tile.textContent.trim().split("\n")[0];
+    const title = titleMap[key] || key;
     let preview = "";
     let count = "";
-    if (Array.isArray(val)) {
+    if (key === "keywords") {
+      preview = `<div class="bc-tags">${val.slice(0, 8).map((t) => `<span>${t}</span>`).join("")}</div>`;
+      count = `${val.length} keywords`;
+    } else if (key === "brandVoiceExamples") {
+      preview = `<div class="bc-good">Good: ${val.good}</div><div class="bc-bad">Avoid: ${val.avoid}</div>`;
+      count = "2 examples";
+    } else if (key === "dosAndDonts") {
+      preview = `<div><strong>Do</strong><ul>${val.dos.slice(0,3).map((v) => `<li>${v}</li>`).join("")}</ul></div><div><strong>Don't</strong><ul>${val.donts.slice(0,3).map((v) => `<li>${v}</li>`).join("")}</ul></div>`;
+      count = `${val.dos.length + val.donts.length} rules`;
+    } else if (key === "personas") {
+      preview = `<ul>${val.slice(0,3).map((p) => `<li>${p.name}<small> ${p.note}</small></li>`).join("")}</ul>`;
+      count = `${val.length} personas`;
+    } else if (key === "brandAssets") {
+      preview = `<div class="bc-assets-preview"><span>${val.domain || ""}</span><span>${val.typography || ""}</span><div class="bc-colors">${(val.colors||[]).slice(0,4).map((c) => `<i style="background:${c}"></i>`).join("")}</div></div>`;
+      count = "assets";
+    } else if (Array.isArray(val)) {
       preview = `<ul>${val.slice(0, 4).map((v) => `<li>${v}</li>`).join("")}</ul>`;
-      count = `${val.length} items`;
+      count = key === "messagingPillars" ? `${val.length} pillars` : `${val.length} traits`;
     } else {
       preview = `<p>${(val || "").slice(0, 120)}</p>`;
       count = val ? "1 statement" : "0";
     }
     tile.innerHTML = `<div class="bc-title">${title}</div><div class="bc-preview">${preview}</div><div class="bc-count">${count}</div>`;
   });
-  const assets = document.querySelector(".bc-assets");
-  if (assets) assets.innerHTML = `<div class="bc-title">BRAND ASSETS</div><div class="bc-preview"><p>${(state.brandCore.brandAssets || "").replace(/\n/g, "<br>")}</p></div>`;
 }
 
 function connectedIds() {
@@ -1680,13 +1693,13 @@ el.campaignCanvasNavButton.addEventListener("click", () => {
   setAppMode("canvas");
   setActiveView("board");
 });
-document.querySelectorAll(".bc-node[data-bc-key]").forEach((n) => {
-  n.addEventListener("click", () => {
-    document.querySelectorAll(".bc-node.selected").forEach((x) => x.classList.remove("selected"));
-    n.classList.add("selected");
-    state.brandCoreSelectedKey = n.dataset.bcKey;
-    renderBrandCoreEditor();
-  });
+el.brandCoreCanvas.addEventListener("click", (event) => {
+  const n = event.target.closest(".bc-node[data-bc-key]");
+  if (!n) return;
+  el.brandCoreCanvas.querySelectorAll(".bc-node.selected").forEach((x) => x.classList.remove("selected"));
+  n.classList.add("selected");
+  state.brandCoreSelectedKey = n.dataset.bcKey;
+  renderBrandCoreEditor();
 });
 el.brandEditorInput.addEventListener("input", () => {
   const key = state.brandCoreSelectedKey;

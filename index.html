@@ -83,32 +83,11 @@
             <h1>Brand Brain</h1>
             <button id="reset-brand-core-btn" type="button">Reset Brand Core</button>
           </header>
-          <div class="brand-core-canvas">
-            <article class="bc-node bc-main selected" data-bc-key="brandName">BRAND CORE</article>
-            <div class="bc-row">
-              <article class="bc-node" data-bc-key="toneOfVoice">TONE OF VOICE</article>
-              <article class="bc-node" data-bc-key="messagingPillars">MESSAGING PILLARS</article>
-              <article class="bc-node" data-bc-key="valueProposition">VALUE PROPOSITION</article>
-              <article class="bc-node" data-bc-key="personas">PERSONAS</article>
-            </div>
-            <div class="bc-row">
-              <article class="bc-node" data-bc-key="contentGuidelines">CONTENT GUIDELINES</article>
-              <article class="bc-node" data-bc-key="guidelines">DO'S & DON'TS</article>
-              <article class="bc-node" data-bc-key="referenceStyle">BRAND VOICE EXAMPLES</article>
-              <article class="bc-node" data-bc-key="keywords">KEYWORDS</article>
-            </div>
-            <article class="bc-node bc-assets" data-bc-key="brandAssets">BRAND ASSETS</article>
-          </div>
+          <div class="brand-core-canvas" id="brand-core-canvas"></div>
           <aside class="brand-core-side">
-            <h3>Section Editor</h3>
+            <h3>Brand Core Details</h3>
             <h4 id="bc-editor-title">BRAND CORE</h4>
-            <label id="bc-editor-label">Details</label>
-            <textarea id="bc-editor-input" rows="5"></textarea>
-            <div class="posting-actions">
-              <input id="bc-list-input" placeholder="Add item and press +"/>
-              <button id="bc-add-item-btn" type="button">+</button>
-            </div>
-            <ul id="bc-list"></ul>
+            <div id="bc-editor-panel"></div>
           </aside>
         </section>
       </main>
