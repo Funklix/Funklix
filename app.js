@@ -745,6 +745,89 @@ function addEdge(fromId, toId) {
   drawLinks();
 }
 
+function buildGeneratedCampaignPlan(ideaText, contextText) {
+  const brand = state.brandCore || {};
+  const tone = Array.isArray(brand.toneOfVoice) ? brand.toneOfVoice.slice(0, 2).join(", ") : "";
+  const pillar = Array.isArray(brand.messagingPillars) ? brand.messagingPillars[0] || "" : "";
+  const context = [contextText, brand.valueProposition, pillar].filter(Boolean).join(" · ");
+  const baseTitle = ideaText || "Campaign Idea";
+  return {
+    idea: { title: baseTitle, content: context || "Core campaign direction." },
+    varA: { title: `${baseTitle} – Variation A`, content: `Angle: ${tone || "Direct and clear"} narrative` },
+    varB: { title: `${baseTitle} – Variation B`, content: `Angle: ${pillar || "Benefit-led"} storytelling` },
+    contentA: { title: "Hero Content A", content: `Main message: ${baseTitle}` },
+    contentB: { title: "Hero Content B", content: `Alternative hook for ${baseTitle}` },
+    socialA: { title: "Social Post A", content: `CTA focused on ${baseTitle}` },
+    socialB: { title: "Social Post B", content: `Community engagement for ${baseTitle}` },
+    landing: { title: "Landing Page", content: `Conversion destination for ${baseTitle}` },
+    email: { title: "Email Campaign", content: `Nurture sequence for ${baseTitle}` }
+  };
+}
+
+function generateCampaignFromIdea(ideaText, contextText) {
+  if (state.nodes.length > 0) {
+    const clear = window.confirm("Canvas already has nodes. Clear board before generating?");
+    if (!clear) return;
+    resetCampaignCanvasState();
+  }
+  const plan = buildGeneratedCampaignPlan(ideaText, contextText);
+  const idea = createNode({ type: "Idea", position: { x: 620, y: 120 } });
+  Object.assign(idea, { title: plan.idea.title, content: plan.idea.content });
+  updateNodeCard(idea);
+
+  const variationA = createNode({ type: "Campaign Variation", position: { x: 320, y: 340 } });
+  Object.assign(variationA, { title: plan.varA.title, content: plan.varA.content });
+  updateNodeCard(variationA);
+  const contentA = createNode({ type: "Content", position: { x: 260, y: 560 } });
+  Object.assign(contentA, { title: plan.contentA.title, content: plan.contentA.content });
+  updateNodeCard(contentA);
+  const socialA = createNode({ type: "Social Media Posting", position: { x: 220, y: 820 } });
+  Object.assign(socialA, { title: plan.socialA.title, content: plan.socialA.content });
+  updateNodeCard(socialA);
+
+  const variationB = createNode({ type: "Campaign Variation", position: { x: 900, y: 340 } });
+  Object.assign(variationB, { title: plan.varB.title, content: plan.varB.content });
+  updateNodeCard(variationB);
+  const contentB = createNode({ type: "Content", position: { x: 980, y: 560 } });
+  Object.assign(contentB, { title: plan.contentB.title, content: plan.contentB.content });
+  updateNodeCard(contentB);
+  const socialB = createNode({ type: "Social Media Posting", position: { x: 1040, y: 820 } });
+  Object.assign(socialB, { title: plan.socialB.title, content: plan.socialB.content });
+  updateNodeCard(socialB);
+
+  const landing = createNode({ type: "Landing Page", position: { x: 520, y: 560 } });
+  Object.assign(landing, { title: plan.landing.title, content: plan.landing.content });
+  updateNodeCard(landing);
+  const email = createNode({ type: "Email Campaign", position: { x: 700, y: 560 } });
+  Object.assign(email, { title: plan.email.title, content: plan.email.content });
+  updateNodeCard(email);
+
+  addEdge(idea.id, variationA.id); addEdge(variationA.id, contentA.id); addEdge(contentA.id, socialA.id);
+  addEdge(idea.id, variationB.id); addEdge(variationB.id, contentB.id); addEdge(contentB.id, socialB.id);
+  addEdge(idea.id, landing.id); addEdge(idea.id, email.id);
+  drawLinks();
+  saveCampaignCanvasState();
+}
+
+function openCreateCampaignModal() {
+  const overlay = document.createElement("div");
+  overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px";
+  overlay.innerHTML = `<div style="width:min(560px,95vw);background:#fff;border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:10px">
+    <h3 style="margin:0">Create Campaign</h3>
+    <label>What is the campaign idea?<textarea id="campaign-idea-input" rows="4" style="width:100%"></textarea></label>
+    <label>Additional context<input id="campaign-context-input" type="text" style="width:100%"/></label>
+    <div style="display:flex;gap:8px;justify-content:flex-end"><button type="button" id="campaign-modal-cancel">Cancel</button><button type="button" id="campaign-modal-generate">Generate Campaign</button></div>
+  </div>`;
+  document.body.appendChild(overlay);
+  overlay.querySelector("#campaign-modal-cancel").addEventListener("click", () => overlay.remove());
+  overlay.querySelector("#campaign-modal-generate").addEventListener("click", () => {
+    const ideaText = overlay.querySelector("#campaign-idea-input").value.trim();
+    const contextText = overlay.querySelector("#campaign-context-input").value.trim();
+    generateCampaignFromIdea(ideaText || "Campaign Idea", contextText);
+    overlay.remove();
+  });
+}
+
 function edgePath(fromPoint, toPoint) {
   const midY = (fromPoint.y + toPoint.y) / 2;
   return `M ${fromPoint.x} ${fromPoint.y} C ${fromPoint.x} ${midY}, ${toPoint.x} ${midY}, ${toPoint.x} ${toPoint.y}`;
@@ -1533,7 +1616,7 @@ el.addNodeButton.addEventListener("click", () => {
 });
 
 el.createCampaignButton.addEventListener("click", () => {
-  createCampaignSetup();
+  openCreateCampaignModal();
 });
 
 el.cycleViewButton.addEventListener("click", () => {
