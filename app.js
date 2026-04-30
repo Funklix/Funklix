@@ -275,6 +275,8 @@ function renderBrandCoreEditor() {
 }
 
 function renderBrandCoreTiles() {
+  console.log("BrandBrain mounted");
+  console.log("BrandBrain data:", state.brandCore);
   if (!el.brandCoreCanvas.querySelector(".bc-node")) {
     el.brandCoreCanvas.innerHTML = `
       <article class="bc-node bc-main selected" data-bc-key="brandCore"></article>
@@ -1399,7 +1401,11 @@ function setAppMode(mode) {
   el.canvasTopbar.classList.toggle("hidden", brand);
   el.inspectorPanel.classList.toggle("hidden", brand);
   el.workspaceWrap?.classList?.toggle("brand-mode", brand);
-  if (brand) setActiveView("brand-core");
+  if (brand) {
+    setActiveView("brand-core");
+    renderBrandCoreTiles();
+    renderBrandCoreEditor();
+  }
   else if (state.activeView === "brand-core") setActiveView("board");
 }
 
@@ -1752,5 +1758,6 @@ setActiveView("board");
 if (!restoreBoardState()) setSaveStatus("Unsaved changes");
 restoreBrandCore();
 renderBrandCoreEditor();
+renderBrandCoreTiles();
 window.addEventListener("beforeunload", saveBoardState);
 el.resetBoardButton.addEventListener("click", resetBoardState);
