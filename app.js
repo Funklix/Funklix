@@ -588,8 +588,18 @@ function createNode({ type = "Idea", parentId = null, position = null, images = 
     nodeEl.style.top = `${node.position.y}px`;
     nodeEl.style.display = "block";
     nodeEl.style.visibility = "visible";
-    nodeEl.style.opacity = "1";
+    nodeEl.style.opacity = "0";
+    nodeEl.style.transform = "scale(0.95)";
+    nodeEl.style.transition = "opacity 250ms ease-out, transform 250ms ease-out";
     nodeEl.style.zIndex = "10";
+    requestAnimationFrame(() => {
+      nodeEl.style.opacity = "1";
+      nodeEl.style.transform = "scale(1)";
+    });
+    setTimeout(() => {
+      nodeEl.style.transition = "";
+      nodeEl.style.transform = "";
+    }, 280);
   }
   updateNodeCard(node);
   toggleListMode(false);
