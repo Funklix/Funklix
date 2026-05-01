@@ -93,6 +93,7 @@ const el = {
   imageUpload: document.getElementById("node-image-upload"),
   inspectorImageList: document.getElementById("inspector-image-list"),
   deleteNodeButton: document.getElementById("delete-node-btn"),
+  improveNodeButton: document.getElementById("improve-node-btn"),
   postingPlanOverlay: document.getElementById("posting-plan-overlay"),
   postingDateInput: document.getElementById("posting-date-input"),
   postingTimeInput: document.getElementById("posting-time-input"),
@@ -1323,6 +1324,62 @@ function renderInspectorImages(node) {
   });
 }
 
+async function refineNodeWithAI(node, instruction) {
+  const response = await fetch("/api/refine-node", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      nodeType: node.type,
+      currentContent: {
+        title: node.title || "",
+        content: node.content || "",
+        caption: node.social?.caption || ""
+      },
+      instruction,
+      brandBrainData: state.brandCore
+    })
+  });
+  if (!response.ok) throw new Error("Refine API request failed");
+  return response.json();
+}
+
+async function runImproveNodeFlow(node) {
+  const options = [
+    "Make it more emotional",
+    "Make it more direct",
+    "Make it more premium",
+    "Make it shorter"
+  ];
+  const choice = window.prompt(`Choose style:\n1) ${options[0]}\n2) ${options[1]}\n3) ${options[2]}\n4) ${options[3]}\n5) Custom instruction`, "1");
+  if (!choice) return;
+  const selectedIdx = Number(choice);
+  let instruction = options[selectedIdx - 1];
+  if (selectedIdx === 5 || !instruction) {
+    instruction = window.prompt("Custom instruction", "Refine this for higher conversion while staying concise.") || "";
+  }
+  if (!instruction.trim()) return;
+
+  const originalLabel = el.improveNodeButton.textContent;
+  el.improveNodeButton.disabled = true;
+  el.improveNodeButton.textContent = "✨ Improving...";
+  try {
+    const refined = await refineNodeWithAI(node, instruction);
+    node.title = refined?.title || node.title;
+    node.content = refined?.content || node.content;
+    if (node.type === "Social Media Posting" && refined?.caption) {
+      node.social.caption = refined.caption;
+    }
+    updateNodeCard(node);
+    fillInspector(node);
+    saveCampaignCanvasState();
+  } catch (_error) {
+    alert("Could not refine node right now. Please try again.");
+  } finally {
+    el.improveNodeButton.disabled = false;
+    el.improveNodeButton.textContent = originalLabel;
+  }
+}
+
 function updateListView() {
   el.nodeListView.innerHTML = "";
 
@@ -1799,6 +1856,11 @@ el.imageUpload.addEventListener("change", () => {
 el.deleteNodeButton.addEventListener("click", () => {
   if (!state.selectedPrimary) return;
   removeNode(state.selectedPrimary);
+});
+el.improveNodeButton.addEventListener("click", async () => {
+  const node = getNode(state.selectedPrimary);
+  if (!node) return;
+  await runImproveNodeFlow(node);
 });
 el.deleteSelectedButton.addEventListener("click", () => {
   if (!state.selectedIds.size) return;
