@@ -30,6 +30,10 @@ const state = {
   connectorCreateMode: null,
   connectorGhostEl: null,
   contextBoardPoint: { x: 0, y: 0 },
+<<<<<<< codex/create-collaborative-campaign-canvas-feature-1wifxc
+  contextNodeId: null,
+=======
+>>>>>>> main
   activeView: "board",
   calendarMonth: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
   postingPlannerNodeId: null
@@ -84,6 +88,10 @@ const el = {
   contextMenu: document.getElementById("context-menu"),
   addContextNodeButton: document.getElementById("add-context-node-btn"),
   addPostitCommentButton: document.getElementById("add-postit-comment-btn"),
+<<<<<<< codex/create-collaborative-campaign-canvas-feature-1wifxc
+  improveContextNodeButton: document.getElementById("improve-context-node-btn"),
+=======
+>>>>>>> main
   picker: document.getElementById("node-type-picker"),
   pickerOptions: document.getElementById("node-type-options"),
   inspectorMeta: document.getElementById("inspector-meta"),
@@ -1009,6 +1017,30 @@ function updateSelectionClasses() {
   el.zoomLayer.querySelectorAll(".node").forEach((nodeEl) => {
     nodeEl.classList.toggle("selected", state.selectedIds.has(nodeEl.dataset.id));
   });
+<<<<<<< codex/create-collaborative-campaign-canvas-feature-1wifxc
+  updateInspectorActionVisibility();
+}
+
+function updateInspectorActionVisibility() {
+  const selectedCount = state.selectedIds.size;
+  const hasSingle = selectedCount === 1;
+  const hasMulti = selectedCount > 1;
+  const primaryNode = hasSingle ? getNode(state.selectedPrimary) : null;
+  const canPropagate = !!primaryNode && downstreamNodeIds(primaryNode.id).length > 0;
+
+  el.deleteNodeButton.classList.toggle("hidden", !hasSingle);
+  el.improveNodeButton.classList.toggle("hidden", !hasSingle);
+  el.deleteSelectedButton.classList.toggle("hidden", !hasMulti);
+  el.disconnectSelectedButton.classList.toggle("hidden", !hasMulti);
+  el.propagateDescendantsButton.classList.toggle("hidden", !hasSingle || !canPropagate);
+
+  el.deleteNodeButton.disabled = !hasSingle;
+  el.improveNodeButton.disabled = !hasSingle;
+  el.deleteSelectedButton.disabled = !hasMulti;
+  el.disconnectSelectedButton.disabled = !hasMulti;
+  el.propagateDescendantsButton.disabled = !canPropagate;
+=======
+>>>>>>> main
 }
 
 function parseList(value) {
@@ -1302,6 +1334,10 @@ function fillInspector(node) {
     el.socialFields.classList.add("hidden");
     el.contentUploadFields.classList.add("hidden");
     el.inspectorImageList.innerHTML = "";
+<<<<<<< codex/create-collaborative-campaign-canvas-feature-1wifxc
+    updateInspectorActionVisibility();
+=======
+>>>>>>> main
     return;
   }
 
@@ -1322,6 +1358,10 @@ function fillInspector(node) {
   el.socialFields.classList.toggle("hidden", node.type !== "Social Media Posting");
   el.contentUploadFields.classList.toggle("hidden", !(node.type === "Content" || node.type === "Social Media Posting"));
   renderInspectorImages(node);
+<<<<<<< codex/create-collaborative-campaign-canvas-feature-1wifxc
+  updateInspectorActionVisibility();
+=======
+>>>>>>> main
 }
 
 function revokeImageObjectUrl(img) {
@@ -1895,6 +1935,19 @@ el.canvas.addEventListener("contextmenu", (event) => {
   event.preventDefault();
   const point = boardPointFromClient(event.clientX, event.clientY);
   state.contextBoardPoint = point;
+<<<<<<< codex/create-collaborative-campaign-canvas-feature-1wifxc
+  const nodeEl = event.target.closest(".node");
+  state.contextNodeId = nodeEl?.dataset?.id || null;
+  el.improveContextNodeButton.classList.toggle("hidden", !state.contextNodeId);
+  if (state.contextNodeId) {
+    state.selectedIds.clear();
+    state.selectedIds.add(state.contextNodeId);
+    state.selectedPrimary = state.contextNodeId;
+    updateSelectionClasses();
+    fillInspector(getNode(state.contextNodeId));
+  }
+=======
+>>>>>>> main
   el.contextMenu.style.left = `${event.clientX}px`;
   el.contextMenu.style.top = `${event.clientY}px`;
   el.contextMenu.style.position = "fixed";
@@ -1902,7 +1955,14 @@ el.canvas.addEventListener("contextmenu", (event) => {
 });
 
 document.addEventListener("click", (event) => {
+<<<<<<< codex/create-collaborative-campaign-canvas-feature-1wifxc
+  if (!el.contextMenu.contains(event.target)) {
+    el.contextMenu.classList.add("hidden");
+    state.contextNodeId = null;
+  }
+=======
   if (!el.contextMenu.contains(event.target)) el.contextMenu.classList.add("hidden");
+>>>>>>> main
 });
 
 el.addContextNodeButton.addEventListener("click", () => {
@@ -1931,6 +1991,20 @@ el.addPostitCommentButton.addEventListener("click", () => {
   updateNodeCard(node);
   saveCampaignCanvasState();
 });
+<<<<<<< codex/create-collaborative-campaign-canvas-feature-1wifxc
+el.improveContextNodeButton.addEventListener("click", async () => {
+  el.contextMenu.classList.add("hidden");
+  const node = getNode(state.contextNodeId || state.selectedPrimary);
+  if (!node) return;
+  state.selectedIds.clear();
+  state.selectedIds.add(node.id);
+  state.selectedPrimary = node.id;
+  updateSelectionClasses();
+  fillInspector(node);
+  await runImproveNodeFlow(node);
+});
+=======
+>>>>>>> main
 el.contextMenu.querySelectorAll(".emoji-quick").forEach((btn) => {
   btn.addEventListener("click", () => {
     el.contextMenu.classList.add("hidden");
