@@ -852,6 +852,12 @@ body {
   animation: nodeFlash 0.9s ease;
 }
 
+.node.ai-updated {
+  border-color: #7a72ff !important;
+  box-shadow: 0 0 0 2px rgba(122, 114, 255, 0.25), 0 12px 30px rgba(78, 142, 255, 0.25) !important;
+  transition: box-shadow 220ms ease-out, border-color 220ms ease-out;
+}
+
 @keyframes nodeFlash {
   0% { filter: brightness(1); transform: scale(1); }
   35% { filter: brightness(2.2) saturate(1.8); transform: scale(1.04); }

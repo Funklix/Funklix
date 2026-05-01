@@ -1494,6 +1494,11 @@ async function runImproveNodeFlow(node) {
       node.content = refined?.content || node.content;
       if (node.type === "Social Media Posting" && refined?.caption) node.social.caption = refined.caption;
       updateNodeCard(node);
+      const updatedEl = el.zoomLayer.querySelector(`[data-id='${node.id}']`);
+      if (updatedEl) {
+        updatedEl.classList.add("ai-updated");
+        setTimeout(() => updatedEl.classList.remove("ai-updated"), 1300);
+      }
       fillInspector(node);
       saveCampaignCanvasState();
       stopThinking();
