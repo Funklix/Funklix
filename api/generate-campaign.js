@@ -23,9 +23,79 @@ module.exports = async function handler(req, res) {
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        model: "gpt-5-mini",
-        input: prompt,
-        text: { format: { type: "json_object" } }
+        model: "gpt-4o-mini",
+        input: [
+          {
+            role: "system",
+            content: "You create campaign plans as strict JSON. Return only data matching the schema."
+          },
+          {
+            role: "user",
+            content: prompt
+          }
+        ],
+        text: {
+          format: {
+            type: "json_schema",
+            name: "campaign_plan",
+            strict: true,
+            schema: {
+              type: "object",
+              additionalProperties: false,
+              required: ["idea", "variations", "landingPage", "emailCampaign"],
+              properties: {
+                idea: {
+                  type: "object",
+                  additionalProperties: false,
+                  required: ["title", "content"],
+                  properties: { title: { type: "string" }, content: { type: "string" } }
+                },
+                variations: {
+                  type: "array",
+                  minItems: 2,
+                  maxItems: 2,
+                  items: {
+                    type: "object",
+                    additionalProperties: false,
+                    required: ["title", "content", "contentNode", "socialPost"],
+                    properties: {
+                      title: { type: "string" },
+                      content: { type: "string" },
+                      contentNode: {
+                        type: "object",
+                        additionalProperties: false,
+                        required: ["title", "content"],
+                        properties: { title: { type: "string" }, content: { type: "string" } }
+                      },
+                      socialPost: {
+                        type: "object",
+                        additionalProperties: false,
+                        required: ["title", "caption", "platform"],
+                        properties: {
+                          title: { type: "string" },
+                          caption: { type: "string" },
+                          platform: { type: "string" }
+                        }
+                      }
+                    }
+                  }
+                },
+                landingPage: {
+                  type: "object",
+                  additionalProperties: false,
+                  required: ["title", "content"],
+                  properties: { title: { type: "string" }, content: { type: "string" } }
+                },
+                emailCampaign: {
+                  type: "object",
+                  additionalProperties: false,
+                  required: ["title", "content"],
+                  properties: { title: { type: "string" }, content: { type: "string" } }
+                }
+              }
+            }
+          }
+        }
       })
     });
 
@@ -35,11 +105,20 @@ module.exports = async function handler(req, res) {
     }
 
     const data = await response.json();
+    console.log("OpenAI responses payload", JSON.stringify(data));
     const rawText =
       data?.output_text ||
-      data?.output?.[0]?.content?.find((c) => c.type === "output_text")?.text ||
+      data?.output?.[0]?.content?.[0]?.text ||
       "";
-    const parsed = JSON.parse(rawText);
+    if (!rawText) {
+      return res.status(500).json({ error: "OpenAI returned empty output", data });
+    }
+    let parsed;
+    try {
+      parsed = JSON.parse(rawText);
+    } catch (_err) {
+      return res.status(500).json({ error: "Failed to parse OpenAI JSON", rawText });
+    }
     return res.status(200).json(parsed);
   } catch (error) {
     return res.status(500).json({ error: error?.message || "Failed to generate campaign" });
