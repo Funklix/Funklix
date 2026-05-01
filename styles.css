@@ -115,6 +115,18 @@ body {
   cursor: pointer;
 }
 
+button {
+  transition: transform 140ms ease-out, box-shadow 160ms ease-out;
+}
+
+button:hover {
+  transform: scale(1.03);
+}
+
+button:active {
+  transform: scale(0.985);
+}
+
 .view-switcher {
   position: relative;
   display: inline-flex;
@@ -428,6 +440,12 @@ body {
   border-radius: 14px;
   padding: 10px 12px 12px;
   box-shadow: 0 8px 18px rgba(82, 67, 170, 0.08);
+  transition: transform 180ms ease-out, box-shadow 180ms ease-out;
+}
+
+.node:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 28px rgba(82, 67, 170, 0.16);
 }
 
 .node-controls {
