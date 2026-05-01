@@ -1344,40 +1344,97 @@ async function refineNodeWithAI(node, instruction) {
 }
 
 async function runImproveNodeFlow(node) {
-  const options = [
-    "Make it more emotional",
-    "Make it more direct",
-    "Make it more premium",
-    "Make it shorter"
-  ];
-  const choice = window.prompt(`Choose style:\n1) ${options[0]}\n2) ${options[1]}\n3) ${options[2]}\n4) ${options[3]}\n5) Custom instruction`, "1");
-  if (!choice) return;
-  const selectedIdx = Number(choice);
-  let instruction = options[selectedIdx - 1];
-  if (selectedIdx === 5 || !instruction) {
-    instruction = window.prompt("Custom instruction", "Refine this for higher conversion while staying concise.") || "";
-  }
-  if (!instruction.trim()) return;
+  const presets = {
+    Emotional: "Make it more emotional",
+    Direct: "Make it more direct",
+    Premium: "Make it feel more premium and high-end",
+    Shorter: "Make it shorter and more concise"
+  };
+  let selectedLabel = "";
+  let selectedInstruction = "";
 
-  const originalLabel = el.improveNodeButton.textContent;
-  el.improveNodeButton.disabled = true;
-  el.improveNodeButton.textContent = "✨ Improving...";
-  try {
-    const refined = await refineNodeWithAI(node, instruction);
-    node.title = refined?.title || node.title;
-    node.content = refined?.content || node.content;
-    if (node.type === "Social Media Posting" && refined?.caption) {
-      node.social.caption = refined.caption;
+  const overlay = document.createElement("div");
+  overlay.style.cssText = "position:fixed;inset:0;background:rgba(10,10,14,.45);z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px";
+  overlay.innerHTML = `<div style="width:min(560px,95vw);background:#fff;border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:12px">
+    <h3 style="margin:0">✨ Improve with AI</h3>
+    <div id="improve-ai-options" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px">
+      <button type="button" data-preset="Emotional">Emotional</button>
+      <button type="button" data-preset="Direct">Direct</button>
+      <button type="button" data-preset="Premium">Premium</button>
+      <button type="button" data-preset="Shorter">Shorter</button>
+      <button type="button" data-preset="Custom" style="grid-column:1/-1">Custom</button>
+    </div>
+    <input id="improve-ai-custom" class="hidden" placeholder="Enter your instruction..." />
+    <div style="display:flex;justify-content:flex-end;gap:8px">
+      <button type="button" id="improve-ai-cancel">Cancel</button>
+      <button type="button" id="improve-ai-run" disabled>Improve</button>
+    </div>
+  </div>`;
+  document.body.appendChild(overlay);
+
+  const optionWrap = overlay.querySelector("#improve-ai-options");
+  const customInput = overlay.querySelector("#improve-ai-custom");
+  const runBtn = overlay.querySelector("#improve-ai-run");
+  const cancelBtn = overlay.querySelector("#improve-ai-cancel");
+
+  const refreshSelectionUI = () => {
+    optionWrap.querySelectorAll("button").forEach((btn) => {
+      const active = btn.dataset.preset === selectedLabel;
+      btn.style.border = active ? "2px solid #6b4eff" : "1px solid #d6d6df";
+      btn.style.background = active ? "#f3f0ff" : "#fff";
+    });
+    const instructionReady = selectedLabel === "Custom" ? !!customInput.value.trim() : !!selectedInstruction;
+    runBtn.disabled = !instructionReady;
+  };
+
+  optionWrap.addEventListener("click", (event) => {
+    const btn = event.target.closest("button[data-preset]");
+    if (!btn) return;
+    selectedLabel = btn.dataset.preset;
+    if (selectedLabel === "Custom") {
+      customInput.classList.remove("hidden");
+      selectedInstruction = customInput.value.trim();
+      customInput.focus();
+    } else {
+      customInput.classList.add("hidden");
+      selectedInstruction = presets[selectedLabel];
     }
-    updateNodeCard(node);
-    fillInspector(node);
-    saveCampaignCanvasState();
-  } catch (_error) {
-    alert("Could not refine node right now. Please try again.");
-  } finally {
-    el.improveNodeButton.disabled = false;
-    el.improveNodeButton.textContent = originalLabel;
-  }
+    refreshSelectionUI();
+  });
+
+  customInput.addEventListener("input", () => {
+    if (selectedLabel === "Custom") selectedInstruction = customInput.value.trim();
+    refreshSelectionUI();
+  });
+
+  cancelBtn.addEventListener("click", () => overlay.remove());
+
+  runBtn.addEventListener("click", async () => {
+    const instruction = selectedLabel === "Custom" ? customInput.value.trim() : selectedInstruction;
+    if (!instruction) return;
+    const originalLabel = el.improveNodeButton.textContent;
+    el.improveNodeButton.disabled = true;
+    el.improveNodeButton.textContent = "✨ Improving...";
+    runBtn.disabled = true;
+    runBtn.textContent = "Improving...";
+    try {
+      const refined = await refineNodeWithAI(node, instruction);
+      node.title = refined?.title || node.title;
+      node.content = refined?.content || node.content;
+      if (node.type === "Social Media Posting" && refined?.caption) node.social.caption = refined.caption;
+      updateNodeCard(node);
+      fillInspector(node);
+      saveCampaignCanvasState();
+      overlay.remove();
+    } catch (_error) {
+      alert("Could not refine node right now. Please try again.");
+      runBtn.disabled = false;
+      runBtn.textContent = "Improve";
+    } finally {
+      el.improveNodeButton.disabled = false;
+      el.improveNodeButton.textContent = originalLabel;
+    }
+  });
 }
 
 function updateListView() {
