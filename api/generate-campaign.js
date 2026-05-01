@@ -14,7 +14,45 @@ module.exports = async function handler(req, res) {
       return res.status(400).json({ error: "campaignIdea is required" });
     }
 
-    const prompt = `Create a campaign plan in strict JSON only.\nInput idea: ${campaignIdea}\nAdditional context: ${additionalContext}\nBrand brain data: ${JSON.stringify(brandBrainData)}\nReturn ONLY JSON with this schema:\n{\n  "idea": { "title": "", "content": "" },\n  "variations": [\n    {\n      "title": "",\n      "content": "",\n      "contentNode": { "title": "", "content": "" },\n      "socialPost": { "title": "", "caption": "", "platform": "" }\n    }\n  ],\n  "landingPage": { "title": "", "content": "" },\n  "emailCampaign": { "title": "", "content": "" }\n}`;
+    const prompt = `You are a senior marketing strategist specializing in high-performing campaign concepts. You think in hooks, angles, emotional triggers and conversion logic.
+
+Create a campaign plan in strict JSON only.
+
+Input idea: ${campaignIdea}
+Additional context: ${additionalContext}
+Brand brain data: ${JSON.stringify(brandBrainData)}
+
+Quality requirements:
+- Use tone of voice from Brand Brain to shape wording.
+- Use messaging pillars to define campaign angles.
+- Include keywords naturally (not stuffed).
+- Reflect value proposition directly in message and promise.
+- Keep language human, realistic, and specific.
+- Avoid generic phrases and clichés (e.g. "innovative solutions").
+
+Content requirements by section:
+- idea: clear hook, short but powerful.
+- variations[0]: emotional angle.
+- variations[1]: rational angle.
+- variations[*].contentNode: clear concept description, platform-agnostic idea.
+- variations[*].socialPost: very strong first-line hook, concise caption, no fluff.
+- landingPage: include headline, subheadline, and core promise in the content.
+- emailCampaign: include subject line and short body copy in the content.
+
+Return ONLY JSON with this schema:
+{
+  "idea": { "title": "", "content": "" },
+  "variations": [
+    {
+      "title": "",
+      "content": "",
+      "contentNode": { "title": "", "content": "" },
+      "socialPost": { "title": "", "caption": "", "platform": "" }
+    }
+  ],
+  "landingPage": { "title": "", "content": "" },
+  "emailCampaign": { "title": "", "content": "" }
+}`;
 
     const response = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
@@ -27,7 +65,7 @@ module.exports = async function handler(req, res) {
         input: [
           {
             role: "system",
-            content: "You create campaign plans as strict JSON. Return only data matching the schema."
+            content: "You are a senior marketing strategist specializing in high-performing campaign concepts. You think in hooks, angles, emotional triggers and conversion logic. Return only strict JSON matching the schema."
           },
           {
             role: "user",
