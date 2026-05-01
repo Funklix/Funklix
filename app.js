@@ -764,42 +764,67 @@ function buildGeneratedCampaignPlan(ideaText, contextText) {
   };
 }
 
-function generateCampaignFromIdea(ideaText, contextText) {
+async function fetchGeneratedCampaignPlan(ideaText, contextText) {
+  const response = await fetch("/api/generate-campaign", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      campaignIdea: ideaText,
+      additionalContext: contextText,
+      brandBrainData: state.brandCore
+    })
+  });
+  if (!response.ok) throw new Error("Generation request failed");
+  return response.json();
+}
+
+function generateCampaignFromIdea(ideaText, contextText, providedPlan = null) {
   if (state.nodes.length > 0) {
     const clear = window.confirm("Canvas already has nodes. Clear board before generating?");
     if (!clear) return;
     resetCampaignCanvasState();
   }
-  const plan = buildGeneratedCampaignPlan(ideaText, contextText);
+  const plan = providedPlan || buildGeneratedCampaignPlan(ideaText, contextText);
+  const variations = Array.isArray(plan.variations) && plan.variations.length
+    ? plan.variations.slice(0, 2)
+    : [
+      { title: plan.varA.title, content: plan.varA.content, contentNode: plan.contentA, socialPost: { title: plan.socialA.title, caption: plan.socialA.content, platform: "Instagram" } },
+      { title: plan.varB.title, content: plan.varB.content, contentNode: plan.contentB, socialPost: { title: plan.socialB.title, caption: plan.socialB.content, platform: "Instagram" } }
+    ];
+
   const idea = createNode({ type: "Idea", position: { x: 620, y: 120 } });
   Object.assign(idea, { title: plan.idea.title, content: plan.idea.content });
   updateNodeCard(idea);
 
   const variationA = createNode({ type: "Campaign Variation", position: { x: 320, y: 340 } });
-  Object.assign(variationA, { title: plan.varA.title, content: plan.varA.content });
+  Object.assign(variationA, { title: variations[0]?.title || "Variation A", content: variations[0]?.content || "" });
   updateNodeCard(variationA);
   const contentA = createNode({ type: "Content", position: { x: 260, y: 560 } });
-  Object.assign(contentA, { title: plan.contentA.title, content: plan.contentA.content });
+  Object.assign(contentA, { title: variations[0]?.contentNode?.title || "Content A", content: variations[0]?.contentNode?.content || "" });
   updateNodeCard(contentA);
   const socialA = createNode({ type: "Social Media Posting", position: { x: 220, y: 820 } });
-  Object.assign(socialA, { title: plan.socialA.title, content: plan.socialA.content });
+  Object.assign(socialA, { title: variations[0]?.socialPost?.title || "Social A", content: variations[0]?.socialPost?.caption || "" });
+  socialA.social.platform = variations[0]?.socialPost?.platform || "Instagram";
+  socialA.social.caption = variations[0]?.socialPost?.caption || "";
   updateNodeCard(socialA);
 
   const variationB = createNode({ type: "Campaign Variation", position: { x: 900, y: 340 } });
-  Object.assign(variationB, { title: plan.varB.title, content: plan.varB.content });
+  Object.assign(variationB, { title: variations[1]?.title || "Variation B", content: variations[1]?.content || "" });
   updateNodeCard(variationB);
   const contentB = createNode({ type: "Content", position: { x: 980, y: 560 } });
-  Object.assign(contentB, { title: plan.contentB.title, content: plan.contentB.content });
+  Object.assign(contentB, { title: variations[1]?.contentNode?.title || "Content B", content: variations[1]?.contentNode?.content || "" });
   updateNodeCard(contentB);
   const socialB = createNode({ type: "Social Media Posting", position: { x: 1040, y: 820 } });
-  Object.assign(socialB, { title: plan.socialB.title, content: plan.socialB.content });
+  Object.assign(socialB, { title: variations[1]?.socialPost?.title || "Social B", content: variations[1]?.socialPost?.caption || "" });
+  socialB.social.platform = variations[1]?.socialPost?.platform || "Instagram";
+  socialB.social.caption = variations[1]?.socialPost?.caption || "";
   updateNodeCard(socialB);
 
   const landing = createNode({ type: "Landing Page", position: { x: 520, y: 560 } });
-  Object.assign(landing, { title: plan.landing.title, content: plan.landing.content });
+  Object.assign(landing, { title: plan.landingPage?.title || plan.landing?.title || "Landing Page", content: plan.landingPage?.content || plan.landing?.content || "" });
   updateNodeCard(landing);
   const email = createNode({ type: "Email Campaign", position: { x: 700, y: 560 } });
-  Object.assign(email, { title: plan.email.title, content: plan.email.content });
+  Object.assign(email, { title: plan.emailCampaign?.title || plan.email?.title || "Email Campaign", content: plan.emailCampaign?.content || plan.email?.content || "" });
   updateNodeCard(email);
 
   addEdge(idea.id, variationA.id); addEdge(variationA.id, contentA.id); addEdge(contentA.id, socialA.id);
@@ -820,11 +845,21 @@ function openCreateCampaignModal() {
   </div>`;
   document.body.appendChild(overlay);
   overlay.querySelector("#campaign-modal-cancel").addEventListener("click", () => overlay.remove());
-  overlay.querySelector("#campaign-modal-generate").addEventListener("click", () => {
+  overlay.querySelector("#campaign-modal-generate").addEventListener("click", async () => {
     const ideaText = overlay.querySelector("#campaign-idea-input").value.trim();
     const contextText = overlay.querySelector("#campaign-context-input").value.trim();
-    generateCampaignFromIdea(ideaText || "Campaign Idea", contextText);
-    overlay.remove();
+    const generateBtn = overlay.querySelector("#campaign-modal-generate");
+    generateBtn.disabled = true;
+    generateBtn.textContent = "Generating...";
+    try {
+      const apiPlan = await fetchGeneratedCampaignPlan(ideaText || "Campaign Idea", contextText);
+      generateCampaignFromIdea(ideaText || "Campaign Idea", contextText, apiPlan);
+      overlay.remove();
+    } catch (error) {
+      alert("Could not generate with AI right now. Using fallback campaign template.");
+      generateCampaignFromIdea(ideaText || "Campaign Idea", contextText);
+      overlay.remove();
+    }
   });
 }
 
