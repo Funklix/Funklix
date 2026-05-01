@@ -113,13 +113,12 @@ module.exports = async function handler(req, res) {
     if (!rawText) {
       return res.status(500).json({ error: "OpenAI returned empty output", data });
     }
-    let parsed;
     try {
-      parsed = JSON.parse(rawText);
-    } catch (_err) {
+      const parsed = JSON.parse(rawText);
+      return res.status(200).json(parsed);
+    } catch (parseError) {
       return res.status(500).json({ error: "Failed to parse OpenAI JSON", rawText });
     }
-    return res.status(200).json(parsed);
   } catch (error) {
     return res.status(500).json({ error: error?.message || "Failed to generate campaign" });
   }
