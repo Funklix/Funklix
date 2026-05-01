@@ -842,16 +842,47 @@ function openCreateCampaignModal() {
     <h3 style="margin:0">Create Campaign</h3>
     <label>What is the campaign idea?<textarea id="campaign-idea-input" rows="4" style="width:100%"></textarea></label>
     <label>Additional context<input id="campaign-context-input" type="text" style="width:100%"/></label>
+    <div id="campaign-ai-loader" class="hidden" style="border:1px solid #ececf4;border-radius:10px;padding:10px;background:#fafaff">
+      <strong>✨ Improving content<span id="campaign-ai-dots"></span></strong>
+      <p id="campaign-ai-subtext" style="margin:6px 0 0;color:#5f6174">Analyzing brand voice...</p>
+    </div>
     <div style="display:flex;gap:8px;justify-content:flex-end"><button type="button" id="campaign-modal-cancel">Cancel</button><button type="button" id="campaign-modal-generate">Generate Campaign</button></div>
   </div>`;
   document.body.appendChild(overlay);
+  const loader = overlay.querySelector("#campaign-ai-loader");
+  const dotsEl = overlay.querySelector("#campaign-ai-dots");
+  const subtextEl = overlay.querySelector("#campaign-ai-subtext");
+  let thinkingTimer = null;
+  let thinkingTick = 0;
+  const startThinking = () => {
+    loader.classList.remove("hidden");
+    const steps = ["Analyzing brand voice...", "Refining tone...", "Optimizing structure..."];
+    thinkingTimer = setInterval(() => {
+      thinkingTick += 1;
+      dotsEl.textContent = ".".repeat((thinkingTick % 3) + 1);
+      subtextEl.textContent = steps[thinkingTick % steps.length];
+    }, 450);
+  };
+  const stopThinking = () => {
+    loader.classList.add("hidden");
+    if (thinkingTimer) clearInterval(thinkingTimer);
+    thinkingTimer = null;
+    dotsEl.textContent = "";
+  };
   overlay.querySelector("#campaign-modal-cancel").addEventListener("click", () => overlay.remove());
   overlay.querySelector("#campaign-modal-generate").addEventListener("click", async () => {
     const ideaText = overlay.querySelector("#campaign-idea-input").value.trim();
     const contextText = overlay.querySelector("#campaign-context-input").value.trim();
     const generateBtn = overlay.querySelector("#campaign-modal-generate");
+    const cancelBtn = overlay.querySelector("#campaign-modal-cancel");
+    const ideaInput = overlay.querySelector("#campaign-idea-input");
+    const contextInput = overlay.querySelector("#campaign-context-input");
     generateBtn.disabled = true;
     generateBtn.textContent = "Generating...";
+    cancelBtn.disabled = true;
+    ideaInput.disabled = true;
+    contextInput.disabled = true;
+    startThinking();
     try {
       const apiPlan = await fetchGeneratedCampaignPlan(ideaText || "Campaign Idea", contextText);
       generateCampaignFromIdea(ideaText || "Campaign Idea", contextText, apiPlan);
@@ -860,6 +891,8 @@ function openCreateCampaignModal() {
       alert("Could not generate with AI right now. Using fallback campaign template.");
       generateCampaignFromIdea(ideaText || "Campaign Idea", contextText);
       overlay.remove();
+    } finally {
+      stopThinking();
     }
   });
 }
@@ -1365,6 +1398,10 @@ async function runImproveNodeFlow(node) {
       <button type="button" data-preset="Custom" style="grid-column:1/-1">Custom</button>
     </div>
     <input id="improve-ai-custom" class="hidden" placeholder="Enter your instruction..." />
+    <div id="improve-ai-loader" class="hidden" style="border:1px solid #ececf4;border-radius:10px;padding:10px;background:#fafaff">
+      <strong>✨ Improving content<span id="improve-ai-dots"></span></strong>
+      <p id="improve-ai-subtext" style="margin:6px 0 0;color:#5f6174">Analyzing brand voice...</p>
+    </div>
     <div style="display:flex;justify-content:flex-end;gap:8px">
       <button type="button" id="improve-ai-cancel">Cancel</button>
       <button type="button" id="improve-ai-run" disabled>Improve</button>
@@ -1376,6 +1413,26 @@ async function runImproveNodeFlow(node) {
   const customInput = overlay.querySelector("#improve-ai-custom");
   const runBtn = overlay.querySelector("#improve-ai-run");
   const cancelBtn = overlay.querySelector("#improve-ai-cancel");
+  const loader = overlay.querySelector("#improve-ai-loader");
+  const dotsEl = overlay.querySelector("#improve-ai-dots");
+  const subtextEl = overlay.querySelector("#improve-ai-subtext");
+  let thinkingTimer = null;
+  let thinkingTick = 0;
+  const startThinking = () => {
+    loader.classList.remove("hidden");
+    const steps = ["Analyzing brand voice...", "Refining tone...", "Optimizing structure..."];
+    thinkingTimer = setInterval(() => {
+      thinkingTick += 1;
+      dotsEl.textContent = ".".repeat((thinkingTick % 3) + 1);
+      subtextEl.textContent = steps[thinkingTick % steps.length];
+    }, 450);
+  };
+  const stopThinking = () => {
+    loader.classList.add("hidden");
+    if (thinkingTimer) clearInterval(thinkingTimer);
+    thinkingTimer = null;
+    dotsEl.textContent = "";
+  };
 
   const refreshSelectionUI = () => {
     optionWrap.querySelectorAll("button").forEach((btn) => {
@@ -1417,6 +1474,10 @@ async function runImproveNodeFlow(node) {
     el.improveNodeButton.textContent = "✨ Improving...";
     runBtn.disabled = true;
     runBtn.textContent = "Improving...";
+    cancelBtn.disabled = true;
+    optionWrap.style.pointerEvents = "none";
+    customInput.disabled = true;
+    startThinking();
     try {
       const refined = await refineNodeWithAI(node, instruction);
       node.title = refined?.title || node.title;
@@ -1425,11 +1486,16 @@ async function runImproveNodeFlow(node) {
       updateNodeCard(node);
       fillInspector(node);
       saveCampaignCanvasState();
+      stopThinking();
       overlay.remove();
     } catch (_error) {
       alert("Could not refine node right now. Please try again.");
       runBtn.disabled = false;
       runBtn.textContent = "Improve";
+      cancelBtn.disabled = false;
+      optionWrap.style.pointerEvents = "";
+      customInput.disabled = false;
+      stopThinking();
     } finally {
       el.improveNodeButton.disabled = false;
       el.improveNodeButton.textContent = originalLabel;
