@@ -1018,16 +1018,21 @@ function updateInspectorActionVisibility() {
   const selectedCount = state.selectedIds.size;
   const hasSingleNode = selectedCount === 1 && !!state.selectedPrimary;
   const hasMultipleNodes = selectedCount > 1;
+  const hasAnySelection = selectedCount > 0;
 
   el.deleteNodeButton.classList.toggle("hidden", !hasSingleNode);
   el.improveNodeButton.classList.toggle("hidden", !hasSingleNode);
+  el.propagateDescendantsButton.classList.toggle("hidden", !hasSingleNode);
+  el.disconnectSelectedButton.classList.toggle("hidden", !hasAnySelection);
   el.deleteSelectedButton.classList.toggle("hidden", !hasMultipleNodes);
-  el.disconnectSelectedButton.classList.toggle("hidden", !hasMultipleNodes);
+
+  el.disconnectSelectedButton.textContent = hasSingleNode ? "Disconnect node" : "Disconnect selected";
 
   el.deleteNodeButton.disabled = !hasSingleNode;
   el.improveNodeButton.disabled = !hasSingleNode;
+  el.propagateDescendantsButton.disabled = !hasSingleNode;
+  el.disconnectSelectedButton.disabled = !hasAnySelection;
   el.deleteSelectedButton.disabled = !hasMultipleNodes;
-  el.disconnectSelectedButton.disabled = !hasMultipleNodes;
 }
 
 function parseList(value) {
