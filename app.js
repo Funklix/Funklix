@@ -1014,6 +1014,18 @@ function updateSelectionClasses() {
   updateInspectorActionVisibility();
 }
 
+function collapseExpandedNodes(exceptNodeId = null) {
+  el.zoomLayer.querySelectorAll(".node.content-expanded").forEach((nodeEl) => {
+    if (exceptNodeId && nodeEl.dataset.id === exceptNodeId) return;
+    nodeEl.classList.remove("content-expanded");
+    const content = nodeEl.querySelector(".content");
+    const expandBtn = nodeEl.querySelector(".node-expand-content");
+    const shouldTruncate = (content?.textContent || "").trim().length > 160;
+    if (content) content.classList.toggle("clamped", shouldTruncate && document.activeElement !== content);
+    if (expandBtn) expandBtn.classList.toggle("hidden", !shouldTruncate);
+  });
+}
+
 function updateInspectorActionVisibility() {
   const selectedCount = state.selectedIds.size;
   const hasSingleNode = selectedCount === 1 && !!state.selectedPrimary;
@@ -1624,6 +1636,7 @@ function renderNode(node) {
   nodeEl.dataset.id = node.id;
 
   nodeEl.addEventListener("click", (event) => {
+    collapseExpandedNodes(node.id);
     const append = event.shiftKey;
     if (!append) state.selectedIds.clear();
     state.selectedIds.add(node.id);
@@ -2161,6 +2174,7 @@ el.canvas.addEventListener("drop", (event) => {
 el.canvas.addEventListener("pointerdown", (event) => {
   if (event.button !== 0) return;
   if (event.target.closest(".node, .context-menu, button, input, textarea, select")) return;
+  collapseExpandedNodes();
 
   const appendSelection = event.shiftKey;
   const startLeft = el.canvas.scrollLeft;
