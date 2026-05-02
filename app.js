@@ -1068,6 +1068,19 @@ function downstreamNodeIds(startId) {
   return [...out];
 }
 
+function getDirectParentNode(nodeId) {
+  const parentEdge = state.edges.find(([, to]) => to === nodeId);
+  if (!parentEdge) return null;
+  return getNode(parentEdge[0]) || null;
+}
+
+function getCampaignContextSummary() {
+  const rootIdea = state.nodes.find((node) => node.type === "Idea" && !state.edges.some(([, to]) => to === node.id))
+    || state.nodes.find((node) => node.type === "Idea");
+  if (!rootIdea) return "";
+  return [rootIdea.title, rootIdea.content].filter(Boolean).join(" — ").trim();
+}
+
 function propagateNodeChangesDownward(node) {
   const targets = downstreamNodeIds(node.id).map(getNode).filter(Boolean);
   targets.forEach((t) => {
@@ -1410,6 +1423,8 @@ function renderInspectorImages(node) {
 }
 
 async function refineNodeWithAI(node, instruction) {
+  const parentNode = getDirectParentNode(node.id);
+  const campaignContext = getCampaignContextSummary();
   const response = await fetch("/api/refine-node", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -1421,7 +1436,11 @@ async function refineNodeWithAI(node, instruction) {
         caption: node.social?.caption || ""
       },
       instruction,
-      brandBrainData: state.brandCore
+      brandBrainData: state.brandCore,
+      parentNode: parentNode
+        ? { title: parentNode.title || "", content: parentNode.content || "", type: parentNode.type || "" }
+        : undefined,
+      campaignContext: campaignContext || undefined
     })
   });
   if (!response.ok) throw new Error("Refine API request failed");
