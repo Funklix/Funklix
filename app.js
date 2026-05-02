@@ -1090,8 +1090,9 @@ function updateNodeCard(node) {
   contentEl.textContent = node.content;
   const expandBtn = nodeEl.querySelector(".node-expand-content");
   const shouldTruncate = (node.content || "").length > 160;
-  contentEl.classList.toggle("clamped", shouldTruncate && document.activeElement !== contentEl);
-  expandBtn.classList.toggle("hidden", !shouldTruncate);
+  const isExpanded = nodeEl.classList.contains("content-expanded");
+  contentEl.classList.toggle("clamped", shouldTruncate && !isExpanded && document.activeElement !== contentEl);
+  expandBtn.classList.toggle("hidden", !shouldTruncate || isExpanded);
 
   const tags = [];
   if (node.channel) tags.push(`Channel: ${node.channel}`);
@@ -1418,11 +1419,10 @@ async function refineNodeWithAI(node, instruction) {
 async function runInlineRefine(node, instruction, triggerBtn = null) {
   const nodeEl = el.zoomLayer.querySelector(`[data-id='${node.id}']`);
   if (!nodeEl) return;
+  const toolbarButtons = [...nodeEl.querySelectorAll(".node-ai-toolbar button")];
   const originalText = triggerBtn?.textContent || "";
-  if (triggerBtn) {
-    triggerBtn.disabled = true;
-    triggerBtn.textContent = "…";
-  }
+  toolbarButtons.forEach((btn) => { btn.disabled = true; });
+  if (triggerBtn) triggerBtn.textContent = "…";
   nodeEl.classList.add("ai-loading");
   try {
     const refined = await refineNodeWithAI(node, instruction);
@@ -1438,10 +1438,8 @@ async function runInlineRefine(node, instruction, triggerBtn = null) {
     alert("Could not refine node right now. Please try again.");
   } finally {
     nodeEl.classList.remove("ai-loading");
-    if (triggerBtn) {
-      triggerBtn.disabled = false;
-      triggerBtn.textContent = originalText;
-    }
+    toolbarButtons.forEach((btn) => { btn.disabled = false; });
+    if (triggerBtn) triggerBtn.textContent = originalText;
   }
 }
 
@@ -1724,15 +1722,18 @@ function renderNode(node) {
   const expandBtn = document.createElement("button");
   expandBtn.type = "button";
   expandBtn.className = "node-expand-content hidden";
-  expandBtn.textContent = "... Expand";
+  expandBtn.textContent = "↗";
   expandBtn.addEventListener("click", (event) => {
     event.stopPropagation();
-    state.selectedIds.clear();
-    state.selectedIds.add(node.id);
-    state.selectedPrimary = node.id;
-    updateSelectionClasses();
-    fillInspector(node);
-    el.inputs.content.focus();
+    nodeEl.classList.add("content-expanded");
+    content.classList.remove("clamped");
+    expandBtn.classList.add("hidden");
+  });
+  content.addEventListener("click", () => {
+    if (!content.classList.contains("clamped")) return;
+    nodeEl.classList.add("content-expanded");
+    content.classList.remove("clamped");
+    expandBtn.classList.add("hidden");
   });
   content.insertAdjacentElement("afterend", expandBtn);
 
@@ -1745,15 +1746,18 @@ function renderNode(node) {
   content.addEventListener("input", () => {
     node.content = content.textContent.trim();
     if (state.selectedPrimary === node.id) el.inputs.content.value = node.content;
+    if ((node.content || "").length <= 160) nodeEl.classList.remove("content-expanded");
     const shouldTruncate = (node.content || "").length > 160;
-    content.classList.toggle("clamped", shouldTruncate && document.activeElement !== content);
-    expandBtn.classList.toggle("hidden", !shouldTruncate);
+    const isExpanded = nodeEl.classList.contains("content-expanded");
+    content.classList.toggle("clamped", shouldTruncate && !isExpanded && document.activeElement !== content);
+    expandBtn.classList.toggle("hidden", !shouldTruncate || isExpanded);
     saveCampaignCanvasState();
   });
   content.addEventListener("focus", () => content.classList.remove("clamped"));
   content.addEventListener("blur", () => {
     const shouldTruncate = (node.content || "").length > 160;
-    content.classList.toggle("clamped", shouldTruncate);
+    const isExpanded = nodeEl.classList.contains("content-expanded");
+    content.classList.toggle("clamped", shouldTruncate && !isExpanded);
   });
 
   enableNodeDrag(nodeEl, node);
