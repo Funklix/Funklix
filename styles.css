@@ -528,6 +528,56 @@ button:active {
   background: #f8f6ff;
 }
 
+.node .content {
+  overflow: hidden;
+}
+
+.node .content.clamped {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: normal;
+}
+
+.node-expand-content {
+  border: none;
+  background: transparent;
+  color: #4b5fd8;
+  font-size: 0.78rem;
+  padding: 0 4px 4px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.node-ai-toolbar {
+  display: none;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin: 2px 0 6px;
+}
+
+.node:hover .node-ai-toolbar,
+.node.selected .node-ai-toolbar {
+  display: flex;
+}
+
+.node-ai-toolbar button {
+  border: 1px solid #d8dced;
+  background: #f7f8ff;
+  color: #42507f;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  padding: 2px 8px;
+  cursor: pointer;
+}
+
+.node.ai-loading {
+  opacity: 0.75 !important;
+}
+
 .image-strip {
   display: flex;
   gap: 6px;
