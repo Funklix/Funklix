@@ -97,6 +97,7 @@ const el = {
   deleteNodeButton: document.getElementById("delete-node-btn"),
   improveNodeButton: document.getElementById("improve-node-btn"),
   regenerateNodeButton: document.getElementById("regenerate-node-btn"),
+  generateImageButton: document.getElementById("generate-image-btn"),
   postingPlanOverlay: document.getElementById("posting-plan-overlay"),
   postingDateInput: document.getElementById("posting-date-input"),
   postingTimeInput: document.getElementById("posting-time-input"),
@@ -1032,10 +1033,13 @@ function updateInspectorActionVisibility() {
   const hasSingleNode = selectedCount === 1 && !!state.selectedPrimary;
   const hasMultipleNodes = selectedCount > 1;
   const hasAnySelection = selectedCount > 0;
+  const selectedNode = hasSingleNode ? getNode(state.selectedPrimary) : null;
+  const canGenerateImage = !!selectedNode && selectedNode.type === "Content";
 
   el.deleteNodeButton.classList.toggle("hidden", !hasSingleNode);
   el.improveNodeButton.classList.toggle("hidden", !hasSingleNode);
   el.regenerateNodeButton.classList.toggle("hidden", !hasSingleNode);
+  el.generateImageButton.classList.toggle("hidden", !canGenerateImage);
   el.propagateDescendantsButton.classList.toggle("hidden", !hasSingleNode);
   el.disconnectSelectedButton.classList.toggle("hidden", !hasAnySelection);
   el.deleteSelectedButton.classList.toggle("hidden", !hasMultipleNodes);
@@ -1045,6 +1049,7 @@ function updateInspectorActionVisibility() {
   el.deleteNodeButton.disabled = !hasSingleNode;
   el.improveNodeButton.disabled = !hasSingleNode;
   el.regenerateNodeButton.disabled = !hasSingleNode;
+  el.generateImageButton.disabled = !canGenerateImage;
   el.propagateDescendantsButton.disabled = !hasSingleNode;
   el.disconnectSelectedButton.disabled = !hasAnySelection;
   el.deleteSelectedButton.disabled = !hasMultipleNodes;
@@ -1474,6 +1479,41 @@ async function runInlineRefine(node, instruction, triggerBtn = null) {
     nodeEl.classList.remove("ai-loading");
     toolbarButtons.forEach((btn) => { btn.disabled = false; });
     if (triggerBtn) triggerBtn.textContent = originalText;
+  }
+}
+
+async function generateImageForNode(node) {
+  const button = el.generateImageButton;
+  const originalLabel = button.textContent;
+  button.disabled = true;
+  button.textContent = "Generating image...";
+  try {
+    const response = await fetch("/api/generate-image", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        nodeTitle: node.title || "",
+        nodeContent: node.content || "",
+        brandBrainData: state.brandCore,
+        campaignContext: getCampaignContextSummary()
+      })
+    });
+    if (!response.ok) throw new Error("Image generation failed");
+    const data = await response.json();
+    if (!data?.imageBase64) throw new Error("Image response is empty");
+    node.images.push({
+      id: crypto.randomUUID(),
+      name: `AI Generated ${new Date().toISOString()}`,
+      url: `data:${data.mimeType || "image/png"};base64,${data.imageBase64}`
+    });
+    updateNodeCard(node);
+    fillInspector(node);
+    saveCampaignCanvasState();
+  } catch (_error) {
+    alert("Could not generate image right now. Please try again.");
+  } finally {
+    button.textContent = originalLabel;
+    updateInspectorActionVisibility();
   }
 }
 
@@ -2165,6 +2205,11 @@ el.regenerateNodeButton.addEventListener("click", async () => {
     "Regenerate this node as a fresh alternative version while keeping it aligned with the campaign context and brand voice.",
     el.regenerateNodeButton
   );
+});
+el.generateImageButton.addEventListener("click", async () => {
+  const node = getNode(state.selectedPrimary);
+  if (!node || node.type !== "Content") return;
+  await generateImageForNode(node);
 });
 el.deleteSelectedButton.addEventListener("click", () => {
   if (!state.selectedIds.size) return;
