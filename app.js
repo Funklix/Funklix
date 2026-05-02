@@ -1415,6 +1415,36 @@ async function refineNodeWithAI(node, instruction) {
   return response.json();
 }
 
+async function runInlineRefine(node, instruction, triggerBtn = null) {
+  const nodeEl = el.zoomLayer.querySelector(`[data-id='${node.id}']`);
+  if (!nodeEl) return;
+  const originalText = triggerBtn?.textContent || "";
+  if (triggerBtn) {
+    triggerBtn.disabled = true;
+    triggerBtn.textContent = "…";
+  }
+  nodeEl.classList.add("ai-loading");
+  try {
+    const refined = await refineNodeWithAI(node, instruction);
+    node.title = refined?.title || node.title;
+    node.content = refined?.content || node.content;
+    if (node.type === "Social Media Posting" && refined?.caption) node.social.caption = refined.caption;
+    updateNodeCard(node);
+    fillInspector(node);
+    saveCampaignCanvasState();
+    nodeEl.classList.add("ai-updated");
+    setTimeout(() => nodeEl.classList.remove("ai-updated"), 1300);
+  } catch (_error) {
+    alert("Could not refine node right now. Please try again.");
+  } finally {
+    nodeEl.classList.remove("ai-loading");
+    if (triggerBtn) {
+      triggerBtn.disabled = false;
+      triggerBtn.textContent = originalText;
+    }
+  }
+}
+
 async function runImproveNodeFlow(node) {
   const presets = {
     Emotional: "Make it more emotional",
@@ -1672,6 +1702,25 @@ function renderNode(node) {
 
   const title = nodeEl.querySelector(".title");
   const content = nodeEl.querySelector(".content");
+  const aiToolbar = document.createElement("div");
+  aiToolbar.className = "node-ai-toolbar";
+  [
+    ["✨ Improve", "Improve this node while keeping the original intent."],
+    ["Shorter", "Make this shorter and more concise."],
+    ["Emotional", "Make this more emotional and engaging."],
+    ["Direct", "Make this more direct and clear."]
+  ].forEach(([label, instruction]) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.textContent = label;
+    btn.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      await runInlineRefine(node, instruction, btn);
+    });
+    aiToolbar.appendChild(btn);
+  });
+  nodeEl.appendChild(aiToolbar);
+
   const expandBtn = document.createElement("button");
   expandBtn.type = "button";
   expandBtn.className = "node-expand-content hidden";
