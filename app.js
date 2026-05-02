@@ -96,6 +96,7 @@ const el = {
   inspectorImageList: document.getElementById("inspector-image-list"),
   deleteNodeButton: document.getElementById("delete-node-btn"),
   improveNodeButton: document.getElementById("improve-node-btn"),
+  regenerateNodeButton: document.getElementById("regenerate-node-btn"),
   postingPlanOverlay: document.getElementById("posting-plan-overlay"),
   postingDateInput: document.getElementById("posting-date-input"),
   postingTimeInput: document.getElementById("posting-time-input"),
@@ -1034,6 +1035,7 @@ function updateInspectorActionVisibility() {
 
   el.deleteNodeButton.classList.toggle("hidden", !hasSingleNode);
   el.improveNodeButton.classList.toggle("hidden", !hasSingleNode);
+  el.regenerateNodeButton.classList.toggle("hidden", !hasSingleNode);
   el.propagateDescendantsButton.classList.toggle("hidden", !hasSingleNode);
   el.disconnectSelectedButton.classList.toggle("hidden", !hasAnySelection);
   el.deleteSelectedButton.classList.toggle("hidden", !hasMultipleNodes);
@@ -1042,6 +1044,7 @@ function updateInspectorActionVisibility() {
 
   el.deleteNodeButton.disabled = !hasSingleNode;
   el.improveNodeButton.disabled = !hasSingleNode;
+  el.regenerateNodeButton.disabled = !hasSingleNode;
   el.propagateDescendantsButton.disabled = !hasSingleNode;
   el.disconnectSelectedButton.disabled = !hasAnySelection;
   el.deleteSelectedButton.disabled = !hasMultipleNodes;
@@ -1736,6 +1739,7 @@ function renderNode(node) {
   aiToolbar.className = "node-ai-toolbar";
   [
     ["✨ Improve", "Improve this node while keeping the original intent."],
+    ["🔄 Regenerate", "Regenerate this node as a fresh alternative version while keeping it aligned with the campaign context and brand voice."],
     ["Shorter", "Make this shorter and more concise."],
     ["Emotional", "Make this more emotional and engaging."],
     ["Direct", "Make this more direct and clear."]
@@ -2152,6 +2156,15 @@ el.improveNodeButton.addEventListener("click", async () => {
   const node = getNode(state.selectedPrimary);
   if (!node) return;
   await runImproveNodeFlow(node);
+});
+el.regenerateNodeButton.addEventListener("click", async () => {
+  const node = getNode(state.selectedPrimary);
+  if (!node) return;
+  await runInlineRefine(
+    node,
+    "Regenerate this node as a fresh alternative version while keeping it aligned with the campaign context and brand voice.",
+    el.regenerateNodeButton
+  );
 });
 el.deleteSelectedButton.addEventListener("click", () => {
   if (!state.selectedIds.size) return;
