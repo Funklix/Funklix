@@ -5,12 +5,28 @@ module.exports = async function handler(req, res) {
   if (!apiKey) return res.status(500).json({ error: "Server is missing OPENAI_API_KEY" });
 
   try {
-    const { nodeType = "", currentContent = {}, instruction = "", brandBrainData = {} } = req.body || {};
+    const {
+      nodeType = "",
+      currentContent = {},
+      instruction = "",
+      brandBrainData = {},
+      parentNode = null,
+      campaignContext = ""
+    } = req.body || {};
+    const parentNodeSection = parentNode
+      ? `Parent node: ${JSON.stringify(parentNode)}`
+      : "Parent node: none";
+    const campaignContextSection = campaignContext
+      ? `Campaign context: ${campaignContext}`
+      : "Campaign context: none";
     const prompt = `Refine campaign node content.
 Node type: ${nodeType}
 Instruction: ${instruction}
 Current content: ${JSON.stringify(currentContent)}
 Brand brain data: ${JSON.stringify(brandBrainData)}
+${parentNodeSection}
+${campaignContextSection}
+Guidance: Use parent node and brand brain to guide tone and intent. Do not change core meaning unless the instruction implies it.
 Return strict JSON only:
 {
   "title": "",
@@ -29,7 +45,7 @@ Return strict JSON only:
         input: [
           {
             role: "system",
-            content: "You are a senior marketing strategist refining campaign content."
+            content: "You are a senior marketing strategist refining campaign content. You always consider brand voice, campaign context, and strategic intent."
           },
           {
             role: "user",
