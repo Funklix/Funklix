@@ -1086,7 +1086,12 @@ function updateNodeCard(node) {
   nodeEl.querySelector(".type").textContent = node.type;
   nodeEl.querySelector(".type").style.color = tone;
   nodeEl.querySelector(".title").textContent = node.title;
-  nodeEl.querySelector(".content").textContent = node.content;
+  const contentEl = nodeEl.querySelector(".content");
+  contentEl.textContent = node.content;
+  const expandBtn = nodeEl.querySelector(".node-expand-content");
+  const shouldTruncate = (node.content || "").length > 160;
+  contentEl.classList.toggle("clamped", shouldTruncate && document.activeElement !== contentEl);
+  expandBtn.classList.toggle("hidden", !shouldTruncate);
 
   const tags = [];
   if (node.channel) tags.push(`Channel: ${node.channel}`);
@@ -1667,6 +1672,21 @@ function renderNode(node) {
 
   const title = nodeEl.querySelector(".title");
   const content = nodeEl.querySelector(".content");
+  const expandBtn = document.createElement("button");
+  expandBtn.type = "button";
+  expandBtn.className = "node-expand-content hidden";
+  expandBtn.textContent = "... Expand";
+  expandBtn.addEventListener("click", (event) => {
+    event.stopPropagation();
+    state.selectedIds.clear();
+    state.selectedIds.add(node.id);
+    state.selectedPrimary = node.id;
+    updateSelectionClasses();
+    fillInspector(node);
+    el.inputs.content.focus();
+  });
+  content.insertAdjacentElement("afterend", expandBtn);
+
   title.addEventListener("input", () => {
     node.title = title.textContent.trim();
     if (state.selectedPrimary === node.id) el.inputs.title.value = node.title;
@@ -1676,7 +1696,15 @@ function renderNode(node) {
   content.addEventListener("input", () => {
     node.content = content.textContent.trim();
     if (state.selectedPrimary === node.id) el.inputs.content.value = node.content;
+    const shouldTruncate = (node.content || "").length > 160;
+    content.classList.toggle("clamped", shouldTruncate && document.activeElement !== content);
+    expandBtn.classList.toggle("hidden", !shouldTruncate);
     saveCampaignCanvasState();
+  });
+  content.addEventListener("focus", () => content.classList.remove("clamped"));
+  content.addEventListener("blur", () => {
+    const shouldTruncate = (node.content || "").length > 160;
+    content.classList.toggle("clamped", shouldTruncate);
   });
 
   enableNodeDrag(nodeEl, node);
