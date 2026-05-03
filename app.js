@@ -15,6 +15,8 @@ const BOARD_HEIGHT = 10000;
 const STORAGE_KEY = "campaignCanvasState";
 const BRAND_CORE_STORAGE_KEY = "brandBrainState";
 
+let activeLightbox = null;
+
 const state = {
   nodes: [],
   edges: [],
@@ -156,19 +158,29 @@ function ensureImageLightbox() {
   return overlay;
 }
 
+function openLightbox(imageUrl) {
+  if (!imageUrl) return;
+  const lightbox = ensureImageLightbox();
+  const img = lightbox.querySelector(".image-lightbox-image");
+  img.src = imageUrl;
+  lightbox.classList.remove("hidden");
+  lightbox.classList.add("open");
+  activeLightbox = lightbox;
+}
+
 function closeLightbox() {
-  const overlay = document.getElementById("image-lightbox");
-  if (!overlay) return;
-  overlay.classList.add("hidden");
+  if (!activeLightbox) return;
+  activeLightbox.classList.remove("open");
+  activeLightbox.classList.add("hidden");
+  activeLightbox = null;
 }
 
 function openImageLightbox(url, alt = "Image preview") {
   if (!url) return;
-  const overlay = ensureImageLightbox();
-  const image = overlay.querySelector(".image-lightbox-image");
-  image.src = url;
-  image.alt = alt;
-  overlay.classList.remove("hidden");
+  const lightbox = ensureImageLightbox();
+  const img = lightbox.querySelector(".image-lightbox-image");
+  img.alt = alt;
+  openLightbox(url);
 }
 
 function nowString() {
@@ -1256,6 +1268,7 @@ function updateNodeCard(node) {
     thumb.className = `image-thumb image-thumb-preview${favoriteImage ? " is-favorite" : ""}`;
 
     const image = document.createElement("img");
+    image.className = "node-image-preview";
     image.src = previewImage.url;
     image.alt = previewImage.name || "Node image";
 
@@ -1264,7 +1277,6 @@ function updateNodeCard(node) {
     badge.textContent = favoriteImage ? "★" : "🖼";
 
     thumb.append(image, badge);
-    thumb.addEventListener("click", () => openImageLightbox(previewImage.url, previewImage.name || "Node image"));
 
     const extraCount = node.images.length - 1;
     if (extraCount > 0) {
@@ -1514,10 +1526,6 @@ function renderInspectorImages(node) {
     thumb.className = "inspector-image-thumb";
     thumb.src = img.url;
     thumb.alt = img.name || "Bild";
-    thumb.addEventListener("click", (event) => {
-      event.stopPropagation();
-      openImageLightbox(img.url, img.name || "Bild");
-    });
 
     const favoriteTag = document.createElement("span");
     favoriteTag.className = "inspector-image-favorite-tag";
@@ -2273,22 +2281,35 @@ function setAppMode(mode) {
 }
 
 // Events
-document.addEventListener("click", (event) => {
-  if (event.target.matches(".image-lightbox-close")) {
-    event.preventDefault();
+document.addEventListener("click", (e) => {
+  if (e.target.closest(".image-lightbox-close")) {
     closeLightbox();
     return;
   }
-  const overlay = document.getElementById("image-lightbox");
-  if (overlay && !overlay.classList.contains("hidden") && event.target === overlay) {
+
+  if (e.target.id === "image-lightbox") {
     closeLightbox();
+    return;
+  }
+
+  const nodeImg = e.target.closest(".node-image-preview");
+  if (nodeImg) {
+    const url = nodeImg.src || nodeImg.dataset.url;
+    if (url) openLightbox(url);
+    return;
+  }
+
+  const inspectorImg = e.target.closest(".inspector-image-thumb");
+  if (inspectorImg) {
+    const url = inspectorImg.src || inspectorImg.dataset.url;
+    if (url) openLightbox(url);
+    return;
   }
 });
 
-document.addEventListener("keydown", (event) => {
-  if (event.key === "Escape") {
-    const overlay = document.getElementById("image-lightbox");
-    if (overlay && !overlay.classList.contains("hidden")) closeLightbox();
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") {
+    closeLightbox();
   }
 });
 el.sidebarToggleButton?.addEventListener("click", () => {
