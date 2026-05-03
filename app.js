@@ -153,12 +153,18 @@ function ensureImageLightbox() {
   overlay.className = "image-lightbox hidden";
   overlay.innerHTML = '<button type="button" class="image-lightbox-close" aria-label="Close preview">✕</button><img class="image-lightbox-image" alt="Image preview" />';
   document.body.appendChild(overlay);
+  const closeLightbox = () => overlay.classList.add("hidden");
   overlay.addEventListener("click", (event) => {
-    if (event.target === overlay) overlay.classList.add("hidden");
+    if (event.target === overlay) closeLightbox();
   });
-  overlay.querySelector(".image-lightbox-close").addEventListener("click", () => overlay.classList.add("hidden"));
+  const closeButton = overlay.querySelector(".image-lightbox-close");
+  closeButton.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    closeLightbox();
+  });
   document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape") overlay.classList.add("hidden");
+    if (event.key === "Escape" && !overlay.classList.contains("hidden")) closeLightbox();
   });
   return overlay;
 }
@@ -1503,7 +1509,10 @@ function renderInspectorImages(node) {
     thumb.className = "inspector-image-thumb";
     thumb.src = img.url;
     thumb.alt = img.name || "Bild";
-    thumb.addEventListener("click", () => openImageLightbox(img.url, img.name || "Bild"));
+    thumb.addEventListener("click", (event) => {
+      event.stopPropagation();
+      openImageLightbox(img.url, img.name || "Bild");
+    });
 
     const favoriteTag = document.createElement("span");
     favoriteTag.className = "inspector-image-favorite-tag";

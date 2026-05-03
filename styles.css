@@ -1345,3 +1345,36 @@ button:active {
   color: #fff;
   font-size: 1rem;
 }
+
+.inspector-section label {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+  margin-bottom: 3px;
+}
+
+.inspector-section input,
+.inspector-section textarea,
+.inspector-section select,
+.inspector-section button {
+  display: block;
+  width: 100%;
+}
+
+.inspector-image-actions {
+  pointer-events: none;
+}
+
+.inspector-image-actions .inspector-image-action {
+  pointer-events: auto;
+}
+
+.image-lightbox {
+  z-index: 20000;
+  pointer-events: auto;
+}
+
+.image-lightbox-close {
+  z-index: 20001;
+  pointer-events: auto;
+}
