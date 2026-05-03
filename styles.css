@@ -28,6 +28,7 @@ body {
   display: grid;
   grid-template-columns: var(--sidebar-width) minmax(0, 1fr) 340px;
   height: 100vh;
+  overflow: hidden;
   transition: grid-template-columns 180ms ease;
 }
 
@@ -72,23 +73,37 @@ body {
   border-left: 1px solid var(--border);
   width: 340px;
   height: 100vh;
+  max-height: 100vh;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .inspector-content {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
+  flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
+  padding-right: 6px;
+  overscroll-behavior: contain;
+}
+
+
+.inspector-content::-webkit-scrollbar {
+  width: 8px;
+}
+
+.inspector-content::-webkit-scrollbar-thumb {
+  background: #c8cde0;
+  border-radius: 999px;
 }
 
 .node-form {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  min-height: 0;
+  flex: 0 0 auto;
+  min-height: unset;
 }
 
 .logo {
@@ -1019,6 +1034,8 @@ button:active {
   display: flex;
   flex-direction: column;
   gap: 7px;
+  flex: 0 0 auto;
+  min-height: unset;
 }
 
 .node-form label {
