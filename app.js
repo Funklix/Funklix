@@ -14,8 +14,6 @@ const BOARD_WIDTH = 10000;
 const BOARD_HEIGHT = 10000;
 const STORAGE_KEY = "campaignCanvasState";
 const BRAND_CORE_STORAGE_KEY = "brandBrainState";
-const IMAGE_DB_NAME = "campaignCanvasImages";
-const IMAGE_STORE_NAME = "images";
 
 const state = {
   nodes: [],
@@ -215,64 +213,9 @@ function restoreLastSnapshot() {
 
 
 function setSaveStatus(text) { el.saveStatus.textContent = text; }
-function openImageDb() {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(IMAGE_DB_NAME, 1);
-    request.onupgradeneeded = () => {
-      const db = request.result;
-      if (!db.objectStoreNames.contains(IMAGE_STORE_NAME)) db.createObjectStore(IMAGE_STORE_NAME, { keyPath: "id" });
-    };
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
-  });
-}
-async function putImageData(record) {
-  const db = await openImageDb();
-  await new Promise((resolve, reject) => {
-    const tx = db.transaction(IMAGE_STORE_NAME, "readwrite");
-    tx.objectStore(IMAGE_STORE_NAME).put(record);
-    tx.oncomplete = resolve;
-    tx.onerror = () => reject(tx.error);
-  });
-}
-async function getImageData(id) {
-  const db = await openImageDb();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(IMAGE_STORE_NAME, "readonly");
-    const req = tx.objectStore(IMAGE_STORE_NAME).get(id);
-    req.onsuccess = () => resolve(req.result || null);
-    req.onerror = () => reject(req.error);
-  });
-}
-async function deleteImageData(id) {
-  const db = await openImageDb();
-  await new Promise((resolve, reject) => {
-    const tx = db.transaction(IMAGE_STORE_NAME, "readwrite");
-    tx.objectStore(IMAGE_STORE_NAME).delete(id);
-    tx.oncomplete = resolve;
-    tx.onerror = () => reject(tx.error);
-  });
-}
-async function hydrateNodeImagesFromDb() {
-  for (const node of state.nodes) {
-    node.images = Array.isArray(node.images) ? node.images : [];
-    for (const img of node.images) {
-      if (img.url) continue;
-      const stored = await getImageData(img.id).catch(() => null);
-      if (stored?.dataUrl) img.url = stored.dataUrl;
-    }
-  }
-  state.nodes.forEach(updateNodeCard);
-  if (state.selectedPrimary) fillInspector(getNode(state.selectedPrimary));
-}
 function serializeState() {
   const serialized = {
-    nodes: state.nodes.map((n) => ({
-      ...n,
-      images: (n.images || [])
-        .filter((img) => img.id)
-        .map((img) => ({ id: img.id, name: img.name || "generated-image.png", createdAt: img.createdAt || Date.now(), source: img.source || "generated", favorite: n.favoriteImageId === img.id }))
-    })),
+    nodes: state.nodes.map((n) => ({ ...n, images: (n.images || []).filter((img) => img.url && !img.url.startsWith("blob:")) })),
     edges: state.edges, nodeCounter: state.nodeCounter, postitCounter: state.postitCounter, zoom: state.zoom
   };
   const selectedNode = state.selectedPrimary ? serialized.nodes.find((n) => n.id === state.selectedPrimary) : null;
@@ -291,7 +234,6 @@ function loadCampaignCanvasState() {
   state.selectedIds.clear(); state.selectedPrimary = null;
   el.zoomLayer.querySelectorAll(".node").forEach((n) => n.remove());
   state.nodes.forEach(renderNode);
-  hydrateNodeImagesFromDb();
   updateListView(); updateEmptyState(); drawLinks(); if (campaignState.zoom) setZoom(campaignState.zoom); setSaveStatus("Restored from local storage"); return true;
 }
 
@@ -1494,7 +1436,6 @@ function removeNodeImage(node, imageId) {
   const [removed] = node.images.splice(idx, 1);
   if (node.favoriteImageId === imageId) node.favoriteImageId = null;
   revokeImageObjectUrl(removed);
-  deleteImageData(imageId).catch((error) => console.error("IndexedDB delete image failed", error));
   updateNodeCard(node);
   if (state.selectedPrimary === node.id) fillInspector(node);
 }
@@ -1647,9 +1588,7 @@ async function generateImageForNode(node) {
       id: crypto.randomUUID ? crypto.randomUUID() : `img-${Date.now()}`,
       url: imageUrl,
       name: "generated-image.png",
-      createdAt: Date.now(),
-      source: "generated",
-      favorite: false
+      createdAt: Date.now()
     };
     node.images = Array.isArray(node.images) ? node.images : [];
     console.log("BEFORE image add", node.id, node.images?.length, node.images);
@@ -1690,10 +1629,6 @@ async function generatePostingVisualForNode(node) {
   const favoriteImage = parentContent.images.find((img) => img.id === parentContent.favoriteImageId);
   const sourceImage = favoriteImage || parentContent.images[parentContent.images.length - 1];
   console.log("content images before save", parentContent.images);
-  if (sourceImage && !sourceImage.url) {
-    const stored = await getImageData(sourceImage.id).catch(() => null);
-    if (stored?.dataUrl) sourceImage.url = stored.dataUrl;
-  }
   console.log("selected source image", sourceImage?.id, sourceImage?.url?.slice(0, 30));
   if (!sourceImage?.url) {
     alert("Please connect this post to a Content node with an image first.");
@@ -1729,9 +1664,7 @@ async function generatePostingVisualForNode(node) {
       id: crypto.randomUUID ? crypto.randomUUID() : `img-${Date.now()}`,
       url: imageUrl,
       name: "generated-image.png",
-      createdAt: Date.now(),
-      source: "generated",
-      favorite: false
+      createdAt: Date.now()
     };
     node.images = Array.isArray(node.images) ? node.images : [];
     console.log("BEFORE image add", node.id, node.images?.length, node.images);
@@ -2673,7 +2606,3 @@ function bootApp() {
 
 if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", bootApp);
 else bootApp();
-    await putImageData({ id: newImage.id, dataUrl: newImage.url, mimeType: data?.mimeType || "image/png", createdAt: newImage.createdAt })
-      .catch((error) => { console.error("IndexedDB image save failed", error); throw error; });
-    await putImageData({ id: newImage.id, dataUrl: newImage.url, mimeType: data?.mimeType || "image/png", createdAt: newImage.createdAt })
-      .catch((error) => { console.error("IndexedDB image save failed", error); throw error; });
