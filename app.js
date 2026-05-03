@@ -54,6 +54,8 @@ const state = {
 };
 
 const el = {
+  appShell: document.querySelector(".app-shell"),
+  leftSidebar: document.getElementById("left-sidebar"),
   workspaceWrap: document.querySelector(".workspace-wrap"),
   canvas: document.getElementById("canvas"),
   canvasTopbar: document.getElementById("canvas-topbar"),
@@ -113,6 +115,7 @@ const el = {
   saveStatus: document.getElementById("save-status"),
   brandCoreButton: document.getElementById("brand-core-nav-btn"),
   campaignCanvasNavButton: document.getElementById("campaign-canvas-nav-btn"),
+  sidebarToggleButton: document.getElementById("sidebar-toggle-btn"),
   brandEditorTitle: document.getElementById("bc-editor-title"),
   brandCoreCanvas: document.getElementById("brand-core-canvas"),
   brandEditorPanel: document.getElementById("bc-editor-panel"),
@@ -2182,6 +2185,18 @@ function renderCalendarView() {
   }
 }
 
+
+
+function setSidebarCollapsed(collapsed) {
+  if (!el.appShell) return;
+  el.appShell.classList.toggle("sidebar-collapsed", !!collapsed);
+  if (el.sidebarToggleButton) {
+    el.sidebarToggleButton.textContent = collapsed ? "▶" : "◀";
+    el.sidebarToggleButton.setAttribute("aria-label", collapsed ? "Expand sidebar" : "Collapse sidebar");
+    el.sidebarToggleButton.title = collapsed ? "Expand sidebar" : "Collapse sidebar";
+  }
+}
+
 function setActiveView(view) {
   state.activeView = view;
   el.canvas.classList.toggle("hidden", view !== "board");
@@ -2213,6 +2228,11 @@ function setAppMode(mode) {
 }
 
 // Events
+el.sidebarToggleButton?.addEventListener("click", () => {
+  const collapsed = !el.appShell.classList.contains("sidebar-collapsed");
+  setSidebarCollapsed(collapsed);
+});
+
 el.addNodeButton.addEventListener("click", () => {
   setActiveView("board");
   openTypePicker((type) => {
@@ -2544,6 +2564,8 @@ el.postingDoneButton.addEventListener("click", () => {
   closePostingPlanner();
 });
 el.postingCancelButton.addEventListener("click", closePostingPlanner);
+setSidebarCollapsed(false);
+
 el.brandCoreButton.addEventListener("click", () => {
   setAppMode("brand");
 });

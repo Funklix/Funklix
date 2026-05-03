@@ -8,14 +8,17 @@
   </head>
   <body>
     <div class="app-shell">
-      <aside class="sidebar">
-        <div class="logo">CC</div>
+      <aside class="sidebar" id="left-sidebar">
+        <div class="sidebar-header">
+          <div class="logo">CC</div>
+          <button id="sidebar-toggle-btn" class="sidebar-toggle" type="button" aria-label="Collapse sidebar" title="Collapse sidebar">◀</button>
+        </div>
         <nav>
-          <button id="campaign-canvas-nav-btn" class="nav-item active">Campaign Canvas</button>
-          <button class="nav-item">Content Workspace</button>
-          <button id="brand-core-nav-btn" class="nav-item">Brand Core</button>
-          <button class="nav-item">AI Brain</button>
-          <button class="nav-item">Insights</button>
+          <button id="campaign-canvas-nav-btn" class="nav-item active" data-icon="🧩"><span class="nav-label">Campaign Canvas</span></button>
+          <button class="nav-item" data-icon="🗂"><span class="nav-label">Content Workspace</span></button>
+          <button id="brand-core-nav-btn" class="nav-item" data-icon="🧠"><span class="nav-label">Brand Core</span></button>
+          <button class="nav-item" data-icon="✨"><span class="nav-label">AI Brain</span></button>
+          <button class="nav-item" data-icon="📈"><span class="nav-label">Insights</span></button>
         </nav>
       </aside>
 
