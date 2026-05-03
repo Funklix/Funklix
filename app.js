@@ -1516,6 +1516,7 @@ async function generateImageForNode(node) {
   console.log("generate image start");
   const button = el.generateImageButton;
   const originalLabel = button.textContent;
+  let imageAttached = false;
   button.disabled = true;
   button.textContent = "Generating image...";
   try {
@@ -1533,10 +1534,10 @@ async function generateImageForNode(node) {
     if (!response.ok) throw new Error("Image generation failed");
     const data = await response.json();
     console.log("generate image API response", data);
-    const imageUrl = data?.imageUrl
-      || data?.url
+    const imageUrl = (data?.imageBase64 ? `data:${data.mimeType || "image/png"};base64,${data.imageBase64}` : "")
       || data?.dataUrl
-      || (data?.imageBase64 ? `data:${data.mimeType || "image/png"};base64,${data.imageBase64}` : "");
+      || data?.imageUrl
+      || data?.url;
     console.log("resolved image URL", imageUrl);
     if (!imageUrl) throw new Error("Image response is empty");
     node.images.push({
@@ -1548,10 +1549,14 @@ async function generateImageForNode(node) {
     updateNodeCard(node);
     fillInspector(node);
     saveCampaignCanvasState();
+    imageAttached = true;
     console.log("generate image success - no alert");
     return;
-  } catch (_error) {
-    alert("Could not generate image right now. Please try again.");
+  } catch (error) {
+    if (!imageAttached) {
+      console.error("SHOWING IMAGE ERROR ALERT", error);
+      alert("Could not generate image right now. Please try again.");
+    }
   } finally {
     button.textContent = originalLabel;
     updateInspectorActionVisibility();

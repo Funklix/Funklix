@@ -24,14 +24,21 @@ Creative direction:
 - Create a visual metaphor or scene that represents the idea.
 - Use brand tone/style cues from brandBrainData where relevant.
 - ${formatGuidance}
-- Make it modern, minimal, and high-quality.
+- Make it modern, minimal, premium, and high-quality.
+- Use cinematic lighting and strong composition.
+- Favor realistic detail or high-end editorial style.
+- Avoid generic stock-photo look.
+- Avoid plain white backgrounds unless explicitly requested.
 - Keep composition clean and suitable for social media marketing.
 
 Strict constraints:
 - Do NOT include any text, letters, words, numbers, logos, or typography in the image.
 - No UI elements.
 - No screenshots.
-- No posters.`;
+- No posters.
+
+Internal style preset:
+- premium editorial marketing visual.`;
 
     const response = await fetch("https://api.openai.com/v1/images/generations", {
       method: "POST",
@@ -43,7 +50,7 @@ Strict constraints:
         model: "gpt-image-1",
         prompt,
         size: "1024x1024",
-        quality: "low",
+        quality: "high",
         n: 1
       })
     });
