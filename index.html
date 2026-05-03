@@ -97,10 +97,11 @@
       </main>
 
       <aside class="inspector" id="inspector-panel">
-        <h2>Node Konfiguration</h2>
-        <div class="meta" id="inspector-meta">Wähle oder erstelle einen Node.</div>
+        <div class="inspector-content">
+          <h2>Node Konfiguration</h2>
+          <div class="meta" id="inspector-meta">Wähle oder erstelle einen Node.</div>
 
-        <form id="node-form" class="node-form" autocomplete="off">
+          <form id="node-form" class="node-form" autocomplete="off">
           <label for="node-type">Typ</label>
           <select id="node-type" name="type"></select>
 
@@ -166,7 +167,8 @@
           <button id="propagate-descendants-btn" type="button">Propagate to descendants</button>
           <button id="delete-node-btn" type="button" class="danger">Delete node</button>
           <button id="delete-selected-btn" type="button" class="danger">Delete selected nodes</button>
-        </form>
+          </form>
+        </div>
       </aside>
     </div>
 
