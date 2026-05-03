@@ -92,6 +92,7 @@ const el = {
   nodeForm: document.getElementById("node-form"),
   socialFields: document.getElementById("social-fields"),
   contentUploadFields: document.getElementById("content-upload-fields"),
+  contentFormatField: document.getElementById("content-format-field"),
   imageUpload: document.getElementById("node-image-upload"),
   inspectorImageList: document.getElementById("inspector-image-list"),
   deleteNodeButton: document.getElementById("delete-node-btn"),
@@ -126,7 +127,8 @@ const el = {
     preview: document.getElementById("node-preview"),
     audience: document.getElementById("node-audience"),
     goal: document.getElementById("node-goal"),
-    channel: document.getElementById("node-channel")
+    channel: document.getElementById("node-channel"),
+    contentFormat: document.getElementById("node-content-format")
   }
 };
 
@@ -565,6 +567,7 @@ function createNode({ type = "Idea", parentId = null, position = null, images = 
     content: "",
     tags: [],
     variants: [],
+    contentFormat: "1:1",
     audience: "",
     goal: "",
     channel: "",
@@ -1131,6 +1134,7 @@ function updateNodeCard(node) {
   if (node.channel) tags.push(`Channel: ${node.channel}`);
   if (node.goal) tags.push(`Goal: ${node.goal}`);
   if (node.audience) tags.push(`Audience: ${node.audience}`);
+  if (node.type === "Content") tags.push(`Format: ${node.contentFormat || "1:1"}`);
   tags.push(...node.tags);
 
   const tagsWrap = nodeEl.querySelector(".tags");
@@ -1363,6 +1367,10 @@ function fillInspector(node) {
     el.nodeForm.reset();
     el.socialFields.classList.add("hidden");
     el.contentUploadFields.classList.add("hidden");
+    el.contentFormatField.classList.add("hidden");
+    const variantsLabel = el.nodeForm.querySelector('label[for="node-variants"]');
+    variantsLabel?.classList.remove("hidden");
+    el.inputs.variants.classList.remove("hidden");
     el.inspectorImageList.innerHTML = "";
     updateInspectorActionVisibility();
     return;
@@ -1380,9 +1388,15 @@ function fillInspector(node) {
   el.inputs.audience.value = node.audience;
   el.inputs.goal.value = node.goal;
   el.inputs.channel.value = node.channel;
+  el.inputs.contentFormat.value = node.contentFormat || "1:1";
 
   el.socialFields.classList.toggle("hidden", node.type !== "Social Media Posting");
   el.contentUploadFields.classList.toggle("hidden", !(node.type === "Content" || node.type === "Social Media Posting"));
+  el.contentFormatField.classList.toggle("hidden", node.type !== "Content");
+  const variantsLabel = el.nodeForm.querySelector('label[for="node-variants"]');
+  const hideVariants = node.type === "Content";
+  variantsLabel?.classList.toggle("hidden", hideVariants);
+  el.inputs.variants.classList.toggle("hidden", hideVariants);
   renderInspectorImages(node);
   updateInspectorActionVisibility();
 }
@@ -1424,8 +1438,24 @@ function renderInspectorImages(node) {
     deleteBtn.className = "inspector-image-delete";
     deleteBtn.textContent = "Bild löschen";
     deleteBtn.addEventListener("click", () => removeNodeImage(node, img.id));
+    const downloadBtn = document.createElement("button");
+    downloadBtn.type = "button";
+    downloadBtn.className = "inspector-image-delete";
+    downloadBtn.textContent = "Download";
+    downloadBtn.addEventListener("click", () => {
+      const a = document.createElement("a");
+      a.href = img.url;
+      const safeName = (node.title || node.content || "node-image")
+        .slice(0, 40)
+        .replace(/[^a-z0-9-_]+/gi, "-")
+        .replace(/^-+|-+$/g, "");
+      a.download = `${safeName || "node-image"}.png`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    });
 
-    row.append(name, deleteBtn);
+    row.append(name, downloadBtn, deleteBtn);
     el.inspectorImageList.appendChild(row);
   });
 }
@@ -1483,6 +1513,7 @@ async function runInlineRefine(node, instruction, triggerBtn = null) {
 }
 
 async function generateImageForNode(node) {
+  console.log("generate image start");
   const button = el.generateImageButton;
   const originalLabel = button.textContent;
   button.disabled = true;
@@ -1495,26 +1526,29 @@ async function generateImageForNode(node) {
         nodeTitle: node.title || "",
         nodeContent: node.content || "",
         brandBrainData: state.brandCore,
-        campaignContext: getCampaignContextSummary()
+        campaignContext: getCampaignContextSummary(),
+        contentFormat: node.contentFormat || "1:1"
       })
     });
     if (!response.ok) throw new Error("Image generation failed");
     const data = await response.json();
-    console.log("Image generation response", data);
-    const normalizedImageUrl = data?.imageUrl
+    console.log("generate image API response", data);
+    const imageUrl = data?.imageUrl
       || data?.url
       || data?.dataUrl
       || (data?.imageBase64 ? `data:${data.mimeType || "image/png"};base64,${data.imageBase64}` : "");
-    if (!normalizedImageUrl) throw new Error("Image response is empty");
+    console.log("resolved image URL", imageUrl);
+    if (!imageUrl) throw new Error("Image response is empty");
     node.images.push({
       id: crypto.randomUUID(),
       name: `AI Generated ${new Date().toISOString()}`,
-      url: normalizedImageUrl
+      url: imageUrl
     });
-    console.log("Image attached successfully", normalizedImageUrl);
+    console.log("image attached to node", node.id);
     updateNodeCard(node);
     fillInspector(node);
     saveCampaignCanvasState();
+    console.log("generate image success - no alert");
     return;
   } catch (_error) {
     alert("Could not generate image right now. Please try again.");
@@ -2163,6 +2197,7 @@ el.nodeForm.addEventListener("input", (event) => {
   if (event.target === el.inputs.audience) node.audience = el.inputs.audience.value.trim();
   if (event.target === el.inputs.goal) node.goal = el.inputs.goal.value.trim();
   if (event.target === el.inputs.channel) node.channel = el.inputs.channel.value.trim();
+  if (event.target === el.inputs.contentFormat) node.contentFormat = el.inputs.contentFormat.value || "1:1";
 
   updateNodeCard(node);
   updateListView();

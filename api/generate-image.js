@@ -5,7 +5,12 @@ module.exports = async function handler(req, res) {
   if (!apiKey) return res.status(500).json({ error: "Server is missing OPENAI_API_KEY" });
 
   try {
-    const { nodeTitle = "", nodeContent = "", brandBrainData = {}, campaignContext = "" } = req.body || {};
+    const { nodeTitle = "", nodeContent = "", brandBrainData = {}, campaignContext = "", contentFormat = "1:1" } = req.body || {};
+    const formatGuidance = contentFormat === "16:9"
+      ? "Create a wide 16:9 landing-page/hero-style visual composition."
+      : contentFormat === "9:16"
+        ? "Create a vertical 9:16 story/reel-style visual composition."
+        : "Create a square 1:1 social/creative visual composition.";
     const prompt = `Create a conceptual marketing visual based on the structured context below.
 
 Structured context:
@@ -13,10 +18,12 @@ Structured context:
 - nodeContent: ${nodeContent}
 - brandBrainData (tone/style/assets): ${JSON.stringify(brandBrainData)}
 - campaignContext: ${campaignContext || "none"}
+- contentFormat: ${contentFormat}
 
 Creative direction:
 - Create a visual metaphor or scene that represents the idea.
 - Use brand tone/style cues from brandBrainData where relevant.
+- ${formatGuidance}
 - Make it modern, minimal, and high-quality.
 - Keep composition clean and suitable for social media marketing.
 
