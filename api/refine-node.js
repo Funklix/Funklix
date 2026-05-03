@@ -78,7 +78,11 @@ Return strict JSON only:
     }
 
     const data = await response.json();
-    const rawText = data?.output_text || data?.output?.[0]?.content?.[0]?.text || "";
+    console.log("OpenAI refine-node payload", JSON.stringify(data));
+    const outputItemText = (data?.output || [])
+      .flatMap((item) => item?.content || [])
+      .find((c) => c?.type === "output_text" && c?.text)?.text || "";
+    const rawText = data?.output_text || data?.output?.[0]?.content?.[0]?.text || outputItemText || "";
     if (!rawText) return res.status(500).json({ error: "OpenAI returned empty output", data });
     try {
       return res.status(200).json(JSON.parse(rawText));

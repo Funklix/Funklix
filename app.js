@@ -1481,7 +1481,11 @@ async function refineNodeWithAI(node, instruction) {
       campaignContext: campaignContext || undefined
     })
   });
-  if (!response.ok) throw new Error("Refine API request failed");
+  if (!response.ok) {
+    const errorResponse = await response.json().catch(() => ({}));
+    console.error("Refine node failed", errorResponse);
+    throw new Error(errorResponse?.error || "Refine API request failed");
+  }
   return response.json();
 }
 
