@@ -528,6 +528,78 @@ button:active {
   background: #f8f6ff;
 }
 
+.node .content {
+  overflow: hidden;
+}
+
+.node .content.clamped {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: normal;
+}
+
+.node-expand-content {
+  border: 1px solid #d7dcf1;
+  background: #f8f9ff;
+  color: #4b5fd8;
+  font-size: 0.8rem;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  padding: 0;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.node-ai-toolbar {
+  display: none;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin: 2px 0 6px;
+}
+
+.node:hover .node-ai-toolbar,
+.node.selected .node-ai-toolbar {
+  display: flex;
+}
+
+.node-ai-toolbar button {
+  border: 1px solid #d8dced;
+  background: #f7f8ff;
+  color: #42507f;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  padding: 2px 8px;
+  cursor: pointer;
+}
+
+.node-ai-toolbar button:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+
+.node.ai-loading {
+  opacity: 0.75 !important;
+  position: relative;
+}
+
+.node.ai-loading .node-ai-toolbar::after {
+  content: "✨ AI is thinking…";
+  font-size: 0.66rem;
+  color: #5b63a8;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #eef1ff 0%, #e1e8ff 50%, #eef1ff 100%);
+  background-size: 200% 100%;
+  animation: aiThinkingShimmer 1.2s linear infinite;
+}
+
 .image-strip {
   display: flex;
   gap: 6px;
@@ -874,6 +946,11 @@ button:active {
   border-color: #7a72ff !important;
   box-shadow: 0 0 0 2px rgba(122, 114, 255, 0.25), 0 12px 30px rgba(78, 142, 255, 0.25) !important;
   transition: box-shadow 220ms ease-out, border-color 220ms ease-out;
+}
+
+@keyframes aiThinkingShimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
 }
 
 @keyframes nodeFlash {
