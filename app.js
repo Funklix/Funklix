@@ -153,20 +153,13 @@ function ensureImageLightbox() {
   overlay.className = "image-lightbox hidden";
   overlay.innerHTML = '<button type="button" class="image-lightbox-close" aria-label="Close preview">✕</button><img class="image-lightbox-image" alt="Image preview" />';
   document.body.appendChild(overlay);
-  const closeLightbox = () => overlay.classList.add("hidden");
-  overlay.addEventListener("click", (event) => {
-    if (event.target === overlay) closeLightbox();
-  });
-  const closeButton = overlay.querySelector(".image-lightbox-close");
-  closeButton.addEventListener("click", (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-    closeLightbox();
-  });
-  document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape" && !overlay.classList.contains("hidden")) closeLightbox();
-  });
   return overlay;
+}
+
+function closeLightbox() {
+  const overlay = document.getElementById("image-lightbox");
+  if (!overlay) return;
+  overlay.classList.add("hidden");
 }
 
 function openImageLightbox(url, alt = "Image preview") {
@@ -1102,25 +1095,37 @@ function updateInspectorActionVisibility() {
   const canGeneratePostingVisual = !!selectedNode && selectedNode.type === "Social Media Posting";
 
   el.deleteNodeButton.classList.toggle("hidden", !hasSingleNode);
+  el.deleteSelectedButton.classList.toggle("hidden", !hasMultipleNodes);
   el.improveNodeButton.classList.toggle("hidden", !hasSingleNode);
   el.regenerateNodeButton.classList.toggle("hidden", !hasSingleNode);
   el.generateImageButton.classList.toggle("hidden", !canGenerateImage);
   el.generatePostingVisualButton.classList.toggle("hidden", !canGeneratePostingVisual);
   el.propagateDescendantsButton.classList.toggle("hidden", !hasSingleNode);
   el.disconnectSelectedButton.classList.toggle("hidden", !hasAnySelection);
-  el.deleteSelectedButton.classList.toggle("hidden", !hasMultipleNodes);
+
+  if (!hasAnySelection) {
+    el.deleteNodeButton.classList.add("hidden");
+    el.deleteSelectedButton.classList.add("hidden");
+  } else if (hasSingleNode) {
+    el.deleteNodeButton.classList.remove("hidden");
+    el.deleteSelectedButton.classList.add("hidden");
+  } else {
+    el.deleteNodeButton.classList.add("hidden");
+    el.deleteSelectedButton.classList.remove("hidden");
+  }
 
   el.disconnectSelectedButton.textContent = hasSingleNode ? "Disconnect node" : "Disconnect selected";
 
   el.deleteNodeButton.disabled = !hasSingleNode;
+  el.deleteSelectedButton.disabled = !hasMultipleNodes;
   el.improveNodeButton.disabled = !hasSingleNode;
   el.regenerateNodeButton.disabled = !hasSingleNode;
   el.generateImageButton.disabled = !canGenerateImage;
   el.generatePostingVisualButton.disabled = !canGeneratePostingVisual;
   el.propagateDescendantsButton.disabled = !hasSingleNode;
   el.disconnectSelectedButton.disabled = !hasAnySelection;
-  el.deleteSelectedButton.disabled = !hasMultipleNodes;
 }
+
 
 function parseList(value) {
   return value
@@ -2268,6 +2273,24 @@ function setAppMode(mode) {
 }
 
 // Events
+document.addEventListener("click", (event) => {
+  if (event.target.matches(".image-lightbox-close")) {
+    event.preventDefault();
+    closeLightbox();
+    return;
+  }
+  const overlay = document.getElementById("image-lightbox");
+  if (overlay && !overlay.classList.contains("hidden") && event.target === overlay) {
+    closeLightbox();
+  }
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") {
+    const overlay = document.getElementById("image-lightbox");
+    if (overlay && !overlay.classList.contains("hidden")) closeLightbox();
+  }
+});
 el.sidebarToggleButton?.addEventListener("click", () => {
   const collapsed = !el.appShell.classList.contains("sidebar-collapsed");
   setSidebarCollapsed(collapsed);
