@@ -230,6 +230,7 @@ function loadCampaignCanvasState() {
   const raw = localStorage.getItem(STORAGE_KEY); if (!raw) return false;
   const campaignState = JSON.parse(raw); console.log("Loaded campaignCanvasState", campaignState);
   state.nodes = campaignState.nodes || []; state.edges = campaignState.edges || []; state.nodeCounter = campaignState.nodeCounter || 1; state.postitCounter = campaignState.postitCounter || 1;
+  console.log("loaded node images", state.nodes.find((n) => n.id === state.selectedPrimary)?.images);
   state.selectedIds.clear(); state.selectedPrimary = null;
   el.zoomLayer.querySelectorAll(".node").forEach((n) => n.remove());
   state.nodes.forEach(renderNode);
@@ -1583,18 +1584,23 @@ async function generateImageForNode(node) {
       || data?.url;
     console.log("resolved image URL", imageUrl);
     if (!imageUrl) throw new Error("Image response is empty");
-    node.images.push({
-      id: `img-${crypto.randomUUID()}`,
-      name: `AI Generated ${new Date().toISOString()}`,
+    const newImage = {
+      id: crypto.randomUUID ? crypto.randomUUID() : `img-${Date.now()}`,
       url: imageUrl,
+      name: "generated-image.png",
       createdAt: Date.now()
-    });
+    };
+    node.images = node.images || [];
+    console.log("image before push", node.images);
+    console.log("new generated image", newImage);
+    node.images.push(newImage);
+    console.log("image after push", node.images);
     imageAttached = true;
     console.log("image attached to node", node.id);
     updateNodeCard(node);
     fillInspector(node);
     saveCampaignCanvasState();
-    console.log("serialized images", serializeState().nodes.find((n) => n.id === node.id)?.images);
+    console.log("saved state images", serializeState().nodes.find((n) => n.id === node.id)?.images);
     console.log("generate image success - no alert");
     return;
   } catch (error) {
@@ -1655,11 +1661,21 @@ async function generatePostingVisualForNode(node) {
     const data = await response.json();
     const imageUrl = data?.imageBase64 ? `data:${data.mimeType || "image/png"};base64,${data.imageBase64}` : "";
     if (!imageUrl) throw new Error("No posting visual returned");
-    node.images.push({ id: `img-${crypto.randomUUID()}`, name: `Posting Visual ${new Date().toISOString()}`, url: imageUrl, createdAt: Date.now() });
+    const newImage = {
+      id: crypto.randomUUID ? crypto.randomUUID() : `img-${Date.now()}`,
+      url: imageUrl,
+      name: "generated-image.png",
+      createdAt: Date.now()
+    };
+    node.images = node.images || [];
+    console.log("image before push", node.images);
+    console.log("new generated image", newImage);
+    node.images.push(newImage);
+    console.log("image after push", node.images);
     postingVisualAttached = true;
     saveCampaignCanvasState();
     console.log("posting visual attached", node.images);
-    console.log("serialized images", serializeState().nodes.find((n) => n.id === node.id)?.images);
+    console.log("saved state images", serializeState().nodes.find((n) => n.id === node.id)?.images);
     updateNodeCard(node);
     fillInspector(node);
     return;
