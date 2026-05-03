@@ -30,6 +30,7 @@ const state = {
   connectorCreateMode: null,
   connectorGhostEl: null,
   contextBoardPoint: { x: 0, y: 0 },
+  contextNodeId: null,
   activeView: "board",
   calendarMonth: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
   postingPlannerNodeId: null
@@ -84,16 +85,21 @@ const el = {
   contextMenu: document.getElementById("context-menu"),
   addContextNodeButton: document.getElementById("add-context-node-btn"),
   addPostitCommentButton: document.getElementById("add-postit-comment-btn"),
+  improveContextNodeButton: document.getElementById("improve-context-node-btn"),
   picker: document.getElementById("node-type-picker"),
   pickerOptions: document.getElementById("node-type-options"),
   inspectorMeta: document.getElementById("inspector-meta"),
   nodeForm: document.getElementById("node-form"),
   socialFields: document.getElementById("social-fields"),
   contentUploadFields: document.getElementById("content-upload-fields"),
+  contentFormatField: document.getElementById("content-format-field"),
   imageUpload: document.getElementById("node-image-upload"),
   inspectorImageList: document.getElementById("inspector-image-list"),
   deleteNodeButton: document.getElementById("delete-node-btn"),
   improveNodeButton: document.getElementById("improve-node-btn"),
+  regenerateNodeButton: document.getElementById("regenerate-node-btn"),
+  generateImageButton: document.getElementById("generate-image-btn"),
+  generatePostingVisualButton: document.getElementById("generate-posting-visual-btn"),
   postingPlanOverlay: document.getElementById("posting-plan-overlay"),
   postingDateInput: document.getElementById("posting-date-input"),
   postingTimeInput: document.getElementById("posting-time-input"),
@@ -122,7 +128,8 @@ const el = {
     preview: document.getElementById("node-preview"),
     audience: document.getElementById("node-audience"),
     goal: document.getElementById("node-goal"),
-    channel: document.getElementById("node-channel")
+    channel: document.getElementById("node-channel"),
+    contentFormat: document.getElementById("node-content-format")
   }
 };
 
@@ -207,10 +214,13 @@ function restoreLastSnapshot() {
 
 function setSaveStatus(text) { el.saveStatus.textContent = text; }
 function serializeState() {
-  return {
+  const serialized = {
     nodes: state.nodes.map((n) => ({ ...n, images: (n.images || []).filter((img) => img.url && !img.url.startsWith("blob:")) })),
     edges: state.edges, nodeCounter: state.nodeCounter, postitCounter: state.postitCounter, zoom: state.zoom
   };
+  const selectedNode = state.selectedPrimary ? serialized.nodes.find((n) => n.id === state.selectedPrimary) : null;
+  console.log("serialized images", selectedNode?.images || []);
+  return serialized;
 }
 function saveCampaignCanvasState() { const campaignState = serializeState(); console.log("Saving campaignCanvasState", campaignState); localStorage.setItem(STORAGE_KEY, JSON.stringify(campaignState)); setSaveStatus("Saved"); }
 function markUnsaved() {
@@ -220,6 +230,7 @@ function loadCampaignCanvasState() {
   const raw = localStorage.getItem(STORAGE_KEY); if (!raw) return false;
   const campaignState = JSON.parse(raw); console.log("Loaded campaignCanvasState", campaignState);
   state.nodes = campaignState.nodes || []; state.edges = campaignState.edges || []; state.nodeCounter = campaignState.nodeCounter || 1; state.postitCounter = campaignState.postitCounter || 1;
+  console.log("loaded node images", state.nodes.find((n) => n.id === state.selectedPrimary)?.images);
   state.selectedIds.clear(); state.selectedPrimary = null;
   el.zoomLayer.querySelectorAll(".node").forEach((n) => n.remove());
   state.nodes.forEach(renderNode);
@@ -561,10 +572,12 @@ function createNode({ type = "Idea", parentId = null, position = null, images = 
     content: "",
     tags: [],
     variants: [],
+    contentFormat: "1:1",
     audience: "",
     goal: "",
     channel: "",
     images: [...images],
+    favoriteImageId: null,
     social: { platform: "Instagram", caption: "", hashtags: [], preview: "", scheduledAt: "" },
     reactions: {},
     postits: [],
@@ -1009,6 +1022,49 @@ function updateSelectionClasses() {
   el.zoomLayer.querySelectorAll(".node").forEach((nodeEl) => {
     nodeEl.classList.toggle("selected", state.selectedIds.has(nodeEl.dataset.id));
   });
+  updateInspectorActionVisibility();
+}
+
+function collapseExpandedNodes(exceptNodeId = null) {
+  el.zoomLayer.querySelectorAll(".node.content-expanded").forEach((nodeEl) => {
+    if (exceptNodeId && nodeEl.dataset.id === exceptNodeId) return;
+    nodeEl.classList.remove("content-expanded");
+    const content = nodeEl.querySelector(".content");
+    const expandBtn = nodeEl.querySelector(".node-expand-content");
+    const shouldTruncate = (content?.textContent || "").trim().length > 160;
+    if (content) content.classList.toggle("clamped", shouldTruncate && document.activeElement !== content);
+    if (expandBtn) expandBtn.classList.toggle("hidden", !shouldTruncate);
+  });
+}
+
+function updateInspectorActionVisibility() {
+  const selectedCount = state.selectedIds.size;
+  const hasSingleNode = selectedCount === 1 && !!state.selectedPrimary;
+  const hasMultipleNodes = selectedCount > 1;
+  const hasAnySelection = selectedCount > 0;
+  const selectedNode = hasSingleNode ? getNode(state.selectedPrimary) : null;
+  const canGenerateImage = !!selectedNode && selectedNode.type === "Content";
+  const canGeneratePostingVisual = !!selectedNode && selectedNode.type === "Social Media Posting";
+
+  el.deleteNodeButton.classList.toggle("hidden", !hasSingleNode);
+  el.improveNodeButton.classList.toggle("hidden", !hasSingleNode);
+  el.regenerateNodeButton.classList.toggle("hidden", !hasSingleNode);
+  el.generateImageButton.classList.toggle("hidden", !canGenerateImage);
+  el.generatePostingVisualButton.classList.toggle("hidden", !canGeneratePostingVisual);
+  el.propagateDescendantsButton.classList.toggle("hidden", !hasSingleNode);
+  el.disconnectSelectedButton.classList.toggle("hidden", !hasAnySelection);
+  el.deleteSelectedButton.classList.toggle("hidden", !hasMultipleNodes);
+
+  el.disconnectSelectedButton.textContent = hasSingleNode ? "Disconnect node" : "Disconnect selected";
+
+  el.deleteNodeButton.disabled = !hasSingleNode;
+  el.improveNodeButton.disabled = !hasSingleNode;
+  el.regenerateNodeButton.disabled = !hasSingleNode;
+  el.generateImageButton.disabled = !canGenerateImage;
+  el.generatePostingVisualButton.disabled = !canGeneratePostingVisual;
+  el.propagateDescendantsButton.disabled = !hasSingleNode;
+  el.disconnectSelectedButton.disabled = !hasAnySelection;
+  el.deleteSelectedButton.disabled = !hasMultipleNodes;
 }
 
 function parseList(value) {
@@ -1030,6 +1086,19 @@ function downstreamNodeIds(startId) {
     });
   }
   return [...out];
+}
+
+function getDirectParentNode(nodeId) {
+  const parentEdge = state.edges.find(([, to]) => to === nodeId);
+  if (!parentEdge) return null;
+  return getNode(parentEdge[0]) || null;
+}
+
+function getCampaignContextSummary() {
+  const rootIdea = state.nodes.find((node) => node.type === "Idea" && !state.edges.some(([, to]) => to === node.id))
+    || state.nodes.find((node) => node.type === "Idea");
+  if (!rootIdea) return "";
+  return [rootIdea.title, rootIdea.content].filter(Boolean).join(" — ").trim();
 }
 
 function propagateNodeChangesDownward(node) {
@@ -1062,12 +1131,19 @@ function updateNodeCard(node) {
   nodeEl.querySelector(".type").textContent = node.type;
   nodeEl.querySelector(".type").style.color = tone;
   nodeEl.querySelector(".title").textContent = node.title;
-  nodeEl.querySelector(".content").textContent = node.content;
+  const contentEl = nodeEl.querySelector(".content");
+  contentEl.textContent = node.content;
+  const expandBtn = nodeEl.querySelector(".node-expand-content");
+  const shouldTruncate = (node.content || "").length > 160;
+  const isExpanded = nodeEl.classList.contains("content-expanded");
+  contentEl.classList.toggle("clamped", shouldTruncate && !isExpanded && document.activeElement !== contentEl);
+  expandBtn.classList.toggle("hidden", !shouldTruncate || isExpanded);
 
   const tags = [];
   if (node.channel) tags.push(`Channel: ${node.channel}`);
   if (node.goal) tags.push(`Goal: ${node.goal}`);
   if (node.audience) tags.push(`Audience: ${node.audience}`);
+  if (node.type === "Content") tags.push(`Format: ${node.contentFormat || "1:1"}`);
   tags.push(...node.tags);
 
   const tagsWrap = nodeEl.querySelector(".tags");
@@ -1121,6 +1197,21 @@ function updateNodeCard(node) {
     const image = document.createElement("img");
     image.src = img.url;
     image.alt = img.name;
+    if (node.type === "Content" && node.favoriteImageId === img.id) {
+      image.style.outline = "2px solid #ffbf47";
+      image.style.outlineOffset = "1px";
+      const star = document.createElement("span");
+      star.textContent = "★";
+      star.style.position = "absolute";
+      star.style.left = "6px";
+      star.style.top = "6px";
+      star.style.fontSize = "0.85rem";
+      star.style.background = "rgba(255,255,255,0.9)";
+      star.style.borderRadius = "999px";
+      star.style.padding = "1px 4px";
+      star.style.color = "#e6a200";
+      thumb.appendChild(star);
+    }
 
     const hint = document.createElement("span");
     hint.className = "zoom-hint";
@@ -1298,10 +1389,14 @@ function fillInspector(node) {
   if (!node) {
     el.inspectorMeta.textContent = "Wähle oder erstelle einen Node.";
     el.nodeForm.reset();
-    el.deleteNodeButton.disabled = true;
     el.socialFields.classList.add("hidden");
     el.contentUploadFields.classList.add("hidden");
+    el.contentFormatField.classList.add("hidden");
+    const variantsLabel = el.nodeForm.querySelector('label[for="node-variants"]');
+    variantsLabel?.classList.remove("hidden");
+    el.inputs.variants.classList.remove("hidden");
     el.inspectorImageList.innerHTML = "";
+    updateInspectorActionVisibility();
     return;
   }
 
@@ -1317,11 +1412,17 @@ function fillInspector(node) {
   el.inputs.audience.value = node.audience;
   el.inputs.goal.value = node.goal;
   el.inputs.channel.value = node.channel;
+  el.inputs.contentFormat.value = node.contentFormat || "1:1";
 
-  el.deleteNodeButton.disabled = false;
   el.socialFields.classList.toggle("hidden", node.type !== "Social Media Posting");
   el.contentUploadFields.classList.toggle("hidden", !(node.type === "Content" || node.type === "Social Media Posting"));
+  el.contentFormatField.classList.toggle("hidden", node.type !== "Content");
+  const variantsLabel = el.nodeForm.querySelector('label[for="node-variants"]');
+  const hideVariants = node.type === "Content";
+  variantsLabel?.classList.toggle("hidden", hideVariants);
+  el.inputs.variants.classList.toggle("hidden", hideVariants);
   renderInspectorImages(node);
+  updateInspectorActionVisibility();
 }
 
 function revokeImageObjectUrl(img) {
@@ -1333,6 +1434,7 @@ function removeNodeImage(node, imageId) {
   const idx = node.images.findIndex((img) => img.id === imageId);
   if (idx === -1) return;
   const [removed] = node.images.splice(idx, 1);
+  if (node.favoriteImageId === imageId) node.favoriteImageId = null;
   revokeImageObjectUrl(removed);
   updateNodeCard(node);
   if (state.selectedPrimary === node.id) fillInspector(node);
@@ -1361,13 +1463,46 @@ function renderInspectorImages(node) {
     deleteBtn.className = "inspector-image-delete";
     deleteBtn.textContent = "Bild löschen";
     deleteBtn.addEventListener("click", () => removeNodeImage(node, img.id));
-
-    row.append(name, deleteBtn);
+    const downloadBtn = document.createElement("button");
+    downloadBtn.type = "button";
+    downloadBtn.className = "inspector-image-delete";
+    downloadBtn.textContent = "Download";
+    downloadBtn.addEventListener("click", () => {
+      const a = document.createElement("a");
+      a.href = img.url;
+      const safeName = (node.title || node.content || "node-image")
+        .slice(0, 40)
+        .replace(/[^a-z0-9-_]+/gi, "-")
+        .replace(/^-+|-+$/g, "");
+      a.download = `${safeName || "node-image"}.png`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    });
+    if (node.type === "Content") {
+      const favoriteBtn = document.createElement("button");
+      favoriteBtn.type = "button";
+      favoriteBtn.className = "inspector-image-delete";
+      const isFavorite = node.favoriteImageId === img.id;
+      favoriteBtn.textContent = isFavorite ? "★ Favorite" : "☆ Favorite";
+      favoriteBtn.style.fontWeight = isFavorite ? "700" : "500";
+      favoriteBtn.addEventListener("click", () => {
+        node.favoriteImageId = node.favoriteImageId === img.id ? null : img.id;
+        updateNodeCard(node);
+        fillInspector(node);
+        saveCampaignCanvasState();
+      });
+      row.append(name, favoriteBtn, downloadBtn, deleteBtn);
+    } else {
+      row.append(name, downloadBtn, deleteBtn);
+    }
     el.inspectorImageList.appendChild(row);
   });
 }
 
 async function refineNodeWithAI(node, instruction) {
+  const parentNode = getDirectParentNode(node.id);
+  const campaignContext = getCampaignContextSummary();
   const response = await fetch("/api/refine-node", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -1379,11 +1514,179 @@ async function refineNodeWithAI(node, instruction) {
         caption: node.social?.caption || ""
       },
       instruction,
-      brandBrainData: state.brandCore
+      brandBrainData: state.brandCore,
+      parentNode: parentNode
+        ? { title: parentNode.title || "", content: parentNode.content || "", type: parentNode.type || "" }
+        : undefined,
+      campaignContext: campaignContext || undefined
     })
   });
-  if (!response.ok) throw new Error("Refine API request failed");
+  if (!response.ok) {
+    const errorResponse = await response.json().catch(() => ({}));
+    console.error("Refine node failed", errorResponse);
+    throw new Error(errorResponse?.error || "Refine API request failed");
+  }
   return response.json();
+}
+
+async function runInlineRefine(node, instruction, triggerBtn = null) {
+  const nodeEl = el.zoomLayer.querySelector(`[data-id='${node.id}']`);
+  if (!nodeEl) return;
+  const toolbarButtons = [...nodeEl.querySelectorAll(".node-ai-toolbar button")];
+  const originalText = triggerBtn?.textContent || "";
+  toolbarButtons.forEach((btn) => { btn.disabled = true; });
+  if (triggerBtn) triggerBtn.textContent = "…";
+  nodeEl.classList.add("ai-loading");
+  try {
+    const refined = await refineNodeWithAI(node, instruction);
+    node.title = refined?.title || node.title;
+    node.content = refined?.content || node.content;
+    if (node.type === "Social Media Posting" && refined?.caption) node.social.caption = refined.caption;
+    updateNodeCard(node);
+    fillInspector(node);
+    saveCampaignCanvasState();
+    nodeEl.classList.add("ai-updated");
+    setTimeout(() => nodeEl.classList.remove("ai-updated"), 1300);
+  } catch (_error) {
+    alert("Could not refine node right now. Please try again.");
+  } finally {
+    nodeEl.classList.remove("ai-loading");
+    toolbarButtons.forEach((btn) => { btn.disabled = false; });
+    if (triggerBtn) triggerBtn.textContent = originalText;
+  }
+}
+
+async function generateImageForNode(node) {
+  console.log("generate image start");
+  const button = el.generateImageButton;
+  const originalLabel = button.textContent;
+  let imageAttached = false;
+  button.disabled = true;
+  button.textContent = "Generating image...";
+  try {
+    const response = await fetch("/api/generate-image", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        nodeTitle: node.title || "",
+        nodeContent: node.content || "",
+        brandBrainData: state.brandCore,
+        campaignContext: getCampaignContextSummary(),
+        contentFormat: node.contentFormat || "1:1"
+      })
+    });
+    if (!response.ok) throw new Error("Image generation failed");
+    const data = await response.json();
+    console.log("generate image API response", data);
+    const imageUrl = (data?.imageBase64 ? `data:${data.mimeType || "image/png"};base64,${data.imageBase64}` : "")
+      || data?.dataUrl
+      || data?.imageUrl
+      || data?.url;
+    console.log("resolved image URL", imageUrl);
+    if (!imageUrl) throw new Error("Image response is empty");
+    const newImage = {
+      id: crypto.randomUUID ? crypto.randomUUID() : `img-${Date.now()}`,
+      url: imageUrl,
+      name: "generated-image.png",
+      createdAt: Date.now()
+    };
+    node.images = node.images || [];
+    console.log("image before push", node.images);
+    console.log("new generated image", newImage);
+    node.images.push(newImage);
+    console.log("image after push", node.images);
+    imageAttached = true;
+    console.log("image attached to node", node.id);
+    updateNodeCard(node);
+    fillInspector(node);
+    saveCampaignCanvasState();
+    console.log("saved state images", serializeState().nodes.find((n) => n.id === node.id)?.images);
+    console.log("generate image success - no alert");
+    return;
+  } catch (error) {
+    if (!imageAttached) {
+      console.error("SHOWING IMAGE ERROR ALERT", error);
+      alert("Could not generate image right now. Please try again.");
+    }
+  } finally {
+    button.textContent = originalLabel;
+    updateInspectorActionVisibility();
+  }
+}
+
+function getParentContentNode(nodeId) {
+  const parentId = state.edges.find(([, to]) => to === nodeId)?.[0];
+  const parent = parentId ? getNode(parentId) : null;
+  return parent?.type === "Content" ? parent : null;
+}
+
+async function generatePostingVisualForNode(node) {
+  let postingVisualAttached = false;
+  const parentContent = getParentContentNode(node.id);
+  if (!parentContent?.images?.length) {
+    alert("Please connect this post to a Content node with an image first.");
+    return;
+  }
+  const favoriteImage = parentContent.images.find((img) => img.id === parentContent.favoriteImageId);
+  const sourceImage = favoriteImage || parentContent.images[parentContent.images.length - 1];
+  console.log("content images before save", parentContent.images);
+  console.log("selected source image", sourceImage?.id, sourceImage?.url?.slice(0, 30));
+  if (!sourceImage?.url) {
+    alert("Please connect this post to a Content node with an image first.");
+    return;
+  }
+  const overlayText = (node.title || "").trim() || (node.social?.caption || "").split("\n")[0].trim();
+  if (!overlayText) {
+    alert("Please add a title or caption first.");
+    return;
+  }
+
+  const button = el.generatePostingVisualButton;
+  const originalLabel = button.textContent;
+  button.disabled = true;
+  button.textContent = "Generating posting visual...";
+  try {
+    const response = await fetch("/api/generate-posting-visual", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sourceImage: sourceImage.url,
+        overlayText,
+        format: node.contentFormat || "1:1",
+        brandBrainData: state.brandCore,
+        campaignContext: getCampaignContextSummary()
+      })
+    });
+    if (!response.ok) throw new Error("Posting visual generation failed");
+    const data = await response.json();
+    const imageUrl = data?.imageBase64 ? `data:${data.mimeType || "image/png"};base64,${data.imageBase64}` : "";
+    if (!imageUrl) throw new Error("No posting visual returned");
+    const newImage = {
+      id: crypto.randomUUID ? crypto.randomUUID() : `img-${Date.now()}`,
+      url: imageUrl,
+      name: "generated-image.png",
+      createdAt: Date.now()
+    };
+    node.images = node.images || [];
+    console.log("image before push", node.images);
+    console.log("new generated image", newImage);
+    node.images.push(newImage);
+    console.log("image after push", node.images);
+    postingVisualAttached = true;
+    saveCampaignCanvasState();
+    console.log("posting visual attached", node.images);
+    console.log("saved state images", serializeState().nodes.find((n) => n.id === node.id)?.images);
+    updateNodeCard(node);
+    fillInspector(node);
+    return;
+  } catch (error) {
+    if (!postingVisualAttached) {
+      alert("Could not generate posting visual right now. Please try again.");
+    }
+  } finally {
+    button.textContent = originalLabel;
+    updateInspectorActionVisibility();
+  }
 }
 
 async function runImproveNodeFlow(node) {
@@ -1567,6 +1870,7 @@ function renderNode(node) {
   nodeEl.dataset.id = node.id;
 
   nodeEl.addEventListener("click", (event) => {
+    collapseExpandedNodes(node.id);
     const append = event.shiftKey;
     if (!append) state.selectedIds.clear();
     state.selectedIds.add(node.id);
@@ -1643,6 +1947,44 @@ function renderNode(node) {
 
   const title = nodeEl.querySelector(".title");
   const content = nodeEl.querySelector(".content");
+  const aiToolbar = document.createElement("div");
+  aiToolbar.className = "node-ai-toolbar";
+  [
+    ["✨ Improve", "Improve this node while keeping the original intent."],
+    ["🔄 Regenerate", "Regenerate this node as a fresh alternative version while keeping it aligned with the campaign context and brand voice."],
+    ["Shorter", "Make this shorter and more concise."],
+    ["Emotional", "Make this more emotional and engaging."],
+    ["Direct", "Make this more direct and clear."]
+  ].forEach(([label, instruction]) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.textContent = label;
+    btn.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      await runInlineRefine(node, instruction, btn);
+    });
+    aiToolbar.appendChild(btn);
+  });
+  nodeEl.appendChild(aiToolbar);
+
+  const expandBtn = document.createElement("button");
+  expandBtn.type = "button";
+  expandBtn.className = "node-expand-content hidden";
+  expandBtn.textContent = "↗";
+  expandBtn.addEventListener("click", (event) => {
+    event.stopPropagation();
+    nodeEl.classList.add("content-expanded");
+    content.classList.remove("clamped");
+    expandBtn.classList.add("hidden");
+  });
+  content.addEventListener("click", () => {
+    if (!content.classList.contains("clamped")) return;
+    nodeEl.classList.add("content-expanded");
+    content.classList.remove("clamped");
+    expandBtn.classList.add("hidden");
+  });
+  content.insertAdjacentElement("afterend", expandBtn);
+
   title.addEventListener("input", () => {
     node.title = title.textContent.trim();
     if (state.selectedPrimary === node.id) el.inputs.title.value = node.title;
@@ -1652,7 +1994,18 @@ function renderNode(node) {
   content.addEventListener("input", () => {
     node.content = content.textContent.trim();
     if (state.selectedPrimary === node.id) el.inputs.content.value = node.content;
+    if ((node.content || "").length <= 160) nodeEl.classList.remove("content-expanded");
+    const shouldTruncate = (node.content || "").length > 160;
+    const isExpanded = nodeEl.classList.contains("content-expanded");
+    content.classList.toggle("clamped", shouldTruncate && !isExpanded && document.activeElement !== content);
+    expandBtn.classList.toggle("hidden", !shouldTruncate || isExpanded);
     saveCampaignCanvasState();
+  });
+  content.addEventListener("focus", () => content.classList.remove("clamped"));
+  content.addEventListener("blur", () => {
+    const shouldTruncate = (node.content || "").length > 160;
+    const isExpanded = nodeEl.classList.contains("content-expanded");
+    content.classList.toggle("clamped", shouldTruncate && !isExpanded);
   });
 
   enableNodeDrag(nodeEl, node);
@@ -1893,6 +2246,10 @@ el.canvas.addEventListener(
 
 el.canvas.addEventListener("contextmenu", (event) => {
   event.preventDefault();
+  const nodeEl = event.target.closest(".node");
+  const nodeId = nodeEl?.dataset?.id || null;
+  state.contextNodeId = nodeId;
+  el.improveContextNodeButton.classList.toggle("hidden", !nodeId);
   const point = boardPointFromClient(event.clientX, event.clientY);
   state.contextBoardPoint = point;
   el.contextMenu.style.left = `${event.clientX}px`;
@@ -1931,6 +2288,18 @@ el.addPostitCommentButton.addEventListener("click", () => {
   updateNodeCard(node);
   saveCampaignCanvasState();
 });
+el.improveContextNodeButton.addEventListener("click", async () => {
+  el.contextMenu.classList.add("hidden");
+  if (!state.contextNodeId) return;
+  const node = getNode(state.contextNodeId);
+  if (!node) return;
+  state.selectedIds.clear();
+  state.selectedIds.add(node.id);
+  state.selectedPrimary = node.id;
+  updateSelectionClasses();
+  fillInspector(node);
+  await runImproveNodeFlow(node);
+});
 el.contextMenu.querySelectorAll(".emoji-quick").forEach((btn) => {
   btn.addEventListener("click", () => {
     el.contextMenu.classList.add("hidden");
@@ -1959,6 +2328,7 @@ el.nodeForm.addEventListener("input", (event) => {
   if (event.target === el.inputs.audience) node.audience = el.inputs.audience.value.trim();
   if (event.target === el.inputs.goal) node.goal = el.inputs.goal.value.trim();
   if (event.target === el.inputs.channel) node.channel = el.inputs.channel.value.trim();
+  if (event.target === el.inputs.contentFormat) node.contentFormat = el.inputs.contentFormat.value || "1:1";
 
   updateNodeCard(node);
   updateListView();
@@ -2000,6 +2370,25 @@ el.improveNodeButton.addEventListener("click", async () => {
   if (!node) return;
   await runImproveNodeFlow(node);
 });
+el.regenerateNodeButton.addEventListener("click", async () => {
+  const node = getNode(state.selectedPrimary);
+  if (!node) return;
+  await runInlineRefine(
+    node,
+    "Regenerate this node as a fresh alternative version while keeping it aligned with the campaign context and brand voice.",
+    el.regenerateNodeButton
+  );
+});
+el.generateImageButton.addEventListener("click", async () => {
+  const node = getNode(state.selectedPrimary);
+  if (!node || node.type !== "Content") return;
+  await generateImageForNode(node);
+});
+el.generatePostingVisualButton.addEventListener("click", async () => {
+  const node = getNode(state.selectedPrimary);
+  if (!node || node.type !== "Social Media Posting") return;
+  await generatePostingVisualForNode(node);
+});
 el.deleteSelectedButton.addEventListener("click", () => {
   if (!state.selectedIds.size) return;
   pushHistorySnapshot();
@@ -2040,6 +2429,7 @@ el.canvas.addEventListener("drop", (event) => {
 el.canvas.addEventListener("pointerdown", (event) => {
   if (event.button !== 0) return;
   if (event.target.closest(".node, .context-menu, button, input, textarea, select")) return;
+  collapseExpandedNodes();
 
   const appendSelection = event.shiftKey;
   const startLeft = el.canvas.scrollLeft;
