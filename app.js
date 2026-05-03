@@ -1545,11 +1545,11 @@ async function generateImageForNode(node) {
       name: `AI Generated ${new Date().toISOString()}`,
       url: imageUrl
     });
+    imageAttached = true;
     console.log("image attached to node", node.id);
     updateNodeCard(node);
     fillInspector(node);
     saveCampaignCanvasState();
-    imageAttached = true;
     console.log("generate image success - no alert");
     return;
   } catch (error) {
