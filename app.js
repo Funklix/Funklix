@@ -153,18 +153,26 @@ function ensureImageLightbox() {
   overlay = document.createElement("div");
   overlay.id = "image-lightbox";
   overlay.className = "image-lightbox hidden";
+  overlay.setAttribute("aria-hidden", "true");
   overlay.innerHTML = '<button type="button" class="image-lightbox-close" aria-label="Close preview">✕</button><img class="image-lightbox-image" alt="Image preview" />';
   document.body.appendChild(overlay);
   return overlay;
 }
 
-function openLightbox(imageUrl) {
+function openLightbox(imageUrl, alt = "Image preview") {
   if (!imageUrl) return;
+
   const lightbox = ensureImageLightbox();
   const img = lightbox.querySelector(".image-lightbox-image");
+
   img.src = imageUrl;
+  img.alt = alt;
+
+  lightbox.style.display = "flex";
   lightbox.classList.remove("hidden");
   lightbox.classList.add("open");
+  lightbox.setAttribute("aria-hidden", "false");
+
   activeLightbox = lightbox;
 }
 
@@ -172,21 +180,23 @@ function closeLightbox() {
   const lightbox = document.getElementById("image-lightbox");
   if (!lightbox) return;
 
-  lightbox.classList.remove("open");
   lightbox.classList.add("hidden");
+  lightbox.classList.remove("open");
+  lightbox.style.display = "none";
+  lightbox.setAttribute("aria-hidden", "true");
 
   const img = lightbox.querySelector(".image-lightbox-image");
-  if (img) img.removeAttribute("src");
+  if (img) {
+    img.removeAttribute("src");
+    img.alt = "";
+  }
 
   activeLightbox = null;
 }
 
 function openImageLightbox(url, alt = "Image preview") {
   if (!url) return;
-  const lightbox = ensureImageLightbox();
-  const img = lightbox.querySelector(".image-lightbox-image");
-  img.alt = alt;
-  openLightbox(url);
+  openLightbox(url, alt);
 }
 
 function nowString() {
@@ -1534,7 +1544,7 @@ function renderInspectorImages(node) {
     thumb.alt = img.name || "Bild";
     thumb.addEventListener("click", (event) => {
       event.stopPropagation();
-      openLightbox(img.url);
+      openLightbox(img.url, img.name || "Image preview");
     });
 
     const favoriteTag = document.createElement("span");
@@ -1550,6 +1560,7 @@ function renderInspectorImages(node) {
     favoriteBtn.textContent = "⭐";
     favoriteBtn.title = "Set as favorite";
     favoriteBtn.addEventListener("click", (event) => {
+      event.preventDefault();
       event.stopPropagation();
       node.favoriteImageId = node.favoriteImageId === img.id ? null : img.id;
       updateNodeCard(node);
@@ -1563,6 +1574,7 @@ function renderInspectorImages(node) {
     downloadBtn.textContent = "⬇️";
     downloadBtn.title = "Download";
     downloadBtn.addEventListener("click", (event) => {
+      event.preventDefault();
       event.stopPropagation();
       downloadNodeImage(node, img);
     });
@@ -1573,6 +1585,7 @@ function renderInspectorImages(node) {
     deleteBtn.textContent = "❌";
     deleteBtn.title = "Delete";
     deleteBtn.addEventListener("click", (event) => {
+      event.preventDefault();
       event.stopPropagation();
       removeNodeImage(node, img.id);
     });
@@ -2293,6 +2306,8 @@ function setAppMode(mode) {
 // Events
 document.addEventListener("click", (e) => {
   if (e.target.closest(".image-lightbox-close")) {
+    e.preventDefault();
+    e.stopPropagation();
     closeLightbox();
     return;
   }
