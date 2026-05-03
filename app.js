@@ -214,10 +214,13 @@ function restoreLastSnapshot() {
 
 function setSaveStatus(text) { el.saveStatus.textContent = text; }
 function serializeState() {
-  return {
+  const serialized = {
     nodes: state.nodes.map((n) => ({ ...n, images: (n.images || []).filter((img) => img.url && !img.url.startsWith("blob:")) })),
     edges: state.edges, nodeCounter: state.nodeCounter, postitCounter: state.postitCounter, zoom: state.zoom
   };
+  const selectedNode = state.selectedPrimary ? serialized.nodes.find((n) => n.id === state.selectedPrimary) : null;
+  console.log("serialized images", selectedNode?.images || []);
+  return serialized;
 }
 function saveCampaignCanvasState() { const campaignState = serializeState(); console.log("Saving campaignCanvasState", campaignState); localStorage.setItem(STORAGE_KEY, JSON.stringify(campaignState)); setSaveStatus("Saved"); }
 function markUnsaved() {
@@ -1193,6 +1196,21 @@ function updateNodeCard(node) {
     const image = document.createElement("img");
     image.src = img.url;
     image.alt = img.name;
+    if (node.type === "Content" && node.favoriteImageId === img.id) {
+      image.style.outline = "2px solid #ffbf47";
+      image.style.outlineOffset = "1px";
+      const star = document.createElement("span");
+      star.textContent = "★";
+      star.style.position = "absolute";
+      star.style.left = "6px";
+      star.style.top = "6px";
+      star.style.fontSize = "0.85rem";
+      star.style.background = "rgba(255,255,255,0.9)";
+      star.style.borderRadius = "999px";
+      star.style.padding = "1px 4px";
+      star.style.color = "#e6a200";
+      thumb.appendChild(star);
+    }
 
     const hint = document.createElement("span");
     hint.className = "zoom-hint";
@@ -1566,15 +1584,17 @@ async function generateImageForNode(node) {
     console.log("resolved image URL", imageUrl);
     if (!imageUrl) throw new Error("Image response is empty");
     node.images.push({
-      id: crypto.randomUUID(),
+      id: `img-${crypto.randomUUID()}`,
       name: `AI Generated ${new Date().toISOString()}`,
-      url: imageUrl
+      url: imageUrl,
+      createdAt: Date.now()
     });
     imageAttached = true;
     console.log("image attached to node", node.id);
     updateNodeCard(node);
     fillInspector(node);
     saveCampaignCanvasState();
+    console.log("serialized images", serializeState().nodes.find((n) => n.id === node.id)?.images);
     console.log("generate image success - no alert");
     return;
   } catch (error) {
@@ -1595,14 +1615,17 @@ function getParentContentNode(nodeId) {
 }
 
 async function generatePostingVisualForNode(node) {
+  let postingVisualAttached = false;
   const parentContent = getParentContentNode(node.id);
   if (!parentContent?.images?.length) {
     alert("Please connect this post to a Content node with an image first.");
     return;
   }
   const favoriteImage = parentContent.images.find((img) => img.id === parentContent.favoriteImageId);
-  const sourceImage = favoriteImage?.url || parentContent.images[parentContent.images.length - 1]?.url;
-  if (!sourceImage) {
+  const sourceImage = favoriteImage || parentContent.images[parentContent.images.length - 1];
+  console.log("content images before save", parentContent.images);
+  console.log("selected source image", sourceImage?.id, sourceImage?.url?.slice(0, 30));
+  if (!sourceImage?.url) {
     alert("Please connect this post to a Content node with an image first.");
     return;
   }
@@ -1621,7 +1644,7 @@ async function generatePostingVisualForNode(node) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        sourceImage,
+        sourceImage: sourceImage.url,
         overlayText,
         format: node.contentFormat || "1:1",
         brandBrainData: state.brandCore,
@@ -1632,12 +1655,18 @@ async function generatePostingVisualForNode(node) {
     const data = await response.json();
     const imageUrl = data?.imageBase64 ? `data:${data.mimeType || "image/png"};base64,${data.imageBase64}` : "";
     if (!imageUrl) throw new Error("No posting visual returned");
-    node.images.push({ id: crypto.randomUUID(), name: `Posting Visual ${new Date().toISOString()}`, url: imageUrl });
+    node.images.push({ id: `img-${crypto.randomUUID()}`, name: `Posting Visual ${new Date().toISOString()}`, url: imageUrl, createdAt: Date.now() });
+    postingVisualAttached = true;
+    saveCampaignCanvasState();
+    console.log("posting visual attached", node.images);
+    console.log("serialized images", serializeState().nodes.find((n) => n.id === node.id)?.images);
     updateNodeCard(node);
     fillInspector(node);
-    saveCampaignCanvasState();
-  } catch (_error) {
-    alert("Could not generate posting visual right now. Please try again.");
+    return;
+  } catch (error) {
+    if (!postingVisualAttached) {
+      alert("Could not generate posting visual right now. Please try again.");
+    }
   } finally {
     button.textContent = originalLabel;
     updateInspectorActionVisibility();
