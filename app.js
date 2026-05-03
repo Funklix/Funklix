@@ -1589,6 +1589,7 @@ async function generateImageForNode(node) {
   button.disabled = true;
   button.textContent = "Generating image...";
   try {
+    console.log("Calling /api/generate-image", { nodeId: node.id, title: node.title || "" });
     const response = await fetch("/api/generate-image", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -1600,16 +1601,33 @@ async function generateImageForNode(node) {
         contentFormat: node.contentFormat || "1:1"
       })
     });
+    console.log("/api/generate-image status", response.status);
+    const responseText = await response.text();
+    console.log("/api/generate-image response text", responseText);
+    let data = {};
+    try {
+      data = responseText ? JSON.parse(responseText) : {};
+      console.log("/api/generate-image response json", data);
+    } catch (parseError) {
+      console.error("Failed to parse /api/generate-image response JSON", parseError);
+    }
     if (!response.ok) throw new Error("Image generation failed");
-    const data = await response.json();
-    console.log("generate image API response", data);
     const imageUrl = (data?.imageBase64 ? `data:${data.mimeType || "image/png"};base64,${data.imageBase64}` : "")
       || data?.dataUrl
       || data?.imageUrl
       || data?.url;
     console.log("resolved image URL", imageUrl);
     if (!imageUrl) throw new Error("Image response is empty");
-    const compressedImageUrl = await compressImageDataUrl(imageUrl);
+    let compressedImageUrl;
+    console.log("before compression", imageUrl?.slice(0, 80));
+    try {
+      compressedImageUrl = await compressImageDataUrl(imageUrl);
+      console.log("after compression", compressedImageUrl?.slice(0, 80));
+    } catch (error) {
+      console.error("Image compression failed, using original image", error);
+      compressedImageUrl = imageUrl;
+    }
+    console.log("before attaching image to node", node.id);
     const newImage = {
       id: crypto.randomUUID ? crypto.randomUUID() : `img-${Date.now()}`,
       url: compressedImageUrl,
