@@ -573,6 +573,7 @@ function createNode({ type = "Idea", parentId = null, position = null, images = 
     goal: "",
     channel: "",
     images: [...images],
+    favoriteImageId: null,
     social: { platform: "Instagram", caption: "", hashtags: [], preview: "", scheduledAt: "" },
     reactions: {},
     postits: [],
@@ -1414,6 +1415,7 @@ function removeNodeImage(node, imageId) {
   const idx = node.images.findIndex((img) => img.id === imageId);
   if (idx === -1) return;
   const [removed] = node.images.splice(idx, 1);
+  if (node.favoriteImageId === imageId) node.favoriteImageId = null;
   revokeImageObjectUrl(removed);
   updateNodeCard(node);
   if (state.selectedPrimary === node.id) fillInspector(node);
@@ -1458,8 +1460,23 @@ function renderInspectorImages(node) {
       a.click();
       a.remove();
     });
-
-    row.append(name, downloadBtn, deleteBtn);
+    if (node.type === "Content") {
+      const favoriteBtn = document.createElement("button");
+      favoriteBtn.type = "button";
+      favoriteBtn.className = "inspector-image-delete";
+      const isFavorite = node.favoriteImageId === img.id;
+      favoriteBtn.textContent = isFavorite ? "★ Favorite" : "☆ Favorite";
+      favoriteBtn.style.fontWeight = isFavorite ? "700" : "500";
+      favoriteBtn.addEventListener("click", () => {
+        node.favoriteImageId = node.favoriteImageId === img.id ? null : img.id;
+        updateNodeCard(node);
+        fillInspector(node);
+        saveCampaignCanvasState();
+      });
+      row.append(name, favoriteBtn, downloadBtn, deleteBtn);
+    } else {
+      row.append(name, downloadBtn, deleteBtn);
+    }
     el.inspectorImageList.appendChild(row);
   });
 }
@@ -1583,6 +1600,12 @@ async function generatePostingVisualForNode(node) {
     alert("Please connect this post to a Content node with an image first.");
     return;
   }
+  const favoriteImage = parentContent.images.find((img) => img.id === parentContent.favoriteImageId);
+  const sourceImage = favoriteImage?.url || parentContent.images[parentContent.images.length - 1]?.url;
+  if (!sourceImage) {
+    alert("Please connect this post to a Content node with an image first.");
+    return;
+  }
   const overlayText = (node.title || "").trim() || (node.social?.caption || "").split("\n")[0].trim();
   if (!overlayText) {
     alert("Please add a title or caption first.");
@@ -1598,7 +1621,7 @@ async function generatePostingVisualForNode(node) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        sourceImage: parentContent.images[0].url,
+        sourceImage,
         overlayText,
         format: node.contentFormat || "1:1",
         brandBrainData: state.brandCore,
