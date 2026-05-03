@@ -213,9 +213,26 @@ function restoreLastSnapshot() {
 
 
 function setSaveStatus(text) { el.saveStatus.textContent = text; }
+
+function isPersistableImageUrl(url) {
+  return typeof url === "string" && url.length > 0 && !url.startsWith("blob:") && !url.startsWith("data:");
+}
+
+function sanitizeNodeImages(images) {
+  return (Array.isArray(images) ? images : [])
+    .filter((img) => img && isPersistableImageUrl(img.url))
+    .map((img) => ({
+      id: img.id || (crypto.randomUUID ? crypto.randomUUID() : `img-${Date.now()}`),
+      url: img.url,
+      name: img.name || "image",
+      createdAt: img.createdAt || Date.now(),
+      source: img.source || "uploaded"
+    }));
+}
+
 function serializeState() {
   const serialized = {
-    nodes: state.nodes.map((n) => ({ ...n, images: (n.images || []).filter((img) => img.url && !img.url.startsWith("blob:")) })),
+    nodes: state.nodes.map((n) => ({ ...n, images: sanitizeNodeImages(n.images) })),
     edges: state.edges, nodeCounter: state.nodeCounter, postitCounter: state.postitCounter, zoom: state.zoom
   };
   const selectedNode = state.selectedPrimary ? serialized.nodes.find((n) => n.id === state.selectedPrimary) : null;
@@ -229,7 +246,7 @@ function markUnsaved() {
 function loadCampaignCanvasState() {
   const raw = localStorage.getItem(STORAGE_KEY); if (!raw) return false;
   const campaignState = JSON.parse(raw); console.log("Loaded campaignCanvasState", campaignState);
-  state.nodes = campaignState.nodes || []; state.edges = campaignState.edges || []; state.nodeCounter = campaignState.nodeCounter || 1; state.postitCounter = campaignState.postitCounter || 1;
+  state.nodes = (campaignState.nodes || []).map((node) => ({ ...node, images: sanitizeNodeImages(node.images) })); state.edges = campaignState.edges || []; state.nodeCounter = campaignState.nodeCounter || 1; state.postitCounter = campaignState.postitCounter || 1;
   console.log("loaded node images", state.nodes.find((n) => n.id === state.selectedPrimary)?.images);
   state.selectedIds.clear(); state.selectedPrimary = null;
   el.zoomLayer.querySelectorAll(".node").forEach((n) => n.remove());
@@ -1578,17 +1595,15 @@ async function generateImageForNode(node) {
     if (!response.ok) throw new Error("Image generation failed");
     const data = await response.json();
     console.log("generate image API response", data);
-    const imageUrl = (data?.imageBase64 ? `data:${data.mimeType || "image/png"};base64,${data.imageBase64}` : "")
-      || data?.dataUrl
-      || data?.imageUrl
-      || data?.url;
+    const imageUrl = data?.imageUrl || data?.url || "";
     console.log("resolved image URL", imageUrl);
     if (!imageUrl) throw new Error("Image response is empty");
     const newImage = {
       id: crypto.randomUUID ? crypto.randomUUID() : `img-${Date.now()}`,
       url: imageUrl,
       name: "generated-image.png",
-      createdAt: Date.now()
+      createdAt: Date.now(),
+      source: "generated"
     };
     node.images = Array.isArray(node.images) ? node.images : [];
     console.log("BEFORE image add", node.id, node.images?.length, node.images);
@@ -1658,13 +1673,14 @@ async function generatePostingVisualForNode(node) {
     });
     if (!response.ok) throw new Error("Posting visual generation failed");
     const data = await response.json();
-    const imageUrl = data?.imageBase64 ? `data:${data.mimeType || "image/png"};base64,${data.imageBase64}` : "";
+    const imageUrl = data?.imageUrl || data?.url || "";
     if (!imageUrl) throw new Error("No posting visual returned");
     const newImage = {
       id: crypto.randomUUID ? crypto.randomUUID() : `img-${Date.now()}`,
       url: imageUrl,
       name: "generated-image.png",
-      createdAt: Date.now()
+      createdAt: Date.now(),
+      source: "generated"
     };
     node.images = Array.isArray(node.images) ? node.images : [];
     console.log("BEFORE image add", node.id, node.images?.length, node.images);
