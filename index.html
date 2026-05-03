@@ -56,6 +56,7 @@
           <div id="context-menu" class="context-menu hidden">
             <button id="add-context-node-btn" type="button">New Node</button>
             <button id="add-postit-comment-btn" type="button">Add Post-It</button>
+            <button id="improve-context-node-btn" type="button" class="hidden">✨ Improve with AI</button>
             <div class="emoji-shortcuts">
               <button class="emoji-quick" data-emoji="🔥" type="button">🔥</button>
               <button class="emoji-quick" data-emoji="👍" type="button">👍</button>
@@ -131,6 +132,15 @@
             <div id="inspector-image-list" class="inspector-image-list"></div>
           </div>
 
+          <div id="content-format-field" class="hidden">
+            <label for="node-content-format">Format</label>
+            <select id="node-content-format">
+              <option value="1:1">1:1</option>
+              <option value="16:9">16:9</option>
+              <option value="9:16">9:16</option>
+            </select>
+          </div>
+
 
           <label for="node-audience">Audience</label>
           <input id="node-audience" name="audience" placeholder="z. B. Eco-conscious homeowners" />
@@ -145,11 +155,13 @@
           <label for="node-variants">A/B Varianten (Komma getrennt)</label>
           <input id="node-variants" name="variants" placeholder="A: Hook 1, B: Hook 2" />
 
-          <button id="delete-node-btn" type="button" class="danger">Delete node</button>
-          <button id="improve-node-btn" type="button">✨ Improve with AI</button>
-          <button id="delete-selected-btn" type="button" class="danger">Delete selected nodes</button>
-          <button id="disconnect-selected-btn" type="button">Disconnect selected</button>
+          <button id="improve-node-btn" type="button" class="primary-add">✨ Improve with AI</button>
+          <button id="regenerate-node-btn" type="button">🔄 Regenerate</button>
+          <button id="generate-image-btn" type="button">🎨 Generate Image</button>
+          <button id="disconnect-selected-btn" type="button">Disconnect node</button>
           <button id="propagate-descendants-btn" type="button">Propagate to descendants</button>
+          <button id="delete-node-btn" type="button" class="danger">Delete node</button>
+          <button id="delete-selected-btn" type="button" class="danger">Delete selected nodes</button>
         </form>
       </aside>
     </div>
