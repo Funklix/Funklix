@@ -1556,31 +1556,6 @@ async function runInlineRefine(node, instruction, triggerBtn = null) {
   }
 }
 
-
-async function compressImageDataUrl(imageUrl) {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => {
-      const maxDim = 512;
-      const scale = Math.min(maxDim / img.width, maxDim / img.height, 1);
-      const width = Math.max(1, Math.round(img.width * scale));
-      const height = Math.max(1, Math.round(img.height * scale));
-      const canvas = document.createElement("canvas");
-      canvas.width = width;
-      canvas.height = height;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) {
-        reject(new Error("Could not create canvas context"));
-        return;
-      }
-      ctx.drawImage(img, 0, 0, width, height);
-      resolve(canvas.toDataURL("image/jpeg", 0.7));
-    };
-    img.onerror = () => reject(new Error("Could not load generated image"));
-    img.src = imageUrl;
-  });
-}
-
 async function generateImageForNode(node) {
   console.log("generate image start");
   const button = el.generateImageButton;
@@ -1609,10 +1584,9 @@ async function generateImageForNode(node) {
       || data?.url;
     console.log("resolved image URL", imageUrl);
     if (!imageUrl) throw new Error("Image response is empty");
-    const compressedImageUrl = await compressImageDataUrl(imageUrl);
     const newImage = {
       id: crypto.randomUUID ? crypto.randomUUID() : `img-${Date.now()}`,
-      url: compressedImageUrl,
+      url: imageUrl,
       name: "generated-image.png",
       createdAt: Date.now()
     };

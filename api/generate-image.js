@@ -49,7 +49,7 @@ Internal style preset:
       body: JSON.stringify({
         model: "gpt-image-1",
         prompt,
-        size: "512x512",
+        size: "1024x1024",
         quality: "high",
         n: 1
       })
