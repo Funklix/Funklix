@@ -1206,53 +1206,32 @@ function updateNodeCard(node) {
 
   const imageStrip = nodeEl.querySelector(".image-strip");
   imageStrip.innerHTML = "";
-  node.images.forEach((img) => {
-    const thumb = document.createElement("button");
-    thumb.type = "button";
-    thumb.className = "image-thumb";
+  if (node.images.length) {
+    const favoriteImage = node.images.find((img) => img.id === node.favoriteImageId);
+    const previewImage = favoriteImage || node.images[node.images.length - 1];
+    const thumb = document.createElement("div");
+    thumb.className = `image-thumb image-thumb-preview${favoriteImage ? " is-favorite" : ""}`;
 
     const image = document.createElement("img");
-    image.src = img.url;
-    image.alt = img.name;
-    if (node.type === "Content" && node.favoriteImageId === img.id) {
-      image.style.outline = "2px solid #ffbf47";
-      image.style.outlineOffset = "1px";
-      const star = document.createElement("span");
-      star.textContent = "★";
-      star.style.position = "absolute";
-      star.style.left = "6px";
-      star.style.top = "6px";
-      star.style.fontSize = "0.85rem";
-      star.style.background = "rgba(255,255,255,0.9)";
-      star.style.borderRadius = "999px";
-      star.style.padding = "1px 4px";
-      star.style.color = "#e6a200";
-      thumb.appendChild(star);
+    image.src = previewImage.url;
+    image.alt = previewImage.name || "Node image";
+
+    const badge = document.createElement("span");
+    badge.className = "image-badge";
+    badge.textContent = favoriteImage ? "★" : "🖼";
+
+    thumb.append(image, badge);
+
+    const extraCount = node.images.length - 1;
+    if (extraCount > 0) {
+      const more = document.createElement("span");
+      more.className = "image-more-count";
+      more.textContent = `+${extraCount}`;
+      thumb.appendChild(more);
     }
 
-    const hint = document.createElement("span");
-    hint.className = "zoom-hint";
-    hint.textContent = "🔍";
-
-    thumb.append(image, hint);
-    const deleteBtn = document.createElement("button");
-    deleteBtn.type = "button";
-    deleteBtn.className = "image-delete-btn";
-    deleteBtn.textContent = "✕";
-    deleteBtn.addEventListener("click", (event) => {
-      event.stopPropagation();
-      removeNodeImage(node, img.id);
-    });
-
-    thumb.appendChild(deleteBtn);
-    thumb.addEventListener("click", (event) => {
-      event.stopPropagation();
-      thumb.classList.add("expanded");
-    });
-    thumb.addEventListener("mouseleave", () => thumb.classList.remove("expanded"));
-
     imageStrip.appendChild(thumb);
-  });
+  }
 
   const social = nodeEl.querySelector(".social-preview");
   const isSocial = node.type === "Social Media Posting";
@@ -1457,6 +1436,21 @@ function removeNodeImage(node, imageId) {
   if (state.selectedPrimary === node.id) fillInspector(node);
 }
 
+
+
+function downloadNodeImage(node, img) {
+  const a = document.createElement("a");
+  a.href = img.url;
+  const safeName = (img.name || node.title || node.content || "node-image")
+    .slice(0, 40)
+    .replace(/[^a-z0-9-_]+/gi, "-")
+    .replace(/^-+|-+$/g, "");
+  a.download = `${safeName || "node-image"}.png`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
 function renderInspectorImages(node) {
   el.inspectorImageList.innerHTML = "";
   if (!node.images.length) {
@@ -1468,54 +1462,65 @@ function renderInspectorImages(node) {
   }
 
   node.images.forEach((img) => {
-    const row = document.createElement("div");
-    row.className = "inspector-image-item";
+    const card = document.createElement("div");
+    const isFavorite = node.favoriteImageId === img.id;
+    card.className = `inspector-image-item${isFavorite ? " is-favorite" : ""}`;
+
+    const thumb = document.createElement("img");
+    thumb.className = "inspector-image-thumb";
+    thumb.src = img.url;
+    thumb.alt = img.name || "Bild";
+
+    const favoriteTag = document.createElement("span");
+    favoriteTag.className = "inspector-image-favorite-tag";
+    favoriteTag.textContent = "★";
+
+    const actions = document.createElement("div");
+    actions.className = "inspector-image-actions";
+
+    const favoriteBtn = document.createElement("button");
+    favoriteBtn.type = "button";
+    favoriteBtn.className = "inspector-image-action";
+    favoriteBtn.textContent = "⭐";
+    favoriteBtn.title = "Set as favorite";
+    favoriteBtn.addEventListener("click", (event) => {
+      event.stopPropagation();
+      node.favoriteImageId = node.favoriteImageId === img.id ? null : img.id;
+      updateNodeCard(node);
+      fillInspector(node);
+      saveCampaignCanvasState();
+    });
+
+    const downloadBtn = document.createElement("button");
+    downloadBtn.type = "button";
+    downloadBtn.className = "inspector-image-action";
+    downloadBtn.textContent = "⬇️";
+    downloadBtn.title = "Download";
+    downloadBtn.addEventListener("click", (event) => {
+      event.stopPropagation();
+      downloadNodeImage(node, img);
+    });
+
+    const deleteBtn = document.createElement("button");
+    deleteBtn.type = "button";
+    deleteBtn.className = "inspector-image-action danger";
+    deleteBtn.textContent = "❌";
+    deleteBtn.title = "Delete";
+    deleteBtn.addEventListener("click", (event) => {
+      event.stopPropagation();
+      removeNodeImage(node, img.id);
+    });
 
     const name = document.createElement("span");
     name.className = "inspector-image-name";
     name.textContent = img.name || "Bild";
 
-    const deleteBtn = document.createElement("button");
-    deleteBtn.type = "button";
-    deleteBtn.className = "inspector-image-delete";
-    deleteBtn.textContent = "Bild löschen";
-    deleteBtn.addEventListener("click", () => removeNodeImage(node, img.id));
-    const downloadBtn = document.createElement("button");
-    downloadBtn.type = "button";
-    downloadBtn.className = "inspector-image-delete";
-    downloadBtn.textContent = "Download";
-    downloadBtn.addEventListener("click", () => {
-      const a = document.createElement("a");
-      a.href = img.url;
-      const safeName = (node.title || node.content || "node-image")
-        .slice(0, 40)
-        .replace(/[^a-z0-9-_]+/gi, "-")
-        .replace(/^-+|-+$/g, "");
-      a.download = `${safeName || "node-image"}.png`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-    });
-    if (node.type === "Content") {
-      const favoriteBtn = document.createElement("button");
-      favoriteBtn.type = "button";
-      favoriteBtn.className = "inspector-image-delete";
-      const isFavorite = node.favoriteImageId === img.id;
-      favoriteBtn.textContent = isFavorite ? "★ Favorite" : "☆ Favorite";
-      favoriteBtn.style.fontWeight = isFavorite ? "700" : "500";
-      favoriteBtn.addEventListener("click", () => {
-        node.favoriteImageId = node.favoriteImageId === img.id ? null : img.id;
-        updateNodeCard(node);
-        fillInspector(node);
-        saveCampaignCanvasState();
-      });
-      row.append(name, favoriteBtn, downloadBtn, deleteBtn);
-    } else {
-      row.append(name, downloadBtn, deleteBtn);
-    }
-    el.inspectorImageList.appendChild(row);
+    actions.append(favoriteBtn, downloadBtn, deleteBtn);
+    card.append(thumb, favoriteTag, actions, name);
+    el.inspectorImageList.appendChild(card);
   });
 }
+
 
 async function refineNodeWithAI(node, instruction) {
   const parentNode = getDirectParentNode(node.id);
@@ -1580,6 +1585,8 @@ async function generateImageForNode(node) {
   let imageAttached = false;
   button.disabled = true;
   button.textContent = "Generating image...";
+  const nodeEl = el.zoomLayer.querySelector(`[data-id='${node.id}']`);
+  if (nodeEl) nodeEl.classList.add("image-generating");
   try {
     const response = await fetch("/api/generate-image", {
       method: "POST",
@@ -1698,6 +1705,7 @@ async function generatePostingVisualForNode(node) {
       alert("Could not generate posting visual right now. Please try again.");
     }
   } finally {
+    if (nodeEl) nodeEl.classList.remove("image-generating");
     button.textContent = originalLabel;
     updateInspectorActionVisibility();
   }
