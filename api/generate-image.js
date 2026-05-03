@@ -6,12 +6,25 @@ module.exports = async function handler(req, res) {
 
   try {
     const { nodeTitle = "", nodeContent = "", brandBrainData = {}, campaignContext = "" } = req.body || {};
-    const prompt = `Create a clean marketing visual.
-Node title: ${nodeTitle}
-Node content: ${nodeContent}
-Campaign context: ${campaignContext || "none"}
-Brand brain data: ${JSON.stringify(brandBrainData)}
-Style guidance: Use brand tone/style/assets when available. Keep composition clear and campaign-aligned.`;
+    const prompt = `Create a conceptual marketing visual based on the structured context below.
+
+Structured context:
+- nodeTitle: ${nodeTitle}
+- nodeContent: ${nodeContent}
+- brandBrainData (tone/style/assets): ${JSON.stringify(brandBrainData)}
+- campaignContext: ${campaignContext || "none"}
+
+Creative direction:
+- Create a visual metaphor or scene that represents the idea.
+- Use brand tone/style cues from brandBrainData where relevant.
+- Make it modern, minimal, and high-quality.
+- Keep composition clean and suitable for social media marketing.
+
+Strict constraints:
+- Do NOT include any text, letters, words, numbers, logos, or typography in the image.
+- No UI elements.
+- No screenshots.
+- No posters.`;
 
     const response = await fetch("https://api.openai.com/v1/images/generations", {
       method: "POST",
