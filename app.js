@@ -99,6 +99,7 @@ const el = {
   improveNodeButton: document.getElementById("improve-node-btn"),
   regenerateNodeButton: document.getElementById("regenerate-node-btn"),
   generateImageButton: document.getElementById("generate-image-btn"),
+  generatePostingVisualButton: document.getElementById("generate-posting-visual-btn"),
   postingPlanOverlay: document.getElementById("posting-plan-overlay"),
   postingDateInput: document.getElementById("posting-date-input"),
   postingTimeInput: document.getElementById("posting-time-input"),
@@ -1038,11 +1039,13 @@ function updateInspectorActionVisibility() {
   const hasAnySelection = selectedCount > 0;
   const selectedNode = hasSingleNode ? getNode(state.selectedPrimary) : null;
   const canGenerateImage = !!selectedNode && selectedNode.type === "Content";
+  const canGeneratePostingVisual = !!selectedNode && selectedNode.type === "Social Media Posting";
 
   el.deleteNodeButton.classList.toggle("hidden", !hasSingleNode);
   el.improveNodeButton.classList.toggle("hidden", !hasSingleNode);
   el.regenerateNodeButton.classList.toggle("hidden", !hasSingleNode);
   el.generateImageButton.classList.toggle("hidden", !canGenerateImage);
+  el.generatePostingVisualButton.classList.toggle("hidden", !canGeneratePostingVisual);
   el.propagateDescendantsButton.classList.toggle("hidden", !hasSingleNode);
   el.disconnectSelectedButton.classList.toggle("hidden", !hasAnySelection);
   el.deleteSelectedButton.classList.toggle("hidden", !hasMultipleNodes);
@@ -1053,6 +1056,7 @@ function updateInspectorActionVisibility() {
   el.improveNodeButton.disabled = !hasSingleNode;
   el.regenerateNodeButton.disabled = !hasSingleNode;
   el.generateImageButton.disabled = !canGenerateImage;
+  el.generatePostingVisualButton.disabled = !canGeneratePostingVisual;
   el.propagateDescendantsButton.disabled = !hasSingleNode;
   el.disconnectSelectedButton.disabled = !hasAnySelection;
   el.deleteSelectedButton.disabled = !hasMultipleNodes;
@@ -1561,6 +1565,56 @@ async function generateImageForNode(node) {
       console.error("SHOWING IMAGE ERROR ALERT", error);
       alert("Could not generate image right now. Please try again.");
     }
+  } finally {
+    button.textContent = originalLabel;
+    updateInspectorActionVisibility();
+  }
+}
+
+function getParentContentNode(nodeId) {
+  const parentId = state.edges.find(([, to]) => to === nodeId)?.[0];
+  const parent = parentId ? getNode(parentId) : null;
+  return parent?.type === "Content" ? parent : null;
+}
+
+async function generatePostingVisualForNode(node) {
+  const parentContent = getParentContentNode(node.id);
+  if (!parentContent?.images?.length) {
+    alert("Please connect this post to a Content node with an image first.");
+    return;
+  }
+  const overlayText = (node.title || "").trim() || (node.social?.caption || "").split("\n")[0].trim();
+  if (!overlayText) {
+    alert("Please add a title or caption first.");
+    return;
+  }
+
+  const button = el.generatePostingVisualButton;
+  const originalLabel = button.textContent;
+  button.disabled = true;
+  button.textContent = "Generating posting visual...";
+  try {
+    const response = await fetch("/api/generate-posting-visual", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sourceImage: parentContent.images[0].url,
+        overlayText,
+        format: node.contentFormat || "1:1",
+        brandBrainData: state.brandCore,
+        campaignContext: getCampaignContextSummary()
+      })
+    });
+    if (!response.ok) throw new Error("Posting visual generation failed");
+    const data = await response.json();
+    const imageUrl = data?.imageBase64 ? `data:${data.mimeType || "image/png"};base64,${data.imageBase64}` : "";
+    if (!imageUrl) throw new Error("No posting visual returned");
+    node.images.push({ id: crypto.randomUUID(), name: `Posting Visual ${new Date().toISOString()}`, url: imageUrl });
+    updateNodeCard(node);
+    fillInspector(node);
+    saveCampaignCanvasState();
+  } catch (_error) {
+    alert("Could not generate posting visual right now. Please try again.");
   } finally {
     button.textContent = originalLabel;
     updateInspectorActionVisibility();
@@ -2261,6 +2315,11 @@ el.generateImageButton.addEventListener("click", async () => {
   const node = getNode(state.selectedPrimary);
   if (!node || node.type !== "Content") return;
   await generateImageForNode(node);
+});
+el.generatePostingVisualButton.addEventListener("click", async () => {
+  const node = getNode(state.selectedPrimary);
+  if (!node || node.type !== "Social Media Posting") return;
+  await generatePostingVisualForNode(node);
 });
 el.deleteSelectedButton.addEventListener("click", () => {
   if (!state.selectedIds.size) return;
