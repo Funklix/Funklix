@@ -1259,3 +1259,43 @@ button:active {
 #improve-node-btn {
   font-weight: 600;
 }
+
+.topbar {
+  padding: 8px 12px;
+  min-height: unset;
+}
+
+.topbar h1 {
+  font-size: 16px;
+  margin: 0;
+}
+
+.topbar p {
+  font-size: 11px;
+  margin: 2px 0 0 0;
+  color: #8a90a6;
+}
+
+.topbar button {
+  font-size: 12px;
+  padding: 5px 8px;
+}
+
+.create-campaign-btn {
+  font-size: 12px;
+  padding: 6px 10px;
+}
+
+.topbar .actions {
+  gap: 6px;
+  align-items: center;
+}
+
+#zoom-label,
+#save-status {
+  font-size: 11px;
+}
+
+.topbar button:not(.create-campaign-btn) {
+  opacity: 0.85;
+}
