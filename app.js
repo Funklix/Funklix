@@ -1500,15 +1500,22 @@ async function generateImageForNode(node) {
     });
     if (!response.ok) throw new Error("Image generation failed");
     const data = await response.json();
-    if (!data?.imageBase64) throw new Error("Image response is empty");
+    console.log("Image generation response", data);
+    const normalizedImageUrl = data?.imageUrl
+      || data?.url
+      || data?.dataUrl
+      || (data?.imageBase64 ? `data:${data.mimeType || "image/png"};base64,${data.imageBase64}` : "");
+    if (!normalizedImageUrl) throw new Error("Image response is empty");
     node.images.push({
       id: crypto.randomUUID(),
       name: `AI Generated ${new Date().toISOString()}`,
-      url: `data:${data.mimeType || "image/png"};base64,${data.imageBase64}`
+      url: normalizedImageUrl
     });
+    console.log("Image attached successfully", normalizedImageUrl);
     updateNodeCard(node);
     fillInspector(node);
     saveCampaignCanvasState();
+    return;
   } catch (_error) {
     alert("Could not generate image right now. Please try again.");
   } finally {
