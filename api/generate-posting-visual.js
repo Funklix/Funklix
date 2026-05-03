@@ -1,3 +1,5 @@
+const { uploadGeneratedImage } = require("./_image-storage");
+
 module.exports = async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
@@ -46,7 +48,9 @@ module.exports = async function handler(req, res) {
     const data = await response.json();
     const imageBase64 = data?.data?.[0]?.b64_json;
     if (!imageBase64) return res.status(500).json({ error: "OpenAI returned no image" });
-    return res.status(200).json({ imageBase64, mimeType: "image/png" });
+
+    const uploaded = await uploadGeneratedImage({ imageBase64, mimeType: "image/png", prefix: "posting" });
+    return res.status(200).json(uploaded);
   } catch (error) {
     return res.status(500).json({ error: error?.message || "Failed to generate posting visual" });
   }
