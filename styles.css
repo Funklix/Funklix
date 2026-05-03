@@ -1215,3 +1215,47 @@ button:active {
   font-weight: 600;
   pointer-events: none;
 }
+
+
+.inspector {
+  font-size: 13px;
+}
+
+.inspector h2 {
+  font-size: 14px;
+  margin-bottom: 8px;
+}
+
+.meta {
+  font-size: 11px;
+}
+
+.node-form {
+  gap: 5px;
+}
+
+.node-form label {
+  font-size: 11px;
+  color: #7a8099;
+  margin-top: 6px;
+}
+
+.node-form input,
+.node-form textarea,
+.node-form select {
+  font-size: 12px;
+  padding: 6px 8px;
+}
+
+.node-form button {
+  font-size: 12px;
+  padding: 6px 8px;
+}
+
+.inspector-image-name {
+  font-size: 11px;
+}
+
+#improve-node-btn {
+  font-weight: 600;
+}
