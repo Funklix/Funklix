@@ -222,7 +222,7 @@ function serializeState() {
   console.log("serialized images", selectedNode?.images || []);
   return serialized;
 }
-function saveCampaignCanvasState() { const campaignState = serializeState(); console.log("Saving campaignCanvasState", campaignState); const payload = JSON.stringify(campaignState); console.log("campaignCanvasState size MB", (payload.length / 1024 / 1024).toFixed(2)); try { localStorage.setItem(STORAGE_KEY, payload); setSaveStatus("Saved"); } catch (error) { console.error("Failed to save campaignCanvasState", error); alert("Could not save the full board. Generated images may be too large for browser storage."); } }
+function saveCampaignCanvasState() { const campaignState = serializeState(); console.log("Saving campaignCanvasState", campaignState); localStorage.setItem(STORAGE_KEY, JSON.stringify(campaignState)); setSaveStatus("Saved"); }
 function markUnsaved() {
   setSaveStatus("Unsaved changes");
 }
