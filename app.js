@@ -169,9 +169,15 @@ function openLightbox(imageUrl) {
 }
 
 function closeLightbox() {
-  if (!activeLightbox) return;
-  activeLightbox.classList.remove("open");
-  activeLightbox.classList.add("hidden");
+  const lightbox = document.getElementById("image-lightbox");
+  if (!lightbox) return;
+
+  lightbox.classList.remove("open");
+  lightbox.classList.add("hidden");
+
+  const img = lightbox.querySelector(".image-lightbox-image");
+  if (img) img.removeAttribute("src");
+
   activeLightbox = null;
 }
 
@@ -1526,6 +1532,10 @@ function renderInspectorImages(node) {
     thumb.className = "inspector-image-thumb";
     thumb.src = img.url;
     thumb.alt = img.name || "Bild";
+    thumb.addEventListener("click", (event) => {
+      event.stopPropagation();
+      openLightbox(img.url);
+    });
 
     const favoriteTag = document.createElement("span");
     favoriteTag.className = "inspector-image-favorite-tag";
