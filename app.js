@@ -1590,17 +1590,16 @@ async function generateImageForNode(node) {
       name: "generated-image.png",
       createdAt: Date.now()
     };
-    node.images = node.images || [];
-    console.log("image before push", node.images);
-    console.log("new generated image", newImage);
+    node.images = Array.isArray(node.images) ? node.images : [];
+    console.log("BEFORE image add", node.id, node.images?.length, node.images);
     node.images.push(newImage);
-    console.log("image after push", node.images);
+    console.log("AFTER image add", node.id, node.images?.length, node.images);
     imageAttached = true;
     console.log("image attached to node", node.id);
     updateNodeCard(node);
     fillInspector(node);
     saveCampaignCanvasState();
-    console.log("saved state images", serializeState().nodes.find((n) => n.id === node.id)?.images);
+    console.log("SAVED image count", serializeState().nodes.find((n) => n.id === node.id)?.images?.length);
     console.log("generate image success - no alert");
     return;
   } catch (error) {
@@ -1667,15 +1666,14 @@ async function generatePostingVisualForNode(node) {
       name: "generated-image.png",
       createdAt: Date.now()
     };
-    node.images = node.images || [];
-    console.log("image before push", node.images);
-    console.log("new generated image", newImage);
+    node.images = Array.isArray(node.images) ? node.images : [];
+    console.log("BEFORE image add", node.id, node.images?.length, node.images);
     node.images.push(newImage);
-    console.log("image after push", node.images);
+    console.log("AFTER image add", node.id, node.images?.length, node.images);
     postingVisualAttached = true;
     saveCampaignCanvasState();
     console.log("posting visual attached", node.images);
-    console.log("saved state images", serializeState().nodes.find((n) => n.id === node.id)?.images);
+    console.log("SAVED image count", serializeState().nodes.find((n) => n.id === node.id)?.images?.length);
     updateNodeCard(node);
     fillInspector(node);
     return;
