@@ -143,6 +143,35 @@ Object.keys(NODE_TYPES).forEach((type) => {
   el.inputs.type.appendChild(option);
 });
 
+
+
+function ensureImageLightbox() {
+  let overlay = document.getElementById("image-lightbox");
+  if (overlay) return overlay;
+  overlay = document.createElement("div");
+  overlay.id = "image-lightbox";
+  overlay.className = "image-lightbox hidden";
+  overlay.innerHTML = '<button type="button" class="image-lightbox-close" aria-label="Close preview">✕</button><img class="image-lightbox-image" alt="Image preview" />';
+  document.body.appendChild(overlay);
+  overlay.addEventListener("click", (event) => {
+    if (event.target === overlay) overlay.classList.add("hidden");
+  });
+  overlay.querySelector(".image-lightbox-close").addEventListener("click", () => overlay.classList.add("hidden"));
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") overlay.classList.add("hidden");
+  });
+  return overlay;
+}
+
+function openImageLightbox(url, alt = "Image preview") {
+  if (!url) return;
+  const overlay = ensureImageLightbox();
+  const image = overlay.querySelector(".image-lightbox-image");
+  image.src = url;
+  image.alt = alt;
+  overlay.classList.remove("hidden");
+}
+
 function nowString() {
   return new Intl.DateTimeFormat("de-DE", { dateStyle: "short", timeStyle: "short" }).format(new Date());
 }
@@ -1224,6 +1253,7 @@ function updateNodeCard(node) {
     badge.textContent = favoriteImage ? "★" : "🖼";
 
     thumb.append(image, badge);
+    thumb.addEventListener("click", () => openImageLightbox(previewImage.url, previewImage.name || "Node image"));
 
     const extraCount = node.images.length - 1;
     if (extraCount > 0) {
@@ -1473,6 +1503,7 @@ function renderInspectorImages(node) {
     thumb.className = "inspector-image-thumb";
     thumb.src = img.url;
     thumb.alt = img.name || "Bild";
+    thumb.addEventListener("click", () => openImageLightbox(img.url, img.name || "Bild"));
 
     const favoriteTag = document.createElement("span");
     favoriteTag.className = "inspector-image-favorite-tag";
