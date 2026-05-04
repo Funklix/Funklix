@@ -419,6 +419,33 @@ function resetBrandBrainState() {
 
 
 
+
+function showResetBoardConfirmModal() {
+  return new Promise((resolve) => {
+    const overlay = document.createElement("div");
+    overlay.className = "brand-confirm-modal";
+    overlay.innerHTML = `<div class="brand-confirm-card"><h3>You are about to reset the board</h3><p>This will remove all nodes and changes from the current board. This action cannot be undone.</p><div class="brand-confirm-actions"><button type="button" id="reset-board-cancel">Cancel</button><button type="button" class="danger" id="reset-board-confirm">Confirm</button></div></div>`;
+    document.body.appendChild(overlay);
+
+    const close = (value) => {
+      overlay.remove();
+      document.removeEventListener("keydown", onKeydown);
+      resolve(value);
+    };
+
+    const onKeydown = (event) => {
+      if (event.key === "Escape") close(false);
+    };
+
+    document.addEventListener("keydown", onKeydown);
+    overlay.addEventListener("click", (event) => {
+      if (event.target === overlay) close(false);
+    });
+    overlay.querySelector("#reset-board-cancel").addEventListener("click", () => close(false));
+    overlay.querySelector("#reset-board-confirm").addEventListener("click", () => close(true));
+  });
+}
+
 function showBrandSuggestionConfirmModal() {
   return new Promise((resolve) => {
     const overlay = document.createElement("div");
@@ -2843,11 +2870,12 @@ window.debugNodes = () => {
 function createDebugPanel() {}
 
 function bindGlobalResetDelegation() {
-  document.addEventListener("click", (event) => {
+  document.addEventListener("click", async (event) => {
     if (event.target.closest("#reset-board-btn")) {
       console.log("RESET BOARD CLICK DELEGATED");
       event.preventDefault();
-      window.resetCampaignCanvasState();
+      const shouldReset = await showResetBoardConfirmModal();
+      if (shouldReset) window.resetCampaignCanvasState();
     }
     if (event.target.closest("#reset-brand-core-btn")) {
       console.log("RESET BRAND CLICK DELEGATED");
