@@ -20,6 +20,31 @@ module.exports = async function handler(req, res) {
     const html = await pageRes.text();
     const safeHtml = html.slice(0, 300000);
 
+
+    const baseUrl = new URL(normalized);
+    const toAbsolute = (u) => {
+      try { return new URL(u, baseUrl).toString(); } catch { return ""; }
+    };
+
+    const logoCandidate =
+      (safeHtml.match(/<img[^>]+(?:alt=["'][^"']*logo[^"']*["'][^>]*src=["']([^"']+)["']|src=["']([^"']+)["'][^>]*alt=["'][^"']*logo[^"']*["'])/i)?.[1] ||
+      safeHtml.match(/<img[^>]+(?:alt=["'][^"']*logo[^"']*["'][^>]*src=["']([^"']+)["']|src=["']([^"']+)["'][^>]*alt=["'][^"']*logo[^"']*["'])/i)?.[2] ||
+      safeHtml.match(/<img[^>]+src=["']([^"']*logo[^"']*)["']/i)?.[1] ||
+      safeHtml.match(/<link[^>]+rel=["'][^"']*(?:icon|apple-touch-icon)[^"']*["'][^>]*href=["']([^"']+)["']/i)?.[1] ||
+      "");
+
+    const colorMatches = [...safeHtml.matchAll(/#([0-9a-fA-F]{6})/g)].map((m) => `#${m[1].toUpperCase()}`);
+    const colorCounts = colorMatches.reduce((acc, c) => { acc[c] = (acc[c] || 0) + 1; return acc; }, {});
+    const extractedColors = Object.entries(colorCounts)
+      .sort((a, b) => b[1] - a[1])
+      .map(([c]) => c)
+      .slice(0, 5);
+
+    const fontCandidate = (safeHtml.match(/font-family\s*:\s*([^;}{]+)/i)?.[1] || "")
+      .split(",")
+      .map((f) => f.replace(/["']/g, "").trim())
+      .filter(Boolean)[0] || "";
+
     const title = (safeHtml.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] || "").replace(/\s+/g, " ").trim();
     const description = (safeHtml.match(/<meta[^>]+name=["']description["'][^>]*content=["']([^"']+)["']/i)?.[1] || "").trim();
     const headings = [...safeHtml.matchAll(/<h[1-3][^>]*>([\s\S]*?)<\/h[1-3]>/gi)].map((m) => m[1].replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim()).filter(Boolean).slice(0, 20);
@@ -87,6 +112,13 @@ Website context:\n${extracted}`;
 
     try {
       const parsed = JSON.parse(sanitized);
+      parsed.brandAssets = {
+        domain: parsed?.brandAssets?.domain || normalized,
+        logo: parsed?.brandAssets?.logo || toAbsolute(logoCandidate) || "",
+        colors: Array.isArray(parsed?.brandAssets?.colors) && parsed.brandAssets.colors.length ? parsed.brandAssets.colors : extractedColors,
+        typography: parsed?.brandAssets?.typography || fontCandidate || "",
+        references: Array.isArray(parsed?.brandAssets?.references) ? parsed.brandAssets.references : []
+      };
       return res.status(200).json({ suggestions: parsed });
     } catch (_parseError) {
       return res.status(500).json({ error: "Failed to parse brand analysis JSON", rawText });

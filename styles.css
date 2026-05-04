@@ -1403,3 +1403,27 @@ button:active {
   margin-top: 0;
   margin-bottom: 8px;
 }
+
+.brand-confirm-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(18, 20, 34, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 13000;
+}
+
+.brand-confirm-card {
+  width: min(420px, 92vw);
+  background: #fff;
+  border: 1px solid #e1e5f4;
+  border-radius: 14px;
+  box-shadow: 0 16px 34px rgba(24, 30, 66, 0.2);
+  padding: 16px;
+}
+
+.brand-confirm-card h3 { margin: 0 0 8px; color: #4736c8; }
+.brand-confirm-card p { margin: 0 0 14px; color: #5e657f; font-size: 0.92rem; }
+.brand-confirm-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.brand-confirm-actions button { border-radius: 9px; padding: 7px 10px; }
