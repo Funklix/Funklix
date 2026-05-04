@@ -357,6 +357,58 @@ function resetBrandBrainState() {
   renderBrandCoreEditor();
 }
 
+
+
+async function analyzeBrandDomainFromEditor() {
+  const domainInput = el.brandEditorPanel.querySelector("#bc-domain");
+  const analyzeButton = el.brandEditorPanel.querySelector("#bc-analyze-domain");
+  const domainUrl = domainInput?.value?.trim();
+  if (!domainUrl) {
+    alert("Please enter a domain URL first.");
+    return;
+  }
+
+  const originalLabel = analyzeButton?.textContent || "Analyze Website";
+  if (analyzeButton) {
+    analyzeButton.disabled = true;
+    analyzeButton.textContent = "Analyzing website…";
+  }
+
+  try {
+    const response = await fetch("/api/analyze-brand-domain", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ domainUrl })
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload?.error || "Could not analyze website");
+
+    const next = payload?.suggestions;
+    if (!next || typeof next !== "object") throw new Error("No brand suggestions returned");
+
+    const confirmReplace = window.confirm("Replace current Brand Brain with generated suggestions?");
+    if (!confirmReplace) return;
+
+    state.brandCore = {
+      ...state.brandCore,
+      ...next,
+      brandAssets: { ...(state.brandCore.brandAssets || {}), ...(next.brandAssets || {}) },
+      customTiles: Array.isArray(state.brandCore.customTiles) ? state.brandCore.customTiles : []
+    };
+
+    saveBrandBrainState();
+    renderBrandCoreTiles();
+    renderBrandCoreEditor();
+  } catch (error) {
+    alert(error?.message || "Website analysis failed. Please try another domain.");
+  } finally {
+    if (analyzeButton) {
+      analyzeButton.disabled = false;
+      analyzeButton.textContent = originalLabel;
+    }
+  }
+}
+
 function renderBrandCoreEditor() {
   const selectedKey = state.brandCoreSelectedKey;
   if (selectedKey === "custom:add") {
@@ -422,9 +474,10 @@ function renderBrandCoreEditor() {
     el.brandEditorPanel.insertAdjacentHTML("beforeend", `<label>Good example</label><textarea class="bc-good" id="bc-good" rows="3">${value.good || ""}</textarea><label>Avoid example</label><textarea class="bc-bad" id="bc-avoid" rows="3">${value.avoid || ""}</textarea>`);
     ["bc-good","bc-avoid"].forEach((id) => el.brandEditorPanel.querySelector(`#${id}`).addEventListener("input", () => { value.good = el.brandEditorPanel.querySelector("#bc-good").value; value.avoid = el.brandEditorPanel.querySelector("#bc-avoid").value; saveBrandBrainState(); renderBrandCoreTiles(); }));
   } else if (key === "brandAssets") {
-    el.brandEditorPanel.insertAdjacentHTML("beforeend", `<label>Domain URL</label><input id="bc-domain" value="${value.domain || ""}"/><label>Typography</label><input id="bc-typo" value="${value.typography || ""}"/><label>Logo URL</label><input id="bc-logo" value="${value.logo || ""}"/><label>Palette</label><div class="posting-actions bc-add-row"><input id="bc-color-add" placeholder="#AABBCC"/><button type="button">+</button></div><div class="bc-tags">${(value.colors||[]).map((c,i)=>`<span data-i="${i}">${c}</span>`).join("")}</div>`);
+    el.brandEditorPanel.insertAdjacentHTML("beforeend", `<label>Domain URL</label><input id="bc-domain" value="${value.domain || ""}"/><button id="bc-analyze-domain" type="button">Analyze Website</button><label>Typography</label><input id="bc-typo" value="${value.typography || ""}"/><label>Logo URL</label><input id="bc-logo" value="${value.logo || ""}"/><label>Palette</label><div class="posting-actions bc-add-row"><input id="bc-color-add" placeholder="#AABBCC"/><button type="button" id="bc-color-plus">+</button></div><div class="bc-tags">${(value.colors||[]).map((c,i)=>`<span data-i="${i}">${c}</span>`).join("")}</div>`);
     ["bc-domain","bc-typo","bc-logo"].forEach((id) => el.brandEditorPanel.querySelector(`#${id}`).addEventListener("input", () => { value.domain = el.brandEditorPanel.querySelector("#bc-domain").value; value.typography = el.brandEditorPanel.querySelector("#bc-typo").value; value.logo = el.brandEditorPanel.querySelector("#bc-logo").value; saveBrandBrainState(); renderBrandCoreTiles(); }));
-    el.brandEditorPanel.querySelector("button").addEventListener("click", () => { const c = el.brandEditorPanel.querySelector("#bc-color-add").value.trim(); if (!c) return; value.colors.push(c); saveBrandBrainState(); renderBrandCoreEditor(); });
+    el.brandEditorPanel.querySelector("#bc-analyze-domain").addEventListener("click", analyzeBrandDomainFromEditor);
+    el.brandEditorPanel.querySelector("#bc-color-plus").addEventListener("click", () => { const c = el.brandEditorPanel.querySelector("#bc-color-add").value.trim(); if (!c) return; value.colors.push(c); saveBrandBrainState(); renderBrandCoreEditor(); });
     el.brandEditorPanel.querySelectorAll(".bc-tags span").forEach((chip) => chip.addEventListener("click", () => { value.colors.splice(Number(chip.dataset.i),1); saveBrandBrainState(); renderBrandCoreEditor(); }));
   } else if (key === "personas") {
     el.brandEditorPanel.insertAdjacentHTML("beforeend", `<div class="posting-actions bc-add-row"><input id="bc-p-name" placeholder="Persona"/><input id="bc-p-note" placeholder="Label"/><button type="button">+</button></div><ul class="bc-edit-list">${value.map((p, i) => `<li data-i="${i}">${p.name} <small>${p.note}</small><button type="button">✕</button></li>`).join("")}</ul>`);
