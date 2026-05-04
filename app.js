@@ -114,6 +114,7 @@ const el = {
   disconnectSelectedButton: document.getElementById("disconnect-selected-btn"),
   propagateDescendantsButton: document.getElementById("propagate-descendants-btn"),
   resetBoardButton: document.getElementById("reset-board-btn"),
+  saveBoardButton: document.getElementById("save-board-btn"),
   saveStatus: document.getElementById("save-status"),
   brandCoreButton: document.getElementById("brand-core-nav-btn"),
   campaignCanvasNavButton: document.getElementById("campaign-canvas-nav-btn"),
@@ -305,12 +306,63 @@ function markUnsaved() {
 function loadCampaignCanvasState() {
   const raw = localStorage.getItem(STORAGE_KEY); if (!raw) return false;
   const campaignState = JSON.parse(raw); console.log("Loaded campaignCanvasState", campaignState);
-  state.nodes = (campaignState.nodes || []).map((node) => ({ ...node, images: sanitizeNodeImages(node.images) })); state.edges = campaignState.edges || []; state.nodeCounter = campaignState.nodeCounter || 1; state.postitCounter = campaignState.postitCounter || 1;
-  console.log("loaded node images", state.nodes.find((n) => n.id === state.selectedPrimary)?.images);
-  state.selectedIds.clear(); state.selectedPrimary = null;
+  applyCampaignState(campaignState, "Restored from local storage");
+  return true;
+}
+
+
+function applyCampaignState(campaignState, statusText = "Restored") {
+  state.nodes = (campaignState.nodes || []).map((node) => ({ ...node, images: sanitizeNodeImages(node.images) }));
+  state.edges = campaignState.edges || [];
+  state.nodeCounter = campaignState.nodeCounter || 1;
+  state.postitCounter = campaignState.postitCounter || 1;
+  state.selectedIds.clear();
+  state.selectedPrimary = null;
   el.zoomLayer.querySelectorAll(".node").forEach((n) => n.remove());
   state.nodes.forEach(renderNode);
-  updateListView(); updateEmptyState(); drawLinks(); if (campaignState.zoom) setZoom(campaignState.zoom); setSaveStatus("Restored from local storage"); return true;
+  updateListView();
+  updateEmptyState();
+  drawLinks();
+  if (campaignState.zoom) setZoom(campaignState.zoom);
+  setSaveStatus(statusText);
+}
+
+async function saveBoardToServer() {
+  try {
+    const payload = {
+      name: `Campaign Canvas ${new Date().toISOString()}`,
+      canvas_json: serializeState()
+    };
+    const response = await fetch('/api/boards', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data?.error || 'Failed to save board');
+    const shareUrl = `${window.location.origin}/boards/${data.id}`;
+    setSaveStatus('Board saved');
+    window.prompt('Share this board URL:', shareUrl);
+  } catch (error) {
+    console.error(error);
+    setSaveStatus('Failed to save board');
+  }
+}
+
+async function loadBoardFromUrlIfPresent() {
+  const match = window.location.pathname.match(/^\/boards\/([^/]+)$/);
+  if (!match) return;
+  const boardId = match[1];
+  try {
+    const response = await fetch(`/api/boards/${boardId}`);
+    const data = await response.json();
+    if (!response.ok) throw new Error(data?.error || 'Failed to load board');
+    applyCampaignState(data.canvas_json || {}, `Loaded board ${boardId.slice(0, 8)}...`);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data.canvas_json || {}));
+  } catch (error) {
+    console.error(error);
+    setSaveStatus('Failed to load shared board');
+  }
 }
 
 function renderCampaignCanvasFromStateIfNeeded() {
@@ -2804,6 +2856,8 @@ function bindGlobalResetDelegation() {
   });
 }
 
+el.saveBoardButton?.addEventListener("click", saveBoardToServer);
+
 window.saveCampaignCanvasState = saveCampaignCanvasState;
 window.loadCampaignCanvasState = loadCampaignCanvasState;
 window.resetCampaignCanvasState = resetCampaignCanvasState;
@@ -2816,6 +2870,7 @@ function bootApp() {
   bindGlobalResetDelegation();
   loadBrandBrainState();
   loadCampaignCanvasState();
+  loadBoardFromUrlIfPresent();
   centerBoardStartPosition();
   el.zoomLayer.style.transform = `scale(${state.zoom})`;
   el.zoomLayer.style.transformOrigin = "0 0";
