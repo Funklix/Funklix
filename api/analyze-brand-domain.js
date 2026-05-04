@@ -36,6 +36,7 @@ module.exports = async function handler(req, res) {
     ].join("\n").slice(0, 12000);
 
     const prompt = `Analyze the website text context and produce a concise Brand Brain JSON object.
+Return raw JSON only. Do not wrap in markdown. Do not use code fences.
 Return ONLY valid JSON with this exact shape and keys:
 {
   "brandCore": "",
@@ -71,9 +72,25 @@ Website context:\n${extracted}`;
 
     if (!aiRes.ok) return res.status(502).json({ error: "AI analysis failed" });
     const ai = await aiRes.json();
-    const text = ai?.choices?.[0]?.message?.content || "";
-    const parsed = JSON.parse(text);
-    return res.status(200).json({ suggestions: parsed });
+    const rawText = ai?.choices?.[0]?.message?.content || "";
+
+    let sanitized = rawText.trim();
+    sanitized = sanitized.replace(/^```json\s*/i, "");
+    sanitized = sanitized.replace(/^```\s*/i, "");
+    sanitized = sanitized.replace(/```\s*$/i, "");
+
+    const firstBrace = sanitized.indexOf("{");
+    const lastBrace = sanitized.lastIndexOf("}");
+    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+      sanitized = sanitized.slice(firstBrace, lastBrace + 1);
+    }
+
+    try {
+      const parsed = JSON.parse(sanitized);
+      return res.status(200).json({ suggestions: parsed });
+    } catch (_parseError) {
+      return res.status(500).json({ error: "Failed to parse brand analysis JSON", rawText });
+    }
   } catch (error) {
     return res.status(500).json({ error: error?.message || "Failed to analyze domain" });
   }
