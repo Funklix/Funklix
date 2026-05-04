@@ -15,6 +15,8 @@ const BOARD_HEIGHT = 10000;
 const STORAGE_KEY = "campaignCanvasState";
 const BRAND_CORE_STORAGE_KEY = "brandBrainState";
 
+let activeLightbox = null;
+
 const state = {
   nodes: [],
   edges: [],
@@ -54,6 +56,8 @@ const state = {
 };
 
 const el = {
+  appShell: document.querySelector(".app-shell"),
+  leftSidebar: document.getElementById("left-sidebar"),
   workspaceWrap: document.querySelector(".workspace-wrap"),
   canvas: document.getElementById("canvas"),
   canvasTopbar: document.getElementById("canvas-topbar"),
@@ -113,6 +117,7 @@ const el = {
   saveStatus: document.getElementById("save-status"),
   brandCoreButton: document.getElementById("brand-core-nav-btn"),
   campaignCanvasNavButton: document.getElementById("campaign-canvas-nav-btn"),
+  sidebarToggleButton: document.getElementById("sidebar-toggle-btn"),
   brandEditorTitle: document.getElementById("bc-editor-title"),
   brandCoreCanvas: document.getElementById("brand-core-canvas"),
   brandEditorPanel: document.getElementById("bc-editor-panel"),
@@ -139,6 +144,60 @@ Object.keys(NODE_TYPES).forEach((type) => {
   option.textContent = type;
   el.inputs.type.appendChild(option);
 });
+
+
+
+function ensureImageLightbox() {
+  let overlay = document.getElementById("image-lightbox");
+  if (overlay) return overlay;
+  overlay = document.createElement("div");
+  overlay.id = "image-lightbox";
+  overlay.className = "image-lightbox hidden";
+  overlay.setAttribute("aria-hidden", "true");
+  overlay.innerHTML = '<button type="button" class="image-lightbox-close" aria-label="Close preview">✕</button><img class="image-lightbox-image" alt="Image preview" />';
+  document.body.appendChild(overlay);
+  return overlay;
+}
+
+function openLightbox(imageUrl, alt = "Image preview") {
+  if (!imageUrl) return;
+
+  const lightbox = ensureImageLightbox();
+  const img = lightbox.querySelector(".image-lightbox-image");
+
+  img.src = imageUrl;
+  img.alt = alt;
+
+  lightbox.style.display = "flex";
+  lightbox.classList.remove("hidden");
+  lightbox.classList.add("open");
+  lightbox.setAttribute("aria-hidden", "false");
+
+  activeLightbox = lightbox;
+}
+
+function closeLightbox() {
+  const lightbox = document.getElementById("image-lightbox");
+  if (!lightbox) return;
+
+  lightbox.classList.add("hidden");
+  lightbox.classList.remove("open");
+  lightbox.style.display = "none";
+  lightbox.setAttribute("aria-hidden", "true");
+
+  const img = lightbox.querySelector(".image-lightbox-image");
+  if (img) {
+    img.removeAttribute("src");
+    img.alt = "";
+  }
+
+  activeLightbox = null;
+}
+
+function openImageLightbox(url, alt = "Image preview") {
+  if (!url) return;
+  openLightbox(url, alt);
+}
 
 function nowString() {
   return new Intl.DateTimeFormat("de-DE", { dateStyle: "short", timeStyle: "short" }).format(new Date());
@@ -213,9 +272,26 @@ function restoreLastSnapshot() {
 
 
 function setSaveStatus(text) { el.saveStatus.textContent = text; }
+
+function isPersistableImageUrl(url) {
+  return typeof url === "string" && url.length > 0 && !url.startsWith("blob:") && !url.startsWith("data:");
+}
+
+function sanitizeNodeImages(images) {
+  return (Array.isArray(images) ? images : [])
+    .filter((img) => img && isPersistableImageUrl(img.url))
+    .map((img) => ({
+      id: img.id || (crypto.randomUUID ? crypto.randomUUID() : `img-${Date.now()}`),
+      url: img.url,
+      name: img.name || "image",
+      createdAt: img.createdAt || Date.now(),
+      source: img.source || "uploaded"
+    }));
+}
+
 function serializeState() {
   const serialized = {
-    nodes: state.nodes.map((n) => ({ ...n, images: (n.images || []).filter((img) => img.url && !img.url.startsWith("blob:")) })),
+    nodes: state.nodes.map((n) => ({ ...n, images: sanitizeNodeImages(n.images) })),
     edges: state.edges, nodeCounter: state.nodeCounter, postitCounter: state.postitCounter, zoom: state.zoom
   };
   const selectedNode = state.selectedPrimary ? serialized.nodes.find((n) => n.id === state.selectedPrimary) : null;
@@ -229,7 +305,7 @@ function markUnsaved() {
 function loadCampaignCanvasState() {
   const raw = localStorage.getItem(STORAGE_KEY); if (!raw) return false;
   const campaignState = JSON.parse(raw); console.log("Loaded campaignCanvasState", campaignState);
-  state.nodes = campaignState.nodes || []; state.edges = campaignState.edges || []; state.nodeCounter = campaignState.nodeCounter || 1; state.postitCounter = campaignState.postitCounter || 1;
+  state.nodes = (campaignState.nodes || []).map((node) => ({ ...node, images: sanitizeNodeImages(node.images) })); state.edges = campaignState.edges || []; state.nodeCounter = campaignState.nodeCounter || 1; state.postitCounter = campaignState.postitCounter || 1;
   console.log("loaded node images", state.nodes.find((n) => n.id === state.selectedPrimary)?.images);
   state.selectedIds.clear(); state.selectedPrimary = null;
   el.zoomLayer.querySelectorAll(".node").forEach((n) => n.remove());
@@ -279,6 +355,78 @@ function resetBrandBrainState() {
   loadBrandBrainState();
   renderBrandCoreTiles();
   renderBrandCoreEditor();
+}
+
+
+
+
+
+function showBrandSuggestionConfirmModal() {
+  return new Promise((resolve) => {
+    const overlay = document.createElement("div");
+    overlay.className = "brand-confirm-modal";
+    overlay.innerHTML = `<div class="brand-confirm-card"><h3>Apply Suggestions</h3><p>Replace current Brand Brain with generated suggestions?</p><div class="brand-confirm-actions"><button type="button" id="brand-confirm-cancel">Cancel</button><button type="button" class="primary-add" id="brand-confirm-apply">Apply Suggestions</button></div></div>`;
+    document.body.appendChild(overlay);
+    const close = (value) => {
+      overlay.remove();
+      resolve(value);
+    };
+    overlay.addEventListener("click", (event) => {
+      if (event.target === overlay) close(false);
+    });
+    overlay.querySelector("#brand-confirm-cancel").addEventListener("click", () => close(false));
+    overlay.querySelector("#brand-confirm-apply").addEventListener("click", () => close(true));
+  });
+}
+
+async function analyzeBrandDomainFromEditor() {
+  const domainInput = el.brandEditorPanel.querySelector("#bc-domain");
+  const analyzeButton = el.brandEditorPanel.querySelector("#bc-analyze-domain");
+  const domainUrl = domainInput?.value?.trim();
+  if (!domainUrl) {
+    alert("Please enter a domain URL first.");
+    return;
+  }
+
+  const originalLabel = analyzeButton?.textContent || "Analyze Website";
+  if (analyzeButton) {
+    analyzeButton.disabled = true;
+    analyzeButton.textContent = "Analyzing website…";
+  }
+
+  try {
+    const response = await fetch("/api/analyze-brand-domain", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ domainUrl })
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload?.error || "Could not analyze website");
+
+    const next = payload?.suggestions;
+    if (!next || typeof next !== "object") throw new Error("No brand suggestions returned");
+
+    const confirmReplace = await showBrandSuggestionConfirmModal();
+    if (!confirmReplace) return;
+
+    state.brandCore = {
+      ...state.brandCore,
+      ...next,
+      brandAssets: { ...(state.brandCore.brandAssets || {}), ...(next.brandAssets || {}) },
+      customTiles: Array.isArray(state.brandCore.customTiles) ? state.brandCore.customTiles : []
+    };
+
+    saveBrandBrainState();
+    renderBrandCoreTiles();
+    renderBrandCoreEditor();
+  } catch (error) {
+    alert(error?.message || "Website analysis failed. Please try another domain.");
+  } finally {
+    if (analyzeButton) {
+      analyzeButton.disabled = false;
+      analyzeButton.textContent = originalLabel;
+    }
+  }
 }
 
 function renderBrandCoreEditor() {
@@ -346,9 +494,14 @@ function renderBrandCoreEditor() {
     el.brandEditorPanel.insertAdjacentHTML("beforeend", `<label>Good example</label><textarea class="bc-good" id="bc-good" rows="3">${value.good || ""}</textarea><label>Avoid example</label><textarea class="bc-bad" id="bc-avoid" rows="3">${value.avoid || ""}</textarea>`);
     ["bc-good","bc-avoid"].forEach((id) => el.brandEditorPanel.querySelector(`#${id}`).addEventListener("input", () => { value.good = el.brandEditorPanel.querySelector("#bc-good").value; value.avoid = el.brandEditorPanel.querySelector("#bc-avoid").value; saveBrandBrainState(); renderBrandCoreTiles(); }));
   } else if (key === "brandAssets") {
-    el.brandEditorPanel.insertAdjacentHTML("beforeend", `<label>Domain URL</label><input id="bc-domain" value="${value.domain || ""}"/><label>Typography</label><input id="bc-typo" value="${value.typography || ""}"/><label>Logo URL</label><input id="bc-logo" value="${value.logo || ""}"/><label>Palette</label><div class="posting-actions bc-add-row"><input id="bc-color-add" placeholder="#AABBCC"/><button type="button">+</button></div><div class="bc-tags">${(value.colors||[]).map((c,i)=>`<span data-i="${i}">${c}</span>`).join("")}</div>`);
+    el.brandEditorPanel.insertAdjacentHTML("beforeend", `<label>Domain URL</label><input id="bc-domain" value="${value.domain || ""}"/><button id="bc-analyze-domain" type="button">Analyze Website</button><label>Typography</label><input id="bc-typo" value="${value.typography || ""}"/><label>Logo URL</label><input id="bc-logo" value="${value.logo || ""}"/><label>Palette</label><div class="posting-actions bc-add-row"><input id="bc-color-add" placeholder="#AABBCC"/><input id="bc-color-picker" type="color" value="#6f5bff"/><button type="button" id="bc-color-plus">+</button></div><div class="bc-tags">${(value.colors||[]).map((c,i)=>`<span data-i="${i}">${c}</span>`).join("")}</div>`);
     ["bc-domain","bc-typo","bc-logo"].forEach((id) => el.brandEditorPanel.querySelector(`#${id}`).addEventListener("input", () => { value.domain = el.brandEditorPanel.querySelector("#bc-domain").value; value.typography = el.brandEditorPanel.querySelector("#bc-typo").value; value.logo = el.brandEditorPanel.querySelector("#bc-logo").value; saveBrandBrainState(); renderBrandCoreTiles(); }));
-    el.brandEditorPanel.querySelector("button").addEventListener("click", () => { const c = el.brandEditorPanel.querySelector("#bc-color-add").value.trim(); if (!c) return; value.colors.push(c); saveBrandBrainState(); renderBrandCoreEditor(); });
+    el.brandEditorPanel.querySelector("#bc-analyze-domain").addEventListener("click", analyzeBrandDomainFromEditor);
+    el.brandEditorPanel.querySelector("#bc-color-picker").addEventListener("input", () => {
+      const picked = el.brandEditorPanel.querySelector("#bc-color-picker").value.trim();
+      el.brandEditorPanel.querySelector("#bc-color-add").value = picked;
+    });
+    el.brandEditorPanel.querySelector("#bc-color-plus").addEventListener("click", () => { const c = (el.brandEditorPanel.querySelector("#bc-color-add").value.trim() || el.brandEditorPanel.querySelector("#bc-color-picker").value.trim()).toUpperCase(); if (!/^#([0-9A-F]{6})$/.test(c)) return; value.colors.push(c); saveBrandBrainState(); renderBrandCoreEditor(); });
     el.brandEditorPanel.querySelectorAll(".bc-tags span").forEach((chip) => chip.addEventListener("click", () => { value.colors.splice(Number(chip.dataset.i),1); saveBrandBrainState(); renderBrandCoreEditor(); }));
   } else if (key === "personas") {
     el.brandEditorPanel.insertAdjacentHTML("beforeend", `<div class="posting-actions bc-add-row"><input id="bc-p-name" placeholder="Persona"/><input id="bc-p-note" placeholder="Label"/><button type="button">+</button></div><ul class="bc-edit-list">${value.map((p, i) => `<li data-i="${i}">${p.name} <small>${p.note}</small><button type="button">✕</button></li>`).join("")}</ul>`);
@@ -1041,31 +1194,34 @@ function updateInspectorActionVisibility() {
   const selectedCount = state.selectedIds.size;
   const hasSingleNode = selectedCount === 1 && !!state.selectedPrimary;
   const hasMultipleNodes = selectedCount > 1;
-  const hasAnySelection = selectedCount > 0;
   const selectedNode = hasSingleNode ? getNode(state.selectedPrimary) : null;
-  const canGenerateImage = !!selectedNode && selectedNode.type === "Content";
-  const canGeneratePostingVisual = !!selectedNode && selectedNode.type === "Social Media Posting";
 
-  el.deleteNodeButton.classList.toggle("hidden", !hasSingleNode);
-  el.improveNodeButton.classList.toggle("hidden", !hasSingleNode);
-  el.regenerateNodeButton.classList.toggle("hidden", !hasSingleNode);
-  el.generateImageButton.classList.toggle("hidden", !canGenerateImage);
-  el.generatePostingVisualButton.classList.toggle("hidden", !canGeneratePostingVisual);
-  el.propagateDescendantsButton.classList.toggle("hidden", !hasSingleNode);
-  el.disconnectSelectedButton.classList.toggle("hidden", !hasAnySelection);
-  el.deleteSelectedButton.classList.toggle("hidden", !hasMultipleNodes);
+  const showGenerateImage = !!selectedNode && selectedNode.type === "Content";
+  const showGeneratePostingVisual = !!selectedNode && selectedNode.type === "Social Media Posting";
+
+  el.deleteNodeButton.style.display = hasSingleNode ? "block" : "none";
+  el.deleteSelectedButton.style.display = hasMultipleNodes ? "block" : "none";
+
+  el.generateImageButton.style.display = showGenerateImage ? "block" : "none";
+  el.generatePostingVisualButton.style.display = showGeneratePostingVisual ? "block" : "none";
+
+  el.improveNodeButton.style.display = hasSingleNode ? "block" : "none";
+  el.regenerateNodeButton.style.display = hasSingleNode ? "block" : "none";
+  el.propagateDescendantsButton.style.display = hasSingleNode ? "block" : "none";
+  el.disconnectSelectedButton.style.display = selectedCount > 0 ? "block" : "none";
 
   el.disconnectSelectedButton.textContent = hasSingleNode ? "Disconnect node" : "Disconnect selected";
 
   el.deleteNodeButton.disabled = !hasSingleNode;
+  el.deleteSelectedButton.disabled = !hasMultipleNodes;
   el.improveNodeButton.disabled = !hasSingleNode;
   el.regenerateNodeButton.disabled = !hasSingleNode;
-  el.generateImageButton.disabled = !canGenerateImage;
-  el.generatePostingVisualButton.disabled = !canGeneratePostingVisual;
+  el.generateImageButton.disabled = !showGenerateImage;
+  el.generatePostingVisualButton.disabled = !showGeneratePostingVisual;
   el.propagateDescendantsButton.disabled = !hasSingleNode;
-  el.disconnectSelectedButton.disabled = !hasAnySelection;
-  el.deleteSelectedButton.disabled = !hasMultipleNodes;
+  el.disconnectSelectedButton.disabled = !(selectedCount > 0);
 }
+
 
 function parseList(value) {
   return value
@@ -1133,8 +1289,10 @@ function updateNodeCard(node) {
   nodeEl.querySelector(".title").textContent = node.title;
   const contentEl = nodeEl.querySelector(".content");
   contentEl.textContent = node.content;
+  const isSocialNodeCard = node.type === "Social Media Posting";
+  contentEl.classList.toggle("hidden", isSocialNodeCard);
   const expandBtn = nodeEl.querySelector(".node-expand-content");
-  const shouldTruncate = (node.content || "").length > 160;
+  const shouldTruncate = !isSocialNodeCard && (node.content || "").length > 160;
   const isExpanded = nodeEl.classList.contains("content-expanded");
   contentEl.classList.toggle("clamped", shouldTruncate && !isExpanded && document.activeElement !== contentEl);
   expandBtn.classList.toggle("hidden", !shouldTruncate || isExpanded);
@@ -1189,53 +1347,33 @@ function updateNodeCard(node) {
 
   const imageStrip = nodeEl.querySelector(".image-strip");
   imageStrip.innerHTML = "";
-  node.images.forEach((img) => {
-    const thumb = document.createElement("button");
-    thumb.type = "button";
-    thumb.className = "image-thumb";
+  if (node.images.length) {
+    const favoriteImage = node.images.find((img) => img.id === node.favoriteImageId);
+    const previewImage = favoriteImage || node.images[node.images.length - 1];
+    const thumb = document.createElement("div");
+    thumb.className = `image-thumb image-thumb-preview${favoriteImage ? " is-favorite" : ""}`;
 
     const image = document.createElement("img");
-    image.src = img.url;
-    image.alt = img.name;
-    if (node.type === "Content" && node.favoriteImageId === img.id) {
-      image.style.outline = "2px solid #ffbf47";
-      image.style.outlineOffset = "1px";
-      const star = document.createElement("span");
-      star.textContent = "★";
-      star.style.position = "absolute";
-      star.style.left = "6px";
-      star.style.top = "6px";
-      star.style.fontSize = "0.85rem";
-      star.style.background = "rgba(255,255,255,0.9)";
-      star.style.borderRadius = "999px";
-      star.style.padding = "1px 4px";
-      star.style.color = "#e6a200";
-      thumb.appendChild(star);
+    image.className = "node-image-preview";
+    image.src = previewImage.url;
+    image.alt = previewImage.name || "Node image";
+
+    const badge = document.createElement("span");
+    badge.className = "image-badge";
+    badge.textContent = favoriteImage ? "★" : "🖼";
+
+    thumb.append(image, badge);
+
+    const extraCount = node.images.length - 1;
+    if (extraCount > 0) {
+      const more = document.createElement("span");
+      more.className = "image-more-count";
+      more.textContent = `+${extraCount}`;
+      thumb.appendChild(more);
     }
 
-    const hint = document.createElement("span");
-    hint.className = "zoom-hint";
-    hint.textContent = "🔍";
-
-    thumb.append(image, hint);
-    const deleteBtn = document.createElement("button");
-    deleteBtn.type = "button";
-    deleteBtn.className = "image-delete-btn";
-    deleteBtn.textContent = "✕";
-    deleteBtn.addEventListener("click", (event) => {
-      event.stopPropagation();
-      removeNodeImage(node, img.id);
-    });
-
-    thumb.appendChild(deleteBtn);
-    thumb.addEventListener("click", (event) => {
-      event.stopPropagation();
-      thumb.classList.add("expanded");
-    });
-    thumb.addEventListener("mouseleave", () => thumb.classList.remove("expanded"));
-
     imageStrip.appendChild(thumb);
-  });
+  }
 
   const social = nodeEl.querySelector(".social-preview");
   const isSocial = node.type === "Social Media Posting";
@@ -1440,6 +1578,21 @@ function removeNodeImage(node, imageId) {
   if (state.selectedPrimary === node.id) fillInspector(node);
 }
 
+
+
+function downloadNodeImage(node, img) {
+  const a = document.createElement("a");
+  a.href = img.url;
+  const safeName = (img.name || node.title || node.content || "node-image")
+    .slice(0, 40)
+    .replace(/[^a-z0-9-_]+/gi, "-")
+    .replace(/^-+|-+$/g, "");
+  a.download = `${safeName || "node-image"}.png`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
 function renderInspectorImages(node) {
   el.inspectorImageList.innerHTML = "";
   if (!node.images.length) {
@@ -1451,54 +1604,74 @@ function renderInspectorImages(node) {
   }
 
   node.images.forEach((img) => {
-    const row = document.createElement("div");
-    row.className = "inspector-image-item";
+    const card = document.createElement("div");
+    const isFavorite = node.favoriteImageId === img.id;
+    card.className = `inspector-image-item${isFavorite ? " is-favorite" : ""}`;
+    card.addEventListener("click", () => openLightbox(img.url, img.name || "Image preview"));
+
+    const thumb = document.createElement("img");
+    thumb.className = "inspector-image-thumb";
+    thumb.src = img.url;
+    thumb.alt = img.name || "Bild";
+    thumb.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      openLightbox(img.url, img.name || "Image preview");
+    });
+
+    const favoriteTag = document.createElement("span");
+    favoriteTag.className = "inspector-image-favorite-tag";
+    favoriteTag.textContent = "★";
+
+    const actions = document.createElement("div");
+    actions.className = "inspector-image-actions";
+
+    const favoriteBtn = document.createElement("button");
+    favoriteBtn.type = "button";
+    favoriteBtn.className = "inspector-image-action";
+    favoriteBtn.textContent = "⭐";
+    favoriteBtn.title = "Set as favorite";
+    favoriteBtn.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      node.favoriteImageId = node.favoriteImageId === img.id ? null : img.id;
+      updateNodeCard(node);
+      fillInspector(node);
+      saveCampaignCanvasState();
+    });
+
+    const downloadBtn = document.createElement("button");
+    downloadBtn.type = "button";
+    downloadBtn.className = "inspector-image-action";
+    downloadBtn.textContent = "⬇️";
+    downloadBtn.title = "Download";
+    downloadBtn.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      downloadNodeImage(node, img);
+    });
+
+    const deleteBtn = document.createElement("button");
+    deleteBtn.type = "button";
+    deleteBtn.className = "inspector-image-action danger";
+    deleteBtn.textContent = "❌";
+    deleteBtn.title = "Delete";
+    deleteBtn.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      removeNodeImage(node, img.id);
+    });
 
     const name = document.createElement("span");
     name.className = "inspector-image-name";
     name.textContent = img.name || "Bild";
 
-    const deleteBtn = document.createElement("button");
-    deleteBtn.type = "button";
-    deleteBtn.className = "inspector-image-delete";
-    deleteBtn.textContent = "Bild löschen";
-    deleteBtn.addEventListener("click", () => removeNodeImage(node, img.id));
-    const downloadBtn = document.createElement("button");
-    downloadBtn.type = "button";
-    downloadBtn.className = "inspector-image-delete";
-    downloadBtn.textContent = "Download";
-    downloadBtn.addEventListener("click", () => {
-      const a = document.createElement("a");
-      a.href = img.url;
-      const safeName = (node.title || node.content || "node-image")
-        .slice(0, 40)
-        .replace(/[^a-z0-9-_]+/gi, "-")
-        .replace(/^-+|-+$/g, "");
-      a.download = `${safeName || "node-image"}.png`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-    });
-    if (node.type === "Content") {
-      const favoriteBtn = document.createElement("button");
-      favoriteBtn.type = "button";
-      favoriteBtn.className = "inspector-image-delete";
-      const isFavorite = node.favoriteImageId === img.id;
-      favoriteBtn.textContent = isFavorite ? "★ Favorite" : "☆ Favorite";
-      favoriteBtn.style.fontWeight = isFavorite ? "700" : "500";
-      favoriteBtn.addEventListener("click", () => {
-        node.favoriteImageId = node.favoriteImageId === img.id ? null : img.id;
-        updateNodeCard(node);
-        fillInspector(node);
-        saveCampaignCanvasState();
-      });
-      row.append(name, favoriteBtn, downloadBtn, deleteBtn);
-    } else {
-      row.append(name, downloadBtn, deleteBtn);
-    }
-    el.inspectorImageList.appendChild(row);
+    actions.append(favoriteBtn, downloadBtn, deleteBtn);
+    card.append(thumb, favoriteTag, actions, name);
+    el.inspectorImageList.appendChild(card);
   });
 }
+
 
 async function refineNodeWithAI(node, instruction) {
   const parentNode = getDirectParentNode(node.id);
@@ -1563,6 +1736,8 @@ async function generateImageForNode(node) {
   let imageAttached = false;
   button.disabled = true;
   button.textContent = "Generating image...";
+  const nodeEl = el.zoomLayer.querySelector(`[data-id='${node.id}']`);
+  if (nodeEl) nodeEl.classList.add("image-generating");
   try {
     const response = await fetch("/api/generate-image", {
       method: "POST",
@@ -1578,17 +1753,15 @@ async function generateImageForNode(node) {
     if (!response.ok) throw new Error("Image generation failed");
     const data = await response.json();
     console.log("generate image API response", data);
-    const imageUrl = (data?.imageBase64 ? `data:${data.mimeType || "image/png"};base64,${data.imageBase64}` : "")
-      || data?.dataUrl
-      || data?.imageUrl
-      || data?.url;
+    const imageUrl = data?.imageUrl || data?.url || "";
     console.log("resolved image URL", imageUrl);
     if (!imageUrl) throw new Error("Image response is empty");
     const newImage = {
       id: crypto.randomUUID ? crypto.randomUUID() : `img-${Date.now()}`,
       url: imageUrl,
       name: "generated-image.png",
-      createdAt: Date.now()
+      createdAt: Date.now(),
+      source: "generated"
     };
     node.images = Array.isArray(node.images) ? node.images : [];
     console.log("BEFORE image add", node.id, node.images?.length, node.images);
@@ -1658,13 +1831,14 @@ async function generatePostingVisualForNode(node) {
     });
     if (!response.ok) throw new Error("Posting visual generation failed");
     const data = await response.json();
-    const imageUrl = data?.imageBase64 ? `data:${data.mimeType || "image/png"};base64,${data.imageBase64}` : "";
+    const imageUrl = data?.imageUrl || data?.url || "";
     if (!imageUrl) throw new Error("No posting visual returned");
     const newImage = {
       id: crypto.randomUUID ? crypto.randomUUID() : `img-${Date.now()}`,
       url: imageUrl,
       name: "generated-image.png",
-      createdAt: Date.now()
+      createdAt: Date.now(),
+      source: "generated"
     };
     node.images = Array.isArray(node.images) ? node.images : [];
     console.log("BEFORE image add", node.id, node.images?.length, node.images);
@@ -1682,6 +1856,7 @@ async function generatePostingVisualForNode(node) {
       alert("Could not generate posting visual right now. Please try again.");
     }
   } finally {
+    if (nodeEl) nodeEl.classList.remove("image-generating");
     button.textContent = originalLabel;
     updateInspectorActionVisibility();
   }
@@ -1993,7 +2168,7 @@ function renderNode(node) {
     node.content = content.textContent.trim();
     if (state.selectedPrimary === node.id) el.inputs.content.value = node.content;
     if ((node.content || "").length <= 160) nodeEl.classList.remove("content-expanded");
-    const shouldTruncate = (node.content || "").length > 160;
+    const shouldTruncate = !isSocialNodeCard && (node.content || "").length > 160;
     const isExpanded = nodeEl.classList.contains("content-expanded");
     content.classList.toggle("clamped", shouldTruncate && !isExpanded && document.activeElement !== content);
     expandBtn.classList.toggle("hidden", !shouldTruncate || isExpanded);
@@ -2001,7 +2176,7 @@ function renderNode(node) {
   });
   content.addEventListener("focus", () => content.classList.remove("clamped"));
   content.addEventListener("blur", () => {
-    const shouldTruncate = (node.content || "").length > 160;
+    const shouldTruncate = !isSocialNodeCard && (node.content || "").length > 160;
     const isExpanded = nodeEl.classList.contains("content-expanded");
     content.classList.toggle("clamped", shouldTruncate && !isExpanded);
   });
@@ -2158,6 +2333,18 @@ function renderCalendarView() {
   }
 }
 
+
+
+function setSidebarCollapsed(collapsed) {
+  if (!el.appShell) return;
+  el.appShell.classList.toggle("sidebar-collapsed", !!collapsed);
+  if (el.sidebarToggleButton) {
+    el.sidebarToggleButton.textContent = collapsed ? "▶" : "◀";
+    el.sidebarToggleButton.setAttribute("aria-label", collapsed ? "Expand sidebar" : "Collapse sidebar");
+    el.sidebarToggleButton.title = collapsed ? "Expand sidebar" : "Collapse sidebar";
+  }
+}
+
 function setActiveView(view) {
   state.activeView = view;
   el.canvas.classList.toggle("hidden", view !== "board");
@@ -2189,6 +2376,44 @@ function setAppMode(mode) {
 }
 
 // Events
+document.addEventListener("click", (e) => {
+  if (e.target.closest(".image-lightbox-close")) {
+    e.preventDefault();
+    e.stopPropagation();
+    closeLightbox();
+    return;
+  }
+
+  if (e.target.id === "image-lightbox") {
+    closeLightbox();
+    return;
+  }
+
+  const nodeImg = e.target.closest(".node-image-preview");
+  if (nodeImg) {
+    const url = nodeImg.src || nodeImg.dataset.url;
+    if (url) openLightbox(url);
+    return;
+  }
+
+  const inspectorImg = e.target.closest(".inspector-image-thumb");
+  if (inspectorImg) {
+    const url = inspectorImg.src || inspectorImg.dataset.url;
+    if (url) openLightbox(url);
+    return;
+  }
+});
+
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") {
+    closeLightbox();
+  }
+});
+el.sidebarToggleButton?.addEventListener("click", () => {
+  const collapsed = !el.appShell.classList.contains("sidebar-collapsed");
+  setSidebarCollapsed(collapsed);
+});
+
 el.addNodeButton.addEventListener("click", () => {
   setActiveView("board");
   openTypePicker((type) => {
@@ -2520,6 +2745,8 @@ el.postingDoneButton.addEventListener("click", () => {
   closePostingPlanner();
 });
 el.postingCancelButton.addEventListener("click", closePostingPlanner);
+setSidebarCollapsed(false);
+
 el.brandCoreButton.addEventListener("click", () => {
   setAppMode("brand");
 });
