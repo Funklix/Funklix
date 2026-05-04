@@ -1119,17 +1119,16 @@ function updateInspectorActionVisibility() {
   const hasMultipleNodes = selectedCount > 1;
   const hasAnySelection = selectedCount > 0;
   const selectedNode = hasSingleNode ? getNode(state.selectedPrimary) : null;
-  const canGenerateImage = !!selectedNode && selectedNode.type === "Content";
-  const canGeneratePostingVisual = !!selectedNode && selectedNode.type === "Social Media Posting";
+  const isContentNode = !!selectedNode && selectedNode.type === "Content";
+  const isSocialNode = !!selectedNode && selectedNode.type === "Social Media Posting";
 
-  el.deleteNodeButton.classList.toggle("hidden", !hasSingleNode);
-  el.deleteSelectedButton.classList.toggle("hidden", !hasMultipleNodes);
   el.improveNodeButton.classList.toggle("hidden", !hasSingleNode);
   el.regenerateNodeButton.classList.toggle("hidden", !hasSingleNode);
-  el.generateImageButton.classList.toggle("hidden", !canGenerateImage);
-  el.generatePostingVisualButton.classList.toggle("hidden", !canGeneratePostingVisual);
   el.propagateDescendantsButton.classList.toggle("hidden", !hasSingleNode);
   el.disconnectSelectedButton.classList.toggle("hidden", !hasAnySelection);
+
+  el.generateImageButton.classList.toggle("hidden", !isContentNode);
+  el.generatePostingVisualButton.classList.toggle("hidden", !isSocialNode);
 
   if (!hasAnySelection) {
     el.deleteNodeButton.classList.add("hidden");
@@ -1148,8 +1147,8 @@ function updateInspectorActionVisibility() {
   el.deleteSelectedButton.disabled = !hasMultipleNodes;
   el.improveNodeButton.disabled = !hasSingleNode;
   el.regenerateNodeButton.disabled = !hasSingleNode;
-  el.generateImageButton.disabled = !canGenerateImage;
-  el.generatePostingVisualButton.disabled = !canGeneratePostingVisual;
+  el.generateImageButton.disabled = !isContentNode;
+  el.generatePostingVisualButton.disabled = !isSocialNode;
   el.propagateDescendantsButton.disabled = !hasSingleNode;
   el.disconnectSelectedButton.disabled = !hasAnySelection;
 }
@@ -1537,12 +1536,14 @@ function renderInspectorImages(node) {
     const card = document.createElement("div");
     const isFavorite = node.favoriteImageId === img.id;
     card.className = `inspector-image-item${isFavorite ? " is-favorite" : ""}`;
+    card.addEventListener("click", () => openLightbox(img.url, img.name || "Image preview"));
 
     const thumb = document.createElement("img");
     thumb.className = "inspector-image-thumb";
     thumb.src = img.url;
     thumb.alt = img.name || "Bild";
     thumb.addEventListener("click", (event) => {
+      event.preventDefault();
       event.stopPropagation();
       openLightbox(img.url, img.name || "Image preview");
     });
