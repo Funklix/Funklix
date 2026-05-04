@@ -1475,3 +1475,53 @@ button:active {
   margin-top: 0;
   margin-bottom: 8px;
 }
+
+/* Brand Brain width balance refinement */
+.brand-core-workspace {
+  grid-template-columns: minmax(720px, 1fr) 380px;
+  width: 100%;
+  max-width: 100%;
+  align-items: stretch;
+}
+
+.brand-core-canvas {
+  width: 100%;
+  grid-template-columns: repeat(4, minmax(180px, 1fr));
+  align-content: start;
+}
+
+.brand-core-side {
+  width: 380px;
+  max-width: 100%;
+  height: 100%;
+  max-height: none;
+  overflow-y: auto;
+}
+
+@media (max-width: 1480px) {
+  .brand-core-workspace {
+    grid-template-columns: minmax(620px, 1fr) 360px;
+  }
+
+  .brand-core-canvas {
+    grid-template-columns: repeat(3, minmax(180px, 1fr));
+  }
+
+  .brand-core-side {
+    width: 360px;
+  }
+}
+
+@media (max-width: 1200px) {
+  .brand-core-workspace {
+    grid-template-columns: minmax(0, 1fr) 340px;
+  }
+
+  .brand-core-canvas {
+    grid-template-columns: repeat(2, minmax(170px, 1fr));
+  }
+
+  .brand-core-side {
+    width: 340px;
+  }
+}
