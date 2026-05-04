@@ -1117,29 +1117,21 @@ function updateInspectorActionVisibility() {
   const selectedCount = state.selectedIds.size;
   const hasSingleNode = selectedCount === 1 && !!state.selectedPrimary;
   const hasMultipleNodes = selectedCount > 1;
-  const hasAnySelection = selectedCount > 0;
   const selectedNode = hasSingleNode ? getNode(state.selectedPrimary) : null;
-  const isContentNode = !!selectedNode && selectedNode.type === "Content";
-  const isSocialNode = !!selectedNode && selectedNode.type === "Social Media Posting";
 
-  el.improveNodeButton.classList.toggle("hidden", !hasSingleNode);
-  el.regenerateNodeButton.classList.toggle("hidden", !hasSingleNode);
-  el.propagateDescendantsButton.classList.toggle("hidden", !hasSingleNode);
-  el.disconnectSelectedButton.classList.toggle("hidden", !hasAnySelection);
+  const showGenerateImage = !!selectedNode && selectedNode.type === "Content";
+  const showGeneratePostingVisual = !!selectedNode && selectedNode.type === "Social Media Posting";
 
-  el.generateImageButton.classList.toggle("hidden", !isContentNode);
-  el.generatePostingVisualButton.classList.toggle("hidden", !isSocialNode);
+  el.deleteNodeButton.style.display = hasSingleNode ? "block" : "none";
+  el.deleteSelectedButton.style.display = hasMultipleNodes ? "block" : "none";
 
-  if (!hasAnySelection) {
-    el.deleteNodeButton.classList.add("hidden");
-    el.deleteSelectedButton.classList.add("hidden");
-  } else if (hasSingleNode) {
-    el.deleteNodeButton.classList.remove("hidden");
-    el.deleteSelectedButton.classList.add("hidden");
-  } else {
-    el.deleteNodeButton.classList.add("hidden");
-    el.deleteSelectedButton.classList.remove("hidden");
-  }
+  el.generateImageButton.style.display = showGenerateImage ? "block" : "none";
+  el.generatePostingVisualButton.style.display = showGeneratePostingVisual ? "block" : "none";
+
+  el.improveNodeButton.style.display = hasSingleNode ? "block" : "none";
+  el.regenerateNodeButton.style.display = hasSingleNode ? "block" : "none";
+  el.propagateDescendantsButton.style.display = hasSingleNode ? "block" : "none";
+  el.disconnectSelectedButton.style.display = selectedCount > 0 ? "block" : "none";
 
   el.disconnectSelectedButton.textContent = hasSingleNode ? "Disconnect node" : "Disconnect selected";
 
@@ -1147,10 +1139,10 @@ function updateInspectorActionVisibility() {
   el.deleteSelectedButton.disabled = !hasMultipleNodes;
   el.improveNodeButton.disabled = !hasSingleNode;
   el.regenerateNodeButton.disabled = !hasSingleNode;
-  el.generateImageButton.disabled = !isContentNode;
-  el.generatePostingVisualButton.disabled = !isSocialNode;
+  el.generateImageButton.disabled = !showGenerateImage;
+  el.generatePostingVisualButton.disabled = !showGeneratePostingVisual;
   el.propagateDescendantsButton.disabled = !hasSingleNode;
-  el.disconnectSelectedButton.disabled = !hasAnySelection;
+  el.disconnectSelectedButton.disabled = !(selectedCount > 0);
 }
 
 
@@ -1220,8 +1212,10 @@ function updateNodeCard(node) {
   nodeEl.querySelector(".title").textContent = node.title;
   const contentEl = nodeEl.querySelector(".content");
   contentEl.textContent = node.content;
+  const isSocialNodeCard = node.type === "Social Media Posting";
+  contentEl.classList.toggle("hidden", isSocialNodeCard);
   const expandBtn = nodeEl.querySelector(".node-expand-content");
-  const shouldTruncate = (node.content || "").length > 160;
+  const shouldTruncate = !isSocialNodeCard && (node.content || "").length > 160;
   const isExpanded = nodeEl.classList.contains("content-expanded");
   contentEl.classList.toggle("clamped", shouldTruncate && !isExpanded && document.activeElement !== contentEl);
   expandBtn.classList.toggle("hidden", !shouldTruncate || isExpanded);
@@ -2097,7 +2091,7 @@ function renderNode(node) {
     node.content = content.textContent.trim();
     if (state.selectedPrimary === node.id) el.inputs.content.value = node.content;
     if ((node.content || "").length <= 160) nodeEl.classList.remove("content-expanded");
-    const shouldTruncate = (node.content || "").length > 160;
+    const shouldTruncate = !isSocialNodeCard && (node.content || "").length > 160;
     const isExpanded = nodeEl.classList.contains("content-expanded");
     content.classList.toggle("clamped", shouldTruncate && !isExpanded && document.activeElement !== content);
     expandBtn.classList.toggle("hidden", !shouldTruncate || isExpanded);
@@ -2105,7 +2099,7 @@ function renderNode(node) {
   });
   content.addEventListener("focus", () => content.classList.remove("clamped"));
   content.addEventListener("blur", () => {
-    const shouldTruncate = (node.content || "").length > 160;
+    const shouldTruncate = !isSocialNodeCard && (node.content || "").length > 160;
     const isExpanded = nodeEl.classList.contains("content-expanded");
     content.classList.toggle("clamped", shouldTruncate && !isExpanded);
   });
