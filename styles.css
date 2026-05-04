@@ -353,7 +353,8 @@ button:active {
 }
 
 .bc-node {
-  min-height: 124px;
+  min-height: 120px;
+  max-height: 170px;
   min-width: 0;
   overflow: hidden;
   border: 1px solid #dfe4f2;
@@ -367,8 +368,8 @@ button:active {
   cursor: pointer;
   box-shadow: 0 4px 10px rgba(46, 55, 93, 0.06);
 }
-.bc-title { color: #5e4bf4; font-size: 0.83rem; letter-spacing: 0.03em; margin: 0; display: flex; align-items: center; gap: 8px; }
-.bc-preview { margin-top: 6px; color: #2f3552; font-weight: 500; font-size: 0.8rem; line-height: 1.34; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+.bc-title { color: #5e4bf4; font-size: 0.83rem; letter-spacing: 0.03em; margin: 0; line-height: 1.2; display: flex; align-items: center; gap: 8px; }
+.bc-preview { margin-top: 6px; color: #2f3552; font-weight: 500; font-size: 0.8rem; line-height: 1.34; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; max-height: 86px; overflow: hidden; }
 .bc-preview ul { margin: 0; padding-left: 16px; }
 .bc-tags { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
 .bc-tags span { background: #f1f3fb; border-radius: 999px; padding: 3px 8px; font-size: 0.74rem; }
@@ -382,7 +383,8 @@ button:active {
 .bc-main {
   width: min(520px, 100%);
   justify-self: center;
-  min-height: 132px;
+  min-height: 130px;
+  max-height: 160px;
 }
 
 .bc-node.selected {
