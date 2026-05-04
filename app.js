@@ -303,6 +303,11 @@ function saveCampaignCanvasState() { const campaignState = serializeState(); con
 function markUnsaved() {
   setSaveStatus("Unsaved changes");
 }
+function getBoardIdFromPath() {
+  const match = window.location.pathname.match(/^\/boards\/([^/]+)$/);
+  return match ? match[1] : null;
+}
+
 function loadCampaignCanvasState() {
   const raw = localStorage.getItem(STORAGE_KEY); if (!raw) return false;
   const campaignState = JSON.parse(raw); console.log("Loaded campaignCanvasState", campaignState);
@@ -350,18 +355,19 @@ async function saveBoardToServer() {
 }
 
 async function loadBoardFromUrlIfPresent() {
-  const match = window.location.pathname.match(/^\/boards\/([^/]+)$/);
-  if (!match) return;
-  const boardId = match[1];
+  const boardId = getBoardIdFromPath();
+  if (!boardId) return false;
   try {
     const response = await fetch(`/api/boards/${boardId}`);
     const data = await response.json();
     if (!response.ok) throw new Error(data?.error || 'Failed to load board');
     applyCampaignState(data.canvas_json || {}, `Loaded board ${boardId.slice(0, 8)}...`);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data.canvas_json || {}));
+    return true;
   } catch (error) {
     console.error(error);
-    setSaveStatus('Failed to load shared board');
+    setSaveStatus('Board not found or could not be loaded.');
+    return false;
   }
 }
 
@@ -2869,8 +2875,12 @@ function bootApp() {
   createDebugPanel();
   bindGlobalResetDelegation();
   loadBrandBrainState();
-  loadCampaignCanvasState();
-  loadBoardFromUrlIfPresent();
+  const boardIdFromPath = getBoardIdFromPath();
+  if (boardIdFromPath) {
+    loadBoardFromUrlIfPresent();
+  } else {
+    loadCampaignCanvasState();
+  }
   centerBoardStartPosition();
   el.zoomLayer.style.transform = `scale(${state.zoom})`;
   el.zoomLayer.style.transformOrigin = "0 0";
