@@ -1525,3 +1525,41 @@ button:active {
     width: 340px;
   }
 }
+
+/* Emergency Brand Brain layout regression fix */
+.brand-core-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 380px;
+  gap: 16px;
+  width: 100%;
+  max-width: 1280px;
+}
+
+.brand-core-canvas {
+  display: grid;
+  gap: 16px;
+  align-content: start;
+  overflow: hidden;
+}
+
+.bc-row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(160px, 1fr));
+  gap: 14px;
+}
+
+.bc-node {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.bc-main {
+  width: min(520px, 100%);
+  justify-self: center;
+}
+
+@media (max-width: 1100px) {
+  .bc-row {
+    grid-template-columns: repeat(2, minmax(180px, 1fr));
+  }
+}
