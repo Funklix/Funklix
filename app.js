@@ -63,6 +63,8 @@ const state = {
   brandCoreSelectedKey: "brandCore"
   ,appMode: "canvas"
   ,boardsLibrary: []
+  ,contentPackLoadingById: {}
+  ,contentPackErrorById: {}
 };
 
 const el = {
@@ -472,9 +474,34 @@ function sanitizeNodeImages(images) {
     }));
 }
 
+function sanitizeNodeForPersistence(node) {
+  const clean = { ...node, images: sanitizeNodeImages(node.images) };
+  delete clean.isGeneratingContentPack;
+  delete clean.generatingContentPack;
+  delete clean.isGenerating;
+  delete clean.loading;
+  delete clean.disabled;
+  delete clean.contentPackError;
+  return clean;
+}
+
+function getContentPackLoading(nodeId) {
+  return !!state.contentPackLoadingById[nodeId];
+}
+
+function setContentPackGenerating(nodeId, value) {
+  if (!nodeId) return;
+  state.contentPackLoadingById[nodeId] = !!value;
+}
+
+function setContentPackError(nodeId, message = "") {
+  if (!nodeId) return;
+  state.contentPackErrorById[nodeId] = message || "";
+}
+
 function serializeState() {
   const serialized = {
-    nodes: state.nodes.map((n) => ({ ...n, images: sanitizeNodeImages(n.images) })),
+    nodes: state.nodes.map((n) => sanitizeNodeForPersistence(n)),
     edges: state.edges, nodeCounter: state.nodeCounter, postitCounter: state.postitCounter, zoom: state.zoom
   };
   const selectedNode = state.selectedPrimary ? serialized.nodes.find((n) => n.id === state.selectedPrimary) : null;
@@ -507,7 +534,9 @@ function loadCampaignCanvasState() {
 
 
 function applyCampaignState(campaignState, statusText = "Restored") {
-  state.nodes = (campaignState.nodes || []).map((node) => ({ ...node, images: sanitizeNodeImages(node.images) }));
+  state.nodes = (campaignState.nodes || []).map((node) => sanitizeNodeForPersistence(node));
+  state.contentPackLoadingById = {};
+  state.contentPackErrorById = {};
   state.edges = campaignState.edges || [];
   state.nodeCounter = campaignState.nodeCounter || 1;
   state.postitCounter = campaignState.postitCounter || 1;
@@ -1076,8 +1105,6 @@ function createNode({ type = "Idea", parentId = null, position = null, images = 
     favoriteImageId: null,
     social: { platform: "Instagram", caption: "", hashtags: [], preview: "", scheduledAt: "" },
     imagePrompt: "",
-    isGeneratingContentPack: false,
-    contentPackError: "",
     reactions: {},
     postits: [],
     justConnectedAt: null,
@@ -1567,7 +1594,7 @@ function updateInspectorActionVisibility() {
   el.regenerateNodeButton.disabled = !hasSingleNode;
   el.generateImageButton.disabled = !showGenerateImage;
   el.generatePostingVisualButton.disabled = !showGeneratePostingVisual;
-  el.generateFullPackButton.disabled = !showGenerateImage || !!selectedNode?.isGeneratingContentPack;
+  el.generateFullPackButton.disabled = !showGenerateImage || !!selectedNode && getContentPackLoading(selectedNode.id);
   el.propagateDescendantsButton.disabled = !hasSingleNode;
   el.disconnectSelectedButton.disabled = !(selectedCount > 0);
 }
@@ -1748,9 +1775,11 @@ function updateNodeCard(node) {
   }
 
   const statusEl = nodeEl.querySelector(".content-pack-status");
-  statusEl.classList.toggle("hidden", !(node.isGeneratingContentPack || node.contentPackError));
-  statusEl.textContent = node.isGeneratingContentPack ? "Generating content pack..." : (node.contentPackError || "");
-  statusEl.classList.toggle("error", !!node.contentPackError);
+  const isGeneratingPack = getContentPackLoading(node.id);
+  const contentPackError = state.contentPackErrorById[node.id] || "";
+  statusEl.classList.toggle("hidden", !(isGeneratingPack || contentPackError));
+  statusEl.textContent = isGeneratingPack ? "Generating content pack..." : contentPackError;
+  statusEl.classList.toggle("error", !!contentPackError);
 
   const existingBar = nodeEl.querySelector(".reaction-bar");
   if (existingBar) existingBar.remove();
@@ -2129,39 +2158,49 @@ async function runInlineRefine(node, instruction, triggerBtn = null) {
 }
 
 async function generateFullContentPack(node, triggerBtn = null) {
-  if (!node || node.isGeneratingContentPack) return;
+  if (!node || getContentPackLoading(node.id)) return;
   const nodeEl = el.zoomLayer.querySelector(`[data-id='${node.id}']`);
   const toolbarButtons = nodeEl ? [...nodeEl.querySelectorAll(".node-ai-toolbar button")] : [];
   const originalText = triggerBtn?.textContent || "";
-  node.isGeneratingContentPack = true;
-  node.contentPackError = "";
+  console.log("Full content pack started", node.id);
+  setContentPackGenerating(node.id, true);
+  setContentPackError(node.id, "");
   toolbarButtons.forEach((btn) => { btn.disabled = true; });
   if (triggerBtn) triggerBtn.textContent = "…";
   updateNodeCard(node);
   try {
+    const connectedSocialNodes = getConnectedSocialPostingNodes(node.id);
+    console.log("Existing social nodes found:", connectedSocialNodes.length);
+    const targetSocialNode = await resolveTargetSocialNodeForContent(node);
+    if (!targetSocialNode) return;
+
     const improved = await refineNodeWithAI(node, "Improve or finalize this content while preserving intent and brand voice.");
     node.title = improved?.title || node.title;
     node.content = improved?.content || node.content;
 
+    console.log("Generating image prompt");
     const imagePromptResult = await refineNodeWithAI(node, "Create or update a clearly descriptive visual image prompt based on this content. Return it in content.");
     node.imagePrompt = (imagePromptResult?.content || "").trim() || node.imagePrompt;
     if (!node.imagePrompt) throw new Error("Image prompt generation failed");
 
+    console.log("Generating caption");
     const captionResult = await refineNodeWithAI(node, "Write one short social-media-ready caption based on this content. Return it in caption.");
     const caption = (captionResult?.caption || captionResult?.content || "").trim();
     if (!caption) throw new Error("Caption generation failed");
 
+    console.log("Generating CTA");
     const ctaResult = await refineNodeWithAI(node, "Write one clear, concise call-to-action line based on this content. Return it in content.");
     const cta = (ctaResult?.content || ctaResult?.caption || "").split("\n")[0].trim();
     if (!cta) throw new Error("CTA generation failed");
 
+    console.log("Generating hashtags");
     const hashtagResult = await refineNodeWithAI(node, "Generate 4-6 relevant social hashtags, comma-separated. Return in caption.");
     const hashtags = parseList((hashtagResult?.caption || hashtagResult?.content || "").replace(/\n/g, ","));
 
+    console.log("Generating image");
     await generateImageForNode(node);
     const newestImage = node.images[node.images.length - 1];
-    const targetSocialNode = await resolveTargetSocialNodeForContent(node);
-    if (!targetSocialNode) throw new Error("Social node selection cancelled");
+    console.log("Creating/updating social node");
     targetSocialNode.title = `Social Post: ${node.title || "Untitled"}`;
     targetSocialNode.content = [caption, cta].filter(Boolean).join("\n\n");
     targetSocialNode.social.caption = caption;
@@ -2175,14 +2214,18 @@ async function generateFullContentPack(node, triggerBtn = null) {
     updateNodeCard(targetSocialNode);
     fillInspector(node);
     saveCampaignCanvasState();
+    console.log("Full content pack complete");
   } catch (_error) {
-    node.contentPackError = "Could not generate content pack. Please retry.";
+    console.error("Full content pack failed", _error);
+    setContentPackError(node.id, "Could not generate content pack. Please retry.");
     updateNodeCard(node);
   } finally {
-    node.isGeneratingContentPack = false;
+    setContentPackGenerating(node.id, false);
     toolbarButtons.forEach((btn) => { btn.disabled = false; });
     if (triggerBtn) triggerBtn.textContent = originalText;
     updateNodeCard(node);
+    updateInspectorActionVisibility();
+    console.log("Full content pack loading cleared");
   }
 }
 
