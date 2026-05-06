@@ -403,14 +403,17 @@ function refreshLastSavedSnapshot() {
 }
 
 function detectDirtyFromSnapshot() {
-  if (state.isBoardLoading || state.isSaving || state.conflictModalOpen) {
-    console.log('Autosave skipped: loading/saving/conflict/no changes');
-    return;
-  }
+  console.log('Autosave effect fired');
+  if (state.isBoardLoading) { console.log('Autosave blocked because:', 'loading'); return; }
+  if (state.isSaving) { console.log('Autosave blocked because:', 'saving'); return; }
+  if (state.conflictModalOpen) { console.log('Autosave blocked because:', 'conflict modal open'); return; }
+
   const currentSnapshot = JSON.stringify(serializeState());
   if (currentSnapshot !== state.lastSavedSnapshot) {
-    console.log('Autosave dirty detected');
-    markUnsaved();
+    if (!state.isDirty) {
+      console.log('Autosave dirty detected');
+      markUnsaved();
+    }
   }
 }
 
@@ -422,22 +425,23 @@ function clearAutosaveTimer() {
   if (state.autosaveTimer) {
     clearTimeout(state.autosaveTimer);
     state.autosaveTimer = null;
+    console.log("Autosave timer cleared");
   }
 }
 
 function scheduleAutosave() {
-  if (state.conflictModalOpen || state.autosavePausedUntilChange || state.isSaving) {
-    console.log('Autosave skipped: loading/saving/conflict/no changes');
-    return;
-  }
-  clearAutosaveTimer();
-  console.log('Autosave scheduled');
+  if (state.conflictModalOpen) { console.log('Autosave blocked because:', 'conflict modal open'); return; }
+  if (state.autosavePausedUntilChange) { console.log('Autosave blocked because:', 'paused until change'); return; }
+  if (state.isSaving) { console.log('Autosave blocked because:', 'saving'); return; }
+  if (state.autosaveTimer) return;
+  console.log('Autosave timer scheduled');
   state.autosaveTimer = setTimeout(() => {
-    if (!state.isDirty || state.isSaving || state.conflictModalOpen || state.autosavePausedUntilChange) {
-      console.log('Autosave skipped: loading/saving/conflict/no changes');
-      return;
-    }
-    console.log('Autosave running');
+    state.autosaveTimer = null;
+    if (!state.isDirty) { console.log('Autosave blocked because:', 'no changes'); return; }
+    if (state.isSaving) { console.log('Autosave blocked because:', 'saving'); return; }
+    if (state.conflictModalOpen) { console.log('Autosave blocked because:', 'conflict modal open'); return; }
+    if (state.autosavePausedUntilChange) { console.log('Autosave blocked because:', 'paused until change'); return; }
+    console.log('Autosave executing');
     saveBoardToServer('autosave');
   }, 3000);
 }
