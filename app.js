@@ -38,6 +38,11 @@ const state = {
   postingPlannerNodeId: null
   ,currentBoardId: null
   ,lastKnownUpdatedAt: null
+  ,autosaveTimer: null
+  ,isDirty: false
+  ,isSaving: false
+  ,conflictModalOpen: false
+  ,autosavePausedUntilChange: false
   ,history: []
   ,forcePanNextDrag: false
   ,brandCore: {
@@ -294,7 +299,8 @@ async function saveBoardAsNew(payload) {
     const nextPath = `/boards/${newId}`;
     if (window.location.pathname !== nextPath) window.history.pushState({}, '', nextPath);
     setSharePanelState(newId, data?.updated_at ? new Date(data.updated_at) : new Date());
-    setSaveStatus('Board saved');
+    state.isDirty = false;
+    setSaveStatus('Saved');
   }
 }
 
@@ -387,6 +393,23 @@ function restoreLastSnapshot() {
 }
 
 
+
+function clearAutosaveTimer() {
+  if (state.autosaveTimer) {
+    clearTimeout(state.autosaveTimer);
+    state.autosaveTimer = null;
+  }
+}
+
+function scheduleAutosave() {
+  if (state.conflictModalOpen || state.autosavePausedUntilChange || state.isSaving) return;
+  clearAutosaveTimer();
+  state.autosaveTimer = setTimeout(() => {
+    if (!state.isDirty || state.isSaving || state.conflictModalOpen || state.autosavePausedUntilChange) return;
+    saveBoardToServer('autosave');
+  }, 3000);
+}
+
 function setSaveStatus(text) { el.saveStatus.textContent = text; }
 
 function isPersistableImageUrl(url) {
@@ -416,7 +439,10 @@ function serializeState() {
 }
 function saveCampaignCanvasState() { const campaignState = serializeState(); console.log("Saving campaignCanvasState", campaignState); localStorage.setItem(STORAGE_KEY, JSON.stringify(campaignState)); setSaveStatus("Saved"); }
 function markUnsaved() {
+  state.isDirty = true;
+  state.autosavePausedUntilChange = false;
   setSaveStatus("Unsaved changes");
+  scheduleAutosave();
 }
 function getBoardIdFromPath() {
   const fromPathname = (window.location.pathname || "").match(/\/boards\/([^/?#]+)/i);
@@ -449,10 +475,12 @@ function applyCampaignState(campaignState, statusText = "Restored") {
   updateEmptyState();
   drawLinks();
   if (campaignState.zoom) setZoom(campaignState.zoom);
+  state.isDirty = false;
+  clearAutosaveTimer();
   setSaveStatus(statusText);
 }
 
-async function saveBoardToServer() {
+async function saveBoardToServer(trigger = "manual") {
   try {
     const payload = {
       name: `Campaign Canvas ${new Date().toISOString()}`,
@@ -472,6 +500,9 @@ async function saveBoardToServer() {
 
     if (isUpdate && state.lastKnownUpdatedAt) payload.lastKnownUpdatedAt = state.lastKnownUpdatedAt;
 
+    state.isSaving = true;
+    setSaveStatus('Saving...');
+
     const response = await fetch(endpoint, {
       method,
       headers: { 'Content-Type': 'application/json' },
@@ -479,12 +510,21 @@ async function saveBoardToServer() {
     });
     const data = await response.json();
     if (response.status === 409 && isUpdate) {
+      state.conflictModalOpen = true;
+      clearAutosaveTimer();
       const action = await showBoardConflictModal();
+      state.conflictModalOpen = false;
       if (action === 'load_latest') {
+        state.autosavePausedUntilChange = false;
         await loadBoardFromUrlIfPresent();
       } else if (action === 'save_new') {
+        state.autosavePausedUntilChange = false;
         await saveBoardAsNew(payload);
+      } else {
+        state.autosavePausedUntilChange = true;
+        setSaveStatus('Unsaved changes');
       }
+      state.isSaving = false;
       return;
     }
     if (!response.ok) throw new Error(data?.error || 'Failed to save board');
@@ -495,7 +535,8 @@ async function saveBoardToServer() {
     state.lastKnownUpdatedAt = data?.updated_at || new Date().toISOString();
 
     const shareUrl = `${window.location.origin}/boards/${returnedId}`;
-    setSaveStatus(isUpdate ? 'Board updated' : 'Board saved');
+    state.isDirty = false;
+    setSaveStatus('Saved');
     setSharePanelState(returnedId, new Date());
 
     if (!isUpdate && returnedId) {
@@ -505,7 +546,9 @@ async function saveBoardToServer() {
     }
   } catch (error) {
     console.error(error);
-    setSaveStatus('Failed to save board');
+    setSaveStatus('Save failed');
+  } finally {
+    state.isSaving = false;
   }
 }
 
@@ -3049,7 +3092,7 @@ function bindGlobalResetDelegation() {
   });
 }
 
-el.saveBoardButton?.addEventListener("click", saveBoardToServer);
+el.saveBoardButton?.addEventListener("click", () => saveBoardToServer("manual"));
 el.copyBoardLinkButton?.addEventListener("click", copyCurrentBoardLink);
 
 window.saveCampaignCanvasState = saveCampaignCanvasState;
