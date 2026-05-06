@@ -3072,7 +3072,7 @@ el.postingDoneButton.addEventListener("click", () => {
   closePostingPlanner();
 });
 el.postingCancelButton.addEventListener("click", closePostingPlanner);
-setSidebarCollapsed(false);
+setSidebarCollapsed(true);
 
 el.brandCoreButton.addEventListener("click", () => {
   setAppMode("brand");
