@@ -22,8 +22,8 @@
       #canvas-topbar { padding-top: 6px; padding-bottom: 6px; overflow: hidden; }
       @media (max-width: 1200px) { .canvas-toolbar, .canvas-toolbar-left { flex-wrap: wrap; } .status-block { width: 100%; min-width: 0; max-width: 100%; flex: 1 1 100%; justify-content: flex-end; } .toolbar-subtitle { display: none; } }
 
-      .boards-library-page { max-width: 1100px; margin: 0 auto; padding: 20px; height: calc(100vh - 150px); display: flex; flex-direction: column; }
-      .boards-library-panel { overflow: auto; padding-right: 6px; }
+      .boards-library-page { max-width: 1100px; margin: 0 auto; padding: 20px; height: calc(100vh - 150px); min-height: 0; display: flex; flex-direction: column; }
+      .boards-library-panel { flex: 1 1 auto; min-height: 0; max-height: calc(100vh - 210px); overflow-y: auto; overflow-x: hidden; padding-right: 8px; }
       .board-row { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; padding: 12px; border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; margin-bottom: 10px; background: rgba(255,255,255,0.03); }
       .board-row:hover { border-color: rgba(107,78,255,0.45); background: rgba(107,78,255,0.08); }
       .board-row-meta { font-size: 12px; opacity: 0.72; margin-top: 2px; }
