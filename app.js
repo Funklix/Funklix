@@ -365,9 +365,17 @@ async function saveBoardToServer() {
     if (!response.ok) throw new Error(data?.error || 'Failed to save board');
     console.log('Saved board response id:', data?.id);
 
-    const shareUrl = `${window.location.origin}/boards/${data.id}`;
+    const returnedId = data?.id || currentBoardId;
+    if (returnedId) state.currentBoardId = returnedId;
+
+    const shareUrl = `${window.location.origin}/boards/${returnedId}`;
     setSaveStatus(isUpdate ? 'Board updated' : 'Board saved');
-    if (!isUpdate) window.prompt('Share this board URL:', shareUrl);
+
+    if (!isUpdate && returnedId) {
+      const nextPath = `/boards/${returnedId}`;
+      if (window.location.pathname !== nextPath) window.history.pushState({}, '', nextPath);
+      window.prompt('Share this board URL:', shareUrl);
+    }
   } catch (error) {
     console.error(error);
     setSaveStatus('Failed to save board');
