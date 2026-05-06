@@ -36,6 +36,8 @@ const state = {
   activeView: "board",
   calendarMonth: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
   postingPlannerNodeId: null
+  ,currentBoardId: null
+  ,lastKnownUpdatedAt: null
   ,history: []
   ,forcePanNextDrag: false
   ,brandCore: {
@@ -114,7 +116,15 @@ const el = {
   disconnectSelectedButton: document.getElementById("disconnect-selected-btn"),
   propagateDescendantsButton: document.getElementById("propagate-descendants-btn"),
   resetBoardButton: document.getElementById("reset-board-btn"),
+  saveBoardButton: document.getElementById("save-board-btn"),
   saveStatus: document.getElementById("save-status"),
+  boardSharePanel: document.getElementById("board-share-panel"),
+  boardShareEmpty: document.getElementById("board-share-empty"),
+  boardShareReady: document.getElementById("board-share-ready"),
+  boardShareLinkText: document.getElementById("board-share-link-text"),
+  copyBoardLinkButton: document.getElementById("copy-board-link-btn"),
+  boardLastSaved: document.getElementById("board-last-saved"),
+  boardCopyFeedback: document.getElementById("board-copy-feedback"),
   brandCoreButton: document.getElementById("brand-core-nav-btn"),
   campaignCanvasNavButton: document.getElementById("campaign-canvas-nav-btn"),
   sidebarToggleButton: document.getElementById("sidebar-toggle-btn"),
@@ -201,6 +211,112 @@ function openImageLightbox(url, alt = "Image preview") {
 
 function nowString() {
   return new Intl.DateTimeFormat("de-DE", { dateStyle: "short", timeStyle: "short" }).format(new Date());
+}
+
+
+
+function formatShareLinkText(url) {
+  try {
+    const parsed = new URL(url);
+    const id = parsed.pathname.split('/').filter(Boolean).pop() || '';
+    return `${parsed.host}/boards/${id.slice(0, 8)}...`;
+  } catch {
+    return url;
+  }
+}
+
+function formatLastSavedLabel(value = new Date()) {
+  return new Intl.DateTimeFormat("de-DE", { dateStyle: "short", timeStyle: "short" }).format(value);
+}
+
+function setSharePanelState(boardId, lastSaved = null) {
+  if (!boardId) {
+    el.boardShareEmpty?.classList.remove("hidden");
+    el.boardShareReady?.classList.add("hidden");
+    return;
+  }
+
+  const url = `${window.location.origin}/boards/${boardId}`;
+  if (el.boardShareLinkText) el.boardShareLinkText.textContent = formatShareLinkText(url);
+  if (el.boardLastSaved) {
+    const label = lastSaved ? formatLastSavedLabel(lastSaved) : "—";
+    el.boardLastSaved.textContent = `Last saved: ${label}`;
+  }
+
+  el.boardShareEmpty?.classList.add("hidden");
+  el.boardShareReady?.classList.remove("hidden");
+}
+
+async function copyCurrentBoardLink() {
+  const boardId = state.currentBoardId || getBoardIdFromPath();
+  if (!boardId) {
+    if (el.boardCopyFeedback) {
+      el.boardCopyFeedback.textContent = "Could not copy link.";
+      el.boardCopyFeedback.classList.remove("hidden");
+      setTimeout(() => el.boardCopyFeedback?.classList.add("hidden"), 1500);
+    }
+    return;
+  }
+
+  const url = `${window.location.origin}/boards/${boardId}`;
+  try {
+    await navigator.clipboard.writeText(url);
+    if (el.copyBoardLinkButton) {
+      el.copyBoardLinkButton.textContent = "Copied";
+      setTimeout(() => {
+        if (el.copyBoardLinkButton) el.copyBoardLinkButton.textContent = "Copy";
+      }, 1500);
+    }
+    el.boardCopyFeedback?.classList.add("hidden");
+  } catch (error) {
+    if (el.boardCopyFeedback) {
+      el.boardCopyFeedback.textContent = "Could not copy link.";
+      el.boardCopyFeedback.classList.remove("hidden");
+      setTimeout(() => el.boardCopyFeedback?.classList.add("hidden"), 1500);
+    }
+  }
+}
+
+
+async function saveBoardAsNew(payload) {
+  const response = await fetch('/api/boards', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data?.error || 'Failed to save board');
+
+  const newId = data?.id;
+  if (newId) {
+    state.currentBoardId = newId;
+    state.lastKnownUpdatedAt = data?.updated_at || null;
+    const nextPath = `/boards/${newId}`;
+    if (window.location.pathname !== nextPath) window.history.pushState({}, '', nextPath);
+    setSharePanelState(newId, data?.updated_at ? new Date(data.updated_at) : new Date());
+    setSaveStatus('Board saved');
+  }
+}
+
+function showBoardConflictModal() {
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div');
+    overlay.className = 'brand-confirm-modal';
+    overlay.innerHTML = `<div class="brand-confirm-card"><h3>A newer version of this board exists</h3><p>Someone else has saved changes to this board since you opened it. What would you like to do?</p><div class="brand-confirm-actions"><button type="button" id="board-conflict-load">Load latest version</button><button type="button" class="primary-add" id="board-conflict-save-new">Save as new board</button><button type="button" id="board-conflict-cancel">Cancel</button></div></div>`;
+    document.body.appendChild(overlay);
+
+    const close = (value) => {
+      overlay.remove();
+      resolve(value);
+    };
+
+    overlay.addEventListener('click', (event) => {
+      if (event.target === overlay) close('cancel');
+    });
+    overlay.querySelector('#board-conflict-load').addEventListener('click', () => close('load_latest'));
+    overlay.querySelector('#board-conflict-save-new').addEventListener('click', () => close('save_new'));
+    overlay.querySelector('#board-conflict-cancel').addEventListener('click', () => close('cancel'));
+  });
 }
 
 function boardPointFromClient(clientX, clientY) {
@@ -302,15 +418,116 @@ function saveCampaignCanvasState() { const campaignState = serializeState(); con
 function markUnsaved() {
   setSaveStatus("Unsaved changes");
 }
+function getBoardIdFromPath() {
+  const fromPathname = (window.location.pathname || "").match(/\/boards\/([^/?#]+)/i);
+  if (fromPathname?.[1]) return decodeURIComponent(fromPathname[1]);
+
+  const fromHref = (window.location.href || "").match(/\/boards\/([^/?#]+)/i);
+  if (fromHref?.[1]) return decodeURIComponent(fromHref[1]);
+
+  return null;
+}
+
 function loadCampaignCanvasState() {
   const raw = localStorage.getItem(STORAGE_KEY); if (!raw) return false;
   const campaignState = JSON.parse(raw); console.log("Loaded campaignCanvasState", campaignState);
-  state.nodes = (campaignState.nodes || []).map((node) => ({ ...node, images: sanitizeNodeImages(node.images) })); state.edges = campaignState.edges || []; state.nodeCounter = campaignState.nodeCounter || 1; state.postitCounter = campaignState.postitCounter || 1;
-  console.log("loaded node images", state.nodes.find((n) => n.id === state.selectedPrimary)?.images);
-  state.selectedIds.clear(); state.selectedPrimary = null;
+  applyCampaignState(campaignState, "Restored from local storage");
+  return true;
+}
+
+
+function applyCampaignState(campaignState, statusText = "Restored") {
+  state.nodes = (campaignState.nodes || []).map((node) => ({ ...node, images: sanitizeNodeImages(node.images) }));
+  state.edges = campaignState.edges || [];
+  state.nodeCounter = campaignState.nodeCounter || 1;
+  state.postitCounter = campaignState.postitCounter || 1;
+  state.selectedIds.clear();
+  state.selectedPrimary = null;
   el.zoomLayer.querySelectorAll(".node").forEach((n) => n.remove());
   state.nodes.forEach(renderNode);
-  updateListView(); updateEmptyState(); drawLinks(); if (campaignState.zoom) setZoom(campaignState.zoom); setSaveStatus("Restored from local storage"); return true;
+  updateListView();
+  updateEmptyState();
+  drawLinks();
+  if (campaignState.zoom) setZoom(campaignState.zoom);
+  setSaveStatus(statusText);
+}
+
+async function saveBoardToServer() {
+  try {
+    const payload = {
+      name: `Campaign Canvas ${new Date().toISOString()}`,
+      canvas_json: serializeState()
+    };
+    const pathname = window.location.pathname || '';
+    const pathBoardId = pathname.startsWith('/boards/')
+      ? decodeURIComponent(pathname.replace(/^\/boards\//, '').split('/')[0]).trim()
+      : null;
+    const currentBoardId = state.currentBoardId || pathBoardId || getBoardIdFromPath();
+    const isUpdate = Boolean(currentBoardId);
+    const endpoint = isUpdate ? `/api/boards/${currentBoardId}` : '/api/boards';
+    const method = isUpdate ? 'PUT' : 'POST';
+    console.log('Current board id:', currentBoardId);
+    console.log('Save method:', currentBoardId ? 'PUT' : 'POST');
+    console.log('Save endpoint:', endpoint);
+
+    if (isUpdate && state.lastKnownUpdatedAt) payload.lastKnownUpdatedAt = state.lastKnownUpdatedAt;
+
+    const response = await fetch(endpoint, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await response.json();
+    if (response.status === 409 && isUpdate) {
+      const action = await showBoardConflictModal();
+      if (action === 'load_latest') {
+        await loadBoardFromUrlIfPresent();
+      } else if (action === 'save_new') {
+        await saveBoardAsNew(payload);
+      }
+      return;
+    }
+    if (!response.ok) throw new Error(data?.error || 'Failed to save board');
+    console.log('Saved board response id:', data?.id);
+
+    const returnedId = data?.id || currentBoardId;
+    if (returnedId) state.currentBoardId = returnedId;
+    state.lastKnownUpdatedAt = data?.updated_at || new Date().toISOString();
+
+    const shareUrl = `${window.location.origin}/boards/${returnedId}`;
+    setSaveStatus(isUpdate ? 'Board updated' : 'Board saved');
+    setSharePanelState(returnedId, new Date());
+
+    if (!isUpdate && returnedId) {
+      const nextPath = `/boards/${returnedId}`;
+      if (window.location.pathname !== nextPath) window.history.pushState({}, '', nextPath);
+
+    }
+  } catch (error) {
+    console.error(error);
+    setSaveStatus('Failed to save board');
+  }
+}
+
+async function loadBoardFromUrlIfPresent() {
+  const boardId = state.currentBoardId || getBoardIdFromPath();
+  if (!boardId) return false;
+  state.currentBoardId = boardId;
+  try {
+    const response = await fetch(`/api/boards/${boardId}`);
+    const data = await response.json();
+    if (!response.ok) throw new Error(data?.error || 'Failed to load board');
+    state.currentBoardId = data?.id || boardId;
+    state.lastKnownUpdatedAt = data?.updated_at || null;
+    setSharePanelState(state.currentBoardId, data?.updated_at ? new Date(data.updated_at) : null);
+    applyCampaignState(data.canvas_json || {}, `Loaded board ${boardId.slice(0, 8)}...`);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data.canvas_json || {}));
+    return true;
+  } catch (error) {
+    console.error(error);
+    setSaveStatus('Board not found or could not be loaded.');
+    return false;
+  }
 }
 
 function renderCampaignCanvasFromStateIfNeeded() {
@@ -360,6 +577,33 @@ function resetBrandBrainState() {
 
 
 
+
+
+function showResetBoardConfirmModal() {
+  return new Promise((resolve) => {
+    const overlay = document.createElement("div");
+    overlay.className = "brand-confirm-modal";
+    overlay.innerHTML = `<div class="brand-confirm-card"><h3>You are about to reset the board</h3><p>This will remove all nodes and changes from the current board. This action cannot be undone.</p><div class="brand-confirm-actions"><button type="button" id="reset-board-cancel">Cancel</button><button type="button" class="danger" id="reset-board-confirm">Confirm</button></div></div>`;
+    document.body.appendChild(overlay);
+
+    const close = (value) => {
+      overlay.remove();
+      document.removeEventListener("keydown", onKeydown);
+      resolve(value);
+    };
+
+    const onKeydown = (event) => {
+      if (event.key === "Escape") close(false);
+    };
+
+    document.addEventListener("keydown", onKeydown);
+    overlay.addEventListener("click", (event) => {
+      if (event.target === overlay) close(false);
+    });
+    overlay.querySelector("#reset-board-cancel").addEventListener("click", () => close(false));
+    overlay.querySelector("#reset-board-confirm").addEventListener("click", () => close(true));
+  });
+}
 
 function showBrandSuggestionConfirmModal() {
   return new Promise((resolve) => {
@@ -2785,11 +3029,12 @@ window.debugNodes = () => {
 function createDebugPanel() {}
 
 function bindGlobalResetDelegation() {
-  document.addEventListener("click", (event) => {
+  document.addEventListener("click", async (event) => {
     if (event.target.closest("#reset-board-btn")) {
       console.log("RESET BOARD CLICK DELEGATED");
       event.preventDefault();
-      window.resetCampaignCanvasState();
+      const shouldReset = await showResetBoardConfirmModal();
+      if (shouldReset) window.resetCampaignCanvasState();
     }
     if (event.target.closest("#reset-brand-core-btn")) {
       console.log("RESET BRAND CLICK DELEGATED");
@@ -2804,6 +3049,9 @@ function bindGlobalResetDelegation() {
   });
 }
 
+el.saveBoardButton?.addEventListener("click", saveBoardToServer);
+el.copyBoardLinkButton?.addEventListener("click", copyCurrentBoardLink);
+
 window.saveCampaignCanvasState = saveCampaignCanvasState;
 window.loadCampaignCanvasState = loadCampaignCanvasState;
 window.resetCampaignCanvasState = resetCampaignCanvasState;
@@ -2815,7 +3063,14 @@ function bootApp() {
   createDebugPanel();
   bindGlobalResetDelegation();
   loadBrandBrainState();
-  loadCampaignCanvasState();
+  const boardIdFromPath = getBoardIdFromPath();
+  state.currentBoardId = boardIdFromPath;
+  setSharePanelState(state.currentBoardId);
+  if (boardIdFromPath) {
+    loadBoardFromUrlIfPresent();
+  } else {
+    loadCampaignCanvasState();
+  }
   centerBoardStartPosition();
   el.zoomLayer.style.transform = `scale(${state.zoom})`;
   el.zoomLayer.style.transformOrigin = "0 0";
