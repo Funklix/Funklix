@@ -6,17 +6,21 @@
     <title>Campaign Canvas MVP</title>
     <link rel="stylesheet" href="/styles.css" />
     <style>
-      .canvas-toolbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-      .canvas-toolbar-left { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-      .status-block { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; margin-left: auto; max-width: 360px; }
-      .save-status-text { font-size: 12px; opacity: 0.85; }
-      .share-panel { display: inline-flex; flex-direction: column; gap: 4px; }
-      .share-ready { display: inline-flex; flex-direction: column; gap: 4px; align-items: flex-end; }
+      .canvas-toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: nowrap; }
+      .toolbar-brand { display: inline-flex; align-items: baseline; gap: 6px; min-width: 0; }
+      .toolbar-title { margin: 0; font-size: 16px; line-height: 1.1; }
+      .toolbar-subtitle { margin: 0; font-size: 11px; opacity: 0.7; white-space: nowrap; }
+      .canvas-toolbar-left { display: flex; align-items: center; gap: 6px; flex-wrap: nowrap; }
+      .status-block { display: flex; align-items: center; gap: 8px; margin-left: auto; white-space: nowrap; }
+      .save-status-text, .share-meta, .share-feedback { font-size: 11px; opacity: 0.8; }
+      .share-panel { display: inline-flex; align-items: center; gap: 8px; }
+      .share-ready { display: inline-flex; align-items: center; gap: 8px; }
       .share-link-row { display: inline-flex; align-items: center; gap: 8px; }
-      .share-meta, .share-feedback, .share-hint { font-size: 12px; opacity: 0.8; }
-      .share-link-text { max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
-      .share-meta { opacity: 0.65; }
+      .share-link-text { display: none; }
+      .share-meta { opacity: 0.7; }
       .share-feedback { color: #c94a4a; }
+      #canvas-topbar { padding-top: 6px; padding-bottom: 6px; }
+      @media (max-width: 1200px) { .canvas-toolbar, .canvas-toolbar-left { flex-wrap: wrap; } .status-block { width: 100%; justify-content: flex-end; } .toolbar-subtitle { display: none; } }
     </style>
 
   </head>
@@ -38,9 +42,9 @@
 
       <main class="workspace-wrap">
         <header class="topbar" id="canvas-topbar">
-          <div>
-            <h1>Campaign Canvas — Collaborative Flow</h1>
-            <p>Top-down Hierarchie: Idea → Variations → Content → Social Posts.</p>
+          <div class="toolbar-brand">
+            <h1 class="toolbar-title">Campaign Canvas</h1>
+            <p class="toolbar-subtitle">Idea → Variations → Content → Social Posts</p>
           </div>
           <div class="actions canvas-toolbar">
             <div class="canvas-toolbar-left">
@@ -65,13 +69,13 @@
             <div class="status-block">
               <span id="save-status" class="save-status-text">Unsaved changes</span>
               <div id="board-share-panel" class="share-panel" aria-live="polite">
-                <div id="board-share-empty" class="share-hint">Save the board to create a shareable link.</div>
+                <div id="board-share-empty" class="share-hint">Save to create share link.</div>
                 <div id="board-share-ready" class="share-ready hidden">
                   <div class="share-link-row">
                     <span id="board-share-link-text" class="share-link-text"></span>
                     <button id="copy-board-link-btn" type="button">Copy</button>
+                    <div id="board-last-saved" class="share-meta">Last saved: —</div>
                   </div>
-                  <div id="board-last-saved" class="share-meta">Last saved: —</div>
                   <div id="board-copy-feedback" class="share-feedback hidden"></div>
                 </div>
               </div>
