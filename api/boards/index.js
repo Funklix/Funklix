@@ -17,11 +17,11 @@ module.exports = async function handler(req, res) {
 
     await ensureBoardsTable();
     const result = await pool.query(
-      'INSERT INTO boards (name, canvas_json) VALUES ($1, $2::jsonb) RETURNING id',
+      'INSERT INTO boards (name, canvas_json) VALUES ($1, $2::jsonb) RETURNING id, updated_at',
       [name, JSON.stringify(canvas_json)]
     );
 
-    return res.status(200).json({ id: result.rows[0].id });
+    return res.status(200).json(result.rows[0]);
   } catch (error) {
     return res.status(500).json({ error: error?.message || 'Failed to save board' });
   }

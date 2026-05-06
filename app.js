@@ -37,6 +37,7 @@ const state = {
   calendarMonth: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
   postingPlannerNodeId: null
   ,currentBoardId: null
+  ,lastKnownUpdatedAt: null
   ,history: []
   ,forcePanNextDrag: false
   ,brandCore: {
@@ -276,6 +277,48 @@ async function copyCurrentBoardLink() {
   }
 }
 
+
+async function saveBoardAsNew(payload) {
+  const response = await fetch('/api/boards', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data?.error || 'Failed to save board');
+
+  const newId = data?.id;
+  if (newId) {
+    state.currentBoardId = newId;
+    state.lastKnownUpdatedAt = data?.updated_at || null;
+    const nextPath = `/boards/${newId}`;
+    if (window.location.pathname !== nextPath) window.history.pushState({}, '', nextPath);
+    setSharePanelState(newId, data?.updated_at ? new Date(data.updated_at) : new Date());
+    setSaveStatus('Board saved');
+  }
+}
+
+function showBoardConflictModal() {
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div');
+    overlay.className = 'brand-confirm-modal';
+    overlay.innerHTML = `<div class="brand-confirm-card"><h3>A newer version of this board exists</h3><p>Someone else has saved changes to this board since you opened it. What would you like to do?</p><div class="brand-confirm-actions"><button type="button" id="board-conflict-load">Load latest version</button><button type="button" class="primary-add" id="board-conflict-save-new">Save as new board</button><button type="button" id="board-conflict-cancel">Cancel</button></div></div>`;
+    document.body.appendChild(overlay);
+
+    const close = (value) => {
+      overlay.remove();
+      resolve(value);
+    };
+
+    overlay.addEventListener('click', (event) => {
+      if (event.target === overlay) close('cancel');
+    });
+    overlay.querySelector('#board-conflict-load').addEventListener('click', () => close('load_latest'));
+    overlay.querySelector('#board-conflict-save-new').addEventListener('click', () => close('save_new'));
+    overlay.querySelector('#board-conflict-cancel').addEventListener('click', () => close('cancel'));
+  });
+}
+
 function boardPointFromClient(clientX, clientY) {
   const rect = el.canvas.getBoundingClientRect();
   return {
@@ -427,17 +470,29 @@ async function saveBoardToServer() {
     console.log('Save method:', currentBoardId ? 'PUT' : 'POST');
     console.log('Save endpoint:', endpoint);
 
+    if (isUpdate && state.lastKnownUpdatedAt) payload.lastKnownUpdatedAt = state.lastKnownUpdatedAt;
+
     const response = await fetch(endpoint, {
       method,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
     const data = await response.json();
+    if (response.status === 409 && isUpdate) {
+      const action = await showBoardConflictModal();
+      if (action === 'load_latest') {
+        await loadBoardFromUrlIfPresent();
+      } else if (action === 'save_new') {
+        await saveBoardAsNew(payload);
+      }
+      return;
+    }
     if (!response.ok) throw new Error(data?.error || 'Failed to save board');
     console.log('Saved board response id:', data?.id);
 
     const returnedId = data?.id || currentBoardId;
     if (returnedId) state.currentBoardId = returnedId;
+    state.lastKnownUpdatedAt = data?.updated_at || new Date().toISOString();
 
     const shareUrl = `${window.location.origin}/boards/${returnedId}`;
     setSaveStatus(isUpdate ? 'Board updated' : 'Board saved');
@@ -463,6 +518,7 @@ async function loadBoardFromUrlIfPresent() {
     const data = await response.json();
     if (!response.ok) throw new Error(data?.error || 'Failed to load board');
     state.currentBoardId = data?.id || boardId;
+    state.lastKnownUpdatedAt = data?.updated_at || null;
     setSharePanelState(state.currentBoardId, data?.updated_at ? new Date(data.updated_at) : null);
     applyCampaignState(data.canvas_json || {}, `Loaded board ${boardId.slice(0, 8)}...`);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data.canvas_json || {}));
