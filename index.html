@@ -168,6 +168,10 @@
 
             <label for="node-content">Inhalt</label>
             <textarea id="node-content" name="content" rows="3" placeholder="Beschreibung, Prompt, Task ..."></textarea>
+            <div id="content-image-prompt-field" class="hidden">
+              <label for="node-image-prompt">Image Prompt</label>
+              <textarea id="node-image-prompt" name="imagePrompt" rows="2" placeholder="Describe the visual style, scene, mood, and composition..."></textarea>
+            </div>
           </section>
 
           <section id="social-fields" class="inspector-section social-fields hidden">
@@ -229,6 +233,7 @@
             <input id="node-variants" name="variants" placeholder="A: Hook 1, B: Hook 2" />
             <button id="improve-node-btn" type="button" class="primary-add">✨ Improve with AI</button>
             <button id="regenerate-node-btn" type="button">🔄 Regenerate</button>
+            <button id="generate-full-pack-btn" type="button">Generate Full Content Pack</button>
           </section>
 
           <section class="inspector-section">
@@ -248,8 +253,6 @@
         <span class="type"></span>
         <h3 class="title" contenteditable="true" data-placeholder="Node Titel"></h3>
         <p class="content" contenteditable="true" data-placeholder="Node Inhalt"></p>
-        <p class="content-pack-caption hidden"></p>
-        <p class="content-pack-cta hidden"></p>
         <p class="content-pack-status hidden"></p>
         <div class="image-strip"></div>
         <div class="social-preview hidden"></div>
