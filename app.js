@@ -36,6 +36,7 @@ const state = {
   activeView: "board",
   calendarMonth: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
   postingPlannerNodeId: null
+  ,currentBoardId: null
   ,history: []
   ,forcePanNextDrag: false
   ,brandCore: {
@@ -304,8 +305,12 @@ function markUnsaved() {
   setSaveStatus("Unsaved changes");
 }
 function getBoardIdFromPath() {
-  const match = window.location.pathname.match(/^\/boards\/([^/]+)$/);
-  return match ? match[1] : null;
+  const path = window.location.pathname || "";
+  const segments = path.split("/").filter(Boolean);
+  if (segments.length >= 2 && segments[0] === "boards" && segments[1]) {
+    return decodeURIComponent(segments[1]);
+  }
+  return null;
 }
 
 function loadCampaignCanvasState() {
@@ -338,10 +343,12 @@ async function saveBoardToServer() {
       name: `Campaign Canvas ${new Date().toISOString()}`,
       canvas_json: serializeState()
     };
-    const boardId = getBoardIdFromPath();
+    const boardId = state.currentBoardId || getBoardIdFromPath();
     const isUpdate = Boolean(boardId);
+    console.log('Save Board boardId', boardId);
     const endpoint = isUpdate ? `/api/boards/${boardId}` : '/api/boards';
     const method = isUpdate ? 'PUT' : 'POST';
+    console.log('Save Board method', method, 'endpoint', endpoint);
 
     const response = await fetch(endpoint, {
       method,
@@ -350,6 +357,7 @@ async function saveBoardToServer() {
     });
     const data = await response.json();
     if (!response.ok) throw new Error(data?.error || 'Failed to save board');
+    console.log('Save Board response id', data?.id);
 
     const shareUrl = `${window.location.origin}/boards/${data.id}`;
     setSaveStatus(isUpdate ? 'Board updated' : 'Board saved');
@@ -361,8 +369,9 @@ async function saveBoardToServer() {
 }
 
 async function loadBoardFromUrlIfPresent() {
-  const boardId = getBoardIdFromPath();
+  const boardId = state.currentBoardId || getBoardIdFromPath();
   if (!boardId) return false;
+  state.currentBoardId = boardId;
   try {
     const response = await fetch(`/api/boards/${boardId}`);
     const data = await response.json();
@@ -2910,6 +2919,7 @@ function bootApp() {
   bindGlobalResetDelegation();
   loadBrandBrainState();
   const boardIdFromPath = getBoardIdFromPath();
+  state.currentBoardId = boardIdFromPath;
   if (boardIdFromPath) {
     loadBoardFromUrlIfPresent();
   } else {
