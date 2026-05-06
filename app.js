@@ -43,6 +43,8 @@ const state = {
   ,isSaving: false
   ,conflictModalOpen: false
   ,autosavePausedUntilChange: false
+  ,isBoardLoading: true
+  ,lastSavedSnapshot: ""
   ,history: []
   ,forcePanNextDrag: false
   ,brandCore: {
@@ -301,6 +303,7 @@ async function saveBoardAsNew(payload) {
     setSharePanelState(newId, data?.updated_at ? new Date(data.updated_at) : new Date());
     state.isDirty = false;
     setSaveStatus('Saved');
+    refreshLastSavedSnapshot();
   }
 }
 
@@ -394,6 +397,27 @@ function restoreLastSnapshot() {
 
 
 
+
+function refreshLastSavedSnapshot() {
+  state.lastSavedSnapshot = JSON.stringify(serializeState());
+}
+
+function detectDirtyFromSnapshot() {
+  if (state.isBoardLoading || state.isSaving || state.conflictModalOpen) {
+    console.log('Autosave skipped: loading/saving/conflict/no changes');
+    return;
+  }
+  const currentSnapshot = JSON.stringify(serializeState());
+  if (currentSnapshot !== state.lastSavedSnapshot) {
+    console.log('Autosave dirty detected');
+    markUnsaved();
+  }
+}
+
+function startAutosaveWatcher() {
+  setInterval(detectDirtyFromSnapshot, 1000);
+}
+
 function clearAutosaveTimer() {
   if (state.autosaveTimer) {
     clearTimeout(state.autosaveTimer);
@@ -402,10 +426,18 @@ function clearAutosaveTimer() {
 }
 
 function scheduleAutosave() {
-  if (state.conflictModalOpen || state.autosavePausedUntilChange || state.isSaving) return;
+  if (state.conflictModalOpen || state.autosavePausedUntilChange || state.isSaving) {
+    console.log('Autosave skipped: loading/saving/conflict/no changes');
+    return;
+  }
   clearAutosaveTimer();
+  console.log('Autosave scheduled');
   state.autosaveTimer = setTimeout(() => {
-    if (!state.isDirty || state.isSaving || state.conflictModalOpen || state.autosavePausedUntilChange) return;
+    if (!state.isDirty || state.isSaving || state.conflictModalOpen || state.autosavePausedUntilChange) {
+      console.log('Autosave skipped: loading/saving/conflict/no changes');
+      return;
+    }
+    console.log('Autosave running');
     saveBoardToServer('autosave');
   }, 3000);
 }
@@ -478,6 +510,8 @@ function applyCampaignState(campaignState, statusText = "Restored") {
   state.isDirty = false;
   clearAutosaveTimer();
   setSaveStatus(statusText);
+  refreshLastSavedSnapshot();
+  state.isBoardLoading = false;
 }
 
 async function saveBoardToServer(trigger = "manual") {
@@ -537,6 +571,8 @@ async function saveBoardToServer(trigger = "manual") {
     const shareUrl = `${window.location.origin}/boards/${returnedId}`;
     state.isDirty = false;
     setSaveStatus('Saved');
+    refreshLastSavedSnapshot();
+    console.log('Autosave success');
     setSharePanelState(returnedId, new Date());
 
     if (!isUpdate && returnedId) {
@@ -3103,6 +3139,7 @@ window.loadBrandBrainState = loadBrandBrainState;
 window.resetBrandBrainState = resetBrandBrainState;
 
 function bootApp() {
+  state.isBoardLoading = true;
   createDebugPanel();
   bindGlobalResetDelegation();
   loadBrandBrainState();
@@ -3127,6 +3164,9 @@ function bootApp() {
   setAppMode("canvas");
   setActiveView("board");
   drawLinks();
+  refreshLastSavedSnapshot();
+  state.isBoardLoading = false;
+  startAutosaveWatcher();
 }
 
 if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", bootApp);
