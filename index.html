@@ -4,7 +4,21 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Campaign Canvas MVP</title>
-    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="/styles.css" />
+    <style>
+      .canvas-toolbar { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
+      .canvas-toolbar-left { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+      .canvas-toolbar-right { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; max-width: 360px; }
+      .save-status-text { font-size: 12px; opacity: 0.85; }
+      .share-panel { display: inline-flex; flex-direction: column; gap: 4px; padding: 6px 8px; border-radius: 8px; background: rgba(255,255,255,0.04); }
+      .share-ready { display: inline-flex; flex-direction: column; gap: 4px; align-items: flex-end; }
+      .share-link-row { display: inline-flex; align-items: center; gap: 8px; }
+      .share-label, .share-meta, .share-feedback, .share-hint { font-size: 12px; opacity: 0.8; }
+      .share-link-text { max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+      .share-meta { opacity: 0.65; }
+      .share-feedback { color: #c94a4a; }
+    </style>
+
   </head>
   <body>
     <div class="app-shell">
@@ -28,24 +42,41 @@
             <h1>Campaign Canvas — Collaborative Flow</h1>
             <p>Top-down Hierarchie: Idea → Variations → Content → Social Posts.</p>
           </div>
-          <div class="actions">
-            <button id="create-campaign-btn" class="create-campaign-btn">Create campaign</button>
-            <button id="undo-btn" title="Rückgängig">↶</button>
-            <button id="add-node-btn" class="primary-add">+ Add node</button>
-            <button id="reset-board-btn">Reset Board</button>
-            <div class="view-switcher">
-              <button id="cycle-view-btn">Board View</button>
-              <button id="view-menu-btn" title="Choose view">▾</button>
-              <div id="view-menu" class="hidden">
-                <button id="view-board-btn" type="button">Board View</button>
-                <button id="view-list-btn" type="button">List View</button>
-                <button id="view-calendar-btn" type="button">Calendar View</button>
+          <div class="actions canvas-toolbar">
+            <div class="canvas-toolbar-left">
+              <button id="create-campaign-btn" class="create-campaign-btn">Create campaign</button>
+              <button id="undo-btn" title="Rückgängig">↶</button>
+              <button id="add-node-btn" class="primary-add">+ Add node</button>
+              <button id="reset-board-btn" class="danger">Reset Board</button>
+              <button id="save-board-btn">Save Board</button>
+              <div class="view-switcher">
+                <button id="cycle-view-btn">Board View</button>
+                <button id="view-menu-btn" title="Choose view">▾</button>
+                <div id="view-menu" class="hidden">
+                  <button id="view-board-btn" type="button">Board View</button>
+                  <button id="view-list-btn" type="button">List View</button>
+                  <button id="view-calendar-btn" type="button">Calendar View</button>
+                </div>
+              </div>
+              <button id="zoom-out-btn" aria-label="Zoom out">-</button>
+              <button id="zoom-in-btn" aria-label="Zoom in">+</button>
+              <span id="zoom-label">100%</span>
+            </div>
+            <div class="canvas-toolbar-right">
+              <span id="save-status" class="save-status-text">Unsaved changes</span>
+              <div id="board-share-panel" class="share-panel" aria-live="polite">
+                <div id="board-share-empty" class="share-hint">Save the board to create a shareable link.</div>
+                <div id="board-share-ready" class="share-ready hidden">
+                  <div class="share-link-row">
+                    <span class="share-label">Share link</span>
+                    <span id="board-share-link-text" class="share-link-text"></span>
+                    <button id="copy-board-link-btn" type="button">Copy</button>
+                  </div>
+                  <div id="board-last-saved" class="share-meta">Last saved: —</div>
+                  <div id="board-copy-feedback" class="share-feedback hidden"></div>
+                </div>
               </div>
             </div>
-            <button id="zoom-out-btn">− Zoom</button>
-            <button id="zoom-in-btn">+ Zoom</button>
-            <span id="zoom-label">100%</span>
-            <span id="save-status">Unsaved changes</span>
           </div>
         </header>
 
@@ -238,6 +269,6 @@
     </div>
 
 
-    <script src="app.js"></script>
+    <script src="/app.js"></script>
   </body>
 </html>
