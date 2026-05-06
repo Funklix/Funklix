@@ -22,12 +22,19 @@
       #canvas-topbar { padding-top: 6px; padding-bottom: 6px; overflow: hidden; }
       @media (max-width: 1200px) { .canvas-toolbar, .canvas-toolbar-left { flex-wrap: wrap; } .status-block { width: 100%; min-width: 0; max-width: 100%; flex: 1 1 100%; justify-content: flex-end; } .toolbar-subtitle { display: none; } }
 
-      .boards-library-panel { max-height: calc(100vh - 180px); overflow: auto; padding-right: 6px; }
-      .board-row { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; padding: 8px; border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; margin-bottom: 8px; }
-      .board-row-meta { font-size: 12px; opacity: 0.75; }
+      .boards-library-page { max-width: 1100px; margin: 0 auto; padding: 20px; height: calc(100vh - 150px); display: flex; flex-direction: column; }
+      .boards-library-panel { overflow: auto; padding-right: 6px; }
+      .board-row { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; padding: 12px; border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; margin-bottom: 10px; background: rgba(255,255,255,0.03); }
+      .board-row:hover { border-color: rgba(107,78,255,0.45); background: rgba(107,78,255,0.08); }
+      .board-row-meta { font-size: 12px; opacity: 0.72; margin-top: 2px; }
       .board-row-actions { display: inline-flex; gap: 6px; }
-      .icon-btn { min-width: 30px; }
-      .board-rename { display: inline-flex; gap: 6px; margin-top: 4px; }
+      .icon-btn { width: 30px; height: 30px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.18); background: rgba(255,255,255,0.06); color: inherit; cursor: pointer; }
+      .icon-btn:hover { background: rgba(107,78,255,0.22); border-color: rgba(107,78,255,0.5); }
+      .icon-btn.danger:hover { background: rgba(201,74,74,0.18); border-color: rgba(201,74,74,0.6); }
+      .board-rename.hidden { display: none; }
+      .board-rename { display: inline-flex; gap: 6px; margin-top: 6px; }
+      .board-rename input { border-radius: 8px; border: 1px solid rgba(255,255,255,0.2); background: rgba(0,0,0,0.2); color: inherit; padding: 6px 8px; }
+      .board-rename button { border-radius: 8px; border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.08); color: inherit; padding: 6px 8px; cursor: pointer; }
 
     </style>
 
@@ -113,7 +120,7 @@
           </div>
         </section>
 
-        <section id="boards-library-view" class="board-list-view hidden"><h2>Boards</h2><p>Manage your saved Campaign Canvas boards.</p><div id="boards-library-list" class="boards-library-panel"></div></section>
+        <section id="boards-library-view" class="board-list-view hidden boards-library-page"><h2>Boards</h2><p>Manage your saved Campaign Canvas boards.</p><div id="boards-library-list" class="boards-library-panel"></div></section>
         <section id="board-list-view" class="board-list-view hidden">
           <h2>Node List View</h2>
           <div id="node-list-view"></div>
