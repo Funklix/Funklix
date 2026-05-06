@@ -1951,7 +1951,13 @@ function fillInspector(node) {
 }
 
 function getConnectedSocialPostingNodes(contentNodeId) {
-  const ids = state.edges.filter(([from]) => from === contentNodeId).map(([, to]) => to);
+  const ids = state.edges
+    .filter((edge) => {
+      const from = Array.isArray(edge) ? edge[0] : edge?.source;
+      return from === contentNodeId;
+    })
+    .map((edge) => (Array.isArray(edge) ? edge[1] : edge?.target))
+    .filter(Boolean);
   return ids.map(getNode).filter((n) => n?.type === "Social Media Posting");
 }
 
@@ -1975,16 +1981,20 @@ function openSocialVariationChoiceModal() {
   });
 }
 
-async function resolveTargetSocialNodeForContent(contentNode) {
+async function resolveTargetSocialNodeForContent(contentNode, mode = "auto") {
   const connected = getConnectedSocialPostingNodes(contentNode.id);
   if (!connected.length) {
     const created = createNode({ type: "Social Media Posting", position: { x: contentNode.position.x + 340, y: contentNode.position.y + 40 } }) || state.nodes[state.nodes.length - 1];
     addEdge(contentNode.id, created.id);
     return created;
   }
-  const choice = await openSocialVariationChoiceModal();
+  const choice = mode === "auto" ? await openSocialVariationChoiceModal() : mode;
   if (choice === "cancel") return null;
-  if (choice === "update") return connected[connected.length - 1];
+  if (choice === "update") {
+    const connectedIds = new Set(connected.map((n) => n.id));
+    const mostRecent = [...state.nodes].reverse().find((n) => connectedIds.has(n.id));
+    return mostRecent || connected[connected.length - 1];
+  }
   const yOffset = connected.length * 120;
   const created = createNode({ type: "Social Media Posting", position: { x: contentNode.position.x + 340, y: contentNode.position.y + 40 + yOffset } }) || state.nodes[state.nodes.length - 1];
   addEdge(contentNode.id, created.id);
@@ -2157,7 +2167,7 @@ async function runInlineRefine(node, instruction, triggerBtn = null) {
   }
 }
 
-async function generateFullContentPack(node, triggerBtn = null) {
+async function generateFullContentPack(node, triggerBtn = null, mode = "auto") {
   if (!node || getContentPackLoading(node.id)) return;
   const nodeEl = el.zoomLayer.querySelector(`[data-id='${node.id}']`);
   const toolbarButtons = nodeEl ? [...nodeEl.querySelectorAll(".node-ai-toolbar button")] : [];
@@ -2169,9 +2179,7 @@ async function generateFullContentPack(node, triggerBtn = null) {
   if (triggerBtn) triggerBtn.textContent = "…";
   updateNodeCard(node);
   try {
-    const connectedSocialNodes = getConnectedSocialPostingNodes(node.id);
-    console.log("Existing social nodes found:", connectedSocialNodes.length);
-    const targetSocialNode = await resolveTargetSocialNodeForContent(node);
+    const targetSocialNode = await resolveTargetSocialNodeForContent(node, mode);
     if (!targetSocialNode) return;
 
     const improved = await refineNodeWithAI(node, "Improve or finalize this content while preserving intent and brand voice.");
@@ -3125,7 +3133,27 @@ el.generateImageButton.addEventListener("click", async () => {
 el.generateFullPackButton.addEventListener("click", async () => {
   const node = getNode(state.selectedPrimary);
   if (!node || node.type !== "Content") return;
-  await generateFullContentPack(node, el.generateFullPackButton);
+  console.log("Generate content pack clicked for:", node.id);
+  const outgoingEdges = state.edges.filter((edge) => (Array.isArray(edge) ? edge[0] : edge?.source) === node.id);
+  console.log("Outgoing edges found:", outgoingEdges.length);
+  const connectedSocialNodes = getConnectedSocialPostingNodes(node.id);
+  console.log("Connected social nodes found:", connectedSocialNodes.length);
+  if (connectedSocialNodes.length > 0) {
+    console.log("Opening existing social post modal");
+    const choice = await openSocialVariationChoiceModal();
+    if (choice === "cancel") {
+      console.log("User cancelled content pack generation");
+      setContentPackGenerating(node.id, false);
+      updateNodeCard(node);
+      updateInspectorActionVisibility();
+      return;
+    }
+    if (choice === "update") console.log("User chose update existing");
+    if (choice === "new") console.log("User chose create new variation");
+    await generateFullContentPack(node, el.generateFullPackButton, choice);
+    return;
+  }
+  await generateFullContentPack(node, el.generateFullPackButton, "auto");
 });
 el.generatePostingVisualButton.addEventListener("click", async () => {
   const node = getNode(state.selectedPrimary);
