@@ -1,5 +1,6 @@
 {
   "dependencies": {
-    "@vercel/blob": "latest"
+    "@vercel/blob": "latest",
+    "pg": "^8.13.1"
   }
 }
