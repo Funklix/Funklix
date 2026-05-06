@@ -5,6 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Campaign Canvas MVP</title>
     <link rel="stylesheet" href="/styles.css" />
+    <style>
+      .share-panel { display: inline-flex; flex-direction: column; gap: 4px; margin-left: 8px; max-width: 320px; }
+      .share-ready { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+      .share-label, .share-meta, .share-feedback, .share-hint { font-size: 12px; opacity: 0.85; }
+      .share-link-text { font-size: 12px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+      .share-feedback { color: #c94a4a; }
+    </style>
+
   </head>
   <body>
     <div class="app-shell">
@@ -47,13 +55,14 @@
             <button id="zoom-in-btn" aria-label="Zoom in">+</button>
             <span id="zoom-label">100%</span>
             <span id="save-status">Unsaved changes</span>
-            <div id="board-share-panel" aria-live="polite">
-              <div id="board-share-empty">Save the board to create a shareable link.</div>
-              <div id="board-share-ready" class="hidden">
-                <a id="board-share-link" href="#" target="_blank" rel="noopener noreferrer"></a>
-                <button id="copy-board-link-btn" type="button">Copy Link</button>
-                <div id="board-last-saved">Last saved: —</div>
-                <div id="board-copy-feedback" class="hidden">Copied</div>
+            <div id="board-share-panel" class="share-panel" aria-live="polite">
+              <div id="board-share-empty" class="share-hint">Save the board to create a shareable link.</div>
+              <div id="board-share-ready" class="share-ready hidden">
+                <span class="share-label">Share link</span>
+                <span id="board-share-link-text" class="share-link-text"></span>
+                <button id="copy-board-link-btn" type="button">Copy</button>
+                <div id="board-last-saved" class="share-meta">Last saved: —</div>
+                <div id="board-copy-feedback" class="share-feedback hidden"></div>
               </div>
             </div>
 

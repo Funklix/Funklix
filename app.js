@@ -120,7 +120,7 @@ const el = {
   boardSharePanel: document.getElementById("board-share-panel"),
   boardShareEmpty: document.getElementById("board-share-empty"),
   boardShareReady: document.getElementById("board-share-ready"),
-  boardShareLink: document.getElementById("board-share-link"),
+  boardShareLinkText: document.getElementById("board-share-link-text"),
   copyBoardLinkButton: document.getElementById("copy-board-link-btn"),
   boardLastSaved: document.getElementById("board-last-saved"),
   boardCopyFeedback: document.getElementById("board-copy-feedback"),
@@ -213,6 +213,17 @@ function nowString() {
 }
 
 
+
+function formatShareLinkText(url) {
+  try {
+    const parsed = new URL(url);
+    const id = parsed.pathname.split('/').filter(Boolean).pop() || '';
+    return `${parsed.host}/boards/${id.slice(0, 8)}...`;
+  } catch {
+    return url;
+  }
+}
+
 function formatLastSavedLabel(value = new Date()) {
   return new Intl.DateTimeFormat("de-DE", { dateStyle: "short", timeStyle: "short" }).format(value);
 }
@@ -225,10 +236,7 @@ function setSharePanelState(boardId, lastSaved = null) {
   }
 
   const url = `${window.location.origin}/boards/${boardId}`;
-  if (el.boardShareLink) {
-    el.boardShareLink.href = url;
-    el.boardShareLink.textContent = url;
-  }
+  if (el.boardShareLinkText) el.boardShareLinkText.textContent = formatShareLinkText(url);
   if (el.boardLastSaved) {
     const label = lastSaved ? formatLastSavedLabel(lastSaved) : "—";
     el.boardLastSaved.textContent = `Last saved: ${label}`;
@@ -242,9 +250,9 @@ async function copyCurrentBoardLink() {
   const boardId = state.currentBoardId || getBoardIdFromPath();
   if (!boardId) {
     if (el.boardCopyFeedback) {
-      el.boardCopyFeedback.textContent = "Save board first";
+      el.boardCopyFeedback.textContent = "Could not copy link.";
       el.boardCopyFeedback.classList.remove("hidden");
-      setTimeout(() => el.boardCopyFeedback?.classList.add("hidden"), 1400);
+      setTimeout(() => el.boardCopyFeedback?.classList.add("hidden"), 1500);
     }
     return;
   }
@@ -252,17 +260,18 @@ async function copyCurrentBoardLink() {
   const url = `${window.location.origin}/boards/${boardId}`;
   try {
     await navigator.clipboard.writeText(url);
-    if (el.boardCopyFeedback) {
-      el.boardCopyFeedback.textContent = "Copied";
-      el.boardCopyFeedback.classList.remove("hidden");
-      setTimeout(() => el.boardCopyFeedback?.classList.add("hidden"), 1400);
+    if (el.copyBoardLinkButton) {
+      el.copyBoardLinkButton.textContent = "Copied";
+      setTimeout(() => {
+        if (el.copyBoardLinkButton) el.copyBoardLinkButton.textContent = "Copy";
+      }, 1500);
     }
+    el.boardCopyFeedback?.classList.add("hidden");
   } catch (error) {
-    window.prompt("Copy this link:", url);
     if (el.boardCopyFeedback) {
-      el.boardCopyFeedback.textContent = "Copy failed";
+      el.boardCopyFeedback.textContent = "Could not copy link.";
       el.boardCopyFeedback.classList.remove("hidden");
-      setTimeout(() => el.boardCopyFeedback?.classList.add("hidden"), 1400);
+      setTimeout(() => el.boardCopyFeedback?.classList.add("hidden"), 1500);
     }
   }
 }
@@ -437,7 +446,7 @@ async function saveBoardToServer() {
     if (!isUpdate && returnedId) {
       const nextPath = `/boards/${returnedId}`;
       if (window.location.pathname !== nextPath) window.history.pushState({}, '', nextPath);
-      window.prompt('Share this board URL:', shareUrl);
+
     }
   } catch (error) {
     console.error(error);
