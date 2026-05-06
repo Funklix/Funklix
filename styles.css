@@ -656,6 +656,30 @@ button:active {
   white-space: normal;
 }
 
+.content-pack-caption,
+.content-pack-cta,
+.content-pack-status {
+  margin: 4px 0;
+  font-size: 0.7rem;
+  line-height: 1.35;
+  color: #4f5678;
+  padding: 2px 4px;
+}
+
+.content-pack-cta {
+  color: #3d4b7f;
+  font-weight: 600;
+}
+
+.content-pack-status {
+  color: #5b63a8;
+  font-style: italic;
+}
+
+.content-pack-status.error {
+  color: #b23939;
+}
+
 .node-expand-content {
   border: 1px solid #d7dcf1;
   background: #f8f9ff;
