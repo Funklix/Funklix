@@ -1,7 +1,7 @@
 const { pool, ensureBoardsTable } = require('../_boards-storage');
 
 module.exports = async function handler(req, res) {
-  if (req.method !== 'GET' && req.method !== 'PUT') {
+  if (req.method !== 'GET' && req.method !== 'PUT' && req.method !== 'PATCH' && req.method !== 'DELETE') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
@@ -44,7 +44,7 @@ module.exports = async function handler(req, res) {
         `UPDATE boards
          SET name = $2, canvas_json = $3::jsonb, brand_core_snapshot = $4::jsonb, updated_at = NOW()
          WHERE id = $1
-         RETURNING id, name, canvas_json, brand_core_snapshot, created_at, updated_at`,
+         RETURNING id, name, canvas_json, brand_core_snapshot, created_at, updated_at, order_index`,
         [id, name, JSON.stringify(canvas_json), JSON.stringify(brand_core_snapshot || null)]
       );
 
@@ -54,8 +54,29 @@ module.exports = async function handler(req, res) {
 
       return res.status(200).json(updated.rows[0]);
     }
+
+    if (req.method === 'PATCH') {
+      const { name = null, order_index = null } = req.body || {};
+      const updated = await pool.query(
+        `UPDATE boards
+         SET name = COALESCE($2, name),
+             order_index = COALESCE($3, order_index),
+             updated_at = NOW()
+         WHERE id = $1
+         RETURNING id, name, updated_at, order_index`,
+        [id, name, Number.isInteger(order_index) ? order_index : null]
+      );
+      if (updated.rowCount === 0) return res.status(404).json({ error: 'Board not found' });
+      return res.status(200).json(updated.rows[0]);
+    }
+
+    if (req.method === 'DELETE') {
+      const deleted = await pool.query('DELETE FROM boards WHERE id = $1 RETURNING id', [id]);
+      if (deleted.rowCount === 0) return res.status(404).json({ error: 'Board not found' });
+      return res.status(200).json({ id });
+    }
     const result = await pool.query(
-      'SELECT id, name, canvas_json, brand_core_snapshot, created_at, updated_at FROM boards WHERE id = $1 LIMIT 1',
+      'SELECT id, name, canvas_json, brand_core_snapshot, created_at, updated_at, order_index FROM boards WHERE id = $1 LIMIT 1',
       [id]
     );
 

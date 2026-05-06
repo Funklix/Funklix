@@ -13,11 +13,13 @@ async function ensureBoardsTable() {
         name TEXT NOT NULL,
         canvas_json JSONB NOT NULL,
         brand_core_snapshot JSONB,
+        order_index INTEGER,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
     `);
       await pool.query('ALTER TABLE boards ADD COLUMN IF NOT EXISTS brand_core_snapshot JSONB;');
+      await pool.query('ALTER TABLE boards ADD COLUMN IF NOT EXISTS order_index INTEGER;');
     })();
   }
   return schemaReadyPromise;

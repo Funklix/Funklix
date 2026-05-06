@@ -12,7 +12,7 @@ module.exports = async function handler(req, res) {
   try {
     if (req.method === 'GET') {
       await ensureBoardsTable();
-      const result = await pool.query('SELECT id, name, updated_at FROM boards ORDER BY updated_at DESC LIMIT 200');
+      const result = await pool.query('SELECT id, name, updated_at, order_index FROM boards ORDER BY order_index ASC NULLS LAST, updated_at DESC LIMIT 200');
       return res.status(200).json({ boards: result.rows });
     }
 

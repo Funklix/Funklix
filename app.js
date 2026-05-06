@@ -3146,6 +3146,29 @@ function bindGlobalResetDelegation() {
       const id = openBtn.getAttribute("data-open-board");
       if (id) window.location.href = `/boards/${id}`;
     }
+    const renameBtn = event.target.closest('[data-rename-board]');
+    if (renameBtn) {
+      const id = renameBtn.getAttribute('data-rename-board');
+      document.querySelector(`[data-rename-wrap="${id}"]`)?.classList.remove('hidden');
+    }
+    const renameCancelBtn = event.target.closest('[data-rename-cancel]');
+    if (renameCancelBtn) {
+      const id = renameCancelBtn.getAttribute('data-rename-cancel');
+      document.querySelector(`[data-rename-wrap="${id}"]`)?.classList.add('hidden');
+    }
+    const renameSaveBtn = event.target.closest('[data-rename-save]');
+    if (renameSaveBtn) {
+      const id = renameSaveBtn.getAttribute('data-rename-save');
+      const input = document.querySelector(`[data-rename-input="${id}"]`);
+      renameBoard(id, input?.value || 'Campaign Canvas Board');
+    }
+    const delBtn = event.target.closest('[data-delete-board]');
+    if (delBtn) deleteBoard(delBtn.getAttribute('data-delete-board'));
+    const upBtn = event.target.closest('[data-up-board]');
+    if (upBtn) moveBoard(upBtn.getAttribute('data-up-board'), 'up', Number(upBtn.getAttribute('data-index')));
+    const downBtn = event.target.closest('[data-down-board]');
+    if (downBtn) moveBoard(downBtn.getAttribute('data-down-board'), 'down', Number(downBtn.getAttribute('data-index')));
+
     const copyBtn = event.target.closest("[data-copy-board]");
     if (copyBtn) {
       const id = copyBtn.getAttribute("data-copy-board");
@@ -3193,12 +3216,49 @@ async function loadBoardsLibrary() {
 function renderBoardsLibrary() {
   if (!el.boardsLibraryList) return;
   el.boardsLibraryList.innerHTML = '';
-  state.boardsLibrary.forEach((board) => {
+  state.boardsLibrary.forEach((board, index) => {
     const row = document.createElement('div');
-    row.className = 'list-card';
+    row.className = 'board-row';
     const savedAt = board.updated_at ? new Date(board.updated_at).toLocaleString('de-DE') : '—';
-    row.innerHTML = `<strong>${board.name || 'Campaign Canvas Board'}</strong><div>Last saved: ${savedAt}</div><button type="button" data-open-board="${board.id}">Open</button><button type="button" data-copy-board="${board.id}">Copy Link</button>`;
+    const preview = `${board.id?.slice(0, 8)}...`;
+    row.innerHTML = `<div><strong>${board.name || 'Campaign Canvas Board'}</strong><div class="board-row-meta">Last saved: ${savedAt} · ${preview}</div><div class="board-rename hidden" data-rename-wrap="${board.id}"><input data-rename-input="${board.id}" value="${board.name || ''}" /><button data-rename-save="${board.id}" type="button">Save</button><button data-rename-cancel="${board.id}" type="button">Cancel</button></div></div><div class="board-row-actions"><button class="icon-btn" data-open-board="${board.id}" title="Open">↗</button><button class="icon-btn" data-copy-board="${board.id}" title="Copy">⧉</button><button class="icon-btn" data-rename-board="${board.id}" title="Rename">✎</button><button class="icon-btn danger" data-delete-board="${board.id}" title="Delete">🗑</button><button class="icon-btn" data-up-board="${board.id}" data-index="${index}" title="Move up">↑</button><button class="icon-btn" data-down-board="${board.id}" data-index="${index}" title="Move down">↓</button></div>`;
     el.boardsLibraryList.appendChild(row);
+  });
+}
+
+async function renameBoard(boardId, name) {
+  const response = await fetch(`/api/boards/${boardId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) });
+  if (response.ok) loadBoardsLibrary();
+}
+
+async function deleteBoard(boardId) {
+  const confirmed = await showDeleteBoardConfirmModal();
+  if (!confirmed) return;
+  const response = await fetch(`/api/boards/${boardId}`, { method: 'DELETE' });
+  if (response.ok) loadBoardsLibrary();
+}
+
+async function moveBoard(boardId, direction, index) {
+  const boards = [...state.boardsLibrary];
+  const swapIndex = direction === 'up' ? index - 1 : index + 1;
+  if (swapIndex < 0 || swapIndex >= boards.length) return;
+  const a = boards[index];
+  const b = boards[swapIndex];
+  await fetch(`/api/boards/${a.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ order_index: swapIndex }) });
+  await fetch(`/api/boards/${b.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ order_index: index }) });
+  loadBoardsLibrary();
+}
+
+function showDeleteBoardConfirmModal() {
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div');
+    overlay.className = 'brand-confirm-modal';
+    overlay.innerHTML = `<div class="brand-confirm-card"><h3>Delete this board?</h3><p>This will permanently delete the board. This action cannot be undone.</p><div class="brand-confirm-actions"><button type="button" id="delete-board-cancel">Cancel</button><button type="button" class="danger" id="delete-board-confirm">Delete</button></div></div>`;
+    document.body.appendChild(overlay);
+    const close = (v) => { overlay.remove(); resolve(v); };
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(false); });
+    overlay.querySelector('#delete-board-cancel').addEventListener('click', () => close(false));
+    overlay.querySelector('#delete-board-confirm').addEventListener('click', () => close(true));
   });
 }
 
