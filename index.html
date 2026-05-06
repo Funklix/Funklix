@@ -6,14 +6,14 @@
     <title>Campaign Canvas MVP</title>
     <link rel="stylesheet" href="/styles.css" />
     <style>
-      .canvas-toolbar { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
+      .canvas-toolbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
       .canvas-toolbar-left { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-      .canvas-toolbar-right { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; max-width: 360px; }
+      .status-block { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; margin-left: auto; max-width: 360px; }
       .save-status-text { font-size: 12px; opacity: 0.85; }
-      .share-panel { display: inline-flex; flex-direction: column; gap: 4px; padding: 6px 8px; border-radius: 8px; background: rgba(255,255,255,0.04); }
+      .share-panel { display: inline-flex; flex-direction: column; gap: 4px; }
       .share-ready { display: inline-flex; flex-direction: column; gap: 4px; align-items: flex-end; }
       .share-link-row { display: inline-flex; align-items: center; gap: 8px; }
-      .share-label, .share-meta, .share-feedback, .share-hint { font-size: 12px; opacity: 0.8; }
+      .share-meta, .share-feedback, .share-hint { font-size: 12px; opacity: 0.8; }
       .share-link-text { max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
       .share-meta { opacity: 0.65; }
       .share-feedback { color: #c94a4a; }
@@ -62,13 +62,12 @@
               <button id="zoom-in-btn" aria-label="Zoom in">+</button>
               <span id="zoom-label">100%</span>
             </div>
-            <div class="canvas-toolbar-right">
+            <div class="status-block">
               <span id="save-status" class="save-status-text">Unsaved changes</span>
               <div id="board-share-panel" class="share-panel" aria-live="polite">
                 <div id="board-share-empty" class="share-hint">Save the board to create a shareable link.</div>
                 <div id="board-share-ready" class="share-ready hidden">
                   <div class="share-link-row">
-                    <span class="share-label">Share link</span>
                     <span id="board-share-link-text" class="share-link-text"></span>
                     <button id="copy-board-link-btn" type="button">Copy</button>
                   </div>
