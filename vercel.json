@@ -1,5 +1,6 @@
 {
   "rewrites": [
+    { "source": "/boards", "destination": "/index.html" },
     { "source": "/boards/:id", "destination": "/index.html" }
   ]
 }

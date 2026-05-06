@@ -6,15 +6,19 @@ let schemaReadyPromise = null;
 
 async function ensureBoardsTable() {
   if (!schemaReadyPromise) {
-    schemaReadyPromise = pool.query(`
+    schemaReadyPromise = (async () => {
+      await pool.query(`
       CREATE TABLE IF NOT EXISTS boards (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         name TEXT NOT NULL,
         canvas_json JSONB NOT NULL,
+        brand_core_snapshot JSONB,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
     `);
+      await pool.query('ALTER TABLE boards ADD COLUMN IF NOT EXISTS brand_core_snapshot JSONB;');
+    })();
   }
   return schemaReadyPromise;
 }

@@ -18,7 +18,7 @@ module.exports = async function handler(req, res) {
     await ensureBoardsTable();
 
     if (req.method === 'PUT') {
-      const { name = 'Campaign Canvas Board', canvas_json = null, lastKnownUpdatedAt = null } = req.body || {};
+      const { name = 'Campaign Canvas Board', canvas_json = null, brand_core_snapshot = null, lastKnownUpdatedAt = null } = req.body || {};
       if (!canvas_json || typeof canvas_json !== 'object') {
         return res.status(400).json({ error: 'canvas_json is required' });
       }
@@ -42,10 +42,10 @@ module.exports = async function handler(req, res) {
       const updated = await pool.query(
 
         `UPDATE boards
-         SET name = $2, canvas_json = $3::jsonb, updated_at = NOW()
+         SET name = $2, canvas_json = $3::jsonb, brand_core_snapshot = $4::jsonb, updated_at = NOW()
          WHERE id = $1
-         RETURNING id, name, canvas_json, created_at, updated_at`,
-        [id, name, JSON.stringify(canvas_json)]
+         RETURNING id, name, canvas_json, brand_core_snapshot, created_at, updated_at`,
+        [id, name, JSON.stringify(canvas_json), JSON.stringify(brand_core_snapshot || null)]
       );
 
       if (updated.rowCount === 0) {
@@ -55,7 +55,7 @@ module.exports = async function handler(req, res) {
       return res.status(200).json(updated.rows[0]);
     }
     const result = await pool.query(
-      'SELECT id, name, canvas_json, created_at, updated_at FROM boards WHERE id = $1 LIMIT 1',
+      'SELECT id, name, canvas_json, brand_core_snapshot, created_at, updated_at FROM boards WHERE id = $1 LIMIT 1',
       [id]
     );
 

@@ -62,6 +62,7 @@ const state = {
   },
   brandCoreSelectedKey: "brandCore"
   ,appMode: "canvas"
+  ,boardsLibrary: []
 };
 
 const el = {
@@ -134,6 +135,9 @@ const el = {
   boardCopyFeedback: document.getElementById("board-copy-feedback"),
   brandCoreButton: document.getElementById("brand-core-nav-btn"),
   campaignCanvasNavButton: document.getElementById("campaign-canvas-nav-btn"),
+  boardsNavButton: document.getElementById("boards-nav-btn"),
+  boardsLibraryView: document.getElementById("boards-library-view"),
+  boardsLibraryList: document.getElementById("boards-library-list"),
   sidebarToggleButton: document.getElementById("sidebar-toggle-btn"),
   brandEditorTitle: document.getElementById("bc-editor-title"),
   brandCoreCanvas: document.getElementById("brand-core-canvas"),
@@ -522,7 +526,8 @@ async function saveBoardToServer(trigger = "manual") {
   try {
     const payload = {
       name: `Campaign Canvas ${new Date().toISOString()}`,
-      canvas_json: serializeState()
+      canvas_json: serializeState(),
+      brand_core_snapshot: state.brandCore
     };
     const pathname = window.location.pathname || '';
     const pathBoardId = pathname.startsWith('/boards/')
@@ -602,6 +607,12 @@ async function loadBoardFromUrlIfPresent() {
     if (!response.ok) throw new Error(data?.error || 'Failed to load board');
     state.currentBoardId = data?.id || boardId;
     state.lastKnownUpdatedAt = data?.updated_at || null;
+    if (data?.brand_core_snapshot && typeof data.brand_core_snapshot === "object") {
+      state.brandCore = data.brand_core_snapshot;
+      renderBrandCoreTiles();
+      renderBrandCoreEditor();
+      saveBrandBrainState();
+    }
     setSharePanelState(state.currentBoardId, data?.updated_at ? new Date(data.updated_at) : null);
     applyCampaignState(data.canvas_json || {}, `Loaded board ${boardId.slice(0, 8)}...`);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data.canvas_json || {}));
@@ -2677,6 +2688,7 @@ function setActiveView(view) {
   el.canvas.classList.toggle("hidden", view !== "board");
   el.boardListView.classList.toggle("hidden", view !== "list");
   el.calendarView.classList.toggle("hidden", view !== "calendar");
+  el.boardsLibraryView?.classList.toggle("hidden", view !== "boards_library");
   el.brandCoreWorkspace.classList.toggle("hidden", view !== "brand-core");
   el.campaignCanvasNavButton.classList.toggle("active", view !== "brand-core");
   el.brandCoreButton.classList.toggle("active", view === "brand-core");
@@ -3082,6 +3094,11 @@ el.campaignCanvasNavButton.addEventListener("click", () => {
   setActiveView("board");
   renderCampaignCanvasFromStateIfNeeded();
 });
+el.boardsNavButton?.addEventListener("click", () => {
+  setAppMode("canvas");
+  setActiveView("boards_library");
+  loadBoardsLibrary();
+});
 el.brandCoreCanvas.addEventListener("click", (event) => {
   const n = event.target.closest(".bc-node[data-bc-key]");
   if (!n) return;
@@ -3124,6 +3141,25 @@ function bindGlobalResetDelegation() {
       event.preventDefault();
       window.resetBrandBrainState();
     }
+    const openBtn = event.target.closest("[data-open-board]");
+    if (openBtn) {
+      const id = openBtn.getAttribute("data-open-board");
+      if (id) window.location.href = `/boards/${id}`;
+    }
+    const copyBtn = event.target.closest("[data-copy-board]");
+    if (copyBtn) {
+      const id = copyBtn.getAttribute("data-copy-board");
+      if (id) {
+        const full = `${window.location.origin}/boards/${id}`;
+        navigator.clipboard.writeText(full).then(() => {
+          copyBtn.textContent = 'Copied';
+          setTimeout(() => { copyBtn.textContent = 'Copy Link'; }, 1200);
+        }).catch(() => {
+          copyBtn.textContent = 'Copy failed';
+          setTimeout(() => { copyBtn.textContent = 'Copy Link'; }, 1200);
+        });
+      }
+    }
     if (event.target.closest("#undo-btn")) {
       console.log("UNDO CLICK DELEGATED");
       event.preventDefault();
@@ -3141,6 +3177,30 @@ window.resetCampaignCanvasState = resetCampaignCanvasState;
 window.saveBrandBrainState = saveBrandBrainState;
 window.loadBrandBrainState = loadBrandBrainState;
 window.resetBrandBrainState = resetBrandBrainState;
+
+async function loadBoardsLibrary() {
+  try {
+    const response = await fetch('/api/boards');
+    const data = await response.json();
+    if (!response.ok) throw new Error(data?.error || 'Failed to load boards');
+    state.boardsLibrary = Array.isArray(data?.boards) ? data.boards : [];
+    renderBoardsLibrary();
+  } catch (error) {
+    if (el.boardsLibraryList) el.boardsLibraryList.textContent = 'Could not load boards.';
+  }
+}
+
+function renderBoardsLibrary() {
+  if (!el.boardsLibraryList) return;
+  el.boardsLibraryList.innerHTML = '';
+  state.boardsLibrary.forEach((board) => {
+    const row = document.createElement('div');
+    row.className = 'list-card';
+    const savedAt = board.updated_at ? new Date(board.updated_at).toLocaleString('de-DE') : '—';
+    row.innerHTML = `<strong>${board.name || 'Campaign Canvas Board'}</strong><div>Last saved: ${savedAt}</div><button type="button" data-open-board="${board.id}">Open</button><button type="button" data-copy-board="${board.id}">Copy Link</button>`;
+    el.boardsLibraryList.appendChild(row);
+  });
+}
 
 function bootApp() {
   state.isBoardLoading = true;
