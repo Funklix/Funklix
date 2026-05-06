@@ -1073,6 +1073,10 @@ function createNode({ type = "Idea", parentId = null, position = null, images = 
     images: [...images],
     favoriteImageId: null,
     social: { platform: "Instagram", caption: "", hashtags: [], preview: "", scheduledAt: "" },
+    caption: "",
+    cta: "",
+    isGeneratingContentPack: false,
+    contentPackError: "",
     reactions: {},
     postits: [],
     justConnectedAt: null,
@@ -1740,6 +1744,17 @@ function updateNodeCard(node) {
     social.appendChild(planBtn);
   }
 
+  const captionEl = nodeEl.querySelector(".content-pack-caption");
+  const ctaEl = nodeEl.querySelector(".content-pack-cta");
+  const statusEl = nodeEl.querySelector(".content-pack-status");
+  captionEl.classList.toggle("hidden", !node.caption);
+  captionEl.textContent = node.caption ? `Caption: ${node.caption}` : "";
+  ctaEl.classList.toggle("hidden", !node.cta);
+  ctaEl.textContent = node.cta ? `CTA: ${node.cta}` : "";
+  statusEl.classList.toggle("hidden", !(node.isGeneratingContentPack || node.contentPackError));
+  statusEl.textContent = node.isGeneratingContentPack ? "Generating content pack..." : (node.contentPackError || "");
+  statusEl.classList.toggle("error", !!node.contentPackError);
+
   const existingBar = nodeEl.querySelector(".reaction-bar");
   if (existingBar) existingBar.remove();
   const reactionEntries = Object.entries(node.reactions || {}).filter(([, count]) => count > 0);
@@ -2069,6 +2084,44 @@ async function runInlineRefine(node, instruction, triggerBtn = null) {
     nodeEl.classList.remove("ai-loading");
     toolbarButtons.forEach((btn) => { btn.disabled = false; });
     if (triggerBtn) triggerBtn.textContent = originalText;
+  }
+}
+
+async function generateFullContentPack(node, triggerBtn = null) {
+  if (!node || node.isGeneratingContentPack) return;
+  const nodeEl = el.zoomLayer.querySelector(`[data-id='${node.id}']`);
+  const toolbarButtons = nodeEl ? [...nodeEl.querySelectorAll(".node-ai-toolbar button")] : [];
+  const originalText = triggerBtn?.textContent || "";
+  node.isGeneratingContentPack = true;
+  node.contentPackError = "";
+  toolbarButtons.forEach((btn) => { btn.disabled = true; });
+  if (triggerBtn) triggerBtn.textContent = "…";
+  updateNodeCard(node);
+  try {
+    const improved = await refineNodeWithAI(node, "Improve or finalize this content while preserving intent and brand voice.");
+    node.title = improved?.title || node.title;
+    node.content = improved?.content || node.content;
+
+    const captionResult = await refineNodeWithAI(node, "Write one short social-media-ready caption based on this content. Return it in caption.");
+    node.caption = (captionResult?.caption || captionResult?.content || "").trim();
+    if (!node.caption) throw new Error("Caption generation failed");
+
+    const ctaResult = await refineNodeWithAI(node, "Write one clear, concise call-to-action line based on this content. Return it in content.");
+    node.cta = (ctaResult?.content || ctaResult?.caption || "").split("\n")[0].trim();
+    if (!node.cta) throw new Error("CTA generation failed");
+
+    await generateImageForNode(node);
+    updateNodeCard(node);
+    fillInspector(node);
+    saveCampaignCanvasState();
+  } catch (_error) {
+    node.contentPackError = "Could not generate content pack. Please retry.";
+    updateNodeCard(node);
+  } finally {
+    node.isGeneratingContentPack = false;
+    toolbarButtons.forEach((btn) => { btn.disabled = false; });
+    if (triggerBtn) triggerBtn.textContent = originalText;
+    updateNodeCard(node);
   }
 }
 
@@ -2486,6 +2539,14 @@ function renderNode(node) {
     });
     aiToolbar.appendChild(btn);
   });
+  const fullPackBtn = document.createElement("button");
+  fullPackBtn.type = "button";
+  fullPackBtn.textContent = "Generate Full Content Pack";
+  fullPackBtn.addEventListener("click", async (event) => {
+    event.stopPropagation();
+    await generateFullContentPack(node, fullPackBtn);
+  });
+  aiToolbar.appendChild(fullPackBtn);
   nodeEl.appendChild(aiToolbar);
 
   const expandBtn = document.createElement("button");
