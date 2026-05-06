@@ -18,7 +18,7 @@ module.exports = async function handler(req, res) {
     await ensureBoardsTable();
 
     if (req.method === 'PUT') {
-      const { name = 'Campaign Canvas Board', canvas_json = null, brand_core_snapshot = null, lastKnownUpdatedAt = null } = req.body || {};
+      const { name = null, canvas_json = null, brand_core_snapshot = null, lastKnownUpdatedAt = null } = req.body || {};
       if (!canvas_json || typeof canvas_json !== 'object') {
         return res.status(400).json({ error: 'canvas_json is required' });
       }
@@ -42,7 +42,7 @@ module.exports = async function handler(req, res) {
       const updated = await pool.query(
 
         `UPDATE boards
-         SET name = $2, canvas_json = $3::jsonb, brand_core_snapshot = $4::jsonb, updated_at = NOW()
+         SET name = COALESCE(NULLIF($2,''), name), canvas_json = $3::jsonb, brand_core_snapshot = $4::jsonb, updated_at = NOW()
          WHERE id = $1
          RETURNING id, name, canvas_json, brand_core_snapshot, created_at, updated_at, order_index`,
         [id, name, JSON.stringify(canvas_json), JSON.stringify(brand_core_snapshot || null)]

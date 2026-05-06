@@ -537,6 +537,7 @@ async function saveBoardToServer(trigger = "manual") {
       : null;
     const currentBoardId = state.currentBoardId || pathBoardId || getBoardIdFromPath();
     const isUpdate = Boolean(currentBoardId);
+    if (isUpdate) payload.name = null;
     const endpoint = isUpdate ? `/api/boards/${currentBoardId}` : '/api/boards';
     const method = isUpdate ? 'PUT' : 'POST';
     console.log('Current board id:', currentBoardId);
@@ -1448,6 +1449,8 @@ function drawLinks() {
       drawLinks();
       state.nodes.forEach(updateNodeCard);
       saveCampaignCanvasState();
+    markUnsaved();
+    markUnsaved();
     });
     el.links.appendChild(path);
   });
@@ -2121,6 +2124,8 @@ async function generateImageForNode(node) {
       alert("Could not generate image right now. Please try again.");
     }
   } finally {
+    if (nodeEl) nodeEl.classList.remove('image-generating');
+    button.disabled = false;
     button.textContent = originalLabel;
     updateInspectorActionVisibility();
   }
@@ -2154,6 +2159,8 @@ async function generatePostingVisualForNode(node) {
   }
 
   const button = el.generatePostingVisualButton;
+  const nodeEl = el.zoomLayer.querySelector(`[data-id='${node.id}']`);
+  if (nodeEl) nodeEl.classList.add('image-generating');
   const originalLabel = button.textContent;
   button.disabled = true;
   button.textContent = "Generating posting visual...";
@@ -2196,7 +2203,8 @@ async function generatePostingVisualForNode(node) {
       alert("Could not generate posting visual right now. Please try again.");
     }
   } finally {
-    if (nodeEl) nodeEl.classList.remove("image-generating");
+    if (nodeEl) nodeEl.classList.remove('image-generating');
+    button.disabled = false;
     button.textContent = originalLabel;
     updateInspectorActionVisibility();
   }
