@@ -344,7 +344,11 @@ async function saveBoardToServer() {
       name: `Campaign Canvas ${new Date().toISOString()}`,
       canvas_json: serializeState()
     };
-    const currentBoardId = state.currentBoardId || getBoardIdFromPath();
+    const pathname = window.location.pathname || '';
+    const pathBoardId = pathname.startsWith('/boards/')
+      ? decodeURIComponent(pathname.replace(/^\/boards\//, '').split('/')[0]).trim()
+      : null;
+    const currentBoardId = state.currentBoardId || pathBoardId || getBoardIdFromPath();
     const isUpdate = Boolean(currentBoardId);
     const endpoint = isUpdate ? `/api/boards/${currentBoardId}` : '/api/boards';
     const method = isUpdate ? 'PUT' : 'POST';
