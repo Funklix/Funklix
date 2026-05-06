@@ -2643,6 +2643,14 @@ function renderNode(node) {
     });
     aiToolbar.appendChild(btn);
   });
+  const fullPackBtn = document.createElement("button");
+  fullPackBtn.type = "button";
+  fullPackBtn.textContent = "Generate Full Content Pack";
+  fullPackBtn.addEventListener("click", async (event) => {
+    event.stopPropagation();
+    await generateFullContentPack(node, fullPackBtn);
+  });
+  aiToolbar.appendChild(fullPackBtn);
   nodeEl.appendChild(aiToolbar);
 
   const expandBtn = document.createElement("button");
