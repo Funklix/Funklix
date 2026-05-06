@@ -65,6 +65,7 @@ const state = {
   ,boardsLibrary: []
   ,contentPackLoadingById: {}
   ,contentPackErrorById: {}
+  ,pendingContentPack: null
 };
 
 const el = {
@@ -2172,7 +2173,7 @@ async function generateFullContentPack(node, triggerBtn = null, mode = "auto") {
   const nodeEl = el.zoomLayer.querySelector(`[data-id='${node.id}']`);
   const toolbarButtons = nodeEl ? [...nodeEl.querySelectorAll(".node-ai-toolbar button")] : [];
   const originalText = triggerBtn?.textContent || "";
-  console.log("Full content pack started", node.id);
+  console.log("runContentPackGeneration started with mode:", mode, node.id);
   setContentPackGenerating(node.id, true);
   setContentPackError(node.id, "");
   toolbarButtons.forEach((btn) => { btn.disabled = true; });
@@ -2222,7 +2223,7 @@ async function generateFullContentPack(node, triggerBtn = null, mode = "auto") {
     updateNodeCard(targetSocialNode);
     fillInspector(node);
     saveCampaignCanvasState();
-    console.log("Full content pack complete");
+    console.log("runContentPackGeneration finished");
   } catch (_error) {
     console.error("Full content pack failed", _error);
     setContentPackError(node.id, "Could not generate content pack. Please retry.");
@@ -2233,8 +2234,56 @@ async function generateFullContentPack(node, triggerBtn = null, mode = "auto") {
     if (triggerBtn) triggerBtn.textContent = originalText;
     updateNodeCard(node);
     updateInspectorActionVisibility();
-    console.log("Full content pack loading cleared");
+    console.log("generation loading cleared");
   }
+}
+
+function openExistingSocialPostModal() {
+  const pending = state.pendingContentPack;
+  if (!pending) return;
+  const overlay = document.createElement("div");
+  overlay.className = "brand-confirm-overlay";
+  overlay.innerHTML = `<div class="brand-confirm-card"><h3>Social post already exists</h3><p>This content node already has a connected social media post. Would you like to update the existing post or create a new variation?</p><div class="brand-confirm-actions"><button type="button" data-choice="update">Update existing</button><button type="button" class="primary-add" data-choice="new">Create new variation</button><button type="button" data-choice="cancel">Cancel</button></div></div>`;
+  const close = () => overlay.remove();
+  overlay.querySelector('[data-choice="update"]').addEventListener("click", async () => {
+    console.log("Modal update existing clicked");
+    close();
+    const node = getNode(pending.contentNodeId);
+    state.pendingContentPack = null;
+    if (!node) return;
+    await generateFullContentPack(node, el.generateFullPackButton, "update");
+  });
+  overlay.querySelector('[data-choice="new"]').addEventListener("click", async () => {
+    console.log("Modal create new variation clicked");
+    close();
+    const node = getNode(pending.contentNodeId);
+    state.pendingContentPack = null;
+    if (!node) return;
+    await generateFullContentPack(node, el.generateFullPackButton, "new");
+  });
+  overlay.querySelector('[data-choice="cancel"]').addEventListener("click", () => {
+    console.log("Modal cancel clicked");
+    close();
+    if (pending?.contentNodeId) setContentPackGenerating(pending.contentNodeId, false);
+    state.pendingContentPack = null;
+    updateInspectorActionVisibility();
+  });
+  document.body.appendChild(overlay);
+}
+
+async function handleGenerateFullContentPack(contentNodeId) {
+  const node = getNode(contentNodeId);
+  if (!node || node.type !== "Content") return;
+  console.log("Full pack clicked");
+  const connectedSocialNodes = getConnectedSocialPostingNodes(node.id);
+  console.log("Existing social nodes:", connectedSocialNodes.length);
+  if (connectedSocialNodes.length > 0) {
+    console.log("Opening existing social post modal");
+    state.pendingContentPack = { contentNodeId: node.id };
+    openExistingSocialPostModal();
+    return;
+  }
+  await generateFullContentPack(node, el.generateFullPackButton, "new");
 }
 
 async function generateImageForNode(node) {
@@ -3133,27 +3182,7 @@ el.generateImageButton.addEventListener("click", async () => {
 el.generateFullPackButton.addEventListener("click", async () => {
   const node = getNode(state.selectedPrimary);
   if (!node || node.type !== "Content") return;
-  console.log("Generate content pack clicked for:", node.id);
-  const outgoingEdges = state.edges.filter((edge) => (Array.isArray(edge) ? edge[0] : edge?.source) === node.id);
-  console.log("Outgoing edges found:", outgoingEdges.length);
-  const connectedSocialNodes = getConnectedSocialPostingNodes(node.id);
-  console.log("Connected social nodes found:", connectedSocialNodes.length);
-  if (connectedSocialNodes.length > 0) {
-    console.log("Opening existing social post modal");
-    const choice = await openSocialVariationChoiceModal();
-    if (choice === "cancel") {
-      console.log("User cancelled content pack generation");
-      setContentPackGenerating(node.id, false);
-      updateNodeCard(node);
-      updateInspectorActionVisibility();
-      return;
-    }
-    if (choice === "update") console.log("User chose update existing");
-    if (choice === "new") console.log("User chose create new variation");
-    await generateFullContentPack(node, el.generateFullPackButton, choice);
-    return;
-  }
-  await generateFullContentPack(node, el.generateFullPackButton, "auto");
+  await handleGenerateFullContentPack(node.id);
 });
 el.generatePostingVisualButton.addEventListener("click", async () => {
   const node = getNode(state.selectedPrimary);
