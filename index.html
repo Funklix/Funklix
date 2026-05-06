@@ -4,7 +4,41 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Campaign Canvas MVP</title>
-    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="/styles.css" />
+    <style>
+      .canvas-toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: nowrap; width: 100%; min-width: 0; }
+      .toolbar-brand { display: none; }
+      .toolbar-title { margin: 0; font-size: 16px; line-height: 1.1; }
+      .toolbar-subtitle { margin: 0; font-size: 11px; opacity: 0.7; white-space: nowrap; }
+      .canvas-toolbar-left { display: flex; align-items: center; gap: 6px; flex-wrap: nowrap; min-width: 0; flex: 1 1 auto; }
+      .status-block { display: flex; align-items: center; gap: 8px; margin-left: auto; white-space: nowrap; flex: 0 0 340px; max-width: 340px; min-width: 340px; overflow: hidden; justify-content: flex-end; }
+      .save-status-text, .share-meta, .share-feedback { font-size: 11px; opacity: 0.8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .share-panel { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
+      .share-ready { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
+      .share-link-row { display: inline-flex; align-items: center; gap: 8px; }
+      .share-link-text { display: none; }
+      .share-meta { opacity: 0.7; max-width: 140px; }
+      .share-feedback { color: #c94a4a; }
+      #canvas-topbar { padding-top: 6px; padding-bottom: 6px; overflow: hidden; }
+      @media (max-width: 1200px) { .canvas-toolbar, .canvas-toolbar-left { flex-wrap: wrap; } .status-block { width: 100%; min-width: 0; max-width: 100%; flex: 1 1 100%; justify-content: flex-end; } .toolbar-subtitle { display: none; } }
+
+      .boards-library-page { max-width: 1100px; margin: 0 auto; padding: 20px; height: calc(100vh - 150px); min-height: 0; display: flex; flex-direction: column; }
+      .boards-header-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+      .boards-library-panel { flex: 1 1 auto; min-height: 0; max-height: calc(100vh - 210px); overflow-y: auto; overflow-x: hidden; padding-right: 8px; }
+      .board-row { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; padding: 12px; border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; margin-bottom: 10px; background: rgba(255,255,255,0.03); }
+      .board-row:hover { border-color: rgba(107,78,255,0.45); background: rgba(107,78,255,0.08); }
+      .board-row-meta { font-size: 12px; opacity: 0.72; margin-top: 2px; }
+      .board-row-actions { display: inline-flex; gap: 6px; }
+      .icon-btn { width: 30px; height: 30px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.18); background: rgba(255,255,255,0.06); color: inherit; cursor: pointer; }
+      .icon-btn:hover { background: rgba(107,78,255,0.22); border-color: rgba(107,78,255,0.5); }
+      .icon-btn.danger:hover { background: rgba(201,74,74,0.18); border-color: rgba(201,74,74,0.6); }
+      .board-rename.hidden { display: none; }
+      .board-rename { display: inline-flex; gap: 6px; margin-top: 6px; }
+      .board-rename input { border-radius: 8px; border: 1px solid rgba(255,255,255,0.2); background: rgba(0,0,0,0.2); color: inherit; padding: 6px 8px; }
+      .board-rename button { border-radius: 8px; border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.08); color: inherit; padding: 6px 8px; cursor: pointer; }
+
+    </style>
+
   </head>
   <body>
     <div class="app-shell">
@@ -15,6 +49,7 @@
         </div>
         <nav>
           <button id="campaign-canvas-nav-btn" class="nav-item active" data-icon="🧩"><span class="nav-label">Campaign Canvas</span></button>
+          <button id="boards-nav-btn" class="nav-item" data-icon="📚"><span class="nav-label">↳ Boards</span></button>
           <button class="nav-item" data-icon="🗂"><span class="nav-label">Content Workspace</span></button>
           <button id="brand-core-nav-btn" class="nav-item" data-icon="🧠"><span class="nav-label">Brand Core</span></button>
           <button class="nav-item" data-icon="✨"><span class="nav-label">AI Brain</span></button>
@@ -24,28 +59,45 @@
 
       <main class="workspace-wrap">
         <header class="topbar" id="canvas-topbar">
-          <div>
-            <h1>Campaign Canvas — Collaborative Flow</h1>
-            <p>Top-down Hierarchie: Idea → Variations → Content → Social Posts.</p>
+          <div class="toolbar-brand">
+            <h1 class="toolbar-title">Campaign Canvas</h1>
+            <p class="toolbar-subtitle">Idea → Variations → Content → Social Posts</p>
           </div>
-          <div class="actions">
-            <button id="create-campaign-btn" class="create-campaign-btn">Create campaign</button>
-            <button id="undo-btn" title="Rückgängig">↶</button>
-            <button id="add-node-btn" class="primary-add">+ Add node</button>
-            <button id="reset-board-btn">Reset Board</button>
-            <div class="view-switcher">
-              <button id="cycle-view-btn">Board View</button>
-              <button id="view-menu-btn" title="Choose view">▾</button>
-              <div id="view-menu" class="hidden">
-                <button id="view-board-btn" type="button">Board View</button>
-                <button id="view-list-btn" type="button">List View</button>
-                <button id="view-calendar-btn" type="button">Calendar View</button>
+          <div class="actions canvas-toolbar">
+            <div class="canvas-toolbar-left">
+              <button id="create-campaign-btn" class="create-campaign-btn">Create campaign</button>
+              <button id="undo-btn" title="Rückgängig">↶</button>
+              <button id="add-node-btn" class="primary-add">+ Add node</button>
+              <button id="reset-board-btn" class="danger">Reset Board</button>
+              <button id="save-board-btn">Save Board</button>
+              <button id="new-board-btn">New Board</button>
+              <div class="view-switcher">
+                <button id="cycle-view-btn">Board View</button>
+                <button id="view-menu-btn" title="Choose view">▾</button>
+                <div id="view-menu" class="hidden">
+                  <button id="view-board-btn" type="button">Board View</button>
+                  <button id="view-list-btn" type="button">List View</button>
+                  <button id="view-calendar-btn" type="button">Calendar View</button>
+                </div>
+              </div>
+              <button id="zoom-out-btn" aria-label="Zoom out">-</button>
+              <button id="zoom-in-btn" aria-label="Zoom in">+</button>
+              <span id="zoom-label">100%</span>
+            </div>
+            <div class="status-block">
+              <span id="save-status" class="save-status-text">Unsaved changes</span>
+              <div id="board-share-panel" class="share-panel" aria-live="polite">
+                <div id="board-share-empty" class="share-hint">Save to create share link.</div>
+                <div id="board-share-ready" class="share-ready hidden">
+                  <div class="share-link-row">
+                    <span id="board-share-link-text" class="share-link-text"></span>
+                    <button id="copy-board-link-btn" type="button">Copy</button>
+                    <div id="board-last-saved" class="share-meta">Last saved: —</div>
+                  </div>
+                  <div id="board-copy-feedback" class="share-feedback hidden"></div>
+                </div>
               </div>
             </div>
-            <button id="zoom-out-btn">− Zoom</button>
-            <button id="zoom-in-btn">+ Zoom</button>
-            <span id="zoom-label">100%</span>
-            <span id="save-status">Unsaved changes</span>
           </div>
         </header>
 
@@ -70,6 +122,7 @@
           </div>
         </section>
 
+        <section id="boards-library-view" class="board-list-view hidden boards-library-page"><div class="boards-header-row"><h2>Boards</h2><button id="boards-create-btn" class="primary-add" type="button">Create New Board</button></div><p>Manage your saved Campaign Canvas boards.</p><div id="boards-library-list" class="boards-library-panel"></div></section>
         <section id="board-list-view" class="board-list-view hidden">
           <h2>Node List View</h2>
           <div id="node-list-view"></div>
@@ -238,6 +291,6 @@
     </div>
 
 
-    <script src="app.js"></script>
+    <script src="/app.js"></script>
   </body>
 </html>
