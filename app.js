@@ -346,10 +346,11 @@ async function saveBoardToServer() {
     };
     const currentBoardId = state.currentBoardId || getBoardIdFromPath();
     const isUpdate = Boolean(currentBoardId);
-    console.log('Saving boardId:', currentBoardId);
     const endpoint = isUpdate ? `/api/boards/${currentBoardId}` : '/api/boards';
     const method = isUpdate ? 'PUT' : 'POST';
-    console.log('Save method:', method);
+    console.log('Current board id:', currentBoardId);
+    console.log('Save method:', currentBoardId ? 'PUT' : 'POST');
+    console.log('Save endpoint:', endpoint);
 
     const response = await fetch(endpoint, {
       method,
