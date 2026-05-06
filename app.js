@@ -305,11 +305,12 @@ function markUnsaved() {
   setSaveStatus("Unsaved changes");
 }
 function getBoardIdFromPath() {
-  const path = window.location.pathname || "";
-  const segments = path.split("/").filter(Boolean);
-  if (segments.length >= 2 && segments[0] === "boards" && segments[1]) {
-    return decodeURIComponent(segments[1]);
-  }
+  const fromPathname = (window.location.pathname || "").match(/\/boards\/([^/?#]+)/i);
+  if (fromPathname?.[1]) return decodeURIComponent(fromPathname[1]);
+
+  const fromHref = (window.location.href || "").match(/\/boards\/([^/?#]+)/i);
+  if (fromHref?.[1]) return decodeURIComponent(fromHref[1]);
+
   return null;
 }
 
@@ -343,12 +344,12 @@ async function saveBoardToServer() {
       name: `Campaign Canvas ${new Date().toISOString()}`,
       canvas_json: serializeState()
     };
-    const boardId = state.currentBoardId || getBoardIdFromPath();
-    const isUpdate = Boolean(boardId);
-    console.log('Save Board boardId', boardId);
-    const endpoint = isUpdate ? `/api/boards/${boardId}` : '/api/boards';
+    const currentBoardId = state.currentBoardId || getBoardIdFromPath();
+    const isUpdate = Boolean(currentBoardId);
+    console.log('Saving boardId:', currentBoardId);
+    const endpoint = isUpdate ? `/api/boards/${currentBoardId}` : '/api/boards';
     const method = isUpdate ? 'PUT' : 'POST';
-    console.log('Save Board method', method, 'endpoint', endpoint);
+    console.log('Save method:', method);
 
     const response = await fetch(endpoint, {
       method,
@@ -357,7 +358,7 @@ async function saveBoardToServer() {
     });
     const data = await response.json();
     if (!response.ok) throw new Error(data?.error || 'Failed to save board');
-    console.log('Save Board response id', data?.id);
+    console.log('Saved board response id:', data?.id);
 
     const shareUrl = `${window.location.origin}/boards/${data.id}`;
     setSaveStatus(isUpdate ? 'Board updated' : 'Board saved');
@@ -376,6 +377,7 @@ async function loadBoardFromUrlIfPresent() {
     const response = await fetch(`/api/boards/${boardId}`);
     const data = await response.json();
     if (!response.ok) throw new Error(data?.error || 'Failed to load board');
+    state.currentBoardId = data?.id || boardId;
     applyCampaignState(data.canvas_json || {}, `Loaded board ${boardId.slice(0, 8)}...`);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data.canvas_json || {}));
     return true;
