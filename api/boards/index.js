@@ -23,7 +23,7 @@ module.exports = async function handler(req, res) {
 
     await ensureBoardsTable();
     const result = await pool.query(
-      'INSERT INTO boards (name, canvas_json, brand_core_snapshot) VALUES ($1, $2::jsonb, $3::jsonb) RETURNING id, updated_at',
+      'INSERT INTO boards (name, canvas_json, brand_core_snapshot) VALUES ($1, $2::jsonb, $3::jsonb) RETURNING id, name, canvas_json, brand_core_snapshot, updated_at',
       [name, JSON.stringify(canvas_json), JSON.stringify(brand_core_snapshot || null)]
     );
 

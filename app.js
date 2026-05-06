@@ -125,6 +125,8 @@ const el = {
   propagateDescendantsButton: document.getElementById("propagate-descendants-btn"),
   resetBoardButton: document.getElementById("reset-board-btn"),
   saveBoardButton: document.getElementById("save-board-btn"),
+  newBoardButton: document.getElementById("new-board-btn"),
+  boardsCreateButton: document.getElementById("boards-create-btn"),
   saveStatus: document.getElementById("save-status"),
   boardSharePanel: document.getElementById("board-share-panel"),
   boardShareEmpty: document.getElementById("board-share-empty"),
@@ -3192,6 +3194,8 @@ function bindGlobalResetDelegation() {
 }
 
 el.saveBoardButton?.addEventListener("click", () => saveBoardToServer("manual"));
+el.newBoardButton?.addEventListener("click", createNewBoardFlow);
+el.boardsCreateButton?.addEventListener("click", createNewBoardFlow);
 el.copyBoardLinkButton?.addEventListener("click", copyCurrentBoardLink);
 
 window.saveCampaignCanvasState = saveCampaignCanvasState;
@@ -3200,6 +3204,62 @@ window.resetCampaignCanvasState = resetCampaignCanvasState;
 window.saveBrandBrainState = saveBrandBrainState;
 window.loadBrandBrainState = loadBrandBrainState;
 window.resetBrandBrainState = resetBrandBrainState;
+
+
+function defaultBrandCoreState() {
+  return { brandCore: "", toneOfVoice: [], messagingPillars: [], valueProposition: "", personas: [], contentGuidelines: [], dosAndDonts: { dos: [], donts: [] }, brandVoiceExamples: { good: "", avoid: "" }, keywords: [], brandAssets: { domain: "", logo: "", colors: [], typography: "", references: [] }, customTiles: [] };
+}
+
+function blankCanvasState() {
+  return { nodes: [], edges: [], nodeCounter: 1, postitCounter: 1, zoom: 1 };
+}
+
+function showCreateBoardModal() {
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div');
+    overlay.className = 'brand-confirm-modal';
+    overlay.innerHTML = `<div class="brand-confirm-card"><h3>Create new board</h3><p>Give your new Campaign Canvas board a name.</p><input id="create-board-name" placeholder="Board name" /><div class="brand-confirm-actions"><button type="button" id="create-board-cancel">Cancel</button><button type="button" class="primary-add" id="create-board-confirm">Create</button></div></div>`;
+    document.body.appendChild(overlay);
+    const close = (v) => { overlay.remove(); resolve(v); };
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(null); });
+    overlay.querySelector('#create-board-cancel').addEventListener('click', () => close(null));
+    overlay.querySelector('#create-board-confirm').addEventListener('click', () => {
+      const name = overlay.querySelector('#create-board-name')?.value?.trim();
+      if (!name) return;
+      close(name);
+    });
+  });
+}
+
+function showUnsavedLeaveModal() {
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div');
+    overlay.className = 'brand-confirm-modal';
+    overlay.innerHTML = `<div class="brand-confirm-card"><h3>You have unsaved changes</h3><p>Creating a new board will leave this board. Make sure your current changes are saved before continuing.</p><div class="brand-confirm-actions"><button type="button" id="leave-cancel">Cancel</button><button type="button" class="primary-add" id="leave-continue">Continue</button></div></div>`;
+    document.body.appendChild(overlay);
+    const close = (v) => { overlay.remove(); resolve(v); };
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(false); });
+    overlay.querySelector('#leave-cancel').addEventListener('click', () => close(false));
+    overlay.querySelector('#leave-continue').addEventListener('click', () => close(true));
+  });
+}
+
+async function createNewBoardFlow() {
+  if (state.isDirty) {
+    const canLeave = await showUnsavedLeaveModal();
+    if (!canLeave) return;
+  }
+  const name = await showCreateBoardModal();
+  if (!name) return;
+  const response = await fetch('/api/boards', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, canvas_json: blankCanvasState(), brand_core_snapshot: defaultBrandCoreState() })
+  });
+  const data = await response.json();
+  if (!response.ok || !data?.id) return;
+  window.location.href = `/boards/${data.id}`;
+}
 
 async function loadBoardsLibrary() {
   try {
