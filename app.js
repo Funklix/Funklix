@@ -338,16 +338,22 @@ async function saveBoardToServer() {
       name: `Campaign Canvas ${new Date().toISOString()}`,
       canvas_json: serializeState()
     };
-    const response = await fetch('/api/boards', {
-      method: 'POST',
+    const boardId = getBoardIdFromPath();
+    const isUpdate = Boolean(boardId);
+    const endpoint = isUpdate ? `/api/boards/${boardId}` : '/api/boards';
+    const method = isUpdate ? 'PUT' : 'POST';
+
+    const response = await fetch(endpoint, {
+      method,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
     const data = await response.json();
     if (!response.ok) throw new Error(data?.error || 'Failed to save board');
+
     const shareUrl = `${window.location.origin}/boards/${data.id}`;
-    setSaveStatus('Board saved');
-    window.prompt('Share this board URL:', shareUrl);
+    setSaveStatus(isUpdate ? 'Board updated' : 'Board saved');
+    if (!isUpdate) window.prompt('Share this board URL:', shareUrl);
   } catch (error) {
     console.error(error);
     setSaveStatus('Failed to save board');
