@@ -3249,7 +3249,7 @@ async function createNewBoardFlow() {
     const canLeave = await showUnsavedLeaveModal();
     if (!canLeave) return;
   }
-  const name = await showCreateBoardModal();
+  const name = (await showCreateBoardModal())?.trim();
   if (!name) return;
   const response = await fetch('/api/boards', {
     method: 'POST',

@@ -16,7 +16,9 @@ module.exports = async function handler(req, res) {
       return res.status(200).json({ boards: result.rows });
     }
 
-    const { name = 'Campaign Canvas Board', canvas_json = null, brand_core_snapshot = null } = req.body || {};
+    const { name: rawName = '', canvas_json = null, brand_core_snapshot = null } = req.body || {};
+    const trimmedName = typeof rawName === 'string' ? rawName.trim() : '';
+    const name = trimmedName || `Campaign Canvas ${new Date().toISOString()}`;
     if (!canvas_json || typeof canvas_json !== 'object') {
       return res.status(400).json({ error: 'canvas_json is required' });
     }
