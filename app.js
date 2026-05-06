@@ -63,6 +63,9 @@ const state = {
   brandCoreSelectedKey: "brandCore"
   ,appMode: "canvas"
   ,boardsLibrary: []
+  ,contentPackLoadingById: {}
+  ,contentPackErrorById: {}
+  ,pendingContentPack: null
 };
 
 const el = {
@@ -114,6 +117,7 @@ const el = {
   regenerateNodeButton: document.getElementById("regenerate-node-btn"),
   generateImageButton: document.getElementById("generate-image-btn"),
   generatePostingVisualButton: document.getElementById("generate-posting-visual-btn"),
+  generateFullPackButton: document.getElementById("generate-full-pack-btn"),
   postingPlanOverlay: document.getElementById("posting-plan-overlay"),
   postingDateInput: document.getElementById("posting-date-input"),
   postingTimeInput: document.getElementById("posting-time-input"),
@@ -149,6 +153,7 @@ const el = {
     type: document.getElementById("node-type"),
     title: document.getElementById("node-title"),
     content: document.getElementById("node-content"),
+    imagePrompt: document.getElementById("node-image-prompt"),
     variants: document.getElementById("node-variants"),
     platform: document.getElementById("node-platform"),
     caption: document.getElementById("node-caption"),
@@ -470,9 +475,34 @@ function sanitizeNodeImages(images) {
     }));
 }
 
+function sanitizeNodeForPersistence(node) {
+  const clean = { ...node, images: sanitizeNodeImages(node.images) };
+  delete clean.isGeneratingContentPack;
+  delete clean.generatingContentPack;
+  delete clean.isGenerating;
+  delete clean.loading;
+  delete clean.disabled;
+  delete clean.contentPackError;
+  return clean;
+}
+
+function getContentPackLoading(nodeId) {
+  return !!state.contentPackLoadingById[nodeId];
+}
+
+function setContentPackGenerating(nodeId, value) {
+  if (!nodeId) return;
+  state.contentPackLoadingById[nodeId] = !!value;
+}
+
+function setContentPackError(nodeId, message = "") {
+  if (!nodeId) return;
+  state.contentPackErrorById[nodeId] = message || "";
+}
+
 function serializeState() {
   const serialized = {
-    nodes: state.nodes.map((n) => ({ ...n, images: sanitizeNodeImages(n.images) })),
+    nodes: state.nodes.map((n) => sanitizeNodeForPersistence(n)),
     edges: state.edges, nodeCounter: state.nodeCounter, postitCounter: state.postitCounter, zoom: state.zoom
   };
   const selectedNode = state.selectedPrimary ? serialized.nodes.find((n) => n.id === state.selectedPrimary) : null;
@@ -505,7 +535,9 @@ function loadCampaignCanvasState() {
 
 
 function applyCampaignState(campaignState, statusText = "Restored") {
-  state.nodes = (campaignState.nodes || []).map((node) => ({ ...node, images: sanitizeNodeImages(node.images) }));
+  state.nodes = (campaignState.nodes || []).map((node) => sanitizeNodeForPersistence(node));
+  state.contentPackLoadingById = {};
+  state.contentPackErrorById = {};
   state.edges = campaignState.edges || [];
   state.nodeCounter = campaignState.nodeCounter || 1;
   state.postitCounter = campaignState.postitCounter || 1;
@@ -1073,6 +1105,7 @@ function createNode({ type = "Idea", parentId = null, position = null, images = 
     images: [...images],
     favoriteImageId: null,
     social: { platform: "Instagram", caption: "", hashtags: [], preview: "", scheduledAt: "" },
+    imagePrompt: "",
     reactions: {},
     postits: [],
     justConnectedAt: null,
@@ -1547,6 +1580,7 @@ function updateInspectorActionVisibility() {
 
   el.generateImageButton.style.display = showGenerateImage ? "block" : "none";
   el.generatePostingVisualButton.style.display = showGeneratePostingVisual ? "block" : "none";
+  el.generateFullPackButton.style.display = showGenerateImage ? "block" : "none";
 
   el.improveNodeButton.style.display = hasSingleNode ? "block" : "none";
   el.regenerateNodeButton.style.display = hasSingleNode ? "block" : "none";
@@ -1561,6 +1595,7 @@ function updateInspectorActionVisibility() {
   el.regenerateNodeButton.disabled = !hasSingleNode;
   el.generateImageButton.disabled = !showGenerateImage;
   el.generatePostingVisualButton.disabled = !showGeneratePostingVisual;
+  el.generateFullPackButton.disabled = !showGenerateImage || !!selectedNode && getContentPackLoading(selectedNode.id);
   el.propagateDescendantsButton.disabled = !hasSingleNode;
   el.disconnectSelectedButton.disabled = !(selectedCount > 0);
 }
@@ -1740,6 +1775,13 @@ function updateNodeCard(node) {
     social.appendChild(planBtn);
   }
 
+  const statusEl = nodeEl.querySelector(".content-pack-status");
+  const isGeneratingPack = getContentPackLoading(node.id);
+  const contentPackError = state.contentPackErrorById[node.id] || "";
+  statusEl.classList.toggle("hidden", !(isGeneratingPack || contentPackError));
+  statusEl.textContent = isGeneratingPack ? "Generating content pack..." : contentPackError;
+  statusEl.classList.toggle("error", !!contentPackError);
+
   const existingBar = nodeEl.querySelector(".reaction-bar");
   if (existingBar) existingBar.remove();
   const reactionEntries = Object.entries(node.reactions || {}).filter(([, count]) => count > 0);
@@ -1873,6 +1915,7 @@ function fillInspector(node) {
     el.socialFields.classList.add("hidden");
     el.contentUploadFields.classList.add("hidden");
     el.contentFormatField.classList.add("hidden");
+    document.getElementById("content-image-prompt-field")?.classList.add("hidden");
     const variantsLabel = el.nodeForm.querySelector('label[for="node-variants"]');
     variantsLabel?.classList.remove("hidden");
     el.inputs.variants.classList.remove("hidden");
@@ -1885,6 +1928,7 @@ function fillInspector(node) {
   el.inputs.type.value = node.type;
   el.inputs.title.value = node.title;
   el.inputs.content.value = node.content;
+  el.inputs.imagePrompt.value = node.imagePrompt || "";
   el.inputs.variants.value = node.variants.join(", ");
   el.inputs.platform.value = node.social.platform;
   el.inputs.caption.value = node.social.caption;
@@ -1898,12 +1942,64 @@ function fillInspector(node) {
   el.socialFields.classList.toggle("hidden", node.type !== "Social Media Posting");
   el.contentUploadFields.classList.toggle("hidden", !(node.type === "Content" || node.type === "Social Media Posting"));
   el.contentFormatField.classList.toggle("hidden", node.type !== "Content");
+  document.getElementById("content-image-prompt-field")?.classList.toggle("hidden", node.type !== "Content");
   const variantsLabel = el.nodeForm.querySelector('label[for="node-variants"]');
   const hideVariants = node.type === "Content";
   variantsLabel?.classList.toggle("hidden", hideVariants);
   el.inputs.variants.classList.toggle("hidden", hideVariants);
   renderInspectorImages(node);
   updateInspectorActionVisibility();
+}
+
+function getConnectedSocialPostingNodes(contentNodeId) {
+  const ids = state.edges
+    .filter((edge) => {
+      const from = Array.isArray(edge) ? edge[0] : edge?.source;
+      return from === contentNodeId;
+    })
+    .map((edge) => (Array.isArray(edge) ? edge[1] : edge?.target))
+    .filter(Boolean);
+  return ids.map(getNode).filter((n) => n?.type === "Social Media Posting");
+}
+
+function openSocialVariationChoiceModal() {
+  return new Promise((resolve) => {
+    const overlay = document.createElement("div");
+    overlay.className = "brand-confirm-overlay";
+    overlay.innerHTML = `<div class="brand-confirm-card"><h3>Social post already exists</h3><p>This content node already has a connected social media post. Would you like to update the existing post or create a new variation?</p><div class="brand-confirm-actions"><button type="button" data-choice="update">Update existing</button><button type="button" class="primary-add" data-choice="new">Create new variation</button><button type="button" data-choice="cancel">Cancel</button></div></div>`;
+    overlay.addEventListener("click", (event) => {
+      if (event.target === overlay) {
+        overlay.remove();
+        resolve("cancel");
+      }
+    });
+    overlay.querySelectorAll("[data-choice]").forEach((btn) => btn.addEventListener("click", () => {
+      const choice = btn.getAttribute("data-choice");
+      overlay.remove();
+      resolve(choice);
+    }));
+    document.body.appendChild(overlay);
+  });
+}
+
+async function resolveTargetSocialNodeForContent(contentNode, mode = "auto") {
+  const connected = getConnectedSocialPostingNodes(contentNode.id);
+  if (!connected.length) {
+    const created = createNode({ type: "Social Media Posting", position: { x: contentNode.position.x + 340, y: contentNode.position.y + 40 } }) || state.nodes[state.nodes.length - 1];
+    addEdge(contentNode.id, created.id);
+    return created;
+  }
+  const choice = mode === "auto" ? await openSocialVariationChoiceModal() : mode;
+  if (choice === "cancel") return null;
+  if (choice === "update") {
+    const connectedIds = new Set(connected.map((n) => n.id));
+    const mostRecent = [...state.nodes].reverse().find((n) => connectedIds.has(n.id));
+    return mostRecent || connected[connected.length - 1];
+  }
+  const yOffset = connected.length * 120;
+  const created = createNode({ type: "Social Media Posting", position: { x: contentNode.position.x + 340, y: contentNode.position.y + 40 + yOffset } }) || state.nodes[state.nodes.length - 1];
+  addEdge(contentNode.id, created.id);
+  return created;
 }
 
 function revokeImageObjectUrl(img) {
@@ -2072,6 +2168,124 @@ async function runInlineRefine(node, instruction, triggerBtn = null) {
   }
 }
 
+async function generateFullContentPack(node, triggerBtn = null, mode = "auto") {
+  if (!node || getContentPackLoading(node.id)) return;
+  const nodeEl = el.zoomLayer.querySelector(`[data-id='${node.id}']`);
+  const toolbarButtons = nodeEl ? [...nodeEl.querySelectorAll(".node-ai-toolbar button")] : [];
+  const originalText = triggerBtn?.textContent || "";
+  console.log("runContentPackGeneration started with mode:", mode, node.id);
+  setContentPackGenerating(node.id, true);
+  setContentPackError(node.id, "");
+  toolbarButtons.forEach((btn) => { btn.disabled = true; });
+  if (triggerBtn) triggerBtn.textContent = "…";
+  updateNodeCard(node);
+  try {
+    const targetSocialNode = await resolveTargetSocialNodeForContent(node, mode);
+    if (!targetSocialNode) return;
+
+    const improved = await refineNodeWithAI(node, "Improve or finalize this content while preserving intent and brand voice.");
+    node.title = improved?.title || node.title;
+    node.content = improved?.content || node.content;
+
+    console.log("Generating image prompt");
+    const imagePromptResult = await refineNodeWithAI(node, "Create or update a clearly descriptive visual image prompt based on this content. Return it in content.");
+    node.imagePrompt = (imagePromptResult?.content || "").trim() || node.imagePrompt;
+    if (!node.imagePrompt) throw new Error("Image prompt generation failed");
+
+    console.log("Generating caption");
+    const captionResult = await refineNodeWithAI(node, "Write one short social-media-ready caption based on this content. Return it in caption.");
+    const caption = (captionResult?.caption || captionResult?.content || "").trim();
+    if (!caption) throw new Error("Caption generation failed");
+
+    console.log("Generating CTA");
+    const ctaResult = await refineNodeWithAI(node, "Write one clear, concise call-to-action line based on this content. Return it in content.");
+    const cta = (ctaResult?.content || ctaResult?.caption || "").split("\n")[0].trim();
+    if (!cta) throw new Error("CTA generation failed");
+
+    console.log("Generating hashtags");
+    const hashtagResult = await refineNodeWithAI(node, "Generate 4-6 relevant social hashtags, comma-separated. Return in caption.");
+    const hashtags = parseList((hashtagResult?.caption || hashtagResult?.content || "").replace(/\n/g, ","));
+
+    console.log("Generating image");
+    await generateImageForNode(node);
+    const newestImage = node.images[node.images.length - 1];
+    console.log("Creating/updating social node");
+    targetSocialNode.title = `Social Post: ${node.title || "Untitled"}`;
+    targetSocialNode.content = [caption, cta].filter(Boolean).join("\n\n");
+    targetSocialNode.social.caption = caption;
+    targetSocialNode.social.hashtags = hashtags;
+    targetSocialNode.social.preview = cta;
+    if (newestImage?.url) {
+      targetSocialNode.images = Array.isArray(targetSocialNode.images) ? targetSocialNode.images : [];
+      targetSocialNode.images.push({ ...newestImage, id: crypto.randomUUID ? crypto.randomUUID() : `img-${Date.now()}` });
+    }
+    updateNodeCard(node);
+    updateNodeCard(targetSocialNode);
+    fillInspector(node);
+    saveCampaignCanvasState();
+    console.log("runContentPackGeneration finished");
+  } catch (_error) {
+    console.error("Full content pack failed", _error);
+    setContentPackError(node.id, "Could not generate content pack. Please retry.");
+    updateNodeCard(node);
+  } finally {
+    setContentPackGenerating(node.id, false);
+    toolbarButtons.forEach((btn) => { btn.disabled = false; });
+    if (triggerBtn) triggerBtn.textContent = originalText;
+    updateNodeCard(node);
+    updateInspectorActionVisibility();
+    console.log("generation loading cleared");
+  }
+}
+
+function openExistingSocialPostModal() {
+  const pending = state.pendingContentPack;
+  if (!pending) return;
+  const overlay = document.createElement("div");
+  overlay.className = "brand-confirm-overlay";
+  overlay.innerHTML = `<div class="brand-confirm-card"><h3>Social post already exists</h3><p>This content node already has a connected social media post. Would you like to update the existing post or create a new variation?</p><div class="brand-confirm-actions"><button type="button" data-choice="update">Update existing</button><button type="button" class="primary-add" data-choice="new">Create new variation</button><button type="button" data-choice="cancel">Cancel</button></div></div>`;
+  const close = () => overlay.remove();
+  overlay.querySelector('[data-choice="update"]').addEventListener("click", async () => {
+    console.log("Modal update existing clicked");
+    close();
+    const node = getNode(pending.contentNodeId);
+    state.pendingContentPack = null;
+    if (!node) return;
+    await generateFullContentPack(node, el.generateFullPackButton, "update");
+  });
+  overlay.querySelector('[data-choice="new"]').addEventListener("click", async () => {
+    console.log("Modal create new variation clicked");
+    close();
+    const node = getNode(pending.contentNodeId);
+    state.pendingContentPack = null;
+    if (!node) return;
+    await generateFullContentPack(node, el.generateFullPackButton, "new");
+  });
+  overlay.querySelector('[data-choice="cancel"]').addEventListener("click", () => {
+    console.log("Modal cancel clicked");
+    close();
+    if (pending?.contentNodeId) setContentPackGenerating(pending.contentNodeId, false);
+    state.pendingContentPack = null;
+    updateInspectorActionVisibility();
+  });
+  document.body.appendChild(overlay);
+}
+
+async function handleGenerateFullContentPack(contentNodeId) {
+  const node = getNode(contentNodeId);
+  if (!node || node.type !== "Content") return;
+  console.log("Full pack clicked");
+  const connectedSocialNodes = getConnectedSocialPostingNodes(node.id);
+  console.log("Existing social nodes:", connectedSocialNodes.length);
+  if (connectedSocialNodes.length > 0) {
+    console.log("Opening existing social post modal");
+    state.pendingContentPack = { contentNodeId: node.id };
+    openExistingSocialPostModal();
+    return;
+  }
+  await generateFullContentPack(node, el.generateFullPackButton, "new");
+}
+
 async function generateImageForNode(node) {
   console.log("generate image start");
   const button = el.generateImageButton;
@@ -2087,7 +2301,7 @@ async function generateImageForNode(node) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         nodeTitle: node.title || "",
-        nodeContent: node.content || "",
+        nodeContent: node.imagePrompt || node.content || "",
         brandBrainData: state.brandCore,
         campaignContext: getCampaignContextSummary(),
         contentFormat: node.contentFormat || "1:1"
@@ -2892,6 +3106,7 @@ el.nodeForm.addEventListener("input", (event) => {
   if (event.target === el.inputs.type) node.type = el.inputs.type.value;
   if (event.target === el.inputs.title) node.title = el.inputs.title.value.trim();
   if (event.target === el.inputs.content) node.content = el.inputs.content.value;
+  if (event.target === el.inputs.imagePrompt) node.imagePrompt = el.inputs.imagePrompt.value;
   if (event.target === el.inputs.variants) node.variants = parseList(el.inputs.variants.value);
   if (event.target === el.inputs.platform) node.social.platform = el.inputs.platform.value;
   if (event.target === el.inputs.caption) node.social.caption = el.inputs.caption.value;
@@ -2955,6 +3170,11 @@ el.generateImageButton.addEventListener("click", async () => {
   const node = getNode(state.selectedPrimary);
   if (!node || node.type !== "Content") return;
   await generateImageForNode(node);
+});
+el.generateFullPackButton.addEventListener("click", async () => {
+  const node = getNode(state.selectedPrimary);
+  if (!node || node.type !== "Content") return;
+  await handleGenerateFullContentPack(node.id);
 });
 el.generatePostingVisualButton.addEventListener("click", async () => {
   const node = getNode(state.selectedPrimary);
