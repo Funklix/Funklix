@@ -47,6 +47,16 @@
             <button id="zoom-in-btn" aria-label="Zoom in">+</button>
             <span id="zoom-label">100%</span>
             <span id="save-status">Unsaved changes</span>
+            <div id="board-share-panel" aria-live="polite">
+              <div id="board-share-empty">Save the board to create a shareable link.</div>
+              <div id="board-share-ready" class="hidden">
+                <a id="board-share-link" href="#" target="_blank" rel="noopener noreferrer"></a>
+                <button id="copy-board-link-btn" type="button">Copy Link</button>
+                <div id="board-last-saved">Last saved: —</div>
+                <div id="board-copy-feedback" class="hidden">Copied</div>
+              </div>
+            </div>
+
           </div>
         </header>
 

@@ -117,6 +117,13 @@ const el = {
   resetBoardButton: document.getElementById("reset-board-btn"),
   saveBoardButton: document.getElementById("save-board-btn"),
   saveStatus: document.getElementById("save-status"),
+  boardSharePanel: document.getElementById("board-share-panel"),
+  boardShareEmpty: document.getElementById("board-share-empty"),
+  boardShareReady: document.getElementById("board-share-ready"),
+  boardShareLink: document.getElementById("board-share-link"),
+  copyBoardLinkButton: document.getElementById("copy-board-link-btn"),
+  boardLastSaved: document.getElementById("board-last-saved"),
+  boardCopyFeedback: document.getElementById("board-copy-feedback"),
   brandCoreButton: document.getElementById("brand-core-nav-btn"),
   campaignCanvasNavButton: document.getElementById("campaign-canvas-nav-btn"),
   sidebarToggleButton: document.getElementById("sidebar-toggle-btn"),
@@ -203,6 +210,61 @@ function openImageLightbox(url, alt = "Image preview") {
 
 function nowString() {
   return new Intl.DateTimeFormat("de-DE", { dateStyle: "short", timeStyle: "short" }).format(new Date());
+}
+
+
+function formatLastSavedLabel(value = new Date()) {
+  return new Intl.DateTimeFormat("de-DE", { dateStyle: "short", timeStyle: "short" }).format(value);
+}
+
+function setSharePanelState(boardId, lastSaved = null) {
+  if (!boardId) {
+    el.boardShareEmpty?.classList.remove("hidden");
+    el.boardShareReady?.classList.add("hidden");
+    return;
+  }
+
+  const url = `${window.location.origin}/boards/${boardId}`;
+  if (el.boardShareLink) {
+    el.boardShareLink.href = url;
+    el.boardShareLink.textContent = url;
+  }
+  if (el.boardLastSaved) {
+    const label = lastSaved ? formatLastSavedLabel(lastSaved) : "—";
+    el.boardLastSaved.textContent = `Last saved: ${label}`;
+  }
+
+  el.boardShareEmpty?.classList.add("hidden");
+  el.boardShareReady?.classList.remove("hidden");
+}
+
+async function copyCurrentBoardLink() {
+  const boardId = state.currentBoardId || getBoardIdFromPath();
+  if (!boardId) {
+    if (el.boardCopyFeedback) {
+      el.boardCopyFeedback.textContent = "Save board first";
+      el.boardCopyFeedback.classList.remove("hidden");
+      setTimeout(() => el.boardCopyFeedback?.classList.add("hidden"), 1400);
+    }
+    return;
+  }
+
+  const url = `${window.location.origin}/boards/${boardId}`;
+  try {
+    await navigator.clipboard.writeText(url);
+    if (el.boardCopyFeedback) {
+      el.boardCopyFeedback.textContent = "Copied";
+      el.boardCopyFeedback.classList.remove("hidden");
+      setTimeout(() => el.boardCopyFeedback?.classList.add("hidden"), 1400);
+    }
+  } catch (error) {
+    window.prompt("Copy this link:", url);
+    if (el.boardCopyFeedback) {
+      el.boardCopyFeedback.textContent = "Copy failed";
+      el.boardCopyFeedback.classList.remove("hidden");
+      setTimeout(() => el.boardCopyFeedback?.classList.add("hidden"), 1400);
+    }
+  }
 }
 
 function boardPointFromClient(clientX, clientY) {
@@ -370,6 +432,7 @@ async function saveBoardToServer() {
 
     const shareUrl = `${window.location.origin}/boards/${returnedId}`;
     setSaveStatus(isUpdate ? 'Board updated' : 'Board saved');
+    setSharePanelState(returnedId, new Date());
 
     if (!isUpdate && returnedId) {
       const nextPath = `/boards/${returnedId}`;
@@ -391,6 +454,7 @@ async function loadBoardFromUrlIfPresent() {
     const data = await response.json();
     if (!response.ok) throw new Error(data?.error || 'Failed to load board');
     state.currentBoardId = data?.id || boardId;
+    setSharePanelState(state.currentBoardId, data?.updated_at ? new Date(data.updated_at) : null);
     applyCampaignState(data.canvas_json || {}, `Loaded board ${boardId.slice(0, 8)}...`);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data.canvas_json || {}));
     return true;
@@ -2921,6 +2985,7 @@ function bindGlobalResetDelegation() {
 }
 
 el.saveBoardButton?.addEventListener("click", saveBoardToServer);
+el.copyBoardLinkButton?.addEventListener("click", copyCurrentBoardLink);
 
 window.saveCampaignCanvasState = saveCampaignCanvasState;
 window.loadCampaignCanvasState = loadCampaignCanvasState;
@@ -2935,6 +3000,7 @@ function bootApp() {
   loadBrandBrainState();
   const boardIdFromPath = getBoardIdFromPath();
   state.currentBoardId = boardIdFromPath;
+  setSharePanelState(state.currentBoardId);
   if (boardIdFromPath) {
     loadBoardFromUrlIfPresent();
   } else {
