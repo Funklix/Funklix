@@ -508,6 +508,20 @@ function platformPromptGuidance(platform = "LinkedIn") {
   return "Platform: LinkedIn. Professional, structured, thought-leadership tone. Can be longer. Avoid excessive hashtags. CTA should invite discussion/action.";
 }
 
+function normalizeHashtagsInput(value = "") {
+  const tokens = String(value)
+    .split(/[\n,]+/g)
+    .flatMap((part) => part.trim().split(/\s+/g))
+    .map((raw) => raw.replace(/^#+/, "").replace(/[^\p{L}\p{N}_ ]/gu, "").trim())
+    .filter(Boolean)
+    .map((raw) => {
+      const words = raw.split(/\s+/).filter(Boolean);
+      const camel = words.map((w, i) => (i === 0 ? w : `${w.charAt(0).toUpperCase()}${w.slice(1)}`)).join("");
+      return `#${camel}`;
+    });
+  return [...new Set(tokens)];
+}
+
 async function regenerateSocialForPlatform(node, triggerBtn = null) {
   if (!node || node.type !== "Social Media Posting") return;
   const nodeEl = el.zoomLayer.querySelector(`[data-id='${node.id}']`);
@@ -524,7 +538,7 @@ async function regenerateSocialForPlatform(node, triggerBtn = null) {
     const hashtagsRefined = await refineNodeWithAI(node, `Generate relevant hashtags for this node, comma-separated. ${guide} Return in caption.`);
     node.social.caption = (captionRefined?.caption || captionRefined?.content || "").trim() || node.social.caption;
     node.social.preview = (ctaRefined?.content || ctaRefined?.caption || "").trim() || node.social.preview;
-    node.social.hashtags = parseList((hashtagsRefined?.caption || hashtagsRefined?.content || "").replace(/\n/g, ",")).map((h) => h.startsWith("#") ? h : `#${h}`);
+    node.social.hashtags = normalizeHashtagsInput(hashtagsRefined?.caption || hashtagsRefined?.content || "");
     updateNodeCard(node);
     fillInspector(node);
     saveCampaignCanvasState();
@@ -1867,7 +1881,8 @@ function updateNodeCard(node) {
     hashtags.textContent = (node.social.hashtags || []).join(" ");
     hashtags.addEventListener("click", (event) => event.stopPropagation());
     hashtags.addEventListener("input", () => {
-      node.social.hashtags = parseList(hashtags.textContent.replace(/#/g, "").replace(/\s+/g, ",")).map((h) => `#${h}`);
+      node.social.hashtags = normalizeHashtagsInput(hashtags.textContent || "");
+      hashtags.textContent = node.social.hashtags.join(" ");
       saveCampaignCanvasState();
     });
 
@@ -1900,7 +1915,7 @@ function updateNodeCard(node) {
         const refined = await refineNodeWithAI(node, `${instruction} ${platformPromptGuidance(node.social.platform || "LinkedIn")}`);
         if (key === "caption") node.social.caption = (refined?.caption || refined?.content || "").trim() || node.social.caption;
         if (key === "cta") node.social.preview = (refined?.content || refined?.caption || "").trim() || node.social.preview;
-        if (key === "hashtags") node.social.hashtags = parseList((refined?.caption || refined?.content || "").replace(/\n/g, ",")).map((h) => h.startsWith("#") ? h : `#${h}`);
+        if (key === "hashtags") node.social.hashtags = normalizeHashtagsInput(refined?.caption || refined?.content || "");
         updateNodeCard(node);
         fillInspector(node);
         saveCampaignCanvasState();
@@ -2093,7 +2108,7 @@ function fillInspector(node) {
   el.inputs.platform.value = node.social.platform;
   el.inputs.caption.value = node.social.caption;
   el.inputs.hashtags.value = node.social.hashtags.join(", ");
-  el.inputs.preview.value = node.social.preview;
+  if (el.inputs.preview) el.inputs.preview.value = node.social.preview;
   el.inputs.audience.value = node.audience;
   el.inputs.goal.value = node.goal;
   el.inputs.channel.value = node.channel;
@@ -2334,7 +2349,7 @@ async function generateFullContentPack(node, triggerBtn = null, mode = "auto") {
 
     console.log("Generating hashtags");
     const hashtagResult = await refineNodeWithAI(node, `Generate relevant social hashtags, comma-separated. ${platformGuide} Return in caption.`);
-    const hashtags = parseList((hashtagResult?.caption || hashtagResult?.content || "").replace(/\n/g, ","));
+    const hashtags = normalizeHashtagsInput(hashtagResult?.caption || hashtagResult?.content || "");
 
     console.log("Generating image");
     await generateImageForNode(node);
@@ -3211,8 +3226,8 @@ el.nodeForm.addEventListener("input", (event) => {
   if (event.target === el.inputs.variants) node.variants = parseList(el.inputs.variants.value);
   if (event.target === el.inputs.platform) node.social.platform = el.inputs.platform.value;
   if (event.target === el.inputs.caption) node.social.caption = el.inputs.caption.value;
-  if (event.target === el.inputs.hashtags) node.social.hashtags = parseList(el.inputs.hashtags.value);
-  if (event.target === el.inputs.preview) node.social.preview = el.inputs.preview.value;
+  if (event.target === el.inputs.hashtags) node.social.hashtags = normalizeHashtagsInput(el.inputs.hashtags.value);
+  if (el.inputs.preview && event.target === el.inputs.preview) node.social.preview = el.inputs.preview.value;
   if (event.target === el.inputs.audience) node.audience = el.inputs.audience.value.trim();
   if (event.target === el.inputs.goal) node.goal = el.inputs.goal.value.trim();
   if (event.target === el.inputs.channel) node.channel = el.inputs.channel.value.trim();
