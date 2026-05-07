@@ -109,6 +109,8 @@ const el = {
   socialFields: document.getElementById("social-fields"),
   contentUploadFields: document.getElementById("content-upload-fields"),
   contentFormatField: document.getElementById("content-format-field"),
+  landingPageFields: document.getElementById("landing-page-fields"),
+  generateHeaderVisualButton: document.getElementById("generate-header-visual-btn"),
   imageUpload: document.getElementById("node-image-upload"),
   inspectorImageList: document.getElementById("inspector-image-list"),
   deleteNodeButton: document.getElementById("delete-node-btn"),
@@ -163,6 +165,12 @@ const el = {
     goal: document.getElementById("node-goal"),
     channel: document.getElementById("node-channel"),
     contentFormat: document.getElementById("node-content-format")
+    ,lpHeaderVisualPrompt: document.getElementById("lp-header-visual-prompt")
+    ,lpHeaderClaim: document.getElementById("lp-header-claim")
+    ,lpProblem: document.getElementById("lp-problem")
+    ,lpSolution: document.getElementById("lp-solution")
+    ,lpTrust: document.getElementById("lp-trust")
+    ,lpCta: document.getElementById("lp-cta")
   }
 };
 
@@ -1180,6 +1188,7 @@ function createNode({ type = "Idea", parentId = null, position = null, images = 
     favoriteImageId: null,
     social: { platform: "Instagram", caption: "", hashtags: [], preview: "", scheduledAt: "" },
     imagePrompt: "",
+    landingPage: { headerVisualPrompt: "", headerClaim: "", problem: "", solution: "", trust: "", cta: "" },
     reactions: {},
     postits: [],
     justConnectedAt: null,
@@ -1672,6 +1681,7 @@ function updateInspectorActionVisibility() {
   el.generateImageButton.disabled = !showGenerateImage;
   el.generatePostingVisualButton.disabled = !showGeneratePostingVisual;
   el.generateFullPackButton.disabled = !showGenerateImage || !!selectedNode && getContentPackLoading(selectedNode.id);
+  if (el.generateHeaderVisualButton) el.generateHeaderVisualButton.disabled = !(selectedNode?.type === "Landing Page");
   el.propagateDescendantsButton.disabled = !hasSingleNode;
   el.disconnectSelectedButton.disabled = !(selectedCount > 0);
 }
@@ -1831,7 +1841,8 @@ function updateNodeCard(node) {
 
   const social = nodeEl.querySelector(".social-preview");
   const isSocial = node.type === "Social Media Posting";
-  social.classList.toggle("hidden", !isSocial);
+  const isLandingPage = node.type === "Landing Page";
+  social.classList.toggle("hidden", !(isSocial || isLandingPage));
   if (isSocial) {
     social.innerHTML = "";
     const wrapper = document.createElement("div");
@@ -1971,6 +1982,29 @@ function updateNodeCard(node) {
 
     wrapper.append(top, charCount, caption, cta, hashtags, imageFrame, actions);
     social.appendChild(wrapper);
+  } else if (isLandingPage) {
+    const lp = node.landingPage || {};
+    social.innerHTML = "";
+    const card = document.createElement("div");
+    card.className = "landing-preview-card";
+    const latestImage = node.images?.[node.images.length - 1];
+    if (latestImage?.url) {
+      const img = document.createElement("img");
+      img.className = "landing-preview-image";
+      img.src = latestImage.url;
+      img.alt = "Landing header visual";
+      img.addEventListener("click", (event) => { event.stopPropagation(); openLightbox(latestImage.url, "Landing header visual"); });
+      card.appendChild(img);
+    }
+    [["Claim", lp.headerClaim], ["Problem", lp.problem], ["Solution", lp.solution], ["Trust", lp.trust], ["CTA", lp.cta]]
+      .forEach(([label, value]) => {
+        if (!value) return;
+        const p = document.createElement("p");
+        p.className = `landing-preview-line${label === "CTA" ? " is-cta" : ""}`;
+        p.innerHTML = `<strong>${label}:</strong> ${value}`;
+        card.appendChild(p);
+      });
+    social.appendChild(card);
   }
 
   const statusEl = nodeEl.querySelector(".content-pack-status");
@@ -2114,6 +2148,7 @@ function fillInspector(node) {
     el.contentUploadFields.classList.add("hidden");
     el.contentFormatField.classList.add("hidden");
     document.getElementById("content-image-prompt-field")?.classList.add("hidden");
+    el.landingPageFields?.classList.add("hidden");
     const variantsLabel = el.nodeForm.querySelector('label[for="node-variants"]');
     variantsLabel?.classList.remove("hidden");
     el.inputs.variants.classList.remove("hidden");
@@ -2136,11 +2171,20 @@ function fillInspector(node) {
   el.inputs.goal.value = node.goal;
   el.inputs.channel.value = node.channel;
   el.inputs.contentFormat.value = node.contentFormat || "1:1";
+  const lp = node.landingPage || { headerVisualPrompt: "", headerClaim: "", problem: "", solution: "", trust: "", cta: "" };
+  el.inputs.lpHeaderVisualPrompt.value = lp.headerVisualPrompt || "";
+  el.inputs.lpHeaderClaim.value = lp.headerClaim || "";
+  el.inputs.lpProblem.value = lp.problem || "";
+  el.inputs.lpSolution.value = lp.solution || "";
+  el.inputs.lpTrust.value = lp.trust || "";
+  el.inputs.lpCta.value = lp.cta || "";
 
   el.socialFields.classList.toggle("hidden", node.type !== "Social Media Posting");
   el.contentUploadFields.classList.toggle("hidden", !(node.type === "Content" || node.type === "Social Media Posting"));
   el.contentFormatField.classList.toggle("hidden", node.type !== "Content");
   document.getElementById("content-image-prompt-field")?.classList.toggle("hidden", node.type !== "Content");
+  el.landingPageFields?.classList.toggle("hidden", node.type !== "Landing Page");
+  el.generateHeaderVisualButton.style.display = node.type === "Landing Page" ? "block" : "none";
   const variantsLabel = el.nodeForm.querySelector('label[for="node-variants"]');
   const hideVariants = node.type === "Content";
   variantsLabel?.classList.toggle("hidden", hideVariants);
@@ -3255,6 +3299,13 @@ el.nodeForm.addEventListener("input", (event) => {
   if (event.target === el.inputs.goal) node.goal = el.inputs.goal.value.trim();
   if (event.target === el.inputs.channel) node.channel = el.inputs.channel.value.trim();
   if (event.target === el.inputs.contentFormat) node.contentFormat = el.inputs.contentFormat.value || "1:1";
+  if (!node.landingPage) node.landingPage = { headerVisualPrompt: "", headerClaim: "", problem: "", solution: "", trust: "", cta: "" };
+  if (event.target === el.inputs.lpHeaderVisualPrompt) node.landingPage.headerVisualPrompt = el.inputs.lpHeaderVisualPrompt.value;
+  if (event.target === el.inputs.lpHeaderClaim) node.landingPage.headerClaim = el.inputs.lpHeaderClaim.value;
+  if (event.target === el.inputs.lpProblem) node.landingPage.problem = el.inputs.lpProblem.value;
+  if (event.target === el.inputs.lpSolution) node.landingPage.solution = el.inputs.lpSolution.value;
+  if (event.target === el.inputs.lpTrust) node.landingPage.trust = el.inputs.lpTrust.value;
+  if (event.target === el.inputs.lpCta) node.landingPage.cta = el.inputs.lpCta.value;
 
   updateNodeCard(node);
   updateListView();
@@ -3319,6 +3370,40 @@ el.generateFullPackButton.addEventListener("click", async () => {
   const node = getNode(state.selectedPrimary);
   if (!node || node.type !== "Content") return;
   await handleGenerateFullContentPack(node.id);
+});
+el.generateHeaderVisualButton.addEventListener("click", async () => {
+  const node = getNode(state.selectedPrimary);
+  if (!node || node.type !== "Landing Page") return;
+  if (!node.landingPage?.headerVisualPrompt?.trim()) return;
+  const btn = el.generateHeaderVisualButton;
+  const original = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "Generating...";
+  try {
+    const response = await fetch("/api/generate-image", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        nodeTitle: node.title || "",
+        nodeContent: node.landingPage.headerVisualPrompt,
+        brandBrainData: state.brandCore,
+        campaignContext: getCampaignContextSummary(),
+        contentFormat: "16:9"
+      })
+    });
+    if (!response.ok) throw new Error("Header visual failed");
+    const data = await response.json();
+    const imageUrl = data?.imageUrl || data?.url || "";
+    if (!imageUrl) throw new Error("Empty image URL");
+    node.images = Array.isArray(node.images) ? node.images : [];
+    node.images.push({ id: crypto.randomUUID(), url: imageUrl, name: "landing-header.png", createdAt: Date.now(), source: "generated" });
+    updateNodeCard(node);
+    fillInspector(node);
+    saveCampaignCanvasState();
+  } finally {
+    btn.disabled = false;
+    btn.textContent = original;
+  }
 });
 el.generatePostingVisualButton.addEventListener("click", async () => {
   const node = getNode(state.selectedPrimary);

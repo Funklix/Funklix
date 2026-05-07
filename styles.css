@@ -931,6 +931,11 @@ button:active {
 .social-image-frame { border: 1px solid #e4e8f8; border-radius: 10px; overflow: hidden; background: #f3f5ff; min-height: 64px; display: flex; align-items: center; justify-content: center; }
 .social-image-frame img { width: 100%; max-height: 120px; object-fit: cover; display: block; cursor: zoom-in; }
 
+.landing-preview-card { display: grid; gap: 5px; }
+.landing-preview-image { width: 100%; max-height: 110px; object-fit: cover; border-radius: 8px; border: 1px solid #e4e8f8; cursor: zoom-in; }
+.landing-preview-line { margin: 0; font-size: 0.67rem; line-height: 1.35; color: #4a537b; }
+.landing-preview-line.is-cta { font-weight: 700; color: #30407d; }
+
 .social-preview p,
 .social-preview small,
 .social-preview em {
