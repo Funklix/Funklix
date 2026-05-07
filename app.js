@@ -500,6 +500,13 @@ function setContentPackError(nodeId, message = "") {
   state.contentPackErrorById[nodeId] = message || "";
 }
 
+function platformPromptGuidance(platform = "LinkedIn") {
+  if (platform === "X / Twitter") return "Platform: X/Twitter. Keep it short, punchy, hook-first, and 280-char aware. Concise CTA. Avoid hashtags unless useful.";
+  if (platform === "Instagram") return "Platform: Instagram. Visual-first, emotional, community-oriented tone. CTA should invite comments/saves/shares. Hashtags allowed but not excessive.";
+  if (platform === "TikTok") return "Platform: TikTok. Short, energetic, hook-driven, video-native phrasing. CTA should invite watch/comment/follow/remix.";
+  return "Platform: LinkedIn. Professional, structured, thought-leadership tone. Can be longer. Avoid excessive hashtags. CTA should invite discussion/action.";
+}
+
 function serializeState() {
   const serialized = {
     nodes: state.nodes.map((n) => sanitizeNodeForPersistence(n)),
@@ -1779,10 +1786,35 @@ function updateNodeCard(node) {
       if (state.selectedPrimary === node.id) fillInspector(node);
       saveCampaignCanvasState();
     });
+    const platformRegenBtn = document.createElement("button");
+    platformRegenBtn.type = "button";
+    platformRegenBtn.className = "social-platform-regen";
+    platformRegenBtn.textContent = "Regenerate for platform";
+    platformRegenBtn.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      platformRegenBtn.disabled = true;
+      const originalText = platformRegenBtn.textContent;
+      platformRegenBtn.textContent = "...";
+      try {
+        const guide = platformPromptGuidance(node.social.platform || "LinkedIn");
+        const captionRefined = await refineNodeWithAI(node, `Write one social-media-ready caption for this node. ${guide} Return in caption.`);
+        const ctaRefined = await refineNodeWithAI(node, `Write one concise CTA for this node. ${guide} Return in content.`);
+        const hashtagsRefined = await refineNodeWithAI(node, `Generate relevant hashtags for this node, comma-separated. ${guide} Return in caption.`);
+        node.social.caption = (captionRefined?.caption || captionRefined?.content || "").trim() || node.social.caption;
+        node.social.preview = (ctaRefined?.content || ctaRefined?.caption || "").trim() || node.social.preview;
+        node.social.hashtags = parseList((hashtagsRefined?.caption || hashtagsRefined?.content || "").replace(/\n/g, ",")).map((h) => h.startsWith("#") ? h : `#${h}`);
+        updateNodeCard(node);
+        fillInspector(node);
+        saveCampaignCanvasState();
+      } finally {
+        platformRegenBtn.disabled = false;
+        platformRegenBtn.textContent = originalText;
+      }
+    });
     const status = document.createElement("span");
     status.className = "social-status-badge";
     status.textContent = "Ready";
-    top.append(platformSelect, status);
+    top.append(platformSelect, platformRegenBtn, status);
 
     const charCount = document.createElement("div");
     charCount.className = "social-char-count";
@@ -1850,7 +1882,7 @@ function updateNodeCard(node) {
       const original = btn.textContent;
       btn.textContent = "...";
       try {
-        const refined = await refineNodeWithAI(node, instruction);
+        const refined = await refineNodeWithAI(node, `${instruction} ${platformPromptGuidance(node.social.platform || "LinkedIn")}`);
         if (key === "caption") node.social.caption = (refined?.caption || refined?.content || "").trim() || node.social.caption;
         if (key === "cta") node.social.preview = (refined?.content || refined?.caption || "").trim() || node.social.preview;
         if (key === "hashtags") node.social.hashtags = parseList((refined?.caption || refined?.content || "").replace(/\n/g, ",")).map((h) => h.startsWith("#") ? h : `#${h}`);
@@ -2264,7 +2296,9 @@ async function generateFullContentPack(node, triggerBtn = null, mode = "auto") {
     const targetSocialNode = await resolveTargetSocialNodeForContent(node);
     if (!targetSocialNode) return;
 
-    const improved = await refineNodeWithAI(node, "Improve or finalize this content while preserving intent and brand voice.");
+    const platform = targetSocialNode?.social?.platform || "LinkedIn";
+    const platformGuide = platformPromptGuidance(platform);
+    const improved = await refineNodeWithAI(node, `Improve or finalize this content while preserving intent and brand voice. ${platformGuide}`);
     node.title = improved?.title || node.title;
     node.content = improved?.content || node.content;
 
@@ -2274,17 +2308,17 @@ async function generateFullContentPack(node, triggerBtn = null, mode = "auto") {
     if (!node.imagePrompt) throw new Error("Image prompt generation failed");
 
     console.log("Generating caption");
-    const captionResult = await refineNodeWithAI(node, "Write one short social-media-ready caption based on this content. Return it in caption.");
+    const captionResult = await refineNodeWithAI(node, `Write one short social-media-ready caption based on this content. ${platformGuide} Return it in caption.`);
     const caption = (captionResult?.caption || captionResult?.content || "").trim();
     if (!caption) throw new Error("Caption generation failed");
 
     console.log("Generating CTA");
-    const ctaResult = await refineNodeWithAI(node, "Write one clear, concise call-to-action line based on this content. Return it in content.");
+    const ctaResult = await refineNodeWithAI(node, `Write one clear, concise call-to-action line based on this content. ${platformGuide} Return it in content.`);
     const cta = (ctaResult?.content || ctaResult?.caption || "").split("\n")[0].trim();
     if (!cta) throw new Error("CTA generation failed");
 
     console.log("Generating hashtags");
-    const hashtagResult = await refineNodeWithAI(node, "Generate 4-6 relevant social hashtags, comma-separated. Return in caption.");
+    const hashtagResult = await refineNodeWithAI(node, `Generate relevant social hashtags, comma-separated. ${platformGuide} Return in caption.`);
     const hashtags = parseList((hashtagResult?.caption || hashtagResult?.content || "").replace(/\n/g, ","));
 
     console.log("Generating image");

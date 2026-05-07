@@ -919,6 +919,7 @@ button:active {
 .social-card { display: grid; gap: 6px; }
 .social-card-top { display: flex; justify-content: space-between; align-items: center; gap: 6px; }
 .social-platform-select { font-size: 0.68rem; border: 1px solid #d8dced; border-radius: 8px; padding: 3px 6px; background: #fff; }
+.social-platform-regen { border: 1px solid #d8dced; background: #f7f8ff; color: #42507f; border-radius: 999px; font-size: 0.6rem; padding: 2px 7px; cursor: pointer; }
 .social-status-badge { font-size: 0.62rem; color: #2f7f5f; background: #eaf8f1; border-radius: 999px; padding: 2px 7px; }
 .social-char-count { font-size: 0.62rem; color: #636b8e; }
 .social-char-count.warning { color: #b23939; font-weight: 600; }
