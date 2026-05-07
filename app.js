@@ -114,6 +114,7 @@ const el = {
   deleteNodeButton: document.getElementById("delete-node-btn"),
   improveNodeButton: document.getElementById("improve-node-btn"),
   regenerateNodeButton: document.getElementById("regenerate-node-btn"),
+  regeneratePlatformButton: document.getElementById("regenerate-platform-btn"),
   generateImageButton: document.getElementById("generate-image-btn"),
   generatePostingVisualButton: document.getElementById("generate-posting-visual-btn"),
   generateFullPackButton: document.getElementById("generate-full-pack-btn"),
@@ -505,6 +506,35 @@ function platformPromptGuidance(platform = "LinkedIn") {
   if (platform === "Instagram") return "Platform: Instagram. Visual-first, emotional, community-oriented tone. CTA should invite comments/saves/shares. Hashtags allowed but not excessive.";
   if (platform === "TikTok") return "Platform: TikTok. Short, energetic, hook-driven, video-native phrasing. CTA should invite watch/comment/follow/remix.";
   return "Platform: LinkedIn. Professional, structured, thought-leadership tone. Can be longer. Avoid excessive hashtags. CTA should invite discussion/action.";
+}
+
+async function regenerateSocialForPlatform(node, triggerBtn = null) {
+  if (!node || node.type !== "Social Media Posting") return;
+  const nodeEl = el.zoomLayer.querySelector(`[data-id='${node.id}']`);
+  const originalText = triggerBtn?.textContent || "";
+  if (triggerBtn) {
+    triggerBtn.disabled = true;
+    triggerBtn.textContent = "...";
+  }
+  if (nodeEl) nodeEl.classList.add("ai-loading");
+  try {
+    const guide = platformPromptGuidance(node.social.platform || "LinkedIn");
+    const captionRefined = await refineNodeWithAI(node, `Write one social-media-ready caption for this node. ${guide} Return in caption.`);
+    const ctaRefined = await refineNodeWithAI(node, `Write one concise CTA for this node. ${guide} Return in content.`);
+    const hashtagsRefined = await refineNodeWithAI(node, `Generate relevant hashtags for this node, comma-separated. ${guide} Return in caption.`);
+    node.social.caption = (captionRefined?.caption || captionRefined?.content || "").trim() || node.social.caption;
+    node.social.preview = (ctaRefined?.content || ctaRefined?.caption || "").trim() || node.social.preview;
+    node.social.hashtags = parseList((hashtagsRefined?.caption || hashtagsRefined?.content || "").replace(/\n/g, ",")).map((h) => h.startsWith("#") ? h : `#${h}`);
+    updateNodeCard(node);
+    fillInspector(node);
+    saveCampaignCanvasState();
+  } finally {
+    if (nodeEl) nodeEl.classList.remove("ai-loading");
+    if (triggerBtn) {
+      triggerBtn.disabled = false;
+      triggerBtn.textContent = originalText;
+    }
+  }
 }
 
 function serializeState() {
@@ -1591,6 +1621,7 @@ function updateInspectorActionVisibility() {
 
   el.improveNodeButton.style.display = hasSingleNode ? "block" : "none";
   el.regenerateNodeButton.style.display = hasSingleNode ? "block" : "none";
+  el.regeneratePlatformButton.style.display = selectedNode?.type === "Social Media Posting" ? "block" : "none";
   el.propagateDescendantsButton.style.display = hasSingleNode ? "block" : "none";
   el.disconnectSelectedButton.style.display = selectedCount > 0 ? "block" : "none";
 
@@ -1600,6 +1631,7 @@ function updateInspectorActionVisibility() {
   el.deleteSelectedButton.disabled = !hasMultipleNodes;
   el.improveNodeButton.disabled = !hasSingleNode;
   el.regenerateNodeButton.disabled = !hasSingleNode;
+  el.regeneratePlatformButton.disabled = !(selectedNode?.type === "Social Media Posting");
   el.generateImageButton.disabled = !showGenerateImage;
   el.generatePostingVisualButton.disabled = !showGeneratePostingVisual;
   el.generateFullPackButton.disabled = !showGenerateImage || !!selectedNode && getContentPackLoading(selectedNode.id);
@@ -1792,24 +1824,7 @@ function updateNodeCard(node) {
     platformRegenBtn.textContent = "Regenerate for platform";
     platformRegenBtn.addEventListener("click", async (event) => {
       event.stopPropagation();
-      platformRegenBtn.disabled = true;
-      const originalText = platformRegenBtn.textContent;
-      platformRegenBtn.textContent = "...";
-      try {
-        const guide = platformPromptGuidance(node.social.platform || "LinkedIn");
-        const captionRefined = await refineNodeWithAI(node, `Write one social-media-ready caption for this node. ${guide} Return in caption.`);
-        const ctaRefined = await refineNodeWithAI(node, `Write one concise CTA for this node. ${guide} Return in content.`);
-        const hashtagsRefined = await refineNodeWithAI(node, `Generate relevant hashtags for this node, comma-separated. ${guide} Return in caption.`);
-        node.social.caption = (captionRefined?.caption || captionRefined?.content || "").trim() || node.social.caption;
-        node.social.preview = (ctaRefined?.content || ctaRefined?.caption || "").trim() || node.social.preview;
-        node.social.hashtags = parseList((hashtagsRefined?.caption || hashtagsRefined?.content || "").replace(/\n/g, ",")).map((h) => h.startsWith("#") ? h : `#${h}`);
-        updateNodeCard(node);
-        fillInspector(node);
-        saveCampaignCanvasState();
-      } finally {
-        platformRegenBtn.disabled = false;
-        platformRegenBtn.textContent = originalText;
-      }
+      await regenerateSocialForPlatform(node, platformRegenBtn);
     });
     const status = document.createElement("span");
     status.className = "social-status-badge";
@@ -3251,6 +3266,11 @@ el.regenerateNodeButton.addEventListener("click", async () => {
     "Regenerate this node as a fresh alternative version while keeping it aligned with the campaign context and brand voice.",
     el.regenerateNodeButton
   );
+});
+el.regeneratePlatformButton.addEventListener("click", async () => {
+  const node = getNode(state.selectedPrimary);
+  if (!node || node.type !== "Social Media Posting") return;
+  await regenerateSocialForPlatform(node, el.regeneratePlatformButton);
 });
 el.generateImageButton.addEventListener("click", async () => {
   const node = getNode(state.selectedPrimary);
