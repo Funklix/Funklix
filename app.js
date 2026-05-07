@@ -66,6 +66,9 @@ const state = {
   ,contentPackLoadingById: {}
   ,contentPackErrorById: {}
   ,hashtagDraftByNode: {}
+  ,analysisRefreshing: false
+  ,analysisLastUpdatedAt: null
+  ,analysisError: ""
 };
 
 const el = {
@@ -118,6 +121,7 @@ const el = {
   improveNodeButton: document.getElementById("improve-node-btn"),
   regenerateNodeButton: document.getElementById("regenerate-node-btn"),
   regeneratePlatformButton: document.getElementById("regenerate-platform-btn"),
+  addToPostingCalendarButton: document.getElementById("add-to-posting-calendar-btn"),
   generateImageButton: document.getElementById("generate-image-btn"),
   generatePostingVisualButton: document.getElementById("generate-posting-visual-btn"),
   generateFullPackButton: document.getElementById("generate-full-pack-btn"),
@@ -645,7 +649,7 @@ function suggestNextNodes(analysis, nodes, edges, brandCore) {
     const lp = n.landingPage || {};
     return !!((lp.cta || "").trim() && (lp.solution || "").trim() && (n.goal === "Conversion" || n.funnelStage === "Conversion"));
   });
-  if (analysis.funnel.missingStages.includes("Conversion") && !hasStrongLanding) {
+  if (analysis.funnel.missingStages.includes("Conversion") && !landingNodes.length) {
     suggestions.push({ id: "s-conv-lp", title: "Add conversion landing page", description: "Create a conversion destination for interested traffic.", recommendedNodeType: "Landing Page", reason: "Campaign has upper-funnel assets but no strong conversion endpoint.", priority: "high", suggestedPositionContext: "after-consideration", suggestedStrategy: { audience: primaryAudience, goal: "Conversion", channel: "Landing Page", funnelStage: "Conversion", tone } });
   } else if (hasStrongLanding) {
     const lp = landingNodes[0];
@@ -661,7 +665,11 @@ function suggestNextNodes(analysis, nodes, edges, brandCore) {
   if (analysis.cta.qualityScore < 50) {
     suggestions.push({ id: "s-cta-social", title: "Add CTA-focused social post", description: "Create a clear next-step social output.", recommendedNodeType: "Social Media Posting", reason: "CTA quality and variation are currently weak.", priority: "high", suggestedPositionContext: "after-social", suggestedStrategy: { audience: primaryAudience, goal: "Lead Gen", channel: "Instagram", funnelStage: "Conversion", tone: "Direct" } });
   }
-  return suggestions.slice(0, 6);
+  const unique = [...new Map(suggestions.map((s) => [s.id, s])).values()];
+  if (!unique.length) {
+    unique.push({ id: "s-safe-variation", title: "Create a campaign variation", description: "Add a new messaging variation to compare performance.", recommendedNodeType: "Social Media Posting", reason: "Your core campaign is in place. A variation helps compare platform/message fit.", priority: "medium", suggestedPositionContext: "after-social", suggestedStrategy: { audience: primaryAudience, goal: "Awareness", channel: "LinkedIn", funnelStage: "Interest", tone } });
+  }
+  return unique.slice(0, 6);
 }
 
 async function createSuggestedNodeFromAnalysis(suggestion) {
@@ -761,7 +769,7 @@ function renderCampaignIntelligence() {
   if (el.aiBrainSummary) {
     el.aiBrainSummary.innerHTML = `
       <section class="ai-brain-wrap">
-        <header class="ai-brain-header"><h3>🧠 AI Brain</h3><p>Your AI strategist & creative partner</p><button type="button" id="refresh-ai-brain">Refresh analysis</button></header>
+        <header class="ai-brain-header"><h3>🧠 AI Brain</h3><p>Your AI strategist & creative partner<br/><small>Last updated: ${state.analysisLastUpdatedAt ? new Date(state.analysisLastUpdatedAt).toLocaleTimeString() : "—"}</small>${state.analysisError ? `<span class="ai-inline-error">${state.analysisError}</span>` : ""}</p><button type="button" id="refresh-ai-brain" class="${state.analysisRefreshing ? "is-loading" : ""}" ${state.analysisRefreshing ? "disabled" : ""}>${state.analysisRefreshing ? `<span class="spinner" aria-hidden="true"></span>Refreshing...` : "Refresh analysis"}</button></header>
         <article class="ai-summary-card"><small>Campaign Summary</small><h2>${a.healthScore}<span>/100</span></h2><p>This campaign focuses on <strong>${a.funnel.coveredStages.join(", ") || "early-stage planning"}</strong>, with primary opportunities in <strong>${a.funnel.missingStages.join(", ") || "execution depth"}</strong>.</p></article>
         <div class="ai-columns">
           <article class="ai-list-card"><h4>Detected Issues</h4><ul>${(a.weaknesses.length ? a.weaknesses : ["No critical issues detected."]).map((w) => `<li>⚠️ ${w}</li>`).join("")}</ul></article>
@@ -771,7 +779,21 @@ function renderCampaignIntelligence() {
         <article class="ai-actions-card"><h4>Quick Actions</h4><div class="ai-action-grid"><button type="button">Improve CTAs</button><button type="button">Generate Conversion Content</button><button type="button">Strengthen Trust Layer</button><button type="button">Create Platform Variations</button></div></article>
       </section>
     `;
-    el.aiBrainSummary.querySelector("#refresh-ai-brain")?.addEventListener("click", () => renderCampaignIntelligence());
+    el.aiBrainSummary.querySelector("#refresh-ai-brain")?.addEventListener("click", async () => {
+      state.analysisRefreshing = true;
+      state.analysisError = "";
+      renderCampaignIntelligence();
+      try {
+        await new Promise((r) => setTimeout(r, 500));
+        renderCampaignIntelligence();
+        state.analysisLastUpdatedAt = Date.now();
+      } catch (_error) {
+        state.analysisError = "Could not refresh analysis. Please try again.";
+      } finally {
+        state.analysisRefreshing = false;
+        renderCampaignIntelligence();
+      }
+    });
     el.aiBrainSummary.querySelectorAll("[data-suggestion-id]").forEach((btn) => btn.addEventListener("click", async () => {
       const suggestion = suggestions.find((s) => s.id === btn.getAttribute("data-suggestion-id"));
       if (suggestion) await createSuggestedNodeFromAnalysis(suggestion);
@@ -1925,6 +1947,7 @@ function updateInspectorActionVisibility() {
   el.improveNodeButton.style.display = hasSingleNode ? "block" : "none";
   el.regenerateNodeButton.style.display = hasSingleNode ? "block" : "none";
   el.regeneratePlatformButton.style.display = selectedNode?.type === "Social Media Posting" ? "block" : "none";
+  el.addToPostingCalendarButton.style.display = selectedNode?.type === "Social Media Posting" ? "block" : "none";
   el.propagateDescendantsButton.style.display = hasSingleNode ? "block" : "none";
   el.disconnectSelectedButton.style.display = selectedCount > 0 ? "block" : "none";
 
@@ -1935,6 +1958,7 @@ function updateInspectorActionVisibility() {
   el.improveNodeButton.disabled = !hasSingleNode;
   el.regenerateNodeButton.disabled = !hasSingleNode;
   el.regeneratePlatformButton.disabled = !(selectedNode?.type === "Social Media Posting");
+  el.addToPostingCalendarButton.disabled = !(selectedNode?.type === "Social Media Posting");
   el.generateImageButton.disabled = !showGenerateImage;
   el.generatePostingVisualButton.disabled = !showGeneratePostingVisual;
   el.generateFullPackButton.disabled = !showGenerateImage || !!selectedNode && getContentPackLoading(selectedNode.id);
@@ -2197,6 +2221,26 @@ function updateNodeCard(node) {
       copyFullBtn.textContent = "Copied";
       setTimeout(() => { copyFullBtn.textContent = "Copy Full Post"; }, 900);
     });
+    const calendarBtn = document.createElement("button");
+    calendarBtn.type = "button";
+    calendarBtn.textContent = node.social?.addedToCalendar ? "In Posting Calendar" : "Add to Posting Calendar";
+    calendarBtn.addEventListener("click", (event) => {
+      event.stopPropagation();
+      node.social.addedToCalendar = true;
+      node.social.calendarDraft = {
+        nodeId: node.id,
+        platform: node.social.platform,
+        caption: node.social.caption,
+        cta: node.social.preview,
+        hashtags: node.social.hashtags,
+        imageUrl: node.images?.[node.images.length - 1]?.url || "",
+        createdAt: Date.now()
+      };
+      updateNodeCard(node);
+      fillInspector(node);
+      saveCampaignCanvasState();
+      setSaveStatus("Added to posting calendar");
+    });
 
     const regen = async (instruction, key, btn) => {
       btn.disabled = true;
@@ -2224,7 +2268,7 @@ function updateNodeCard(node) {
     const regenHash = document.createElement("button");
     regenHash.type = "button"; regenHash.textContent = "Regenerate Hashtags";
     regenHash.addEventListener("click", (event) => { event.stopPropagation(); regen(structuredHashtagPrompt(node.social.platform || "LinkedIn"), "hashtags", regenHash); });
-    actions.append(copyCaptionBtn, copyFullBtn, regenCaption, regenCTA, regenHash);
+    actions.append(copyCaptionBtn, copyFullBtn, calendarBtn, regenCaption, regenCTA, regenHash);
 
     const imageFrame = document.createElement("div");
     imageFrame.className = "social-image-frame";
@@ -2446,6 +2490,9 @@ function fillInspector(node) {
   document.getElementById("content-image-prompt-field")?.classList.toggle("hidden", node.type !== "Content");
   el.landingPageFields?.classList.toggle("hidden", node.type !== "Landing Page");
   el.generateHeaderVisualButton.style.display = node.type === "Landing Page" ? "block" : "none";
+  if (el.addToPostingCalendarButton) {
+    el.addToPostingCalendarButton.textContent = node.type === "Social Media Posting" && node.social?.addedToCalendar ? "In Posting Calendar" : "Add to Posting Calendar";
+  }
   const variantsLabel = el.nodeForm.querySelector('label[for="node-variants"]');
   const hideVariants = node.type === "Content";
   variantsLabel?.classList.toggle("hidden", hideVariants);
@@ -3653,6 +3700,24 @@ el.regeneratePlatformButton.addEventListener("click", async () => {
   const node = getNode(state.selectedPrimary);
   if (!node || node.type !== "Social Media Posting") return;
   await regenerateSocialForPlatform(node, el.regeneratePlatformButton);
+});
+el.addToPostingCalendarButton.addEventListener("click", () => {
+  const node = getNode(state.selectedPrimary);
+  if (!node || node.type !== "Social Media Posting") return;
+  node.social.addedToCalendar = true;
+  node.social.calendarDraft = {
+    nodeId: node.id,
+    platform: node.social.platform,
+    caption: node.social.caption,
+    cta: node.social.preview,
+    hashtags: node.social.hashtags,
+    imageUrl: node.images?.[node.images.length - 1]?.url || "",
+    createdAt: Date.now()
+  };
+  updateNodeCard(node);
+  fillInspector(node);
+  saveCampaignCanvasState();
+  setSaveStatus("Added to posting calendar");
 });
 el.generateImageButton.addEventListener("click", async () => {
   const node = getNode(state.selectedPrimary);
