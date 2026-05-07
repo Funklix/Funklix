@@ -65,7 +65,6 @@ const state = {
   ,boardsLibrary: []
   ,contentPackLoadingById: {}
   ,contentPackErrorById: {}
-  ,pendingContentPack: null
 };
 
 const el = {
@@ -481,6 +480,7 @@ function sanitizeNodeForPersistence(node) {
   delete clean.generatingContentPack;
   delete clean.isGenerating;
   delete clean.loading;
+  delete clean.generationStatus;
   delete clean.disabled;
   delete clean.contentPackError;
   return clean;
@@ -1962,40 +1962,8 @@ function getConnectedSocialPostingNodes(contentNodeId) {
   return ids.map(getNode).filter((n) => n?.type === "Social Media Posting");
 }
 
-function openSocialVariationChoiceModal() {
-  return new Promise((resolve) => {
-    const overlay = document.createElement("div");
-    overlay.className = "brand-confirm-overlay";
-    overlay.innerHTML = `<div class="brand-confirm-card"><h3>Social post already exists</h3><p>This content node already has a connected social media post. Would you like to update the existing post or create a new variation?</p><div class="brand-confirm-actions"><button type="button" data-choice="update">Update existing</button><button type="button" class="primary-add" data-choice="new">Create new variation</button><button type="button" data-choice="cancel">Cancel</button></div></div>`;
-    overlay.addEventListener("click", (event) => {
-      if (event.target === overlay) {
-        overlay.remove();
-        resolve("cancel");
-      }
-    });
-    overlay.querySelectorAll("[data-choice]").forEach((btn) => btn.addEventListener("click", () => {
-      const choice = btn.getAttribute("data-choice");
-      overlay.remove();
-      resolve(choice);
-    }));
-    document.body.appendChild(overlay);
-  });
-}
-
-async function resolveTargetSocialNodeForContent(contentNode, mode = "auto") {
+async function resolveTargetSocialNodeForContent(contentNode) {
   const connected = getConnectedSocialPostingNodes(contentNode.id);
-  if (!connected.length) {
-    const created = createNode({ type: "Social Media Posting", position: { x: contentNode.position.x + 340, y: contentNode.position.y + 40 } }) || state.nodes[state.nodes.length - 1];
-    addEdge(contentNode.id, created.id);
-    return created;
-  }
-  const choice = mode === "auto" ? await openSocialVariationChoiceModal() : mode;
-  if (choice === "cancel") return null;
-  if (choice === "update") {
-    const connectedIds = new Set(connected.map((n) => n.id));
-    const mostRecent = [...state.nodes].reverse().find((n) => connectedIds.has(n.id));
-    return mostRecent || connected[connected.length - 1];
-  }
   const yOffset = connected.length * 120;
   const created = createNode({ type: "Social Media Posting", position: { x: contentNode.position.x + 340, y: contentNode.position.y + 40 + yOffset } }) || state.nodes[state.nodes.length - 1];
   addEdge(contentNode.id, created.id);
@@ -2180,7 +2148,7 @@ async function generateFullContentPack(node, triggerBtn = null, mode = "auto") {
   if (triggerBtn) triggerBtn.textContent = "…";
   updateNodeCard(node);
   try {
-    const targetSocialNode = await resolveTargetSocialNodeForContent(node, mode);
+    const targetSocialNode = await resolveTargetSocialNodeForContent(node);
     if (!targetSocialNode) return;
 
     const improved = await refineNodeWithAI(node, "Improve or finalize this content while preserving intent and brand voice.");
@@ -2238,51 +2206,12 @@ async function generateFullContentPack(node, triggerBtn = null, mode = "auto") {
   }
 }
 
-function openExistingSocialPostModal() {
-  const pending = state.pendingContentPack;
-  if (!pending) return;
-  const overlay = document.createElement("div");
-  overlay.className = "brand-confirm-overlay";
-  overlay.innerHTML = `<div class="brand-confirm-card"><h3>Social post already exists</h3><p>This content node already has a connected social media post. Would you like to update the existing post or create a new variation?</p><div class="brand-confirm-actions"><button type="button" data-choice="update">Update existing</button><button type="button" class="primary-add" data-choice="new">Create new variation</button><button type="button" data-choice="cancel">Cancel</button></div></div>`;
-  const close = () => overlay.remove();
-  overlay.querySelector('[data-choice="update"]').addEventListener("click", async () => {
-    console.log("Modal update existing clicked");
-    close();
-    const node = getNode(pending.contentNodeId);
-    state.pendingContentPack = null;
-    if (!node) return;
-    await generateFullContentPack(node, el.generateFullPackButton, "update");
-  });
-  overlay.querySelector('[data-choice="new"]').addEventListener("click", async () => {
-    console.log("Modal create new variation clicked");
-    close();
-    const node = getNode(pending.contentNodeId);
-    state.pendingContentPack = null;
-    if (!node) return;
-    await generateFullContentPack(node, el.generateFullPackButton, "new");
-  });
-  overlay.querySelector('[data-choice="cancel"]').addEventListener("click", () => {
-    console.log("Modal cancel clicked");
-    close();
-    if (pending?.contentNodeId) setContentPackGenerating(pending.contentNodeId, false);
-    state.pendingContentPack = null;
-    updateInspectorActionVisibility();
-  });
-  document.body.appendChild(overlay);
-}
-
 async function handleGenerateFullContentPack(contentNodeId) {
   const node = getNode(contentNodeId);
   if (!node || node.type !== "Content") return;
   console.log("Full pack clicked");
   const connectedSocialNodes = getConnectedSocialPostingNodes(node.id);
   console.log("Existing social nodes:", connectedSocialNodes.length);
-  if (connectedSocialNodes.length > 0) {
-    console.log("Opening existing social post modal");
-    state.pendingContentPack = { contentNodeId: node.id };
-    openExistingSocialPostModal();
-    return;
-  }
   await generateFullContentPack(node, el.generateFullPackButton, "new");
 }
 
@@ -2700,14 +2629,16 @@ function renderNode(node) {
     });
     aiToolbar.appendChild(btn);
   });
-  const fullPackBtn = document.createElement("button");
-  fullPackBtn.type = "button";
-  fullPackBtn.textContent = "Generate Full Content Pack";
-  fullPackBtn.addEventListener("click", async (event) => {
-    event.stopPropagation();
-    await generateFullContentPack(node, fullPackBtn);
-  });
-  aiToolbar.appendChild(fullPackBtn);
+  if (node.type === "Content") {
+    const packBtn = document.createElement("button");
+    packBtn.type = "button";
+    packBtn.textContent = "Generate Full Content Pack";
+    packBtn.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      await handleGenerateFullContentPack(node.id);
+    });
+    aiToolbar.appendChild(packBtn);
+  }
   nodeEl.appendChild(aiToolbar);
 
   const expandBtn = document.createElement("button");
