@@ -630,23 +630,33 @@ function analyzeCampaign(nodes, edges, brandCore) {
 function renderCampaignIntelligence() {
   const a = analyzeCampaign(state.nodes, state.edges, state.brandCore);
   if (el.insightsCards) {
+    const funnelSteps = ["Awareness", "Interest", "Consideration", "Conversion", "Retention"]
+      .map((step) => `<span class="insight-step ${a.funnel.coveredStages.includes(step) ? "covered" : "missing"}">${step}</span>`).join("");
     el.insightsCards.innerHTML = `
-      <div class="board-row"><strong>Campaign Health Score</strong><div>${a.healthScore}</div></div>
-      <div class="board-row"><strong>Funnel Coverage</strong><div>${a.funnel.coveredStages.join(", ") || "None"}<br/><small>Missing: ${a.funnel.missingStages.join(", ") || "None"}</small></div></div>
-      <div class="board-row"><strong>Platform Distribution</strong><div>${a.platformDistribution.summary}</div></div>
-      <div class="board-row"><strong>CTA Quality</strong><div>${a.cta.qualityScore}</div></div>
-      <div class="board-row"><strong>ICP Consistency</strong><div>${a.icp.consistencyScore}</div></div>
-      <div class="board-row"><strong>Tone Consistency</strong><div>${a.tone.consistencyScore}</div></div>
-      <div class="board-row"><strong>Trust Layer</strong><div>${a.trust.score}</div></div>
+      <div class="insights-grid">
+        <article class="insight-card hero"><small>Campaign Health Score</small><h3>${a.healthScore}<span>/100</span></h3><p>${a.strengths[0] || "Campaign baseline established."}</p></article>
+        <article class="insight-card"><small>Funnel Coverage</small><div class="insight-funnel">${funnelSteps}</div><p>Missing: ${a.funnel.missingStages.join(", ") || "None"}</p></article>
+        <article class="insight-card"><small>Platform Distribution</small><h4>${a.platformDistribution.summary}</h4><p>${Object.entries(a.platformDistribution.counts).map(([k,v]) => `${k}: ${v}`).join(" · ") || "No platforms yet"}</p></article>
+        <article class="insight-card"><small>CTA Quality</small><h4>${a.cta.qualityScore}/100</h4><p>${a.cta.suggestions[0] || "CTA diversity looks healthy."}</p></article>
+        <article class="insight-card"><small>ICP Consistency</small><h4>${a.icp.consistencyScore}/100</h4><p>${a.icp.inconsistencies.join(" · ") || "Strong ICP consistency across nodes."}</p></article>
+        <article class="insight-card"><small>Tone Consistency</small><h4>${a.tone.consistencyScore}/100</h4><p>${a.tone.warnings[0] || "Tone alignment looks stable."}</p></article>
+        <article class="insight-card"><small>Trust Layer</small><h4>${a.trust.score}/100</h4><p>${a.trust.suggestions[0] || "Trust coverage is present."}</p></article>
+      </div>
     `;
   }
   if (el.aiBrainSummary) {
     el.aiBrainSummary.innerHTML = `
-      <p>This campaign currently covers <strong>${a.funnel.coveredStages.join(", ") || "no funnel stages"}</strong> with health score <strong>${a.healthScore}</strong>.</p>
-      <p><strong>Detected Issues:</strong> ${(a.weaknesses.join(" · ") || "No major issues detected.")}</p>
-      <p><strong>Suggestions:</strong> ${(a.suggestions.join(" · "))}</p>
-      <div class="board-row-actions"><button type="button">Improve CTAs</button><button type="button">Generate Conversion Content</button><button type="button">Strengthen Trust Layer</button><button type="button">Create Platform Variations</button></div>
+      <section class="ai-brain-wrap">
+        <header class="ai-brain-header"><h3>🧠 AI Brain</h3><p>Your AI strategist & creative partner</p><button type="button" id="refresh-ai-brain">Refresh analysis</button></header>
+        <article class="ai-summary-card"><small>Campaign Summary</small><h2>${a.healthScore}<span>/100</span></h2><p>This campaign focuses on <strong>${a.funnel.coveredStages.join(", ") || "early-stage planning"}</strong>, with primary opportunities in <strong>${a.funnel.missingStages.join(", ") || "execution depth"}</strong>.</p></article>
+        <div class="ai-columns">
+          <article class="ai-list-card"><h4>Detected Issues</h4><ul>${(a.weaknesses.length ? a.weaknesses : ["No critical issues detected."]).map((w) => `<li>⚠️ ${w}</li>`).join("")}</ul></article>
+          <article class="ai-list-card"><h4>Suggestions</h4><ul>${a.suggestions.map((s) => `<li>💡 ${s}</li>`).join("")}</ul></article>
+        </div>
+        <article class="ai-actions-card"><h4>Quick Actions</h4><div class="ai-action-grid"><button type="button">Improve CTAs</button><button type="button">Generate Conversion Content</button><button type="button">Strengthen Trust Layer</button><button type="button">Create Platform Variations</button></div></article>
+      </section>
     `;
+    el.aiBrainSummary.querySelector("#refresh-ai-brain")?.addEventListener("click", () => renderCampaignIntelligence());
   }
 }
 
