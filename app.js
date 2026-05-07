@@ -165,6 +165,8 @@ const el = {
     audience: document.getElementById("node-audience"),
     goal: document.getElementById("node-goal"),
     channel: document.getElementById("node-channel"),
+    funnelStage: document.getElementById("node-funnel-stage"),
+    tone: document.getElementById("node-tone"),
     contentFormat: document.getElementById("node-content-format")
     ,lpHeaderVisualPrompt: document.getElementById("lp-header-visual-prompt")
     ,lpHeaderClaim: document.getElementById("lp-header-claim")
@@ -561,6 +563,17 @@ function buildContentImagePrompt(title = "", content = "") {
   return `16:9 campaign visual. Subject: ${title || "core offer"}. Context: ${context}. Composition: clear focal subject, balanced layout, ample negative space for headline overlay. Mood/style: ${mood}. High-quality realistic marketing visual.`;
 }
 
+function nodeStrategyContext(node) {
+  if (!node) return "";
+  return [
+    node.tone ? `Tone: ${node.tone}` : "",
+    node.goal ? `Goal: ${node.goal}` : "",
+    node.audience ? `Audience: ${node.audience}` : "",
+    node.channel ? `Channel: ${node.channel}` : "",
+    node.funnelStage ? `Funnel Stage: ${node.funnelStage}` : ""
+  ].filter(Boolean).join(" | ");
+}
+
 async function regenerateSocialForPlatform(node, triggerBtn = null) {
   if (!node || node.type !== "Social Media Posting") return;
   const nodeEl = el.zoomLayer.querySelector(`[data-id='${node.id}']`);
@@ -572,9 +585,10 @@ async function regenerateSocialForPlatform(node, triggerBtn = null) {
   if (nodeEl) nodeEl.classList.add("ai-loading");
   try {
     const guide = platformPromptGuidance(node.social.platform || "LinkedIn");
-    const captionRefined = await refineNodeWithAI(node, `Write one social-media-ready caption for this node. ${guide} Return in caption.`);
-    const ctaRefined = await refineNodeWithAI(node, `Write one concise CTA for this node. ${guide} Return in content.`);
-    const hashtagsRefined = await refineNodeWithAI(node, `${structuredHashtagPrompt(node.social.platform || "LinkedIn")} ${guide}`);
+    const strategy = nodeStrategyContext(node);
+    const captionRefined = await refineNodeWithAI(node, `Write one social-media-ready caption for this node. ${guide} ${strategy} Return in caption.`);
+    const ctaRefined = await refineNodeWithAI(node, `Write one concise CTA for this node. ${guide} ${strategy} Return in content.`);
+    const hashtagsRefined = await refineNodeWithAI(node, `${structuredHashtagPrompt(node.social.platform || "LinkedIn")} ${guide} ${strategy}`);
     node.social.caption = (captionRefined?.caption || captionRefined?.content || "").trim() || node.social.caption;
     node.social.preview = (ctaRefined?.content || ctaRefined?.caption || "").trim() || node.social.preview;
     node.social.hashtags = finalizeGeneratedHashtags(hashtagsRefined?.caption || hashtagsRefined?.content || "", node.social.platform || "LinkedIn");
@@ -1192,6 +1206,8 @@ function createNode({ type = "Idea", parentId = null, position = null, images = 
     audience: "",
     goal: "",
     channel: "",
+    funnelStage: "",
+    tone: "",
     images: [...images],
     favoriteImageId: null,
     social: { platform: "Instagram", caption: "", hashtags: [], preview: "", scheduledAt: "" },
@@ -1444,6 +1460,7 @@ function generateCampaignFromIdea(ideaText, contextText, providedPlan = null) {
 
   const idea = createNode({ type: "Idea", position: { x: 620, y: 120 } });
   Object.assign(idea, { title: plan.idea.title, content: plan.idea.content });
+  Object.assign(idea, { goal: "Awareness", channel: "Campaign Strategy", funnelStage: "Awareness", audience: state.brandCore?.personas?.[0]?.name || "Primary ICP", tone: "Professional" });
   updateNodeCard(idea);
 
   const variationA = createNode({ type: "Campaign Variation", position: { x: 320, y: 340 } });
@@ -1452,12 +1469,14 @@ function generateCampaignFromIdea(ideaText, contextText, providedPlan = null) {
   const contentA = createNode({ type: "Content", position: { x: 260, y: 560 } });
   Object.assign(contentA, { title: variations[0]?.contentNode?.title || "Content A", content: variations[0]?.contentNode?.content || "" });
   contentA.imagePrompt = buildContentImagePrompt(contentA.title, contentA.content);
+  Object.assign(contentA, { goal: "Education", channel: "Blog", funnelStage: "Interest", audience: idea.audience, tone: idea.tone });
   updateNodeCard(contentA);
   const socialA = createNode({ type: "Social Media Posting", position: { x: 220, y: 820 } });
   Object.assign(socialA, { title: variations[0]?.socialPost?.title || "Social A", content: variations[0]?.socialPost?.caption || "" });
   socialA.social.platform = variations[0]?.socialPost?.platform || "Instagram";
   socialA.social.caption = variations[0]?.socialPost?.caption || "";
   socialA.social.hashtags = finalizeGeneratedHashtags(variations[0]?.socialPost?.hashtags || `${socialA.title}, ${socialA.social.caption}`, socialA.social.platform);
+  Object.assign(socialA, { goal: "Community", channel: socialA.social.platform, funnelStage: "Awareness", audience: idea.audience, tone: "Emotional" });
   updateNodeCard(socialA);
 
   const variationB = createNode({ type: "Campaign Variation", position: { x: 900, y: 340 } });
@@ -1466,12 +1485,14 @@ function generateCampaignFromIdea(ideaText, contextText, providedPlan = null) {
   const contentB = createNode({ type: "Content", position: { x: 980, y: 560 } });
   Object.assign(contentB, { title: variations[1]?.contentNode?.title || "Content B", content: variations[1]?.contentNode?.content || "" });
   contentB.imagePrompt = buildContentImagePrompt(contentB.title, contentB.content);
+  Object.assign(contentB, { goal: "Consideration", channel: "Email", funnelStage: "Consideration", audience: idea.audience, tone: "Direct" });
   updateNodeCard(contentB);
   const socialB = createNode({ type: "Social Media Posting", position: { x: 1040, y: 820 } });
   Object.assign(socialB, { title: variations[1]?.socialPost?.title || "Social B", content: variations[1]?.socialPost?.caption || "" });
   socialB.social.platform = variations[1]?.socialPost?.platform || "Instagram";
   socialB.social.caption = variations[1]?.socialPost?.caption || "";
   socialB.social.hashtags = finalizeGeneratedHashtags(variations[1]?.socialPost?.hashtags || `${socialB.title}, ${socialB.social.caption}`, socialB.social.platform);
+  Object.assign(socialB, { goal: "Lead Gen", channel: socialB.social.platform, funnelStage: "Conversion", audience: idea.audience, tone: "Direct" });
   updateNodeCard(socialB);
 
   const landing = createNode({ type: "Landing Page", position: { x: 520, y: 560 } });
@@ -1485,9 +1506,11 @@ function generateCampaignFromIdea(ideaText, contextText, providedPlan = null) {
     trust: lpStructured.buildingTrust || "Trusted by teams looking for clearer, more effective campaign execution.",
     cta: lpStructured.conversionCta || "Get started"
   };
+  Object.assign(landing, { goal: "Conversion", channel: "Landing Page", funnelStage: "Conversion", audience: idea.audience, tone: "Professional" });
   updateNodeCard(landing);
   const email = createNode({ type: "Email Campaign", position: { x: 700, y: 560 } });
   Object.assign(email, { title: plan.emailCampaign?.title || plan.email?.title || "Email Campaign", content: plan.emailCampaign?.content || plan.email?.content || "" });
+  Object.assign(email, { goal: "Lead Gen", channel: "Email", funnelStage: "Consideration", audience: idea.audience, tone: "Professional" });
   updateNodeCard(email);
 
   addEdge(idea.id, variationA.id); addEdge(variationA.id, contentA.id); addEdge(contentA.id, socialA.id);
@@ -2199,6 +2222,8 @@ function fillInspector(node) {
   el.inputs.audience.value = node.audience;
   el.inputs.goal.value = node.goal;
   el.inputs.channel.value = node.channel;
+  el.inputs.funnelStage.value = node.funnelStage || "";
+  el.inputs.tone.value = node.tone || "";
   el.inputs.contentFormat.value = node.contentFormat || "1:1";
   const lp = node.landingPage || { headerVisualPrompt: "", headerClaim: "", problem: "", solution: "", trust: "", cta: "" };
   el.inputs.lpHeaderVisualPrompt.value = lp.headerVisualPrompt || "";
@@ -2503,7 +2528,7 @@ async function generateImageForNode(node) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         nodeTitle: node.title || "",
-        nodeContent: node.imagePrompt || node.content || "",
+        nodeContent: [node.imagePrompt || node.content || "", nodeStrategyContext(node)].filter(Boolean).join(" | "),
         brandBrainData: state.brandCore,
         campaignContext: getCampaignContextSummary(),
         contentFormat: node.contentFormat || "1:1"
@@ -3327,6 +3352,8 @@ el.nodeForm.addEventListener("input", (event) => {
   if (event.target === el.inputs.audience) node.audience = el.inputs.audience.value.trim();
   if (event.target === el.inputs.goal) node.goal = el.inputs.goal.value.trim();
   if (event.target === el.inputs.channel) node.channel = el.inputs.channel.value.trim();
+  if (event.target === el.inputs.funnelStage) node.funnelStage = el.inputs.funnelStage.value.trim();
+  if (event.target === el.inputs.tone) node.tone = el.inputs.tone.value.trim();
   if (event.target === el.inputs.contentFormat) node.contentFormat = el.inputs.contentFormat.value || "1:1";
   if (!node.landingPage) node.landingPage = { headerVisualPrompt: "", headerClaim: "", problem: "", solution: "", trust: "", cta: "" };
   if (event.target === el.inputs.lpHeaderVisualPrompt) node.landingPage.headerVisualPrompt = el.inputs.lpHeaderVisualPrompt.value;
