@@ -55,8 +55,8 @@
           <button id="boards-nav-btn" class="nav-item" data-icon="📚"><span class="nav-label">↳ Boards</span></button>
           <button class="nav-item" data-icon="🗂"><span class="nav-label">Content Workspace</span></button>
           <button id="brand-core-nav-btn" class="nav-item" data-icon="🧠"><span class="nav-label">Brand Core</span></button>
-          <button class="nav-item" data-icon="✨"><span class="nav-label">AI Brain</span></button>
-          <button class="nav-item" data-icon="📈"><span class="nav-label">Insights</span></button>
+          <button id="ai-brain-nav-btn" class="nav-item" data-icon="✨"><span class="nav-label">AI Brain</span></button>
+          <button id="insights-nav-btn" class="nav-item" data-icon="📈"><span class="nav-label">Insights</span></button>
         </nav>
       </aside>
 
@@ -138,6 +138,14 @@
           </div>
           <div id="calendar-grid" class="calendar-grid"></div>
         </section>
+        <section id="insights-view" class="board-list-view hidden">
+          <h2>Campaign Insights</h2>
+          <div id="insights-cards" class="boards-library-panel"></div>
+        </section>
+        <section id="ai-brain-view" class="board-list-view hidden">
+          <h2>AI Brain</h2>
+          <div id="ai-brain-summary" class="boards-library-panel"></div>
+        </section>
         <section id="brand-core-workspace" class="brand-core-workspace hidden">
           <header class="brand-mode-header">
             <h1>🧠 Brand Brain</h1>
@@ -168,6 +176,25 @@
 
             <label for="node-content">Inhalt</label>
             <textarea id="node-content" name="content" rows="3" placeholder="Beschreibung, Prompt, Task ..."></textarea>
+            <div id="content-image-prompt-field" class="hidden">
+              <label for="node-image-prompt">Image Prompt</label>
+              <textarea id="node-image-prompt" name="imagePrompt" rows="2" placeholder="Describe the visual style, scene, mood, and composition..."></textarea>
+            </div>
+            <div id="landing-page-fields" class="hidden">
+              <label for="lp-header-visual-prompt">Header visual prompt</label>
+              <textarea id="lp-header-visual-prompt" rows="2" placeholder="Describe the 16:9 hero visual..."></textarea>
+              <button id="generate-header-visual-btn" type="button">Generate Header Visual</button>
+              <label for="lp-header-claim">Header claim</label>
+              <input id="lp-header-claim" placeholder="Main headline claim" />
+              <label for="lp-problem">Problem of ICP clearly stated</label>
+              <textarea id="lp-problem" rows="2"></textarea>
+              <label for="lp-solution">Solution for ICP presented</label>
+              <textarea id="lp-solution" rows="2"></textarea>
+              <label for="lp-trust">Building Trust</label>
+              <textarea id="lp-trust" rows="2"></textarea>
+              <label for="lp-cta">Call to action for conversion</label>
+              <input id="lp-cta" placeholder="Start free trial" />
+            </div>
           </section>
 
           <section id="social-fields" class="inspector-section social-fields hidden">
@@ -187,8 +214,6 @@
             <label for="node-hashtags">Hashtags (Komma getrennt)</label>
             <input id="node-hashtags" name="hashtags" placeholder="#solar, #greenenergy" />
 
-            <label for="node-preview">Preview Text</label>
-            <textarea id="node-preview" name="preview" rows="2" placeholder="So sieht der Post im Feed aus..."></textarea>
           </section>
 
           <section class="inspector-section">
@@ -217,10 +242,22 @@
             <input id="node-audience" name="audience" placeholder="z. B. Eco-conscious homeowners" />
 
             <label for="node-goal">Goal</label>
-            <input id="node-goal" name="goal" placeholder="z. B. Product Launch" />
+            <select id="node-goal" name="goal">
+              <option value=""></option><option>Awareness</option><option>Lead Gen</option><option>Conversion</option><option>Community</option><option>Education</option>
+            </select>
 
             <label for="node-channel">Channel</label>
-            <input id="node-channel" name="channel" placeholder="z. B. Instagram" />
+            <select id="node-channel" name="channel">
+              <option value=""></option><option>LinkedIn</option><option>X / Twitter</option><option>Instagram</option><option>TikTok</option><option>Email</option><option>Landing Page</option><option>Website</option><option>Blog</option><option>Campaign Strategy</option>
+            </select>
+            <label for="node-funnel-stage">Funnel stage</label>
+            <select id="node-funnel-stage" name="funnelStage">
+              <option value=""></option><option>Awareness</option><option>Interest</option><option>Consideration</option><option>Conversion</option><option>Retention</option>
+            </select>
+            <label for="node-tone">Tone</label>
+            <select id="node-tone" name="tone">
+              <option value=""></option><option>Professional</option><option>Emotional</option><option>Direct</option><option>Premium</option><option>Playful</option>
+            </select>
           </section>
 
           <section class="inspector-section">
@@ -229,6 +266,9 @@
             <input id="node-variants" name="variants" placeholder="A: Hook 1, B: Hook 2" />
             <button id="improve-node-btn" type="button" class="primary-add">✨ Improve with AI</button>
             <button id="regenerate-node-btn" type="button">🔄 Regenerate</button>
+            <button id="regenerate-platform-btn" type="button">Regenerate for platform</button>
+            <button id="add-to-posting-calendar-btn" type="button">Add to Posting Calendar</button>
+            <button id="generate-full-pack-btn" type="button">Generate Full Content Pack</button>
           </section>
 
           <section class="inspector-section">
@@ -237,6 +277,13 @@
             <button id="propagate-descendants-btn" type="button">Propagate to descendants</button>
             <button id="delete-node-btn" type="button" class="danger">Delete node</button>
             <button id="delete-selected-btn" type="button" class="danger">Delete selected nodes</button>
+          </section>
+          <section class="inspector-section">
+            <h3 class="inspector-section-title">Connected Context</h3>
+            <details id="connected-context-details">
+              <summary id="connected-context-summary">Parents: 0 · Children: 0</summary>
+              <div id="connected-context-body" class="meta"></div>
+            </details>
           </section>
         </form>
         </div>
@@ -248,6 +295,7 @@
         <span class="type"></span>
         <h3 class="title" contenteditable="true" data-placeholder="Node Titel"></h3>
         <p class="content" contenteditable="true" data-placeholder="Node Inhalt"></p>
+        <p class="content-pack-status hidden"></p>
         <div class="image-strip"></div>
         <div class="social-preview hidden"></div>
         <div class="tags"></div>
