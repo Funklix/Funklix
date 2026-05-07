@@ -601,7 +601,16 @@ function getConnectedNodeContext(currentNodeId) {
 
 function analyzeCampaign(nodes, edges, brandCore) {
   const stages = ["Awareness", "Interest", "Consideration", "Conversion", "Retention"];
-  const coveredStages = [...new Set(nodes.map((n) => n.funnelStage).filter(Boolean))];
+  const derivedStages = nodes.flatMap((n) => {
+    const out = [];
+    if (n.funnelStage) out.push(n.funnelStage);
+    if (n.type === "Idea") out.push("Awareness");
+    if (n.type === "Content") out.push("Interest");
+    if (n.type === "Social Media Posting") out.push("Awareness");
+    if (n.type === "Landing Page" || n.goal === "Conversion" || n.funnelStage === "Conversion" || (n.landingPage?.cta || "").trim()) out.push("Conversion");
+    return out;
+  });
+  const coveredStages = [...new Set(derivedStages.filter(Boolean))];
   const missingStages = stages.filter((s) => !coveredStages.includes(s));
   const socialNodes = nodes.filter((n) => n.type === "Social Media Posting");
   const ctas = nodes.map((n) => n.landingPage?.cta || n.social?.preview || "").filter(Boolean);
@@ -631,8 +640,17 @@ function suggestNextNodes(analysis, nodes, edges, brandCore) {
   const primaryAudience = brandCore?.personas?.[0]?.name || "Primary ICP";
   const tone = Array.isArray(brandCore?.toneOfVoice) ? brandCore.toneOfVoice[0] || "Professional" : "Professional";
   const suggestions = [];
-  if (analysis.funnel.missingStages.includes("Conversion")) {
+  const landingNodes = nodes.filter((n) => n.type === "Landing Page");
+  const hasStrongLanding = landingNodes.some((n) => {
+    const lp = n.landingPage || {};
+    return !!((lp.cta || "").trim() && (lp.solution || "").trim() && (n.goal === "Conversion" || n.funnelStage === "Conversion"));
+  });
+  if (analysis.funnel.missingStages.includes("Conversion") && !hasStrongLanding) {
     suggestions.push({ id: "s-conv-lp", title: "Add conversion landing page", description: "Create a conversion destination for interested traffic.", recommendedNodeType: "Landing Page", reason: "Campaign has upper-funnel assets but no strong conversion endpoint.", priority: "high", suggestedPositionContext: "after-consideration", suggestedStrategy: { audience: primaryAudience, goal: "Conversion", channel: "Landing Page", funnelStage: "Conversion", tone } });
+  } else if (hasStrongLanding) {
+    const lp = landingNodes[0];
+    if (!(lp.landingPage?.cta || "").trim()) suggestions.push({ id: "s-improve-lp-cta", title: "Improve landing page CTA", description: "Strengthen the conversion step on your current landing page.", recommendedNodeType: "Landing Page", reason: "Landing page exists, but CTA can be stronger.", priority: "medium", suggestedPositionContext: "near-landing", suggestedStrategy: { audience: primaryAudience, goal: "Conversion", channel: "Landing Page", funnelStage: "Conversion", tone } });
+    if (!(lp.landingPage?.trust || "").trim()) suggestions.push({ id: "s-lp-trust", title: "Strengthen trust section", description: "Add stronger social proof and credibility cues.", recommendedNodeType: "Content", reason: "Landing conversion layer needs trust reinforcement.", priority: "medium", suggestedPositionContext: "near-landing", suggestedStrategy: { audience: primaryAudience, goal: "Consideration", channel: "Blog", funnelStage: "Consideration", tone: "Professional" } });
   }
   if (analysis.trust.score < 60) {
     suggestions.push({ id: "s-trust-content", title: "Add trust-building content", description: "Add proof and credibility messaging.", recommendedNodeType: "Content", reason: "Trust layer is weak in current campaign structure.", priority: "medium", suggestedPositionContext: "near-landing", suggestedStrategy: { audience: primaryAudience, goal: "Consideration", channel: "Blog", funnelStage: "Consideration", tone: "Professional" } });
@@ -646,7 +664,7 @@ function suggestNextNodes(analysis, nodes, edges, brandCore) {
   return suggestions.slice(0, 6);
 }
 
-function createSuggestedNodeFromAnalysis(suggestion) {
+async function createSuggestedNodeFromAnalysis(suggestion) {
   const base = state.nodes[state.nodes.length - 1];
   const pos = base ? { x: base.position.x + 340, y: base.position.y + 40 } : { x: 620, y: 420 };
   const node = createNode({ type: suggestion.recommendedNodeType, position: pos });
@@ -657,24 +675,50 @@ function createSuggestedNodeFromAnalysis(suggestion) {
   node.channel = suggestion.suggestedStrategy?.channel || "";
   node.funnelStage = suggestion.suggestedStrategy?.funnelStage || "";
   node.tone = suggestion.suggestedStrategy?.tone || "";
-  if (node.type === "Content") {
-    node.imagePrompt = buildContentImagePrompt(node.title, node.content);
-  }
-  if (node.type === "Social Media Posting") {
-    node.social.platform = suggestion.suggestedStrategy?.channel || "LinkedIn";
-    node.social.caption = `${suggestion.title} for ${node.audience}`.trim();
-    node.social.preview = "Get started today.";
-    node.social.hashtags = finalizeGeneratedHashtags(`#Marketing,#${(node.channel || "Campaign").replace(/[^A-Za-z0-9]/g, "")},#NextStep`, node.social.platform);
-  }
-  if (node.type === "Landing Page") {
-    node.landingPage = {
-      headerVisualPrompt: buildContentImagePrompt(node.title, node.content),
-      headerClaim: node.title,
-      problem: "Your audience needs a clearer path to convert.",
-      solution: "This landing page gives them a direct, value-focused next step.",
-      trust: "Trusted by teams looking for clearer, more effective campaign execution.",
-      cta: "Get started"
-    };
+  try {
+    const contextPrompt = `Campaign context: ${getCampaignContextSummary()}. Suggestion reason: ${suggestion.reason}.`;
+    if (node.type === "Content") {
+      const refined = await refineNodeWithAI(node, `Write a specific trust-building or conversion-supporting content brief. ${contextPrompt}`);
+      node.title = refined?.title || node.title;
+      node.content = refined?.content || node.content;
+      node.imagePrompt = buildContentImagePrompt(node.title, node.content);
+    }
+    if (node.type === "Social Media Posting") {
+      node.social.platform = suggestion.suggestedStrategy?.channel || "LinkedIn";
+      const guide = platformPromptGuidance(node.social.platform);
+      const caption = await refineNodeWithAI(node, `Create a high-quality ${node.social.platform} caption aligned to campaign context. ${guide} ${contextPrompt} Return in caption.`);
+      const cta = await refineNodeWithAI(node, `Create a conversion-focused CTA aligned to campaign context. ${guide} ${contextPrompt} Return in content.`);
+      const hashtags = await refineNodeWithAI(node, `${structuredHashtagPrompt(node.social.platform)} ${guide} ${contextPrompt}`);
+      node.social.caption = (caption?.caption || caption?.content || node.social.caption || "").trim();
+      node.social.preview = (cta?.content || cta?.caption || "Learn more").trim();
+      node.social.hashtags = finalizeGeneratedHashtags(hashtags?.caption || hashtags?.content || "", node.social.platform);
+      node.content = node.social.caption;
+    }
+    if (node.type === "Landing Page") {
+      const claim = await refineNodeWithAI(node, `Write a specific conversion headline for the landing page. ${contextPrompt} Return in content.`);
+      const problem = await refineNodeWithAI(node, `Write the ICP problem statement clearly and specifically. ${contextPrompt} Return in content.`);
+      const solution = await refineNodeWithAI(node, `Write the solution/value proposition clearly and specifically. ${contextPrompt} Return in content.`);
+      const trust = await refineNodeWithAI(node, `Write trust-building copy without fake metrics/testimonials unless provided in context. ${contextPrompt} Return in content.`);
+      const cta = await refineNodeWithAI(node, `Write a concise conversion CTA line. ${contextPrompt} Return in content.`);
+      node.landingPage = {
+        headerVisualPrompt: buildContentImagePrompt(node.title, solution?.content || node.content),
+        headerClaim: claim?.content || node.title,
+        problem: problem?.content || node.content,
+        solution: solution?.content || node.content,
+        trust: trust?.content || "Trusted by teams looking for clearer, more effective campaign execution.",
+        cta: cta?.content || "Get started"
+      };
+      node.content = [node.landingPage.headerClaim, node.landingPage.solution].filter(Boolean).join(" — ");
+    }
+  } catch (_error) {
+    if (node.type === "Content") node.imagePrompt = buildContentImagePrompt(node.title, node.content);
+    if (node.type === "Social Media Posting") {
+      node.social.platform = suggestion.suggestedStrategy?.channel || "LinkedIn";
+      node.social.caption = `${suggestion.title} for ${node.audience}`.trim();
+      node.social.preview = "Learn more";
+      node.social.hashtags = finalizeGeneratedHashtags(`#Marketing,#${(node.channel || "Campaign").replace(/[^A-Za-z0-9]/g, "")},#NextStep`, node.social.platform);
+    }
+    if (node.type === "Landing Page") node.landingPage = { headerVisualPrompt: buildContentImagePrompt(node.title, node.content), headerClaim: node.title, problem: node.content, solution: node.content, trust: "Trusted by teams looking for clearer, more effective campaign execution.", cta: "Get started" };
   }
   const parent = state.nodes.find((n) => n.funnelStage === "Consideration") || state.nodes.find((n) => n.type === "Content") || null;
   if (parent && parent.id !== node.id) addEdge(parent.id, node.id);
@@ -709,9 +753,9 @@ function renderCampaignIntelligence() {
         <div class="insight-suggestion-list">${suggestions.slice(0,3).map((s) => `<div class="insight-suggestion-item"><div><strong>${s.title}</strong><small>${s.recommendedNodeType} · ${s.priority}</small><p>${s.reason}</p></div><button type="button" data-suggestion-id="${s.id}">Create node</button></div>`).join("") || "<p>No suggestions right now.</p>"}</div>
       </div>
     `;
-    el.insightsCards.querySelectorAll("[data-suggestion-id]").forEach((btn) => btn.addEventListener("click", () => {
+    el.insightsCards.querySelectorAll("[data-suggestion-id]").forEach((btn) => btn.addEventListener("click", async () => {
       const suggestion = suggestions.find((s) => s.id === btn.getAttribute("data-suggestion-id"));
-      if (suggestion) createSuggestedNodeFromAnalysis(suggestion);
+      if (suggestion) await createSuggestedNodeFromAnalysis(suggestion);
     }));
   }
   if (el.aiBrainSummary) {
@@ -728,9 +772,9 @@ function renderCampaignIntelligence() {
       </section>
     `;
     el.aiBrainSummary.querySelector("#refresh-ai-brain")?.addEventListener("click", () => renderCampaignIntelligence());
-    el.aiBrainSummary.querySelectorAll("[data-suggestion-id]").forEach((btn) => btn.addEventListener("click", () => {
+    el.aiBrainSummary.querySelectorAll("[data-suggestion-id]").forEach((btn) => btn.addEventListener("click", async () => {
       const suggestion = suggestions.find((s) => s.id === btn.getAttribute("data-suggestion-id"));
-      if (suggestion) createSuggestedNodeFromAnalysis(suggestion);
+      if (suggestion) await createSuggestedNodeFromAnalysis(suggestion);
     }));
   }
 }
