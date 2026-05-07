@@ -145,7 +145,13 @@ const el = {
   brandCoreButton: document.getElementById("brand-core-nav-btn"),
   campaignCanvasNavButton: document.getElementById("campaign-canvas-nav-btn"),
   boardsNavButton: document.getElementById("boards-nav-btn"),
+  insightsNavButton: document.getElementById("insights-nav-btn"),
+  aiBrainNavButton: document.getElementById("ai-brain-nav-btn"),
   boardsLibraryView: document.getElementById("boards-library-view"),
+  insightsView: document.getElementById("insights-view"),
+  aiBrainView: document.getElementById("ai-brain-view"),
+  insightsCards: document.getElementById("insights-cards"),
+  aiBrainSummary: document.getElementById("ai-brain-summary"),
   boardsLibraryList: document.getElementById("boards-library-list"),
   sidebarToggleButton: document.getElementById("sidebar-toggle-btn"),
   brandEditorTitle: document.getElementById("bc-editor-title"),
@@ -593,6 +599,57 @@ function getConnectedNodeContext(currentNodeId) {
   return { parentNodes: parentNodes.map(slim), childNodes: childNodes.map(slim), siblingNodes: siblingNodes.map(slim) };
 }
 
+function analyzeCampaign(nodes, edges, brandCore) {
+  const stages = ["Awareness", "Interest", "Consideration", "Conversion", "Retention"];
+  const coveredStages = [...new Set(nodes.map((n) => n.funnelStage).filter(Boolean))];
+  const missingStages = stages.filter((s) => !coveredStages.includes(s));
+  const socialNodes = nodes.filter((n) => n.type === "Social Media Posting");
+  const ctas = nodes.map((n) => n.landingPage?.cta || n.social?.preview || "").filter(Boolean);
+  const uniqueCtas = new Set(ctas.map((v) => v.toLowerCase()));
+  const audienceSet = new Set(nodes.map((n) => (n.audience || "").trim()).filter(Boolean));
+  const toneSet = new Set(nodes.map((n) => (n.tone || "").trim()).filter(Boolean));
+  const trustNodes = nodes.filter((n) => n.type === "Landing Page" && (n.landingPage?.trust || "").trim().length > 0);
+  const platformCounts = socialNodes.reduce((acc, n) => { const p = n.social?.platform || "Unknown"; acc[p] = (acc[p] || 0) + 1; return acc; }, {});
+  const healthScore = Math.max(0, Math.min(100, Math.round(
+    40 + (coveredStages.length / stages.length) * 25 + (trustNodes.length ? 10 : 0) + (uniqueCtas.size >= 2 ? 10 : 0) + (audienceSet.size <= 1 ? 10 : 0) + (toneSet.size <= 2 ? 5 : 0)
+  )));
+  return {
+    healthScore,
+    funnel: { coveredStages, missingStages, confidence: Math.round((coveredStages.length / stages.length) * 100) },
+    platformDistribution: { counts: platformCounts, summary: `${socialNodes.length} social nodes across ${Object.keys(platformCounts).length || 0} platforms` },
+    cta: { qualityScore: Math.round((uniqueCtas.size / Math.max(ctas.length, 1)) * 100), warnings: ctas.length ? [] : ["Missing CTA"], suggestions: uniqueCtas.size < 2 ? ["Add CTA variations for different stages."] : [] },
+    icp: { consistencyScore: audienceSet.size <= 1 ? 90 : 55, inconsistencies: audienceSet.size > 1 ? [...audienceSet] : [] },
+    tone: { consistencyScore: toneSet.size <= 1 ? 90 : toneSet.size <= 2 ? 75 : 50, warnings: toneSet.size > 2 ? ["Tone shifts across nodes are high."] : [] },
+    trust: { score: trustNodes.length ? 80 : 35, suggestions: trustNodes.length ? [] : ["Add trust-building proof in Landing Page nodes."] },
+    strengths: [coveredStages.length >= 3 ? "Good funnel stage coverage." : "", socialNodes.length >= 2 ? "Multi-platform social presence." : ""].filter(Boolean),
+    weaknesses: [missingStages.length > 0 ? `Missing stages: ${missingStages.join(", ")}` : "", audienceSet.size > 1 ? "Audience/ICP varies across nodes." : ""].filter(Boolean),
+    suggestions: ["Strengthen conversion-oriented CTA where missing.", "Keep ICP and tone aligned across connected nodes."]
+  };
+}
+
+function renderCampaignIntelligence() {
+  const a = analyzeCampaign(state.nodes, state.edges, state.brandCore);
+  if (el.insightsCards) {
+    el.insightsCards.innerHTML = `
+      <div class="board-row"><strong>Campaign Health Score</strong><div>${a.healthScore}</div></div>
+      <div class="board-row"><strong>Funnel Coverage</strong><div>${a.funnel.coveredStages.join(", ") || "None"}<br/><small>Missing: ${a.funnel.missingStages.join(", ") || "None"}</small></div></div>
+      <div class="board-row"><strong>Platform Distribution</strong><div>${a.platformDistribution.summary}</div></div>
+      <div class="board-row"><strong>CTA Quality</strong><div>${a.cta.qualityScore}</div></div>
+      <div class="board-row"><strong>ICP Consistency</strong><div>${a.icp.consistencyScore}</div></div>
+      <div class="board-row"><strong>Tone Consistency</strong><div>${a.tone.consistencyScore}</div></div>
+      <div class="board-row"><strong>Trust Layer</strong><div>${a.trust.score}</div></div>
+    `;
+  }
+  if (el.aiBrainSummary) {
+    el.aiBrainSummary.innerHTML = `
+      <p>This campaign currently covers <strong>${a.funnel.coveredStages.join(", ") || "no funnel stages"}</strong> with health score <strong>${a.healthScore}</strong>.</p>
+      <p><strong>Detected Issues:</strong> ${(a.weaknesses.join(" · ") || "No major issues detected.")}</p>
+      <p><strong>Suggestions:</strong> ${(a.suggestions.join(" · "))}</p>
+      <div class="board-row-actions"><button type="button">Improve CTAs</button><button type="button">Generate Conversion Content</button><button type="button">Strengthen Trust Layer</button><button type="button">Create Platform Variations</button></div>
+    `;
+  }
+}
+
 async function regenerateSocialForPlatform(node, triggerBtn = null) {
   if (!node || node.type !== "Social Media Posting") return;
   const nodeEl = el.zoomLayer.querySelector(`[data-id='${node.id}']`);
@@ -632,7 +689,7 @@ function serializeState() {
   console.log("serialized images", selectedNode?.images || []);
   return serialized;
 }
-function saveCampaignCanvasState() { const campaignState = serializeState(); console.log("Saving campaignCanvasState", campaignState); localStorage.setItem(STORAGE_KEY, JSON.stringify(campaignState)); setSaveStatus("Saved"); }
+function saveCampaignCanvasState() { const campaignState = serializeState(); console.log("Saving campaignCanvasState", campaignState); localStorage.setItem(STORAGE_KEY, JSON.stringify(campaignState)); setSaveStatus("Saved"); renderCampaignIntelligence(); }
 function markUnsaved() {
   state.isDirty = true;
   state.autosavePausedUntilChange = false;
@@ -3183,12 +3240,15 @@ function setActiveView(view) {
   el.boardListView.classList.toggle("hidden", view !== "list");
   el.calendarView.classList.toggle("hidden", view !== "calendar");
   el.boardsLibraryView?.classList.toggle("hidden", view !== "boards_library");
+  el.insightsView?.classList.toggle("hidden", view !== "insights");
+  el.aiBrainView?.classList.toggle("hidden", view !== "ai_brain");
   el.brandCoreWorkspace.classList.toggle("hidden", view !== "brand-core");
   el.campaignCanvasNavButton.classList.toggle("active", view !== "brand-core");
   el.brandCoreButton.classList.toggle("active", view === "brand-core");
   el.cycleViewButton.textContent =
-    view === "board" ? "Board View" : view === "list" ? "List View" : view === "calendar" ? "Calendar View" : "Brand Core";
+    view === "board" ? "Board View" : view === "list" ? "List View" : view === "calendar" ? "Calendar View" : view === "insights" ? "Insights" : view === "ai_brain" ? "AI Brain" : "Brand Core";
   if (view === "calendar") renderCalendarView();
+  if (view === "insights" || view === "ai_brain") renderCampaignIntelligence();
 }
 
 function setAppMode(mode) {
@@ -3662,6 +3722,14 @@ el.boardsNavButton?.addEventListener("click", () => {
   setAppMode("canvas");
   setActiveView("boards_library");
   loadBoardsLibrary();
+});
+el.insightsNavButton?.addEventListener("click", () => {
+  setAppMode("canvas");
+  setActiveView("insights");
+});
+el.aiBrainNavButton?.addEventListener("click", () => {
+  setAppMode("canvas");
+  setActiveView("ai_brain");
 });
 el.brandCoreCanvas.addEventListener("click", (event) => {
   const n = event.target.closest(".bc-node[data-bc-key]");
