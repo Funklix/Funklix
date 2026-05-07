@@ -963,6 +963,13 @@ button:active {
 .ai-actions-card h4, .ai-list-card h4 { margin: 0 0 8px; color: #2f3561; }
 .ai-action-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(180px,1fr)); gap: 8px; }
 .ai-action-grid button { border: 1px solid #d8dcef; background: #f8f9ff; color: #415082; border-radius: 12px; padding: 8px 10px; font-size: 0.72rem; text-align: left; }
+.ai-action-grid button small { display: block; margin-top: 4px; color: #7280ac; font-size: 0.62rem; }
+.insight-suggestion-list { display: grid; gap: 8px; margin-top: 8px; }
+.insight-suggestion-item { display: flex; justify-content: space-between; gap: 10px; border: 1px solid #e6e8f5; border-radius: 12px; padding: 8px; background: #fbfcff; }
+.insight-suggestion-item strong { color: #2f3561; font-size: 0.78rem; }
+.insight-suggestion-item small { display: block; color: #7280ac; font-size: 0.64rem; margin-top: 2px; }
+.insight-suggestion-item p { margin: 4px 0 0; color: #5a648e; font-size: 0.7rem; }
+.insight-suggestion-item button { border: 1px solid #d8dcef; background: #f7f8ff; color: #415082; border-radius: 10px; padding: 6px 8px; font-size: 0.68rem; white-space: nowrap; }
 
 .social-preview p,
 .social-preview small,
