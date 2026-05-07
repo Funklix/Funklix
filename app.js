@@ -1474,6 +1474,7 @@ function createNode({ type = "Idea", parentId = null, position = null, images = 
     landingPage: { headerVisualPrompt: "", headerClaim: "", problem: "", solution: "", trust: "", cta: "" },
     reactions: {},
     postits: [],
+    compact: false,
     justConnectedAt: null,
     position: safePos
   };
@@ -2082,9 +2083,16 @@ function updateNodeCard(node) {
   nodeEl.style.opacity = isConnected ? "1" : "0.62";
   nodeEl.style.filter = isConnected ? "grayscale(0)" : "grayscale(1) saturate(0)";
   nodeEl.classList.toggle("just-connected", !!node.justConnectedAt && Date.now() - node.justConnectedAt < 700);
+  nodeEl.classList.toggle("is-compact", !!node.compact);
 
   nodeEl.querySelector(".type").textContent = node.type;
   nodeEl.querySelector(".type").style.color = tone;
+  const compactToggle = nodeEl.querySelector(".node-compact-toggle");
+  if (compactToggle) {
+    compactToggle.textContent = node.compact ? "↗" : "−";
+    compactToggle.title = node.compact ? "Expand node" : "Compact view";
+    compactToggle.setAttribute("aria-label", compactToggle.title);
+  }
   nodeEl.querySelector(".title").textContent = node.title;
   const contentEl = nodeEl.querySelector(".content");
   contentEl.textContent = node.content;
@@ -2173,6 +2181,27 @@ function updateNodeCard(node) {
 
     imageStrip.appendChild(thumb);
   }
+
+  const compactSummary = nodeEl.querySelector(".node-compact-summary");
+  const compactPreview = node.type === "Landing Page"
+    ? (node.landingPage?.headerClaim || node.landingPage?.cta || node.content || "").trim()
+    : node.type === "Social Media Posting"
+      ? (node.social?.caption || node.title || "").trim()
+      : (node.content || node.title || "").trim();
+  const compactMeta = [];
+  if (node.goal) compactMeta.push(`Goal: ${node.goal}`);
+  if (node.audience) compactMeta.push(`Audience: ${node.audience}`);
+  if (node.type === "Social Media Posting" && node.social?.platform) compactMeta.push(node.social.platform);
+  if (node.type === "Social Media Posting" && node.social?.scheduledAt) compactMeta.push("Scheduled");
+  if (node.type === "Landing Page" && node.landingPage?.cta) compactMeta.push(`CTA: ${node.landingPage.cta.slice(0, 24)}${node.landingPage.cta.length > 24 ? "…" : ""}`);
+  if (node.type === "Content" && node.imagePrompt) compactMeta.push("Image prompt ready");
+  compactSummary.innerHTML = `
+    <p class="compact-preview">${compactPreview.slice(0, 100)}${compactPreview.length > 100 ? "…" : ""}</p>
+    <div class="compact-meta">${compactMeta.slice(0, 4).map((m) => `<span>${m}</span>`).join("")}</div>
+  `;
+  const compactThumb = node.images?.[node.images.length - 1]?.url;
+  compactSummary.classList.toggle("has-thumb", !!compactThumb);
+  compactSummary.style.setProperty("--compact-thumb", compactThumb ? `url('${compactThumb.replace(/'/g, "%27")}')` : "none");
 
   const social = nodeEl.querySelector(".social-preview");
   const isSocial = node.type === "Social Media Posting";
@@ -3163,6 +3192,12 @@ function renderNode(node) {
     updateSelectionClasses();
     fillInspector(node);
   });
+  nodeEl.addEventListener("dblclick", (event) => {
+    if (event.target.closest("button,input,textarea,select,[contenteditable='true']")) return;
+    node.compact = false;
+    updateNodeCard(node);
+    saveCampaignCanvasState();
+  });
 
   nodeEl.querySelector(".connector-handle").addEventListener("pointerdown", (event) => {
     event.preventDefault();
@@ -3232,6 +3267,19 @@ function renderNode(node) {
 
   const title = nodeEl.querySelector(".title");
   const content = nodeEl.querySelector(".content");
+  const compactToggle = document.createElement("button");
+  compactToggle.type = "button";
+  compactToggle.className = "node-compact-toggle";
+  compactToggle.addEventListener("click", (event) => {
+    event.stopPropagation();
+    node.compact = !node.compact;
+    updateNodeCard(node);
+    saveCampaignCanvasState();
+  });
+  nodeEl.appendChild(compactToggle);
+  const compactSummary = document.createElement("div");
+  compactSummary.className = "node-compact-summary";
+  nodeEl.insertBefore(compactSummary, nodeEl.querySelector(".tags"));
   const aiToolbar = document.createElement("div");
   aiToolbar.className = "node-ai-toolbar";
   [
