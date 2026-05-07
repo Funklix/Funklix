@@ -2240,7 +2240,9 @@ function updateNodeCard(node) {
     calendarBtn.textContent = node.social?.scheduledAt ? "Scheduled" : "Add to Posting Calendar";
     calendarBtn.addEventListener("click", (event) => {
       event.stopPropagation();
-      openPostingPlanner(node.id);
+      await navigator.clipboard.writeText([node.social.caption || "", node.social.preview || "", (node.social.hashtags || []).join(" ")].filter(Boolean).join("\n\n"));
+      copyFullBtn.textContent = "Copied";
+      setTimeout(() => { copyFullBtn.textContent = "Copy Full Post"; }, 900);
     });
 
     const regen = async (instruction, key, btn) => {
