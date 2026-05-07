@@ -522,6 +522,29 @@ function normalizeHashtagsInput(value = "") {
   return [...new Set(tokens)];
 }
 
+function structuredHashtagPrompt(platform = "LinkedIn") {
+  const platformHint = platform === "Instagram"
+    ? "For Instagram, you may include 4-6 if relevant."
+    : platform === "TikTok"
+      ? "For TikTok, keep them short/trendy and focused."
+      : platform === "X / Twitter"
+        ? "For X/Twitter, use 3 concise hashtags max."
+        : "For LinkedIn, use 3 strategic hashtags max.";
+  return `Generate strategic marketing hashtags only in this structure: (1) one broad/general hashtag, (2) one medium-specific hashtag, (3) one highly specific campaign hashtag. Minimum 3 hashtags. Never convert full sentences into hashtags. Never hashtag every word. No labels/explanations. Return hashtags only, comma-separated. ${platformHint}`;
+}
+
+function finalizeGeneratedHashtags(rawValue = "", platform = "LinkedIn") {
+  const stopwords = new Set(["the", "and", "for", "with", "your", "into", "from", "this", "that", "you", "are", "our", "turn"]);
+  let tags = normalizeHashtagsInput(rawValue).filter((tag) => {
+    const core = tag.replace(/^#/, "");
+    return core.length >= 3 && !stopwords.has(core.toLowerCase());
+  });
+  const maxByPlatform = platform === "Instagram" ? 6 : platform === "TikTok" ? 5 : 3;
+  if (tags.length > maxByPlatform) tags = tags.slice(0, maxByPlatform);
+  if (tags.length < 3) tags = [...new Set([...tags, "#Marketing", "#ContentStrategy", "#CampaignLaunch"])].slice(0, 3);
+  return tags;
+}
+
 async function regenerateSocialForPlatform(node, triggerBtn = null) {
   if (!node || node.type !== "Social Media Posting") return;
   const nodeEl = el.zoomLayer.querySelector(`[data-id='${node.id}']`);
@@ -535,10 +558,10 @@ async function regenerateSocialForPlatform(node, triggerBtn = null) {
     const guide = platformPromptGuidance(node.social.platform || "LinkedIn");
     const captionRefined = await refineNodeWithAI(node, `Write one social-media-ready caption for this node. ${guide} Return in caption.`);
     const ctaRefined = await refineNodeWithAI(node, `Write one concise CTA for this node. ${guide} Return in content.`);
-    const hashtagsRefined = await refineNodeWithAI(node, `Generate relevant hashtags for this node, comma-separated. ${guide} Return in caption.`);
+    const hashtagsRefined = await refineNodeWithAI(node, `${structuredHashtagPrompt(node.social.platform || "LinkedIn")} ${guide}`);
     node.social.caption = (captionRefined?.caption || captionRefined?.content || "").trim() || node.social.caption;
     node.social.preview = (ctaRefined?.content || ctaRefined?.caption || "").trim() || node.social.preview;
-    node.social.hashtags = normalizeHashtagsInput(hashtagsRefined?.caption || hashtagsRefined?.content || "");
+    node.social.hashtags = finalizeGeneratedHashtags(hashtagsRefined?.caption || hashtagsRefined?.content || "", node.social.platform || "LinkedIn");
     updateNodeCard(node);
     fillInspector(node);
     saveCampaignCanvasState();
@@ -1915,7 +1938,7 @@ function updateNodeCard(node) {
         const refined = await refineNodeWithAI(node, `${instruction} ${platformPromptGuidance(node.social.platform || "LinkedIn")}`);
         if (key === "caption") node.social.caption = (refined?.caption || refined?.content || "").trim() || node.social.caption;
         if (key === "cta") node.social.preview = (refined?.content || refined?.caption || "").trim() || node.social.preview;
-        if (key === "hashtags") node.social.hashtags = normalizeHashtagsInput(refined?.caption || refined?.content || "");
+        if (key === "hashtags") node.social.hashtags = finalizeGeneratedHashtags(refined?.caption || refined?.content || "", node.social.platform || "LinkedIn");
         updateNodeCard(node);
         fillInspector(node);
         saveCampaignCanvasState();
@@ -1932,7 +1955,7 @@ function updateNodeCard(node) {
     regenCTA.addEventListener("click", (event) => { event.stopPropagation(); regen("Write one concise CTA line for this post. Return in content.", "cta", regenCTA); });
     const regenHash = document.createElement("button");
     regenHash.type = "button"; regenHash.textContent = "Regenerate Hashtags";
-    regenHash.addEventListener("click", (event) => { event.stopPropagation(); regen("Write 4-6 relevant hashtags, comma-separated. Return in caption.", "hashtags", regenHash); });
+    regenHash.addEventListener("click", (event) => { event.stopPropagation(); regen(structuredHashtagPrompt(node.social.platform || "LinkedIn"), "hashtags", regenHash); });
     actions.append(copyCaptionBtn, copyFullBtn, regenCaption, regenCTA, regenHash);
 
     const imageFrame = document.createElement("div");
@@ -2348,8 +2371,8 @@ async function generateFullContentPack(node, triggerBtn = null, mode = "auto") {
     if (!cta) throw new Error("CTA generation failed");
 
     console.log("Generating hashtags");
-    const hashtagResult = await refineNodeWithAI(node, `Generate relevant social hashtags, comma-separated. ${platformGuide} Return in caption.`);
-    const hashtags = normalizeHashtagsInput(hashtagResult?.caption || hashtagResult?.content || "");
+    const hashtagResult = await refineNodeWithAI(node, `${structuredHashtagPrompt(platform)} ${platformGuide}`);
+    const hashtags = finalizeGeneratedHashtags(hashtagResult?.caption || hashtagResult?.content || "", platform);
 
     console.log("Generating image");
     await generateImageForNode(node);
