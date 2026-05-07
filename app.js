@@ -65,6 +65,7 @@ const state = {
   ,boardsLibrary: []
   ,contentPackLoadingById: {}
   ,contentPackErrorById: {}
+  ,hashtagDraftByNode: {}
 };
 
 const el = {
@@ -551,6 +552,13 @@ function finalizeGeneratedHashtags(rawValue = "", platform = "LinkedIn") {
   if (tags.length > maxByPlatform) tags = tags.slice(0, maxByPlatform);
   if (tags.length < 3) tags = [...new Set([...tags, "#Marketing", "#ContentStrategy", "#CampaignLaunch"])].slice(0, 3);
   return tags;
+}
+
+function buildContentImagePrompt(title = "", content = "") {
+  const brand = state.brandCore || {};
+  const mood = Array.isArray(brand.toneOfVoice) ? brand.toneOfVoice.slice(0, 2).join(", ") : "confident, modern";
+  const context = [brand.valueProposition, title, content].filter(Boolean).join(" · ");
+  return `16:9 campaign visual. Subject: ${title || "core offer"}. Context: ${context}. Composition: clear focal subject, balanced layout, ample negative space for headline overlay. Mood/style: ${mood}. High-quality realistic marketing visual.`;
 }
 
 async function regenerateSocialForPlatform(node, triggerBtn = null) {
@@ -1443,11 +1451,13 @@ function generateCampaignFromIdea(ideaText, contextText, providedPlan = null) {
   updateNodeCard(variationA);
   const contentA = createNode({ type: "Content", position: { x: 260, y: 560 } });
   Object.assign(contentA, { title: variations[0]?.contentNode?.title || "Content A", content: variations[0]?.contentNode?.content || "" });
+  contentA.imagePrompt = buildContentImagePrompt(contentA.title, contentA.content);
   updateNodeCard(contentA);
   const socialA = createNode({ type: "Social Media Posting", position: { x: 220, y: 820 } });
   Object.assign(socialA, { title: variations[0]?.socialPost?.title || "Social A", content: variations[0]?.socialPost?.caption || "" });
   socialA.social.platform = variations[0]?.socialPost?.platform || "Instagram";
   socialA.social.caption = variations[0]?.socialPost?.caption || "";
+  socialA.social.hashtags = finalizeGeneratedHashtags(variations[0]?.socialPost?.hashtags || `${socialA.title}, ${socialA.social.caption}`, socialA.social.platform);
   updateNodeCard(socialA);
 
   const variationB = createNode({ type: "Campaign Variation", position: { x: 900, y: 340 } });
@@ -1455,11 +1465,13 @@ function generateCampaignFromIdea(ideaText, contextText, providedPlan = null) {
   updateNodeCard(variationB);
   const contentB = createNode({ type: "Content", position: { x: 980, y: 560 } });
   Object.assign(contentB, { title: variations[1]?.contentNode?.title || "Content B", content: variations[1]?.contentNode?.content || "" });
+  contentB.imagePrompt = buildContentImagePrompt(contentB.title, contentB.content);
   updateNodeCard(contentB);
   const socialB = createNode({ type: "Social Media Posting", position: { x: 1040, y: 820 } });
   Object.assign(socialB, { title: variations[1]?.socialPost?.title || "Social B", content: variations[1]?.socialPost?.caption || "" });
   socialB.social.platform = variations[1]?.socialPost?.platform || "Instagram";
   socialB.social.caption = variations[1]?.socialPost?.caption || "";
+  socialB.social.hashtags = finalizeGeneratedHashtags(variations[1]?.socialPost?.hashtags || `${socialB.title}, ${socialB.social.caption}`, socialB.social.platform);
   updateNodeCard(socialB);
 
   const landing = createNode({ type: "Landing Page", position: { x: 520, y: 560 } });
@@ -2182,7 +2194,7 @@ function fillInspector(node) {
   el.inputs.variants.value = node.variants.join(", ");
   el.inputs.platform.value = node.social.platform;
   el.inputs.caption.value = node.social.caption;
-  el.inputs.hashtags.value = node.social.hashtags.join(", ");
+  el.inputs.hashtags.value = state.hashtagDraftByNode[node.id] ?? node.social.hashtags.join(", ");
   if (el.inputs.preview) el.inputs.preview.value = node.social.preview;
   el.inputs.audience.value = node.audience;
   el.inputs.goal.value = node.goal;
@@ -3310,7 +3322,7 @@ el.nodeForm.addEventListener("input", (event) => {
   if (event.target === el.inputs.variants) node.variants = parseList(el.inputs.variants.value);
   if (event.target === el.inputs.platform) node.social.platform = el.inputs.platform.value;
   if (event.target === el.inputs.caption) node.social.caption = el.inputs.caption.value;
-  if (event.target === el.inputs.hashtags) node.social.hashtags = normalizeHashtagsInput(el.inputs.hashtags.value);
+  if (event.target === el.inputs.hashtags) state.hashtagDraftByNode[node.id] = el.inputs.hashtags.value;
   if (el.inputs.preview && event.target === el.inputs.preview) node.social.preview = el.inputs.preview.value;
   if (event.target === el.inputs.audience) node.audience = el.inputs.audience.value.trim();
   if (event.target === el.inputs.goal) node.goal = el.inputs.goal.value.trim();
@@ -3341,6 +3353,21 @@ el.inputs.channel.addEventListener("keydown", (event) => {
   updateNodeCard(node);
   fillInspector(node);
   saveCampaignCanvasState();
+});
+el.inputs.hashtags.addEventListener("blur", () => {
+  const node = getNode(state.selectedPrimary);
+  if (!node) return;
+  const normalized = normalizeHashtagsInput(state.hashtagDraftByNode[node.id] ?? el.inputs.hashtags.value);
+  node.social.hashtags = normalized;
+  delete state.hashtagDraftByNode[node.id];
+  el.inputs.hashtags.value = normalized.join(", ");
+  updateNodeCard(node);
+  saveCampaignCanvasState();
+});
+el.inputs.hashtags.addEventListener("keydown", (event) => {
+  if (event.key !== "Enter") return;
+  event.preventDefault();
+  el.inputs.hashtags.blur();
 });
 
 el.imageUpload.addEventListener("change", () => {

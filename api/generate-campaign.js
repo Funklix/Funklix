@@ -35,7 +35,7 @@ Content requirements by section:
 - variations[0]: emotional angle.
 - variations[1]: rational angle.
 - variations[*].contentNode: clear concept description, platform-agnostic idea.
-- variations[*].socialPost: very strong first-line hook, concise caption, no fluff.
+- variations[*].socialPost: very strong first-line hook, concise caption, no fluff, plus strategic hashtags using broad → medium → specific structure.
 - landingPage: include headline, subheadline, and core promise in the content.
 - landingPageStructured: include:
   - headerVisualPrompt (16:9 hero image prompt with style, subject, mood)
@@ -54,7 +54,7 @@ Return ONLY JSON with this schema:
       "title": "",
       "content": "",
       "contentNode": { "title": "", "content": "" },
-      "socialPost": { "title": "", "caption": "", "platform": "" }
+      "socialPost": { "title": "", "caption": "", "platform": "", "hashtags": "" }
     }
   ],
   "landingPage": { "title": "", "content": "" },
@@ -123,11 +123,12 @@ Return ONLY JSON with this schema:
                       socialPost: {
                         type: "object",
                         additionalProperties: false,
-                        required: ["title", "caption", "platform"],
+                        required: ["title", "caption", "platform", "hashtags"],
                         properties: {
                           title: { type: "string" },
                           caption: { type: "string" },
-                          platform: { type: "string" }
+                          platform: { type: "string" },
+                          hashtags: { type: "string" }
                         }
                       }
                     }
