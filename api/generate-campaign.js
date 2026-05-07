@@ -37,6 +37,13 @@ Content requirements by section:
 - variations[*].contentNode: clear concept description, platform-agnostic idea.
 - variations[*].socialPost: very strong first-line hook, concise caption, no fluff.
 - landingPage: include headline, subheadline, and core promise in the content.
+- landingPageStructured: include:
+  - headerVisualPrompt (16:9 hero image prompt with style, subject, mood)
+  - headerClaim
+  - problemOfIcp
+  - solutionForIcp
+  - buildingTrust (do not fabricate specific metrics/testimonials/logos unless provided in context)
+  - conversionCta
 - emailCampaign: include subject line and short body copy in the content.
 
 Return ONLY JSON with this schema:
@@ -51,6 +58,14 @@ Return ONLY JSON with this schema:
     }
   ],
   "landingPage": { "title": "", "content": "" },
+  "landingPageStructured": {
+    "headerVisualPrompt": "",
+    "headerClaim": "",
+    "problemOfIcp": "",
+    "solutionForIcp": "",
+    "buildingTrust": "",
+    "conversionCta": ""
+  },
   "emailCampaign": { "title": "", "content": "" }
 }`;
 
@@ -80,7 +95,7 @@ Return ONLY JSON with this schema:
             schema: {
               type: "object",
               additionalProperties: false,
-              required: ["idea", "variations", "landingPage", "emailCampaign"],
+              required: ["idea", "variations", "landingPage", "landingPageStructured", "emailCampaign"],
               properties: {
                 idea: {
                   type: "object",
@@ -123,6 +138,19 @@ Return ONLY JSON with this schema:
                   additionalProperties: false,
                   required: ["title", "content"],
                   properties: { title: { type: "string" }, content: { type: "string" } }
+                },
+                landingPageStructured: {
+                  type: "object",
+                  additionalProperties: false,
+                  required: ["headerVisualPrompt", "headerClaim", "problemOfIcp", "solutionForIcp", "buildingTrust", "conversionCta"],
+                  properties: {
+                    headerVisualPrompt: { type: "string" },
+                    headerClaim: { type: "string" },
+                    problemOfIcp: { type: "string" },
+                    solutionForIcp: { type: "string" },
+                    buildingTrust: { type: "string" },
+                    conversionCta: { type: "string" }
+                  }
                 },
                 emailCampaign: {
                   type: "object",

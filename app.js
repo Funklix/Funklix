@@ -1394,6 +1394,14 @@ function buildGeneratedCampaignPlan(ideaText, contextText) {
     socialA: { title: "Social Post A", content: `CTA focused on ${baseTitle}` },
     socialB: { title: "Social Post B", content: `Community engagement for ${baseTitle}` },
     landing: { title: "Landing Page", content: `Conversion destination for ${baseTitle}` },
+    landingPageStructured: {
+      headerVisualPrompt: `16:9 hero visual for ${baseTitle}, modern clean style, confident and trustworthy mood`,
+      headerClaim: `${baseTitle}: clearer campaigns, stronger results`,
+      problemOfIcp: "Teams struggle to ship consistent, high-performing campaign assets quickly.",
+      solutionForIcp: `Use ${baseTitle} messaging and assets to launch with clarity and speed.`,
+      buildingTrust: "Trusted by teams looking for clearer, more effective campaign execution.",
+      conversionCta: "Get started"
+    },
     email: { title: "Email Campaign", content: `Nurture sequence for ${baseTitle}` }
   };
 }
@@ -1456,6 +1464,15 @@ function generateCampaignFromIdea(ideaText, contextText, providedPlan = null) {
 
   const landing = createNode({ type: "Landing Page", position: { x: 520, y: 560 } });
   Object.assign(landing, { title: plan.landingPage?.title || plan.landing?.title || "Landing Page", content: plan.landingPage?.content || plan.landing?.content || "" });
+  const lpStructured = plan.landingPageStructured || {};
+  landing.landingPage = {
+    headerVisualPrompt: lpStructured.headerVisualPrompt || `16:9 hero visual for ${landing.title}: modern product-focused scene, clean composition, confident and trustworthy mood.`,
+    headerClaim: lpStructured.headerClaim || landing.title || "High-converting landing page",
+    problem: lpStructured.problemOfIcp || (landing.content || "").split("\n")[0] || "Your audience struggles with inconsistent campaign execution.",
+    solution: lpStructured.solutionForIcp || (landing.content || "").split("\n")[1] || "Our solution helps teams launch clearer, more effective campaigns faster.",
+    trust: lpStructured.buildingTrust || "Trusted by teams looking for clearer, more effective campaign execution.",
+    cta: lpStructured.conversionCta || "Get started"
+  };
   updateNodeCard(landing);
   const email = createNode({ type: "Email Campaign", position: { x: 700, y: 560 } });
   Object.assign(email, { title: plan.emailCampaign?.title || plan.email?.title || "Email Campaign", content: plan.emailCampaign?.content || plan.email?.content || "" });
