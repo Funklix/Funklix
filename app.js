@@ -152,6 +152,8 @@ const el = {
   brandCoreCanvas: document.getElementById("brand-core-canvas"),
   brandEditorPanel: document.getElementById("bc-editor-panel"),
   resetBrandCoreButton: document.getElementById("reset-brand-core-btn"),
+  connectedContextSummary: document.getElementById("connected-context-summary"),
+  connectedContextBody: document.getElementById("connected-context-body"),
   inputs: {
     type: document.getElementById("node-type"),
     title: document.getElementById("node-title"),
@@ -572,6 +574,23 @@ function nodeStrategyContext(node) {
     node.channel ? `Channel: ${node.channel}` : "",
     node.funnelStage ? `Funnel Stage: ${node.funnelStage}` : ""
   ].filter(Boolean).join(" | ");
+}
+
+function getConnectedNodeContext(currentNodeId) {
+  const parentIds = state.edges.filter((edge) => (Array.isArray(edge) ? edge[1] : edge?.target) === currentNodeId).map((edge) => (Array.isArray(edge) ? edge[0] : edge?.source));
+  const childIds = state.edges.filter((edge) => (Array.isArray(edge) ? edge[0] : edge?.source) === currentNodeId).map((edge) => (Array.isArray(edge) ? edge[1] : edge?.target));
+  const parentNodes = parentIds.map(getNode).filter(Boolean);
+  const childNodes = childIds.map(getNode).filter(Boolean);
+  const siblingIds = parentIds.flatMap((pid) => state.edges.filter((edge) => (Array.isArray(edge) ? edge[0] : edge?.source) === pid).map((edge) => (Array.isArray(edge) ? edge[1] : edge?.target))).filter((id) => id && id !== currentNodeId);
+  const siblingNodes = [...new Map(siblingIds.map((id) => [id, getNode(id)])).values()].filter(Boolean);
+  const slim = (n) => ({
+    id: n.id, type: n.type, title: n.title, content: n.content,
+    audience: n.audience, goal: n.goal, channel: n.channel, funnelStage: n.funnelStage, tone: n.tone,
+    imagePrompt: n.imagePrompt || "",
+    social: n.type === "Social Media Posting" ? { platform: n.social?.platform, caption: n.social?.caption, cta: n.social?.preview, hashtags: n.social?.hashtags } : undefined,
+    landing: n.type === "Landing Page" ? { headerClaim: n.landingPage?.headerClaim, problemOfIcp: n.landingPage?.problem, solutionForIcp: n.landingPage?.solution, conversionCta: n.landingPage?.cta } : undefined
+  });
+  return { parentNodes: parentNodes.map(slim), childNodes: childNodes.map(slim), siblingNodes: siblingNodes.map(slim) };
 }
 
 async function regenerateSocialForPlatform(node, triggerBtn = null) {
@@ -2205,6 +2224,8 @@ function fillInspector(node) {
     variantsLabel?.classList.remove("hidden");
     el.inputs.variants.classList.remove("hidden");
     el.inspectorImageList.innerHTML = "";
+    if (el.connectedContextSummary) el.connectedContextSummary.textContent = "Parents: 0 · Children: 0";
+    if (el.connectedContextBody) el.connectedContextBody.textContent = "";
     updateInspectorActionVisibility();
     return;
   }
@@ -2244,6 +2265,15 @@ function fillInspector(node) {
   variantsLabel?.classList.toggle("hidden", hideVariants);
   el.inputs.variants.classList.toggle("hidden", hideVariants);
   renderInspectorImages(node);
+  const connected = getConnectedNodeContext(node.id);
+  if (el.connectedContextSummary) {
+    el.connectedContextSummary.textContent = `Parents: ${connected.parentNodes.length} · Children: ${connected.childNodes.length}`;
+  }
+  if (el.connectedContextBody) {
+    const parents = connected.parentNodes.slice(0, 3).map((n) => n.title || n.type).join(", ") || "—";
+    const children = connected.childNodes.slice(0, 3).map((n) => n.title || n.type).join(", ") || "—";
+    el.connectedContextBody.innerHTML = `<div><strong>Parent:</strong> ${parents}</div><div><strong>Child:</strong> ${children}</div>`;
+  }
   updateInspectorActionVisibility();
 }
 
@@ -2379,6 +2409,7 @@ function renderInspectorImages(node) {
 async function refineNodeWithAI(node, instruction) {
   const parentNode = getDirectParentNode(node.id);
   const campaignContext = getCampaignContextSummary();
+  const connectedContext = getConnectedNodeContext(node.id);
   const response = await fetch("/api/refine-node", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -2394,7 +2425,8 @@ async function refineNodeWithAI(node, instruction) {
       parentNode: parentNode
         ? { title: parentNode.title || "", content: parentNode.content || "", type: parentNode.type || "" }
         : undefined,
-      campaignContext: campaignContext || undefined
+      campaignContext: campaignContext || undefined,
+      connectedNodeContext: connectedContext
     })
   });
   if (!response.ok) {
@@ -2531,7 +2563,8 @@ async function generateImageForNode(node) {
         nodeContent: [node.imagePrompt || node.content || "", nodeStrategyContext(node)].filter(Boolean).join(" | "),
         brandBrainData: state.brandCore,
         campaignContext: getCampaignContextSummary(),
-        contentFormat: node.contentFormat || "1:1"
+        contentFormat: node.contentFormat || "1:1",
+        connectedNodeContext: getConnectedNodeContext(node.id)
       })
     });
     if (!response.ok) throw new Error("Image generation failed");
@@ -3459,7 +3492,8 @@ el.generateHeaderVisualButton.addEventListener("click", async () => {
         nodeContent: node.landingPage.headerVisualPrompt,
         brandBrainData: state.brandCore,
         campaignContext: getCampaignContextSummary(),
-        contentFormat: "16:9"
+        contentFormat: "16:9",
+        connectedNodeContext: getConnectedNodeContext(node.id)
       })
     });
     if (!response.ok) throw new Error("Header visual failed");
