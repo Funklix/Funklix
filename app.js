@@ -63,6 +63,9 @@ const state = {
   brandCoreSelectedKey: "brandCore"
   ,appMode: "canvas"
   ,boardsLibrary: []
+  ,contentPackLoadingById: {}
+  ,contentPackErrorById: {}
+  ,hashtagDraftByNode: {}
 };
 
 const el = {
@@ -107,13 +110,17 @@ const el = {
   socialFields: document.getElementById("social-fields"),
   contentUploadFields: document.getElementById("content-upload-fields"),
   contentFormatField: document.getElementById("content-format-field"),
+  landingPageFields: document.getElementById("landing-page-fields"),
+  generateHeaderVisualButton: document.getElementById("generate-header-visual-btn"),
   imageUpload: document.getElementById("node-image-upload"),
   inspectorImageList: document.getElementById("inspector-image-list"),
   deleteNodeButton: document.getElementById("delete-node-btn"),
   improveNodeButton: document.getElementById("improve-node-btn"),
   regenerateNodeButton: document.getElementById("regenerate-node-btn"),
+  regeneratePlatformButton: document.getElementById("regenerate-platform-btn"),
   generateImageButton: document.getElementById("generate-image-btn"),
   generatePostingVisualButton: document.getElementById("generate-posting-visual-btn"),
+  generateFullPackButton: document.getElementById("generate-full-pack-btn"),
   postingPlanOverlay: document.getElementById("posting-plan-overlay"),
   postingDateInput: document.getElementById("posting-date-input"),
   postingTimeInput: document.getElementById("posting-time-input"),
@@ -149,6 +156,7 @@ const el = {
     type: document.getElementById("node-type"),
     title: document.getElementById("node-title"),
     content: document.getElementById("node-content"),
+    imagePrompt: document.getElementById("node-image-prompt"),
     variants: document.getElementById("node-variants"),
     platform: document.getElementById("node-platform"),
     caption: document.getElementById("node-caption"),
@@ -157,7 +165,15 @@ const el = {
     audience: document.getElementById("node-audience"),
     goal: document.getElementById("node-goal"),
     channel: document.getElementById("node-channel"),
+    funnelStage: document.getElementById("node-funnel-stage"),
+    tone: document.getElementById("node-tone"),
     contentFormat: document.getElementById("node-content-format")
+    ,lpHeaderVisualPrompt: document.getElementById("lp-header-visual-prompt")
+    ,lpHeaderClaim: document.getElementById("lp-header-claim")
+    ,lpProblem: document.getElementById("lp-problem")
+    ,lpSolution: document.getElementById("lp-solution")
+    ,lpTrust: document.getElementById("lp-trust")
+    ,lpCta: document.getElementById("lp-cta")
   }
 };
 
@@ -470,9 +486,127 @@ function sanitizeNodeImages(images) {
     }));
 }
 
+function sanitizeNodeForPersistence(node) {
+  const clean = { ...node, images: sanitizeNodeImages(node.images) };
+  delete clean.isGeneratingContentPack;
+  delete clean.generatingContentPack;
+  delete clean.isGenerating;
+  delete clean.loading;
+  delete clean.generationStatus;
+  delete clean.disabled;
+  delete clean.contentPackError;
+  return clean;
+}
+
+function getContentPackLoading(nodeId) {
+  return !!state.contentPackLoadingById[nodeId];
+}
+
+function setContentPackGenerating(nodeId, value) {
+  if (!nodeId) return;
+  state.contentPackLoadingById[nodeId] = !!value;
+}
+
+function setContentPackError(nodeId, message = "") {
+  if (!nodeId) return;
+  state.contentPackErrorById[nodeId] = message || "";
+}
+
+function platformPromptGuidance(platform = "LinkedIn") {
+  if (platform === "X / Twitter") return "Platform: X/Twitter. Keep it short, punchy, hook-first, and 280-char aware. Concise CTA. Avoid hashtags unless useful.";
+  if (platform === "Instagram") return "Platform: Instagram. Visual-first, emotional, community-oriented tone. CTA should invite comments/saves/shares. Hashtags allowed but not excessive.";
+  if (platform === "TikTok") return "Platform: TikTok. Short, energetic, hook-driven, video-native phrasing. CTA should invite watch/comment/follow/remix.";
+  return "Platform: LinkedIn. Professional, structured, thought-leadership tone. Can be longer. Avoid excessive hashtags. CTA should invite discussion/action.";
+}
+
+function normalizeHashtagsInput(value = "") {
+  const tokens = String(value)
+    .split(/[\n,]+/g)
+    .flatMap((part) => part.trim().split(/\s+/g))
+    .map((raw) => raw.replace(/^#+/, "").replace(/[^\p{L}\p{N}_ ]/gu, "").trim())
+    .filter(Boolean)
+    .map((raw) => {
+      const words = raw.split(/\s+/).filter(Boolean);
+      const camel = words.map((w, i) => (i === 0 ? w : `${w.charAt(0).toUpperCase()}${w.slice(1)}`)).join("");
+      return `#${camel}`;
+    });
+  return [...new Set(tokens)];
+}
+
+function structuredHashtagPrompt(platform = "LinkedIn") {
+  const platformHint = platform === "Instagram"
+    ? "For Instagram, you may include 4-6 if relevant."
+    : platform === "TikTok"
+      ? "For TikTok, keep them short/trendy and focused."
+      : platform === "X / Twitter"
+        ? "For X/Twitter, use 3 concise hashtags max."
+        : "For LinkedIn, use 3 strategic hashtags max.";
+  return `Generate strategic marketing hashtags only in this structure: (1) one broad/general hashtag, (2) one medium-specific hashtag, (3) one highly specific campaign hashtag. Minimum 3 hashtags. Never convert full sentences into hashtags. Never hashtag every word. No labels/explanations. Return hashtags only, comma-separated. ${platformHint}`;
+}
+
+function finalizeGeneratedHashtags(rawValue = "", platform = "LinkedIn") {
+  const stopwords = new Set(["the", "and", "for", "with", "your", "into", "from", "this", "that", "you", "are", "our", "turn"]);
+  let tags = normalizeHashtagsInput(rawValue).filter((tag) => {
+    const core = tag.replace(/^#/, "");
+    return core.length >= 3 && !stopwords.has(core.toLowerCase());
+  });
+  const maxByPlatform = platform === "Instagram" ? 6 : platform === "TikTok" ? 5 : 3;
+  if (tags.length > maxByPlatform) tags = tags.slice(0, maxByPlatform);
+  if (tags.length < 3) tags = [...new Set([...tags, "#Marketing", "#ContentStrategy", "#CampaignLaunch"])].slice(0, 3);
+  return tags;
+}
+
+function buildContentImagePrompt(title = "", content = "") {
+  const brand = state.brandCore || {};
+  const mood = Array.isArray(brand.toneOfVoice) ? brand.toneOfVoice.slice(0, 2).join(", ") : "confident, modern";
+  const context = [brand.valueProposition, title, content].filter(Boolean).join(" · ");
+  return `16:9 campaign visual. Subject: ${title || "core offer"}. Context: ${context}. Composition: clear focal subject, balanced layout, ample negative space for headline overlay. Mood/style: ${mood}. High-quality realistic marketing visual.`;
+}
+
+function nodeStrategyContext(node) {
+  if (!node) return "";
+  return [
+    node.tone ? `Tone: ${node.tone}` : "",
+    node.goal ? `Goal: ${node.goal}` : "",
+    node.audience ? `Audience: ${node.audience}` : "",
+    node.channel ? `Channel: ${node.channel}` : "",
+    node.funnelStage ? `Funnel Stage: ${node.funnelStage}` : ""
+  ].filter(Boolean).join(" | ");
+}
+
+async function regenerateSocialForPlatform(node, triggerBtn = null) {
+  if (!node || node.type !== "Social Media Posting") return;
+  const nodeEl = el.zoomLayer.querySelector(`[data-id='${node.id}']`);
+  const originalText = triggerBtn?.textContent || "";
+  if (triggerBtn) {
+    triggerBtn.disabled = true;
+    triggerBtn.textContent = "...";
+  }
+  if (nodeEl) nodeEl.classList.add("ai-loading");
+  try {
+    const guide = platformPromptGuidance(node.social.platform || "LinkedIn");
+    const strategy = nodeStrategyContext(node);
+    const captionRefined = await refineNodeWithAI(node, `Write one social-media-ready caption for this node. ${guide} ${strategy} Return in caption.`);
+    const ctaRefined = await refineNodeWithAI(node, `Write one concise CTA for this node. ${guide} ${strategy} Return in content.`);
+    const hashtagsRefined = await refineNodeWithAI(node, `${structuredHashtagPrompt(node.social.platform || "LinkedIn")} ${guide} ${strategy}`);
+    node.social.caption = (captionRefined?.caption || captionRefined?.content || "").trim() || node.social.caption;
+    node.social.preview = (ctaRefined?.content || ctaRefined?.caption || "").trim() || node.social.preview;
+    node.social.hashtags = finalizeGeneratedHashtags(hashtagsRefined?.caption || hashtagsRefined?.content || "", node.social.platform || "LinkedIn");
+    updateNodeCard(node);
+    fillInspector(node);
+    saveCampaignCanvasState();
+  } finally {
+    if (nodeEl) nodeEl.classList.remove("ai-loading");
+    if (triggerBtn) {
+      triggerBtn.disabled = false;
+      triggerBtn.textContent = originalText;
+    }
+  }
+}
+
 function serializeState() {
   const serialized = {
-    nodes: state.nodes.map((n) => ({ ...n, images: sanitizeNodeImages(n.images) })),
+    nodes: state.nodes.map((n) => sanitizeNodeForPersistence(n)),
     edges: state.edges, nodeCounter: state.nodeCounter, postitCounter: state.postitCounter, zoom: state.zoom
   };
   const selectedNode = state.selectedPrimary ? serialized.nodes.find((n) => n.id === state.selectedPrimary) : null;
@@ -505,7 +639,9 @@ function loadCampaignCanvasState() {
 
 
 function applyCampaignState(campaignState, statusText = "Restored") {
-  state.nodes = (campaignState.nodes || []).map((node) => ({ ...node, images: sanitizeNodeImages(node.images) }));
+  state.nodes = (campaignState.nodes || []).map((node) => sanitizeNodeForPersistence(node));
+  state.contentPackLoadingById = {};
+  state.contentPackErrorById = {};
   state.edges = campaignState.edges || [];
   state.nodeCounter = campaignState.nodeCounter || 1;
   state.postitCounter = campaignState.postitCounter || 1;
@@ -1070,9 +1206,13 @@ function createNode({ type = "Idea", parentId = null, position = null, images = 
     audience: "",
     goal: "",
     channel: "",
+    funnelStage: "",
+    tone: "",
     images: [...images],
     favoriteImageId: null,
     social: { platform: "Instagram", caption: "", hashtags: [], preview: "", scheduledAt: "" },
+    imagePrompt: "",
+    landingPage: { headerVisualPrompt: "", headerClaim: "", problem: "", solution: "", trust: "", cta: "" },
     reactions: {},
     postits: [],
     justConnectedAt: null,
@@ -1278,6 +1418,14 @@ function buildGeneratedCampaignPlan(ideaText, contextText) {
     socialA: { title: "Social Post A", content: `CTA focused on ${baseTitle}` },
     socialB: { title: "Social Post B", content: `Community engagement for ${baseTitle}` },
     landing: { title: "Landing Page", content: `Conversion destination for ${baseTitle}` },
+    landingPageStructured: {
+      headerVisualPrompt: `16:9 hero visual for ${baseTitle}, modern clean style, confident and trustworthy mood`,
+      headerClaim: `${baseTitle}: clearer campaigns, stronger results`,
+      problemOfIcp: "Teams struggle to ship consistent, high-performing campaign assets quickly.",
+      solutionForIcp: `Use ${baseTitle} messaging and assets to launch with clarity and speed.`,
+      buildingTrust: "Trusted by teams looking for clearer, more effective campaign execution.",
+      conversionCta: "Get started"
+    },
     email: { title: "Email Campaign", content: `Nurture sequence for ${baseTitle}` }
   };
 }
@@ -1312,6 +1460,7 @@ function generateCampaignFromIdea(ideaText, contextText, providedPlan = null) {
 
   const idea = createNode({ type: "Idea", position: { x: 620, y: 120 } });
   Object.assign(idea, { title: plan.idea.title, content: plan.idea.content });
+  Object.assign(idea, { goal: "Awareness", channel: "Campaign Strategy", funnelStage: "Awareness", audience: state.brandCore?.personas?.[0]?.name || "Primary ICP", tone: "Professional" });
   updateNodeCard(idea);
 
   const variationA = createNode({ type: "Campaign Variation", position: { x: 320, y: 340 } });
@@ -1319,11 +1468,15 @@ function generateCampaignFromIdea(ideaText, contextText, providedPlan = null) {
   updateNodeCard(variationA);
   const contentA = createNode({ type: "Content", position: { x: 260, y: 560 } });
   Object.assign(contentA, { title: variations[0]?.contentNode?.title || "Content A", content: variations[0]?.contentNode?.content || "" });
+  contentA.imagePrompt = buildContentImagePrompt(contentA.title, contentA.content);
+  Object.assign(contentA, { goal: "Education", channel: "Blog", funnelStage: "Interest", audience: idea.audience, tone: idea.tone });
   updateNodeCard(contentA);
   const socialA = createNode({ type: "Social Media Posting", position: { x: 220, y: 820 } });
   Object.assign(socialA, { title: variations[0]?.socialPost?.title || "Social A", content: variations[0]?.socialPost?.caption || "" });
   socialA.social.platform = variations[0]?.socialPost?.platform || "Instagram";
   socialA.social.caption = variations[0]?.socialPost?.caption || "";
+  socialA.social.hashtags = finalizeGeneratedHashtags(variations[0]?.socialPost?.hashtags || `${socialA.title}, ${socialA.social.caption}`, socialA.social.platform);
+  Object.assign(socialA, { goal: "Community", channel: socialA.social.platform, funnelStage: "Awareness", audience: idea.audience, tone: "Emotional" });
   updateNodeCard(socialA);
 
   const variationB = createNode({ type: "Campaign Variation", position: { x: 900, y: 340 } });
@@ -1331,18 +1484,33 @@ function generateCampaignFromIdea(ideaText, contextText, providedPlan = null) {
   updateNodeCard(variationB);
   const contentB = createNode({ type: "Content", position: { x: 980, y: 560 } });
   Object.assign(contentB, { title: variations[1]?.contentNode?.title || "Content B", content: variations[1]?.contentNode?.content || "" });
+  contentB.imagePrompt = buildContentImagePrompt(contentB.title, contentB.content);
+  Object.assign(contentB, { goal: "Consideration", channel: "Email", funnelStage: "Consideration", audience: idea.audience, tone: "Direct" });
   updateNodeCard(contentB);
   const socialB = createNode({ type: "Social Media Posting", position: { x: 1040, y: 820 } });
   Object.assign(socialB, { title: variations[1]?.socialPost?.title || "Social B", content: variations[1]?.socialPost?.caption || "" });
   socialB.social.platform = variations[1]?.socialPost?.platform || "Instagram";
   socialB.social.caption = variations[1]?.socialPost?.caption || "";
+  socialB.social.hashtags = finalizeGeneratedHashtags(variations[1]?.socialPost?.hashtags || `${socialB.title}, ${socialB.social.caption}`, socialB.social.platform);
+  Object.assign(socialB, { goal: "Lead Gen", channel: socialB.social.platform, funnelStage: "Conversion", audience: idea.audience, tone: "Direct" });
   updateNodeCard(socialB);
 
   const landing = createNode({ type: "Landing Page", position: { x: 520, y: 560 } });
   Object.assign(landing, { title: plan.landingPage?.title || plan.landing?.title || "Landing Page", content: plan.landingPage?.content || plan.landing?.content || "" });
+  const lpStructured = plan.landingPageStructured || {};
+  landing.landingPage = {
+    headerVisualPrompt: lpStructured.headerVisualPrompt || `16:9 hero visual for ${landing.title}: modern product-focused scene, clean composition, confident and trustworthy mood.`,
+    headerClaim: lpStructured.headerClaim || landing.title || "High-converting landing page",
+    problem: lpStructured.problemOfIcp || (landing.content || "").split("\n")[0] || "Your audience struggles with inconsistent campaign execution.",
+    solution: lpStructured.solutionForIcp || (landing.content || "").split("\n")[1] || "Our solution helps teams launch clearer, more effective campaigns faster.",
+    trust: lpStructured.buildingTrust || "Trusted by teams looking for clearer, more effective campaign execution.",
+    cta: lpStructured.conversionCta || "Get started"
+  };
+  Object.assign(landing, { goal: "Conversion", channel: "Landing Page", funnelStage: "Conversion", audience: idea.audience, tone: "Professional" });
   updateNodeCard(landing);
   const email = createNode({ type: "Email Campaign", position: { x: 700, y: 560 } });
   Object.assign(email, { title: plan.emailCampaign?.title || plan.email?.title || "Email Campaign", content: plan.emailCampaign?.content || plan.email?.content || "" });
+  Object.assign(email, { goal: "Lead Gen", channel: "Email", funnelStage: "Consideration", audience: idea.audience, tone: "Professional" });
   updateNodeCard(email);
 
   addEdge(idea.id, variationA.id); addEdge(variationA.id, contentA.id); addEdge(contentA.id, socialA.id);
@@ -1547,9 +1715,11 @@ function updateInspectorActionVisibility() {
 
   el.generateImageButton.style.display = showGenerateImage ? "block" : "none";
   el.generatePostingVisualButton.style.display = showGeneratePostingVisual ? "block" : "none";
+  el.generateFullPackButton.style.display = showGenerateImage ? "block" : "none";
 
   el.improveNodeButton.style.display = hasSingleNode ? "block" : "none";
   el.regenerateNodeButton.style.display = hasSingleNode ? "block" : "none";
+  el.regeneratePlatformButton.style.display = selectedNode?.type === "Social Media Posting" ? "block" : "none";
   el.propagateDescendantsButton.style.display = hasSingleNode ? "block" : "none";
   el.disconnectSelectedButton.style.display = selectedCount > 0 ? "block" : "none";
 
@@ -1559,8 +1729,11 @@ function updateInspectorActionVisibility() {
   el.deleteSelectedButton.disabled = !hasMultipleNodes;
   el.improveNodeButton.disabled = !hasSingleNode;
   el.regenerateNodeButton.disabled = !hasSingleNode;
+  el.regeneratePlatformButton.disabled = !(selectedNode?.type === "Social Media Posting");
   el.generateImageButton.disabled = !showGenerateImage;
   el.generatePostingVisualButton.disabled = !showGeneratePostingVisual;
+  el.generateFullPackButton.disabled = !showGenerateImage || !!selectedNode && getContentPackLoading(selectedNode.id);
+  if (el.generateHeaderVisualButton) el.generateHeaderVisualButton.disabled = !(selectedNode?.type === "Landing Page");
   el.propagateDescendantsButton.disabled = !hasSingleNode;
   el.disconnectSelectedButton.disabled = !(selectedCount > 0);
 }
@@ -1720,25 +1893,178 @@ function updateNodeCard(node) {
 
   const social = nodeEl.querySelector(".social-preview");
   const isSocial = node.type === "Social Media Posting";
-  social.classList.toggle("hidden", !isSocial);
+  const isLandingPage = node.type === "Landing Page";
+  social.classList.toggle("hidden", !(isSocial || isLandingPage));
   if (isSocial) {
-    social.innerHTML = `<strong>${node.social.platform} Preview</strong><p>${node.social.caption || ""}</p><small>${node.social.hashtags.join(" ")}</small><em>${node.social.preview || ""}</em>`;
-    if (node.social.scheduledAt) {
-      const when = new Date(node.social.scheduledAt);
-      const scheduled = document.createElement("small");
-      scheduled.textContent = `Geplant: ${when.toLocaleString("de-DE")}`;
-      social.appendChild(scheduled);
-    }
-    const planBtn = document.createElement("button");
-    planBtn.type = "button";
-    planBtn.className = "inspector-image-delete";
-    planBtn.textContent = "Add to Posting Plan";
-    planBtn.addEventListener("click", (event) => {
-      event.stopPropagation();
-      openPostingPlanner(node.id);
+    social.innerHTML = "";
+    const wrapper = document.createElement("div");
+    wrapper.className = "social-card";
+
+    const top = document.createElement("div");
+    top.className = "social-card-top";
+    const platformSelect = document.createElement("select");
+    platformSelect.className = "social-platform-select";
+    ["LinkedIn", "X / Twitter", "Instagram", "TikTok"].forEach((p) => {
+      const option = document.createElement("option");
+      option.value = p;
+      option.textContent = p;
+      platformSelect.appendChild(option);
     });
-    social.appendChild(planBtn);
+    platformSelect.value = node.social.platform || "LinkedIn";
+    platformSelect.addEventListener("click", (event) => event.stopPropagation());
+    platformSelect.addEventListener("change", () => {
+      node.social.platform = platformSelect.value;
+      updateNodeCard(node);
+      if (state.selectedPrimary === node.id) fillInspector(node);
+      saveCampaignCanvasState();
+    });
+    const platformRegenBtn = document.createElement("button");
+    platformRegenBtn.type = "button";
+    platformRegenBtn.className = "social-platform-regen";
+    platformRegenBtn.textContent = "Regenerate for platform";
+    platformRegenBtn.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      await regenerateSocialForPlatform(node, platformRegenBtn);
+    });
+    const status = document.createElement("span");
+    status.className = "social-status-badge";
+    status.textContent = "Ready";
+    top.append(platformSelect, platformRegenBtn, status);
+
+    const charCount = document.createElement("div");
+    charCount.className = "social-char-count";
+    const captionLen = (node.social.caption || "").length;
+    const limits = { "X / Twitter": 280, LinkedIn: 3000, Instagram: 2200, TikTok: 2200 };
+    const limit = limits[node.social.platform] || 3000;
+    charCount.textContent = `${captionLen} characters${captionLen > limit ? ` (over ${limit})` : ""}`;
+    if (captionLen > limit) charCount.classList.add("warning");
+
+    const caption = document.createElement("div");
+    caption.className = "social-caption";
+    caption.contentEditable = "true";
+    caption.textContent = node.social.caption || "";
+    caption.addEventListener("click", (event) => event.stopPropagation());
+    caption.addEventListener("input", () => {
+      node.social.caption = caption.textContent;
+      updateNodeCard(node);
+      if (state.selectedPrimary === node.id) fillInspector(node);
+      saveCampaignCanvasState();
+    });
+
+    const cta = document.createElement("div");
+    cta.className = "social-cta";
+    cta.contentEditable = "true";
+    cta.textContent = node.social.preview || "";
+    cta.addEventListener("click", (event) => event.stopPropagation());
+    cta.addEventListener("input", () => {
+      node.social.preview = cta.textContent;
+      saveCampaignCanvasState();
+    });
+
+    const hashtags = document.createElement("div");
+    hashtags.className = "social-hashtags";
+    hashtags.contentEditable = "true";
+    hashtags.textContent = (node.social.hashtags || []).join(" ");
+    hashtags.addEventListener("click", (event) => event.stopPropagation());
+    hashtags.addEventListener("input", () => {
+      node.social.hashtags = normalizeHashtagsInput(hashtags.textContent || "");
+      hashtags.textContent = node.social.hashtags.join(" ");
+      saveCampaignCanvasState();
+    });
+
+    const actions = document.createElement("div");
+    actions.className = "social-actions-row";
+    const copyCaptionBtn = document.createElement("button");
+    copyCaptionBtn.type = "button";
+    copyCaptionBtn.textContent = "Copy Caption";
+    copyCaptionBtn.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      await navigator.clipboard.writeText(node.social.caption || "");
+      copyCaptionBtn.textContent = "Copied";
+      setTimeout(() => { copyCaptionBtn.textContent = "Copy Caption"; }, 900);
+    });
+    const copyFullBtn = document.createElement("button");
+    copyFullBtn.type = "button";
+    copyFullBtn.textContent = "Copy Full Post";
+    copyFullBtn.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      await navigator.clipboard.writeText([node.social.caption || "", node.social.preview || "", (node.social.hashtags || []).join(" ")].filter(Boolean).join("\n\n"));
+      copyFullBtn.textContent = "Copied";
+      setTimeout(() => { copyFullBtn.textContent = "Copy Full Post"; }, 900);
+    });
+
+    const regen = async (instruction, key, btn) => {
+      btn.disabled = true;
+      const original = btn.textContent;
+      btn.textContent = "...";
+      try {
+        const refined = await refineNodeWithAI(node, `${instruction} ${platformPromptGuidance(node.social.platform || "LinkedIn")}`);
+        if (key === "caption") node.social.caption = (refined?.caption || refined?.content || "").trim() || node.social.caption;
+        if (key === "cta") node.social.preview = (refined?.content || refined?.caption || "").trim() || node.social.preview;
+        if (key === "hashtags") node.social.hashtags = finalizeGeneratedHashtags(refined?.caption || refined?.content || "", node.social.platform || "LinkedIn");
+        updateNodeCard(node);
+        fillInspector(node);
+        saveCampaignCanvasState();
+      } finally {
+        btn.disabled = false;
+        btn.textContent = original;
+      }
+    };
+    const regenCaption = document.createElement("button");
+    regenCaption.type = "button"; regenCaption.textContent = "Regenerate Caption";
+    regenCaption.addEventListener("click", (event) => { event.stopPropagation(); regen("Write a social-ready caption for this post. Return in caption.", "caption", regenCaption); });
+    const regenCTA = document.createElement("button");
+    regenCTA.type = "button"; regenCTA.textContent = "Regenerate CTA";
+    regenCTA.addEventListener("click", (event) => { event.stopPropagation(); regen("Write one concise CTA line for this post. Return in content.", "cta", regenCTA); });
+    const regenHash = document.createElement("button");
+    regenHash.type = "button"; regenHash.textContent = "Regenerate Hashtags";
+    regenHash.addEventListener("click", (event) => { event.stopPropagation(); regen(structuredHashtagPrompt(node.social.platform || "LinkedIn"), "hashtags", regenHash); });
+    actions.append(copyCaptionBtn, copyFullBtn, regenCaption, regenCTA, regenHash);
+
+    const imageFrame = document.createElement("div");
+    imageFrame.className = "social-image-frame";
+    const previewImage = node.images?.[node.images.length - 1];
+    if (previewImage?.url) {
+      const img = document.createElement("img");
+      img.src = previewImage.url;
+      img.alt = "Social preview";
+      img.addEventListener("click", (event) => { event.stopPropagation(); openLightbox(previewImage.url, "Social preview image"); });
+      imageFrame.appendChild(img);
+    }
+
+    wrapper.append(top, charCount, caption, cta, hashtags, imageFrame, actions);
+    social.appendChild(wrapper);
+  } else if (isLandingPage) {
+    const lp = node.landingPage || {};
+    social.innerHTML = "";
+    const card = document.createElement("div");
+    card.className = "landing-preview-card";
+    const latestImage = node.images?.[node.images.length - 1];
+    if (latestImage?.url) {
+      const img = document.createElement("img");
+      img.className = "landing-preview-image";
+      img.src = latestImage.url;
+      img.alt = "Landing header visual";
+      img.addEventListener("click", (event) => { event.stopPropagation(); openLightbox(latestImage.url, "Landing header visual"); });
+      card.appendChild(img);
+    }
+    [["Claim", lp.headerClaim], ["Problem", lp.problem], ["Solution", lp.solution], ["Trust", lp.trust], ["CTA", lp.cta]]
+      .forEach(([label, value]) => {
+        if (!value) return;
+        const p = document.createElement("p");
+        p.className = `landing-preview-line${label === "CTA" ? " is-cta" : ""}`;
+        p.innerHTML = `<strong>${label}:</strong> ${value}`;
+        card.appendChild(p);
+      });
+    social.appendChild(card);
   }
+
+  const statusEl = nodeEl.querySelector(".content-pack-status");
+  const isGeneratingPack = getContentPackLoading(node.id);
+  const contentPackError = state.contentPackErrorById[node.id] || "";
+  statusEl.classList.toggle("hidden", !(isGeneratingPack || contentPackError));
+  statusEl.textContent = isGeneratingPack ? "Generating content pack..." : contentPackError;
+  statusEl.classList.toggle("error", !!contentPackError);
 
   const existingBar = nodeEl.querySelector(".reaction-bar");
   if (existingBar) existingBar.remove();
@@ -1873,6 +2199,8 @@ function fillInspector(node) {
     el.socialFields.classList.add("hidden");
     el.contentUploadFields.classList.add("hidden");
     el.contentFormatField.classList.add("hidden");
+    document.getElementById("content-image-prompt-field")?.classList.add("hidden");
+    el.landingPageFields?.classList.add("hidden");
     const variantsLabel = el.nodeForm.querySelector('label[for="node-variants"]');
     variantsLabel?.classList.remove("hidden");
     el.inputs.variants.classList.remove("hidden");
@@ -1885,25 +2213,57 @@ function fillInspector(node) {
   el.inputs.type.value = node.type;
   el.inputs.title.value = node.title;
   el.inputs.content.value = node.content;
+  el.inputs.imagePrompt.value = node.imagePrompt || "";
   el.inputs.variants.value = node.variants.join(", ");
   el.inputs.platform.value = node.social.platform;
   el.inputs.caption.value = node.social.caption;
-  el.inputs.hashtags.value = node.social.hashtags.join(", ");
-  el.inputs.preview.value = node.social.preview;
+  el.inputs.hashtags.value = state.hashtagDraftByNode[node.id] ?? node.social.hashtags.join(", ");
+  if (el.inputs.preview) el.inputs.preview.value = node.social.preview;
   el.inputs.audience.value = node.audience;
   el.inputs.goal.value = node.goal;
   el.inputs.channel.value = node.channel;
+  el.inputs.funnelStage.value = node.funnelStage || "";
+  el.inputs.tone.value = node.tone || "";
   el.inputs.contentFormat.value = node.contentFormat || "1:1";
+  const lp = node.landingPage || { headerVisualPrompt: "", headerClaim: "", problem: "", solution: "", trust: "", cta: "" };
+  el.inputs.lpHeaderVisualPrompt.value = lp.headerVisualPrompt || "";
+  el.inputs.lpHeaderClaim.value = lp.headerClaim || "";
+  el.inputs.lpProblem.value = lp.problem || "";
+  el.inputs.lpSolution.value = lp.solution || "";
+  el.inputs.lpTrust.value = lp.trust || "";
+  el.inputs.lpCta.value = lp.cta || "";
 
   el.socialFields.classList.toggle("hidden", node.type !== "Social Media Posting");
   el.contentUploadFields.classList.toggle("hidden", !(node.type === "Content" || node.type === "Social Media Posting"));
   el.contentFormatField.classList.toggle("hidden", node.type !== "Content");
+  document.getElementById("content-image-prompt-field")?.classList.toggle("hidden", node.type !== "Content");
+  el.landingPageFields?.classList.toggle("hidden", node.type !== "Landing Page");
+  el.generateHeaderVisualButton.style.display = node.type === "Landing Page" ? "block" : "none";
   const variantsLabel = el.nodeForm.querySelector('label[for="node-variants"]');
   const hideVariants = node.type === "Content";
   variantsLabel?.classList.toggle("hidden", hideVariants);
   el.inputs.variants.classList.toggle("hidden", hideVariants);
   renderInspectorImages(node);
   updateInspectorActionVisibility();
+}
+
+function getConnectedSocialPostingNodes(contentNodeId) {
+  const ids = state.edges
+    .filter((edge) => {
+      const from = Array.isArray(edge) ? edge[0] : edge?.source;
+      return from === contentNodeId;
+    })
+    .map((edge) => (Array.isArray(edge) ? edge[1] : edge?.target))
+    .filter(Boolean);
+  return ids.map(getNode).filter((n) => n?.type === "Social Media Posting");
+}
+
+async function resolveTargetSocialNodeForContent(contentNode) {
+  const connected = getConnectedSocialPostingNodes(contentNode.id);
+  const yOffset = connected.length * 120;
+  const created = createNode({ type: "Social Media Posting", position: { x: contentNode.position.x + 340, y: contentNode.position.y + 40 + yOffset } }) || state.nodes[state.nodes.length - 1];
+  addEdge(contentNode.id, created.id);
+  return created;
 }
 
 function revokeImageObjectUrl(img) {
@@ -2072,6 +2432,87 @@ async function runInlineRefine(node, instruction, triggerBtn = null) {
   }
 }
 
+async function generateFullContentPack(node, triggerBtn = null, mode = "auto") {
+  if (!node || getContentPackLoading(node.id)) return;
+  const nodeEl = el.zoomLayer.querySelector(`[data-id='${node.id}']`);
+  const toolbarButtons = nodeEl ? [...nodeEl.querySelectorAll(".node-ai-toolbar button")] : [];
+  const originalText = triggerBtn?.textContent || "";
+  console.log("runContentPackGeneration started with mode:", mode, node.id);
+  setContentPackGenerating(node.id, true);
+  setContentPackError(node.id, "");
+  toolbarButtons.forEach((btn) => { btn.disabled = true; });
+  if (triggerBtn) triggerBtn.textContent = "…";
+  updateNodeCard(node);
+  try {
+    const targetSocialNode = await resolveTargetSocialNodeForContent(node);
+    if (!targetSocialNode) return;
+
+    const platform = targetSocialNode?.social?.platform || "LinkedIn";
+    const platformGuide = platformPromptGuidance(platform);
+    const improved = await refineNodeWithAI(node, `Improve or finalize this content while preserving intent and brand voice. ${platformGuide}`);
+    node.title = improved?.title || node.title;
+    node.content = improved?.content || node.content;
+
+    console.log("Generating image prompt");
+    const imagePromptResult = await refineNodeWithAI(node, "Create or update a clearly descriptive visual image prompt based on this content. Return it in content.");
+    node.imagePrompt = (imagePromptResult?.content || "").trim() || node.imagePrompt;
+    if (!node.imagePrompt) throw new Error("Image prompt generation failed");
+
+    console.log("Generating caption");
+    const captionResult = await refineNodeWithAI(node, `Write one short social-media-ready caption based on this content. ${platformGuide} Return it in caption.`);
+    const caption = (captionResult?.caption || captionResult?.content || "").trim();
+    if (!caption) throw new Error("Caption generation failed");
+
+    console.log("Generating CTA");
+    const ctaResult = await refineNodeWithAI(node, `Write one clear, concise call-to-action line based on this content. ${platformGuide} Return it in content.`);
+    const cta = (ctaResult?.content || ctaResult?.caption || "").split("\n")[0].trim();
+    if (!cta) throw new Error("CTA generation failed");
+
+    console.log("Generating hashtags");
+    const hashtagResult = await refineNodeWithAI(node, `${structuredHashtagPrompt(platform)} ${platformGuide}`);
+    const hashtags = finalizeGeneratedHashtags(hashtagResult?.caption || hashtagResult?.content || "", platform);
+
+    console.log("Generating image");
+    await generateImageForNode(node);
+    const newestImage = node.images[node.images.length - 1];
+    console.log("Creating/updating social node");
+    targetSocialNode.title = `Social Post: ${node.title || "Untitled"}`;
+    targetSocialNode.content = [caption, cta].filter(Boolean).join("\n\n");
+    targetSocialNode.social.caption = caption;
+    targetSocialNode.social.hashtags = hashtags;
+    targetSocialNode.social.preview = cta;
+    if (newestImage?.url) {
+      targetSocialNode.images = Array.isArray(targetSocialNode.images) ? targetSocialNode.images : [];
+      targetSocialNode.images.push({ ...newestImage, id: crypto.randomUUID ? crypto.randomUUID() : `img-${Date.now()}` });
+    }
+    updateNodeCard(node);
+    updateNodeCard(targetSocialNode);
+    fillInspector(node);
+    saveCampaignCanvasState();
+    console.log("runContentPackGeneration finished");
+  } catch (_error) {
+    console.error("Full content pack failed", _error);
+    setContentPackError(node.id, "Could not generate content pack. Please retry.");
+    updateNodeCard(node);
+  } finally {
+    setContentPackGenerating(node.id, false);
+    toolbarButtons.forEach((btn) => { btn.disabled = false; });
+    if (triggerBtn) triggerBtn.textContent = originalText;
+    updateNodeCard(node);
+    updateInspectorActionVisibility();
+    console.log("generation loading cleared");
+  }
+}
+
+async function handleGenerateFullContentPack(contentNodeId) {
+  const node = getNode(contentNodeId);
+  if (!node || node.type !== "Content") return;
+  console.log("Full pack clicked");
+  const connectedSocialNodes = getConnectedSocialPostingNodes(node.id);
+  console.log("Existing social nodes:", connectedSocialNodes.length);
+  await generateFullContentPack(node, el.generateFullPackButton, "new");
+}
+
 async function generateImageForNode(node) {
   console.log("generate image start");
   const button = el.generateImageButton;
@@ -2087,7 +2528,7 @@ async function generateImageForNode(node) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         nodeTitle: node.title || "",
-        nodeContent: node.content || "",
+        nodeContent: [node.imagePrompt || node.content || "", nodeStrategyContext(node)].filter(Boolean).join(" | "),
         brandBrainData: state.brandCore,
         campaignContext: getCampaignContextSummary(),
         contentFormat: node.contentFormat || "1:1"
@@ -2486,6 +2927,16 @@ function renderNode(node) {
     });
     aiToolbar.appendChild(btn);
   });
+  if (node.type === "Content") {
+    const packBtn = document.createElement("button");
+    packBtn.type = "button";
+    packBtn.textContent = "Generate Full Content Pack";
+    packBtn.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      await handleGenerateFullContentPack(node.id);
+    });
+    aiToolbar.appendChild(packBtn);
+  }
   nodeEl.appendChild(aiToolbar);
 
   const expandBtn = document.createElement("button");
@@ -2892,15 +3343,25 @@ el.nodeForm.addEventListener("input", (event) => {
   if (event.target === el.inputs.type) node.type = el.inputs.type.value;
   if (event.target === el.inputs.title) node.title = el.inputs.title.value.trim();
   if (event.target === el.inputs.content) node.content = el.inputs.content.value;
+  if (event.target === el.inputs.imagePrompt) node.imagePrompt = el.inputs.imagePrompt.value;
   if (event.target === el.inputs.variants) node.variants = parseList(el.inputs.variants.value);
   if (event.target === el.inputs.platform) node.social.platform = el.inputs.platform.value;
   if (event.target === el.inputs.caption) node.social.caption = el.inputs.caption.value;
-  if (event.target === el.inputs.hashtags) node.social.hashtags = parseList(el.inputs.hashtags.value);
-  if (event.target === el.inputs.preview) node.social.preview = el.inputs.preview.value;
+  if (event.target === el.inputs.hashtags) state.hashtagDraftByNode[node.id] = el.inputs.hashtags.value;
+  if (el.inputs.preview && event.target === el.inputs.preview) node.social.preview = el.inputs.preview.value;
   if (event.target === el.inputs.audience) node.audience = el.inputs.audience.value.trim();
   if (event.target === el.inputs.goal) node.goal = el.inputs.goal.value.trim();
   if (event.target === el.inputs.channel) node.channel = el.inputs.channel.value.trim();
+  if (event.target === el.inputs.funnelStage) node.funnelStage = el.inputs.funnelStage.value.trim();
+  if (event.target === el.inputs.tone) node.tone = el.inputs.tone.value.trim();
   if (event.target === el.inputs.contentFormat) node.contentFormat = el.inputs.contentFormat.value || "1:1";
+  if (!node.landingPage) node.landingPage = { headerVisualPrompt: "", headerClaim: "", problem: "", solution: "", trust: "", cta: "" };
+  if (event.target === el.inputs.lpHeaderVisualPrompt) node.landingPage.headerVisualPrompt = el.inputs.lpHeaderVisualPrompt.value;
+  if (event.target === el.inputs.lpHeaderClaim) node.landingPage.headerClaim = el.inputs.lpHeaderClaim.value;
+  if (event.target === el.inputs.lpProblem) node.landingPage.problem = el.inputs.lpProblem.value;
+  if (event.target === el.inputs.lpSolution) node.landingPage.solution = el.inputs.lpSolution.value;
+  if (event.target === el.inputs.lpTrust) node.landingPage.trust = el.inputs.lpTrust.value;
+  if (event.target === el.inputs.lpCta) node.landingPage.cta = el.inputs.lpCta.value;
 
   updateNodeCard(node);
   updateListView();
@@ -2919,6 +3380,21 @@ el.inputs.channel.addEventListener("keydown", (event) => {
   updateNodeCard(node);
   fillInspector(node);
   saveCampaignCanvasState();
+});
+el.inputs.hashtags.addEventListener("blur", () => {
+  const node = getNode(state.selectedPrimary);
+  if (!node) return;
+  const normalized = normalizeHashtagsInput(state.hashtagDraftByNode[node.id] ?? el.inputs.hashtags.value);
+  node.social.hashtags = normalized;
+  delete state.hashtagDraftByNode[node.id];
+  el.inputs.hashtags.value = normalized.join(", ");
+  updateNodeCard(node);
+  saveCampaignCanvasState();
+});
+el.inputs.hashtags.addEventListener("keydown", (event) => {
+  if (event.key !== "Enter") return;
+  event.preventDefault();
+  el.inputs.hashtags.blur();
 });
 
 el.imageUpload.addEventListener("change", () => {
@@ -2951,10 +3427,54 @@ el.regenerateNodeButton.addEventListener("click", async () => {
     el.regenerateNodeButton
   );
 });
+el.regeneratePlatformButton.addEventListener("click", async () => {
+  const node = getNode(state.selectedPrimary);
+  if (!node || node.type !== "Social Media Posting") return;
+  await regenerateSocialForPlatform(node, el.regeneratePlatformButton);
+});
 el.generateImageButton.addEventListener("click", async () => {
   const node = getNode(state.selectedPrimary);
   if (!node || node.type !== "Content") return;
   await generateImageForNode(node);
+});
+el.generateFullPackButton.addEventListener("click", async () => {
+  const node = getNode(state.selectedPrimary);
+  if (!node || node.type !== "Content") return;
+  await handleGenerateFullContentPack(node.id);
+});
+el.generateHeaderVisualButton.addEventListener("click", async () => {
+  const node = getNode(state.selectedPrimary);
+  if (!node || node.type !== "Landing Page") return;
+  if (!node.landingPage?.headerVisualPrompt?.trim()) return;
+  const btn = el.generateHeaderVisualButton;
+  const original = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "Generating...";
+  try {
+    const response = await fetch("/api/generate-image", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        nodeTitle: node.title || "",
+        nodeContent: node.landingPage.headerVisualPrompt,
+        brandBrainData: state.brandCore,
+        campaignContext: getCampaignContextSummary(),
+        contentFormat: "16:9"
+      })
+    });
+    if (!response.ok) throw new Error("Header visual failed");
+    const data = await response.json();
+    const imageUrl = data?.imageUrl || data?.url || "";
+    if (!imageUrl) throw new Error("Empty image URL");
+    node.images = Array.isArray(node.images) ? node.images : [];
+    node.images.push({ id: crypto.randomUUID(), url: imageUrl, name: "landing-header.png", createdAt: Date.now(), source: "generated" });
+    updateNodeCard(node);
+    fillInspector(node);
+    saveCampaignCanvasState();
+  } finally {
+    btn.disabled = false;
+    btn.textContent = original;
+  }
 });
 el.generatePostingVisualButton.addEventListener("click", async () => {
   const node = getNode(state.selectedPrimary);

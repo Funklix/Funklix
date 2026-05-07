@@ -656,6 +656,23 @@ button:active {
   white-space: normal;
 }
 
+.content-pack-status {
+  margin: 4px 0;
+  font-size: 0.7rem;
+  line-height: 1.35;
+  color: #4f5678;
+  padding: 2px 4px;
+}
+
+.content-pack-status {
+  color: #5b63a8;
+  font-style: italic;
+}
+
+.content-pack-status.error {
+  color: #b23939;
+}
+
 .node-expand-content {
   border: 1px solid #d7dcf1;
   background: #f8f9ff;
@@ -898,6 +915,26 @@ button:active {
   padding: 8px;
   background: #fafbff;
 }
+
+.social-card { display: grid; gap: 6px; }
+.social-card-top { display: flex; justify-content: space-between; align-items: center; gap: 6px; }
+.social-platform-select { font-size: 0.68rem; border: 1px solid #d8dced; border-radius: 8px; padding: 3px 6px; background: #fff; }
+.social-platform-regen { border: 1px solid #d8dced; background: #f7f8ff; color: #42507f; border-radius: 999px; font-size: 0.6rem; padding: 2px 7px; cursor: pointer; }
+.social-status-badge { font-size: 0.62rem; color: #2f7f5f; background: #eaf8f1; border-radius: 999px; padding: 2px 7px; }
+.social-char-count { font-size: 0.62rem; color: #636b8e; }
+.social-char-count.warning { color: #b23939; font-weight: 600; }
+.social-caption, .social-cta, .social-hashtags { border: 1px solid #e4e7f6; border-radius: 8px; padding: 6px; background: #fff; font-size: 0.7rem; white-space: pre-wrap; line-height: 1.35; }
+.social-cta { font-weight: 600; color: #34457f; }
+.social-hashtags { color: #63709b; font-size: 0.66rem; }
+.social-actions-row { display: flex; flex-wrap: wrap; gap: 5px; }
+.social-actions-row button { border: 1px solid #d8dced; background: #f7f8ff; color: #42507f; border-radius: 999px; font-size: 0.62rem; padding: 2px 7px; cursor: pointer; }
+.social-image-frame { border: 1px solid #e4e8f8; border-radius: 10px; overflow: hidden; background: #f3f5ff; min-height: 64px; display: flex; align-items: center; justify-content: center; }
+.social-image-frame img { width: 100%; max-height: 120px; object-fit: cover; display: block; cursor: zoom-in; }
+
+.landing-preview-card { display: grid; gap: 5px; }
+.landing-preview-image { width: 100%; max-height: 110px; object-fit: cover; border-radius: 8px; border: 1px solid #e4e8f8; cursor: zoom-in; }
+.landing-preview-line { margin: 0; font-size: 0.67rem; line-height: 1.35; color: #4a537b; }
+.landing-preview-line.is-cta { font-weight: 700; color: #30407d; }
 
 .social-preview p,
 .social-preview small,
