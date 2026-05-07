@@ -1757,22 +1757,135 @@ function updateNodeCard(node) {
   const isSocial = node.type === "Social Media Posting";
   social.classList.toggle("hidden", !isSocial);
   if (isSocial) {
-    social.innerHTML = `<strong>${node.social.platform} Preview</strong><p>${node.social.caption || ""}</p><small>${node.social.hashtags.join(" ")}</small><em>${node.social.preview || ""}</em>`;
-    if (node.social.scheduledAt) {
-      const when = new Date(node.social.scheduledAt);
-      const scheduled = document.createElement("small");
-      scheduled.textContent = `Geplant: ${when.toLocaleString("de-DE")}`;
-      social.appendChild(scheduled);
-    }
-    const planBtn = document.createElement("button");
-    planBtn.type = "button";
-    planBtn.className = "inspector-image-delete";
-    planBtn.textContent = "Add to Posting Plan";
-    planBtn.addEventListener("click", (event) => {
-      event.stopPropagation();
-      openPostingPlanner(node.id);
+    social.innerHTML = "";
+    const wrapper = document.createElement("div");
+    wrapper.className = "social-card";
+
+    const top = document.createElement("div");
+    top.className = "social-card-top";
+    const platformSelect = document.createElement("select");
+    platformSelect.className = "social-platform-select";
+    ["LinkedIn", "X / Twitter", "Instagram", "TikTok"].forEach((p) => {
+      const option = document.createElement("option");
+      option.value = p;
+      option.textContent = p;
+      platformSelect.appendChild(option);
     });
-    social.appendChild(planBtn);
+    platformSelect.value = node.social.platform || "LinkedIn";
+    platformSelect.addEventListener("click", (event) => event.stopPropagation());
+    platformSelect.addEventListener("change", () => {
+      node.social.platform = platformSelect.value;
+      updateNodeCard(node);
+      if (state.selectedPrimary === node.id) fillInspector(node);
+      saveCampaignCanvasState();
+    });
+    const status = document.createElement("span");
+    status.className = "social-status-badge";
+    status.textContent = "Ready";
+    top.append(platformSelect, status);
+
+    const charCount = document.createElement("div");
+    charCount.className = "social-char-count";
+    const captionLen = (node.social.caption || "").length;
+    const limits = { "X / Twitter": 280, LinkedIn: 3000, Instagram: 2200, TikTok: 2200 };
+    const limit = limits[node.social.platform] || 3000;
+    charCount.textContent = `${captionLen} characters${captionLen > limit ? ` (over ${limit})` : ""}`;
+    if (captionLen > limit) charCount.classList.add("warning");
+
+    const caption = document.createElement("div");
+    caption.className = "social-caption";
+    caption.contentEditable = "true";
+    caption.textContent = node.social.caption || "";
+    caption.addEventListener("click", (event) => event.stopPropagation());
+    caption.addEventListener("input", () => {
+      node.social.caption = caption.textContent;
+      updateNodeCard(node);
+      if (state.selectedPrimary === node.id) fillInspector(node);
+      saveCampaignCanvasState();
+    });
+
+    const cta = document.createElement("div");
+    cta.className = "social-cta";
+    cta.contentEditable = "true";
+    cta.textContent = node.social.preview || "";
+    cta.addEventListener("click", (event) => event.stopPropagation());
+    cta.addEventListener("input", () => {
+      node.social.preview = cta.textContent;
+      saveCampaignCanvasState();
+    });
+
+    const hashtags = document.createElement("div");
+    hashtags.className = "social-hashtags";
+    hashtags.contentEditable = "true";
+    hashtags.textContent = (node.social.hashtags || []).join(" ");
+    hashtags.addEventListener("click", (event) => event.stopPropagation());
+    hashtags.addEventListener("input", () => {
+      node.social.hashtags = parseList(hashtags.textContent.replace(/#/g, "").replace(/\s+/g, ",")).map((h) => `#${h}`);
+      saveCampaignCanvasState();
+    });
+
+    const actions = document.createElement("div");
+    actions.className = "social-actions-row";
+    const copyCaptionBtn = document.createElement("button");
+    copyCaptionBtn.type = "button";
+    copyCaptionBtn.textContent = "Copy Caption";
+    copyCaptionBtn.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      await navigator.clipboard.writeText(node.social.caption || "");
+      copyCaptionBtn.textContent = "Copied";
+      setTimeout(() => { copyCaptionBtn.textContent = "Copy Caption"; }, 900);
+    });
+    const copyFullBtn = document.createElement("button");
+    copyFullBtn.type = "button";
+    copyFullBtn.textContent = "Copy Full Post";
+    copyFullBtn.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      await navigator.clipboard.writeText([node.social.caption || "", node.social.preview || "", (node.social.hashtags || []).join(" ")].filter(Boolean).join("\n\n"));
+      copyFullBtn.textContent = "Copied";
+      setTimeout(() => { copyFullBtn.textContent = "Copy Full Post"; }, 900);
+    });
+
+    const regen = async (instruction, key, btn) => {
+      btn.disabled = true;
+      const original = btn.textContent;
+      btn.textContent = "...";
+      try {
+        const refined = await refineNodeWithAI(node, instruction);
+        if (key === "caption") node.social.caption = (refined?.caption || refined?.content || "").trim() || node.social.caption;
+        if (key === "cta") node.social.preview = (refined?.content || refined?.caption || "").trim() || node.social.preview;
+        if (key === "hashtags") node.social.hashtags = parseList((refined?.caption || refined?.content || "").replace(/\n/g, ",")).map((h) => h.startsWith("#") ? h : `#${h}`);
+        updateNodeCard(node);
+        fillInspector(node);
+        saveCampaignCanvasState();
+      } finally {
+        btn.disabled = false;
+        btn.textContent = original;
+      }
+    };
+    const regenCaption = document.createElement("button");
+    regenCaption.type = "button"; regenCaption.textContent = "Regenerate Caption";
+    regenCaption.addEventListener("click", (event) => { event.stopPropagation(); regen("Write a social-ready caption for this post. Return in caption.", "caption", regenCaption); });
+    const regenCTA = document.createElement("button");
+    regenCTA.type = "button"; regenCTA.textContent = "Regenerate CTA";
+    regenCTA.addEventListener("click", (event) => { event.stopPropagation(); regen("Write one concise CTA line for this post. Return in content.", "cta", regenCTA); });
+    const regenHash = document.createElement("button");
+    regenHash.type = "button"; regenHash.textContent = "Regenerate Hashtags";
+    regenHash.addEventListener("click", (event) => { event.stopPropagation(); regen("Write 4-6 relevant hashtags, comma-separated. Return in caption.", "hashtags", regenHash); });
+    actions.append(copyCaptionBtn, copyFullBtn, regenCaption, regenCTA, regenHash);
+
+    const imageFrame = document.createElement("div");
+    imageFrame.className = "social-image-frame";
+    const previewImage = node.images?.[node.images.length - 1];
+    if (previewImage?.url) {
+      const img = document.createElement("img");
+      img.src = previewImage.url;
+      img.alt = "Social preview";
+      img.addEventListener("click", (event) => { event.stopPropagation(); openLightbox(previewImage.url, "Social preview image"); });
+      imageFrame.appendChild(img);
+    }
+
+    wrapper.append(top, charCount, caption, cta, hashtags, imageFrame, actions);
+    social.appendChild(wrapper);
   }
 
   const statusEl = nodeEl.querySelector(".content-pack-status");
