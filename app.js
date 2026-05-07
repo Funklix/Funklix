@@ -122,7 +122,6 @@ const el = {
   regenerateNodeButton: document.getElementById("regenerate-node-btn"),
   regeneratePlatformButton: document.getElementById("regenerate-platform-btn"),
   addToPostingCalendarButton: document.getElementById("add-to-posting-calendar-btn"),
-  postingScheduleMeta: document.getElementById("posting-schedule-meta"),
   generateImageButton: document.getElementById("generate-image-btn"),
   generatePostingVisualButton: document.getElementById("generate-posting-visual-btn"),
   generateFullPackButton: document.getElementById("generate-full-pack-btn"),
@@ -668,7 +667,7 @@ function suggestNextNodes(analysis, nodes, edges, brandCore) {
   }
   const unique = [...new Map(suggestions.map((s) => [s.id, s])).values()];
   if (!unique.length) {
-    unique.push({ id: "s-safe-variation", title: `Variation: ${tone}-focused ${primaryAudience} angle`, description: "Create a campaign variation with a distinct messaging angle and rationale.", recommendedNodeType: "Campaign Variation", reason: "Your core campaign is in place. A variation helps compare message-performance fit.", priority: "medium", suggestedPositionContext: "after-social", suggestedStrategy: { audience: primaryAudience, goal: "Awareness", channel: "Campaign Strategy", funnelStage: "Interest", tone } });
+    unique.push({ id: "s-safe-variation", title: "Create a campaign variation", description: "Add a new messaging variation to compare performance.", recommendedNodeType: "Social Media Posting", reason: "Your core campaign is in place. A variation helps compare platform/message fit.", priority: "medium", suggestedPositionContext: "after-social", suggestedStrategy: { audience: primaryAudience, goal: "Awareness", channel: "LinkedIn", funnelStage: "Interest", tone } });
   }
   return unique.slice(0, 6);
 }
@@ -684,15 +683,6 @@ async function createSuggestedNodeFromAnalysis(suggestion) {
   node.channel = suggestion.suggestedStrategy?.channel || "";
   node.funnelStage = suggestion.suggestedStrategy?.funnelStage || "";
   node.tone = suggestion.suggestedStrategy?.tone || "";
-  const suggestionTitle = (suggestion.title || "").toLowerCase();
-  const wantsCampaignVariation = suggestion.recommendedNodeType === "Campaign Variation" || suggestionTitle.includes("campaign variation") || suggestionTitle.startsWith("variation:");
-  if (wantsCampaignVariation) {
-    node.type = "Campaign Variation";
-    const angleSeed = (suggestion.suggestedStrategy?.tone || tone || "Strategic").replace(/\s+/g, "-").toLowerCase();
-    const audienceSeed = (suggestion.suggestedStrategy?.audience || primaryAudience || "ICP").split(/[\s,/]+/).filter(Boolean).slice(0,2).join(" ");
-    node.title = suggestion.title?.startsWith("Variation:") ? suggestion.title : `Variation: ${suggestion.suggestedStrategy?.tone || "Trust-first"} ${audienceSeed} angle`;
-    node.content = `Angle: ${angleSeed}. Audience: ${suggestion.suggestedStrategy?.audience || primaryAudience}. Goal: ${suggestion.suggestedStrategy?.goal || "Awareness"}. Rationale: ${suggestion.reason}. Next step: create one supporting content node and one social execution node.`;
-  }
   try {
     const contextPrompt = `Campaign context: ${getCampaignContextSummary()}. Suggestion reason: ${suggestion.reason}.`;
     if (node.type === "Content") {
@@ -2211,10 +2201,6 @@ function updateNodeCard(node) {
       saveCampaignCanvasState();
     });
 
-    const scheduleMeta = document.createElement("small");
-    scheduleMeta.className = "meta";
-    scheduleMeta.textContent = node.social.scheduledAt ? `Scheduled: ${new Date(node.social.scheduledAt).toLocaleString()}` : "";
-
     const actions = document.createElement("div");
     actions.className = "social-actions-row";
     const copyCaptionBtn = document.createElement("button");
@@ -2237,12 +2223,23 @@ function updateNodeCard(node) {
     });
     const calendarBtn = document.createElement("button");
     calendarBtn.type = "button";
-    calendarBtn.textContent = node.social?.scheduledAt ? "Scheduled" : "Add to Posting Calendar";
+    calendarBtn.textContent = node.social?.addedToCalendar ? "In Posting Calendar" : "Add to Posting Calendar";
     calendarBtn.addEventListener("click", (event) => {
       event.stopPropagation();
-      await navigator.clipboard.writeText([node.social.caption || "", node.social.preview || "", (node.social.hashtags || []).join(" ")].filter(Boolean).join("\n\n"));
-      copyFullBtn.textContent = "Copied";
-      setTimeout(() => { copyFullBtn.textContent = "Copy Full Post"; }, 900);
+      node.social.addedToCalendar = true;
+      node.social.calendarDraft = {
+        nodeId: node.id,
+        platform: node.social.platform,
+        caption: node.social.caption,
+        cta: node.social.preview,
+        hashtags: node.social.hashtags,
+        imageUrl: node.images?.[node.images.length - 1]?.url || "",
+        createdAt: Date.now()
+      };
+      updateNodeCard(node);
+      fillInspector(node);
+      saveCampaignCanvasState();
+      setSaveStatus("Added to posting calendar");
     });
 
     const regen = async (instruction, key, btn) => {
@@ -2284,7 +2281,7 @@ function updateNodeCard(node) {
       imageFrame.appendChild(img);
     }
 
-    wrapper.append(top, charCount, caption, cta, hashtags, scheduleMeta, imageFrame, actions);
+    wrapper.append(top, charCount, caption, cta, hashtags, imageFrame, actions);
     social.appendChild(wrapper);
   } else if (isLandingPage) {
     const lp = node.landingPage || {};
@@ -2494,10 +2491,7 @@ function fillInspector(node) {
   el.landingPageFields?.classList.toggle("hidden", node.type !== "Landing Page");
   el.generateHeaderVisualButton.style.display = node.type === "Landing Page" ? "block" : "none";
   if (el.addToPostingCalendarButton) {
-    el.addToPostingCalendarButton.textContent = node.type === "Social Media Posting" && node.social?.scheduledAt ? "Scheduled" : "Add to Posting Calendar";
-  }
-  if (el.postingScheduleMeta) {
-    el.postingScheduleMeta.textContent = node.type === "Social Media Posting" && node.social?.scheduledAt ? `Scheduled: ${new Date(node.social.scheduledAt).toLocaleString()}` : "";
+    el.addToPostingCalendarButton.textContent = node.type === "Social Media Posting" && node.social?.addedToCalendar ? "In Posting Calendar" : "Add to Posting Calendar";
   }
   const variantsLabel = el.nodeForm.querySelector('label[for="node-variants"]');
   const hideVariants = node.type === "Content";
@@ -3388,17 +3382,7 @@ function renderCalendarView() {
       btn.type = "button";
       btn.className = "calendar-post";
       const when = new Date(n.social.scheduledAt);
-      const metaTime = when.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
-      const captionPreview = (n.social.caption || n.title || n.id || "Post").trim().slice(0, 44);
-      btn.innerHTML = `<strong>${n.social.platform || "Social"}</strong> · ${metaTime}<br/><small>${captionPreview}${captionPreview.length >= 44 ? "…" : ""}</small>`;
-      const previewImage = n.images?.[n.images.length - 1]?.url;
-      if (previewImage) {
-        const thumb = document.createElement("img");
-        thumb.src = previewImage;
-        thumb.alt = "Scheduled post preview";
-        thumb.style.cssText = "width:24px;height:24px;object-fit:cover;border-radius:6px;margin-left:6px;vertical-align:middle";
-        btn.appendChild(thumb);
-      }
+      btn.textContent = `${n.title || n.id} · ${when.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}`;
       btn.addEventListener("click", () => {
         setActiveView("board");
         state.selectedIds.clear();
@@ -3720,7 +3704,20 @@ el.regeneratePlatformButton.addEventListener("click", async () => {
 el.addToPostingCalendarButton.addEventListener("click", () => {
   const node = getNode(state.selectedPrimary);
   if (!node || node.type !== "Social Media Posting") return;
-  openPostingPlanner(node.id);
+  node.social.addedToCalendar = true;
+  node.social.calendarDraft = {
+    nodeId: node.id,
+    platform: node.social.platform,
+    caption: node.social.caption,
+    cta: node.social.preview,
+    hashtags: node.social.hashtags,
+    imageUrl: node.images?.[node.images.length - 1]?.url || "",
+    createdAt: Date.now()
+  };
+  updateNodeCard(node);
+  fillInspector(node);
+  saveCampaignCanvasState();
+  setSaveStatus("Added to posting calendar");
 });
 el.generateImageButton.addEventListener("click", async () => {
   const node = getNode(state.selectedPrimary);
@@ -3899,23 +3896,9 @@ el.postingDoneButton.addEventListener("click", () => {
   if (!node) return closePostingPlanner();
   if (!el.postingDateInput.value || !el.postingTimeInput.value) return;
   node.social.scheduledAt = `${el.postingDateInput.value}T${el.postingTimeInput.value}:00`;
-  node.social.addedToCalendar = true;
-  node.social.calendarDraft = {
-    nodeId: node.id,
-    platform: node.social.platform,
-    caption: node.social.caption,
-    cta: node.social.preview,
-    hashtags: node.social.hashtags,
-    imageUrl: node.images?.[node.images.length - 1]?.url || "",
-    scheduledDate: el.postingDateInput.value,
-    scheduledTime: el.postingTimeInput.value,
-    createdAt: Date.now()
-  };
   updateNodeCard(node);
   fillInspector(node);
   renderCalendarView();
-  saveCampaignCanvasState();
-  setSaveStatus("Scheduled in posting calendar");
   closePostingPlanner();
 });
 el.postingCancelButton.addEventListener("click", closePostingPlanner);
