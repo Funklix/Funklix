@@ -63,6 +63,9 @@ const state = {
   brandCoreSelectedKey: "brandCore"
   ,appMode: "canvas"
   ,boardsLibrary: []
+  ,contentPackLoadingById: {}
+  ,contentPackErrorById: {}
+  ,hashtagDraftByNode: {}
 };
 
 const el = {
@@ -107,13 +110,17 @@ const el = {
   socialFields: document.getElementById("social-fields"),
   contentUploadFields: document.getElementById("content-upload-fields"),
   contentFormatField: document.getElementById("content-format-field"),
+  landingPageFields: document.getElementById("landing-page-fields"),
+  generateHeaderVisualButton: document.getElementById("generate-header-visual-btn"),
   imageUpload: document.getElementById("node-image-upload"),
   inspectorImageList: document.getElementById("inspector-image-list"),
   deleteNodeButton: document.getElementById("delete-node-btn"),
   improveNodeButton: document.getElementById("improve-node-btn"),
   regenerateNodeButton: document.getElementById("regenerate-node-btn"),
+  regeneratePlatformButton: document.getElementById("regenerate-platform-btn"),
   generateImageButton: document.getElementById("generate-image-btn"),
   generatePostingVisualButton: document.getElementById("generate-posting-visual-btn"),
+  generateFullPackButton: document.getElementById("generate-full-pack-btn"),
   postingPlanOverlay: document.getElementById("posting-plan-overlay"),
   postingDateInput: document.getElementById("posting-date-input"),
   postingTimeInput: document.getElementById("posting-time-input"),
@@ -138,17 +145,26 @@ const el = {
   brandCoreButton: document.getElementById("brand-core-nav-btn"),
   campaignCanvasNavButton: document.getElementById("campaign-canvas-nav-btn"),
   boardsNavButton: document.getElementById("boards-nav-btn"),
+  insightsNavButton: document.getElementById("insights-nav-btn"),
+  aiBrainNavButton: document.getElementById("ai-brain-nav-btn"),
   boardsLibraryView: document.getElementById("boards-library-view"),
+  insightsView: document.getElementById("insights-view"),
+  aiBrainView: document.getElementById("ai-brain-view"),
+  insightsCards: document.getElementById("insights-cards"),
+  aiBrainSummary: document.getElementById("ai-brain-summary"),
   boardsLibraryList: document.getElementById("boards-library-list"),
   sidebarToggleButton: document.getElementById("sidebar-toggle-btn"),
   brandEditorTitle: document.getElementById("bc-editor-title"),
   brandCoreCanvas: document.getElementById("brand-core-canvas"),
   brandEditorPanel: document.getElementById("bc-editor-panel"),
   resetBrandCoreButton: document.getElementById("reset-brand-core-btn"),
+  connectedContextSummary: document.getElementById("connected-context-summary"),
+  connectedContextBody: document.getElementById("connected-context-body"),
   inputs: {
     type: document.getElementById("node-type"),
     title: document.getElementById("node-title"),
     content: document.getElementById("node-content"),
+    imagePrompt: document.getElementById("node-image-prompt"),
     variants: document.getElementById("node-variants"),
     platform: document.getElementById("node-platform"),
     caption: document.getElementById("node-caption"),
@@ -157,7 +173,15 @@ const el = {
     audience: document.getElementById("node-audience"),
     goal: document.getElementById("node-goal"),
     channel: document.getElementById("node-channel"),
+    funnelStage: document.getElementById("node-funnel-stage"),
+    tone: document.getElementById("node-tone"),
     contentFormat: document.getElementById("node-content-format")
+    ,lpHeaderVisualPrompt: document.getElementById("lp-header-visual-prompt")
+    ,lpHeaderClaim: document.getElementById("lp-header-claim")
+    ,lpProblem: document.getElementById("lp-problem")
+    ,lpSolution: document.getElementById("lp-solution")
+    ,lpTrust: document.getElementById("lp-trust")
+    ,lpCta: document.getElementById("lp-cta")
   }
 };
 
@@ -470,16 +494,331 @@ function sanitizeNodeImages(images) {
     }));
 }
 
+function sanitizeNodeForPersistence(node) {
+  const clean = { ...node, images: sanitizeNodeImages(node.images) };
+  delete clean.isGeneratingContentPack;
+  delete clean.generatingContentPack;
+  delete clean.isGenerating;
+  delete clean.loading;
+  delete clean.generationStatus;
+  delete clean.disabled;
+  delete clean.contentPackError;
+  return clean;
+}
+
+function getContentPackLoading(nodeId) {
+  return !!state.contentPackLoadingById[nodeId];
+}
+
+function setContentPackGenerating(nodeId, value) {
+  if (!nodeId) return;
+  state.contentPackLoadingById[nodeId] = !!value;
+}
+
+function setContentPackError(nodeId, message = "") {
+  if (!nodeId) return;
+  state.contentPackErrorById[nodeId] = message || "";
+}
+
+function platformPromptGuidance(platform = "LinkedIn") {
+  if (platform === "X / Twitter") return "Platform: X/Twitter. Keep it short, punchy, hook-first, and 280-char aware. Concise CTA. Avoid hashtags unless useful.";
+  if (platform === "Instagram") return "Platform: Instagram. Visual-first, emotional, community-oriented tone. CTA should invite comments/saves/shares. Hashtags allowed but not excessive.";
+  if (platform === "TikTok") return "Platform: TikTok. Short, energetic, hook-driven, video-native phrasing. CTA should invite watch/comment/follow/remix.";
+  return "Platform: LinkedIn. Professional, structured, thought-leadership tone. Can be longer. Avoid excessive hashtags. CTA should invite discussion/action.";
+}
+
+function normalizeHashtagsInput(value = "") {
+  const tokens = String(value)
+    .split(/[\n,]+/g)
+    .flatMap((part) => part.trim().split(/\s+/g))
+    .map((raw) => raw.replace(/^#+/, "").replace(/[^\p{L}\p{N}_ ]/gu, "").trim())
+    .filter(Boolean)
+    .map((raw) => {
+      const words = raw.split(/\s+/).filter(Boolean);
+      const camel = words.map((w, i) => (i === 0 ? w : `${w.charAt(0).toUpperCase()}${w.slice(1)}`)).join("");
+      return `#${camel}`;
+    });
+  return [...new Set(tokens)];
+}
+
+function structuredHashtagPrompt(platform = "LinkedIn") {
+  const platformHint = platform === "Instagram"
+    ? "For Instagram, you may include 4-6 if relevant."
+    : platform === "TikTok"
+      ? "For TikTok, keep them short/trendy and focused."
+      : platform === "X / Twitter"
+        ? "For X/Twitter, use 3 concise hashtags max."
+        : "For LinkedIn, use 3 strategic hashtags max.";
+  return `Generate strategic marketing hashtags only in this structure: (1) one broad/general hashtag, (2) one medium-specific hashtag, (3) one highly specific campaign hashtag. Minimum 3 hashtags. Never convert full sentences into hashtags. Never hashtag every word. No labels/explanations. Return hashtags only, comma-separated. ${platformHint}`;
+}
+
+function finalizeGeneratedHashtags(rawValue = "", platform = "LinkedIn") {
+  const stopwords = new Set(["the", "and", "for", "with", "your", "into", "from", "this", "that", "you", "are", "our", "turn"]);
+  let tags = normalizeHashtagsInput(rawValue).filter((tag) => {
+    const core = tag.replace(/^#/, "");
+    return core.length >= 3 && !stopwords.has(core.toLowerCase());
+  });
+  const maxByPlatform = platform === "Instagram" ? 6 : platform === "TikTok" ? 5 : 3;
+  if (tags.length > maxByPlatform) tags = tags.slice(0, maxByPlatform);
+  if (tags.length < 3) tags = [...new Set([...tags, "#Marketing", "#ContentStrategy", "#CampaignLaunch"])].slice(0, 3);
+  return tags;
+}
+
+function buildContentImagePrompt(title = "", content = "") {
+  const brand = state.brandCore || {};
+  const mood = Array.isArray(brand.toneOfVoice) ? brand.toneOfVoice.slice(0, 2).join(", ") : "confident, modern";
+  const context = [brand.valueProposition, title, content].filter(Boolean).join(" · ");
+  return `16:9 campaign visual. Subject: ${title || "core offer"}. Context: ${context}. Composition: clear focal subject, balanced layout, ample negative space for headline overlay. Mood/style: ${mood}. High-quality realistic marketing visual.`;
+}
+
+function nodeStrategyContext(node) {
+  if (!node) return "";
+  return [
+    node.tone ? `Tone: ${node.tone}` : "",
+    node.goal ? `Goal: ${node.goal}` : "",
+    node.audience ? `Audience: ${node.audience}` : "",
+    node.channel ? `Channel: ${node.channel}` : "",
+    node.funnelStage ? `Funnel Stage: ${node.funnelStage}` : ""
+  ].filter(Boolean).join(" | ");
+}
+
+function getConnectedNodeContext(currentNodeId) {
+  const parentIds = state.edges.filter((edge) => (Array.isArray(edge) ? edge[1] : edge?.target) === currentNodeId).map((edge) => (Array.isArray(edge) ? edge[0] : edge?.source));
+  const childIds = state.edges.filter((edge) => (Array.isArray(edge) ? edge[0] : edge?.source) === currentNodeId).map((edge) => (Array.isArray(edge) ? edge[1] : edge?.target));
+  const parentNodes = parentIds.map(getNode).filter(Boolean);
+  const childNodes = childIds.map(getNode).filter(Boolean);
+  const siblingIds = parentIds.flatMap((pid) => state.edges.filter((edge) => (Array.isArray(edge) ? edge[0] : edge?.source) === pid).map((edge) => (Array.isArray(edge) ? edge[1] : edge?.target))).filter((id) => id && id !== currentNodeId);
+  const siblingNodes = [...new Map(siblingIds.map((id) => [id, getNode(id)])).values()].filter(Boolean);
+  const slim = (n) => ({
+    id: n.id, type: n.type, title: n.title, content: n.content,
+    audience: n.audience, goal: n.goal, channel: n.channel, funnelStage: n.funnelStage, tone: n.tone,
+    imagePrompt: n.imagePrompt || "",
+    social: n.type === "Social Media Posting" ? { platform: n.social?.platform, caption: n.social?.caption, cta: n.social?.preview, hashtags: n.social?.hashtags } : undefined,
+    landing: n.type === "Landing Page" ? { headerClaim: n.landingPage?.headerClaim, problemOfIcp: n.landingPage?.problem, solutionForIcp: n.landingPage?.solution, conversionCta: n.landingPage?.cta } : undefined
+  });
+  return { parentNodes: parentNodes.map(slim), childNodes: childNodes.map(slim), siblingNodes: siblingNodes.map(slim) };
+}
+
+function analyzeCampaign(nodes, edges, brandCore) {
+  const stages = ["Awareness", "Interest", "Consideration", "Conversion", "Retention"];
+  const derivedStages = nodes.flatMap((n) => {
+    const out = [];
+    if (n.funnelStage) out.push(n.funnelStage);
+    if (n.type === "Idea") out.push("Awareness");
+    if (n.type === "Content") out.push("Interest");
+    if (n.type === "Social Media Posting") out.push("Awareness");
+    if (n.type === "Landing Page" || n.goal === "Conversion" || n.funnelStage === "Conversion" || (n.landingPage?.cta || "").trim()) out.push("Conversion");
+    return out;
+  });
+  const coveredStages = [...new Set(derivedStages.filter(Boolean))];
+  const missingStages = stages.filter((s) => !coveredStages.includes(s));
+  const socialNodes = nodes.filter((n) => n.type === "Social Media Posting");
+  const ctas = nodes.map((n) => n.landingPage?.cta || n.social?.preview || "").filter(Boolean);
+  const uniqueCtas = new Set(ctas.map((v) => v.toLowerCase()));
+  const audienceSet = new Set(nodes.map((n) => (n.audience || "").trim()).filter(Boolean));
+  const toneSet = new Set(nodes.map((n) => (n.tone || "").trim()).filter(Boolean));
+  const trustNodes = nodes.filter((n) => n.type === "Landing Page" && (n.landingPage?.trust || "").trim().length > 0);
+  const platformCounts = socialNodes.reduce((acc, n) => { const p = n.social?.platform || "Unknown"; acc[p] = (acc[p] || 0) + 1; return acc; }, {});
+  const healthScore = Math.max(0, Math.min(100, Math.round(
+    40 + (coveredStages.length / stages.length) * 25 + (trustNodes.length ? 10 : 0) + (uniqueCtas.size >= 2 ? 10 : 0) + (audienceSet.size <= 1 ? 10 : 0) + (toneSet.size <= 2 ? 5 : 0)
+  )));
+  return {
+    healthScore,
+    funnel: { coveredStages, missingStages, confidence: Math.round((coveredStages.length / stages.length) * 100) },
+    platformDistribution: { counts: platformCounts, summary: `${socialNodes.length} social nodes across ${Object.keys(platformCounts).length || 0} platforms` },
+    cta: { qualityScore: Math.round((uniqueCtas.size / Math.max(ctas.length, 1)) * 100), warnings: ctas.length ? [] : ["Missing CTA"], suggestions: uniqueCtas.size < 2 ? ["Add CTA variations for different stages."] : [] },
+    icp: { consistencyScore: audienceSet.size <= 1 ? 90 : 55, inconsistencies: audienceSet.size > 1 ? [...audienceSet] : [] },
+    tone: { consistencyScore: toneSet.size <= 1 ? 90 : toneSet.size <= 2 ? 75 : 50, warnings: toneSet.size > 2 ? ["Tone shifts across nodes are high."] : [] },
+    trust: { score: trustNodes.length ? 80 : 35, suggestions: trustNodes.length ? [] : ["Add trust-building proof in Landing Page nodes."] },
+    strengths: [coveredStages.length >= 3 ? "Good funnel stage coverage." : "", socialNodes.length >= 2 ? "Multi-platform social presence." : ""].filter(Boolean),
+    weaknesses: [missingStages.length > 0 ? `Missing stages: ${missingStages.join(", ")}` : "", audienceSet.size > 1 ? "Audience/ICP varies across nodes." : ""].filter(Boolean),
+    suggestions: ["Strengthen conversion-oriented CTA where missing.", "Keep ICP and tone aligned across connected nodes."]
+  };
+}
+
+function suggestNextNodes(analysis, nodes, edges, brandCore) {
+  const primaryAudience = brandCore?.personas?.[0]?.name || "Primary ICP";
+  const tone = Array.isArray(brandCore?.toneOfVoice) ? brandCore.toneOfVoice[0] || "Professional" : "Professional";
+  const suggestions = [];
+  const landingNodes = nodes.filter((n) => n.type === "Landing Page");
+  const hasStrongLanding = landingNodes.some((n) => {
+    const lp = n.landingPage || {};
+    return !!((lp.cta || "").trim() && (lp.solution || "").trim() && (n.goal === "Conversion" || n.funnelStage === "Conversion"));
+  });
+  if (analysis.funnel.missingStages.includes("Conversion") && !hasStrongLanding) {
+    suggestions.push({ id: "s-conv-lp", title: "Add conversion landing page", description: "Create a conversion destination for interested traffic.", recommendedNodeType: "Landing Page", reason: "Campaign has upper-funnel assets but no strong conversion endpoint.", priority: "high", suggestedPositionContext: "after-consideration", suggestedStrategy: { audience: primaryAudience, goal: "Conversion", channel: "Landing Page", funnelStage: "Conversion", tone } });
+  } else if (hasStrongLanding) {
+    const lp = landingNodes[0];
+    if (!(lp.landingPage?.cta || "").trim()) suggestions.push({ id: "s-improve-lp-cta", title: "Improve landing page CTA", description: "Strengthen the conversion step on your current landing page.", recommendedNodeType: "Landing Page", reason: "Landing page exists, but CTA can be stronger.", priority: "medium", suggestedPositionContext: "near-landing", suggestedStrategy: { audience: primaryAudience, goal: "Conversion", channel: "Landing Page", funnelStage: "Conversion", tone } });
+    if (!(lp.landingPage?.trust || "").trim()) suggestions.push({ id: "s-lp-trust", title: "Strengthen trust section", description: "Add stronger social proof and credibility cues.", recommendedNodeType: "Content", reason: "Landing conversion layer needs trust reinforcement.", priority: "medium", suggestedPositionContext: "near-landing", suggestedStrategy: { audience: primaryAudience, goal: "Consideration", channel: "Blog", funnelStage: "Consideration", tone: "Professional" } });
+  }
+  if (analysis.trust.score < 60) {
+    suggestions.push({ id: "s-trust-content", title: "Add trust-building content", description: "Add proof and credibility messaging.", recommendedNodeType: "Content", reason: "Trust layer is weak in current campaign structure.", priority: "medium", suggestedPositionContext: "near-landing", suggestedStrategy: { audience: primaryAudience, goal: "Consideration", channel: "Blog", funnelStage: "Consideration", tone: "Professional" } });
+  }
+  if ((Object.keys(analysis.platformDistribution.counts || {}).length || 0) < 2) {
+    suggestions.push({ id: "s-platform-var", title: "Create platform variation", description: "Expand to another social platform.", recommendedNodeType: "Social Media Posting", reason: "Platform spread is narrow.", priority: "medium", suggestedPositionContext: "after-content", suggestedStrategy: { audience: primaryAudience, goal: "Awareness", channel: "LinkedIn", funnelStage: "Awareness", tone: "Direct" } });
+  }
+  if (analysis.cta.qualityScore < 50) {
+    suggestions.push({ id: "s-cta-social", title: "Add CTA-focused social post", description: "Create a clear next-step social output.", recommendedNodeType: "Social Media Posting", reason: "CTA quality and variation are currently weak.", priority: "high", suggestedPositionContext: "after-social", suggestedStrategy: { audience: primaryAudience, goal: "Lead Gen", channel: "Instagram", funnelStage: "Conversion", tone: "Direct" } });
+  }
+  return suggestions.slice(0, 6);
+}
+
+async function createSuggestedNodeFromAnalysis(suggestion) {
+  const base = state.nodes[state.nodes.length - 1];
+  const pos = base ? { x: base.position.x + 340, y: base.position.y + 40 } : { x: 620, y: 420 };
+  const node = createNode({ type: suggestion.recommendedNodeType, position: pos });
+  node.title = suggestion.title;
+  node.content = suggestion.description;
+  node.audience = suggestion.suggestedStrategy?.audience || "";
+  node.goal = suggestion.suggestedStrategy?.goal || "";
+  node.channel = suggestion.suggestedStrategy?.channel || "";
+  node.funnelStage = suggestion.suggestedStrategy?.funnelStage || "";
+  node.tone = suggestion.suggestedStrategy?.tone || "";
+  try {
+    const contextPrompt = `Campaign context: ${getCampaignContextSummary()}. Suggestion reason: ${suggestion.reason}.`;
+    if (node.type === "Content") {
+      const refined = await refineNodeWithAI(node, `Write a specific trust-building or conversion-supporting content brief. ${contextPrompt}`);
+      node.title = refined?.title || node.title;
+      node.content = refined?.content || node.content;
+      node.imagePrompt = buildContentImagePrompt(node.title, node.content);
+    }
+    if (node.type === "Social Media Posting") {
+      node.social.platform = suggestion.suggestedStrategy?.channel || "LinkedIn";
+      const guide = platformPromptGuidance(node.social.platform);
+      const caption = await refineNodeWithAI(node, `Create a high-quality ${node.social.platform} caption aligned to campaign context. ${guide} ${contextPrompt} Return in caption.`);
+      const cta = await refineNodeWithAI(node, `Create a conversion-focused CTA aligned to campaign context. ${guide} ${contextPrompt} Return in content.`);
+      const hashtags = await refineNodeWithAI(node, `${structuredHashtagPrompt(node.social.platform)} ${guide} ${contextPrompt}`);
+      node.social.caption = (caption?.caption || caption?.content || node.social.caption || "").trim();
+      node.social.preview = (cta?.content || cta?.caption || "Learn more").trim();
+      node.social.hashtags = finalizeGeneratedHashtags(hashtags?.caption || hashtags?.content || "", node.social.platform);
+      node.content = node.social.caption;
+    }
+    if (node.type === "Landing Page") {
+      const claim = await refineNodeWithAI(node, `Write a specific conversion headline for the landing page. ${contextPrompt} Return in content.`);
+      const problem = await refineNodeWithAI(node, `Write the ICP problem statement clearly and specifically. ${contextPrompt} Return in content.`);
+      const solution = await refineNodeWithAI(node, `Write the solution/value proposition clearly and specifically. ${contextPrompt} Return in content.`);
+      const trust = await refineNodeWithAI(node, `Write trust-building copy without fake metrics/testimonials unless provided in context. ${contextPrompt} Return in content.`);
+      const cta = await refineNodeWithAI(node, `Write a concise conversion CTA line. ${contextPrompt} Return in content.`);
+      node.landingPage = {
+        headerVisualPrompt: buildContentImagePrompt(node.title, solution?.content || node.content),
+        headerClaim: claim?.content || node.title,
+        problem: problem?.content || node.content,
+        solution: solution?.content || node.content,
+        trust: trust?.content || "Trusted by teams looking for clearer, more effective campaign execution.",
+        cta: cta?.content || "Get started"
+      };
+      node.content = [node.landingPage.headerClaim, node.landingPage.solution].filter(Boolean).join(" — ");
+    }
+  } catch (_error) {
+    if (node.type === "Content") node.imagePrompt = buildContentImagePrompt(node.title, node.content);
+    if (node.type === "Social Media Posting") {
+      node.social.platform = suggestion.suggestedStrategy?.channel || "LinkedIn";
+      node.social.caption = `${suggestion.title} for ${node.audience}`.trim();
+      node.social.preview = "Learn more";
+      node.social.hashtags = finalizeGeneratedHashtags(`#Marketing,#${(node.channel || "Campaign").replace(/[^A-Za-z0-9]/g, "")},#NextStep`, node.social.platform);
+    }
+    if (node.type === "Landing Page") node.landingPage = { headerVisualPrompt: buildContentImagePrompt(node.title, node.content), headerClaim: node.title, problem: node.content, solution: node.content, trust: "Trusted by teams looking for clearer, more effective campaign execution.", cta: "Get started" };
+  }
+  const parent = state.nodes.find((n) => n.funnelStage === "Consideration") || state.nodes.find((n) => n.type === "Content") || null;
+  if (parent && parent.id !== node.id) addEdge(parent.id, node.id);
+  state.selectedIds.clear();
+  state.selectedIds.add(node.id);
+  state.selectedPrimary = node.id;
+  updateSelectionClasses();
+  fillInspector(node);
+  setActiveView("board");
+  renderCampaignCanvasFromStateIfNeeded();
+  saveCampaignCanvasState();
+  setSaveStatus("Suggested node created");
+}
+
+function renderCampaignIntelligence() {
+  const a = analyzeCampaign(state.nodes, state.edges, state.brandCore);
+  const suggestions = suggestNextNodes(a, state.nodes, state.edges, state.brandCore);
+  if (el.insightsCards) {
+    const funnelSteps = ["Awareness", "Interest", "Consideration", "Conversion", "Retention"]
+      .map((step) => `<span class="insight-step ${a.funnel.coveredStages.includes(step) ? "covered" : "missing"}">${step}</span>`).join("");
+    el.insightsCards.innerHTML = `
+      <div class="insights-grid">
+        <article class="insight-card hero"><small>Campaign Health Score</small><h3>${a.healthScore}<span>/100</span></h3><p>${a.strengths[0] || "Campaign baseline established."}</p></article>
+        <article class="insight-card"><small>Funnel Coverage</small><div class="insight-funnel">${funnelSteps}</div><p>Missing: ${a.funnel.missingStages.join(", ") || "None"}</p></article>
+        <article class="insight-card"><small>Platform Distribution</small><h4>${a.platformDistribution.summary}</h4><p>${Object.entries(a.platformDistribution.counts).map(([k,v]) => `${k}: ${v}`).join(" · ") || "No platforms yet"}</p></article>
+        <article class="insight-card"><small>CTA Quality</small><h4>${a.cta.qualityScore}/100</h4><p>${a.cta.suggestions[0] || "CTA diversity looks healthy."}</p></article>
+        <article class="insight-card"><small>ICP Consistency</small><h4>${a.icp.consistencyScore}/100</h4><p>${a.icp.inconsistencies.join(" · ") || "Strong ICP consistency across nodes."}</p></article>
+        <article class="insight-card"><small>Tone Consistency</small><h4>${a.tone.consistencyScore}/100</h4><p>${a.tone.warnings[0] || "Tone alignment looks stable."}</p></article>
+        <article class="insight-card"><small>Trust Layer</small><h4>${a.trust.score}/100</h4><p>${a.trust.suggestions[0] || "Trust coverage is present."}</p></article>
+      </div>
+      <div class="insight-card" style="margin-top:12px"><small>Recommended Next Steps</small>
+        <div class="insight-suggestion-list">${suggestions.slice(0,3).map((s) => `<div class="insight-suggestion-item"><div><strong>${s.title}</strong><small>${s.recommendedNodeType} · ${s.priority}</small><p>${s.reason}</p></div><button type="button" data-suggestion-id="${s.id}">Create node</button></div>`).join("") || "<p>No suggestions right now.</p>"}</div>
+      </div>
+    `;
+    el.insightsCards.querySelectorAll("[data-suggestion-id]").forEach((btn) => btn.addEventListener("click", async () => {
+      const suggestion = suggestions.find((s) => s.id === btn.getAttribute("data-suggestion-id"));
+      if (suggestion) await createSuggestedNodeFromAnalysis(suggestion);
+    }));
+  }
+  if (el.aiBrainSummary) {
+    el.aiBrainSummary.innerHTML = `
+      <section class="ai-brain-wrap">
+        <header class="ai-brain-header"><h3>🧠 AI Brain</h3><p>Your AI strategist & creative partner</p><button type="button" id="refresh-ai-brain">Refresh analysis</button></header>
+        <article class="ai-summary-card"><small>Campaign Summary</small><h2>${a.healthScore}<span>/100</span></h2><p>This campaign focuses on <strong>${a.funnel.coveredStages.join(", ") || "early-stage planning"}</strong>, with primary opportunities in <strong>${a.funnel.missingStages.join(", ") || "execution depth"}</strong>.</p></article>
+        <div class="ai-columns">
+          <article class="ai-list-card"><h4>Detected Issues</h4><ul>${(a.weaknesses.length ? a.weaknesses : ["No critical issues detected."]).map((w) => `<li>⚠️ ${w}</li>`).join("")}</ul></article>
+          <article class="ai-list-card"><h4>Suggestions</h4><ul>${a.suggestions.map((s) => `<li>💡 ${s}</li>`).join("")}</ul></article>
+        </div>
+        <article class="ai-list-card"><h4>Suggested Next Nodes</h4><div class="insight-suggestion-list">${suggestions.map((s) => `<div class="insight-suggestion-item"><div><strong>${s.title}</strong><small>${s.recommendedNodeType} · ${s.priority}</small><p>${s.reason}</p></div><button type="button" data-suggestion-id="${s.id}">Create node</button></div>`).join("") || "<p>No suggestions right now.</p>"}</div></article>
+        <article class="ai-actions-card"><h4>Quick Actions</h4><div class="ai-action-grid"><button type="button">Improve CTAs</button><button type="button">Generate Conversion Content</button><button type="button">Strengthen Trust Layer</button><button type="button">Create Platform Variations</button></div></article>
+      </section>
+    `;
+    el.aiBrainSummary.querySelector("#refresh-ai-brain")?.addEventListener("click", () => renderCampaignIntelligence());
+    el.aiBrainSummary.querySelectorAll("[data-suggestion-id]").forEach((btn) => btn.addEventListener("click", async () => {
+      const suggestion = suggestions.find((s) => s.id === btn.getAttribute("data-suggestion-id"));
+      if (suggestion) await createSuggestedNodeFromAnalysis(suggestion);
+    }));
+  }
+}
+
+async function regenerateSocialForPlatform(node, triggerBtn = null) {
+  if (!node || node.type !== "Social Media Posting") return;
+  const nodeEl = el.zoomLayer.querySelector(`[data-id='${node.id}']`);
+  const originalText = triggerBtn?.textContent || "";
+  if (triggerBtn) {
+    triggerBtn.disabled = true;
+    triggerBtn.textContent = "...";
+  }
+  if (nodeEl) nodeEl.classList.add("ai-loading");
+  try {
+    const guide = platformPromptGuidance(node.social.platform || "LinkedIn");
+    const strategy = nodeStrategyContext(node);
+    const captionRefined = await refineNodeWithAI(node, `Write one social-media-ready caption for this node. ${guide} ${strategy} Return in caption.`);
+    const ctaRefined = await refineNodeWithAI(node, `Write one concise CTA for this node. ${guide} ${strategy} Return in content.`);
+    const hashtagsRefined = await refineNodeWithAI(node, `${structuredHashtagPrompt(node.social.platform || "LinkedIn")} ${guide} ${strategy}`);
+    node.social.caption = (captionRefined?.caption || captionRefined?.content || "").trim() || node.social.caption;
+    node.social.preview = (ctaRefined?.content || ctaRefined?.caption || "").trim() || node.social.preview;
+    node.social.hashtags = finalizeGeneratedHashtags(hashtagsRefined?.caption || hashtagsRefined?.content || "", node.social.platform || "LinkedIn");
+    updateNodeCard(node);
+    fillInspector(node);
+    saveCampaignCanvasState();
+  } finally {
+    if (nodeEl) nodeEl.classList.remove("ai-loading");
+    if (triggerBtn) {
+      triggerBtn.disabled = false;
+      triggerBtn.textContent = originalText;
+    }
+  }
+}
+
 function serializeState() {
   const serialized = {
-    nodes: state.nodes.map((n) => ({ ...n, images: sanitizeNodeImages(n.images) })),
+    nodes: state.nodes.map((n) => sanitizeNodeForPersistence(n)),
     edges: state.edges, nodeCounter: state.nodeCounter, postitCounter: state.postitCounter, zoom: state.zoom
   };
   const selectedNode = state.selectedPrimary ? serialized.nodes.find((n) => n.id === state.selectedPrimary) : null;
   console.log("serialized images", selectedNode?.images || []);
   return serialized;
 }
-function saveCampaignCanvasState() { const campaignState = serializeState(); console.log("Saving campaignCanvasState", campaignState); localStorage.setItem(STORAGE_KEY, JSON.stringify(campaignState)); setSaveStatus("Saved"); }
+function saveCampaignCanvasState() { const campaignState = serializeState(); console.log("Saving campaignCanvasState", campaignState); localStorage.setItem(STORAGE_KEY, JSON.stringify(campaignState)); setSaveStatus("Saved"); renderCampaignIntelligence(); }
 function markUnsaved() {
   state.isDirty = true;
   state.autosavePausedUntilChange = false;
@@ -505,7 +844,9 @@ function loadCampaignCanvasState() {
 
 
 function applyCampaignState(campaignState, statusText = "Restored") {
-  state.nodes = (campaignState.nodes || []).map((node) => ({ ...node, images: sanitizeNodeImages(node.images) }));
+  state.nodes = (campaignState.nodes || []).map((node) => sanitizeNodeForPersistence(node));
+  state.contentPackLoadingById = {};
+  state.contentPackErrorById = {};
   state.edges = campaignState.edges || [];
   state.nodeCounter = campaignState.nodeCounter || 1;
   state.postitCounter = campaignState.postitCounter || 1;
@@ -1070,9 +1411,13 @@ function createNode({ type = "Idea", parentId = null, position = null, images = 
     audience: "",
     goal: "",
     channel: "",
+    funnelStage: "",
+    tone: "",
     images: [...images],
     favoriteImageId: null,
     social: { platform: "Instagram", caption: "", hashtags: [], preview: "", scheduledAt: "" },
+    imagePrompt: "",
+    landingPage: { headerVisualPrompt: "", headerClaim: "", problem: "", solution: "", trust: "", cta: "" },
     reactions: {},
     postits: [],
     justConnectedAt: null,
@@ -1278,6 +1623,14 @@ function buildGeneratedCampaignPlan(ideaText, contextText) {
     socialA: { title: "Social Post A", content: `CTA focused on ${baseTitle}` },
     socialB: { title: "Social Post B", content: `Community engagement for ${baseTitle}` },
     landing: { title: "Landing Page", content: `Conversion destination for ${baseTitle}` },
+    landingPageStructured: {
+      headerVisualPrompt: `16:9 hero visual for ${baseTitle}, modern clean style, confident and trustworthy mood`,
+      headerClaim: `${baseTitle}: clearer campaigns, stronger results`,
+      problemOfIcp: "Teams struggle to ship consistent, high-performing campaign assets quickly.",
+      solutionForIcp: `Use ${baseTitle} messaging and assets to launch with clarity and speed.`,
+      buildingTrust: "Trusted by teams looking for clearer, more effective campaign execution.",
+      conversionCta: "Get started"
+    },
     email: { title: "Email Campaign", content: `Nurture sequence for ${baseTitle}` }
   };
 }
@@ -1312,6 +1665,7 @@ function generateCampaignFromIdea(ideaText, contextText, providedPlan = null) {
 
   const idea = createNode({ type: "Idea", position: { x: 620, y: 120 } });
   Object.assign(idea, { title: plan.idea.title, content: plan.idea.content });
+  Object.assign(idea, { goal: "Awareness", channel: "Campaign Strategy", funnelStage: "Awareness", audience: state.brandCore?.personas?.[0]?.name || "Primary ICP", tone: "Professional" });
   updateNodeCard(idea);
 
   const variationA = createNode({ type: "Campaign Variation", position: { x: 320, y: 340 } });
@@ -1319,11 +1673,15 @@ function generateCampaignFromIdea(ideaText, contextText, providedPlan = null) {
   updateNodeCard(variationA);
   const contentA = createNode({ type: "Content", position: { x: 260, y: 560 } });
   Object.assign(contentA, { title: variations[0]?.contentNode?.title || "Content A", content: variations[0]?.contentNode?.content || "" });
+  contentA.imagePrompt = buildContentImagePrompt(contentA.title, contentA.content);
+  Object.assign(contentA, { goal: "Education", channel: "Blog", funnelStage: "Interest", audience: idea.audience, tone: idea.tone });
   updateNodeCard(contentA);
   const socialA = createNode({ type: "Social Media Posting", position: { x: 220, y: 820 } });
   Object.assign(socialA, { title: variations[0]?.socialPost?.title || "Social A", content: variations[0]?.socialPost?.caption || "" });
   socialA.social.platform = variations[0]?.socialPost?.platform || "Instagram";
   socialA.social.caption = variations[0]?.socialPost?.caption || "";
+  socialA.social.hashtags = finalizeGeneratedHashtags(variations[0]?.socialPost?.hashtags || `${socialA.title}, ${socialA.social.caption}`, socialA.social.platform);
+  Object.assign(socialA, { goal: "Community", channel: socialA.social.platform, funnelStage: "Awareness", audience: idea.audience, tone: "Emotional" });
   updateNodeCard(socialA);
 
   const variationB = createNode({ type: "Campaign Variation", position: { x: 900, y: 340 } });
@@ -1331,18 +1689,33 @@ function generateCampaignFromIdea(ideaText, contextText, providedPlan = null) {
   updateNodeCard(variationB);
   const contentB = createNode({ type: "Content", position: { x: 980, y: 560 } });
   Object.assign(contentB, { title: variations[1]?.contentNode?.title || "Content B", content: variations[1]?.contentNode?.content || "" });
+  contentB.imagePrompt = buildContentImagePrompt(contentB.title, contentB.content);
+  Object.assign(contentB, { goal: "Consideration", channel: "Email", funnelStage: "Consideration", audience: idea.audience, tone: "Direct" });
   updateNodeCard(contentB);
   const socialB = createNode({ type: "Social Media Posting", position: { x: 1040, y: 820 } });
   Object.assign(socialB, { title: variations[1]?.socialPost?.title || "Social B", content: variations[1]?.socialPost?.caption || "" });
   socialB.social.platform = variations[1]?.socialPost?.platform || "Instagram";
   socialB.social.caption = variations[1]?.socialPost?.caption || "";
+  socialB.social.hashtags = finalizeGeneratedHashtags(variations[1]?.socialPost?.hashtags || `${socialB.title}, ${socialB.social.caption}`, socialB.social.platform);
+  Object.assign(socialB, { goal: "Lead Gen", channel: socialB.social.platform, funnelStage: "Conversion", audience: idea.audience, tone: "Direct" });
   updateNodeCard(socialB);
 
   const landing = createNode({ type: "Landing Page", position: { x: 520, y: 560 } });
   Object.assign(landing, { title: plan.landingPage?.title || plan.landing?.title || "Landing Page", content: plan.landingPage?.content || plan.landing?.content || "" });
+  const lpStructured = plan.landingPageStructured || {};
+  landing.landingPage = {
+    headerVisualPrompt: lpStructured.headerVisualPrompt || `16:9 hero visual for ${landing.title}: modern product-focused scene, clean composition, confident and trustworthy mood.`,
+    headerClaim: lpStructured.headerClaim || landing.title || "High-converting landing page",
+    problem: lpStructured.problemOfIcp || (landing.content || "").split("\n")[0] || "Your audience struggles with inconsistent campaign execution.",
+    solution: lpStructured.solutionForIcp || (landing.content || "").split("\n")[1] || "Our solution helps teams launch clearer, more effective campaigns faster.",
+    trust: lpStructured.buildingTrust || "Trusted by teams looking for clearer, more effective campaign execution.",
+    cta: lpStructured.conversionCta || "Get started"
+  };
+  Object.assign(landing, { goal: "Conversion", channel: "Landing Page", funnelStage: "Conversion", audience: idea.audience, tone: "Professional" });
   updateNodeCard(landing);
   const email = createNode({ type: "Email Campaign", position: { x: 700, y: 560 } });
   Object.assign(email, { title: plan.emailCampaign?.title || plan.email?.title || "Email Campaign", content: plan.emailCampaign?.content || plan.email?.content || "" });
+  Object.assign(email, { goal: "Lead Gen", channel: "Email", funnelStage: "Consideration", audience: idea.audience, tone: "Professional" });
   updateNodeCard(email);
 
   addEdge(idea.id, variationA.id); addEdge(variationA.id, contentA.id); addEdge(contentA.id, socialA.id);
@@ -1547,9 +1920,11 @@ function updateInspectorActionVisibility() {
 
   el.generateImageButton.style.display = showGenerateImage ? "block" : "none";
   el.generatePostingVisualButton.style.display = showGeneratePostingVisual ? "block" : "none";
+  el.generateFullPackButton.style.display = showGenerateImage ? "block" : "none";
 
   el.improveNodeButton.style.display = hasSingleNode ? "block" : "none";
   el.regenerateNodeButton.style.display = hasSingleNode ? "block" : "none";
+  el.regeneratePlatformButton.style.display = selectedNode?.type === "Social Media Posting" ? "block" : "none";
   el.propagateDescendantsButton.style.display = hasSingleNode ? "block" : "none";
   el.disconnectSelectedButton.style.display = selectedCount > 0 ? "block" : "none";
 
@@ -1559,8 +1934,11 @@ function updateInspectorActionVisibility() {
   el.deleteSelectedButton.disabled = !hasMultipleNodes;
   el.improveNodeButton.disabled = !hasSingleNode;
   el.regenerateNodeButton.disabled = !hasSingleNode;
+  el.regeneratePlatformButton.disabled = !(selectedNode?.type === "Social Media Posting");
   el.generateImageButton.disabled = !showGenerateImage;
   el.generatePostingVisualButton.disabled = !showGeneratePostingVisual;
+  el.generateFullPackButton.disabled = !showGenerateImage || !!selectedNode && getContentPackLoading(selectedNode.id);
+  if (el.generateHeaderVisualButton) el.generateHeaderVisualButton.disabled = !(selectedNode?.type === "Landing Page");
   el.propagateDescendantsButton.disabled = !hasSingleNode;
   el.disconnectSelectedButton.disabled = !(selectedCount > 0);
 }
@@ -1720,25 +2098,178 @@ function updateNodeCard(node) {
 
   const social = nodeEl.querySelector(".social-preview");
   const isSocial = node.type === "Social Media Posting";
-  social.classList.toggle("hidden", !isSocial);
+  const isLandingPage = node.type === "Landing Page";
+  social.classList.toggle("hidden", !(isSocial || isLandingPage));
   if (isSocial) {
-    social.innerHTML = `<strong>${node.social.platform} Preview</strong><p>${node.social.caption || ""}</p><small>${node.social.hashtags.join(" ")}</small><em>${node.social.preview || ""}</em>`;
-    if (node.social.scheduledAt) {
-      const when = new Date(node.social.scheduledAt);
-      const scheduled = document.createElement("small");
-      scheduled.textContent = `Geplant: ${when.toLocaleString("de-DE")}`;
-      social.appendChild(scheduled);
-    }
-    const planBtn = document.createElement("button");
-    planBtn.type = "button";
-    planBtn.className = "inspector-image-delete";
-    planBtn.textContent = "Add to Posting Plan";
-    planBtn.addEventListener("click", (event) => {
-      event.stopPropagation();
-      openPostingPlanner(node.id);
+    social.innerHTML = "";
+    const wrapper = document.createElement("div");
+    wrapper.className = "social-card";
+
+    const top = document.createElement("div");
+    top.className = "social-card-top";
+    const platformSelect = document.createElement("select");
+    platformSelect.className = "social-platform-select";
+    ["LinkedIn", "X / Twitter", "Instagram", "TikTok"].forEach((p) => {
+      const option = document.createElement("option");
+      option.value = p;
+      option.textContent = p;
+      platformSelect.appendChild(option);
     });
-    social.appendChild(planBtn);
+    platformSelect.value = node.social.platform || "LinkedIn";
+    platformSelect.addEventListener("click", (event) => event.stopPropagation());
+    platformSelect.addEventListener("change", () => {
+      node.social.platform = platformSelect.value;
+      updateNodeCard(node);
+      if (state.selectedPrimary === node.id) fillInspector(node);
+      saveCampaignCanvasState();
+    });
+    const platformRegenBtn = document.createElement("button");
+    platformRegenBtn.type = "button";
+    platformRegenBtn.className = "social-platform-regen";
+    platformRegenBtn.textContent = "Regenerate for platform";
+    platformRegenBtn.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      await regenerateSocialForPlatform(node, platformRegenBtn);
+    });
+    const status = document.createElement("span");
+    status.className = "social-status-badge";
+    status.textContent = "Ready";
+    top.append(platformSelect, platformRegenBtn, status);
+
+    const charCount = document.createElement("div");
+    charCount.className = "social-char-count";
+    const captionLen = (node.social.caption || "").length;
+    const limits = { "X / Twitter": 280, LinkedIn: 3000, Instagram: 2200, TikTok: 2200 };
+    const limit = limits[node.social.platform] || 3000;
+    charCount.textContent = `${captionLen} characters${captionLen > limit ? ` (over ${limit})` : ""}`;
+    if (captionLen > limit) charCount.classList.add("warning");
+
+    const caption = document.createElement("div");
+    caption.className = "social-caption";
+    caption.contentEditable = "true";
+    caption.textContent = node.social.caption || "";
+    caption.addEventListener("click", (event) => event.stopPropagation());
+    caption.addEventListener("input", () => {
+      node.social.caption = caption.textContent;
+      updateNodeCard(node);
+      if (state.selectedPrimary === node.id) fillInspector(node);
+      saveCampaignCanvasState();
+    });
+
+    const cta = document.createElement("div");
+    cta.className = "social-cta";
+    cta.contentEditable = "true";
+    cta.textContent = node.social.preview || "";
+    cta.addEventListener("click", (event) => event.stopPropagation());
+    cta.addEventListener("input", () => {
+      node.social.preview = cta.textContent;
+      saveCampaignCanvasState();
+    });
+
+    const hashtags = document.createElement("div");
+    hashtags.className = "social-hashtags";
+    hashtags.contentEditable = "true";
+    hashtags.textContent = (node.social.hashtags || []).join(" ");
+    hashtags.addEventListener("click", (event) => event.stopPropagation());
+    hashtags.addEventListener("input", () => {
+      node.social.hashtags = normalizeHashtagsInput(hashtags.textContent || "");
+      hashtags.textContent = node.social.hashtags.join(" ");
+      saveCampaignCanvasState();
+    });
+
+    const actions = document.createElement("div");
+    actions.className = "social-actions-row";
+    const copyCaptionBtn = document.createElement("button");
+    copyCaptionBtn.type = "button";
+    copyCaptionBtn.textContent = "Copy Caption";
+    copyCaptionBtn.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      await navigator.clipboard.writeText(node.social.caption || "");
+      copyCaptionBtn.textContent = "Copied";
+      setTimeout(() => { copyCaptionBtn.textContent = "Copy Caption"; }, 900);
+    });
+    const copyFullBtn = document.createElement("button");
+    copyFullBtn.type = "button";
+    copyFullBtn.textContent = "Copy Full Post";
+    copyFullBtn.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      await navigator.clipboard.writeText([node.social.caption || "", node.social.preview || "", (node.social.hashtags || []).join(" ")].filter(Boolean).join("\n\n"));
+      copyFullBtn.textContent = "Copied";
+      setTimeout(() => { copyFullBtn.textContent = "Copy Full Post"; }, 900);
+    });
+
+    const regen = async (instruction, key, btn) => {
+      btn.disabled = true;
+      const original = btn.textContent;
+      btn.textContent = "...";
+      try {
+        const refined = await refineNodeWithAI(node, `${instruction} ${platformPromptGuidance(node.social.platform || "LinkedIn")}`);
+        if (key === "caption") node.social.caption = (refined?.caption || refined?.content || "").trim() || node.social.caption;
+        if (key === "cta") node.social.preview = (refined?.content || refined?.caption || "").trim() || node.social.preview;
+        if (key === "hashtags") node.social.hashtags = finalizeGeneratedHashtags(refined?.caption || refined?.content || "", node.social.platform || "LinkedIn");
+        updateNodeCard(node);
+        fillInspector(node);
+        saveCampaignCanvasState();
+      } finally {
+        btn.disabled = false;
+        btn.textContent = original;
+      }
+    };
+    const regenCaption = document.createElement("button");
+    regenCaption.type = "button"; regenCaption.textContent = "Regenerate Caption";
+    regenCaption.addEventListener("click", (event) => { event.stopPropagation(); regen("Write a social-ready caption for this post. Return in caption.", "caption", regenCaption); });
+    const regenCTA = document.createElement("button");
+    regenCTA.type = "button"; regenCTA.textContent = "Regenerate CTA";
+    regenCTA.addEventListener("click", (event) => { event.stopPropagation(); regen("Write one concise CTA line for this post. Return in content.", "cta", regenCTA); });
+    const regenHash = document.createElement("button");
+    regenHash.type = "button"; regenHash.textContent = "Regenerate Hashtags";
+    regenHash.addEventListener("click", (event) => { event.stopPropagation(); regen(structuredHashtagPrompt(node.social.platform || "LinkedIn"), "hashtags", regenHash); });
+    actions.append(copyCaptionBtn, copyFullBtn, regenCaption, regenCTA, regenHash);
+
+    const imageFrame = document.createElement("div");
+    imageFrame.className = "social-image-frame";
+    const previewImage = node.images?.[node.images.length - 1];
+    if (previewImage?.url) {
+      const img = document.createElement("img");
+      img.src = previewImage.url;
+      img.alt = "Social preview";
+      img.addEventListener("click", (event) => { event.stopPropagation(); openLightbox(previewImage.url, "Social preview image"); });
+      imageFrame.appendChild(img);
+    }
+
+    wrapper.append(top, charCount, caption, cta, hashtags, imageFrame, actions);
+    social.appendChild(wrapper);
+  } else if (isLandingPage) {
+    const lp = node.landingPage || {};
+    social.innerHTML = "";
+    const card = document.createElement("div");
+    card.className = "landing-preview-card";
+    const latestImage = node.images?.[node.images.length - 1];
+    if (latestImage?.url) {
+      const img = document.createElement("img");
+      img.className = "landing-preview-image";
+      img.src = latestImage.url;
+      img.alt = "Landing header visual";
+      img.addEventListener("click", (event) => { event.stopPropagation(); openLightbox(latestImage.url, "Landing header visual"); });
+      card.appendChild(img);
+    }
+    [["Claim", lp.headerClaim], ["Problem", lp.problem], ["Solution", lp.solution], ["Trust", lp.trust], ["CTA", lp.cta]]
+      .forEach(([label, value]) => {
+        if (!value) return;
+        const p = document.createElement("p");
+        p.className = `landing-preview-line${label === "CTA" ? " is-cta" : ""}`;
+        p.innerHTML = `<strong>${label}:</strong> ${value}`;
+        card.appendChild(p);
+      });
+    social.appendChild(card);
   }
+
+  const statusEl = nodeEl.querySelector(".content-pack-status");
+  const isGeneratingPack = getContentPackLoading(node.id);
+  const contentPackError = state.contentPackErrorById[node.id] || "";
+  statusEl.classList.toggle("hidden", !(isGeneratingPack || contentPackError));
+  statusEl.textContent = isGeneratingPack ? "Generating content pack..." : contentPackError;
+  statusEl.classList.toggle("error", !!contentPackError);
 
   const existingBar = nodeEl.querySelector(".reaction-bar");
   if (existingBar) existingBar.remove();
@@ -1873,10 +2404,14 @@ function fillInspector(node) {
     el.socialFields.classList.add("hidden");
     el.contentUploadFields.classList.add("hidden");
     el.contentFormatField.classList.add("hidden");
+    document.getElementById("content-image-prompt-field")?.classList.add("hidden");
+    el.landingPageFields?.classList.add("hidden");
     const variantsLabel = el.nodeForm.querySelector('label[for="node-variants"]');
     variantsLabel?.classList.remove("hidden");
     el.inputs.variants.classList.remove("hidden");
     el.inspectorImageList.innerHTML = "";
+    if (el.connectedContextSummary) el.connectedContextSummary.textContent = "Parents: 0 · Children: 0";
+    if (el.connectedContextBody) el.connectedContextBody.textContent = "";
     updateInspectorActionVisibility();
     return;
   }
@@ -1885,25 +2420,66 @@ function fillInspector(node) {
   el.inputs.type.value = node.type;
   el.inputs.title.value = node.title;
   el.inputs.content.value = node.content;
+  el.inputs.imagePrompt.value = node.imagePrompt || "";
   el.inputs.variants.value = node.variants.join(", ");
   el.inputs.platform.value = node.social.platform;
   el.inputs.caption.value = node.social.caption;
-  el.inputs.hashtags.value = node.social.hashtags.join(", ");
-  el.inputs.preview.value = node.social.preview;
+  el.inputs.hashtags.value = state.hashtagDraftByNode[node.id] ?? node.social.hashtags.join(", ");
+  if (el.inputs.preview) el.inputs.preview.value = node.social.preview;
   el.inputs.audience.value = node.audience;
   el.inputs.goal.value = node.goal;
   el.inputs.channel.value = node.channel;
+  el.inputs.funnelStage.value = node.funnelStage || "";
+  el.inputs.tone.value = node.tone || "";
   el.inputs.contentFormat.value = node.contentFormat || "1:1";
+  const lp = node.landingPage || { headerVisualPrompt: "", headerClaim: "", problem: "", solution: "", trust: "", cta: "" };
+  el.inputs.lpHeaderVisualPrompt.value = lp.headerVisualPrompt || "";
+  el.inputs.lpHeaderClaim.value = lp.headerClaim || "";
+  el.inputs.lpProblem.value = lp.problem || "";
+  el.inputs.lpSolution.value = lp.solution || "";
+  el.inputs.lpTrust.value = lp.trust || "";
+  el.inputs.lpCta.value = lp.cta || "";
 
   el.socialFields.classList.toggle("hidden", node.type !== "Social Media Posting");
   el.contentUploadFields.classList.toggle("hidden", !(node.type === "Content" || node.type === "Social Media Posting"));
   el.contentFormatField.classList.toggle("hidden", node.type !== "Content");
+  document.getElementById("content-image-prompt-field")?.classList.toggle("hidden", node.type !== "Content");
+  el.landingPageFields?.classList.toggle("hidden", node.type !== "Landing Page");
+  el.generateHeaderVisualButton.style.display = node.type === "Landing Page" ? "block" : "none";
   const variantsLabel = el.nodeForm.querySelector('label[for="node-variants"]');
   const hideVariants = node.type === "Content";
   variantsLabel?.classList.toggle("hidden", hideVariants);
   el.inputs.variants.classList.toggle("hidden", hideVariants);
   renderInspectorImages(node);
+  const connected = getConnectedNodeContext(node.id);
+  if (el.connectedContextSummary) {
+    el.connectedContextSummary.textContent = `Parents: ${connected.parentNodes.length} · Children: ${connected.childNodes.length}`;
+  }
+  if (el.connectedContextBody) {
+    const parents = connected.parentNodes.slice(0, 3).map((n) => n.title || n.type).join(", ") || "—";
+    const children = connected.childNodes.slice(0, 3).map((n) => n.title || n.type).join(", ") || "—";
+    el.connectedContextBody.innerHTML = `<div><strong>Parent:</strong> ${parents}</div><div><strong>Child:</strong> ${children}</div>`;
+  }
   updateInspectorActionVisibility();
+}
+
+function getConnectedSocialPostingNodes(contentNodeId) {
+  const ids = state.edges
+    .filter((edge) => {
+      const from = Array.isArray(edge) ? edge[0] : edge?.source;
+      return from === contentNodeId;
+    })
+    .map((edge) => (Array.isArray(edge) ? edge[1] : edge?.target))
+    .filter(Boolean);
+  return ids.map(getNode).filter((n) => n?.type === "Social Media Posting");
+}
+
+async function resolveTargetSocialNodeForContent(contentNode) {
+  const connected = getConnectedSocialPostingNodes(contentNode.id);
+  const yOffset = connected.length * 120;
+  const created = createNode({ type: "Social Media Posting", position: { x: contentNode.position.x + 340, y: contentNode.position.y + 40 + yOffset } }) || state.nodes[state.nodes.length - 1];
+  addEdge(contentNode.id, created.id);
+  return created;
 }
 
 function revokeImageObjectUrl(img) {
@@ -2019,6 +2595,7 @@ function renderInspectorImages(node) {
 async function refineNodeWithAI(node, instruction) {
   const parentNode = getDirectParentNode(node.id);
   const campaignContext = getCampaignContextSummary();
+  const connectedContext = getConnectedNodeContext(node.id);
   const response = await fetch("/api/refine-node", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -2034,7 +2611,8 @@ async function refineNodeWithAI(node, instruction) {
       parentNode: parentNode
         ? { title: parentNode.title || "", content: parentNode.content || "", type: parentNode.type || "" }
         : undefined,
-      campaignContext: campaignContext || undefined
+      campaignContext: campaignContext || undefined,
+      connectedNodeContext: connectedContext
     })
   });
   if (!response.ok) {
@@ -2072,6 +2650,87 @@ async function runInlineRefine(node, instruction, triggerBtn = null) {
   }
 }
 
+async function generateFullContentPack(node, triggerBtn = null, mode = "auto") {
+  if (!node || getContentPackLoading(node.id)) return;
+  const nodeEl = el.zoomLayer.querySelector(`[data-id='${node.id}']`);
+  const toolbarButtons = nodeEl ? [...nodeEl.querySelectorAll(".node-ai-toolbar button")] : [];
+  const originalText = triggerBtn?.textContent || "";
+  console.log("runContentPackGeneration started with mode:", mode, node.id);
+  setContentPackGenerating(node.id, true);
+  setContentPackError(node.id, "");
+  toolbarButtons.forEach((btn) => { btn.disabled = true; });
+  if (triggerBtn) triggerBtn.textContent = "…";
+  updateNodeCard(node);
+  try {
+    const targetSocialNode = await resolveTargetSocialNodeForContent(node);
+    if (!targetSocialNode) return;
+
+    const platform = targetSocialNode?.social?.platform || "LinkedIn";
+    const platformGuide = platformPromptGuidance(platform);
+    const improved = await refineNodeWithAI(node, `Improve or finalize this content while preserving intent and brand voice. ${platformGuide}`);
+    node.title = improved?.title || node.title;
+    node.content = improved?.content || node.content;
+
+    console.log("Generating image prompt");
+    const imagePromptResult = await refineNodeWithAI(node, "Create or update a clearly descriptive visual image prompt based on this content. Return it in content.");
+    node.imagePrompt = (imagePromptResult?.content || "").trim() || node.imagePrompt;
+    if (!node.imagePrompt) throw new Error("Image prompt generation failed");
+
+    console.log("Generating caption");
+    const captionResult = await refineNodeWithAI(node, `Write one short social-media-ready caption based on this content. ${platformGuide} Return it in caption.`);
+    const caption = (captionResult?.caption || captionResult?.content || "").trim();
+    if (!caption) throw new Error("Caption generation failed");
+
+    console.log("Generating CTA");
+    const ctaResult = await refineNodeWithAI(node, `Write one clear, concise call-to-action line based on this content. ${platformGuide} Return it in content.`);
+    const cta = (ctaResult?.content || ctaResult?.caption || "").split("\n")[0].trim();
+    if (!cta) throw new Error("CTA generation failed");
+
+    console.log("Generating hashtags");
+    const hashtagResult = await refineNodeWithAI(node, `${structuredHashtagPrompt(platform)} ${platformGuide}`);
+    const hashtags = finalizeGeneratedHashtags(hashtagResult?.caption || hashtagResult?.content || "", platform);
+
+    console.log("Generating image");
+    await generateImageForNode(node);
+    const newestImage = node.images[node.images.length - 1];
+    console.log("Creating/updating social node");
+    targetSocialNode.title = `Social Post: ${node.title || "Untitled"}`;
+    targetSocialNode.content = [caption, cta].filter(Boolean).join("\n\n");
+    targetSocialNode.social.caption = caption;
+    targetSocialNode.social.hashtags = hashtags;
+    targetSocialNode.social.preview = cta;
+    if (newestImage?.url) {
+      targetSocialNode.images = Array.isArray(targetSocialNode.images) ? targetSocialNode.images : [];
+      targetSocialNode.images.push({ ...newestImage, id: crypto.randomUUID ? crypto.randomUUID() : `img-${Date.now()}` });
+    }
+    updateNodeCard(node);
+    updateNodeCard(targetSocialNode);
+    fillInspector(node);
+    saveCampaignCanvasState();
+    console.log("runContentPackGeneration finished");
+  } catch (_error) {
+    console.error("Full content pack failed", _error);
+    setContentPackError(node.id, "Could not generate content pack. Please retry.");
+    updateNodeCard(node);
+  } finally {
+    setContentPackGenerating(node.id, false);
+    toolbarButtons.forEach((btn) => { btn.disabled = false; });
+    if (triggerBtn) triggerBtn.textContent = originalText;
+    updateNodeCard(node);
+    updateInspectorActionVisibility();
+    console.log("generation loading cleared");
+  }
+}
+
+async function handleGenerateFullContentPack(contentNodeId) {
+  const node = getNode(contentNodeId);
+  if (!node || node.type !== "Content") return;
+  console.log("Full pack clicked");
+  const connectedSocialNodes = getConnectedSocialPostingNodes(node.id);
+  console.log("Existing social nodes:", connectedSocialNodes.length);
+  await generateFullContentPack(node, el.generateFullPackButton, "new");
+}
+
 async function generateImageForNode(node) {
   console.log("generate image start");
   const button = el.generateImageButton;
@@ -2087,10 +2746,11 @@ async function generateImageForNode(node) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         nodeTitle: node.title || "",
-        nodeContent: node.content || "",
+        nodeContent: [node.imagePrompt || node.content || "", nodeStrategyContext(node)].filter(Boolean).join(" | "),
         brandBrainData: state.brandCore,
         campaignContext: getCampaignContextSummary(),
-        contentFormat: node.contentFormat || "1:1"
+        contentFormat: node.contentFormat || "1:1",
+        connectedNodeContext: getConnectedNodeContext(node.id)
       })
     });
     if (!response.ok) throw new Error("Image generation failed");
@@ -2486,6 +3146,16 @@ function renderNode(node) {
     });
     aiToolbar.appendChild(btn);
   });
+  if (node.type === "Content") {
+    const packBtn = document.createElement("button");
+    packBtn.type = "button";
+    packBtn.textContent = "Generate Full Content Pack";
+    packBtn.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      await handleGenerateFullContentPack(node.id);
+    });
+    aiToolbar.appendChild(packBtn);
+  }
   nodeEl.appendChild(aiToolbar);
 
   const expandBtn = document.createElement("button");
@@ -2699,12 +3369,15 @@ function setActiveView(view) {
   el.boardListView.classList.toggle("hidden", view !== "list");
   el.calendarView.classList.toggle("hidden", view !== "calendar");
   el.boardsLibraryView?.classList.toggle("hidden", view !== "boards_library");
+  el.insightsView?.classList.toggle("hidden", view !== "insights");
+  el.aiBrainView?.classList.toggle("hidden", view !== "ai_brain");
   el.brandCoreWorkspace.classList.toggle("hidden", view !== "brand-core");
   el.campaignCanvasNavButton.classList.toggle("active", view !== "brand-core");
   el.brandCoreButton.classList.toggle("active", view === "brand-core");
   el.cycleViewButton.textContent =
-    view === "board" ? "Board View" : view === "list" ? "List View" : view === "calendar" ? "Calendar View" : "Brand Core";
+    view === "board" ? "Board View" : view === "list" ? "List View" : view === "calendar" ? "Calendar View" : view === "insights" ? "Insights" : view === "ai_brain" ? "AI Brain" : "Brand Core";
   if (view === "calendar") renderCalendarView();
+  if (view === "insights" || view === "ai_brain") renderCampaignIntelligence();
 }
 
 function setAppMode(mode) {
@@ -2892,15 +3565,25 @@ el.nodeForm.addEventListener("input", (event) => {
   if (event.target === el.inputs.type) node.type = el.inputs.type.value;
   if (event.target === el.inputs.title) node.title = el.inputs.title.value.trim();
   if (event.target === el.inputs.content) node.content = el.inputs.content.value;
+  if (event.target === el.inputs.imagePrompt) node.imagePrompt = el.inputs.imagePrompt.value;
   if (event.target === el.inputs.variants) node.variants = parseList(el.inputs.variants.value);
   if (event.target === el.inputs.platform) node.social.platform = el.inputs.platform.value;
   if (event.target === el.inputs.caption) node.social.caption = el.inputs.caption.value;
-  if (event.target === el.inputs.hashtags) node.social.hashtags = parseList(el.inputs.hashtags.value);
-  if (event.target === el.inputs.preview) node.social.preview = el.inputs.preview.value;
+  if (event.target === el.inputs.hashtags) state.hashtagDraftByNode[node.id] = el.inputs.hashtags.value;
+  if (el.inputs.preview && event.target === el.inputs.preview) node.social.preview = el.inputs.preview.value;
   if (event.target === el.inputs.audience) node.audience = el.inputs.audience.value.trim();
   if (event.target === el.inputs.goal) node.goal = el.inputs.goal.value.trim();
   if (event.target === el.inputs.channel) node.channel = el.inputs.channel.value.trim();
+  if (event.target === el.inputs.funnelStage) node.funnelStage = el.inputs.funnelStage.value.trim();
+  if (event.target === el.inputs.tone) node.tone = el.inputs.tone.value.trim();
   if (event.target === el.inputs.contentFormat) node.contentFormat = el.inputs.contentFormat.value || "1:1";
+  if (!node.landingPage) node.landingPage = { headerVisualPrompt: "", headerClaim: "", problem: "", solution: "", trust: "", cta: "" };
+  if (event.target === el.inputs.lpHeaderVisualPrompt) node.landingPage.headerVisualPrompt = el.inputs.lpHeaderVisualPrompt.value;
+  if (event.target === el.inputs.lpHeaderClaim) node.landingPage.headerClaim = el.inputs.lpHeaderClaim.value;
+  if (event.target === el.inputs.lpProblem) node.landingPage.problem = el.inputs.lpProblem.value;
+  if (event.target === el.inputs.lpSolution) node.landingPage.solution = el.inputs.lpSolution.value;
+  if (event.target === el.inputs.lpTrust) node.landingPage.trust = el.inputs.lpTrust.value;
+  if (event.target === el.inputs.lpCta) node.landingPage.cta = el.inputs.lpCta.value;
 
   updateNodeCard(node);
   updateListView();
@@ -2919,6 +3602,21 @@ el.inputs.channel.addEventListener("keydown", (event) => {
   updateNodeCard(node);
   fillInspector(node);
   saveCampaignCanvasState();
+});
+el.inputs.hashtags.addEventListener("blur", () => {
+  const node = getNode(state.selectedPrimary);
+  if (!node) return;
+  const normalized = normalizeHashtagsInput(state.hashtagDraftByNode[node.id] ?? el.inputs.hashtags.value);
+  node.social.hashtags = normalized;
+  delete state.hashtagDraftByNode[node.id];
+  el.inputs.hashtags.value = normalized.join(", ");
+  updateNodeCard(node);
+  saveCampaignCanvasState();
+});
+el.inputs.hashtags.addEventListener("keydown", (event) => {
+  if (event.key !== "Enter") return;
+  event.preventDefault();
+  el.inputs.hashtags.blur();
 });
 
 el.imageUpload.addEventListener("change", () => {
@@ -2951,10 +3649,55 @@ el.regenerateNodeButton.addEventListener("click", async () => {
     el.regenerateNodeButton
   );
 });
+el.regeneratePlatformButton.addEventListener("click", async () => {
+  const node = getNode(state.selectedPrimary);
+  if (!node || node.type !== "Social Media Posting") return;
+  await regenerateSocialForPlatform(node, el.regeneratePlatformButton);
+});
 el.generateImageButton.addEventListener("click", async () => {
   const node = getNode(state.selectedPrimary);
   if (!node || node.type !== "Content") return;
   await generateImageForNode(node);
+});
+el.generateFullPackButton.addEventListener("click", async () => {
+  const node = getNode(state.selectedPrimary);
+  if (!node || node.type !== "Content") return;
+  await handleGenerateFullContentPack(node.id);
+});
+el.generateHeaderVisualButton.addEventListener("click", async () => {
+  const node = getNode(state.selectedPrimary);
+  if (!node || node.type !== "Landing Page") return;
+  if (!node.landingPage?.headerVisualPrompt?.trim()) return;
+  const btn = el.generateHeaderVisualButton;
+  const original = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "Generating...";
+  try {
+    const response = await fetch("/api/generate-image", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        nodeTitle: node.title || "",
+        nodeContent: node.landingPage.headerVisualPrompt,
+        brandBrainData: state.brandCore,
+        campaignContext: getCampaignContextSummary(),
+        contentFormat: "16:9",
+        connectedNodeContext: getConnectedNodeContext(node.id)
+      })
+    });
+    if (!response.ok) throw new Error("Header visual failed");
+    const data = await response.json();
+    const imageUrl = data?.imageUrl || data?.url || "";
+    if (!imageUrl) throw new Error("Empty image URL");
+    node.images = Array.isArray(node.images) ? node.images : [];
+    node.images.push({ id: crypto.randomUUID(), url: imageUrl, name: "landing-header.png", createdAt: Date.now(), source: "generated" });
+    updateNodeCard(node);
+    fillInspector(node);
+    saveCampaignCanvasState();
+  } finally {
+    btn.disabled = false;
+    btn.textContent = original;
+  }
 });
 el.generatePostingVisualButton.addEventListener("click", async () => {
   const node = getNode(state.selectedPrimary);
@@ -3108,6 +3851,14 @@ el.boardsNavButton?.addEventListener("click", () => {
   setAppMode("canvas");
   setActiveView("boards_library");
   loadBoardsLibrary();
+});
+el.insightsNavButton?.addEventListener("click", () => {
+  setAppMode("canvas");
+  setActiveView("insights");
+});
+el.aiBrainNavButton?.addEventListener("click", () => {
+  setAppMode("canvas");
+  setActiveView("ai_brain");
 });
 el.brandCoreCanvas.addEventListener("click", (event) => {
   const n = event.target.closest(".bc-node[data-bc-key]");
