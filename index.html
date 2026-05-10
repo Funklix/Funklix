@@ -6,12 +6,15 @@
     <title>Campaign Canvas MVP</title>
     <link rel="stylesheet" href="/styles.css" />
     <style>
-      .canvas-toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: nowrap; width: 100%; min-width: 0; }
+      .canvas-toolbar { display: grid; grid-template-columns: auto minmax(320px, 480px) minmax(0, 1fr); align-items: center; gap: 10px; width: 100%; min-width: 0; }
       .toolbar-brand { display: none; }
       .toolbar-title { margin: 0; font-size: 16px; line-height: 1.1; }
       .toolbar-subtitle { margin: 0; font-size: 11px; opacity: 0.7; white-space: nowrap; }
-      .canvas-toolbar-left { display: flex; align-items: center; gap: 6px; flex-wrap: nowrap; min-width: 0; flex: 1 1 auto; }
-      .status-block { display: flex; align-items: center; gap: 8px; margin-left: auto; white-space: nowrap; flex: 0 0 340px; max-width: 340px; min-width: 340px; overflow: hidden; justify-content: flex-end; }
+      .toolbar-group { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+      .toolbar-group-left { flex: 0 1 auto; }
+      .toolbar-group-center { justify-content: center; }
+      .toolbar-group-right { justify-content: flex-end; overflow: hidden; }
+      .status-block { display: flex; align-items: center; gap: 8px; white-space: nowrap; min-width: 0; overflow: hidden; justify-content: flex-end; width: 100%; }
       .save-status-text, .share-meta, .share-feedback { font-size: 11px; opacity: 0.8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
       .share-panel { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
       .share-ready { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
@@ -19,8 +22,21 @@
       .share-link-text { display: none; }
       .share-meta { opacity: 0.7; max-width: 140px; }
       .share-feedback { color: #c94a4a; }
-      #canvas-topbar { padding-top: 6px; padding-bottom: 6px; overflow: hidden; }
-      @media (max-width: 1200px) { .canvas-toolbar, .canvas-toolbar-left { flex-wrap: wrap; } .status-block { width: 100%; min-width: 0; max-width: 100%; flex: 1 1 100%; justify-content: flex-end; } .toolbar-subtitle { display: none; } }
+      #canvas-topbar { padding-top: 6px; padding-bottom: 6px; overflow: visible; position: relative; z-index: 120; }
+      #node-search-input { width: 100%; min-width: 260px; }
+      .utility-muted { opacity: 0.78; }
+      .filter-dropdown-wrap { position: relative; }
+      .filter-popover { position: absolute; top: calc(100% + 8px); right: 0; width: min(430px, 72vw); background: #fff; border: 1px solid #dde2f3; border-radius: 12px; box-shadow: 0 12px 30px rgba(30,40,90,.14); padding: 10px; z-index: 999; display: block; }
+      #filters-popover[hidden] { display: none !important; }
+      .filter-group { margin-bottom: 8px; }
+      .filter-group:last-child { margin-bottom: 0; }
+      .filter-group strong { display: block; font-size: 11px; color: #717b9f; margin-bottom: 5px; }
+      .toolbar-utilities { position: relative; }
+      .toolbar-utilities summary { list-style: none; cursor: pointer; border: 1px solid #d8dcef; background: #f7f8ff; color: #4a5889; border-radius: 999px; font-size: 12px; padding: 4px 9px; }
+      .toolbar-utilities summary::-webkit-details-marker { display: none; }
+      .toolbar-utilities-menu { position: absolute; right: 0; top: calc(100% + 7px); width: 170px; background: #fff; border: 1px solid #dde2f3; border-radius: 10px; box-shadow: 0 12px 30px rgba(30,40,90,.14); padding: 8px; display: grid; gap: 6px; z-index: 999; }
+      .toolbar-utilities-menu button { width: 100%; text-align: left; font-size: 12px; }
+      @media (max-width: 1200px) { .canvas-toolbar { grid-template-columns: 1fr; } .toolbar-group-center { order: 2; } .toolbar-group-right { order: 3; justify-content: flex-start; } .toolbar-subtitle { display: none; } }
 
       .boards-library-page { max-width: 1100px; margin: 0 auto; padding: 20px; height: calc(100vh - 150px); min-height: 0; display: flex; flex-direction: column; }
       .boards-library-page.hidden { display: none !important; }
@@ -67,13 +83,14 @@
             <p class="toolbar-subtitle">Idea → Variations → Content → Social Posts</p>
           </div>
           <div class="actions canvas-toolbar">
-            <div class="canvas-toolbar-left">
+            <div class="toolbar-group toolbar-group-left">
               <button id="create-campaign-btn" class="create-campaign-btn">Create campaign</button>
-              <button id="undo-btn" title="Rückgängig">↶</button>
               <button id="add-node-btn" class="primary-add">+ Add node</button>
-              <button id="reset-board-btn" class="danger">Reset Board</button>
-              <button id="save-board-btn">Save Board</button>
-              <button id="new-board-btn">New Board</button>
+            </div>
+            <div class="toolbar-group toolbar-group-center">
+              <input id="node-search-input" type="search" placeholder="Search nodes..." />
+            </div>
+            <div class="toolbar-group toolbar-group-right">
               <div class="view-switcher">
                 <button id="cycle-view-btn">Board View</button>
                 <button id="view-menu-btn" title="Choose view">▾</button>
@@ -85,9 +102,23 @@
               </div>
               <button id="zoom-out-btn" aria-label="Zoom out">-</button>
               <button id="zoom-in-btn" aria-label="Zoom in">+</button>
+              <div class="filter-dropdown-wrap">
+                <button id="filters-toggle-btn" type="button" class="utility-muted">Filters</button>
+              </div>
+              <details class="toolbar-utilities">
+                <summary>Utilities</summary>
+                <div class="toolbar-utilities-menu">
+                  <button id="compact-all-btn" type="button" title="Compact all nodes">Compact All</button>
+                  <button id="expand-all-btn" type="button" title="Expand all nodes">Expand All</button>
+                  <button id="undo-btn" class="utility-muted" title="Rückgängig">↶ Undo</button>
+                  <button id="save-board-btn" class="utility-muted">Save Board</button>
+                  <button id="new-board-btn" class="utility-muted">New Board</button>
+                  <button id="reset-board-btn" class="danger utility-muted">Reset Board</button>
+                </div>
+              </details>
+              <span id="node-search-count" class="node-search-count"></span>
               <span id="zoom-label">100%</span>
-            </div>
-            <div class="status-block">
+              <div class="status-block">
               <span id="save-status" class="save-status-text">Unsaved changes</span>
               <div id="board-share-panel" class="share-panel" aria-live="polite">
                 <div id="board-share-empty" class="share-hint">Save to create share link.</div>
@@ -100,6 +131,7 @@
                   <div id="board-copy-feedback" class="share-feedback hidden"></div>
                 </div>
               </div>
+            </div>
             </div>
           </div>
         </header>
