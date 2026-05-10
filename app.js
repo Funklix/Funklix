@@ -101,6 +101,8 @@ const el = {
   addNodeButton: document.getElementById("add-node-btn"),
   zoomInButton: document.getElementById("zoom-in-btn"),
   zoomOutButton: document.getElementById("zoom-out-btn"),
+  compactAllButton: document.getElementById("compact-all-btn"),
+  expandAllButton: document.getElementById("expand-all-btn"),
   zoomLabel: document.getElementById("zoom-label"),
   nodeTemplate: document.getElementById("node-template"),
   postitTemplate: document.getElementById("postit-template"),
@@ -3462,6 +3464,20 @@ function toggleListMode(showList) {
   }
 }
 
+function setCompactModeForAllNodes(compact) {
+  if (!state.nodes.length) return;
+  let changed = false;
+  state.nodes.forEach((node) => {
+    if (!!node.compact === !!compact) return;
+    node.compact = !!compact;
+    updateNodeCard(node);
+    changed = true;
+  });
+  if (!changed) return;
+  setSaveStatus(compact ? "All nodes compacted" : "All nodes expanded");
+  saveCampaignCanvasState();
+}
+
 function renderCalendarView() {
   const month = state.calendarMonth;
   const totalScheduled = state.nodes.filter((n) => n.type === "Social Media Posting" && n.social?.addedToCalendar && n.social?.scheduledAt).length;
@@ -3895,6 +3911,14 @@ el.propagateDescendantsButton.addEventListener("click", () => {
   propagateNodeChangesDownward(node);
   fillInspector(node);
   saveCampaignCanvasState();
+});
+el.compactAllButton?.addEventListener("click", () => {
+  pushHistorySnapshot();
+  setCompactModeForAllNodes(true);
+});
+el.expandAllButton?.addEventListener("click", () => {
+  pushHistorySnapshot();
+  setCompactModeForAllNodes(false);
 });
 // Undo is handled via delegated click binding in bindGlobalResetDelegation().
 
