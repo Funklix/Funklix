@@ -4012,16 +4012,17 @@ el.filtersPopover?.addEventListener("click", (event) => {
 el.filtersToggleButton?.addEventListener("click", (event) => {
   event.stopPropagation();
   if (!el.filtersPopover) return;
-  const nextHidden = !el.filtersPopover.classList.contains("hidden");
-  el.filtersPopover.classList.toggle("hidden", nextHidden);
-  el.filtersPopover.hidden = nextHidden;
+  if (el.filtersPopover.hasAttribute("hidden")) {
+    el.filtersPopover.removeAttribute("hidden");
+  } else {
+    el.filtersPopover.setAttribute("hidden", "");
+  }
 });
 document.addEventListener("click", (event) => {
   if (!el.filtersPopover || !el.filtersToggleButton) return;
-  if (el.filtersPopover.hidden || el.filtersPopover.classList.contains("hidden")) return;
+  if (el.filtersPopover.hasAttribute("hidden")) return;
   if (event.target.closest("#filters-popover, #filters-toggle-btn")) return;
-  el.filtersPopover.classList.add("hidden");
-  el.filtersPopover.hidden = true;
+  el.filtersPopover.setAttribute("hidden", "");
 });
 // Undo is handled via delegated click binding in bindGlobalResetDelegation().
 
