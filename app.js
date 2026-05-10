@@ -108,6 +108,8 @@ const el = {
   nodeSearchInput: document.getElementById("node-search-input"),
   nodeFilterChips: document.getElementById("node-filter-chips"),
   nodeSearchCount: document.getElementById("node-search-count"),
+  filtersToggleButton: document.getElementById("filters-toggle-btn"),
+  filtersPopover: document.getElementById("filters-popover"),
   zoomLabel: document.getElementById("zoom-label"),
   nodeTemplate: document.getElementById("node-template"),
   postitTemplate: document.getElementById("postit-template"),
@@ -2477,6 +2479,10 @@ function refreshNodeSearchUI() {
     el.nodeSearchCount.textContent = hasSearchActive ? `${matches} matches` : "";
     if (hasSearchActive && matches === 0) el.nodeSearchCount.textContent = "No matching nodes";
   }
+  if (el.filtersToggleButton) {
+    const activeFilters = Object.values(state.nodeFilters).reduce((n, set) => n + set.size, 0);
+    el.filtersToggleButton.textContent = activeFilters > 0 ? `Filters (${activeFilters})` : "Filters";
+  }
 }
 
 function renderPostits(node, nodeEl) {
@@ -4002,6 +4008,16 @@ el.nodeFilterChips?.addEventListener("click", (event) => {
   else groupSet.add(value);
   btn.classList.toggle("active", groupSet.has(value));
   refreshNodeSearchUI();
+});
+el.filtersToggleButton?.addEventListener("click", (event) => {
+  event.stopPropagation();
+  el.filtersPopover?.classList.toggle("hidden");
+});
+document.addEventListener("click", (event) => {
+  if (!el.filtersPopover || !el.filtersToggleButton) return;
+  if (el.filtersPopover.classList.contains("hidden")) return;
+  if (event.target.closest("#filters-popover, #filters-toggle-btn")) return;
+  el.filtersPopover.classList.add("hidden");
 });
 // Undo is handled via delegated click binding in bindGlobalResetDelegation().
 
