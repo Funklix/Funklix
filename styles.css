@@ -654,6 +654,22 @@ button:active {
 .node.is-compact:hover .node-ai-toolbar,
 .node.is-compact.selected .node-ai-toolbar { display: flex; margin-top: 4px; }
 .node.is-compact .node-ai-toolbar button:nth-child(n+4) { display: none; }
+.node.search-dimmed { opacity: 0.35 !important; }
+.node.search-match { box-shadow: 0 0 0 2px #6f5bff44, 0 10px 20px rgba(82,67,170,0.18); }
+
+#node-search-input {
+  width: 170px;
+  border: 1px solid #d7dcf1;
+  border-radius: 999px;
+  padding: 5px 10px;
+  font-size: 0.74rem;
+  background: #fbfcff;
+}
+#node-search-input:focus { outline: none; border-color: #6f5bff; box-shadow: 0 0 0 2px #6f5bff22; }
+.node-filter-chips { display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; max-width: 420px; }
+.node-filter-chips button { border: 1px solid #d8dcef; background: #f7f8ff; color: #4a5889; border-radius: 999px; font-size: 0.62rem; padding: 2px 7px; cursor: pointer; }
+.node-filter-chips button.active { background: #ebe7ff; border-color: #c8bcff; color: #4f39db; }
+.node-search-count { font-size: 0.66rem; color: #66719a; min-width: 78px; }
 
 .node .type {
   display: inline-block;

@@ -71,6 +71,8 @@ const state = {
   ,analysisRefreshing: false
   ,analysisLastUpdatedAt: null
   ,analysisError: ""
+  ,nodeSearchQuery: ""
+  ,nodeFilters: { type: new Set(), platform: new Set(), state: new Set() }
 };
 
 const el = {
@@ -103,6 +105,9 @@ const el = {
   zoomOutButton: document.getElementById("zoom-out-btn"),
   compactAllButton: document.getElementById("compact-all-btn"),
   expandAllButton: document.getElementById("expand-all-btn"),
+  nodeSearchInput: document.getElementById("node-search-input"),
+  nodeFilterChips: document.getElementById("node-filter-chips"),
+  nodeSearchCount: document.getElementById("node-search-count"),
   zoomLabel: document.getElementById("zoom-label"),
   nodeTemplate: document.getElementById("node-template"),
   postitTemplate: document.getElementById("postit-template"),
@@ -2086,6 +2091,10 @@ function updateNodeCard(node) {
   nodeEl.style.filter = isConnected ? "grayscale(0)" : "grayscale(1) saturate(0)";
   nodeEl.classList.toggle("just-connected", !!node.justConnectedAt && Date.now() - node.justConnectedAt < 700);
   nodeEl.classList.toggle("is-compact", !!node.compact);
+  const matchesSearch = nodeMatchesSearchAndFilters(node);
+  const hasSearchActive = !!state.nodeSearchQuery.trim() || Object.values(state.nodeFilters).some((set) => set.size > 0);
+  nodeEl.classList.toggle("search-match", hasSearchActive && matchesSearch);
+  nodeEl.classList.toggle("search-dimmed", hasSearchActive && !matchesSearch);
 
   nodeEl.querySelector(".type").textContent = node.type;
   nodeEl.querySelector(".type").style.color = tone;
@@ -2422,6 +2431,52 @@ function updateNodeCard(node) {
   }
 
   renderPostits(node, nodeEl);
+}
+
+function nodeSearchText(node) {
+  return [
+    node.type,
+    node.title,
+    node.content,
+    node.audience,
+    node.goal,
+    node.funnelStage,
+    node.social?.platform,
+    node.social?.caption,
+    node.social?.preview,
+    (node.social?.hashtags || []).join(" "),
+    node.landingPage?.headerClaim,
+    node.landingPage?.cta
+  ].filter(Boolean).join(" ").toLowerCase();
+}
+
+function nodeMatchesSearchAndFilters(node) {
+  const q = state.nodeSearchQuery.trim().toLowerCase();
+  if (q && !nodeSearchText(node).includes(q)) return false;
+  if (state.nodeFilters.type.size && !state.nodeFilters.type.has(node.type)) return false;
+  if (state.nodeFilters.platform.size && !state.nodeFilters.platform.has(node.social?.platform || "")) return false;
+  if (state.nodeFilters.state.size) {
+    const states = new Set([
+      node.social?.scheduledAt ? "scheduled" : "",
+      (node.goal || "").toLowerCase(),
+      (node.funnelStage || "").toLowerCase()
+    ]);
+    if (![...state.nodeFilters.state].some((s) => states.has(s))) return false;
+  }
+  return true;
+}
+
+function refreshNodeSearchUI() {
+  const hasSearchActive = !!state.nodeSearchQuery.trim() || Object.values(state.nodeFilters).some((set) => set.size > 0);
+  let matches = 0;
+  state.nodes.forEach((node) => {
+    if (nodeMatchesSearchAndFilters(node)) matches += 1;
+    updateNodeCard(node);
+  });
+  if (el.nodeSearchCount) {
+    el.nodeSearchCount.textContent = hasSearchActive ? `${matches} matches` : "";
+    if (hasSearchActive && matches === 0) el.nodeSearchCount.textContent = "No matching nodes";
+  }
 }
 
 function renderPostits(node, nodeEl) {
@@ -3919,6 +3974,34 @@ el.compactAllButton?.addEventListener("click", () => {
 el.expandAllButton?.addEventListener("click", () => {
   pushHistorySnapshot();
   setCompactModeForAllNodes(false);
+});
+el.nodeSearchInput?.addEventListener("input", (event) => {
+  state.nodeSearchQuery = event.target.value || "";
+  refreshNodeSearchUI();
+});
+el.nodeSearchInput?.addEventListener("keydown", (event) => {
+  if (event.key !== "Enter") return;
+  const firstMatch = state.nodes.find((node) => nodeMatchesSearchAndFilters(node));
+  if (!firstMatch) return;
+  setActiveView("board");
+  state.selectedIds.clear();
+  state.selectedIds.add(firstMatch.id);
+  state.selectedPrimary = firstMatch.id;
+  updateSelectionClasses();
+  fillInspector(firstMatch);
+  forceNodeVisible(firstMatch.id);
+});
+el.nodeFilterChips?.addEventListener("click", (event) => {
+  const btn = event.target.closest("button[data-filter-group][data-filter-value]");
+  if (!btn) return;
+  const group = btn.dataset.filterGroup;
+  const value = btn.dataset.filterValue;
+  const groupSet = state.nodeFilters[group];
+  if (!groupSet) return;
+  if (groupSet.has(value)) groupSet.delete(value);
+  else groupSet.add(value);
+  btn.classList.toggle("active", groupSet.has(value));
+  refreshNodeSearchUI();
 });
 // Undo is handled via delegated click binding in bindGlobalResetDelegation().
 
