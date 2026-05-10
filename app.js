@@ -2518,6 +2518,8 @@ function buildUtilitiesPopoverHtml() {
   </div></div>
   <div class="filter-group"><strong>View</strong><div class="node-filter-chips">
     <button type="button" data-utility-action="board-view">Board View</button>
+    <button type="button" data-utility-action="list-view">List View</button>
+    <button type="button" data-utility-action="calendar-view">Calendar View</button>
   </div></div>
   <div class="filter-group"><strong>Layout</strong><div class="node-filter-chips">
     <button type="button" data-utility-action="compact-all">Compact All</button>
@@ -4098,6 +4100,8 @@ el.utilitiesToggleButton?.addEventListener("click", (event) => {
       "compact-all": el.compactAllButton,
       "expand-all": el.expandAllButton,
       "board-view": el.viewBoardButton,
+      "list-view": el.viewListButton,
+      "calendar-view": el.viewCalendarButton,
       "copy-link": el.copyBoardLinkButton
     };
     const targetBtn = map[btn.dataset.utilityAction];

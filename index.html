@@ -82,6 +82,7 @@
             <div class="toolbar-group toolbar-group-left">
               <button id="create-campaign-btn" class="create-campaign-btn">Create campaign</button>
               <button id="add-node-btn" class="primary-add">+ Add node</button>
+              <button id="undo-btn" class="utility-muted" title="Rückgängig">↶</button>
             </div>
             <div class="toolbar-group toolbar-group-center">
               <input id="node-search-input" type="search" placeholder="Search nodes..." />
@@ -97,6 +98,7 @@
                 </div>
               </div>
               <button id="zoom-out-btn" aria-label="Zoom out">-</button>
+              <span id="zoom-label">100%</span>
               <button id="zoom-in-btn" aria-label="Zoom in">+</button>
               <div class="filter-dropdown-wrap">
                 <button id="filters-toggle-btn" type="button" class="utility-muted">Filters</button>
@@ -105,13 +107,11 @@
               <div class="toolbar-utility-source" aria-hidden="true">
                 <button id="compact-all-btn" type="button" title="Compact all nodes">Compact All</button>
                 <button id="expand-all-btn" type="button" title="Expand all nodes">Expand All</button>
-                <button id="undo-btn" class="utility-muted" title="Rückgängig">↶ Undo</button>
                 <button id="save-board-btn" class="utility-muted">Save Board</button>
                 <button id="new-board-btn" class="utility-muted">New Board</button>
                 <button id="reset-board-btn" class="danger utility-muted">Reset Board</button>
               </div>
               <span id="node-search-count" class="node-search-count"></span>
-              <span id="zoom-label">100%</span>
               <div class="status-block">
               <span id="save-status" class="save-status-text">Unsaved changes</span>
               <div id="board-share-panel" class="share-panel" aria-live="polite">
