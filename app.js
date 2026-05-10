@@ -106,10 +106,8 @@ const el = {
   compactAllButton: document.getElementById("compact-all-btn"),
   expandAllButton: document.getElementById("expand-all-btn"),
   nodeSearchInput: document.getElementById("node-search-input"),
-  nodeFilterChips: document.getElementById("node-filter-chips"),
   nodeSearchCount: document.getElementById("node-search-count"),
   filtersToggleButton: document.getElementById("filters-toggle-btn"),
-  filtersPopover: document.getElementById("filters-popover"),
   zoomLabel: document.getElementById("zoom-label"),
   nodeTemplate: document.getElementById("node-template"),
   postitTemplate: document.getElementById("postit-template"),
@@ -2485,6 +2483,40 @@ function refreshNodeSearchUI() {
   }
 }
 
+function buildFiltersPopoverHtml() {
+  return `<div class="filter-group"><strong>Node Type</strong><div class="node-filter-chips">
+    <button type="button" data-filter-group="type" data-filter-value="Idea">Idea</button>
+    <button type="button" data-filter-group="type" data-filter-value="Campaign Variation">Variation</button>
+    <button type="button" data-filter-group="type" data-filter-value="Content">Content</button>
+    <button type="button" data-filter-group="type" data-filter-value="Landing Page">Landing</button>
+    <button type="button" data-filter-group="type" data-filter-value="Social Media Posting">Social</button>
+  </div></div>
+  <div class="filter-group"><strong>Platform</strong><div class="node-filter-chips">
+    <button type="button" data-filter-group="platform" data-filter-value="LinkedIn">LinkedIn</button>
+    <button type="button" data-filter-group="platform" data-filter-value="X / Twitter">X</button>
+    <button type="button" data-filter-group="platform" data-filter-value="Instagram">Instagram</button>
+    <button type="button" data-filter-group="platform" data-filter-value="TikTok">TikTok</button>
+  </div></div>
+  <div class="filter-group"><strong>State / Funnel</strong><div class="node-filter-chips">
+    <button type="button" data-filter-group="state" data-filter-value="scheduled">Scheduled</button>
+    <button type="button" data-filter-group="state" data-filter-value="conversion">Conversion</button>
+    <button type="button" data-filter-group="state" data-filter-value="awareness">Awareness</button>
+  </div></div>`;
+}
+
+function closeFiltersPopover() {
+  document.getElementById("floating-filters-popover")?.remove();
+}
+
+function syncPopoverActiveStates(popoverEl) {
+  if (!popoverEl) return;
+  popoverEl.querySelectorAll("button[data-filter-group][data-filter-value]").forEach((btn) => {
+    const group = btn.dataset.filterGroup;
+    const value = btn.dataset.filterValue;
+    btn.classList.toggle("active", !!state.nodeFilters[group]?.has(value));
+  });
+}
+
 function renderPostits(node, nodeEl) {
   nodeEl.querySelectorAll(".postit").forEach((p) => p.remove());
 
@@ -3997,32 +4029,36 @@ el.nodeSearchInput?.addEventListener("keydown", (event) => {
   fillInspector(firstMatch);
   forceNodeVisible(firstMatch.id);
 });
-el.filtersPopover?.addEventListener("click", (event) => {
-  const btn = event.target.closest("button[data-filter-group][data-filter-value]");
-  if (!btn) return;
-  const group = btn.dataset.filterGroup;
-  const value = btn.dataset.filterValue;
-  const groupSet = state.nodeFilters[group];
-  if (!groupSet) return;
-  if (groupSet.has(value)) groupSet.delete(value);
-  else groupSet.add(value);
-  btn.classList.toggle("active", groupSet.has(value));
-  refreshNodeSearchUI();
-});
 el.filtersToggleButton?.addEventListener("click", (event) => {
   event.stopPropagation();
-  if (!el.filtersPopover) return;
-  if (el.filtersPopover.hasAttribute("hidden")) {
-    el.filtersPopover.removeAttribute("hidden");
-  } else {
-    el.filtersPopover.setAttribute("hidden", "");
-  }
+  const existing = document.getElementById("floating-filters-popover");
+  if (existing) return closeFiltersPopover();
+  const popover = document.createElement("div");
+  popover.id = "floating-filters-popover";
+  popover.className = "floating-filter-popover";
+  popover.innerHTML = buildFiltersPopoverHtml();
+  const rect = el.filtersToggleButton.getBoundingClientRect();
+  popover.style.top = `${rect.bottom + 8}px`;
+  popover.style.left = `${Math.max(10, rect.right - 430)}px`;
+  popover.addEventListener("click", (e) => {
+    const btn = e.target.closest("button[data-filter-group][data-filter-value]");
+    if (!btn) return;
+    const group = btn.dataset.filterGroup;
+    const value = btn.dataset.filterValue;
+    const groupSet = state.nodeFilters[group];
+    if (!groupSet) return;
+    if (groupSet.has(value)) groupSet.delete(value);
+    else groupSet.add(value);
+    btn.classList.toggle("active", groupSet.has(value));
+    refreshNodeSearchUI();
+    syncPopoverActiveStates(popover);
+  });
+  document.body.appendChild(popover);
+  syncPopoverActiveStates(popover);
 });
 document.addEventListener("click", (event) => {
-  if (!el.filtersPopover || !el.filtersToggleButton) return;
-  if (el.filtersPopover.hasAttribute("hidden")) return;
-  if (event.target.closest("#filters-popover, #filters-toggle-btn")) return;
-  el.filtersPopover.setAttribute("hidden", "");
+  if (event.target.closest("#floating-filters-popover, #filters-toggle-btn")) return;
+  closeFiltersPopover();
 });
 // Undo is handled via delegated click binding in bindGlobalResetDelegation().
 

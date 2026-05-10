@@ -670,6 +670,16 @@ button:active {
 .node-filter-chips button { border: 1px solid #d8dcef; background: #f7f8ff; color: #4a5889; border-radius: 999px; font-size: 0.62rem; padding: 2px 7px; cursor: pointer; }
 .node-filter-chips button.active { background: #ebe7ff; border-color: #c8bcff; color: #4f39db; }
 .node-search-count { font-size: 0.66rem; color: #66719a; min-width: 78px; }
+.floating-filter-popover {
+  position: fixed;
+  width: min(430px, 72vw);
+  background: #fff;
+  border: 1px solid #dde2f3;
+  border-radius: 12px;
+  box-shadow: 0 12px 30px rgba(30,40,90,.14);
+  padding: 10px;
+  z-index: 1200;
+}
 
 .node .type {
   display: inline-block;
