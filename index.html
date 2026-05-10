@@ -22,11 +22,11 @@
       .share-link-text { display: none; }
       .share-meta { opacity: 0.7; max-width: 140px; }
       .share-feedback { color: #c94a4a; }
-      #canvas-topbar { padding-top: 6px; padding-bottom: 6px; overflow: hidden; }
+      #canvas-topbar { padding-top: 6px; padding-bottom: 6px; overflow: visible; position: relative; z-index: 120; }
       #node-search-input { width: 100%; min-width: 260px; }
       .utility-muted { opacity: 0.78; }
       .filter-dropdown-wrap { position: relative; }
-      .filter-popover { position: absolute; top: calc(100% + 6px); right: 0; width: min(430px, 72vw); background: #fff; border: 1px solid #dde2f3; border-radius: 12px; box-shadow: 0 12px 30px rgba(30,40,90,.14); padding: 10px; z-index: 50; }
+      .filter-popover { position: absolute; top: calc(100% + 6px); right: 0; width: min(430px, 72vw); background: #fff; border: 1px solid #dde2f3; border-radius: 12px; box-shadow: 0 12px 30px rgba(30,40,90,.14); padding: 10px; z-index: 999; }
       .filter-popover.hidden { display: none; }
       .filter-group { margin-bottom: 8px; }
       .filter-group:last-child { margin-bottom: 0; }
