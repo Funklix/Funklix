@@ -108,6 +108,7 @@ const el = {
   nodeSearchInput: document.getElementById("node-search-input"),
   nodeSearchCount: document.getElementById("node-search-count"),
   filtersToggleButton: document.getElementById("filters-toggle-btn"),
+  utilitiesToggleButton: document.getElementById("utilities-toggle-btn"),
   zoomLabel: document.getElementById("zoom-label"),
   nodeTemplate: document.getElementById("node-template"),
   postitTemplate: document.getElementById("postit-template"),
@@ -2508,6 +2509,28 @@ function closeFiltersPopover() {
   document.getElementById("floating-filters-popover")?.remove();
 }
 
+function buildUtilitiesPopoverHtml() {
+  return `<div class="filter-group"><strong>Board</strong><div class="node-filter-chips">
+    <button type="button" data-utility-action="save-board">Save Board</button>
+    <button type="button" data-utility-action="new-board">New Board</button>
+    <button type="button" data-utility-action="reset-board">Reset Board</button>
+    <button type="button" data-utility-action="copy-link">Copy Link</button>
+  </div></div>
+  <div class="filter-group"><strong>View & Zoom</strong><div class="node-filter-chips">
+    <button type="button" data-utility-action="board-view">Board View</button>
+    <button type="button" data-utility-action="zoom-out">Zoom -</button>
+    <button type="button" data-utility-action="zoom-in">Zoom +</button>
+  </div></div>
+  <div class="filter-group"><strong>Layout</strong><div class="node-filter-chips">
+    <button type="button" data-utility-action="compact-all">Compact All</button>
+    <button type="button" data-utility-action="expand-all">Expand All</button>
+  </div></div>`;
+}
+
+function closeUtilitiesPopover() {
+  document.getElementById("floating-utilities-popover")?.remove();
+}
+
 function syncPopoverActiveStates(popoverEl) {
   if (!popoverEl) return;
   popoverEl.querySelectorAll("button[data-filter-group][data-filter-value]").forEach((btn) => {
@@ -4056,9 +4079,43 @@ el.filtersToggleButton?.addEventListener("click", (event) => {
   document.body.appendChild(popover);
   syncPopoverActiveStates(popover);
 });
+el.utilitiesToggleButton?.addEventListener("click", (event) => {
+  event.stopPropagation();
+  const existing = document.getElementById("floating-utilities-popover");
+  if (existing) return closeUtilitiesPopover();
+  const popover = document.createElement("div");
+  popover.id = "floating-utilities-popover";
+  popover.className = "floating-filter-popover";
+  popover.innerHTML = buildUtilitiesPopoverHtml();
+  const rect = el.utilitiesToggleButton.getBoundingClientRect();
+  popover.style.top = `${rect.bottom + 8}px`;
+  popover.style.left = `${Math.max(10, rect.right - 260)}px`;
+  popover.addEventListener("click", (e) => {
+    const btn = e.target.closest("button[data-utility-action]");
+    if (!btn) return;
+    const map = {
+      "save-board": el.saveBoardButton,
+      "new-board": el.newBoardButton,
+      "reset-board": el.resetBoardButton,
+      "compact-all": el.compactAllButton,
+      "expand-all": el.expandAllButton,
+      "zoom-out": el.zoomOutButton,
+      "zoom-in": el.zoomInButton,
+      "board-view": el.viewBoardButton,
+      "copy-link": el.copyBoardLinkButton
+    };
+    const targetBtn = map[btn.dataset.utilityAction];
+    if (!targetBtn || targetBtn.disabled || targetBtn.offsetParent === null && btn.dataset.utilityAction === "copy-link") return;
+    targetBtn.click();
+    closeUtilitiesPopover();
+  });
+  document.body.appendChild(popover);
+});
 document.addEventListener("click", (event) => {
   if (event.target.closest("#floating-filters-popover, #filters-toggle-btn")) return;
+  if (event.target.closest("#floating-utilities-popover, #utilities-toggle-btn")) return;
   closeFiltersPopover();
+  closeUtilitiesPopover();
 });
 // Undo is handled via delegated click binding in bindGlobalResetDelegation().
 

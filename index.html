@@ -31,11 +31,7 @@
       .filter-group { margin-bottom: 8px; }
       .filter-group:last-child { margin-bottom: 0; }
       .filter-group strong { display: block; font-size: 11px; color: #717b9f; margin-bottom: 5px; }
-      .toolbar-utilities { position: relative; }
-      .toolbar-utilities summary { list-style: none; cursor: pointer; border: 1px solid #d8dcef; background: #f7f8ff; color: #4a5889; border-radius: 999px; font-size: 12px; padding: 4px 9px; }
-      .toolbar-utilities summary::-webkit-details-marker { display: none; }
-      .toolbar-utilities-menu { position: absolute; right: 0; top: calc(100% + 7px); width: 170px; background: #fff; border: 1px solid #dde2f3; border-radius: 10px; box-shadow: 0 12px 30px rgba(30,40,90,.14); padding: 8px; display: grid; gap: 6px; z-index: 999; }
-      .toolbar-utilities-menu button { width: 100%; text-align: left; font-size: 12px; }
+      .toolbar-utility-source { display: none !important; }
       @media (max-width: 1200px) { .canvas-toolbar { grid-template-columns: 1fr; } .toolbar-group-center { order: 2; } .toolbar-group-right { order: 3; justify-content: flex-start; } .toolbar-subtitle { display: none; } }
 
       .boards-library-page { max-width: 1100px; margin: 0 auto; padding: 20px; height: calc(100vh - 150px); min-height: 0; display: flex; flex-direction: column; }
@@ -105,17 +101,15 @@
               <div class="filter-dropdown-wrap">
                 <button id="filters-toggle-btn" type="button" class="utility-muted">Filters</button>
               </div>
-              <details class="toolbar-utilities">
-                <summary>Utilities</summary>
-                <div class="toolbar-utilities-menu">
-                  <button id="compact-all-btn" type="button" title="Compact all nodes">Compact All</button>
-                  <button id="expand-all-btn" type="button" title="Expand all nodes">Expand All</button>
-                  <button id="undo-btn" class="utility-muted" title="Rückgängig">↶ Undo</button>
-                  <button id="save-board-btn" class="utility-muted">Save Board</button>
-                  <button id="new-board-btn" class="utility-muted">New Board</button>
-                  <button id="reset-board-btn" class="danger utility-muted">Reset Board</button>
-                </div>
-              </details>
+              <button id="utilities-toggle-btn" type="button" class="utility-muted">Utilities</button>
+              <div class="toolbar-utility-source" aria-hidden="true">
+                <button id="compact-all-btn" type="button" title="Compact all nodes">Compact All</button>
+                <button id="expand-all-btn" type="button" title="Expand all nodes">Expand All</button>
+                <button id="undo-btn" class="utility-muted" title="Rückgängig">↶ Undo</button>
+                <button id="save-board-btn" class="utility-muted">Save Board</button>
+                <button id="new-board-btn" class="utility-muted">New Board</button>
+                <button id="reset-board-btn" class="danger utility-muted">Reset Board</button>
+              </div>
               <span id="node-search-count" class="node-search-count"></span>
               <span id="zoom-label">100%</span>
               <div class="status-block">
