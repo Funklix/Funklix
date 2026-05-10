@@ -101,6 +101,8 @@ const el = {
   addNodeButton: document.getElementById("add-node-btn"),
   zoomInButton: document.getElementById("zoom-in-btn"),
   zoomOutButton: document.getElementById("zoom-out-btn"),
+  compactAllButton: document.getElementById("compact-all-btn"),
+  expandAllButton: document.getElementById("expand-all-btn"),
   zoomLabel: document.getElementById("zoom-label"),
   nodeTemplate: document.getElementById("node-template"),
   postitTemplate: document.getElementById("postit-template"),
@@ -527,6 +529,26 @@ function setContentPackError(nodeId, message = "") {
   state.contentPackErrorById[nodeId] = message || "";
 }
 
+
+function getPlatformTone(platform = "LinkedIn") {
+  const tones = {
+    "LinkedIn": { accent: "#5167d8", soft: "#eef1ff", label: "LinkedIn" },
+    "X / Twitter": { accent: "#4d5d78", soft: "#eef1f6", label: "X" },
+    "Instagram": { accent: "#a15fd1", soft: "#f7efff", label: "Instagram" },
+    "TikTok": { accent: "#2f8e88", soft: "#eaf8f6", label: "TikTok" }
+  };
+  return tones[platform] || { accent: "#62709a", soft: "#f3f5ff", label: platform || "Social" };
+}
+
+function formatScheduleMeta(isoString) {
+  if (!isoString) return null;
+  const when = new Date(isoString);
+  if (Number.isNaN(when.getTime())) return null;
+  return {
+    dateLabel: when.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+    timeLabel: when.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })
+  };
+}
 function platformPromptGuidance(platform = "LinkedIn") {
   if (platform === "X / Twitter") return "Platform: X/Twitter. Keep it short, punchy, hook-first, and 280-char aware. Concise CTA. Avoid hashtags unless useful.";
   if (platform === "Instagram") return "Platform: Instagram. Visual-first, emotional, community-oriented tone. CTA should invite comments/saves/shares. Hashtags allowed but not excessive.";
@@ -1454,6 +1476,7 @@ function createNode({ type = "Idea", parentId = null, position = null, images = 
     landingPage: { headerVisualPrompt: "", headerClaim: "", problem: "", solution: "", trust: "", cta: "" },
     reactions: {},
     postits: [],
+    compact: false,
     justConnectedAt: null,
     position: safePos
   };
@@ -2062,9 +2085,16 @@ function updateNodeCard(node) {
   nodeEl.style.opacity = isConnected ? "1" : "0.62";
   nodeEl.style.filter = isConnected ? "grayscale(0)" : "grayscale(1) saturate(0)";
   nodeEl.classList.toggle("just-connected", !!node.justConnectedAt && Date.now() - node.justConnectedAt < 700);
+  nodeEl.classList.toggle("is-compact", !!node.compact);
 
   nodeEl.querySelector(".type").textContent = node.type;
   nodeEl.querySelector(".type").style.color = tone;
+  const compactToggle = nodeEl.querySelector(".node-compact-toggle");
+  if (compactToggle) {
+    compactToggle.textContent = node.compact ? "↗" : "−";
+    compactToggle.title = node.compact ? "Expand node" : "Compact view";
+    compactToggle.setAttribute("aria-label", compactToggle.title);
+  }
   nodeEl.querySelector(".title").textContent = node.title;
   const contentEl = nodeEl.querySelector(".content");
   contentEl.textContent = node.content;
@@ -2154,6 +2184,27 @@ function updateNodeCard(node) {
     imageStrip.appendChild(thumb);
   }
 
+  const compactSummary = nodeEl.querySelector(".node-compact-summary");
+  const compactPreview = node.type === "Landing Page"
+    ? (node.landingPage?.headerClaim || node.landingPage?.cta || node.content || "").trim()
+    : node.type === "Social Media Posting"
+      ? (node.social?.caption || node.title || "").trim()
+      : (node.content || node.title || "").trim();
+  const compactMeta = [];
+  if (node.goal) compactMeta.push(`Goal: ${node.goal}`);
+  if (node.audience) compactMeta.push(`Audience: ${node.audience}`);
+  if (node.type === "Social Media Posting" && node.social?.platform) compactMeta.push(node.social.platform);
+  if (node.type === "Social Media Posting" && node.social?.scheduledAt) compactMeta.push("Scheduled");
+  if (node.type === "Landing Page" && node.landingPage?.cta) compactMeta.push(`CTA: ${node.landingPage.cta.slice(0, 24)}${node.landingPage.cta.length > 24 ? "…" : ""}`);
+  if (node.type === "Content" && node.imagePrompt) compactMeta.push("Image prompt ready");
+  compactSummary.innerHTML = `
+    <p class="compact-preview">${compactPreview.slice(0, 100)}${compactPreview.length > 100 ? "…" : ""}</p>
+    <div class="compact-meta">${compactMeta.slice(0, 4).map((m) => `<span>${m}</span>`).join("")}</div>
+  `;
+  const compactThumb = node.images?.[node.images.length - 1]?.url;
+  compactSummary.classList.toggle("has-thumb", !!compactThumb);
+  compactSummary.style.setProperty("--compact-thumb", compactThumb ? `url('${compactThumb.replace(/'/g, "%27")}')` : "none");
+
   const social = nodeEl.querySelector(".social-preview");
   const isSocial = node.type === "Social Media Posting";
   const isLandingPage = node.type === "Landing Page";
@@ -2235,9 +2286,14 @@ function updateNodeCard(node) {
       saveCampaignCanvasState();
     });
 
-    const scheduleMeta = document.createElement("small");
-    scheduleMeta.className = "meta";
-    scheduleMeta.textContent = node.social.scheduledAt ? `Scheduled: ${new Date(node.social.scheduledAt).toLocaleString()}` : "";
+    const platformTone = getPlatformTone(node.social.platform || "LinkedIn");
+    const scheduledMeta = formatScheduleMeta(node.social.scheduledAt);
+    const scheduleMeta = document.createElement("div");
+    scheduleMeta.className = "social-schedule-meta";
+    if (scheduledMeta) {
+      scheduleMeta.innerHTML = `<span class="social-schedule-icon">📅</span><div><small>Scheduled · ${platformTone.label}</small><strong>${scheduledMeta.dateLabel} • ${scheduledMeta.timeLabel}</strong></div>`;
+      scheduleMeta.style.borderLeftColor = platformTone.accent;
+    }
 
     const actions = document.createElement("div");
     actions.className = "social-actions-row";
@@ -2262,6 +2318,7 @@ function updateNodeCard(node) {
     const calendarBtn = document.createElement("button");
     calendarBtn.type = "button";
     calendarBtn.textContent = node.social?.scheduledAt ? "Scheduled" : "Add to Posting Calendar";
+    calendarBtn.classList.toggle("is-scheduled", !!node.social?.scheduledAt);
     calendarBtn.addEventListener("click", (event) => {
       event.stopPropagation();
       openSchedulePostModal(node.id);
@@ -2516,10 +2573,13 @@ function fillInspector(node) {
   el.landingPageFields?.classList.toggle("hidden", node.type !== "Landing Page");
   el.generateHeaderVisualButton.style.display = node.type === "Landing Page" ? "block" : "none";
   if (el.addToPostingCalendarButton) {
-    el.addToPostingCalendarButton.textContent = node.type === "Social Media Posting" && node.social?.scheduledAt ? "Scheduled" : "Add to Posting Calendar";
+    const isScheduled = node.type === "Social Media Posting" && node.social?.scheduledAt;
+    el.addToPostingCalendarButton.textContent = isScheduled ? "Scheduled" : "Add to Posting Calendar";
+    el.addToPostingCalendarButton.classList.toggle("is-scheduled", !!isScheduled);
   }
   if (el.postingScheduleMeta) {
-    el.postingScheduleMeta.textContent = node.type === "Social Media Posting" && node.social?.scheduledAt ? `Scheduled: ${new Date(node.social.scheduledAt).toLocaleString()}` : "";
+    const scheduleInfo = node.type === "Social Media Posting" ? formatScheduleMeta(node.social?.scheduledAt) : null;
+    el.postingScheduleMeta.textContent = scheduleInfo ? `Scheduled: ${scheduleInfo.dateLabel} • ${scheduleInfo.timeLabel}` : "";
   }
   const variantsLabel = el.nodeForm.querySelector('label[for="node-variants"]');
   const hideVariants = node.type === "Content";
@@ -3134,6 +3194,12 @@ function renderNode(node) {
     updateSelectionClasses();
     fillInspector(node);
   });
+  nodeEl.addEventListener("dblclick", (event) => {
+    if (event.target.closest("button,input,textarea,select,[contenteditable='true']")) return;
+    node.compact = false;
+    updateNodeCard(node);
+    saveCampaignCanvasState();
+  });
 
   nodeEl.querySelector(".connector-handle").addEventListener("pointerdown", (event) => {
     event.preventDefault();
@@ -3203,6 +3269,19 @@ function renderNode(node) {
 
   const title = nodeEl.querySelector(".title");
   const content = nodeEl.querySelector(".content");
+  const compactToggle = document.createElement("button");
+  compactToggle.type = "button";
+  compactToggle.className = "node-compact-toggle";
+  compactToggle.addEventListener("click", (event) => {
+    event.stopPropagation();
+    node.compact = !node.compact;
+    updateNodeCard(node);
+    saveCampaignCanvasState();
+  });
+  nodeEl.appendChild(compactToggle);
+  const compactSummary = document.createElement("div");
+  compactSummary.className = "node-compact-summary";
+  nodeEl.insertBefore(compactSummary, nodeEl.querySelector(".tags"));
   const aiToolbar = document.createElement("div");
   aiToolbar.className = "node-ai-toolbar";
   [
@@ -3385,9 +3464,24 @@ function toggleListMode(showList) {
   }
 }
 
+function setCompactModeForAllNodes(compact) {
+  if (!state.nodes.length) return;
+  let changed = false;
+  state.nodes.forEach((node) => {
+    if (!!node.compact === !!compact) return;
+    node.compact = !!compact;
+    updateNodeCard(node);
+    changed = true;
+  });
+  if (!changed) return;
+  setSaveStatus(compact ? "All nodes compacted" : "All nodes expanded");
+  saveCampaignCanvasState();
+}
+
 function renderCalendarView() {
   const month = state.calendarMonth;
-  el.calendarTitle.textContent = month.toLocaleDateString("de-DE", { month: "long", year: "numeric" });
+  const totalScheduled = state.nodes.filter((n) => n.type === "Social Media Posting" && n.social?.addedToCalendar && n.social?.scheduledAt).length;
+  el.calendarTitle.textContent = `${month.toLocaleDateString("de-DE", { month: "long", year: "numeric" })} · ${totalScheduled} scheduled posts`;
   el.calendarGrid.innerHTML = "";
   const start = new Date(month.getFullYear(), month.getMonth(), 1);
   const end = new Date(month.getFullYear(), month.getMonth() + 1, 0);
@@ -3410,15 +3504,17 @@ function renderCalendarView() {
       btn.type = "button";
       btn.className = "calendar-post";
       const when = new Date(n.social.scheduledAt);
-      const metaTime = when.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
-      const captionPreview = (n.social.caption || n.title || n.id || "Post").trim().slice(0, 44);
-      btn.innerHTML = `<strong>${n.social.platform || "Social"}</strong> · ${metaTime}<br/><small>${captionPreview}${captionPreview.length >= 44 ? "…" : ""}</small>`;
+      const metaTime = when.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+      const captionPreview = (n.social.caption || n.title || n.id || "Post").trim().slice(0, 60);
+      const platformTone = getPlatformTone(n.social.platform || "LinkedIn");
+      btn.style.borderLeftColor = platformTone.accent;
       const previewImage = n.images?.[n.images.length - 1]?.url;
+      btn.innerHTML = `<span class="calendar-post-platform" style="background:${platformTone.soft};color:${platformTone.accent}">${platformTone.label}</span><strong>${metaTime}</strong><small>${captionPreview}${captionPreview.length >= 60 ? "…" : ""}</small>`;
       if (previewImage) {
         const thumb = document.createElement("img");
         thumb.src = previewImage;
         thumb.alt = "Scheduled post preview";
-        thumb.style.cssText = "width:24px;height:24px;object-fit:cover;border-radius:6px;margin-left:6px;vertical-align:middle";
+        thumb.className = "calendar-post-thumb";
         btn.appendChild(thumb);
       }
       btn.addEventListener("click", () => {
@@ -3815,6 +3911,14 @@ el.propagateDescendantsButton.addEventListener("click", () => {
   propagateNodeChangesDownward(node);
   fillInspector(node);
   saveCampaignCanvasState();
+});
+el.compactAllButton?.addEventListener("click", () => {
+  pushHistorySnapshot();
+  setCompactModeForAllNodes(true);
+});
+el.expandAllButton?.addEventListener("click", () => {
+  pushHistorySnapshot();
+  setCompactModeForAllNodes(false);
 });
 // Undo is handled via delegated click binding in bindGlobalResetDelegation().
 
