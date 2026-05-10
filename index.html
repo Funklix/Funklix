@@ -6,12 +6,15 @@
     <title>Campaign Canvas MVP</title>
     <link rel="stylesheet" href="/styles.css" />
     <style>
-      .canvas-toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: nowrap; width: 100%; min-width: 0; }
+      .canvas-toolbar { display: flex; align-items: center; gap: 12px; width: 100%; min-width: 0; justify-content: space-between; }
       .toolbar-brand { display: none; }
       .toolbar-title { margin: 0; font-size: 16px; line-height: 1.1; }
       .toolbar-subtitle { margin: 0; font-size: 11px; opacity: 0.7; white-space: nowrap; }
-      .canvas-toolbar-left { display: flex; align-items: center; gap: 6px; flex-wrap: nowrap; min-width: 0; flex: 1 1 auto; }
-      .status-block { display: flex; align-items: center; gap: 8px; margin-left: auto; white-space: nowrap; flex: 0 0 340px; max-width: 340px; min-width: 340px; overflow: hidden; justify-content: flex-end; }
+      .toolbar-group { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+      .toolbar-group-left { flex: 0 1 auto; }
+      .toolbar-group-center { flex: 1 1 auto; justify-content: center; }
+      .toolbar-group-right { flex: 0 0 340px; justify-content: flex-end; max-width: 340px; overflow: hidden; }
+      .status-block { display: flex; align-items: center; gap: 8px; white-space: nowrap; min-width: 0; overflow: hidden; justify-content: flex-end; width: 100%; }
       .save-status-text, .share-meta, .share-feedback { font-size: 11px; opacity: 0.8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
       .share-panel { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
       .share-ready { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
@@ -20,7 +23,11 @@
       .share-meta { opacity: 0.7; max-width: 140px; }
       .share-feedback { color: #c94a4a; }
       #canvas-topbar { padding-top: 6px; padding-bottom: 6px; overflow: hidden; }
-      @media (max-width: 1200px) { .canvas-toolbar, .canvas-toolbar-left { flex-wrap: wrap; } .status-block { width: 100%; min-width: 0; max-width: 100%; flex: 1 1 100%; justify-content: flex-end; } .toolbar-subtitle { display: none; } }
+      #node-search-input { width: clamp(220px, 28vw, 320px); min-width: 220px; }
+      .canvas-filter-row { display: flex; align-items: center; gap: 8px; padding: 6px 12px 8px; border-bottom: 1px solid #eceffc; background: #fbfcff; }
+      .canvas-filter-row .node-filter-chips { flex: 1 1 auto; max-width: 100%; }
+      .canvas-filter-row .node-search-count { flex: 0 0 auto; }
+      @media (max-width: 1200px) { .canvas-toolbar { flex-wrap: wrap; } .toolbar-group-right { flex: 1 1 100%; max-width: 100%; } .toolbar-group-center { order: 3; width: 100%; justify-content: flex-start; } .toolbar-subtitle { display: none; } #node-search-input { min-width: 180px; width: 100%; max-width: 320px; } .canvas-filter-row { flex-wrap: wrap; } }
 
       .boards-library-page { max-width: 1100px; margin: 0 auto; padding: 20px; height: calc(100vh - 150px); min-height: 0; display: flex; flex-direction: column; }
       .boards-library-page.hidden { display: none !important; }
@@ -67,13 +74,15 @@
             <p class="toolbar-subtitle">Idea → Variations → Content → Social Posts</p>
           </div>
           <div class="actions canvas-toolbar">
-            <div class="canvas-toolbar-left">
+            <div class="toolbar-group toolbar-group-left">
               <button id="create-campaign-btn" class="create-campaign-btn">Create campaign</button>
               <button id="undo-btn" title="Rückgängig">↶</button>
               <button id="add-node-btn" class="primary-add">+ Add node</button>
               <button id="reset-board-btn" class="danger">Reset Board</button>
               <button id="save-board-btn">Save Board</button>
               <button id="new-board-btn">New Board</button>
+            </div>
+            <div class="toolbar-group toolbar-group-center">
               <div class="view-switcher">
                 <button id="cycle-view-btn">Board View</button>
                 <button id="view-menu-btn" title="Choose view">▾</button>
@@ -88,24 +97,10 @@
               <button id="compact-all-btn" type="button" title="Compact all nodes">Compact All</button>
               <button id="expand-all-btn" type="button" title="Expand all nodes">Expand All</button>
               <input id="node-search-input" type="search" placeholder="Search nodes..." />
-              <div id="node-filter-chips" class="node-filter-chips">
-                <button type="button" data-filter-group="type" data-filter-value="Idea">Idea</button>
-                <button type="button" data-filter-group="type" data-filter-value="Campaign Variation">Variation</button>
-                <button type="button" data-filter-group="type" data-filter-value="Content">Content</button>
-                <button type="button" data-filter-group="type" data-filter-value="Landing Page">Landing</button>
-                <button type="button" data-filter-group="type" data-filter-value="Social Media Posting">Social</button>
-                <button type="button" data-filter-group="platform" data-filter-value="LinkedIn">LinkedIn</button>
-                <button type="button" data-filter-group="platform" data-filter-value="X / Twitter">X</button>
-                <button type="button" data-filter-group="platform" data-filter-value="Instagram">Instagram</button>
-                <button type="button" data-filter-group="platform" data-filter-value="TikTok">TikTok</button>
-                <button type="button" data-filter-group="state" data-filter-value="scheduled">Scheduled</button>
-                <button type="button" data-filter-group="state" data-filter-value="conversion">Conversion</button>
-                <button type="button" data-filter-group="state" data-filter-value="awareness">Awareness</button>
-              </div>
-              <span id="node-search-count" class="node-search-count"></span>
               <span id="zoom-label">100%</span>
             </div>
-            <div class="status-block">
+            <div class="toolbar-group toolbar-group-right">
+              <div class="status-block">
               <span id="save-status" class="save-status-text">Unsaved changes</span>
               <div id="board-share-panel" class="share-panel" aria-live="polite">
                 <div id="board-share-empty" class="share-hint">Save to create share link.</div>
@@ -119,8 +114,26 @@
                 </div>
               </div>
             </div>
+            </div>
           </div>
         </header>
+        <div class="canvas-filter-row">
+          <div id="node-filter-chips" class="node-filter-chips">
+            <button type="button" data-filter-group="type" data-filter-value="Idea">Idea</button>
+            <button type="button" data-filter-group="type" data-filter-value="Campaign Variation">Variation</button>
+            <button type="button" data-filter-group="type" data-filter-value="Content">Content</button>
+            <button type="button" data-filter-group="type" data-filter-value="Landing Page">Landing</button>
+            <button type="button" data-filter-group="type" data-filter-value="Social Media Posting">Social</button>
+            <button type="button" data-filter-group="platform" data-filter-value="LinkedIn">LinkedIn</button>
+            <button type="button" data-filter-group="platform" data-filter-value="X / Twitter">X</button>
+            <button type="button" data-filter-group="platform" data-filter-value="Instagram">Instagram</button>
+            <button type="button" data-filter-group="platform" data-filter-value="TikTok">TikTok</button>
+            <button type="button" data-filter-group="state" data-filter-value="scheduled">Scheduled</button>
+            <button type="button" data-filter-group="state" data-filter-value="conversion">Conversion</button>
+            <button type="button" data-filter-group="state" data-filter-value="awareness">Awareness</button>
+          </div>
+          <span id="node-search-count" class="node-search-count"></span>
+        </div>
 
         <section class="canvas" id="canvas">
           <div class="zoom-layer" id="zoom-layer">
