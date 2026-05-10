@@ -2516,10 +2516,8 @@ function buildUtilitiesPopoverHtml() {
     <button type="button" data-utility-action="reset-board">Reset Board</button>
     <button type="button" data-utility-action="copy-link">Copy Link</button>
   </div></div>
-  <div class="filter-group"><strong>View & Zoom</strong><div class="node-filter-chips">
+  <div class="filter-group"><strong>View</strong><div class="node-filter-chips">
     <button type="button" data-utility-action="board-view">Board View</button>
-    <button type="button" data-utility-action="zoom-out">Zoom -</button>
-    <button type="button" data-utility-action="zoom-in">Zoom +</button>
   </div></div>
   <div class="filter-group"><strong>Layout</strong><div class="node-filter-chips">
     <button type="button" data-utility-action="compact-all">Compact All</button>
@@ -4099,8 +4097,6 @@ el.utilitiesToggleButton?.addEventListener("click", (event) => {
       "reset-board": el.resetBoardButton,
       "compact-all": el.compactAllButton,
       "expand-all": el.expandAllButton,
-      "zoom-out": el.zoomOutButton,
-      "zoom-in": el.zoomInButton,
       "board-view": el.viewBoardButton,
       "copy-link": el.copyBoardLinkButton
     };
