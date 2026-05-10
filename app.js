@@ -2457,10 +2457,12 @@ function nodeMatchesSearchAndFilters(node) {
   if (state.nodeFilters.type.size && !state.nodeFilters.type.has(node.type)) return false;
   if (state.nodeFilters.platform.size && !state.nodeFilters.platform.has(node.social?.platform || "")) return false;
   if (state.nodeFilters.state.size) {
+    const strategyStage = node.strategy?.funnelStage || "";
     const states = new Set([
       node.social?.scheduledAt ? "scheduled" : "",
       (node.goal || "").toLowerCase(),
-      (node.funnelStage || "").toLowerCase()
+      (node.funnelStage || "").toLowerCase(),
+      String(strategyStage).toLowerCase()
     ]);
     if (![...state.nodeFilters.state].some((s) => states.has(s))) return false;
   }
@@ -2502,6 +2504,9 @@ function buildFiltersPopoverHtml() {
     <button type="button" data-filter-group="state" data-filter-value="scheduled">Scheduled</button>
     <button type="button" data-filter-group="state" data-filter-value="conversion">Conversion</button>
     <button type="button" data-filter-group="state" data-filter-value="awareness">Awareness</button>
+    <button type="button" data-filter-group="state" data-filter-value="interest">Interest</button>
+    <button type="button" data-filter-group="state" data-filter-value="consideration">Consideration</button>
+    <button type="button" data-filter-group="state" data-filter-value="retention">Retention</button>
   </div></div>`;
 }
 
