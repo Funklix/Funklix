@@ -3997,7 +3997,7 @@ el.nodeSearchInput?.addEventListener("keydown", (event) => {
   fillInspector(firstMatch);
   forceNodeVisible(firstMatch.id);
 });
-el.nodeFilterChips?.addEventListener("click", (event) => {
+el.filtersPopover?.addEventListener("click", (event) => {
   const btn = event.target.closest("button[data-filter-group][data-filter-value]");
   if (!btn) return;
   const group = btn.dataset.filterGroup;
@@ -4011,13 +4011,17 @@ el.nodeFilterChips?.addEventListener("click", (event) => {
 });
 el.filtersToggleButton?.addEventListener("click", (event) => {
   event.stopPropagation();
-  el.filtersPopover?.classList.toggle("hidden");
+  if (!el.filtersPopover) return;
+  const nextHidden = !el.filtersPopover.classList.contains("hidden");
+  el.filtersPopover.classList.toggle("hidden", nextHidden);
+  el.filtersPopover.hidden = nextHidden;
 });
 document.addEventListener("click", (event) => {
   if (!el.filtersPopover || !el.filtersToggleButton) return;
-  if (el.filtersPopover.classList.contains("hidden")) return;
+  if (el.filtersPopover.hidden || el.filtersPopover.classList.contains("hidden")) return;
   if (event.target.closest("#filters-popover, #filters-toggle-btn")) return;
   el.filtersPopover.classList.add("hidden");
+  el.filtersPopover.hidden = true;
 });
 // Undo is handled via delegated click binding in bindGlobalResetDelegation().
 
