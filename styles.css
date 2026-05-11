@@ -1591,6 +1591,38 @@ button:active {
 .ai-inline-error { color: #bb2f2f; margin-left: 6px; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
+/* Toolbar runtime stability patch (CSS-only) */
+#canvas-topbar .status-block {
+  max-width: 520px !important;
+  overflow: visible !important;
+}
+#canvas-topbar .status-block .save-status-text,
+#canvas-topbar .status-block .share-meta,
+#canvas-topbar .status-block .share-feedback {
+  min-width: 0;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+#canvas-topbar .canvas-toolbar-row.secondary {
+  flex-wrap: nowrap !important;
+}
+#canvas-topbar .toolbar-zoom {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+#canvas-topbar #zoom-label {
+  margin-left: 6px;
+  min-width: 38px;
+  text-align: center;
+}
+@media (max-width: 960px) {
+  #canvas-topbar .canvas-toolbar-row.secondary {
+    flex-wrap: wrap !important;
+  }
+}
+
 .floating-zoom-control {
   position: absolute;
   left: 14px;
@@ -1599,11 +1631,25 @@ button:active {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  background: rgba(255,255,255,0.94);
+  background: rgba(255, 255, 255, 0.94);
   border: 1px solid #d9dff2;
   border-radius: 12px;
-  box-shadow: 0 8px 20px rgba(27,35,77,0.16);
+  box-shadow: 0 8px 20px rgba(27, 35, 77, 0.16);
   padding: 6px 8px;
+  backdrop-filter: blur(3px);
 }
-.floating-zoom-control button { width: 28px; height: 28px; border-radius: 8px; border: 1px solid #d5dcf3; background: #fff; cursor: pointer; }
-.floating-zoom-control #zoom-label { margin-left: 0; min-width: 44px; text-align: center; font-weight: 600; color: #5b6687; }
+.floating-zoom-control button {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: 1px solid #d5dcf3;
+  background: #fff;
+  cursor: pointer;
+}
+.floating-zoom-control #zoom-label {
+  margin-left: 0;
+  min-width: 44px;
+  text-align: center;
+  font-weight: 600;
+  color: #5b6687;
+}
