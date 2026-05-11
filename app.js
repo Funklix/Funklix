@@ -4496,6 +4496,10 @@ function showDeleteBoardConfirmModal() {
 }
 
 function bootApp() {
+  console.log("Build check: zoom-v2 quick-v2");
+  console.log("zoom-out-btn exists:", !!document.getElementById("zoom-out-btn"));
+  console.log("zoom-label exists:", !!document.getElementById("zoom-label"));
+  console.log("zoom-in-btn exists:", !!document.getElementById("zoom-in-btn"));
   state.isBoardLoading = true;
   createDebugPanel();
   bindGlobalResetDelegation();
@@ -4522,6 +4526,9 @@ function bootApp() {
   setActiveView("board");
   drawLinks();
   refreshLastSavedSnapshot();
+  setTimeout(() => {
+    console.log("node-ai-toolbar exists after render:", !!document.querySelector(".node-ai-toolbar"));
+  }, 0);
   state.isBoardLoading = false;
   startAutosaveWatcher();
 }
