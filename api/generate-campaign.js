@@ -172,7 +172,6 @@ Return ONLY JSON with this schema:
     }
 
     const data = await response.json();
-    console.log("OpenAI responses payload", JSON.stringify(data));
     const rawText =
       data?.output_text ||
       data?.output?.[0]?.content?.[0]?.text ||
