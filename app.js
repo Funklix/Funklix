@@ -162,6 +162,7 @@ const el = {
   copyBoardLinkButton: document.getElementById("copy-board-link-btn"),
   boardLastSaved: document.getElementById("board-last-saved"),
   claimBoardButton: document.getElementById("claim-board-btn"),
+  boardOwnedPill: document.getElementById("board-owned-pill"),
   boardCopyFeedback: document.getElementById("board-copy-feedback"),
   googleSigninButton: document.getElementById("google-signin-btn"),
   authUserWrap: document.getElementById("auth-user"),
@@ -303,6 +304,7 @@ function setSharePanelState(boardId, lastSaved = null, ownerEmail = null) {
     el.boardShareEmpty?.classList.remove("hidden");
     el.boardShareReady?.classList.add("hidden");
     el.claimBoardButton?.classList.add("hidden");
+    el.boardOwnedPill?.classList.add("hidden");
     return;
   }
 
@@ -314,8 +316,10 @@ function setSharePanelState(boardId, lastSaved = null, ownerEmail = null) {
   }
 
   state.currentBoardOwnerEmail = ownerEmail || null;
+  const isOwnedByYou = !!state.user?.email && state.currentBoardOwnerEmail === state.user.email;
   const canClaim = !!state.user?.email && !state.currentBoardOwnerEmail;
   el.claimBoardButton?.classList.toggle("hidden", !canClaim);
+  el.boardOwnedPill?.classList.toggle("hidden", !isOwnedByYou);
   el.boardShareEmpty?.classList.add("hidden");
   el.boardShareReady?.classList.remove("hidden");
 }
@@ -4533,6 +4537,14 @@ function bindGlobalResetDelegation() {
     if (upBtn) moveBoard(upBtn.getAttribute('data-up-board'), 'up', Number(upBtn.getAttribute('data-index')));
     const downBtn = event.target.closest('[data-down-board]');
     if (downBtn) moveBoard(downBtn.getAttribute('data-down-board'), 'down', Number(downBtn.getAttribute('data-index')));
+    const claimBtn = event.target.closest('[data-claim-board]');
+    if (claimBtn) {
+      const id = claimBtn.getAttribute('data-claim-board');
+      if (id && state.user?.email) {
+        const response = await fetch(`/api/boards/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ claim: true }) });
+        if (response.ok) loadBoardsLibrary();
+      }
+    }
 
     const copyBtn = event.target.closest("[data-copy-board]");
     if (copyBtn) {
@@ -4652,7 +4664,7 @@ function renderBoardsLibrary() {
     const savedAt = board.updated_at ? new Date(board.updated_at).toLocaleString('de-DE') : '—';
     const preview = `${board.id?.slice(0, 8)}...`;
     const ownerLabel = board.owner_email ? (state.user?.email && board.owner_email === state.user.email ? 'Owned by you' : `Owner: ${board.owner_name || board.owner_email}`) : 'Anonymous / Public';
-    row.innerHTML = `<div><strong>${board.name || 'Campaign Canvas Board'}</strong><div class="board-row-meta">Last saved: ${savedAt} · ${preview}</div><div class="board-row-meta">${ownerLabel}</div><div class="board-rename hidden" data-rename-wrap="${board.id}"><input data-rename-input="${board.id}" value="${board.name || ''}" /><button data-rename-save="${board.id}" type="button">Save</button><button data-rename-cancel="${board.id}" type="button">Cancel</button></div></div><div class="board-row-actions"><button class="icon-btn" data-open-board="${board.id}" title="Open" aria-label="Open board">↗</button><button class="icon-btn" data-copy-board="${board.id}" title="Copy link" aria-label="Copy link">⧉</button><button class="icon-btn" data-rename-board="${board.id}" title="Rename" aria-label="Rename board">✎</button><button class="icon-btn danger" data-delete-board="${board.id}" title="Delete" aria-label="Delete board">🗑</button><button class="icon-btn" data-up-board="${board.id}" data-index="${index}" title="Move up">↑</button><button class="icon-btn" data-down-board="${board.id}" data-index="${index}" title="Move down">↓</button></div>`;
+    row.innerHTML = `<div><strong>${board.name || 'Campaign Canvas Board'}</strong><div class="board-row-meta">Last saved: ${savedAt} · ${preview}</div><div class="board-row-meta">${ownerLabel}</div><div class="board-rename hidden" data-rename-wrap="${board.id}"><input data-rename-input="${board.id}" value="${board.name || ''}" /><button data-rename-save="${board.id}" type="button">Save</button><button data-rename-cancel="${board.id}" type="button">Cancel</button></div></div><div class="board-row-actions"><button class="icon-btn" data-open-board="${board.id}" title="Open" aria-label="Open board">↗</button><button class="icon-btn" data-copy-board="${board.id}" title="Copy link" aria-label="Copy link">⧉</button><button class="icon-btn" data-rename-board="${board.id}" title="Rename" aria-label="Rename board">✎</button><button class="icon-btn danger" data-delete-board="${board.id}" title="Delete" aria-label="Delete board">🗑</button><button class="icon-btn" data-up-board="${board.id}" data-index="${index}" title="Move up">↑</button><button class="icon-btn" data-down-board="${board.id}" data-index="${index}" title="Move down">↓</button>${state.user?.email && !board.owner_email ? `<button class="icon-btn" data-claim-board="${board.id}" title="Claim">Claim</button>` : ""}</div>`;
     el.boardsLibraryList.appendChild(row);
   });
 }
