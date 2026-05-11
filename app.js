@@ -2583,16 +2583,12 @@ function closeFiltersPopover() {
 }
 
 function buildUtilitiesPopoverHtml() {
-  const canClaim = !!state.user?.email && !!(state.currentBoardId || getBoardIdFromPath()) && !state.currentBoardOwnerEmail;
-  const ownedByYou = !!state.user?.email && !!state.currentBoardOwnerEmail && state.currentBoardOwnerEmail === state.user.email;
-  const boardStatus = state.currentBoardId ? (el.boardLastSaved?.textContent || 'Last saved: —') : 'Save to create share link.';
   return `<div class="filter-group"><strong>Board</strong><div class="node-filter-chips">
     <button type="button" data-utility-action="save-board">Save Board</button>
     <button type="button" data-utility-action="new-board">New Board</button>
     <button type="button" data-utility-action="reset-board">Reset Board</button>
     <button type="button" data-utility-action="copy-link">Copy Link</button>
-    ${canClaim ? '<button type="button" data-utility-action="claim-board">Claim Board</button>' : ''}
-  </div><div class="board-row-meta" style="margin-top:6px;">${ownedByYou ? 'Owned by you · ' : ''}${boardStatus}</div></div>
+  </div></div>
   <div class="filter-group"><strong>View</strong><div class="node-filter-chips">
     <button type="button" data-utility-action="board-view">Board View</button>
     <button type="button" data-utility-action="list-view">List View</button>
