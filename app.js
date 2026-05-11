@@ -75,6 +75,9 @@ const state = {
   ,analysisError: ""
   ,nodeSearchQuery: ""
   ,nodeFilters: { type: new Set(), platform: new Set(), state: new Set() }
+  ,user: null
+  ,authConfigured: true
+  ,currentBoardOwnerEmail: null
 };
 
 const el = {
@@ -158,7 +161,17 @@ const el = {
   boardShareLinkText: document.getElementById("board-share-link-text"),
   copyBoardLinkButton: document.getElementById("copy-board-link-btn"),
   boardLastSaved: document.getElementById("board-last-saved"),
+  claimBoardButton: document.getElementById("claim-board-btn"),
+  boardOwnedPill: document.getElementById("board-owned-pill"),
   boardCopyFeedback: document.getElementById("board-copy-feedback"),
+  googleSigninButton: document.getElementById("google-signin-btn"),
+  authUserWrap: document.getElementById("auth-user"),
+  authName: document.getElementById("auth-name"),
+  authEmail: document.getElementById("auth-email"),
+  authAvatar: document.getElementById("auth-avatar"),
+  authAvatarFallback: document.getElementById("auth-avatar-fallback"),
+  authMessage: document.getElementById("auth-message"),
+  authSignoutButton: document.getElementById("auth-signout-btn"),
   brandCoreButton: document.getElementById("brand-core-nav-btn"),
   campaignCanvasNavButton: document.getElementById("campaign-canvas-nav-btn"),
   boardsNavButton: document.getElementById("boards-nav-btn"),
@@ -170,6 +183,8 @@ const el = {
   insightsCards: document.getElementById("insights-cards"),
   aiBrainSummary: document.getElementById("ai-brain-summary"),
   boardsLibraryList: document.getElementById("boards-library-list"),
+  boardsLibraryTitle: document.getElementById("boards-library-title"),
+  boardsLibrarySubtitle: document.getElementById("boards-library-subtitle"),
   sidebarToggleButton: document.getElementById("sidebar-toggle-btn"),
   brandEditorTitle: document.getElementById("bc-editor-title"),
   brandCoreCanvas: document.getElementById("brand-core-canvas"),
@@ -283,10 +298,13 @@ function formatLastSavedLabel(value = new Date()) {
   return new Intl.DateTimeFormat("de-DE", { dateStyle: "short", timeStyle: "short" }).format(value);
 }
 
-function setSharePanelState(boardId, lastSaved = null) {
+function setSharePanelState(boardId, lastSaved = null, ownerEmail = null) {
   if (!boardId) {
+    state.currentBoardOwnerEmail = null;
     el.boardShareEmpty?.classList.remove("hidden");
     el.boardShareReady?.classList.add("hidden");
+    el.claimBoardButton?.classList.add("hidden");
+    el.boardOwnedPill?.classList.add("hidden");
     return;
   }
 
@@ -297,6 +315,11 @@ function setSharePanelState(boardId, lastSaved = null) {
     el.boardLastSaved.textContent = `Last saved: ${label}`;
   }
 
+  state.currentBoardOwnerEmail = ownerEmail || null;
+  const isOwnedByYou = !!state.user?.email && state.currentBoardOwnerEmail === state.user.email;
+  const canClaim = !!state.user?.email && !state.currentBoardOwnerEmail;
+  el.claimBoardButton?.classList.toggle("hidden", !canClaim);
+  el.boardOwnedPill?.classList.toggle("hidden", !isOwnedByYou);
   el.boardShareEmpty?.classList.add("hidden");
   el.boardShareReady?.classList.remove("hidden");
 }
@@ -347,11 +370,59 @@ async function saveBoardAsNew(payload) {
     state.lastKnownUpdatedAt = data?.updated_at || null;
     const nextPath = `/boards/${newId}`;
     if (window.location.pathname !== nextPath) window.history.pushState({}, '', nextPath);
-    setSharePanelState(newId, data?.updated_at ? new Date(data.updated_at) : new Date());
+    setSharePanelState(newId, data?.updated_at ? new Date(data.updated_at) : new Date(), data?.owner_email || null);
     state.isDirty = false;
     setSaveStatus('Saved');
     refreshLastSavedSnapshot();
   }
+}
+
+
+function getUserInitials(user) {
+  const source = (user?.name || user?.email || "U").trim();
+  return source.split(/\s+/).slice(0, 2).map((p) => p[0]?.toUpperCase() || "").join("") || "U";
+}
+
+function setAuthMessage(message = "") {
+  if (!el.authMessage) return;
+  el.authMessage.textContent = message;
+  el.authMessage.classList.toggle("hidden", !message);
+}
+
+function renderAuthState() {
+  const signedIn = !!state.user;
+  if (el.googleSigninButton) el.googleSigninButton.style.display = signedIn ? "none" : "inline-flex";
+  if (el.authUserWrap) el.authUserWrap.style.display = signedIn ? "inline-flex" : "none";
+  if (!signedIn) {
+    if (el.authAvatar) el.authAvatar.classList.add("hidden");
+    if (el.authAvatarFallback) el.authAvatarFallback.classList.add("hidden");
+    return;
+  }
+  el.authName.textContent = state.user.name || "Google user";
+  el.authEmail.textContent = state.user.email || "";
+  const hasAvatar = !!state.user.avatar;
+  if (el.authAvatar) {
+    el.authAvatar.src = hasAvatar ? state.user.avatar : "";
+    el.authAvatar.classList.toggle("hidden", !hasAvatar);
+  }
+  if (el.authAvatarFallback) {
+    el.authAvatarFallback.textContent = getUserInitials(state.user);
+    el.authAvatarFallback.classList.toggle("hidden", hasAvatar);
+  }
+}
+
+async function loadSessionUser() {
+  try {
+    const response = await fetch('/api/auth/session');
+    if (!response.ok) return;
+    const data = await response.json();
+    state.user = data?.user || null;
+    state.authConfigured = data?.authConfigured !== false;
+  } catch (_error) {
+    state.user = null;
+  }
+  renderAuthState();
+  setSharePanelState(state.currentBoardId || getBoardIdFromPath(), null, state.currentBoardOwnerEmail);
 }
 
 function showBoardConflictModal() {
@@ -450,15 +521,13 @@ function refreshLastSavedSnapshot() {
 }
 
 function detectDirtyFromSnapshot() {
-  console.log('Autosave effect fired');
-  if (state.isBoardLoading) { console.log('Autosave blocked because:', 'loading'); return; }
-  if (state.isSaving) { console.log('Autosave blocked because:', 'saving'); return; }
-  if (state.conflictModalOpen) { console.log('Autosave blocked because:', 'conflict modal open'); return; }
+  if (state.isBoardLoading) { return; }
+  if (state.isSaving) { return; }
+  if (state.conflictModalOpen) { return; }
 
   const currentSnapshot = JSON.stringify(serializeState());
   if (currentSnapshot !== state.lastSavedSnapshot) {
     if (!state.isDirty) {
-      console.log('Autosave dirty detected');
       markUnsaved();
     }
   }
@@ -472,23 +541,20 @@ function clearAutosaveTimer() {
   if (state.autosaveTimer) {
     clearTimeout(state.autosaveTimer);
     state.autosaveTimer = null;
-    console.log("Autosave timer cleared");
   }
 }
 
 function scheduleAutosave() {
-  if (state.conflictModalOpen) { console.log('Autosave blocked because:', 'conflict modal open'); return; }
-  if (state.autosavePausedUntilChange) { console.log('Autosave blocked because:', 'paused until change'); return; }
-  if (state.isSaving) { console.log('Autosave blocked because:', 'saving'); return; }
+  if (state.conflictModalOpen) { return; }
+  if (state.autosavePausedUntilChange) { return; }
+  if (state.isSaving) { return; }
   if (state.autosaveTimer) return;
-  console.log('Autosave timer scheduled');
   state.autosaveTimer = setTimeout(() => {
     state.autosaveTimer = null;
-    if (!state.isDirty) { console.log('Autosave blocked because:', 'no changes'); return; }
-    if (state.isSaving) { console.log('Autosave blocked because:', 'saving'); return; }
-    if (state.conflictModalOpen) { console.log('Autosave blocked because:', 'conflict modal open'); return; }
-    if (state.autosavePausedUntilChange) { console.log('Autosave blocked because:', 'paused until change'); return; }
-    console.log('Autosave executing');
+    if (!state.isDirty) { return; }
+    if (state.isSaving) { return; }
+    if (state.conflictModalOpen) { return; }
+    if (state.autosavePausedUntilChange) { return; }
     saveBoardToServer('autosave');
   }, 3000);
 }
@@ -989,8 +1055,7 @@ async function saveBoardToServer(trigger = "manual") {
     state.isDirty = false;
     setSaveStatus('Saved');
     refreshLastSavedSnapshot();
-    console.log('Autosave success');
-    setSharePanelState(returnedId, new Date());
+    setSharePanelState(returnedId, new Date(), data?.owner_email || state.currentBoardOwnerEmail || null);
 
     if (!isUpdate && returnedId) {
       const nextPath = `/boards/${returnedId}`;
@@ -1021,7 +1086,7 @@ async function loadBoardFromUrlIfPresent() {
       renderBrandCoreEditor();
       saveBrandBrainState();
     }
-    setSharePanelState(state.currentBoardId, data?.updated_at ? new Date(data.updated_at) : null);
+    setSharePanelState(state.currentBoardId, data?.updated_at ? new Date(data.updated_at) : null, data?.owner_email || null);
     applyCampaignState(data.canvas_json || {}, `Loaded board ${boardId.slice(0, 8)}...`);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data.canvas_json || {}));
     return true;
@@ -2518,12 +2583,16 @@ function closeFiltersPopover() {
 }
 
 function buildUtilitiesPopoverHtml() {
+  const canClaim = !!state.user?.email && !!(state.currentBoardId || getBoardIdFromPath()) && !state.currentBoardOwnerEmail;
+  const ownedByYou = !!state.user?.email && !!state.currentBoardOwnerEmail && state.currentBoardOwnerEmail === state.user.email;
+  const boardStatus = state.currentBoardId ? (el.boardLastSaved?.textContent || 'Last saved: —') : 'Save to create share link.';
   return `<div class="filter-group"><strong>Board</strong><div class="node-filter-chips">
     <button type="button" data-utility-action="save-board">Save Board</button>
     <button type="button" data-utility-action="new-board">New Board</button>
     <button type="button" data-utility-action="reset-board">Reset Board</button>
     <button type="button" data-utility-action="copy-link">Copy Link</button>
-  </div></div>
+    ${canClaim ? '<button type="button" data-utility-action="claim-board">Claim Board</button>' : ''}
+  </div><div class="board-row-meta" style="margin-top:6px;">${ownedByYou ? 'Owned by you · ' : ''}${boardStatus}</div></div>
   <div class="filter-group"><strong>View</strong><div class="node-filter-chips">
     <button type="button" data-utility-action="board-view">Board View</button>
     <button type="button" data-utility-action="list-view">List View</button>
@@ -3881,6 +3950,36 @@ el.calendarNextMonthButton.addEventListener("click", () => {
 });
 
 el.zoomInButton.addEventListener("click", () => setZoom(state.zoom + 0.1));
+el.googleSigninButton?.addEventListener("click", () => {
+  if (!state.authConfigured) {
+    setAuthMessage("Google Login is not configured yet.");
+    return;
+  }
+  setAuthMessage("");
+  window.location.href = "/api/auth/google/start";
+});
+el.authSignoutButton?.addEventListener("click", async () => {
+  await fetch("/api/auth/session", { method: "DELETE" });
+  state.user = null;
+  setAuthMessage("");
+  renderAuthState();
+});
+el.authAvatar?.addEventListener("error", () => {
+  el.authAvatar.classList.add("hidden");
+  if (el.authAvatarFallback) el.authAvatarFallback.classList.remove("hidden");
+});
+
+el.claimBoardButton?.addEventListener("click", async () => {
+  const boardId = state.currentBoardId || getBoardIdFromPath();
+  if (!boardId || !state.user?.email || state.currentBoardOwnerEmail) return;
+  const response = await fetch(`/api/boards/${boardId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ claim: true }) });
+  const data = await response.json();
+  if (!response.ok) return;
+  setSharePanelState(boardId, data?.updated_at ? new Date(data.updated_at) : new Date(), data?.owner_email || state.user.email);
+  setSaveStatus('Board claimed');
+  loadBoardsLibrary();
+});
+
 el.zoomOutButton.addEventListener("click", () => setZoom(state.zoom - 0.1));
 
 el.canvas.addEventListener(
@@ -4400,11 +4499,6 @@ document.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && state.activeConnection) stopExistingNodeConnection();
 });
 
-window.debugNodes = () => {
-  console.log("STATE NODES", state.nodes);
-  console.log("DOM NODES", [...document.querySelectorAll(".node")].map((n) => n.getBoundingClientRect()));
-};
-
 function createDebugPanel() {}
 
 function bindGlobalResetDelegation() {
@@ -4447,6 +4541,14 @@ function bindGlobalResetDelegation() {
     if (upBtn) moveBoard(upBtn.getAttribute('data-up-board'), 'up', Number(upBtn.getAttribute('data-index')));
     const downBtn = event.target.closest('[data-down-board]');
     if (downBtn) moveBoard(downBtn.getAttribute('data-down-board'), 'down', Number(downBtn.getAttribute('data-index')));
+    const claimBtn = event.target.closest('[data-claim-board]');
+    if (claimBtn) {
+      const id = claimBtn.getAttribute('data-claim-board');
+      if (id && state.user?.email) {
+        const response = await fetch(`/api/boards/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ claim: true }) });
+        if (response.ok) loadBoardsLibrary();
+      }
+    }
 
     const copyBtn = event.target.closest("[data-copy-board]");
     if (copyBtn) {
@@ -4553,12 +4655,20 @@ async function loadBoardsLibrary() {
 function renderBoardsLibrary() {
   if (!el.boardsLibraryList) return;
   el.boardsLibraryList.innerHTML = '';
+  if (state.user?.email) {
+    if (el.boardsLibraryTitle) el.boardsLibraryTitle.textContent = 'My Boards';
+    if (el.boardsLibrarySubtitle) el.boardsLibrarySubtitle.textContent = 'Boards owned by your account are shown first. Anonymous/public boards may also appear.';
+  } else {
+    if (el.boardsLibraryTitle) el.boardsLibraryTitle.textContent = 'Boards';
+    if (el.boardsLibrarySubtitle) el.boardsLibrarySubtitle.textContent = 'Manage your saved Campaign Canvas boards. Sign in to save boards to your account.';
+  }
   state.boardsLibrary.forEach((board, index) => {
     const row = document.createElement('div');
     row.className = 'board-row';
     const savedAt = board.updated_at ? new Date(board.updated_at).toLocaleString('de-DE') : '—';
     const preview = `${board.id?.slice(0, 8)}...`;
-    row.innerHTML = `<div><strong>${board.name || 'Campaign Canvas Board'}</strong><div class="board-row-meta">Last saved: ${savedAt} · ${preview}</div><div class="board-rename hidden" data-rename-wrap="${board.id}"><input data-rename-input="${board.id}" value="${board.name || ''}" /><button data-rename-save="${board.id}" type="button">Save</button><button data-rename-cancel="${board.id}" type="button">Cancel</button></div></div><div class="board-row-actions"><button class="icon-btn" data-open-board="${board.id}" title="Open" aria-label="Open board">↗</button><button class="icon-btn" data-copy-board="${board.id}" title="Copy link" aria-label="Copy link">⧉</button><button class="icon-btn" data-rename-board="${board.id}" title="Rename" aria-label="Rename board">✎</button><button class="icon-btn danger" data-delete-board="${board.id}" title="Delete" aria-label="Delete board">🗑</button><button class="icon-btn" data-up-board="${board.id}" data-index="${index}" title="Move up">↑</button><button class="icon-btn" data-down-board="${board.id}" data-index="${index}" title="Move down">↓</button></div>`;
+    const ownerLabel = board.owner_email ? (state.user?.email && board.owner_email === state.user.email ? 'Owned by you' : `Owner: ${board.owner_name || board.owner_email}`) : 'Anonymous / Public';
+    row.innerHTML = `<div><strong>${board.name || 'Campaign Canvas Board'}</strong><div class="board-row-meta">Last saved: ${savedAt} · ${preview}</div><div class="board-row-meta">${ownerLabel}</div><div class="board-rename hidden" data-rename-wrap="${board.id}"><input data-rename-input="${board.id}" value="${board.name || ''}" /><button data-rename-save="${board.id}" type="button">Save</button><button data-rename-cancel="${board.id}" type="button">Cancel</button></div></div><div class="board-row-actions"><button class="icon-btn" data-open-board="${board.id}" title="Open" aria-label="Open board">↗</button><button class="icon-btn" data-copy-board="${board.id}" title="Copy link" aria-label="Copy link">⧉</button><button class="icon-btn" data-rename-board="${board.id}" title="Rename" aria-label="Rename board">✎</button><button class="icon-btn danger" data-delete-board="${board.id}" title="Delete" aria-label="Delete board">🗑</button><button class="icon-btn" data-up-board="${board.id}" data-index="${index}" title="Move up">↑</button><button class="icon-btn" data-down-board="${board.id}" data-index="${index}" title="Move down">↓</button>${state.user?.email && !board.owner_email ? `<button class="icon-btn" data-claim-board="${board.id}" title="Claim">Claim</button>` : ""}</div>`;
     el.boardsLibraryList.appendChild(row);
   });
 }
@@ -4599,13 +4709,11 @@ function showDeleteBoardConfirmModal() {
   });
 }
 
-function bootApp() {
-  console.log("Build check: zoom-v2 quick-v2");
-  console.log("zoom-out-btn exists:", !!document.getElementById("zoom-out-btn"));
-  console.log("zoom-label exists:", !!document.getElementById("zoom-label"));
-  console.log("zoom-in-btn exists:", !!document.getElementById("zoom-in-btn"));
+async function bootApp() {
   state.isBoardLoading = true;
   createDebugPanel();
+  await loadSessionUser();
+  if (new URLSearchParams(window.location.search).get("auth_error") === "not_configured") setAuthMessage("Google Login is not configured yet.");
   bindGlobalResetDelegation();
   loadBrandBrainState();
   const boardIdFromPath = getBoardIdFromPath();
@@ -4630,12 +4738,9 @@ function bootApp() {
   setActiveView("board");
   drawLinks();
   refreshLastSavedSnapshot();
-  setTimeout(() => {
-    console.log("node-ai-toolbar exists after render:", !!document.querySelector(".node-ai-toolbar"));
-  }, 0);
   state.isBoardLoading = false;
   startAutosaveWatcher();
 }
 
-if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", bootApp);
-else bootApp();
+if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", () => { void bootApp(); });
+else void bootApp();
