@@ -71,6 +71,8 @@ const state = {
   ,analysisRefreshing: false
   ,analysisLastUpdatedAt: null
   ,analysisError: ""
+  ,nodeSearchQuery: ""
+  ,nodeFilters: { type: new Set(), platform: new Set(), state: new Set() }
 };
 
 const el = {
@@ -101,6 +103,12 @@ const el = {
   addNodeButton: document.getElementById("add-node-btn"),
   zoomInButton: document.getElementById("zoom-in-btn"),
   zoomOutButton: document.getElementById("zoom-out-btn"),
+  compactAllButton: document.getElementById("compact-all-btn"),
+  expandAllButton: document.getElementById("expand-all-btn"),
+  nodeSearchInput: document.getElementById("node-search-input"),
+  nodeSearchCount: document.getElementById("node-search-count"),
+  filtersToggleButton: document.getElementById("filters-toggle-btn"),
+  utilitiesToggleButton: document.getElementById("utilities-toggle-btn"),
   zoomLabel: document.getElementById("zoom-label"),
   nodeTemplate: document.getElementById("node-template"),
   postitTemplate: document.getElementById("postit-template"),
@@ -527,6 +535,26 @@ function setContentPackError(nodeId, message = "") {
   state.contentPackErrorById[nodeId] = message || "";
 }
 
+
+function getPlatformTone(platform = "LinkedIn") {
+  const tones = {
+    "LinkedIn": { accent: "#5167d8", soft: "#eef1ff", label: "LinkedIn" },
+    "X / Twitter": { accent: "#4d5d78", soft: "#eef1f6", label: "X" },
+    "Instagram": { accent: "#a15fd1", soft: "#f7efff", label: "Instagram" },
+    "TikTok": { accent: "#2f8e88", soft: "#eaf8f6", label: "TikTok" }
+  };
+  return tones[platform] || { accent: "#62709a", soft: "#f3f5ff", label: platform || "Social" };
+}
+
+function formatScheduleMeta(isoString) {
+  if (!isoString) return null;
+  const when = new Date(isoString);
+  if (Number.isNaN(when.getTime())) return null;
+  return {
+    dateLabel: when.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+    timeLabel: when.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })
+  };
+}
 function platformPromptGuidance(platform = "LinkedIn") {
   if (platform === "X / Twitter") return "Platform: X/Twitter. Keep it short, punchy, hook-first, and 280-char aware. Concise CTA. Avoid hashtags unless useful.";
   if (platform === "Instagram") return "Platform: Instagram. Visual-first, emotional, community-oriented tone. CTA should invite comments/saves/shares. Hashtags allowed but not excessive.";
@@ -1349,6 +1377,7 @@ function openTypePicker(onSelect, preferred = "Idea") {
   Object.keys(NODE_TYPES).forEach((type) => {
     const btn = document.createElement("button");
     btn.type = "button";
+    btn.dataset.quickWired = "1";
     btn.className = "picker-option";
     btn.textContent = type;
     btn.style.borderColor = `${NODE_TYPES[type].color}66`;
@@ -1454,6 +1483,7 @@ function createNode({ type = "Idea", parentId = null, position = null, images = 
     landingPage: { headerVisualPrompt: "", headerClaim: "", problem: "", solution: "", trust: "", cta: "" },
     reactions: {},
     postits: [],
+    compact: false,
     justConnectedAt: null,
     position: safePos
   };
@@ -2062,9 +2092,20 @@ function updateNodeCard(node) {
   nodeEl.style.opacity = isConnected ? "1" : "0.62";
   nodeEl.style.filter = isConnected ? "grayscale(0)" : "grayscale(1) saturate(0)";
   nodeEl.classList.toggle("just-connected", !!node.justConnectedAt && Date.now() - node.justConnectedAt < 700);
+  nodeEl.classList.toggle("is-compact", !!node.compact);
+  const matchesSearch = nodeMatchesSearchAndFilters(node);
+  const hasSearchActive = !!state.nodeSearchQuery.trim() || Object.values(state.nodeFilters).some((set) => set.size > 0);
+  nodeEl.classList.toggle("search-match", hasSearchActive && matchesSearch);
+  nodeEl.classList.toggle("search-dimmed", hasSearchActive && !matchesSearch);
 
   nodeEl.querySelector(".type").textContent = node.type;
   nodeEl.querySelector(".type").style.color = tone;
+  const compactToggle = nodeEl.querySelector(".node-compact-toggle");
+  if (compactToggle) {
+    compactToggle.textContent = node.compact ? "↗" : "−";
+    compactToggle.title = node.compact ? "Expand node" : "Compact view";
+    compactToggle.setAttribute("aria-label", compactToggle.title);
+  }
   nodeEl.querySelector(".title").textContent = node.title;
   const contentEl = nodeEl.querySelector(".content");
   contentEl.textContent = node.content;
@@ -2154,6 +2195,27 @@ function updateNodeCard(node) {
     imageStrip.appendChild(thumb);
   }
 
+  const compactSummary = nodeEl.querySelector(".node-compact-summary");
+  const compactPreview = node.type === "Landing Page"
+    ? (node.landingPage?.headerClaim || node.landingPage?.cta || node.content || "").trim()
+    : node.type === "Social Media Posting"
+      ? (node.social?.caption || node.title || "").trim()
+      : (node.content || node.title || "").trim();
+  const compactMeta = [];
+  if (node.goal) compactMeta.push(`Goal: ${node.goal}`);
+  if (node.audience) compactMeta.push(`Audience: ${node.audience}`);
+  if (node.type === "Social Media Posting" && node.social?.platform) compactMeta.push(node.social.platform);
+  if (node.type === "Social Media Posting" && node.social?.scheduledAt) compactMeta.push("Scheduled");
+  if (node.type === "Landing Page" && node.landingPage?.cta) compactMeta.push(`CTA: ${node.landingPage.cta.slice(0, 24)}${node.landingPage.cta.length > 24 ? "…" : ""}`);
+  if (node.type === "Content" && node.imagePrompt) compactMeta.push("Image prompt ready");
+  compactSummary.innerHTML = `
+    <p class="compact-preview">${compactPreview.slice(0, 100)}${compactPreview.length > 100 ? "…" : ""}</p>
+    <div class="compact-meta">${compactMeta.slice(0, 4).map((m) => `<span>${m}</span>`).join("")}</div>
+  `;
+  const compactThumb = node.images?.[node.images.length - 1]?.url;
+  compactSummary.classList.toggle("has-thumb", !!compactThumb);
+  compactSummary.style.setProperty("--compact-thumb", compactThumb ? `url('${compactThumb.replace(/'/g, "%27")}')` : "none");
+
   const social = nodeEl.querySelector(".social-preview");
   const isSocial = node.type === "Social Media Posting";
   const isLandingPage = node.type === "Landing Page";
@@ -2235,9 +2297,14 @@ function updateNodeCard(node) {
       saveCampaignCanvasState();
     });
 
-    const scheduleMeta = document.createElement("small");
-    scheduleMeta.className = "meta";
-    scheduleMeta.textContent = node.social.scheduledAt ? `Scheduled: ${new Date(node.social.scheduledAt).toLocaleString()}` : "";
+    const platformTone = getPlatformTone(node.social.platform || "LinkedIn");
+    const scheduledMeta = formatScheduleMeta(node.social.scheduledAt);
+    const scheduleMeta = document.createElement("div");
+    scheduleMeta.className = "social-schedule-meta";
+    if (scheduledMeta) {
+      scheduleMeta.innerHTML = `<span class="social-schedule-icon">📅</span><div><small>Scheduled · ${platformTone.label}</small><strong>${scheduledMeta.dateLabel} • ${scheduledMeta.timeLabel}</strong></div>`;
+      scheduleMeta.style.borderLeftColor = platformTone.accent;
+    }
 
     const actions = document.createElement("div");
     actions.className = "social-actions-row";
@@ -2262,6 +2329,7 @@ function updateNodeCard(node) {
     const calendarBtn = document.createElement("button");
     calendarBtn.type = "button";
     calendarBtn.textContent = node.social?.scheduledAt ? "Scheduled" : "Add to Posting Calendar";
+    calendarBtn.classList.toggle("is-scheduled", !!node.social?.scheduledAt);
     calendarBtn.addEventListener("click", (event) => {
       event.stopPropagation();
       openSchedulePostModal(node.id);
@@ -2365,6 +2433,117 @@ function updateNodeCard(node) {
   }
 
   renderPostits(node, nodeEl);
+}
+
+function nodeSearchText(node) {
+  return [
+    node.type,
+    node.title,
+    node.content,
+    node.audience,
+    node.goal,
+    node.funnelStage,
+    node.social?.platform,
+    node.social?.caption,
+    node.social?.preview,
+    (node.social?.hashtags || []).join(" "),
+    node.landingPage?.headerClaim,
+    node.landingPage?.cta
+  ].filter(Boolean).join(" ").toLowerCase();
+}
+
+function nodeMatchesSearchAndFilters(node) {
+  const q = state.nodeSearchQuery.trim().toLowerCase();
+  if (q && !nodeSearchText(node).includes(q)) return false;
+  if (state.nodeFilters.type.size && !state.nodeFilters.type.has(node.type)) return false;
+  if (state.nodeFilters.platform.size && !state.nodeFilters.platform.has(node.social?.platform || "")) return false;
+  if (state.nodeFilters.state.size) {
+    const strategyStage = node.strategy?.funnelStage || "";
+    const states = new Set([
+      node.social?.scheduledAt ? "scheduled" : "",
+      (node.goal || "").toLowerCase(),
+      (node.funnelStage || "").toLowerCase(),
+      String(strategyStage).toLowerCase()
+    ]);
+    if (![...state.nodeFilters.state].some((s) => states.has(s))) return false;
+  }
+  return true;
+}
+
+function refreshNodeSearchUI() {
+  const hasSearchActive = !!state.nodeSearchQuery.trim() || Object.values(state.nodeFilters).some((set) => set.size > 0);
+  let matches = 0;
+  state.nodes.forEach((node) => {
+    if (nodeMatchesSearchAndFilters(node)) matches += 1;
+    updateNodeCard(node);
+  });
+  if (el.nodeSearchCount) {
+    el.nodeSearchCount.textContent = hasSearchActive ? `${matches} matches` : "";
+    if (hasSearchActive && matches === 0) el.nodeSearchCount.textContent = "No matching nodes";
+  }
+  if (el.filtersToggleButton) {
+    const activeFilters = Object.values(state.nodeFilters).reduce((n, set) => n + set.size, 0);
+    el.filtersToggleButton.textContent = activeFilters > 0 ? `Filters (${activeFilters})` : "Filters";
+  }
+}
+
+function buildFiltersPopoverHtml() {
+  return `<div class="filter-group"><strong>Node Type</strong><div class="node-filter-chips">
+    <button type="button" data-filter-group="type" data-filter-value="Idea">Idea</button>
+    <button type="button" data-filter-group="type" data-filter-value="Campaign Variation">Variation</button>
+    <button type="button" data-filter-group="type" data-filter-value="Content">Content</button>
+    <button type="button" data-filter-group="type" data-filter-value="Landing Page">Landing</button>
+    <button type="button" data-filter-group="type" data-filter-value="Social Media Posting">Social</button>
+  </div></div>
+  <div class="filter-group"><strong>Platform</strong><div class="node-filter-chips">
+    <button type="button" data-filter-group="platform" data-filter-value="LinkedIn">LinkedIn</button>
+    <button type="button" data-filter-group="platform" data-filter-value="X / Twitter">X</button>
+    <button type="button" data-filter-group="platform" data-filter-value="Instagram">Instagram</button>
+    <button type="button" data-filter-group="platform" data-filter-value="TikTok">TikTok</button>
+  </div></div>
+  <div class="filter-group"><strong>State / Funnel</strong><div class="node-filter-chips">
+    <button type="button" data-filter-group="state" data-filter-value="scheduled">Scheduled</button>
+    <button type="button" data-filter-group="state" data-filter-value="conversion">Conversion</button>
+    <button type="button" data-filter-group="state" data-filter-value="awareness">Awareness</button>
+    <button type="button" data-filter-group="state" data-filter-value="interest">Interest</button>
+    <button type="button" data-filter-group="state" data-filter-value="consideration">Consideration</button>
+    <button type="button" data-filter-group="state" data-filter-value="retention">Retention</button>
+  </div></div>`;
+}
+
+function closeFiltersPopover() {
+  document.getElementById("floating-filters-popover")?.remove();
+}
+
+function buildUtilitiesPopoverHtml() {
+  return `<div class="filter-group"><strong>Board</strong><div class="node-filter-chips">
+    <button type="button" data-utility-action="save-board">Save Board</button>
+    <button type="button" data-utility-action="new-board">New Board</button>
+    <button type="button" data-utility-action="reset-board">Reset Board</button>
+    <button type="button" data-utility-action="copy-link">Copy Link</button>
+  </div></div>
+  <div class="filter-group"><strong>View</strong><div class="node-filter-chips">
+    <button type="button" data-utility-action="board-view">Board View</button>
+    <button type="button" data-utility-action="list-view">List View</button>
+    <button type="button" data-utility-action="calendar-view">Calendar View</button>
+  </div></div>
+  <div class="filter-group"><strong>Layout</strong><div class="node-filter-chips">
+    <button type="button" data-utility-action="compact-all">Compact All</button>
+    <button type="button" data-utility-action="expand-all">Expand All</button>
+  </div></div>`;
+}
+
+function closeUtilitiesPopover() {
+  document.getElementById("floating-utilities-popover")?.remove();
+}
+
+function syncPopoverActiveStates(popoverEl) {
+  if (!popoverEl) return;
+  popoverEl.querySelectorAll("button[data-filter-group][data-filter-value]").forEach((btn) => {
+    const group = btn.dataset.filterGroup;
+    const value = btn.dataset.filterValue;
+    btn.classList.toggle("active", !!state.nodeFilters[group]?.has(value));
+  });
 }
 
 function renderPostits(node, nodeEl) {
@@ -2516,10 +2695,13 @@ function fillInspector(node) {
   el.landingPageFields?.classList.toggle("hidden", node.type !== "Landing Page");
   el.generateHeaderVisualButton.style.display = node.type === "Landing Page" ? "block" : "none";
   if (el.addToPostingCalendarButton) {
-    el.addToPostingCalendarButton.textContent = node.type === "Social Media Posting" && node.social?.scheduledAt ? "Scheduled" : "Add to Posting Calendar";
+    const isScheduled = node.type === "Social Media Posting" && node.social?.scheduledAt;
+    el.addToPostingCalendarButton.textContent = isScheduled ? "Scheduled" : "Add to Posting Calendar";
+    el.addToPostingCalendarButton.classList.toggle("is-scheduled", !!isScheduled);
   }
   if (el.postingScheduleMeta) {
-    el.postingScheduleMeta.textContent = node.type === "Social Media Posting" && node.social?.scheduledAt ? `Scheduled: ${new Date(node.social.scheduledAt).toLocaleString()}` : "";
+    const scheduleInfo = node.type === "Social Media Posting" ? formatScheduleMeta(node.social?.scheduledAt) : null;
+    el.postingScheduleMeta.textContent = scheduleInfo ? `Scheduled: ${scheduleInfo.dateLabel} • ${scheduleInfo.timeLabel}` : "";
   }
   const variantsLabel = el.nodeForm.querySelector('label[for="node-variants"]');
   const hideVariants = node.type === "Content";
@@ -3134,6 +3316,12 @@ function renderNode(node) {
     updateSelectionClasses();
     fillInspector(node);
   });
+  nodeEl.addEventListener("dblclick", (event) => {
+    if (event.target.closest("button,input,textarea,select,[contenteditable='true']")) return;
+    node.compact = false;
+    updateNodeCard(node);
+    saveCampaignCanvasState();
+  });
 
   nodeEl.querySelector(".connector-handle").addEventListener("pointerdown", (event) => {
     event.preventDefault();
@@ -3203,6 +3391,19 @@ function renderNode(node) {
 
   const title = nodeEl.querySelector(".title");
   const content = nodeEl.querySelector(".content");
+  const compactToggle = document.createElement("button");
+  compactToggle.type = "button";
+  compactToggle.className = "node-compact-toggle";
+  compactToggle.addEventListener("click", (event) => {
+    event.stopPropagation();
+    node.compact = !node.compact;
+    updateNodeCard(node);
+    saveCampaignCanvasState();
+  });
+  nodeEl.appendChild(compactToggle);
+  const compactSummary = document.createElement("div");
+  compactSummary.className = "node-compact-summary";
+  nodeEl.insertBefore(compactSummary, nodeEl.querySelector(".tags"));
   const aiToolbar = document.createElement("div");
   aiToolbar.className = "node-ai-toolbar";
   [
@@ -3214,6 +3415,7 @@ function renderNode(node) {
   ].forEach(([label, instruction]) => {
     const btn = document.createElement("button");
     btn.type = "button";
+    btn.dataset.quickWired = "1";
     btn.textContent = label;
     btn.addEventListener("click", async (event) => {
       event.stopPropagation();
@@ -3224,6 +3426,7 @@ function renderNode(node) {
   if (node.type === "Content") {
     const packBtn = document.createElement("button");
     packBtn.type = "button";
+    packBtn.dataset.quickWired = "1";
     packBtn.textContent = "Generate Full Content Pack";
     packBtn.addEventListener("click", async (event) => {
       event.stopPropagation();
@@ -3385,9 +3588,24 @@ function toggleListMode(showList) {
   }
 }
 
+function setCompactModeForAllNodes(compact) {
+  if (!state.nodes.length) return;
+  let changed = false;
+  state.nodes.forEach((node) => {
+    if (!!node.compact === !!compact) return;
+    node.compact = !!compact;
+    updateNodeCard(node);
+    changed = true;
+  });
+  if (!changed) return;
+  setSaveStatus(compact ? "All nodes compacted" : "All nodes expanded");
+  saveCampaignCanvasState();
+}
+
 function renderCalendarView() {
   const month = state.calendarMonth;
-  el.calendarTitle.textContent = month.toLocaleDateString("de-DE", { month: "long", year: "numeric" });
+  const totalScheduled = state.nodes.filter((n) => n.type === "Social Media Posting" && n.social?.addedToCalendar && n.social?.scheduledAt).length;
+  el.calendarTitle.textContent = `${month.toLocaleDateString("de-DE", { month: "long", year: "numeric" })} · ${totalScheduled} scheduled posts`;
   el.calendarGrid.innerHTML = "";
   const start = new Date(month.getFullYear(), month.getMonth(), 1);
   const end = new Date(month.getFullYear(), month.getMonth() + 1, 0);
@@ -3410,15 +3628,17 @@ function renderCalendarView() {
       btn.type = "button";
       btn.className = "calendar-post";
       const when = new Date(n.social.scheduledAt);
-      const metaTime = when.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
-      const captionPreview = (n.social.caption || n.title || n.id || "Post").trim().slice(0, 44);
-      btn.innerHTML = `<strong>${n.social.platform || "Social"}</strong> · ${metaTime}<br/><small>${captionPreview}${captionPreview.length >= 44 ? "…" : ""}</small>`;
+      const metaTime = when.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+      const captionPreview = (n.social.caption || n.title || n.id || "Post").trim().slice(0, 60);
+      const platformTone = getPlatformTone(n.social.platform || "LinkedIn");
+      btn.style.borderLeftColor = platformTone.accent;
       const previewImage = n.images?.[n.images.length - 1]?.url;
+      btn.innerHTML = `<span class="calendar-post-platform" style="background:${platformTone.soft};color:${platformTone.accent}">${platformTone.label}</span><strong>${metaTime}</strong><small>${captionPreview}${captionPreview.length >= 60 ? "…" : ""}</small>`;
       if (previewImage) {
         const thumb = document.createElement("img");
         thumb.src = previewImage;
         thumb.alt = "Scheduled post preview";
-        thumb.style.cssText = "width:24px;height:24px;object-fit:cover;border-radius:6px;margin-left:6px;vertical-align:middle";
+        thumb.className = "calendar-post-thumb";
         btn.appendChild(thumb);
       }
       btn.addEventListener("click", () => {
@@ -3815,6 +4035,119 @@ el.propagateDescendantsButton.addEventListener("click", () => {
   propagateNodeChangesDownward(node);
   fillInspector(node);
   saveCampaignCanvasState();
+});
+el.compactAllButton?.addEventListener("click", () => {
+  pushHistorySnapshot();
+  setCompactModeForAllNodes(true);
+});
+el.expandAllButton?.addEventListener("click", () => {
+  pushHistorySnapshot();
+  setCompactModeForAllNodes(false);
+});
+el.nodeSearchInput?.addEventListener("input", (event) => {
+  state.nodeSearchQuery = event.target.value || "";
+  refreshNodeSearchUI();
+});
+el.nodeSearchInput?.addEventListener("keydown", (event) => {
+  if (event.key !== "Enter") return;
+  const firstMatch = state.nodes.find((node) => nodeMatchesSearchAndFilters(node));
+  if (!firstMatch) return;
+  setActiveView("board");
+  state.selectedIds.clear();
+  state.selectedIds.add(firstMatch.id);
+  state.selectedPrimary = firstMatch.id;
+  updateSelectionClasses();
+  fillInspector(firstMatch);
+  forceNodeVisible(firstMatch.id);
+});
+el.zoomLayer.addEventListener("click", async (event) => {
+  const quickBtn = event.target.closest(".node-ai-toolbar button");
+  if (!quickBtn) return;
+  const nodeEl = quickBtn.closest(".node");
+  const node = nodeEl ? getNode(nodeEl.dataset.id) : null;
+  if (!node) return;
+  if (quickBtn.dataset.quickWired === "1") return;
+  event.stopPropagation();
+  const label = (quickBtn.textContent || "").trim();
+  if (label === "Generate Full Content Pack") {
+    await handleGenerateFullContentPack(node.id);
+    return;
+  }
+  const map = {
+    "✨ Improve": "Improve this node while keeping the original intent.",
+    "🔄 Regenerate": "Regenerate this node as a fresh alternative version while keeping it aligned with the campaign context and brand voice.",
+    "Shorter": "Make this shorter and more concise.",
+    "Emotional": "Make this more emotional and engaging.",
+    "Direct": "Make this more direct and clear."
+  };
+  const instruction = map[label];
+  if (!instruction) return;
+  await runInlineRefine(node, instruction, quickBtn);
+});
+el.filtersToggleButton?.addEventListener("click", (event) => {
+  event.stopPropagation();
+  const existing = document.getElementById("floating-filters-popover");
+  if (existing) return closeFiltersPopover();
+  const popover = document.createElement("div");
+  popover.id = "floating-filters-popover";
+  popover.className = "floating-filter-popover";
+  popover.innerHTML = buildFiltersPopoverHtml();
+  const rect = el.filtersToggleButton.getBoundingClientRect();
+  popover.style.top = `${rect.bottom + 8}px`;
+  popover.style.left = `${Math.max(10, rect.right - 430)}px`;
+  popover.addEventListener("click", (e) => {
+    const btn = e.target.closest("button[data-filter-group][data-filter-value]");
+    if (!btn) return;
+    const group = btn.dataset.filterGroup;
+    const value = btn.dataset.filterValue;
+    const groupSet = state.nodeFilters[group];
+    if (!groupSet) return;
+    if (groupSet.has(value)) groupSet.delete(value);
+    else groupSet.add(value);
+    btn.classList.toggle("active", groupSet.has(value));
+    refreshNodeSearchUI();
+    syncPopoverActiveStates(popover);
+  });
+  document.body.appendChild(popover);
+  syncPopoverActiveStates(popover);
+});
+el.utilitiesToggleButton?.addEventListener("click", (event) => {
+  event.stopPropagation();
+  const existing = document.getElementById("floating-utilities-popover");
+  if (existing) return closeUtilitiesPopover();
+  const popover = document.createElement("div");
+  popover.id = "floating-utilities-popover";
+  popover.className = "floating-filter-popover";
+  popover.innerHTML = buildUtilitiesPopoverHtml();
+  const rect = el.utilitiesToggleButton.getBoundingClientRect();
+  popover.style.top = `${rect.bottom + 8}px`;
+  popover.style.left = `${Math.max(10, rect.right - 260)}px`;
+  popover.addEventListener("click", (e) => {
+    const btn = e.target.closest("button[data-utility-action]");
+    if (!btn) return;
+    const map = {
+      "save-board": el.saveBoardButton,
+      "new-board": el.newBoardButton,
+      "reset-board": el.resetBoardButton,
+      "compact-all": el.compactAllButton,
+      "expand-all": el.expandAllButton,
+      "board-view": el.viewBoardButton,
+      "list-view": el.viewListButton,
+      "calendar-view": el.viewCalendarButton,
+      "copy-link": el.copyBoardLinkButton
+    };
+    const targetBtn = map[btn.dataset.utilityAction];
+    if (!targetBtn || targetBtn.disabled || targetBtn.offsetParent === null && btn.dataset.utilityAction === "copy-link") return;
+    targetBtn.click();
+    closeUtilitiesPopover();
+  });
+  document.body.appendChild(popover);
+});
+document.addEventListener("click", (event) => {
+  if (event.target.closest("#floating-filters-popover, #filters-toggle-btn")) return;
+  if (event.target.closest("#floating-utilities-popover, #utilities-toggle-btn")) return;
+  closeFiltersPopover();
+  closeUtilitiesPopover();
 });
 // Undo is handled via delegated click binding in bindGlobalResetDelegation().
 
