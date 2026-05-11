@@ -6,14 +6,14 @@
     <title>Campaign Canvas MVP</title>
     <link rel="stylesheet" href="/styles.css" />
     <style>
-      .canvas-toolbar { display: grid; grid-template-columns: auto minmax(280px, 560px) minmax(0, 1fr); align-items: center; gap: 10px; width: 100%; min-width: 0; }
+      .canvas-toolbar { display: flex; align-items: center; gap: 10px; width: 100%; min-width: 0; }
       .toolbar-brand { display: none; }
       .toolbar-title { margin: 0; font-size: 16px; line-height: 1.1; }
       .toolbar-subtitle { margin: 0; font-size: 11px; opacity: 0.7; white-space: nowrap; }
       .toolbar-group { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
       .toolbar-group-left { flex: 0 1 auto; }
-      .toolbar-group-center { justify-content: center; }
-      .toolbar-group-right { justify-content: flex-end; overflow: visible; }
+      .toolbar-group-center { justify-content: center; width: clamp(280px, 32vw, 520px); flex: 0 1 auto; }
+      .toolbar-group-right { justify-content: flex-end; overflow: visible; flex: 0 0 auto; gap: 8px; margin-left: auto; }
       .status-block { display: flex; align-items: center; gap: 8px; white-space: nowrap; min-width: 0; overflow: hidden; justify-content: flex-end; width: 100%; }
       .save-status-text, .share-meta, .share-feedback { font-size: 11px; opacity: 0.8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
       .share-panel { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
@@ -23,7 +23,7 @@
       .share-meta { opacity: 0.7; max-width: 140px; }
       .share-feedback { color: #c94a4a; }
       #canvas-topbar { padding-top: 6px; padding-bottom: 6px; overflow: visible; position: relative; z-index: 120; }
-      #node-search-input { width: clamp(280px, 38vw, 560px); max-width: 100%; min-width: 220px; }
+      #node-search-input { width: 100%; max-width: 100%; min-width: 220px; }
       .topbar .view-switcher { display: none !important; }
       .utility-muted { opacity: 0.78; }
       .filter-dropdown-wrap { position: relative; }
@@ -37,7 +37,7 @@
       #filters-toggle-btn { display: inline-flex !important; align-items: center; flex: 0 0 auto; visibility: visible; opacity: 1; position: relative; z-index: 140; }
       .canvas-filter-row { display: none !important; }
       #node-filter-chips { display: none !important; }
-      @media (max-width: 1200px) { .canvas-toolbar { grid-template-columns: 1fr; } .toolbar-group-center { order: 2; } .toolbar-group-right { order: 3; justify-content: flex-start; } .toolbar-subtitle { display: none; } }
+      @media (max-width: 1200px) { .canvas-toolbar { flex-wrap: wrap; } .toolbar-group-center { order: 2; width: min(100%, 520px); } .toolbar-group-right { order: 3; justify-content: flex-start; } .toolbar-subtitle { display: none; } }
 
       .boards-library-page { max-width: 1100px; margin: 0 auto; padding: 20px; height: calc(100vh - 150px); min-height: 0; display: flex; flex-direction: column; }
       .boards-library-page.hidden { display: none !important; }
