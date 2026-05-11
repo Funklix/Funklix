@@ -166,27 +166,7 @@
                 </div>
                 <button id="utilities-toggle-btn" type="button" class="utility-muted">Utilities</button>
               </div>
-              <div class="toolbar-row2-mid">
-                <div class="toolbar-zoom">
-                  <button id="zoom-out-btn" aria-label="Zoom out">-</button>
-                  <span id="zoom-label">100%</span>
-                  <button id="zoom-in-btn" aria-label="Zoom in">+</button>
-                </div>
-              </div>
-              <div class="toolbar-row2-right">
-                <div id="board-share-panel" class="share-panel" aria-live="polite">
-                  <div id="board-share-empty" class="share-hint">Save to create share link.</div>
-                  <div id="board-share-ready" class="share-ready hidden">
-                    <div class="share-link-row">
-                      <button id="claim-board-btn" type="button" class="utility-muted hidden">Claim Board</button>
-                      <span id="board-owned-pill" class="share-meta hidden">Owned by you</span>
-                      <button id="copy-board-link-btn" type="button">Copy Link</button>
-                      <div id="board-last-saved" class="share-meta">Last saved: —</div>
-                    </div>
-                    <div id="board-copy-feedback" class="share-feedback hidden"></div>
-                  </div>
-                </div>
-              </div>
+              <button id="utilities-toggle-btn" type="button" class="utility-muted">Utilities</button>
             </div>
           </div>
           </div>
@@ -228,6 +208,12 @@
               <button class="emoji-quick" data-emoji="💩" type="button">💩</button>
             </div>
           </div>
+          <div class="floating-zoom-control" aria-label="Canvas zoom controls">
+            <button id="zoom-out-btn" aria-label="Zoom out">-</button>
+            <span id="zoom-label">100%</span>
+            <button id="zoom-in-btn" aria-label="Zoom in">+</button>
+          </div>
+
         </section>
 
         <section id="boards-library-view" class="board-list-view hidden boards-library-page"><div class="boards-header-row"><h2 id="boards-library-title">Boards</h2><button id="boards-create-btn" class="primary-add boards-create-btn" type="button">Create New Board</button></div><p id="boards-library-subtitle">Manage your saved Campaign Canvas boards.</p><div id="boards-library-list" class="boards-library-panel"></div></section>
