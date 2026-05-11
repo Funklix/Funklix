@@ -75,6 +75,7 @@ const state = {
   ,analysisError: ""
   ,nodeSearchQuery: ""
   ,nodeFilters: { type: new Set(), platform: new Set(), state: new Set() }
+  ,user: null
 };
 
 const el = {
@@ -159,6 +160,12 @@ const el = {
   copyBoardLinkButton: document.getElementById("copy-board-link-btn"),
   boardLastSaved: document.getElementById("board-last-saved"),
   boardCopyFeedback: document.getElementById("board-copy-feedback"),
+  googleSigninButton: document.getElementById("google-signin-btn"),
+  authUserWrap: document.getElementById("auth-user"),
+  authName: document.getElementById("auth-name"),
+  authEmail: document.getElementById("auth-email"),
+  authAvatar: document.getElementById("auth-avatar"),
+  authSignoutButton: document.getElementById("auth-signout-btn"),
   brandCoreButton: document.getElementById("brand-core-nav-btn"),
   campaignCanvasNavButton: document.getElementById("campaign-canvas-nav-btn"),
   boardsNavButton: document.getElementById("boards-nav-btn"),
@@ -352,6 +359,30 @@ async function saveBoardAsNew(payload) {
     setSaveStatus('Saved');
     refreshLastSavedSnapshot();
   }
+}
+
+
+function renderAuthState() {
+  const signedIn = !!state.user;
+  el.googleSigninButton?.classList.toggle("hidden", signedIn);
+  el.authUserWrap?.classList.toggle("hidden", !signedIn);
+  if (!signedIn) return;
+  el.authName.textContent = state.user.name || "Google user";
+  el.authEmail.textContent = state.user.email || "";
+  el.authAvatar.src = state.user.avatar || "";
+  el.authAvatar.classList.toggle("hidden", !state.user.avatar);
+}
+
+async function loadSessionUser() {
+  try {
+    const response = await fetch('/api/auth/session');
+    if (!response.ok) return;
+    const data = await response.json();
+    state.user = data?.user || null;
+  } catch (_error) {
+    state.user = null;
+  }
+  renderAuthState();
 }
 
 function showBoardConflictModal() {
@@ -3875,6 +3906,12 @@ el.calendarNextMonthButton.addEventListener("click", () => {
 });
 
 el.zoomInButton.addEventListener("click", () => setZoom(state.zoom + 0.1));
+el.googleSigninButton?.addEventListener("click", () => { window.location.href = "/api/auth/google/start"; });
+el.authSignoutButton?.addEventListener("click", async () => {
+  await fetch("/api/auth/session", { method: "DELETE" });
+  state.user = null;
+  renderAuthState();
+});
 el.zoomOutButton.addEventListener("click", () => setZoom(state.zoom - 0.1));
 
 el.canvas.addEventListener(
@@ -4588,9 +4625,10 @@ function showDeleteBoardConfirmModal() {
   });
 }
 
-function bootApp() {
+async function bootApp() {
   state.isBoardLoading = true;
   createDebugPanel();
+  await loadSessionUser();
   bindGlobalResetDelegation();
   loadBrandBrainState();
   const boardIdFromPath = getBoardIdFromPath();
@@ -4619,5 +4657,5 @@ function bootApp() {
   startAutosaveWatcher();
 }
 
-if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", bootApp);
-else bootApp();
+if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", () => { void bootApp(); });
+else void bootApp();
