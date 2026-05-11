@@ -61,6 +61,16 @@
       .board-rename { display: inline-flex; gap: 6px; margin-top: 6px; }
       .board-rename input { border-radius: 8px; border: 1px solid rgba(255,255,255,0.2); background: rgba(0,0,0,0.2); color: inherit; padding: 6px 8px; }
       .board-rename button { border-radius: 8px; border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.08); color: inherit; padding: 6px 8px; cursor: pointer; }
+      .auth-panel { display: inline-flex; align-items: center; gap: 8px; margin-left: 8px; }
+      .auth-signin-btn { font-size: 11px; padding: 6px 10px; border-radius: 999px; }
+      .auth-user { display: inline-flex; align-items: center; gap: 8px; max-width: 250px; }
+      .auth-avatar { width: 24px; height: 24px; border-radius: 999px; object-fit: cover; border: 1px solid #dbe0f2; }
+      .auth-meta { display: grid; line-height: 1.1; }
+      .auth-meta strong { font-size: 11px; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .auth-meta span { font-size: 10px; opacity: .75; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .auth-signout-btn { font-size: 10px; padding: 4px 8px; }
+      .auth-avatar-fallback { width: 24px; height: 24px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; background: #edf1ff; color: #4d5fcf; border: 1px solid #dbe0f2; }
+      .auth-message { font-size: 11px; color: #b44a4a; }
 
     </style>
 
@@ -117,17 +127,16 @@
               </div>
               <div class="status-block">
               <span id="save-status" class="save-status-text">Unsaved changes</span>
-              <div id="board-share-panel" class="share-panel" aria-live="polite">
-                <div id="board-share-empty" class="share-hint">Save to create share link.</div>
-                <div id="board-share-ready" class="share-ready hidden">
-                  <div class="share-link-row">
-                    <span id="board-share-link-text" class="share-link-text"></span>
-                    <button id="copy-board-link-btn" type="button">Copy</button>
-                    <div id="board-last-saved" class="share-meta">Last saved: —</div>
-                  </div>
-                  <div id="board-copy-feedback" class="share-feedback hidden"></div>
+              <div id="auth-panel" class="auth-panel" aria-live="polite">
+                <button id="google-signin-btn" type="button" class="auth-signin-btn">Sign in with Google</button>
+                <div id="auth-user" class="auth-user hidden">
+                  <img id="auth-avatar" class="auth-avatar" alt="User avatar" />
+                  <span id="auth-avatar-fallback" class="auth-avatar-fallback hidden"></span>
+                  <div class="auth-meta"><strong id="auth-name"></strong><span id="auth-email"></span></div>
+                  <button id="auth-signout-btn" type="button" class="auth-signout-btn utility-muted">Sign out</button>
                 </div>
               </div>
+              <span id="auth-message" class="auth-message hidden"></span>
             </div>
             </div>
             <div class="canvas-toolbar-row secondary toolbar-secondary">
@@ -136,6 +145,18 @@
                 <button id="filters-toggle-btn" type="button" class="utility-muted">Filters</button>
               </div>
               <button id="utilities-toggle-btn" type="button" class="utility-muted">Utilities</button>
+              <div id="board-share-panel" class="share-panel" aria-live="polite">
+                <div id="board-share-empty" class="share-hint">Save to create share link.</div>
+                <div id="board-share-ready" class="share-ready hidden">
+                  <div class="share-link-row">
+                    <button id="copy-board-link-btn" type="button">Copy Link</button>
+                    <button id="claim-board-btn" type="button" class="utility-muted hidden">Claim Board</button>
+                    <span id="board-owned-pill" class="share-meta hidden">Owned by you</span>
+                    <div id="board-last-saved" class="share-meta">Last saved: —</div>
+                  </div>
+                  <div id="board-copy-feedback" class="share-feedback hidden"></div>
+                </div>
+              </div>
               <div class="toolbar-zoom">
                 <button id="zoom-out-btn" aria-label="Zoom out">-</button>
                 <span id="zoom-label">100%</span>
@@ -184,7 +205,7 @@
           </div>
         </section>
 
-        <section id="boards-library-view" class="board-list-view hidden boards-library-page"><div class="boards-header-row"><h2>Boards</h2><button id="boards-create-btn" class="primary-add boards-create-btn" type="button">Create New Board</button></div><p>Manage your saved Campaign Canvas boards.</p><div id="boards-library-list" class="boards-library-panel"></div></section>
+        <section id="boards-library-view" class="board-list-view hidden boards-library-page"><div class="boards-header-row"><h2 id="boards-library-title">Boards</h2><button id="boards-create-btn" class="primary-add boards-create-btn" type="button">Create New Board</button></div><p id="boards-library-subtitle">Manage your saved Campaign Canvas boards.</p><div id="boards-library-list" class="boards-library-panel"></div></section>
         <section id="board-list-view" class="board-list-view hidden">
           <h2>Node List View</h2>
           <div id="node-list-view"></div>
