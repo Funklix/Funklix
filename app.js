@@ -1377,6 +1377,7 @@ function openTypePicker(onSelect, preferred = "Idea") {
   Object.keys(NODE_TYPES).forEach((type) => {
     const btn = document.createElement("button");
     btn.type = "button";
+    btn.dataset.quickWired = "1";
     btn.className = "picker-option";
     btn.textContent = type;
     btn.style.borderColor = `${NODE_TYPES[type].color}66`;
@@ -3414,6 +3415,7 @@ function renderNode(node) {
   ].forEach(([label, instruction]) => {
     const btn = document.createElement("button");
     btn.type = "button";
+    btn.dataset.quickWired = "1";
     btn.textContent = label;
     btn.addEventListener("click", async (event) => {
       event.stopPropagation();
@@ -3424,6 +3426,7 @@ function renderNode(node) {
   if (node.type === "Content") {
     const packBtn = document.createElement("button");
     packBtn.type = "button";
+    packBtn.dataset.quickWired = "1";
     packBtn.textContent = "Generate Full Content Pack";
     packBtn.addEventListener("click", async (event) => {
       event.stopPropagation();
@@ -4056,6 +4059,30 @@ el.nodeSearchInput?.addEventListener("keydown", (event) => {
   updateSelectionClasses();
   fillInspector(firstMatch);
   forceNodeVisible(firstMatch.id);
+});
+el.zoomLayer.addEventListener("click", async (event) => {
+  const quickBtn = event.target.closest(".node-ai-toolbar button");
+  if (!quickBtn) return;
+  const nodeEl = quickBtn.closest(".node");
+  const node = nodeEl ? getNode(nodeEl.dataset.id) : null;
+  if (!node) return;
+  if (quickBtn.dataset.quickWired === "1") return;
+  event.stopPropagation();
+  const label = (quickBtn.textContent || "").trim();
+  if (label === "Generate Full Content Pack") {
+    await handleGenerateFullContentPack(node.id);
+    return;
+  }
+  const map = {
+    "✨ Improve": "Improve this node while keeping the original intent.",
+    "🔄 Regenerate": "Regenerate this node as a fresh alternative version while keeping it aligned with the campaign context and brand voice.",
+    "Shorter": "Make this shorter and more concise.",
+    "Emotional": "Make this more emotional and engaging.",
+    "Direct": "Make this more direct and clear."
+  };
+  const instruction = map[label];
+  if (!instruction) return;
+  await runInlineRefine(node, instruction, quickBtn);
 });
 el.filtersToggleButton?.addEventListener("click", (event) => {
   event.stopPropagation();

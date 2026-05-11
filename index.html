@@ -32,6 +32,7 @@
       .filter-group:last-child { margin-bottom: 0; }
       .filter-group strong { display: block; font-size: 11px; color: #717b9f; margin-bottom: 5px; }
       .toolbar-utility-source { display: none !important; }
+      .toolbar-zoom { display: inline-flex; align-items: center; gap: 4px; flex: 0 0 auto; }
       @media (max-width: 1200px) { .canvas-toolbar { grid-template-columns: 1fr; } .toolbar-group-center { order: 2; } .toolbar-group-right { order: 3; justify-content: flex-start; } .toolbar-subtitle { display: none; } }
 
       .boards-library-page { max-width: 1100px; margin: 0 auto; padding: 20px; height: calc(100vh - 150px); min-height: 0; display: flex; flex-direction: column; }
@@ -97,9 +98,11 @@
                   <button id="view-calendar-btn" type="button">Calendar View</button>
                 </div>
               </div>
-              <button id="zoom-out-btn" aria-label="Zoom out">-</button>
-              <span id="zoom-label">100%</span>
-              <button id="zoom-in-btn" aria-label="Zoom in">+</button>
+              <div class="toolbar-zoom">
+                <button id="zoom-out-btn" aria-label="Zoom out">-</button>
+                <span id="zoom-label">100%</span>
+                <button id="zoom-in-btn" aria-label="Zoom in">+</button>
+              </div>
               <div class="filter-dropdown-wrap">
                 <button id="filters-toggle-btn" type="button" class="utility-muted">Filters</button>
               </div>
