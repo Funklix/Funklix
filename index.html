@@ -6,7 +6,7 @@
     <title>Campaign Canvas MVP</title>
     <link rel="stylesheet" href="/styles.css" />
     <style>
-      .canvas-toolbar { display: grid; grid-template-columns: auto minmax(260px, 420px) minmax(0, 1fr); align-items: center; gap: 10px; width: 100%; min-width: 0; }
+      .canvas-toolbar { display: grid; grid-template-columns: auto minmax(280px, 560px) minmax(0, 1fr); align-items: center; gap: 10px; width: 100%; min-width: 0; }
       .toolbar-brand { display: none; }
       .toolbar-title { margin: 0; font-size: 16px; line-height: 1.1; }
       .toolbar-subtitle { margin: 0; font-size: 11px; opacity: 0.7; white-space: nowrap; }
@@ -23,7 +23,8 @@
       .share-meta { opacity: 0.7; max-width: 140px; }
       .share-feedback { color: #c94a4a; }
       #canvas-topbar { padding-top: 6px; padding-bottom: 6px; overflow: visible; position: relative; z-index: 120; }
-      #node-search-input { width: 100%; min-width: 260px; }
+      #node-search-input { width: clamp(280px, 38vw, 560px); max-width: 100%; min-width: 220px; }
+      .topbar .view-switcher { display: none !important; }
       .utility-muted { opacity: 0.78; }
       .filter-dropdown-wrap { position: relative; }
       .filter-popover { position: absolute; top: calc(100% + 8px); right: 0; width: min(430px, 72vw); background: #fff; border: 1px solid #dde2f3; border-radius: 12px; box-shadow: 0 12px 30px rgba(30,40,90,.14); padding: 10px; z-index: 999; display: block; }
