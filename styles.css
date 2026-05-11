@@ -1590,3 +1590,35 @@ button:active {
 .ai-brain-header .spinner { width: 12px; height: 12px; border: 2px solid #cfd5ee; border-top-color: #5e4bf4; border-radius: 999px; animation: spin 0.8s linear infinite; }
 .ai-inline-error { color: #bb2f2f; margin-left: 6px; }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* Toolbar runtime stability patch (CSS-only) */
+#canvas-topbar .status-block {
+  max-width: 520px !important;
+  overflow: visible !important;
+}
+#canvas-topbar .status-block .save-status-text,
+#canvas-topbar .status-block .share-meta,
+#canvas-topbar .status-block .share-feedback {
+  min-width: 0;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+#canvas-topbar .canvas-toolbar-row.secondary {
+  flex-wrap: nowrap !important;
+}
+#canvas-topbar .toolbar-zoom {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+#canvas-topbar #zoom-label {
+  margin-left: 6px;
+  min-width: 38px;
+  text-align: center;
+}
+@media (max-width: 960px) {
+  #canvas-topbar .canvas-toolbar-row.secondary {
+    flex-wrap: wrap !important;
+  }
+}
