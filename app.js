@@ -10,6 +10,7 @@ const NODE_TYPES = {
 
 const NODE_WIDTH = 285;
 const NODE_HEIGHT = 200;
+const NODE_OVERLAP_MARGIN = 32;
 const BOARD_WIDTH = 10000;
 const BOARD_HEIGHT = 10000;
 const STORAGE_KEY = "campaignCanvasState";
@@ -3396,9 +3397,14 @@ function renderNode(node) {
   compactToggle.className = "node-compact-toggle";
   compactToggle.addEventListener("click", (event) => {
     event.stopPropagation();
+    const wasCompact = !!node.compact;
     node.compact = !node.compact;
     updateNodeCard(node);
-    saveCampaignCanvasState();
+    if (wasCompact && !node.compact) {
+      requestAnimationFrame(() => preventNodeOverlapAfterExpand(node.id));
+    } else {
+      saveCampaignCanvasState();
+    }
   });
   nodeEl.appendChild(compactToggle);
   const compactSummary = document.createElement("div");
@@ -3572,6 +3578,41 @@ function enableNodeDrag(nodeEl, node) {
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
   });
+}
+
+function preventNodeOverlapAfterExpand(expandedNodeId) {
+  const expandedNode = getNode(expandedNodeId);
+  if (!expandedNode) return;
+  const expandedEl = el.zoomLayer.querySelector(`[data-id='${expandedNodeId}']`);
+  if (!expandedEl) return;
+
+  const expandedRect = expandedEl.getBoundingClientRect();
+  const movedNodes = [];
+
+  state.nodes.forEach((candidate) => {
+    if (candidate.id === expandedNodeId) return;
+    const candidateEl = el.zoomLayer.querySelector(`[data-id='${candidate.id}']`);
+    if (!candidateEl) return;
+    const candidateRect = candidateEl.getBoundingClientRect();
+
+    const nearX = Math.min(expandedRect.right, candidateRect.right) - Math.max(expandedRect.left, candidateRect.left) + NODE_OVERLAP_MARGIN;
+    const nearY = Math.min(expandedRect.bottom, candidateRect.bottom) - Math.max(expandedRect.top, candidateRect.top) + NODE_OVERLAP_MARGIN;
+    if (nearX <= 0 || nearY <= 0) return;
+
+    const overlapX = Math.min(expandedRect.right, candidateRect.right) - Math.max(expandedRect.left, candidateRect.left);
+    const overlapY = Math.min(expandedRect.bottom, candidateRect.bottom) - Math.max(expandedRect.top, candidateRect.top);
+    const moveRight = overlapX > 0 ? overlapX + NODE_OVERLAP_MARGIN : NODE_OVERLAP_MARGIN;
+    const moveDown = overlapY > 0 ? overlapY + NODE_OVERLAP_MARGIN : NODE_OVERLAP_MARGIN;
+
+    candidate.position.x += moveRight / state.zoom;
+    candidate.position.y += moveDown / state.zoom;
+    movedNodes.push(candidate);
+  });
+
+  if (!movedNodes.length) return;
+  movedNodes.forEach((movedNode) => updateNodeCard(movedNode));
+  drawLinks();
+  saveCampaignCanvasState();
 }
 
 function toggleListMode(showList) {
