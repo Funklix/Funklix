@@ -20,6 +20,12 @@ async function ensureBoardsTable() {
     `);
       await pool.query('ALTER TABLE boards ADD COLUMN IF NOT EXISTS brand_core_snapshot JSONB;');
       await pool.query('ALTER TABLE boards ADD COLUMN IF NOT EXISTS order_index INTEGER;');
+
+      await pool.query('ALTER TABLE boards ADD COLUMN IF NOT EXISTS owner_id TEXT;');
+      await pool.query('ALTER TABLE boards ADD COLUMN IF NOT EXISTS owner_email TEXT;');
+      await pool.query('ALTER TABLE boards ADD COLUMN IF NOT EXISTS owner_name TEXT;');
+      await pool.query('ALTER TABLE boards ADD COLUMN IF NOT EXISTS owner_avatar TEXT;');
+      await pool.query('ALTER TABLE boards ADD COLUMN IF NOT EXISTS created_by TEXT;');
     })();
   }
   return schemaReadyPromise;
