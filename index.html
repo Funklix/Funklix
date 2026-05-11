@@ -9,7 +9,14 @@
       .canvas-toolbar { display: grid; grid-template-rows: auto auto; gap: 8px; width: 100%; min-width: 0; box-sizing: border-box; overflow: visible; }
       .canvas-toolbar-row { min-width: 0; box-sizing: border-box; }
       .canvas-toolbar-row.primary { display: grid; grid-template-columns: auto minmax(260px, 520px) minmax(220px, 1fr); align-items: center; gap: 12px; }
-      .canvas-toolbar-row.secondary { display: flex; align-items: center; justify-content: center; gap: 10px; min-width: 0; }
+      .canvas-toolbar-row.secondary { display: grid; grid-template-columns: auto auto 1fr; align-items: center; gap: 10px; min-width: 0; }
+      .toolbar-row2-left, .toolbar-row2-mid, .toolbar-row2-right { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
+      .toolbar-row2-mid { justify-content: center; }
+      .toolbar-row2-right { justify-content: flex-end; overflow: hidden; }
+      .toolbar-row2-right .share-panel, .toolbar-row2-right .share-ready, .toolbar-row2-right .share-link-row { display: inline-flex; align-items: center; gap: 8px; min-width: 0; overflow: hidden; white-space: nowrap; }
+      .toolbar-row2-right .share-hint, .toolbar-row2-right .share-meta { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 190px; }
+      .toolbar-row2-right button { flex: 0 0 auto; }
+      .toolbar-zoom { white-space: nowrap; }
       .toolbar-brand { display: none; }
       .toolbar-title { margin: 0; font-size: 16px; line-height: 1.1; }
       .toolbar-subtitle { margin: 0; font-size: 11px; opacity: 0.7; white-space: nowrap; }
@@ -42,7 +49,7 @@
       #filters-toggle-btn { display: inline-flex !important; align-items: center; flex: 0 0 auto; visibility: visible; opacity: 1; position: relative; z-index: 140; }
       .canvas-filter-row { display: none !important; }
       #node-filter-chips { display: none !important; }
-      @media (max-width: 1200px) { .canvas-toolbar-row.primary { grid-template-columns: 1fr; } .toolbar-group-center { width: min(100%, 520px); } .toolbar-group-right { justify-content: flex-start; } .canvas-toolbar-row.secondary { justify-content: flex-start; flex-wrap: wrap; } .status-block { width: 100%; justify-content: flex-start; } .toolbar-subtitle { display: none; } }
+      @media (max-width: 1200px) { .canvas-toolbar-row.primary { grid-template-columns: 1fr; } .toolbar-group-center { width: min(100%, 520px); } .toolbar-group-right { justify-content: flex-start; } .canvas-toolbar-row.secondary { grid-template-columns: 1fr; gap: 8px; } .toolbar-row2-right { justify-content: flex-start; } .status-block { width: 100%; justify-content: flex-start; } .toolbar-subtitle { display: none; } }
 
       .boards-library-page { max-width: 1100px; margin: 0 auto; padding: 20px; height: calc(100vh - 150px); min-height: 0; display: flex; flex-direction: column; }
       .boards-library-page.hidden { display: none !important; }
@@ -140,27 +147,33 @@
             </div>
             </div>
             <div class="canvas-toolbar-row secondary toolbar-secondary">
-              <span id="node-search-count" class="node-search-count"></span>
-              <div class="filter-dropdown-wrap">
-                <button id="filters-toggle-btn" type="button" class="utility-muted">Filters</button>
+              <div class="toolbar-row2-left">
+                <span id="node-search-count" class="node-search-count"></span>
+                <div class="filter-dropdown-wrap">
+                  <button id="filters-toggle-btn" type="button" class="utility-muted">Filters</button>
+                </div>
+                <button id="utilities-toggle-btn" type="button" class="utility-muted">Utilities</button>
               </div>
-              <button id="utilities-toggle-btn" type="button" class="utility-muted">Utilities</button>
-              <div id="board-share-panel" class="share-panel" aria-live="polite">
-                <div id="board-share-empty" class="share-hint">Save to create share link.</div>
-                <div id="board-share-ready" class="share-ready hidden">
-                  <div class="share-link-row">
-                    <button id="copy-board-link-btn" type="button">Copy Link</button>
-                    <button id="claim-board-btn" type="button" class="utility-muted hidden">Claim Board</button>
-                    <span id="board-owned-pill" class="share-meta hidden">Owned by you</span>
-                    <div id="board-last-saved" class="share-meta">Last saved: —</div>
-                  </div>
-                  <div id="board-copy-feedback" class="share-feedback hidden"></div>
+              <div class="toolbar-row2-mid">
+                <div class="toolbar-zoom">
+                  <button id="zoom-out-btn" aria-label="Zoom out">-</button>
+                  <span id="zoom-label">100%</span>
+                  <button id="zoom-in-btn" aria-label="Zoom in">+</button>
                 </div>
               </div>
-              <div class="toolbar-zoom">
-                <button id="zoom-out-btn" aria-label="Zoom out">-</button>
-                <span id="zoom-label">100%</span>
-                <button id="zoom-in-btn" aria-label="Zoom in">+</button>
+              <div class="toolbar-row2-right">
+                <div id="board-share-panel" class="share-panel" aria-live="polite">
+                  <div id="board-share-empty" class="share-hint">Save to create share link.</div>
+                  <div id="board-share-ready" class="share-ready hidden">
+                    <div class="share-link-row">
+                      <button id="claim-board-btn" type="button" class="utility-muted hidden">Claim Board</button>
+                      <span id="board-owned-pill" class="share-meta hidden">Owned by you</span>
+                      <button id="copy-board-link-btn" type="button">Copy Link</button>
+                      <div id="board-last-saved" class="share-meta">Last saved: —</div>
+                    </div>
+                    <div id="board-copy-feedback" class="share-feedback hidden"></div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
