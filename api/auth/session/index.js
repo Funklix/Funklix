@@ -3,7 +3,8 @@ const { clearSessionCookie, getSessionUser } = require('../../_auth-session');
 module.exports = async (req, res) => {
   if (req.method === 'GET') {
     const user = getSessionUser(req);
-    return res.status(200).json({ user: user || null });
+    const authConfigured = !!process.env.GOOGLE_CLIENT_ID && !!process.env.GOOGLE_CLIENT_SECRET && !!(process.env.AUTH_SECRET || process.env.SESSION_SECRET);
+    return res.status(200).json({ user: user || null, authConfigured });
   }
   if (req.method === 'DELETE' || req.method === 'POST') {
     clearSessionCookie(res);

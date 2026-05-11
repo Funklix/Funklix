@@ -69,6 +69,8 @@
       .auth-meta strong { font-size: 11px; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       .auth-meta span { font-size: 10px; opacity: .75; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       .auth-signout-btn { font-size: 10px; padding: 4px 8px; }
+      .auth-avatar-fallback { width: 24px; height: 24px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; background: #edf1ff; color: #4d5fcf; border: 1px solid #dbe0f2; }
+      .auth-message { font-size: 11px; color: #b44a4a; }
 
     </style>
 
@@ -129,10 +131,12 @@
                 <button id="google-signin-btn" type="button" class="auth-signin-btn">Sign in with Google</button>
                 <div id="auth-user" class="auth-user hidden">
                   <img id="auth-avatar" class="auth-avatar" alt="User avatar" />
+                  <span id="auth-avatar-fallback" class="auth-avatar-fallback hidden"></span>
                   <div class="auth-meta"><strong id="auth-name"></strong><span id="auth-email"></span></div>
                   <button id="auth-signout-btn" type="button" class="auth-signout-btn utility-muted">Sign out</button>
                 </div>
               </div>
+              <span id="auth-message" class="auth-message hidden"></span>
               <div id="board-share-panel" class="share-panel" aria-live="polite">
                 <div id="board-share-empty" class="share-hint">Save to create share link.</div>
                 <div id="board-share-ready" class="share-ready hidden">

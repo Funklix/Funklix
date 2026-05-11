@@ -76,6 +76,7 @@ const state = {
   ,nodeSearchQuery: ""
   ,nodeFilters: { type: new Set(), platform: new Set(), state: new Set() }
   ,user: null
+  ,authConfigured: true
 };
 
 const el = {
@@ -165,6 +166,8 @@ const el = {
   authName: document.getElementById("auth-name"),
   authEmail: document.getElementById("auth-email"),
   authAvatar: document.getElementById("auth-avatar"),
+  authAvatarFallback: document.getElementById("auth-avatar-fallback"),
+  authMessage: document.getElementById("auth-message"),
   authSignoutButton: document.getElementById("auth-signout-btn"),
   brandCoreButton: document.getElementById("brand-core-nav-btn"),
   campaignCanvasNavButton: document.getElementById("campaign-canvas-nav-btn"),
@@ -362,15 +365,37 @@ async function saveBoardAsNew(payload) {
 }
 
 
+function getUserInitials(user) {
+  const source = (user?.name || user?.email || "U").trim();
+  return source.split(/\s+/).slice(0, 2).map((p) => p[0]?.toUpperCase() || "").join("") || "U";
+}
+
+function setAuthMessage(message = "") {
+  if (!el.authMessage) return;
+  el.authMessage.textContent = message;
+  el.authMessage.classList.toggle("hidden", !message);
+}
+
 function renderAuthState() {
   const signedIn = !!state.user;
-  el.googleSigninButton?.classList.toggle("hidden", signedIn);
-  el.authUserWrap?.classList.toggle("hidden", !signedIn);
-  if (!signedIn) return;
+  if (el.googleSigninButton) el.googleSigninButton.style.display = signedIn ? "none" : "inline-flex";
+  if (el.authUserWrap) el.authUserWrap.style.display = signedIn ? "inline-flex" : "none";
+  if (!signedIn) {
+    if (el.authAvatar) el.authAvatar.classList.add("hidden");
+    if (el.authAvatarFallback) el.authAvatarFallback.classList.add("hidden");
+    return;
+  }
   el.authName.textContent = state.user.name || "Google user";
   el.authEmail.textContent = state.user.email || "";
-  el.authAvatar.src = state.user.avatar || "";
-  el.authAvatar.classList.toggle("hidden", !state.user.avatar);
+  const hasAvatar = !!state.user.avatar;
+  if (el.authAvatar) {
+    el.authAvatar.src = hasAvatar ? state.user.avatar : "";
+    el.authAvatar.classList.toggle("hidden", !hasAvatar);
+  }
+  if (el.authAvatarFallback) {
+    el.authAvatarFallback.textContent = getUserInitials(state.user);
+    el.authAvatarFallback.classList.toggle("hidden", hasAvatar);
+  }
 }
 
 async function loadSessionUser() {
@@ -379,6 +404,7 @@ async function loadSessionUser() {
     if (!response.ok) return;
     const data = await response.json();
     state.user = data?.user || null;
+    state.authConfigured = data?.authConfigured !== false;
   } catch (_error) {
     state.user = null;
   }
@@ -3906,11 +3932,23 @@ el.calendarNextMonthButton.addEventListener("click", () => {
 });
 
 el.zoomInButton.addEventListener("click", () => setZoom(state.zoom + 0.1));
-el.googleSigninButton?.addEventListener("click", () => { window.location.href = "/api/auth/google/start"; });
+el.googleSigninButton?.addEventListener("click", () => {
+  if (!state.authConfigured) {
+    setAuthMessage("Google Login is not configured yet.");
+    return;
+  }
+  setAuthMessage("");
+  window.location.href = "/api/auth/google/start";
+});
 el.authSignoutButton?.addEventListener("click", async () => {
   await fetch("/api/auth/session", { method: "DELETE" });
   state.user = null;
+  setAuthMessage("");
   renderAuthState();
+});
+el.authAvatar?.addEventListener("error", () => {
+  el.authAvatar.classList.add("hidden");
+  if (el.authAvatarFallback) el.authAvatarFallback.classList.remove("hidden");
 });
 el.zoomOutButton.addEventListener("click", () => setZoom(state.zoom - 0.1));
 
@@ -4629,6 +4667,7 @@ async function bootApp() {
   state.isBoardLoading = true;
   createDebugPanel();
   await loadSessionUser();
+  if (new URLSearchParams(window.location.search).get("auth_error") === "not_configured") setAuthMessage("Google Login is not configured yet.");
   bindGlobalResetDelegation();
   loadBrandBrainState();
   const boardIdFromPath = getBoardIdFromPath();

@@ -3,7 +3,7 @@ const crypto = require('crypto');
 module.exports = async (req, res) => {
   try {
     const clientId = process.env.GOOGLE_CLIENT_ID;
-    if (!clientId) return res.status(500).json({ error: 'Missing GOOGLE_CLIENT_ID' });
+    if (!clientId) return res.redirect('/?auth_error=not_configured');
     const origin = `${req.headers['x-forwarded-proto'] || 'https'}://${req.headers.host}`;
     const redirectUri = `${origin}/api/auth/google/callback`;
     const state = crypto.randomBytes(16).toString('hex');

@@ -62,3 +62,8 @@ Configure this Google OAuth redirect URI:
 For local development (if running with a server that supports `/api` routes):
 
 - `http://localhost:3000/api/auth/google/callback`
+
+
+In Google Cloud Console, add the production callback URL exactly as:
+
+- `https://<your-domain>/api/auth/google/callback`
