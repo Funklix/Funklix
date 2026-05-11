@@ -9,14 +9,8 @@
       .canvas-toolbar { display: grid; grid-template-rows: auto auto; gap: 8px; width: 100%; min-width: 0; box-sizing: border-box; overflow: visible; }
       .canvas-toolbar-row { min-width: 0; box-sizing: border-box; }
       .canvas-toolbar-row.primary { display: grid; grid-template-columns: auto minmax(260px, 520px) minmax(220px, 1fr); align-items: center; gap: 12px; }
-      .canvas-toolbar-row.secondary { display: grid; grid-template-columns: auto auto 1fr; align-items: center; gap: 10px; min-width: 0; }
-      .toolbar-row2-left, .toolbar-row2-mid, .toolbar-row2-right { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
-      .toolbar-row2-mid { justify-content: center; }
-      .toolbar-row2-right { justify-content: flex-end; overflow: hidden; }
-      .toolbar-row2-right .share-panel, .toolbar-row2-right .share-ready, .toolbar-row2-right .share-link-row { display: inline-flex; align-items: center; gap: 8px; min-width: 0; overflow: hidden; white-space: nowrap; }
-      .toolbar-row2-right .share-hint, .toolbar-row2-right .share-meta { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 190px; }
-      .toolbar-row2-right button { flex: 0 0 auto; }
-      .toolbar-zoom { white-space: nowrap; }
+      .canvas-toolbar-row.secondary { display: flex; align-items: center; justify-content: center; gap: 10px; min-width: 0; }
+      .toolbar-zoom { white-space: nowrap; display: inline-flex; align-items: center; gap: 4px; flex: 0 0 auto; }
       .toolbar-brand { display: none; }
       .toolbar-title { margin: 0; font-size: 16px; line-height: 1.1; }
       .toolbar-subtitle { margin: 0; font-size: 11px; opacity: 0.7; white-space: nowrap; }
@@ -174,6 +168,18 @@
                     <div id="board-copy-feedback" class="share-feedback hidden"></div>
                   </div>
                 </div>
+              </div>
+            </div>
+            <div id="board-share-panel" class="share-panel hidden" aria-live="polite">
+              <div id="board-share-empty" class="share-hint">Save to create share link.</div>
+              <div id="board-share-ready" class="share-ready hidden">
+                <div class="share-link-row">
+                  <button id="claim-board-btn" type="button" class="utility-muted hidden">Claim Board</button>
+                  <span id="board-owned-pill" class="share-meta hidden">Owned by you</span>
+                  <button id="copy-board-link-btn" type="button">Copy Link</button>
+                  <div id="board-last-saved" class="share-meta">Last saved: —</div>
+                </div>
+                <div id="board-copy-feedback" class="share-feedback hidden"></div>
               </div>
             </div>
           </div>
