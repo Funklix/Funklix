@@ -1,4 +1,5 @@
 const { pool, ensureBoardsTable } = require('../_boards-storage');
+const { getSessionUser } = require('../_auth-session');
 
 module.exports = async function handler(req, res) {
   if (req.method !== 'GET' && req.method !== 'PUT' && req.method !== 'PATCH' && req.method !== 'DELETE') {
@@ -44,7 +45,7 @@ module.exports = async function handler(req, res) {
         `UPDATE boards
          SET name = COALESCE(NULLIF($2,''), name), canvas_json = $3::jsonb, brand_core_snapshot = $4::jsonb, updated_at = NOW()
          WHERE id = $1
-         RETURNING id, name, canvas_json, brand_core_snapshot, created_at, updated_at, order_index`,
+         RETURNING id, name, canvas_json, brand_core_snapshot, created_at, updated_at, order_index, owner_id, owner_email, owner_name, owner_avatar, created_by`,
         [id, name, JSON.stringify(canvas_json), JSON.stringify(brand_core_snapshot || null)]
       );
 
@@ -56,16 +57,33 @@ module.exports = async function handler(req, res) {
     }
 
     if (req.method === 'PATCH') {
-      const { name = null, order_index = null } = req.body || {};
-      const updated = await pool.query(
-        `UPDATE boards
-         SET name = COALESCE($2, name),
-             order_index = COALESCE($3, order_index),
-             updated_at = NOW()
-         WHERE id = $1
-         RETURNING id, name, updated_at, order_index`,
-        [id, name, Number.isInteger(order_index) ? order_index : null]
-      );
+      const { name = null, order_index = null, claim = false } = req.body || {};
+      const user = getSessionUser(req);
+      let updated;
+      if (claim && user?.email) {
+        updated = await pool.query(
+          `UPDATE boards
+           SET owner_id = CASE WHEN owner_email IS NULL THEN $2 ELSE owner_id END,
+               owner_email = CASE WHEN owner_email IS NULL THEN $2 ELSE owner_email END,
+               owner_name = CASE WHEN owner_email IS NULL THEN $3 ELSE owner_name END,
+               owner_avatar = CASE WHEN owner_email IS NULL THEN $4 ELSE owner_avatar END,
+               created_by = COALESCE(created_by, $2),
+               updated_at = NOW()
+           WHERE id = $1
+           RETURNING id, name, updated_at, order_index, owner_id, owner_email, owner_name, owner_avatar, created_by, created_at`
+          , [id, user.email, user.name || null, user.avatar || null]
+        );
+      } else {
+        updated = await pool.query(
+          `UPDATE boards
+           SET name = COALESCE($2, name),
+               order_index = COALESCE($3, order_index),
+               updated_at = NOW()
+           WHERE id = $1
+           RETURNING id, name, updated_at, order_index, owner_id, owner_email, owner_name, owner_avatar, created_by, created_at`,
+          [id, name, Number.isInteger(order_index) ? order_index : null]
+        );
+      }
       if (updated.rowCount === 0) return res.status(404).json({ error: 'Board not found' });
       return res.status(200).json(updated.rows[0]);
     }
@@ -76,7 +94,7 @@ module.exports = async function handler(req, res) {
       return res.status(200).json({ id });
     }
     const result = await pool.query(
-      'SELECT id, name, canvas_json, brand_core_snapshot, created_at, updated_at, order_index FROM boards WHERE id = $1 LIMIT 1',
+      'SELECT id, name, canvas_json, brand_core_snapshot, created_at, updated_at, order_index, owner_id, owner_email, owner_name, owner_avatar, created_by FROM boards WHERE id = $1 LIMIT 1',
       [id]
     );
 

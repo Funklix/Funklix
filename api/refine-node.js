@@ -78,7 +78,6 @@ Return strict JSON only:
     }
 
     const data = await response.json();
-    console.log("OpenAI refine-node payload", JSON.stringify(data));
     const outputItemText = (data?.output || [])
       .flatMap((item) => item?.content || [])
       .find((c) => c?.type === "output_text" && c?.text)?.text || "";
