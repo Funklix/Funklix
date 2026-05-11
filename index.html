@@ -8,8 +8,8 @@
     <style>
       .canvas-toolbar { display: grid; grid-template-rows: auto auto; gap: 8px; width: 100%; min-width: 0; box-sizing: border-box; overflow: visible; }
       .canvas-toolbar-row { min-width: 0; box-sizing: border-box; }
-      .canvas-toolbar-row.primary { display: grid; grid-template-columns: auto minmax(260px, 520px) minmax(220px, 1fr); align-items: center; gap: 12px; }
-      .canvas-toolbar-row.secondary { display: flex; align-items: center; justify-content: center; gap: 10px; min-width: 0; }
+      .canvas-toolbar-row.primary { display: grid; grid-template-columns: auto minmax(280px, 1fr) auto; align-items: center; gap: 12px; }
+      .canvas-toolbar-row.secondary { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; }
       .toolbar-brand { display: none; }
       .toolbar-title { margin: 0; font-size: 16px; line-height: 1.1; }
       .toolbar-subtitle { margin: 0; font-size: 11px; opacity: 0.7; white-space: nowrap; }
@@ -18,8 +18,10 @@
       .toolbar-group-left { flex: 0 0 auto; white-space: nowrap; }
       .toolbar-group-center { justify-content: center; min-width: 0; width: 100%; }
       .toolbar-group-right { justify-content: flex-end; overflow: visible; min-width: 0; gap: 8px; }
-      .toolbar-secondary { justify-content: center; gap: 10px; }
-      .status-block { display: flex; align-items: center; gap: 8px; white-space: nowrap; min-width: 0; overflow: hidden; justify-content: flex-end; width: 100%; max-width: 360px; margin-left: auto; }
+      .toolbar-secondary { justify-content: space-between; gap: 10px; }
+      .toolbar-row2-left, .toolbar-row2-right { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
+      .toolbar-row2-right { justify-content: flex-end; }
+      .status-block { display: none; }
       .save-status-text, .share-meta, .share-feedback { font-size: 11px; opacity: 0.8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
       .share-panel { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
       .share-ready { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
@@ -42,7 +44,7 @@
       #filters-toggle-btn { display: inline-flex !important; align-items: center; flex: 0 0 auto; visibility: visible; opacity: 1; position: relative; z-index: 140; }
       .canvas-filter-row { display: none !important; }
       #node-filter-chips { display: none !important; }
-      @media (max-width: 1200px) { .canvas-toolbar-row.primary { grid-template-columns: 1fr; } .toolbar-group-center { width: min(100%, 520px); } .toolbar-group-right { justify-content: flex-start; } .canvas-toolbar-row.secondary { justify-content: flex-start; flex-wrap: wrap; } .status-block { width: 100%; justify-content: flex-start; } .toolbar-subtitle { display: none; } }
+      @media (max-width: 1200px) { .canvas-toolbar-row.primary { grid-template-columns: 1fr; } .toolbar-group-center { width: min(100%, 640px); } .toolbar-group-right { justify-content: flex-start; flex-wrap: wrap; } .canvas-toolbar-row.secondary { flex-wrap: wrap; justify-content: flex-start; } .toolbar-row2-right { justify-content: flex-start; } .toolbar-subtitle { display: none; } }
 
       .boards-library-page { max-width: 1100px; margin: 0 auto; padding: 20px; height: calc(100vh - 150px); min-height: 0; display: flex; flex-direction: column; }
       .boards-library-page.hidden { display: none !important; }
@@ -61,6 +63,16 @@
       .board-rename { display: inline-flex; gap: 6px; margin-top: 6px; }
       .board-rename input { border-radius: 8px; border: 1px solid rgba(255,255,255,0.2); background: rgba(0,0,0,0.2); color: inherit; padding: 6px 8px; }
       .board-rename button { border-radius: 8px; border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.08); color: inherit; padding: 6px 8px; cursor: pointer; }
+      .auth-panel { display: inline-flex; align-items: center; gap: 8px; margin-left: 8px; }
+      .auth-signin-btn { font-size: 11px; padding: 6px 10px; border-radius: 999px; }
+      .auth-user { display: inline-flex; align-items: center; gap: 8px; max-width: 250px; }
+      .auth-avatar { width: 24px; height: 24px; border-radius: 999px; object-fit: cover; border: 1px solid #dbe0f2; }
+      .auth-meta { display: grid; line-height: 1.1; }
+      .auth-meta strong { font-size: 11px; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .auth-meta span { font-size: 10px; opacity: .75; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .auth-signout-btn { font-size: 10px; padding: 4px 8px; }
+      .auth-avatar-fallback { width: 24px; height: 24px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; background: #edf1ff; color: #4d5fcf; border: 1px solid #dbe0f2; }
+      .auth-message { font-size: 11px; color: #b44a4a; }
 
     </style>
 
@@ -99,51 +111,51 @@
                 <input id="node-search-input" type="search" placeholder="Search nodes..." />
               </div>
               <div class="toolbar-group toolbar-group-right">
-                <div class="view-switcher">
-                <button id="cycle-view-btn">Board View</button>
-                <button id="view-menu-btn" title="Choose view">▾</button>
-                <div id="view-menu" class="hidden">
-                  <button id="view-board-btn" type="button">Board View</button>
-                  <button id="view-list-btn" type="button">List View</button>
-                  <button id="view-calendar-btn" type="button">Calendar View</button>
-                </div>
-              </div>
-              <div class="toolbar-utility-source" aria-hidden="true">
-                <button id="compact-all-btn" type="button" title="Compact all nodes">Compact All</button>
-                <button id="expand-all-btn" type="button" title="Expand all nodes">Expand All</button>
-                <button id="save-board-btn" class="utility-muted">Save Board</button>
-                <button id="new-board-btn" class="utility-muted">New Board</button>
-                <button id="reset-board-btn" class="danger utility-muted">Reset Board</button>
-              </div>
-              <div class="status-block">
-              <span id="save-status" class="save-status-text">Unsaved changes</span>
-              <div id="board-share-panel" class="share-panel" aria-live="polite">
-                <div id="board-share-empty" class="share-hint">Save to create share link.</div>
-                <div id="board-share-ready" class="share-ready hidden">
-                  <div class="share-link-row">
-                    <span id="board-share-link-text" class="share-link-text"></span>
-                    <button id="copy-board-link-btn" type="button">Copy</button>
-                    <div id="board-last-saved" class="share-meta">Last saved: —</div>
+                <div id="auth-panel" class="auth-panel" aria-live="polite">
+                  <button id="google-signin-btn" type="button" class="auth-signin-btn">Sign in with Google</button>
+                  <div id="auth-user" class="auth-user hidden">
+                    <img id="auth-avatar" class="auth-avatar" alt="User avatar" />
+                    <span id="auth-avatar-fallback" class="auth-avatar-fallback hidden"></span>
+                    <div class="auth-meta"><strong id="auth-name"></strong><span id="auth-email"></span></div>
+                    <button id="auth-signout-btn" type="button" class="auth-signout-btn utility-muted">Sign out</button>
                   </div>
-                  <div id="board-copy-feedback" class="share-feedback hidden"></div>
+                </div>
+                <button id="copy-board-link-btn" type="button" class="utility-muted">Copy Link</button>
+              </div>
+            </div>
+
+            <div class="canvas-toolbar-row secondary toolbar-secondary">
+              <div class="toolbar-row2-left">
+                <span id="node-search-count" class="node-search-count"></span>
+                <div class="filter-dropdown-wrap">
+                  <button id="filters-toggle-btn" type="button" class="utility-muted">Filters</button>
+                </div>
+                <button id="utilities-toggle-btn" type="button" class="utility-muted">Utilities</button>
+              </div>
+              <div class="toolbar-row2-right">
+                <span id="save-status" class="save-status-text">Unsaved changes</span>
+                <span id="auth-message" class="auth-message hidden"></span>
+                <div id="board-share-panel" class="share-panel" aria-live="polite">
+                  <div id="board-share-empty" class="share-hint">Save to create share link.</div>
+                  <div id="board-share-ready" class="share-ready hidden">
+                    <span id="board-last-saved" class="share-meta">Last saved: —</span>
+                    <span id="board-owned-pill" class="share-meta hidden">Owned by you</span>
+                    <button id="claim-board-btn" type="button" class="utility-muted hidden">Claim board</button>
+                    <span id="board-share-link-text" class="share-link-text"></span>
+                    <span id="board-copy-feedback" class="share-feedback hidden"></span>
+                  </div>
                 </div>
               </div>
             </div>
+
+            <div class="toolbar-utility-source" aria-hidden="true" style="display:none;">
+              <button id="compact-all-btn" type="button" title="Compact all nodes">Compact All</button>
+              <button id="expand-all-btn" type="button" title="Expand all nodes">Expand All</button>
+              <button id="save-board-btn" class="utility-muted">Save Board</button>
+              <button id="new-board-btn" class="utility-muted">New Board</button>
+              <button id="reset-board-btn" class="danger utility-muted">Reset Board</button>
             </div>
-            <div class="canvas-toolbar-row secondary toolbar-secondary">
-              <span id="node-search-count" class="node-search-count"></span>
-              <div class="filter-dropdown-wrap">
-                <button id="filters-toggle-btn" type="button" class="utility-muted">Filters</button>
-              </div>
-              <button id="utilities-toggle-btn" type="button" class="utility-muted">Utilities</button>
-              <div class="toolbar-zoom">
-                <button id="zoom-out-btn" aria-label="Zoom out">-</button>
-                <span id="zoom-label">100%</span>
-                <button id="zoom-in-btn" aria-label="Zoom in">+</button>
-              </div>
-            </div>
-          </div>
-          </div>
+          </div></div>
         </header>
         <div class="canvas-filter-row">
           <div id="node-filter-chips" class="node-filter-chips">
@@ -182,9 +194,15 @@
               <button class="emoji-quick" data-emoji="💩" type="button">💩</button>
             </div>
           </div>
+          <div class="floating-zoom-control" aria-label="Canvas zoom controls">
+            <button id="zoom-out-btn" aria-label="Zoom out">-</button>
+            <span id="zoom-label">100%</span>
+            <button id="zoom-in-btn" aria-label="Zoom in">+</button>
+          </div>
+
         </section>
 
-        <section id="boards-library-view" class="board-list-view hidden boards-library-page"><div class="boards-header-row"><h2>Boards</h2><button id="boards-create-btn" class="primary-add boards-create-btn" type="button">Create New Board</button></div><p>Manage your saved Campaign Canvas boards.</p><div id="boards-library-list" class="boards-library-panel"></div></section>
+        <section id="boards-library-view" class="board-list-view hidden boards-library-page"><div class="boards-header-row"><h2 id="boards-library-title">Boards</h2><button id="boards-create-btn" class="primary-add boards-create-btn" type="button">Create New Board</button></div><p id="boards-library-subtitle">Manage your saved Campaign Canvas boards.</p><div id="boards-library-list" class="boards-library-panel"></div></section>
         <section id="board-list-view" class="board-list-view hidden">
           <h2>Node List View</h2>
           <div id="node-list-view"></div>

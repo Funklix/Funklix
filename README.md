@@ -42,3 +42,28 @@ python3 -m http.server 4173
 Danach im Browser öffnen:
 
 - http://localhost:4173
+
+## Google Login (Phase 2.1 foundation)
+
+Minimal optional Google sign-in is now available and does **not** gate app usage.
+
+### Required environment variables
+
+- `GOOGLE_CLIENT_ID`
+- `GOOGLE_CLIENT_SECRET`
+- `AUTH_SECRET` (or `SESSION_SECRET`) for signing session cookies
+
+### OAuth callback URL
+
+Configure this Google OAuth redirect URI:
+
+- `https://<your-domain>/api/auth/google/callback`
+
+For local development (if running with a server that supports `/api` routes):
+
+- `http://localhost:3000/api/auth/google/callback`
+
+
+In Google Cloud Console, add the production callback URL exactly as:
+
+- `https://<your-domain>/api/auth/google/callback`
