@@ -75,6 +75,7 @@ const state = {
   ,analysisError: ""
   ,nodeSearchQuery: ""
   ,nodeFilters: { type: new Set(), platform: new Set(), state: new Set() }
+  ,user: null
 };
 
 const el = {
@@ -159,6 +160,12 @@ const el = {
   copyBoardLinkButton: document.getElementById("copy-board-link-btn"),
   boardLastSaved: document.getElementById("board-last-saved"),
   boardCopyFeedback: document.getElementById("board-copy-feedback"),
+  googleSigninButton: document.getElementById("google-signin-btn"),
+  authUserWrap: document.getElementById("auth-user"),
+  authName: document.getElementById("auth-name"),
+  authEmail: document.getElementById("auth-email"),
+  authAvatar: document.getElementById("auth-avatar"),
+  authSignoutButton: document.getElementById("auth-signout-btn"),
   brandCoreButton: document.getElementById("brand-core-nav-btn"),
   campaignCanvasNavButton: document.getElementById("campaign-canvas-nav-btn"),
   boardsNavButton: document.getElementById("boards-nav-btn"),
@@ -354,6 +361,30 @@ async function saveBoardAsNew(payload) {
   }
 }
 
+
+function renderAuthState() {
+  const signedIn = !!state.user;
+  el.googleSigninButton?.classList.toggle("hidden", signedIn);
+  el.authUserWrap?.classList.toggle("hidden", !signedIn);
+  if (!signedIn) return;
+  el.authName.textContent = state.user.name || "Google user";
+  el.authEmail.textContent = state.user.email || "";
+  el.authAvatar.src = state.user.avatar || "";
+  el.authAvatar.classList.toggle("hidden", !state.user.avatar);
+}
+
+async function loadSessionUser() {
+  try {
+    const response = await fetch('/api/auth/session');
+    if (!response.ok) return;
+    const data = await response.json();
+    state.user = data?.user || null;
+  } catch (_error) {
+    state.user = null;
+  }
+  renderAuthState();
+}
+
 function showBoardConflictModal() {
   return new Promise((resolve) => {
     const overlay = document.createElement('div');
@@ -450,15 +481,13 @@ function refreshLastSavedSnapshot() {
 }
 
 function detectDirtyFromSnapshot() {
-  console.log('Autosave effect fired');
-  if (state.isBoardLoading) { console.log('Autosave blocked because:', 'loading'); return; }
-  if (state.isSaving) { console.log('Autosave blocked because:', 'saving'); return; }
-  if (state.conflictModalOpen) { console.log('Autosave blocked because:', 'conflict modal open'); return; }
+  if (state.isBoardLoading) { return; }
+  if (state.isSaving) { return; }
+  if (state.conflictModalOpen) { return; }
 
   const currentSnapshot = JSON.stringify(serializeState());
   if (currentSnapshot !== state.lastSavedSnapshot) {
     if (!state.isDirty) {
-      console.log('Autosave dirty detected');
       markUnsaved();
     }
   }
@@ -472,23 +501,20 @@ function clearAutosaveTimer() {
   if (state.autosaveTimer) {
     clearTimeout(state.autosaveTimer);
     state.autosaveTimer = null;
-    console.log("Autosave timer cleared");
   }
 }
 
 function scheduleAutosave() {
-  if (state.conflictModalOpen) { console.log('Autosave blocked because:', 'conflict modal open'); return; }
-  if (state.autosavePausedUntilChange) { console.log('Autosave blocked because:', 'paused until change'); return; }
-  if (state.isSaving) { console.log('Autosave blocked because:', 'saving'); return; }
+  if (state.conflictModalOpen) { return; }
+  if (state.autosavePausedUntilChange) { return; }
+  if (state.isSaving) { return; }
   if (state.autosaveTimer) return;
-  console.log('Autosave timer scheduled');
   state.autosaveTimer = setTimeout(() => {
     state.autosaveTimer = null;
-    if (!state.isDirty) { console.log('Autosave blocked because:', 'no changes'); return; }
-    if (state.isSaving) { console.log('Autosave blocked because:', 'saving'); return; }
-    if (state.conflictModalOpen) { console.log('Autosave blocked because:', 'conflict modal open'); return; }
-    if (state.autosavePausedUntilChange) { console.log('Autosave blocked because:', 'paused until change'); return; }
-    console.log('Autosave executing');
+    if (!state.isDirty) { return; }
+    if (state.isSaving) { return; }
+    if (state.conflictModalOpen) { return; }
+    if (state.autosavePausedUntilChange) { return; }
     saveBoardToServer('autosave');
   }, 3000);
 }
@@ -989,7 +1015,6 @@ async function saveBoardToServer(trigger = "manual") {
     state.isDirty = false;
     setSaveStatus('Saved');
     refreshLastSavedSnapshot();
-    console.log('Autosave success');
     setSharePanelState(returnedId, new Date());
 
     if (!isUpdate && returnedId) {
@@ -3881,6 +3906,12 @@ el.calendarNextMonthButton.addEventListener("click", () => {
 });
 
 el.zoomInButton.addEventListener("click", () => setZoom(state.zoom + 0.1));
+el.googleSigninButton?.addEventListener("click", () => { window.location.href = "/api/auth/google/start"; });
+el.authSignoutButton?.addEventListener("click", async () => {
+  await fetch("/api/auth/session", { method: "DELETE" });
+  state.user = null;
+  renderAuthState();
+});
 el.zoomOutButton.addEventListener("click", () => setZoom(state.zoom - 0.1));
 
 el.canvas.addEventListener(
@@ -4400,11 +4431,6 @@ document.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && state.activeConnection) stopExistingNodeConnection();
 });
 
-window.debugNodes = () => {
-  console.log("STATE NODES", state.nodes);
-  console.log("DOM NODES", [...document.querySelectorAll(".node")].map((n) => n.getBoundingClientRect()));
-};
-
 function createDebugPanel() {}
 
 function bindGlobalResetDelegation() {
@@ -4599,13 +4625,10 @@ function showDeleteBoardConfirmModal() {
   });
 }
 
-function bootApp() {
-  console.log("Build check: zoom-v2 quick-v2");
-  console.log("zoom-out-btn exists:", !!document.getElementById("zoom-out-btn"));
-  console.log("zoom-label exists:", !!document.getElementById("zoom-label"));
-  console.log("zoom-in-btn exists:", !!document.getElementById("zoom-in-btn"));
+async function bootApp() {
   state.isBoardLoading = true;
   createDebugPanel();
+  await loadSessionUser();
   bindGlobalResetDelegation();
   loadBrandBrainState();
   const boardIdFromPath = getBoardIdFromPath();
@@ -4630,12 +4653,9 @@ function bootApp() {
   setActiveView("board");
   drawLinks();
   refreshLastSavedSnapshot();
-  setTimeout(() => {
-    console.log("node-ai-toolbar exists after render:", !!document.querySelector(".node-ai-toolbar"));
-  }, 0);
   state.isBoardLoading = false;
   startAutosaveWatcher();
 }
 
-if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", bootApp);
-else bootApp();
+if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", () => { void bootApp(); });
+else void bootApp();
