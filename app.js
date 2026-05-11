@@ -450,15 +450,13 @@ function refreshLastSavedSnapshot() {
 }
 
 function detectDirtyFromSnapshot() {
-  console.log('Autosave effect fired');
-  if (state.isBoardLoading) { console.log('Autosave blocked because:', 'loading'); return; }
-  if (state.isSaving) { console.log('Autosave blocked because:', 'saving'); return; }
-  if (state.conflictModalOpen) { console.log('Autosave blocked because:', 'conflict modal open'); return; }
+  if (state.isBoardLoading) { return; }
+  if (state.isSaving) { return; }
+  if (state.conflictModalOpen) { return; }
 
   const currentSnapshot = JSON.stringify(serializeState());
   if (currentSnapshot !== state.lastSavedSnapshot) {
     if (!state.isDirty) {
-      console.log('Autosave dirty detected');
       markUnsaved();
     }
   }
@@ -472,23 +470,20 @@ function clearAutosaveTimer() {
   if (state.autosaveTimer) {
     clearTimeout(state.autosaveTimer);
     state.autosaveTimer = null;
-    console.log("Autosave timer cleared");
   }
 }
 
 function scheduleAutosave() {
-  if (state.conflictModalOpen) { console.log('Autosave blocked because:', 'conflict modal open'); return; }
-  if (state.autosavePausedUntilChange) { console.log('Autosave blocked because:', 'paused until change'); return; }
-  if (state.isSaving) { console.log('Autosave blocked because:', 'saving'); return; }
+  if (state.conflictModalOpen) { return; }
+  if (state.autosavePausedUntilChange) { return; }
+  if (state.isSaving) { return; }
   if (state.autosaveTimer) return;
-  console.log('Autosave timer scheduled');
   state.autosaveTimer = setTimeout(() => {
     state.autosaveTimer = null;
-    if (!state.isDirty) { console.log('Autosave blocked because:', 'no changes'); return; }
-    if (state.isSaving) { console.log('Autosave blocked because:', 'saving'); return; }
-    if (state.conflictModalOpen) { console.log('Autosave blocked because:', 'conflict modal open'); return; }
-    if (state.autosavePausedUntilChange) { console.log('Autosave blocked because:', 'paused until change'); return; }
-    console.log('Autosave executing');
+    if (!state.isDirty) { return; }
+    if (state.isSaving) { return; }
+    if (state.conflictModalOpen) { return; }
+    if (state.autosavePausedUntilChange) { return; }
     saveBoardToServer('autosave');
   }, 3000);
 }
@@ -989,7 +984,6 @@ async function saveBoardToServer(trigger = "manual") {
     state.isDirty = false;
     setSaveStatus('Saved');
     refreshLastSavedSnapshot();
-    console.log('Autosave success');
     setSharePanelState(returnedId, new Date());
 
     if (!isUpdate && returnedId) {
@@ -4400,11 +4394,6 @@ document.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && state.activeConnection) stopExistingNodeConnection();
 });
 
-window.debugNodes = () => {
-  console.log("STATE NODES", state.nodes);
-  console.log("DOM NODES", [...document.querySelectorAll(".node")].map((n) => n.getBoundingClientRect()));
-};
-
 function createDebugPanel() {}
 
 function bindGlobalResetDelegation() {
@@ -4600,10 +4589,6 @@ function showDeleteBoardConfirmModal() {
 }
 
 function bootApp() {
-  console.log("Build check: zoom-v2 quick-v2");
-  console.log("zoom-out-btn exists:", !!document.getElementById("zoom-out-btn"));
-  console.log("zoom-label exists:", !!document.getElementById("zoom-label"));
-  console.log("zoom-in-btn exists:", !!document.getElementById("zoom-in-btn"));
   state.isBoardLoading = true;
   createDebugPanel();
   bindGlobalResetDelegation();
@@ -4630,9 +4615,6 @@ function bootApp() {
   setActiveView("board");
   drawLinks();
   refreshLastSavedSnapshot();
-  setTimeout(() => {
-    console.log("node-ai-toolbar exists after render:", !!document.querySelector(".node-ai-toolbar"));
-  }, 0);
   state.isBoardLoading = false;
   startAutosaveWatcher();
 }
