@@ -77,6 +77,7 @@ const state = {
   ,nodeFilters: { type: new Set(), platform: new Set(), state: new Set() }
   ,user: null
   ,authConfigured: true
+  ,currentBoardOwnerEmail: null
 };
 
 const el = {
@@ -160,6 +161,7 @@ const el = {
   boardShareLinkText: document.getElementById("board-share-link-text"),
   copyBoardLinkButton: document.getElementById("copy-board-link-btn"),
   boardLastSaved: document.getElementById("board-last-saved"),
+  claimBoardButton: document.getElementById("claim-board-btn"),
   boardCopyFeedback: document.getElementById("board-copy-feedback"),
   googleSigninButton: document.getElementById("google-signin-btn"),
   authUserWrap: document.getElementById("auth-user"),
@@ -180,6 +182,8 @@ const el = {
   insightsCards: document.getElementById("insights-cards"),
   aiBrainSummary: document.getElementById("ai-brain-summary"),
   boardsLibraryList: document.getElementById("boards-library-list"),
+  boardsLibraryTitle: document.getElementById("boards-library-title"),
+  boardsLibrarySubtitle: document.getElementById("boards-library-subtitle"),
   sidebarToggleButton: document.getElementById("sidebar-toggle-btn"),
   brandEditorTitle: document.getElementById("bc-editor-title"),
   brandCoreCanvas: document.getElementById("brand-core-canvas"),
@@ -293,10 +297,12 @@ function formatLastSavedLabel(value = new Date()) {
   return new Intl.DateTimeFormat("de-DE", { dateStyle: "short", timeStyle: "short" }).format(value);
 }
 
-function setSharePanelState(boardId, lastSaved = null) {
+function setSharePanelState(boardId, lastSaved = null, ownerEmail = null) {
   if (!boardId) {
+    state.currentBoardOwnerEmail = null;
     el.boardShareEmpty?.classList.remove("hidden");
     el.boardShareReady?.classList.add("hidden");
+    el.claimBoardButton?.classList.add("hidden");
     return;
   }
 
@@ -307,6 +313,9 @@ function setSharePanelState(boardId, lastSaved = null) {
     el.boardLastSaved.textContent = `Last saved: ${label}`;
   }
 
+  state.currentBoardOwnerEmail = ownerEmail || null;
+  const canClaim = !!state.user?.email && !state.currentBoardOwnerEmail;
+  el.claimBoardButton?.classList.toggle("hidden", !canClaim);
   el.boardShareEmpty?.classList.add("hidden");
   el.boardShareReady?.classList.remove("hidden");
 }
@@ -357,7 +366,7 @@ async function saveBoardAsNew(payload) {
     state.lastKnownUpdatedAt = data?.updated_at || null;
     const nextPath = `/boards/${newId}`;
     if (window.location.pathname !== nextPath) window.history.pushState({}, '', nextPath);
-    setSharePanelState(newId, data?.updated_at ? new Date(data.updated_at) : new Date());
+    setSharePanelState(newId, data?.updated_at ? new Date(data.updated_at) : new Date(), data?.owner_email || null);
     state.isDirty = false;
     setSaveStatus('Saved');
     refreshLastSavedSnapshot();
@@ -409,6 +418,7 @@ async function loadSessionUser() {
     state.user = null;
   }
   renderAuthState();
+  setSharePanelState(state.currentBoardId || getBoardIdFromPath(), null, state.currentBoardOwnerEmail);
 }
 
 function showBoardConflictModal() {
@@ -1041,7 +1051,7 @@ async function saveBoardToServer(trigger = "manual") {
     state.isDirty = false;
     setSaveStatus('Saved');
     refreshLastSavedSnapshot();
-    setSharePanelState(returnedId, new Date());
+    setSharePanelState(returnedId, new Date(), data?.owner_email || state.currentBoardOwnerEmail || null);
 
     if (!isUpdate && returnedId) {
       const nextPath = `/boards/${returnedId}`;
@@ -1072,7 +1082,7 @@ async function loadBoardFromUrlIfPresent() {
       renderBrandCoreEditor();
       saveBrandBrainState();
     }
-    setSharePanelState(state.currentBoardId, data?.updated_at ? new Date(data.updated_at) : null);
+    setSharePanelState(state.currentBoardId, data?.updated_at ? new Date(data.updated_at) : null, data?.owner_email || null);
     applyCampaignState(data.canvas_json || {}, `Loaded board ${boardId.slice(0, 8)}...`);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data.canvas_json || {}));
     return true;
@@ -3950,6 +3960,18 @@ el.authAvatar?.addEventListener("error", () => {
   el.authAvatar.classList.add("hidden");
   if (el.authAvatarFallback) el.authAvatarFallback.classList.remove("hidden");
 });
+
+el.claimBoardButton?.addEventListener("click", async () => {
+  const boardId = state.currentBoardId || getBoardIdFromPath();
+  if (!boardId || !state.user?.email || state.currentBoardOwnerEmail) return;
+  const response = await fetch(`/api/boards/${boardId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ claim: true }) });
+  const data = await response.json();
+  if (!response.ok) return;
+  setSharePanelState(boardId, data?.updated_at ? new Date(data.updated_at) : new Date(), data?.owner_email || state.user.email);
+  setSaveStatus('Board claimed');
+  loadBoardsLibrary();
+});
+
 el.zoomOutButton.addEventListener("click", () => setZoom(state.zoom - 0.1));
 
 el.canvas.addEventListener(
@@ -4617,12 +4639,20 @@ async function loadBoardsLibrary() {
 function renderBoardsLibrary() {
   if (!el.boardsLibraryList) return;
   el.boardsLibraryList.innerHTML = '';
+  if (state.user?.email) {
+    if (el.boardsLibraryTitle) el.boardsLibraryTitle.textContent = 'My Boards';
+    if (el.boardsLibrarySubtitle) el.boardsLibrarySubtitle.textContent = 'Boards owned by your account are shown first. Anonymous/public boards may also appear.';
+  } else {
+    if (el.boardsLibraryTitle) el.boardsLibraryTitle.textContent = 'Boards';
+    if (el.boardsLibrarySubtitle) el.boardsLibrarySubtitle.textContent = 'Manage your saved Campaign Canvas boards. Sign in to save boards to your account.';
+  }
   state.boardsLibrary.forEach((board, index) => {
     const row = document.createElement('div');
     row.className = 'board-row';
     const savedAt = board.updated_at ? new Date(board.updated_at).toLocaleString('de-DE') : '—';
     const preview = `${board.id?.slice(0, 8)}...`;
-    row.innerHTML = `<div><strong>${board.name || 'Campaign Canvas Board'}</strong><div class="board-row-meta">Last saved: ${savedAt} · ${preview}</div><div class="board-rename hidden" data-rename-wrap="${board.id}"><input data-rename-input="${board.id}" value="${board.name || ''}" /><button data-rename-save="${board.id}" type="button">Save</button><button data-rename-cancel="${board.id}" type="button">Cancel</button></div></div><div class="board-row-actions"><button class="icon-btn" data-open-board="${board.id}" title="Open" aria-label="Open board">↗</button><button class="icon-btn" data-copy-board="${board.id}" title="Copy link" aria-label="Copy link">⧉</button><button class="icon-btn" data-rename-board="${board.id}" title="Rename" aria-label="Rename board">✎</button><button class="icon-btn danger" data-delete-board="${board.id}" title="Delete" aria-label="Delete board">🗑</button><button class="icon-btn" data-up-board="${board.id}" data-index="${index}" title="Move up">↑</button><button class="icon-btn" data-down-board="${board.id}" data-index="${index}" title="Move down">↓</button></div>`;
+    const ownerLabel = board.owner_email ? (state.user?.email && board.owner_email === state.user.email ? 'Owned by you' : `Owner: ${board.owner_name || board.owner_email}`) : 'Anonymous / Public';
+    row.innerHTML = `<div><strong>${board.name || 'Campaign Canvas Board'}</strong><div class="board-row-meta">Last saved: ${savedAt} · ${preview}</div><div class="board-row-meta">${ownerLabel}</div><div class="board-rename hidden" data-rename-wrap="${board.id}"><input data-rename-input="${board.id}" value="${board.name || ''}" /><button data-rename-save="${board.id}" type="button">Save</button><button data-rename-cancel="${board.id}" type="button">Cancel</button></div></div><div class="board-row-actions"><button class="icon-btn" data-open-board="${board.id}" title="Open" aria-label="Open board">↗</button><button class="icon-btn" data-copy-board="${board.id}" title="Copy link" aria-label="Copy link">⧉</button><button class="icon-btn" data-rename-board="${board.id}" title="Rename" aria-label="Rename board">✎</button><button class="icon-btn danger" data-delete-board="${board.id}" title="Delete" aria-label="Delete board">🗑</button><button class="icon-btn" data-up-board="${board.id}" data-index="${index}" title="Move up">↑</button><button class="icon-btn" data-down-board="${board.id}" data-index="${index}" title="Move down">↓</button></div>`;
     el.boardsLibraryList.appendChild(row);
   });
 }
