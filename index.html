@@ -6,7 +6,8 @@
     <title>Campaign Canvas MVP</title>
     <link rel="stylesheet" href="/styles.css" />
     <style>
-      .canvas-toolbar { display: flex; align-items: center; gap: 10px; width: 100%; min-width: 0; }
+      .canvas-toolbar { display: grid; gap: 6px; width: 100%; min-width: 0; }
+      .canvas-toolbar-row { display: flex; align-items: center; gap: 10px; min-width: 0; }
       .toolbar-brand { display: none; }
       .toolbar-title { margin: 0; font-size: 16px; line-height: 1.1; }
       .toolbar-subtitle { margin: 0; font-size: 11px; opacity: 0.7; white-space: nowrap; }
@@ -14,7 +15,8 @@
       .toolbar-group-left { flex: 0 1 auto; }
       .toolbar-group-center { justify-content: center; width: clamp(280px, 32vw, 520px); flex: 0 1 auto; }
       .toolbar-group-right { justify-content: flex-end; overflow: visible; flex: 0 0 auto; gap: 8px; margin-left: auto; }
-      .status-block { display: flex; align-items: center; gap: 8px; white-space: nowrap; min-width: 0; overflow: hidden; justify-content: flex-end; width: 100%; }
+      .toolbar-secondary { justify-content: center; gap: 10px; }
+      .status-block { display: flex; align-items: center; gap: 8px; white-space: nowrap; min-width: 0; overflow: hidden; justify-content: flex-end; width: min(360px, 40vw); margin-left: auto; }
       .save-status-text, .share-meta, .share-feedback { font-size: 11px; opacity: 0.8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
       .share-panel { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
       .share-ready { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
@@ -34,10 +36,11 @@
       .filter-group strong { display: block; font-size: 11px; color: #717b9f; margin-bottom: 5px; }
       .toolbar-utility-source { display: none !important; }
       .toolbar-zoom { display: inline-flex; align-items: center; gap: 4px; flex: 0 0 auto; }
+      .debug-badge { font-size: 10px; color: #5c4ad8; white-space: nowrap; }
       #filters-toggle-btn { display: inline-flex !important; align-items: center; flex: 0 0 auto; visibility: visible; opacity: 1; position: relative; z-index: 140; }
       .canvas-filter-row { display: none !important; }
       #node-filter-chips { display: none !important; }
-      @media (max-width: 1200px) { .canvas-toolbar { flex-wrap: wrap; } .toolbar-group-center { order: 2; width: min(100%, 520px); } .toolbar-group-right { order: 3; justify-content: flex-start; } .toolbar-subtitle { display: none; } }
+      @media (max-width: 1200px) { .canvas-toolbar-row { flex-wrap: wrap; } .toolbar-group-center { width: min(100%, 520px); } .toolbar-group-right { justify-content: flex-start; margin-left: 0; } .toolbar-secondary { justify-content: flex-start; } .status-block { width: 100%; justify-content: flex-start; } .toolbar-subtitle { display: none; } }
 
       .boards-library-page { max-width: 1100px; margin: 0 auto; padding: 20px; height: calc(100vh - 150px); min-height: 0; display: flex; flex-direction: column; }
       .boards-library-page.hidden { display: none !important; }
@@ -84,16 +87,17 @@
             <p class="toolbar-subtitle">Idea → Variations → Content → Social Posts</p>
           </div>
           <div class="actions canvas-toolbar">
-            <div class="toolbar-group toolbar-group-left">
-              <button id="create-campaign-btn" class="create-campaign-btn">Create campaign</button>
-              <button id="add-node-btn" class="primary-add">+ Add node</button>
-              <button id="undo-btn" class="utility-muted" title="Rückgängig">↶</button>
-            </div>
-            <div class="toolbar-group toolbar-group-center">
-              <input id="node-search-input" type="search" placeholder="Search nodes..." />
-            </div>
-            <div class="toolbar-group toolbar-group-right">
-              <div class="view-switcher">
+            <div class="canvas-toolbar-row">
+              <div class="toolbar-group toolbar-group-left">
+                <button id="create-campaign-btn" class="create-campaign-btn">Create campaign</button>
+                <button id="add-node-btn" class="primary-add">+ Add node</button>
+                <button id="undo-btn" class="utility-muted" title="Rückgängig">↶</button>
+              </div>
+              <div class="toolbar-group toolbar-group-center">
+                <input id="node-search-input" type="search" placeholder="Search nodes..." />
+              </div>
+              <div class="toolbar-group toolbar-group-right">
+                <div class="view-switcher">
                 <button id="cycle-view-btn">Board View</button>
                 <button id="view-menu-btn" title="Choose view">▾</button>
                 <div id="view-menu" class="hidden">
@@ -102,15 +106,6 @@
                   <button id="view-calendar-btn" type="button">Calendar View</button>
                 </div>
               </div>
-              <div class="filter-dropdown-wrap">
-                <button id="filters-toggle-btn" type="button" class="utility-muted">Filters</button>
-              </div>
-              <button id="utilities-toggle-btn" type="button" class="utility-muted">Utilities</button>
-              <div class="toolbar-zoom">
-                <button id="zoom-out-btn" aria-label="Zoom out">-</button>
-                <span id="zoom-label">100%</span>
-                <button id="zoom-in-btn" aria-label="Zoom in">+</button>
-              </div>
               <div class="toolbar-utility-source" aria-hidden="true">
                 <button id="compact-all-btn" type="button" title="Compact all nodes">Compact All</button>
                 <button id="expand-all-btn" type="button" title="Expand all nodes">Expand All</button>
@@ -118,8 +113,6 @@
                 <button id="new-board-btn" class="utility-muted">New Board</button>
                 <button id="reset-board-btn" class="danger utility-muted">Reset Board</button>
               </div>
-              <span id="node-search-count" class="node-search-count"></span>
-              <span class="node-search-count" style="color:#4f39db;">Build check: zoom-v2 quick-v2</span>
               <div class="status-block">
               <span id="save-status" class="save-status-text">Unsaved changes</span>
               <div id="board-share-panel" class="share-panel" aria-live="polite">
@@ -134,7 +127,21 @@
                 </div>
               </div>
             </div>
+            <span class="debug-badge">Build check: zoom-v2 quick-v2</span>
             </div>
+            <div class="canvas-toolbar-row toolbar-secondary">
+              <span id="node-search-count" class="node-search-count"></span>
+              <div class="filter-dropdown-wrap">
+                <button id="filters-toggle-btn" type="button" class="utility-muted">Filters</button>
+              </div>
+              <button id="utilities-toggle-btn" type="button" class="utility-muted">Utilities</button>
+              <div class="toolbar-zoom">
+                <button id="zoom-out-btn" aria-label="Zoom out">-</button>
+                <span id="zoom-label">100%</span>
+                <button id="zoom-in-btn" aria-label="Zoom in">+</button>
+              </div>
+            </div>
+          </div>
           </div>
         </header>
         <div class="canvas-filter-row">
