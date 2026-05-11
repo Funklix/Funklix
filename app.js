@@ -10,6 +10,8 @@ const NODE_TYPES = {
 
 const NODE_WIDTH = 285;
 const NODE_HEIGHT = 200;
+const NODE_OVERLAP_MARGIN = 32;
+const NODE_OVERLAP_MAX_PASSES = 4;
 const BOARD_WIDTH = 10000;
 const BOARD_HEIGHT = 10000;
 const STORAGE_KEY = "campaignCanvasState";
@@ -3396,9 +3398,18 @@ function renderNode(node) {
   compactToggle.className = "node-compact-toggle";
   compactToggle.addEventListener("click", (event) => {
     event.stopPropagation();
+    const wasCompact = !!node.compact;
     node.compact = !node.compact;
     updateNodeCard(node);
-    saveCampaignCanvasState();
+    if (wasCompact && !node.compact) {
+      requestAnimationFrame(() => {
+        const moved = resolveOverlapsAfterNodeExpand(node.id);
+        if (moved) drawLinks();
+        saveCampaignCanvasState();
+      });
+    } else {
+      saveCampaignCanvasState();
+    }
   });
   nodeEl.appendChild(compactToggle);
   const compactSummary = document.createElement("div");
@@ -3574,6 +3585,90 @@ function enableNodeDrag(nodeEl, node) {
   });
 }
 
+function getNodeBounds(nodeId) {
+  const nodeEl = el.zoomLayer.querySelector(`[data-id='${nodeId}']`);
+  return nodeEl ? nodeEl.getBoundingClientRect() : null;
+}
+
+function doBoundsOverlap(a, b, margin = 0) {
+  if (!a || !b) return false;
+  return !(a.right + margin <= b.left || b.right + margin <= a.left || a.bottom + margin <= b.top || b.bottom + margin <= a.top);
+}
+
+function nudgeNodeAwayFromAnchor(node, nodeBounds, anchorBounds, preferDiagonal = false) {
+  const overlapX = Math.min(anchorBounds.right, nodeBounds.right) - Math.max(anchorBounds.left, nodeBounds.left);
+  const overlapY = Math.min(anchorBounds.bottom, nodeBounds.bottom) - Math.max(anchorBounds.top, nodeBounds.top);
+  const moveRight = (Math.max(0, overlapX) + NODE_OVERLAP_MARGIN) / state.zoom;
+  const moveDown = (Math.max(0, overlapY) + NODE_OVERLAP_MARGIN) / state.zoom;
+  node.position.x += moveRight;
+  if (preferDiagonal || overlapY > 0) node.position.y += moveDown;
+}
+
+function resolveOverlapsAfterNodeExpand(expandedNodeId) {
+  const expandedNode = getNode(expandedNodeId);
+  if (!expandedNode) return false;
+  const expandedBounds = getNodeBounds(expandedNodeId);
+  if (!expandedBounds) return false;
+
+  const movedNodeIds = new Set();
+  let changed = false;
+
+  state.nodes.forEach((candidate) => {
+    if (candidate.id === expandedNodeId) return;
+    const candidateBounds = getNodeBounds(candidate.id);
+    if (!doBoundsOverlap(expandedBounds, candidateBounds, NODE_OVERLAP_MARGIN)) return;
+    nudgeNodeAwayFromAnchor(candidate, candidateBounds, expandedBounds, false);
+    updateNodeCard(candidate);
+    movedNodeIds.add(candidate.id);
+    changed = true;
+  });
+
+  for (let pass = 0; pass < NODE_OVERLAP_MAX_PASSES && movedNodeIds.size; pass++) {
+    let passChanged = false;
+    const anchors = [...movedNodeIds];
+    anchors.forEach((anchorId) => {
+      const anchorBounds = getNodeBounds(anchorId);
+      if (!anchorBounds) return;
+      state.nodes.forEach((candidate) => {
+        if (candidate.id === expandedNodeId || candidate.id === anchorId) return;
+        const candidateBounds = getNodeBounds(candidate.id);
+        if (!doBoundsOverlap(anchorBounds, candidateBounds, NODE_OVERLAP_MARGIN)) return;
+        nudgeNodeAwayFromAnchor(candidate, candidateBounds, anchorBounds, true);
+        updateNodeCard(candidate);
+        movedNodeIds.add(candidate.id);
+        passChanged = true;
+        changed = true;
+      });
+    });
+    if (!passChanged) break;
+  }
+
+  return changed;
+}
+
+function resolveAllNodeOverlaps() {
+  let changed = false;
+  for (let pass = 0; pass < NODE_OVERLAP_MAX_PASSES; pass++) {
+    let passChanged = false;
+    for (let i = 0; i < state.nodes.length; i++) {
+      const left = state.nodes[i];
+      const leftBounds = getNodeBounds(left.id);
+      if (!leftBounds) continue;
+      for (let j = i + 1; j < state.nodes.length; j++) {
+        const right = state.nodes[j];
+        const rightBounds = getNodeBounds(right.id);
+        if (!doBoundsOverlap(leftBounds, rightBounds, NODE_OVERLAP_MARGIN)) continue;
+        nudgeNodeAwayFromAnchor(right, rightBounds, leftBounds, pass > 0);
+        updateNodeCard(right);
+        passChanged = true;
+        changed = true;
+      }
+    }
+    if (!passChanged) break;
+  }
+  return changed;
+}
+
 function toggleListMode(showList) {
   const shouldShowList = typeof showList === "boolean" ? showList : !el.canvas.classList.contains("hidden");
   el.canvas.classList.toggle("hidden", shouldShowList);
@@ -3598,6 +3693,15 @@ function setCompactModeForAllNodes(compact) {
     changed = true;
   });
   if (!changed) return;
+  if (!compact) {
+    setSaveStatus("All nodes expanded");
+    requestAnimationFrame(() => {
+      const moved = resolveAllNodeOverlaps();
+      if (moved) drawLinks();
+      saveCampaignCanvasState();
+    });
+    return;
+  }
   setSaveStatus(compact ? "All nodes compacted" : "All nodes expanded");
   saveCampaignCanvasState();
 }
