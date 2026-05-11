@@ -116,59 +116,34 @@
                 <input id="node-search-input" type="search" placeholder="Search nodes..." />
               </div>
               <div class="toolbar-group toolbar-group-right">
-                <div class="view-switcher">
-                <button id="cycle-view-btn">Board View</button>
-                <button id="view-menu-btn" title="Choose view">▾</button>
-                <div id="view-menu" class="hidden">
-                  <button id="view-board-btn" type="button">Board View</button>
-                  <button id="view-list-btn" type="button">List View</button>
-                  <button id="view-calendar-btn" type="button">Calendar View</button>
-                </div>
-              </div>
-              <div class="toolbar-utility-source" aria-hidden="true">
-                <button id="compact-all-btn" type="button" title="Compact all nodes">Compact All</button>
-                <button id="expand-all-btn" type="button" title="Expand all nodes">Expand All</button>
-                <button id="save-board-btn" class="utility-muted">Save Board</button>
-                <button id="new-board-btn" class="utility-muted">New Board</button>
-                <button id="reset-board-btn" class="danger utility-muted">Reset Board</button>
-              </div>
-              <div class="status-block">
-              <span id="save-status" class="save-status-text">Unsaved changes</span>
-              <div id="auth-panel" class="auth-panel" aria-live="polite">
-                <button id="google-signin-btn" type="button" class="auth-signin-btn">Sign in with Google</button>
-                <div id="auth-user" class="auth-user hidden">
-                  <img id="auth-avatar" class="auth-avatar" alt="User avatar" />
-                  <span id="auth-avatar-fallback" class="auth-avatar-fallback hidden"></span>
-                  <div class="auth-meta"><strong id="auth-name"></strong><span id="auth-email"></span></div>
-                  <button id="auth-signout-btn" type="button" class="auth-signout-btn utility-muted">Sign out</button>
-                </div>
-              </div>
-              <span id="auth-message" class="auth-message hidden"></span>
-              <div id="board-share-panel" class="share-panel" aria-live="polite">
-                <div id="board-share-empty" class="share-hint">Save to create share link.</div>
-                <div id="board-share-ready" class="share-ready hidden">
-                  <div class="share-link-row">
-                    <span id="board-share-link-text" class="share-link-text"></span>
-                    <button id="copy-board-link-btn" type="button">Copy</button>
-                    <div id="board-last-saved" class="share-meta">Last saved: —</div><button id="claim-board-btn" type="button" class="utility-muted hidden">Claim board</button>
+                <div id="auth-panel" class="auth-panel" aria-live="polite">
+                  <button id="google-signin-btn" type="button" class="auth-signin-btn">Sign in with Google</button>
+                  <div id="auth-user" class="auth-user hidden">
+                    <img id="auth-avatar" class="auth-avatar" alt="User avatar" />
+                    <span id="auth-avatar-fallback" class="auth-avatar-fallback hidden"></span>
+                    <div class="auth-meta"><strong id="auth-name"></strong><span id="auth-email"></span></div>
+                    <button id="auth-signout-btn" type="button" class="auth-signout-btn utility-muted">Sign out</button>
                   </div>
-                  <div id="board-copy-feedback" class="share-feedback hidden"></div>
                 </div>
+                <button id="copy-board-link-btn" type="button" class="utility-muted">Copy</button>
               </div>
               <span id="auth-message" class="auth-message hidden"></span>
-            </div>
             </div>
             <div class="canvas-toolbar-row secondary toolbar-secondary">
-              <div class="toolbar-row2-left">
-                <span id="node-search-count" class="node-search-count"></span>
-                <div class="filter-dropdown-wrap">
-                  <button id="filters-toggle-btn" type="button" class="utility-muted">Filters</button>
-                </div>
-                <button id="utilities-toggle-btn" type="button" class="utility-muted">Utilities</button>
+              <div class="filter-dropdown-wrap">
+                <button id="filters-toggle-btn" type="button" class="utility-muted">Filters</button>
               </div>
               <button id="utilities-toggle-btn" type="button" class="utility-muted">Utilities</button>
             </div>
-          </div>
+
+            <div class="toolbar-utility-source" aria-hidden="true" style="display:none;">
+              <button id="compact-all-btn" type="button" title="Compact all nodes">Compact All</button>
+              <button id="expand-all-btn" type="button" title="Expand all nodes">Expand All</button>
+              <button id="save-board-btn" class="utility-muted">Save Board</button>
+              <button id="new-board-btn" class="utility-muted">New Board</button>
+              <button id="reset-board-btn" class="danger utility-muted">Reset Board</button>
+            </div>
+          </div></div>
           </div>
         </header>
         <div class="canvas-filter-row">
@@ -186,7 +161,6 @@
             <button type="button" data-filter-group="state" data-filter-value="conversion">Conversion</button>
             <button type="button" data-filter-group="state" data-filter-value="awareness">Awareness</button>
           </div>
-          <span id="node-search-count" class="node-search-count"></span>
         </div>
 
         <section class="canvas" id="canvas">
@@ -213,7 +187,6 @@
             <span id="zoom-label">100%</span>
             <button id="zoom-in-btn" aria-label="Zoom in">+</button>
           </div>
-
         </section>
 
         <section id="boards-library-view" class="board-list-view hidden boards-library-page"><div class="boards-header-row"><h2 id="boards-library-title">Boards</h2><button id="boards-create-btn" class="primary-add boards-create-btn" type="button">Create New Board</button></div><p id="boards-library-subtitle">Manage your saved Campaign Canvas boards.</p><div id="boards-library-list" class="boards-library-panel"></div></section>
