@@ -23,13 +23,28 @@ module.exports = async function handler(req, res) {
       if (!canvas_json || typeof canvas_json !== 'object') {
         return res.status(400).json({ error: 'canvas_json is required' });
       }
+      const user = getSessionUser(req);
 
       const current = await pool.query(
-        'SELECT id, updated_at FROM boards WHERE id = $1 LIMIT 1',
+        'SELECT id, updated_at, owner_id, owner_email FROM boards WHERE id = $1 LIMIT 1',
         [id]
       );
       if (current.rowCount === 0) {
         return res.status(404).json({ error: 'Board not found' });
+      }
+      const board = current.rows[0];
+      const sessionUserId = user?.id || user?.sub || null;
+      const ownerMatchByEmail = !!board.owner_email && user?.email === board.owner_email;
+      const ownerMatchById = !!board.owner_id && !!sessionUserId && board.owner_id === sessionUserId;
+      const isOwner = ownerMatchByEmail || ownerMatchById;
+      const actorType = !user?.email ? 'anonymous' : (!board.owner_email && !board.owner_id ? 'unowned_board' : (isOwner ? 'owner' : 'non_owner_signed_in'));
+      if (!isOwner) {
+        console.warn('[Funklix Authz Observe] Non-owner PUT write', {
+          boardId: id,
+          actorType,
+          actorEmail: user?.email || null,
+          ownerEmail: board.owner_email || null
+        });
       }
 
       if (lastKnownUpdatedAt) {
