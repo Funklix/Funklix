@@ -138,7 +138,8 @@
           </div>
           <div id="legacy-toolbar-hooks" hidden aria-hidden="true">
             <span id="save-status">Unsaved changes</span>
-            <span id="auth-message"></span>
+            <!-- Keep primary #auth-message in visible auth panel; legacy hook uses unique id to avoid duplicate-ID lookup ambiguity. -->
+            <span id="auth-message-legacy-hook"></span>
 
             <div id="board-share-panel">
               <div id="board-share-empty">Save to create share link.</div>
