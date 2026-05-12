@@ -1047,9 +1047,15 @@ async function regenerateSocialForPlatform(node, triggerBtn = null) {
 }
 
 function serializeState() {
+  // Board canvas schema marker for forward-compatible persistence evolution.
+  const nowIso = new Date().toISOString();
   const serialized = {
     nodes: state.nodes.map((n) => sanitizeNodeForPersistence(n)),
-    edges: state.edges, nodeCounter: state.nodeCounter, postitCounter: state.postitCounter, zoom: state.zoom
+    edges: state.edges, nodeCounter: state.nodeCounter, postitCounter: state.postitCounter, zoom: state.zoom,
+    schemaVersion: 1,
+    metadata: {
+      updatedAt: nowIso
+    }
   };
   const selectedNode = state.selectedPrimary ? serialized.nodes.find((n) => n.id === state.selectedPrimary) : null;
   console.log("serialized images", selectedNode?.images || []);
@@ -1075,18 +1081,33 @@ function getBoardIdFromPath() {
 function loadCampaignCanvasState() {
   const raw = localStorage.getItem(STORAGE_KEY); if (!raw) return false;
   const campaignState = JSON.parse(raw); console.log("Loaded campaignCanvasState", campaignState);
-  applyCampaignState(campaignState, "Restored from local storage");
+  applyCampaignState(withBoardSchemaDefaults(campaignState), "Restored from local storage");
   return true;
 }
 
 
+function withBoardSchemaDefaults(campaignState) {
+  // Backward-compatible normalization: older boards may not have schemaVersion/metadata yet.
+  const safeState = campaignState && typeof campaignState === "object" ? campaignState : {};
+  const nowIso = new Date().toISOString();
+  return {
+    ...safeState,
+    schemaVersion: Number.isFinite(safeState.schemaVersion) ? safeState.schemaVersion : 1,
+    metadata: {
+      createdAt: safeState?.metadata?.createdAt || nowIso,
+      updatedAt: safeState?.metadata?.updatedAt || nowIso
+    }
+  };
+}
+
 function applyCampaignState(campaignState, statusText = "Restored") {
-  state.nodes = (campaignState.nodes || []).map((node) => sanitizeNodeForPersistence(node));
+  const normalizedState = withBoardSchemaDefaults(campaignState);
+  state.nodes = (normalizedState.nodes || []).map((node) => sanitizeNodeForPersistence(node));
   state.contentPackLoadingById = {};
   state.contentPackErrorById = {};
-  state.edges = campaignState.edges || [];
-  state.nodeCounter = campaignState.nodeCounter || 1;
-  state.postitCounter = campaignState.postitCounter || 1;
+  state.edges = normalizedState.edges || [];
+  state.nodeCounter = normalizedState.nodeCounter || 1;
+  state.postitCounter = normalizedState.postitCounter || 1;
   state.selectedIds.clear();
   state.selectedPrimary = null;
   el.zoomLayer.querySelectorAll(".node").forEach((n) => n.remove());
@@ -1094,7 +1115,7 @@ function applyCampaignState(campaignState, statusText = "Restored") {
   updateListView();
   updateEmptyState();
   drawLinks();
-  if (campaignState.zoom) setZoom(campaignState.zoom);
+  if (normalizedState.zoom) setZoom(normalizedState.zoom);
   state.isDirty = false;
   clearAutosaveTimer();
   setSaveStatus(statusText);
@@ -1194,8 +1215,9 @@ async function loadBoardFromUrlIfPresent() {
       saveBrandBrainState();
     }
     setSharePanelState(state.currentBoardId, data?.updated_at ? new Date(data.updated_at) : null, data?.owner_email || null);
-    applyCampaignState(data.canvas_json || {}, `Loaded board ${boardId.slice(0, 8)}...`);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data.canvas_json || {}));
+    const normalizedCanvasState = withBoardSchemaDefaults(data.canvas_json || {});
+    applyCampaignState(normalizedCanvasState, `Loaded board ${boardId.slice(0, 8)}...`);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(normalizedCanvasState));
     return true;
   } catch (error) {
     console.error(error);
@@ -4728,7 +4750,8 @@ function defaultBrandCoreState() {
 }
 
 function blankCanvasState() {
-  return { nodes: [], edges: [], nodeCounter: 1, postitCounter: 1, zoom: 1 };
+  const nowIso = new Date().toISOString();
+  return { nodes: [], edges: [], nodeCounter: 1, postitCounter: 1, zoom: 1, schemaVersion: 1, metadata: { createdAt: nowIso, updatedAt: nowIso } };
 }
 
 function showCreateBoardModal() {
