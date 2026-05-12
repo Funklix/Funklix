@@ -4934,7 +4934,8 @@ async function bootApp() {
   setAppMode("canvas");
   setActiveView("board");
   drawLinks();
-  refreshLastSavedSnapshot();
+  // URL/server-loaded boards refresh snapshot after applyCampaignState(); avoid capturing pre-load snapshot while in-flight.
+  if (!state.initialServerLoadInFlight) refreshLastSavedSnapshot();
   if (!state.initialServerLoadInFlight) state.isBoardLoading = false;
   startAutosaveWatcher();
 }
