@@ -217,6 +217,34 @@ const el = {
   }
 };
 
+const domRegistryMeta = {
+  "canvas": { category: "canvas", critical: true, requiredForBoot: true, optional: false, legacy: false, hiddenCompatibilityHook: false, viewSpecific: false },
+  "zoom-layer": { category: "canvas", critical: true, requiredForBoot: true, optional: false, legacy: false, hiddenCompatibilityHook: false, viewSpecific: false },
+  "links": { category: "canvas", critical: true, requiredForBoot: true, optional: false, legacy: false, hiddenCompatibilityHook: false, viewSpecific: false },
+  "add-node-btn": { category: "toolbar", critical: true, requiredForBoot: true, optional: false, legacy: false, hiddenCompatibilityHook: false, viewSpecific: false },
+  "create-campaign-btn": { category: "toolbar", critical: true, requiredForBoot: true, optional: false, legacy: false, hiddenCompatibilityHook: false, viewSpecific: false },
+  "undo-btn": { category: "toolbar", critical: true, requiredForBoot: true, optional: false, legacy: false, hiddenCompatibilityHook: false, viewSpecific: false },
+  "node-search-input": { category: "toolbar", critical: true, requiredForBoot: true, optional: false, legacy: false, hiddenCompatibilityHook: false, viewSpecific: false },
+  "zoom-in-btn": { category: "zoom", critical: true, requiredForBoot: true, optional: false, legacy: false, hiddenCompatibilityHook: false, viewSpecific: false },
+  "zoom-out-btn": { category: "zoom", critical: true, requiredForBoot: true, optional: false, legacy: false, hiddenCompatibilityHook: false, viewSpecific: false },
+  "zoom-label": { category: "zoom", critical: true, requiredForBoot: true, optional: false, legacy: false, hiddenCompatibilityHook: false, viewSpecific: false },
+  "inspector-panel": { category: "inspector", critical: true, requiredForBoot: true, optional: false, legacy: false, hiddenCompatibilityHook: false, viewSpecific: false },
+  "node-form": { category: "inspector", critical: true, requiredForBoot: true, optional: false, legacy: false, hiddenCompatibilityHook: false, viewSpecific: false },
+  "google-signin-btn": { category: "auth", critical: false, requiredForBoot: false, optional: true, legacy: false, hiddenCompatibilityHook: false, viewSpecific: false },
+  "auth-user": { category: "auth", critical: false, requiredForBoot: false, optional: true, legacy: false, hiddenCompatibilityHook: false, viewSpecific: false },
+  "auth-message": { category: "auth", critical: false, requiredForBoot: false, optional: true, legacy: false, hiddenCompatibilityHook: false, viewSpecific: false },
+  "save-status": { category: "saveShare", critical: true, requiredForBoot: true, optional: false, legacy: true, hiddenCompatibilityHook: true, viewSpecific: false },
+  "board-share-panel": { category: "saveShare", critical: true, requiredForBoot: true, optional: false, legacy: true, hiddenCompatibilityHook: true, viewSpecific: false },
+  "copy-board-link-btn": { category: "saveShare", critical: true, requiredForBoot: true, optional: false, legacy: false, hiddenCompatibilityHook: false, viewSpecific: false },
+  "filters-toggle-btn": { category: "filtersUtilities", critical: false, requiredForBoot: false, optional: true, legacy: false, hiddenCompatibilityHook: false, viewSpecific: false },
+  "utilities-toggle-btn": { category: "filtersUtilities", critical: false, requiredForBoot: false, optional: true, legacy: false, hiddenCompatibilityHook: false, viewSpecific: false },
+  "boards-library-view": { category: "boards", critical: false, requiredForBoot: false, optional: true, legacy: false, hiddenCompatibilityHook: false, viewSpecific: true },
+  "boards-library-list": { category: "boards", critical: false, requiredForBoot: false, optional: true, legacy: false, hiddenCompatibilityHook: false, viewSpecific: true },
+  "cycle-view-btn": { category: "legacyHooks", critical: true, requiredForBoot: true, optional: false, legacy: true, hiddenCompatibilityHook: true, viewSpecific: false },
+  "view-menu-btn": { category: "legacyHooks", critical: true, requiredForBoot: true, optional: false, legacy: true, hiddenCompatibilityHook: true, viewSpecific: false },
+  "view-board-btn": { category: "legacyHooks", critical: true, requiredForBoot: true, optional: false, legacy: true, hiddenCompatibilityHook: true, viewSpecific: false }
+};
+
 function diagnoseDomDependencies() {
   try {
     const categories = {
@@ -270,14 +298,16 @@ function diagnoseDomDependencies() {
     const criticalSet = new Set(categories.bootCritical);
     idsToCheck.forEach((id) => {
       if (!document.getElementById(id) && criticalSet.has(id)) {
-        console.warn(`[Funklix DOM Diagnostics] Missing critical element: #${id}`);
+        const category = domRegistryMeta[id]?.category || "unknown";
+        console.warn(`[Funklix DOM Diagnostics][${category}] Missing critical element: #${id}`);
       }
     });
 
     Object.entries(missingByCategory).forEach(([category, ids]) => {
       ids.forEach((id) => {
         if (category !== "bootCritical") {
-          console.warn(`[Funklix DOM Diagnostics] Missing ${category} element: #${id}`);
+          const metaCategory = domRegistryMeta[id]?.category || category || "unknown";
+          console.warn(`[Funklix DOM Diagnostics][${metaCategory}] Missing element: #${id}`);
         }
       });
     });
