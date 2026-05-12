@@ -217,6 +217,83 @@ const el = {
   }
 };
 
+function diagnoseDomDependencies() {
+  try {
+    const categories = {
+      bootCritical: [
+        "canvas", "zoom-layer", "zoom-label", "inspector-panel", "node-form",
+        "add-node-btn", "create-campaign-btn", "undo-btn", "node-search-input"
+      ],
+      canvas: ["canvas", "zoom-layer", "links", "context-menu", "empty-state"],
+      toolbar: [
+        "add-node-btn", "create-campaign-btn", "undo-btn", "node-search-input",
+        "copy-board-link-btn", "save-board-btn", "new-board-btn", "reset-board-btn",
+        "compact-all-btn", "expand-all-btn"
+      ],
+      hiddenLegacyHooks: [
+        "save-status", "view-menu-btn", "view-menu", "view-board-btn", "view-list-btn", "view-calendar-btn"
+      ],
+      inspector: [
+        "inspector-panel", "inspector-meta", "node-form", "node-type", "node-title", "node-content"
+      ],
+      auth: [
+        "google-signin-btn", "auth-user", "auth-name", "auth-email",
+        "auth-avatar", "auth-avatar-fallback", "auth-message", "auth-signout-btn"
+      ],
+      boards: ["boards-library-view", "boards-library-list", "boards-create-btn", "claim-board-btn"],
+      saveShare: [
+        "save-status", "board-share-panel", "board-share-empty", "board-share-ready",
+        "board-share-link-text", "board-last-saved", "board-copy-feedback", "copy-board-link-btn"
+      ],
+      filtersUtilities: ["filters-toggle-btn", "utilities-toggle-btn"],
+      zoom: ["zoom-in-btn", "zoom-out-btn", "zoom-label"],
+      modals: ["posting-plan-overlay", "image-lightbox"]
+    };
+
+    const idsToCheck = new Set();
+    Object.values(categories).forEach((ids) => ids.forEach((id) => idsToCheck.add(id)));
+    ["save-board-btn", "new-board-btn", "reset-board-btn", "compact-all-btn", "expand-all-btn"].forEach((id) => idsToCheck.add(id));
+
+    const missingByCategory = {};
+    Object.entries(categories).forEach(([category, ids]) => {
+      const missing = ids.filter((id) => !document.getElementById(id));
+      if (missing.length) missingByCategory[category] = missing;
+    });
+
+    const duplicateCounts = {};
+    document.querySelectorAll("[id]").forEach((node) => {
+      const id = node.id;
+      duplicateCounts[id] = (duplicateCounts[id] || 0) + 1;
+    });
+    const duplicateEntries = Object.entries(duplicateCounts).filter(([, count]) => count > 1);
+
+    const criticalSet = new Set(categories.bootCritical);
+    idsToCheck.forEach((id) => {
+      if (!document.getElementById(id) && criticalSet.has(id)) {
+        console.warn(`[Funklix DOM Diagnostics] Missing critical element: #${id}`);
+      }
+    });
+
+    Object.entries(missingByCategory).forEach(([category, ids]) => {
+      ids.forEach((id) => {
+        if (category !== "bootCritical") {
+          console.warn(`[Funklix DOM Diagnostics] Missing ${category} element: #${id}`);
+        }
+      });
+    });
+
+    duplicateEntries.forEach(([id, count]) => {
+      console.warn(`[Funklix DOM Diagnostics] Duplicate id detected: #${id} appears ${count} times`);
+    });
+    const authMessageDuplicate = duplicateEntries.find(([id]) => id === "auth-message");
+    if (authMessageDuplicate) {
+      console.warn(`[Funklix DOM Diagnostics] Duplicate auth id warning: #auth-message appears ${authMessageDuplicate[1]} times`);
+    }
+  } catch (err) {
+    console.warn("[Funklix DOM Diagnostics] Diagnostics failed safely.", err);
+  }
+}
+
 Object.keys(NODE_TYPES).forEach((type) => {
   const option = document.createElement("option");
   option.value = type;
@@ -4710,6 +4787,7 @@ function showDeleteBoardConfirmModal() {
 
 async function bootApp() {
   state.isBoardLoading = true;
+  diagnoseDomDependencies();
   createDebugPanel();
   await loadSessionUser();
   if (new URLSearchParams(window.location.search).get("auth_error") === "not_configured") setAuthMessage("Google Login is not configured yet.");
