@@ -89,6 +89,21 @@ module.exports = async function handler(req, res) {
     }
 
     if (req.method === 'DELETE') {
+      const user = getSessionUser(req);
+      if (!user?.email) return res.status(401).json({ error: 'Authentication required' });
+
+      const current = await pool.query(
+        'SELECT id, owner_id, owner_email FROM boards WHERE id = $1 LIMIT 1',
+        [id]
+      );
+      if (current.rowCount === 0) return res.status(404).json({ error: 'Board not found' });
+
+      const board = current.rows[0];
+      const sessionUserId = user?.id || user?.sub || null;
+      const ownerMatchByEmail = !!board.owner_email && user.email === board.owner_email;
+      const ownerMatchById = !!board.owner_id && !!sessionUserId && board.owner_id === sessionUserId;
+      if (!ownerMatchByEmail && !ownerMatchById) return res.status(403).json({ error: 'Forbidden' });
+
       const deleted = await pool.query('DELETE FROM boards WHERE id = $1 RETURNING id', [id]);
       if (deleted.rowCount === 0) return res.status(404).json({ error: 'Board not found' });
       return res.status(200).json({ id });
