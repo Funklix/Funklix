@@ -1157,6 +1157,14 @@ function applyCampaignState(campaignState, statusText = "Restored") {
 }
 
 async function saveBoardToServer(trigger = "manual") {
+  if (!state.boardAccess?.canEdit) {
+    setSaveStatus("Read-only board");
+    console.warn("[Funklix Access] Save blocked by boardAccess", {
+      source: trigger,
+      reason: state.boardAccess?.reason || "unknown"
+    });
+    return false;
+  }
   state.latestSaveRequestId += 1;
   const saveRequestId = state.latestSaveRequestId;
   try {
