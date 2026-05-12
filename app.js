@@ -81,6 +81,7 @@ const state = {
   ,user: null
   ,authConfigured: true
   ,currentBoardOwnerEmail: null
+  ,boardAccess: { canView: true, canEdit: true, reason: "unknown" }
 };
 
 const el = {
@@ -408,9 +409,23 @@ function formatLastSavedLabel(value = new Date()) {
   return new Intl.DateTimeFormat("de-DE", { dateStyle: "short", timeStyle: "short" }).format(value);
 }
 
+function updateBoardAccessState() {
+  const ownerEmail = state.currentBoardOwnerEmail || null;
+  const userEmail = state.user?.email || null;
+  const hasOwner = !!ownerEmail;
+  const isOwner = !!userEmail && hasOwner && userEmail === ownerEmail;
+  const reason = isOwner ? "owner" : (!hasOwner ? "unowned" : (!userEmail ? "anonymous_shared" : "non_owner"));
+  const nextAccess = { canView: true, canEdit: true, reason };
+  if (state.boardAccess?.reason !== nextAccess.reason || state.boardAccess?.canView !== nextAccess.canView || state.boardAccess?.canEdit !== nextAccess.canEdit) {
+    state.boardAccess = nextAccess;
+    console.debug("[Funklix Access] boardAccess", state.boardAccess);
+  }
+}
+
 function setSharePanelState(boardId, lastSaved = null, ownerEmail = null) {
   if (!boardId) {
     state.currentBoardOwnerEmail = null;
+    updateBoardAccessState();
     el.boardShareEmpty?.classList.remove("hidden");
     el.boardShareReady?.classList.add("hidden");
     el.claimBoardButton?.classList.add("hidden");
@@ -426,6 +441,7 @@ function setSharePanelState(boardId, lastSaved = null, ownerEmail = null) {
   }
 
   state.currentBoardOwnerEmail = ownerEmail || null;
+  updateBoardAccessState();
   const isOwnedByYou = !!state.user?.email && state.currentBoardOwnerEmail === state.user.email;
   const canClaim = !!state.user?.email && !state.currentBoardOwnerEmail;
   el.claimBoardButton?.classList.toggle("hidden", !canClaim);
@@ -531,6 +547,7 @@ async function loadSessionUser() {
   } catch (_error) {
     state.user = null;
   }
+  updateBoardAccessState();
   renderAuthState();
   setSharePanelState(state.currentBoardId || getBoardIdFromPath(), null, state.currentBoardOwnerEmail);
 }
