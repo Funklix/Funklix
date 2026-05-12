@@ -3990,29 +3990,57 @@ el.sidebarToggleButton?.addEventListener("click", () => {
   setSidebarCollapsed(collapsed);
 });
 
-el.addNodeButton.addEventListener("click", () => {
-  setActiveView("board");
-  openTypePicker((type) => {
-    createNode({ type });
-  }, "Idea");
-});
+if (el.addNodeButton) {
+  el.addNodeButton.addEventListener("click", () => {
+    setActiveView("board");
+    openTypePicker((type) => {
+      createNode({ type });
+    }, "Idea");
+  });
+} else {
+  console.warn("[Funklix DOM Hardening] Missing listener target: #add-node-btn");
+}
 
-el.createCampaignButton.addEventListener("click", () => {
-  openCreateCampaignModal();
-});
+if (el.createCampaignButton) {
+  el.createCampaignButton.addEventListener("click", () => {
+    openCreateCampaignModal();
+  });
+} else {
+  console.warn("[Funklix DOM Hardening] Missing listener target: #create-campaign-btn");
+}
 
-el.cycleViewButton.addEventListener("click", () => {
-  const order = ["board", "list", "calendar"];
-  const idx = order.indexOf(state.activeView);
-  setActiveView(order[(idx + 1) % order.length]);
-});
-el.viewMenuButton.addEventListener("click", (event) => {
-  event.stopPropagation();
-  el.viewMenu.classList.toggle("hidden");
-});
-el.viewBoardButton.addEventListener("click", () => { setActiveView("board"); el.viewMenu.classList.add("hidden"); });
-el.viewListButton.addEventListener("click", () => { setActiveView("list"); el.viewMenu.classList.add("hidden"); });
-el.viewCalendarButton.addEventListener("click", () => { setActiveView("calendar"); el.viewMenu.classList.add("hidden"); });
+if (el.cycleViewButton) {
+  el.cycleViewButton.addEventListener("click", () => {
+    const order = ["board", "list", "calendar"];
+    const idx = order.indexOf(state.activeView);
+    setActiveView(order[(idx + 1) % order.length]);
+  });
+} else {
+  console.warn("[Funklix DOM Hardening] Missing listener target: #cycle-view-btn");
+}
+if (el.viewMenuButton) {
+  el.viewMenuButton.addEventListener("click", (event) => {
+    event.stopPropagation();
+    el.viewMenu.classList.toggle("hidden");
+  });
+} else {
+  console.warn("[Funklix DOM Hardening] Missing listener target: #view-menu-btn");
+}
+if (el.viewBoardButton) {
+  el.viewBoardButton.addEventListener("click", () => { setActiveView("board"); el.viewMenu.classList.add("hidden"); });
+} else {
+  console.warn("[Funklix DOM Hardening] Missing listener target: #view-board-btn");
+}
+if (el.viewListButton) {
+  el.viewListButton.addEventListener("click", () => { setActiveView("list"); el.viewMenu.classList.add("hidden"); });
+} else {
+  console.warn("[Funklix DOM Hardening] Missing listener target: #view-list-btn");
+}
+if (el.viewCalendarButton) {
+  el.viewCalendarButton.addEventListener("click", () => { setActiveView("calendar"); el.viewMenu.classList.add("hidden"); });
+} else {
+  console.warn("[Funklix DOM Hardening] Missing listener target: #view-calendar-btn");
+}
 document.addEventListener("click", (event) => {
   if (!event.target.closest(".view-switcher")) el.viewMenu.classList.add("hidden");
 });
@@ -4025,7 +4053,11 @@ el.calendarNextMonthButton.addEventListener("click", () => {
   renderCalendarView();
 });
 
-el.zoomInButton.addEventListener("click", () => setZoom(state.zoom + 0.1));
+if (el.zoomInButton) {
+  el.zoomInButton.addEventListener("click", () => setZoom(state.zoom + 0.1));
+} else {
+  console.warn("[Funklix DOM Hardening] Missing listener target: #zoom-in-btn");
+}
 el.googleSigninButton?.addEventListener("click", () => {
   if (!state.authConfigured) {
     setAuthMessage("Google Login is not configured yet.");
