@@ -23,13 +23,28 @@ module.exports = async function handler(req, res) {
       if (!canvas_json || typeof canvas_json !== 'object') {
         return res.status(400).json({ error: 'canvas_json is required' });
       }
+      const user = getSessionUser(req);
 
       const current = await pool.query(
-        'SELECT id, updated_at FROM boards WHERE id = $1 LIMIT 1',
+        'SELECT id, updated_at, owner_id, owner_email FROM boards WHERE id = $1 LIMIT 1',
         [id]
       );
       if (current.rowCount === 0) {
         return res.status(404).json({ error: 'Board not found' });
+      }
+      const board = current.rows[0];
+      const sessionUserId = user?.id || user?.sub || null;
+      const ownerMatchByEmail = !!board.owner_email && user?.email === board.owner_email;
+      const ownerMatchById = !!board.owner_id && !!sessionUserId && board.owner_id === sessionUserId;
+      const isOwner = ownerMatchByEmail || ownerMatchById;
+      const actorType = !user?.email ? 'anonymous' : (!board.owner_email && !board.owner_id ? 'unowned_board' : (isOwner ? 'owner' : 'non_owner_signed_in'));
+      if (!isOwner) {
+        console.warn('[Funklix Authz Observe] Non-owner PUT write', {
+          boardId: id,
+          actorType,
+          actorEmail: user?.email || null,
+          ownerEmail: board.owner_email || null
+        });
       }
 
       if (lastKnownUpdatedAt) {
@@ -61,6 +76,13 @@ module.exports = async function handler(req, res) {
       const user = getSessionUser(req);
       let updated;
       if (claim && user?.email) {
+        const boardLookup = await pool.query(
+          'SELECT id, owner_id, owner_email FROM boards WHERE id = $1 LIMIT 1',
+          [id]
+        );
+        if (boardLookup.rowCount === 0) return res.status(404).json({ error: 'Board not found' });
+        if (boardLookup.rows[0].owner_email) return res.status(403).json({ error: 'Forbidden' });
+
         updated = await pool.query(
           `UPDATE boards
            SET owner_id = CASE WHEN owner_email IS NULL THEN $2 ELSE owner_id END,
@@ -70,10 +92,23 @@ module.exports = async function handler(req, res) {
                created_by = COALESCE(created_by, $2),
                updated_at = NOW()
            WHERE id = $1
-           RETURNING id, name, updated_at, order_index, owner_id, owner_email, owner_name, owner_avatar, created_by, created_at`
+          RETURNING id, name, updated_at, order_index, owner_id, owner_email, owner_name, owner_avatar, created_by, created_at`
           , [id, user.email, user.name || null, user.avatar || null]
         );
       } else {
+        if (!user?.email) return res.status(401).json({ error: 'Authentication required' });
+        const boardLookup = await pool.query(
+          'SELECT id, owner_id, owner_email FROM boards WHERE id = $1 LIMIT 1',
+          [id]
+        );
+        if (boardLookup.rowCount === 0) return res.status(404).json({ error: 'Board not found' });
+
+        const board = boardLookup.rows[0];
+        const sessionUserId = user?.id || user?.sub || null;
+        const ownerMatchByEmail = !!board.owner_email && user.email === board.owner_email;
+        const ownerMatchById = !!board.owner_id && !!sessionUserId && board.owner_id === sessionUserId;
+        if (!ownerMatchByEmail && !ownerMatchById) return res.status(403).json({ error: 'Forbidden' });
+
         updated = await pool.query(
           `UPDATE boards
            SET name = COALESCE($2, name),
@@ -89,6 +124,21 @@ module.exports = async function handler(req, res) {
     }
 
     if (req.method === 'DELETE') {
+      const user = getSessionUser(req);
+      if (!user?.email) return res.status(401).json({ error: 'Authentication required' });
+
+      const current = await pool.query(
+        'SELECT id, owner_id, owner_email FROM boards WHERE id = $1 LIMIT 1',
+        [id]
+      );
+      if (current.rowCount === 0) return res.status(404).json({ error: 'Board not found' });
+
+      const board = current.rows[0];
+      const sessionUserId = user?.id || user?.sub || null;
+      const ownerMatchByEmail = !!board.owner_email && user.email === board.owner_email;
+      const ownerMatchById = !!board.owner_id && !!sessionUserId && board.owner_id === sessionUserId;
+      if (!ownerMatchByEmail && !ownerMatchById) return res.status(403).json({ error: 'Forbidden' });
+
       const deleted = await pool.query('DELETE FROM boards WHERE id = $1 RETURNING id', [id]);
       if (deleted.rowCount === 0) return res.status(404).json({ error: 'Board not found' });
       return res.status(200).json({ id });
@@ -102,7 +152,22 @@ module.exports = async function handler(req, res) {
       return res.status(404).json({ error: 'Board not found' });
     }
 
-    return res.status(200).json(result.rows[0]);
+    const board = result.rows[0];
+    const user = getSessionUser(req);
+    const sessionUserId = user?.id || user?.sub || null;
+    const ownerMatchByEmail = !!board.owner_email && !!user?.email && user.email === board.owner_email;
+    const ownerMatchById = !!board.owner_id && !!sessionUserId && board.owner_id === sessionUserId;
+    const isOwner = ownerMatchByEmail || ownerMatchById;
+    const role = isOwner ? 'owner' : (!board.owner_email && !board.owner_id ? 'unowned' : (!user?.email ? 'anonymous_shared' : 'non_owner'));
+
+    return res.status(200).json({
+      ...board,
+      access: {
+        canView: true,
+        canEdit: true,
+        role
+      }
+    });
   } catch (error) {
     return res.status(500).json({ error: error?.message || 'Failed to load board' });
   }
