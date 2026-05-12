@@ -1188,16 +1188,6 @@ async function saveBoardToServer(trigger = "manual") {
   }
   state.latestSaveRequestId += 1;
   const saveRequestId = state.latestSaveRequestId;
-  console.debug('[Funklix Save Debug] Save start', {
-    trigger,
-    saveRequestId,
-    currentBoardId: state.currentBoardId || getBoardIdFromPath(),
-    lastKnownUpdatedAt: state.lastKnownUpdatedAt,
-    isSaving: state.isSaving,
-    isDirty: state.isDirty,
-    boardAccessReason: state.boardAccess?.reason || 'unknown',
-    hasAutosaveTimer: !!state.autosaveTimer
-  });
   try {
     const canvasStateForSave = serializeState();
     const saveTimestamp = new Date().toISOString();
@@ -1224,13 +1214,6 @@ async function saveBoardToServer(trigger = "manual") {
     console.log('Save endpoint:', endpoint);
 
     if (isUpdate && state.lastKnownUpdatedAt) payload.lastKnownUpdatedAt = state.lastKnownUpdatedAt;
-    console.debug('[Funklix Save Debug] Save request payload', {
-      boardId: currentBoardId,
-      trigger,
-      saveRequestId,
-      payloadLastKnownUpdatedAt: payload.lastKnownUpdatedAt || null
-    });
-
     state.isSaving = true;
     setSaveStatus('Saving...');
 
@@ -1273,13 +1256,6 @@ async function saveBoardToServer(trigger = "manual") {
       return;
     }
     console.log('Saved board response id:', data?.id);
-    console.debug('[Funklix Save Debug] Save success', {
-      trigger,
-      saveRequestId,
-      responseUpdatedAt: data?.updated_at || null,
-      previousStateLastKnownUpdatedAt: state.lastKnownUpdatedAt || null
-    });
-
     const returnedId = data?.id || currentBoardId;
     if (returnedId) state.currentBoardId = returnedId;
     state.lastKnownUpdatedAt = data?.updated_at || new Date().toISOString();
