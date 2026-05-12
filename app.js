@@ -51,6 +51,7 @@ const state = {
   ,autosavePausedUntilChange: false
   ,isBoardLoading: true
   ,lastSavedSnapshot: ""
+  ,canvasMetadata: { createdAt: null, updatedAt: null }
   ,history: []
   ,forcePanNextDrag: false
   ,brandCore: {
@@ -1049,14 +1050,14 @@ async function regenerateSocialForPlatform(node, triggerBtn = null) {
 }
 
 function serializeState() {
-  // Board canvas schema marker for forward-compatible persistence evolution.
-  const nowIso = new Date().toISOString();
+  // Keep serialization stable for dirty checks; do not mutate updatedAt on every call.
   const serialized = {
     nodes: state.nodes.map((n) => sanitizeNodeForPersistence(n)),
     edges: state.edges, nodeCounter: state.nodeCounter, postitCounter: state.postitCounter, zoom: state.zoom,
     schemaVersion: 1,
     metadata: {
-      updatedAt: nowIso
+      createdAt: state.canvasMetadata?.createdAt || null,
+      updatedAt: state.canvasMetadata?.updatedAt || null
     }
   };
   const selectedNode = state.selectedPrimary ? serialized.nodes.find((n) => n.id === state.selectedPrimary) : null;
@@ -1116,6 +1117,7 @@ function isValidCanvasStatePayload(value) {
 
 function applyCampaignState(campaignState, statusText = "Restored") {
   const normalizedState = withBoardSchemaDefaults(campaignState);
+  state.canvasMetadata = { ...normalizedState.metadata };
   state.nodes = (normalizedState.nodes || []).map((node) => sanitizeNodeForPersistence(node));
   state.contentPackLoadingById = {};
   state.contentPackErrorById = {};
@@ -1141,9 +1143,14 @@ async function saveBoardToServer(trigger = "manual") {
   state.latestSaveRequestId += 1;
   const saveRequestId = state.latestSaveRequestId;
   try {
+    const canvasStateForSave = serializeState();
+    canvasStateForSave.metadata = {
+      ...(canvasStateForSave.metadata || {}),
+      updatedAt: new Date().toISOString()
+    };
     const payload = {
       name: `Campaign Canvas ${new Date().toISOString()}`,
-      canvas_json: serializeState(),
+      canvas_json: canvasStateForSave,
       brand_core_snapshot: state.brandCore
     };
     const pathname = window.location.pathname || '';
