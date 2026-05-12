@@ -45,6 +45,7 @@ const state = {
   ,autosaveTimer: null
   ,isDirty: false
   ,isSaving: false
+  ,latestSaveRequestId: 0
   ,conflictModalOpen: false
   ,autosavePausedUntilChange: false
   ,isBoardLoading: true
@@ -1124,6 +1125,8 @@ function applyCampaignState(campaignState, statusText = "Restored") {
 }
 
 async function saveBoardToServer(trigger = "manual") {
+  state.latestSaveRequestId += 1;
+  const saveRequestId = state.latestSaveRequestId;
   try {
     const payload = {
       name: `Campaign Canvas ${new Date().toISOString()}`,
@@ -1167,12 +1170,16 @@ async function saveBoardToServer(trigger = "manual") {
         await saveBoardAsNew(payload);
       } else {
         state.autosavePausedUntilChange = true;
-        setSaveStatus('Unsaved changes');
+        if (saveRequestId === state.latestSaveRequestId) setSaveStatus('Unsaved changes');
       }
-      state.isSaving = false;
+      if (saveRequestId === state.latestSaveRequestId) state.isSaving = false;
       return;
     }
     if (!response.ok) throw new Error(data?.error || 'Failed to save board');
+    if (saveRequestId !== state.latestSaveRequestId) {
+      console.warn('[Funklix Save Guard] Ignored stale save completion');
+      return;
+    }
     console.log('Saved board response id:', data?.id);
 
     const returnedId = data?.id || currentBoardId;
@@ -1192,9 +1199,13 @@ async function saveBoardToServer(trigger = "manual") {
     }
   } catch (error) {
     console.error(error);
-    setSaveStatus('Save failed');
+    if (saveRequestId === state.latestSaveRequestId) {
+      setSaveStatus('Save failed');
+    } else {
+      console.warn('[Funklix Save Guard] Ignored stale save failure');
+    }
   } finally {
-    state.isSaving = false;
+    if (saveRequestId === state.latestSaveRequestId) state.isSaving = false;
   }
 }
 
