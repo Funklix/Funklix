@@ -46,6 +46,7 @@ const state = {
   ,isDirty: false
   ,isSaving: false
   ,latestSaveRequestId: 0
+  ,initialServerLoadInFlight: false
   ,conflictModalOpen: false
   ,autosavePausedUntilChange: false
   ,isBoardLoading: true
@@ -1224,6 +1225,8 @@ async function saveBoardToServer(trigger = "manual") {
 async function loadBoardFromUrlIfPresent() {
   const boardId = state.currentBoardId || getBoardIdFromPath();
   if (!boardId) return false;
+  state.initialServerLoadInFlight = true;
+  state.isBoardLoading = true;
   state.currentBoardId = boardId;
   try {
     const response = await fetch(`/api/boards/${boardId}`);
@@ -1252,6 +1255,9 @@ async function loadBoardFromUrlIfPresent() {
     console.error(error);
     setSaveStatus('Board not found or could not be loaded.');
     return false;
+  } finally {
+    state.initialServerLoadInFlight = false;
+    state.isBoardLoading = false;
   }
 }
 
@@ -4929,7 +4935,7 @@ async function bootApp() {
   setActiveView("board");
   drawLinks();
   refreshLastSavedSnapshot();
-  state.isBoardLoading = false;
+  if (!state.initialServerLoadInFlight) state.isBoardLoading = false;
   startAutosaveWatcher();
 }
 
