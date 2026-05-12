@@ -1169,6 +1169,15 @@ function applyCampaignState(campaignState, statusText = "Restored") {
 }
 
 async function saveBoardToServer(trigger = "manual") {
+  if (state.isSaving) {
+    console.warn('[Funklix Save Guard] Save already in progress, skipping overlapping save', {
+      trigger,
+      currentBoardId: state.currentBoardId || getBoardIdFromPath(),
+      lastKnownUpdatedAt: state.lastKnownUpdatedAt || null,
+      isDirty: state.isDirty
+    });
+    return false;
+  }
   if (!state.boardAccess?.canEdit) {
     setSaveStatus("Read-only board");
     console.warn("[Funklix Access] Save blocked by boardAccess", {
