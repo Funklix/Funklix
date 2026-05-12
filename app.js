@@ -676,8 +676,20 @@ function scheduleAutosave() {
   if (state.autosavePausedUntilChange) { return; }
   if (state.isSaving) { return; }
   if (state.autosaveTimer) return;
+  console.debug('[Funklix Save Debug] Autosave scheduled', {
+    isDirty: state.isDirty,
+    isSaving: state.isSaving,
+    lastKnownUpdatedAt: state.lastKnownUpdatedAt,
+    currentBoardId: state.currentBoardId || getBoardIdFromPath()
+  });
   state.autosaveTimer = setTimeout(() => {
     state.autosaveTimer = null;
+    console.debug('[Funklix Save Debug] Autosave fired', {
+      isDirty: state.isDirty,
+      isSaving: state.isSaving,
+      lastKnownUpdatedAt: state.lastKnownUpdatedAt,
+      currentBoardId: state.currentBoardId || getBoardIdFromPath()
+    });
     if (!state.isDirty) { return; }
     if (state.isSaving) { return; }
     if (state.conflictModalOpen) { return; }
@@ -1167,6 +1179,16 @@ async function saveBoardToServer(trigger = "manual") {
   }
   state.latestSaveRequestId += 1;
   const saveRequestId = state.latestSaveRequestId;
+  console.debug('[Funklix Save Debug] Save start', {
+    trigger,
+    saveRequestId,
+    currentBoardId: state.currentBoardId || getBoardIdFromPath(),
+    lastKnownUpdatedAt: state.lastKnownUpdatedAt,
+    isSaving: state.isSaving,
+    isDirty: state.isDirty,
+    boardAccessReason: state.boardAccess?.reason || 'unknown',
+    hasAutosaveTimer: !!state.autosaveTimer
+  });
   try {
     const canvasStateForSave = serializeState();
     const saveTimestamp = new Date().toISOString();
@@ -1193,6 +1215,12 @@ async function saveBoardToServer(trigger = "manual") {
     console.log('Save endpoint:', endpoint);
 
     if (isUpdate && state.lastKnownUpdatedAt) payload.lastKnownUpdatedAt = state.lastKnownUpdatedAt;
+    console.debug('[Funklix Save Debug] Save request payload', {
+      boardId: currentBoardId,
+      trigger,
+      saveRequestId,
+      payloadLastKnownUpdatedAt: payload.lastKnownUpdatedAt || null
+    });
 
     state.isSaving = true;
     setSaveStatus('Saving...');
@@ -1204,6 +1232,15 @@ async function saveBoardToServer(trigger = "manual") {
     });
     const data = await response.json();
     if (response.status === 409 && isUpdate) {
+      console.warn('[Funklix Save Debug] Save conflict 409', {
+        trigger,
+        saveRequestId,
+        payloadLastKnownUpdatedAt: payload.lastKnownUpdatedAt || null,
+        currentStateLastKnownUpdatedAt: state.lastKnownUpdatedAt || null,
+        responseStatus: response.status,
+        responseUpdatedAt: data?.updated_at || null,
+        responseError: data?.error || null
+      });
       state.conflictModalOpen = true;
       clearAutosaveTimer();
       const action = await showBoardConflictModal();
@@ -1227,6 +1264,12 @@ async function saveBoardToServer(trigger = "manual") {
       return;
     }
     console.log('Saved board response id:', data?.id);
+    console.debug('[Funklix Save Debug] Save success', {
+      trigger,
+      saveRequestId,
+      responseUpdatedAt: data?.updated_at || null,
+      previousStateLastKnownUpdatedAt: state.lastKnownUpdatedAt || null
+    });
 
     const returnedId = data?.id || currentBoardId;
     if (returnedId) state.currentBoardId = returnedId;
@@ -4205,6 +4248,7 @@ el.authAvatar?.addEventListener("error", () => {
 el.claimBoardButton?.addEventListener("click", async () => {
   const boardId = state.currentBoardId || getBoardIdFromPath();
   if (!boardId || !state.user?.email || state.currentBoardOwnerEmail) return;
+  console.debug('[Funklix Save Debug] PATCH claim triggered', { boardId, actorEmail: state.user?.email || null });
   const response = await fetch(`/api/boards/${boardId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ claim: true }) });
   const data = await response.json();
   if (!response.ok) return;
@@ -4908,6 +4952,7 @@ function renderBoardsLibrary() {
 }
 
 async function renameBoard(boardId, name) {
+  console.debug('[Funklix Save Debug] PATCH rename triggered', { boardId, name });
   const response = await fetch(`/api/boards/${boardId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) });
   if (response.ok) loadBoardsLibrary();
 }
@@ -4920,6 +4965,7 @@ async function deleteBoard(boardId) {
 }
 
 async function moveBoard(boardId, direction, index) {
+  console.debug('[Funklix Save Debug] PATCH reorder triggered', { boardId, direction, index });
   const boards = [...state.boardsLibrary];
   const swapIndex = direction === 'up' ? index - 1 : index + 1;
   if (swapIndex < 0 || swapIndex >= boards.length) return;
