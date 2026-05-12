@@ -1144,9 +1144,10 @@ async function saveBoardToServer(trigger = "manual") {
   const saveRequestId = state.latestSaveRequestId;
   try {
     const canvasStateForSave = serializeState();
+    const saveTimestamp = new Date().toISOString();
     canvasStateForSave.metadata = {
       ...(canvasStateForSave.metadata || {}),
-      updatedAt: new Date().toISOString()
+      updatedAt: saveTimestamp
     };
     const payload = {
       name: `Campaign Canvas ${new Date().toISOString()}`,
@@ -1209,6 +1210,11 @@ async function saveBoardToServer(trigger = "manual") {
     const shareUrl = `${window.location.origin}/boards/${returnedId}`;
     state.isDirty = false;
     setSaveStatus('Saved');
+    state.canvasMetadata = {
+      ...(state.canvasMetadata || {}),
+      createdAt: state.canvasMetadata?.createdAt || canvasStateForSave.metadata?.createdAt || null,
+      updatedAt: saveTimestamp
+    };
     refreshLastSavedSnapshot();
     setSharePanelState(returnedId, new Date(), data?.owner_email || state.currentBoardOwnerEmail || null);
 
