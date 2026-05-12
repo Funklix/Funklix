@@ -61,6 +61,13 @@ module.exports = async function handler(req, res) {
       const user = getSessionUser(req);
       let updated;
       if (claim && user?.email) {
+        const boardLookup = await pool.query(
+          'SELECT id, owner_id, owner_email FROM boards WHERE id = $1 LIMIT 1',
+          [id]
+        );
+        if (boardLookup.rowCount === 0) return res.status(404).json({ error: 'Board not found' });
+        if (boardLookup.rows[0].owner_email) return res.status(403).json({ error: 'Forbidden' });
+
         updated = await pool.query(
           `UPDATE boards
            SET owner_id = CASE WHEN owner_email IS NULL THEN $2 ELSE owner_id END,
@@ -70,10 +77,23 @@ module.exports = async function handler(req, res) {
                created_by = COALESCE(created_by, $2),
                updated_at = NOW()
            WHERE id = $1
-           RETURNING id, name, updated_at, order_index, owner_id, owner_email, owner_name, owner_avatar, created_by, created_at`
+          RETURNING id, name, updated_at, order_index, owner_id, owner_email, owner_name, owner_avatar, created_by, created_at`
           , [id, user.email, user.name || null, user.avatar || null]
         );
       } else {
+        if (!user?.email) return res.status(401).json({ error: 'Authentication required' });
+        const boardLookup = await pool.query(
+          'SELECT id, owner_id, owner_email FROM boards WHERE id = $1 LIMIT 1',
+          [id]
+        );
+        if (boardLookup.rowCount === 0) return res.status(404).json({ error: 'Board not found' });
+
+        const board = boardLookup.rows[0];
+        const sessionUserId = user?.id || user?.sub || null;
+        const ownerMatchByEmail = !!board.owner_email && user.email === board.owner_email;
+        const ownerMatchById = !!board.owner_id && !!sessionUserId && board.owner_id === sessionUserId;
+        if (!ownerMatchByEmail && !ownerMatchById) return res.status(403).json({ error: 'Forbidden' });
+
         updated = await pool.query(
           `UPDATE boards
            SET name = COALESCE($2, name),
