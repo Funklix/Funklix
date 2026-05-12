@@ -1101,6 +1101,18 @@ function withBoardSchemaDefaults(campaignState) {
   };
 }
 
+function isValidCanvasStatePayload(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  if (value.nodes !== undefined && !Array.isArray(value.nodes)) return false;
+  if (value.edges !== undefined && !Array.isArray(value.edges)) return false;
+  if (value.zoom !== undefined) {
+    const zoomValue = typeof value.zoom === "object" && value.zoom !== null ? (value.zoom.zoom ?? value.zoom.scale) : value.zoom;
+    if (!Number.isFinite(zoomValue)) return false;
+  }
+  if (value.schemaVersion !== undefined && !Number.isFinite(Number(value.schemaVersion))) return false;
+  return true;
+}
+
 function applyCampaignState(campaignState, statusText = "Restored") {
   const normalizedState = withBoardSchemaDefaults(campaignState);
   state.nodes = (normalizedState.nodes || []).map((node) => sanitizeNodeForPersistence(node));
@@ -1226,7 +1238,13 @@ async function loadBoardFromUrlIfPresent() {
       saveBrandBrainState();
     }
     setSharePanelState(state.currentBoardId, data?.updated_at ? new Date(data.updated_at) : null, data?.owner_email || null);
-    const normalizedCanvasState = withBoardSchemaDefaults(data.canvas_json || {});
+    const incomingCanvasState = data.canvas_json || {};
+    if (!isValidCanvasStatePayload(incomingCanvasState)) {
+      console.warn('[Funklix Board Load] Invalid canvas_json payload ignored');
+      setSaveStatus('Board data is invalid and was ignored.');
+      return false;
+    }
+    const normalizedCanvasState = withBoardSchemaDefaults(incomingCanvasState);
     applyCampaignState(normalizedCanvasState, `Loaded board ${boardId.slice(0, 8)}...`);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(normalizedCanvasState));
     return true;
