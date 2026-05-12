@@ -152,7 +152,22 @@ module.exports = async function handler(req, res) {
       return res.status(404).json({ error: 'Board not found' });
     }
 
-    return res.status(200).json(result.rows[0]);
+    const board = result.rows[0];
+    const user = getSessionUser(req);
+    const sessionUserId = user?.id || user?.sub || null;
+    const ownerMatchByEmail = !!board.owner_email && !!user?.email && user.email === board.owner_email;
+    const ownerMatchById = !!board.owner_id && !!sessionUserId && board.owner_id === sessionUserId;
+    const isOwner = ownerMatchByEmail || ownerMatchById;
+    const role = isOwner ? 'owner' : (!board.owner_email && !board.owner_id ? 'unowned' : (!user?.email ? 'anonymous_shared' : 'non_owner'));
+
+    return res.status(200).json({
+      ...board,
+      access: {
+        canView: true,
+        canEdit: true,
+        role
+      }
+    });
   } catch (error) {
     return res.status(500).json({ error: error?.message || 'Failed to load board' });
   }
