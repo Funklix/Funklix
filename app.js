@@ -2778,8 +2778,12 @@ function updateNodeCard(node) {
       });
       bar.appendChild(item);
     });
-    const reactionHost = node.type === "Social Media Posting" ? (nodeEl.querySelector(".social-preview") || nodeEl) : nodeEl;
-    reactionHost.appendChild(bar);
+    const connectorActions = nodeEl.querySelector(".connector-actions");
+    if (connectorActions) {
+      nodeEl.insertBefore(bar, connectorActions);
+    } else {
+      nodeEl.appendChild(bar);
+    }
   }
 
   renderPostits(node, nodeEl);
