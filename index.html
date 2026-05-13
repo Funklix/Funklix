@@ -75,6 +75,7 @@
       .auth-signout-btn { font-size: 10px; padding: 4px 8px; }
       .auth-avatar-fallback { width: 24px; height: 24px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; background: #edf1ff; color: #4d5fcf; border: 1px solid #dbe0f2; }
       .auth-message { font-size: 11px; color: #b44a4a; }
+      .readonly-board-notice { font-size: 11px; color: #7a5f00; background: rgba(255, 214, 10, 0.14); border: 1px solid rgba(255, 214, 10, 0.35); border-radius: 8px; padding: 4px 8px; margin-left: 8px; }
 
     </style>
 
@@ -124,6 +125,7 @@
                 </div>
               </div>
               <span id="auth-message" class="auth-message hidden"></span>
+              <span id="readonly-board-notice" class="readonly-board-notice" hidden>View-only board. Changes cannot be saved.</span>
             </div>
             <div class="canvas-toolbar-row secondary toolbar-secondary">
               <div class="toolbar-row2-left">
@@ -138,7 +140,8 @@
           </div>
           <div id="legacy-toolbar-hooks" hidden aria-hidden="true">
             <span id="save-status">Unsaved changes</span>
-            <span id="auth-message"></span>
+            <!-- Keep primary #auth-message in visible auth panel; legacy hook uses unique id to avoid duplicate-ID lookup ambiguity. -->
+            <span id="auth-message-legacy-hook"></span>
 
             <div id="board-share-panel">
               <div id="board-share-empty">Save to create share link.</div>
