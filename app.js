@@ -175,6 +175,7 @@ const el = {
   authAvatar: document.getElementById("auth-avatar"),
   authAvatarFallback: document.getElementById("auth-avatar-fallback"),
   authMessage: document.getElementById("auth-message"),
+  readonlyBoardNotice: document.getElementById("readonly-board-notice"),
   authSignoutButton: document.getElementById("auth-signout-btn"),
   brandCoreButton: document.getElementById("brand-core-nav-btn"),
   campaignCanvasNavButton: document.getElementById("campaign-canvas-nav-btn"),
@@ -420,6 +421,13 @@ function updateBoardAccessState() {
     state.boardAccess = nextAccess;
     console.debug("[Funklix Access] boardAccess", state.boardAccess);
   }
+  updateReadOnlyNoticeVisibility();
+}
+
+function updateReadOnlyNoticeVisibility() {
+  if (!el.readonlyBoardNotice) return;
+  const isReadOnly = state.boardAccess?.canEdit === false;
+  el.readonlyBoardNotice.hidden = !isReadOnly;
 }
 
 function setSharePanelState(boardId, lastSaved = null, ownerEmail = null) {
@@ -1317,6 +1325,7 @@ async function loadBoardFromUrlIfPresent() {
         state.boardAccess = nextAccess;
         console.debug("[Funklix Access] boardAccess", state.boardAccess);
       }
+      updateReadOnlyNoticeVisibility();
     } else {
       updateBoardAccessState();
     }
