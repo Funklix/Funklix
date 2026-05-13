@@ -647,7 +647,6 @@ button:active {
 .node.is-compact .ab-tests,
 .node.is-compact .image-strip,
 .node.is-compact .content-pack-status,
-.node.is-compact .reaction-bar,
 .node.is-compact .node-expand-content { display: none !important; }
 .node.is-compact .node-compact-summary { display: block; }
 .node.is-compact .node-ai-toolbar { display: none; }
