@@ -1789,6 +1789,10 @@ function applyInherited(source, target) {
 }
 
 function createNode({ type = "Idea", parentId = null, position = null, images = [] } = {}) {
+  if (state.boardAccess?.canEdit === false) {
+    setSaveStatus("Read-only board");
+    return null;
+  }
   const parent = parentId ? getNode(parentId) : null;
   const defaultPos = parent
     ? { x: parent.position.x + 320, y: parent.position.y + 80 }
@@ -2013,6 +2017,10 @@ function removeNode(nodeId) {
 }
 
 function addEdge(fromId, toId) {
+  if (state.boardAccess?.canEdit === false) {
+    setSaveStatus("Read-only board");
+    return false;
+  }
   pushHistorySnapshot();
   if (!fromId || !toId || fromId === toId) return;
   if (state.edges.some(([a, b]) => a === fromId && b === toId)) return;
