@@ -682,6 +682,7 @@ function clearAutosaveTimer() {
 function scheduleAutosave() {
   if (state.conflictModalOpen) { return; }
   if (state.autosavePausedUntilChange) { return; }
+  if (state.boardAccess?.canEdit === false) { return; }
   if (state.isSaving) { return; }
   if (state.autosaveTimer) return;
   console.debug('[Funklix Save Debug] Autosave scheduled', {
