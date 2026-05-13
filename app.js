@@ -3885,6 +3885,8 @@ function enableNodeDrag(nodeEl, node) {
   nodeEl.addEventListener("pointerdown", (event) => {
     if (event.button !== 0) return;
     if (event.target.closest("button,input,textarea,select")) return;
+    // Read-only guard: do not start node drag interactions when editing is disabled.
+    if (state.boardAccess?.canEdit === false) return;
 
     if (!state.selectedIds.has(node.id)) {
       state.selectedIds.clear();
