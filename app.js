@@ -3097,6 +3097,10 @@ function revokeImageObjectUrl(img) {
 }
 
 function removeNodeImage(node, imageId) {
+  if (state.boardAccess?.canEdit === false) {
+    setSaveStatus("Read-only board");
+    return;
+  }
   const idx = node.images.findIndex((img) => img.id === imageId);
   if (idx === -1) return;
   const [removed] = node.images.splice(idx, 1);
@@ -4340,6 +4344,10 @@ el.addContextNodeButton.addEventListener("click", () => {
 
 el.addPostitCommentButton.addEventListener("click", () => {
   el.contextMenu.classList.add("hidden");
+  if (state.boardAccess?.canEdit === false) {
+    setSaveStatus("Read-only board");
+    return;
+  }
   if (!state.selectedPrimary) return;
   const node = getNode(state.selectedPrimary);
   if (!node) return;
@@ -4372,6 +4380,10 @@ el.improveContextNodeButton.addEventListener("click", async () => {
 el.contextMenu.querySelectorAll(".emoji-quick").forEach((btn) => {
   btn.addEventListener("click", () => {
     el.contextMenu.classList.add("hidden");
+    if (state.boardAccess?.canEdit === false) {
+      setSaveStatus("Read-only board");
+      return;
+    }
     if (!state.selectedPrimary) return;
     const node = getNode(state.selectedPrimary);
     if (!node) return;
@@ -4444,6 +4456,11 @@ el.inputs.hashtags.addEventListener("keydown", (event) => {
 });
 
 el.imageUpload.addEventListener("change", () => {
+  if (state.boardAccess?.canEdit === false) {
+    setSaveStatus("Read-only board");
+    el.imageUpload.value = "";
+    return;
+  }
   const node = getNode(state.selectedPrimary);
   if (!node) return;
   [...el.imageUpload.files]
