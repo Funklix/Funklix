@@ -1307,6 +1307,19 @@ async function loadBoardFromUrlIfPresent() {
       saveBrandBrainState();
     }
     setSharePanelState(state.currentBoardId, data?.updated_at ? new Date(data.updated_at) : null, data?.owner_email || null);
+    if (data?.access && typeof data.access === "object") {
+      const nextAccess = {
+        canView: data.access.canView !== false,
+        canEdit: data.access.canEdit !== false,
+        reason: typeof data.access.role === "string" && data.access.role ? data.access.role : (state.boardAccess?.reason || "unknown")
+      };
+      if (state.boardAccess?.reason !== nextAccess.reason || state.boardAccess?.canView !== nextAccess.canView || state.boardAccess?.canEdit !== nextAccess.canEdit) {
+        state.boardAccess = nextAccess;
+        console.debug("[Funklix Access] boardAccess", state.boardAccess);
+      }
+    } else {
+      updateBoardAccessState();
+    }
     const incomingCanvasState = data.canvas_json || {};
     if (!isValidCanvasStatePayload(incomingCanvasState)) {
       console.warn('[Funklix Board Load] Invalid canvas_json payload ignored');
