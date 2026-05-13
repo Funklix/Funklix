@@ -2778,7 +2778,8 @@ function updateNodeCard(node) {
       });
       bar.appendChild(item);
     });
-    nodeEl.appendChild(bar);
+    const reactionHost = node.type === "Social Media Posting" ? (nodeEl.querySelector(".social-preview") || nodeEl) : nodeEl;
+    reactionHost.appendChild(bar);
   }
 
   renderPostits(node, nodeEl);
