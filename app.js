@@ -1986,6 +1986,11 @@ function confirmSchedulePost() {
 }
 
 function removeNode(nodeId) {
+  // Read-only guard: prevent local destructive node mutation on view-only boards.
+  if (state.boardAccess?.canEdit === false) {
+    setSaveStatus("Read-only board");
+    return;
+  }
   pushHistorySnapshot();
   const idx = state.nodes.findIndex((n) => n.id === nodeId);
   if (idx === -1) return;
@@ -4526,6 +4531,10 @@ el.deleteSelectedButton.addEventListener("click", () => {
   [...state.selectedIds].forEach((id) => removeNode(id));
 });
 el.disconnectSelectedButton.addEventListener("click", () => {
+  if (state.boardAccess?.canEdit === false) {
+    setSaveStatus("Read-only board");
+    return;
+  }
   if (!state.selectedIds.size) return;
   pushHistorySnapshot();
   state.edges = state.edges.filter(([a, b]) => !state.selectedIds.has(a) && !state.selectedIds.has(b));
@@ -4534,6 +4543,10 @@ el.disconnectSelectedButton.addEventListener("click", () => {
   saveCampaignCanvasState();
 });
 el.propagateDescendantsButton.addEventListener("click", () => {
+  if (state.boardAccess?.canEdit === false) {
+    setSaveStatus("Read-only board");
+    return;
+  }
   const node = getNode(state.selectedPrimary);
   if (!node) return;
   if (downstreamNodeIds(node.id).length === 0) return;
