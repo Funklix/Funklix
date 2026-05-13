@@ -425,9 +425,13 @@ function updateBoardAccessState() {
 }
 
 function updateReadOnlyNoticeVisibility() {
-  if (!el.readonlyBoardNotice) return;
   const isReadOnly = state.boardAccess?.canEdit === false;
-  el.readonlyBoardNotice.hidden = !isReadOnly;
+  if (el.readonlyBoardNotice) el.readonlyBoardNotice.hidden = !isReadOnly;
+  if (el.saveBoardButton) {
+    el.saveBoardButton.disabled = isReadOnly;
+    if (isReadOnly) el.saveBoardButton.title = "View-only board. Changes cannot be saved.";
+    else el.saveBoardButton.removeAttribute("title");
+  }
 }
 
 function setSharePanelState(boardId, lastSaved = null, ownerEmail = null) {
