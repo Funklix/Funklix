@@ -653,6 +653,11 @@ button:active {
 .node.is-compact:hover .node-ai-toolbar,
 .node.is-compact.selected .node-ai-toolbar { display: flex; margin-top: 4px; }
 .node.is-compact .node-ai-toolbar button:nth-child(n+4) { display: none; }
+.node.is-compact .social-preview:not(.hidden) ~ .reaction-bar {
+  display: flex;
+  position: relative;
+  z-index: 2;
+}
 .node.search-dimmed { opacity: 0.35 !important; }
 .node.search-match { box-shadow: 0 0 0 2px #6f5bff44, 0 10px 20px rgba(82,67,170,0.18); }
 
