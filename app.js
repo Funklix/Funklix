@@ -426,12 +426,24 @@ function updateBoardAccessState() {
 
 function updateReadOnlyNoticeVisibility() {
   const isReadOnly = state.boardAccess?.canEdit === false;
+  const readOnlyActionTitle = "View-only board. This action is disabled.";
   if (el.readonlyBoardNotice) el.readonlyBoardNotice.hidden = !isReadOnly;
   if (el.saveBoardButton) {
     el.saveBoardButton.disabled = isReadOnly;
     if (isReadOnly) el.saveBoardButton.title = "View-only board. Changes cannot be saved.";
     else el.saveBoardButton.removeAttribute("title");
   }
+  [
+    el.deleteNodeButton,
+    el.deleteSelectedButton,
+    el.disconnectSelectedButton,
+    el.propagateDescendantsButton
+  ].forEach((button) => {
+    if (!button) return;
+    button.disabled = isReadOnly;
+    if (isReadOnly) button.title = readOnlyActionTitle;
+    else button.removeAttribute("title");
+  });
 }
 
 function setSharePanelState(boardId, lastSaved = null, ownerEmail = null) {
