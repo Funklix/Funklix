@@ -159,12 +159,13 @@ module.exports = async function handler(req, res) {
     const ownerMatchById = !!board.owner_id && !!sessionUserId && board.owner_id === sessionUserId;
     const isOwner = ownerMatchByEmail || ownerMatchById;
     const role = isOwner ? 'owner' : (!board.owner_email && !board.owner_id ? 'unowned' : (!user?.email ? 'anonymous_shared' : 'non_owner'));
+    const canEdit = role === 'owner' || role === 'unowned';
 
     return res.status(200).json({
       ...board,
       access: {
         canView: true,
-        canEdit: true,
+        canEdit,
         role
       }
     });
