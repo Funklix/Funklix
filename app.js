@@ -45,10 +45,13 @@ const state = {
   ,autosaveTimer: null
   ,isDirty: false
   ,isSaving: false
+  ,latestSaveRequestId: 0
+  ,initialServerLoadInFlight: false
   ,conflictModalOpen: false
   ,autosavePausedUntilChange: false
   ,isBoardLoading: true
   ,lastSavedSnapshot: ""
+  ,canvasMetadata: { createdAt: null, updatedAt: null }
   ,history: []
   ,forcePanNextDrag: false
   ,brandCore: {
@@ -78,6 +81,7 @@ const state = {
   ,user: null
   ,authConfigured: true
   ,currentBoardOwnerEmail: null
+  ,boardAccess: { canView: true, canEdit: true, reason: "unknown" }
 };
 
 const el = {
@@ -171,6 +175,7 @@ const el = {
   authAvatar: document.getElementById("auth-avatar"),
   authAvatarFallback: document.getElementById("auth-avatar-fallback"),
   authMessage: document.getElementById("auth-message"),
+  readonlyBoardNotice: document.getElementById("readonly-board-notice"),
   authSignoutButton: document.getElementById("auth-signout-btn"),
   brandCoreButton: document.getElementById("brand-core-nav-btn"),
   campaignCanvasNavButton: document.getElementById("campaign-canvas-nav-btn"),
@@ -216,6 +221,113 @@ const el = {
     ,lpCta: document.getElementById("lp-cta")
   }
 };
+
+const domRegistryMeta = {
+  "canvas": { category: "canvas", critical: true, requiredForBoot: true, optional: false, legacy: false, hiddenCompatibilityHook: false, viewSpecific: false },
+  "zoom-layer": { category: "canvas", critical: true, requiredForBoot: true, optional: false, legacy: false, hiddenCompatibilityHook: false, viewSpecific: false },
+  "links": { category: "canvas", critical: true, requiredForBoot: true, optional: false, legacy: false, hiddenCompatibilityHook: false, viewSpecific: false },
+  "add-node-btn": { category: "toolbar", critical: true, requiredForBoot: true, optional: false, legacy: false, hiddenCompatibilityHook: false, viewSpecific: false },
+  "create-campaign-btn": { category: "toolbar", critical: true, requiredForBoot: true, optional: false, legacy: false, hiddenCompatibilityHook: false, viewSpecific: false },
+  "undo-btn": { category: "toolbar", critical: true, requiredForBoot: true, optional: false, legacy: false, hiddenCompatibilityHook: false, viewSpecific: false },
+  "node-search-input": { category: "toolbar", critical: true, requiredForBoot: true, optional: false, legacy: false, hiddenCompatibilityHook: false, viewSpecific: false },
+  "zoom-in-btn": { category: "zoom", critical: true, requiredForBoot: true, optional: false, legacy: false, hiddenCompatibilityHook: false, viewSpecific: false },
+  "zoom-out-btn": { category: "zoom", critical: true, requiredForBoot: true, optional: false, legacy: false, hiddenCompatibilityHook: false, viewSpecific: false },
+  "zoom-label": { category: "zoom", critical: true, requiredForBoot: true, optional: false, legacy: false, hiddenCompatibilityHook: false, viewSpecific: false },
+  "inspector-panel": { category: "inspector", critical: true, requiredForBoot: true, optional: false, legacy: false, hiddenCompatibilityHook: false, viewSpecific: false },
+  "node-form": { category: "inspector", critical: true, requiredForBoot: true, optional: false, legacy: false, hiddenCompatibilityHook: false, viewSpecific: false },
+  "google-signin-btn": { category: "auth", critical: false, requiredForBoot: false, optional: true, legacy: false, hiddenCompatibilityHook: false, viewSpecific: false },
+  "auth-user": { category: "auth", critical: false, requiredForBoot: false, optional: true, legacy: false, hiddenCompatibilityHook: false, viewSpecific: false },
+  "auth-message": { category: "auth", critical: false, requiredForBoot: false, optional: true, legacy: false, hiddenCompatibilityHook: false, viewSpecific: false },
+  "save-status": { category: "saveShare", critical: true, requiredForBoot: true, optional: false, legacy: true, hiddenCompatibilityHook: true, viewSpecific: false },
+  "board-share-panel": { category: "saveShare", critical: true, requiredForBoot: true, optional: false, legacy: true, hiddenCompatibilityHook: true, viewSpecific: false },
+  "copy-board-link-btn": { category: "saveShare", critical: true, requiredForBoot: true, optional: false, legacy: false, hiddenCompatibilityHook: false, viewSpecific: false },
+  "filters-toggle-btn": { category: "filtersUtilities", critical: false, requiredForBoot: false, optional: true, legacy: false, hiddenCompatibilityHook: false, viewSpecific: false },
+  "utilities-toggle-btn": { category: "filtersUtilities", critical: false, requiredForBoot: false, optional: true, legacy: false, hiddenCompatibilityHook: false, viewSpecific: false },
+  "boards-library-view": { category: "boards", critical: false, requiredForBoot: false, optional: true, legacy: false, hiddenCompatibilityHook: false, viewSpecific: true },
+  "boards-library-list": { category: "boards", critical: false, requiredForBoot: false, optional: true, legacy: false, hiddenCompatibilityHook: false, viewSpecific: true },
+  "cycle-view-btn": { category: "legacyHooks", critical: true, requiredForBoot: true, optional: false, legacy: true, hiddenCompatibilityHook: true, viewSpecific: false },
+  "view-menu-btn": { category: "legacyHooks", critical: true, requiredForBoot: true, optional: false, legacy: true, hiddenCompatibilityHook: true, viewSpecific: false },
+  "view-board-btn": { category: "legacyHooks", critical: true, requiredForBoot: true, optional: false, legacy: true, hiddenCompatibilityHook: true, viewSpecific: false }
+};
+
+function diagnoseDomDependencies() {
+  try {
+    const categories = {
+      bootCritical: [
+        "canvas", "zoom-layer", "zoom-label", "inspector-panel", "node-form",
+        "add-node-btn", "create-campaign-btn", "undo-btn", "node-search-input"
+      ],
+      canvas: ["canvas", "zoom-layer", "links", "context-menu", "empty-state"],
+      toolbar: [
+        "add-node-btn", "create-campaign-btn", "undo-btn", "node-search-input",
+        "copy-board-link-btn", "save-board-btn", "new-board-btn", "reset-board-btn",
+        "compact-all-btn", "expand-all-btn"
+      ],
+      hiddenLegacyHooks: [
+        "save-status", "view-menu-btn", "view-menu", "view-board-btn", "view-list-btn", "view-calendar-btn"
+      ],
+      inspector: [
+        "inspector-panel", "inspector-meta", "node-form", "node-type", "node-title", "node-content"
+      ],
+      auth: [
+        "google-signin-btn", "auth-user", "auth-name", "auth-email",
+        "auth-avatar", "auth-avatar-fallback", "auth-message", "auth-signout-btn"
+      ],
+      boards: ["boards-library-view", "boards-library-list", "boards-create-btn", "claim-board-btn"],
+      saveShare: [
+        "save-status", "board-share-panel", "board-share-empty", "board-share-ready",
+        "board-share-link-text", "board-last-saved", "board-copy-feedback", "copy-board-link-btn"
+      ],
+      filtersUtilities: ["filters-toggle-btn", "utilities-toggle-btn"],
+      zoom: ["zoom-in-btn", "zoom-out-btn", "zoom-label"],
+      modals: ["posting-plan-overlay", "image-lightbox"]
+    };
+
+    const idsToCheck = new Set();
+    Object.values(categories).forEach((ids) => ids.forEach((id) => idsToCheck.add(id)));
+    ["save-board-btn", "new-board-btn", "reset-board-btn", "compact-all-btn", "expand-all-btn"].forEach((id) => idsToCheck.add(id));
+
+    const missingByCategory = {};
+    Object.entries(categories).forEach(([category, ids]) => {
+      const missing = ids.filter((id) => !document.getElementById(id));
+      if (missing.length) missingByCategory[category] = missing;
+    });
+
+    const duplicateCounts = {};
+    document.querySelectorAll("[id]").forEach((node) => {
+      const id = node.id;
+      duplicateCounts[id] = (duplicateCounts[id] || 0) + 1;
+    });
+    const duplicateEntries = Object.entries(duplicateCounts).filter(([, count]) => count > 1);
+
+    const criticalSet = new Set(categories.bootCritical);
+    idsToCheck.forEach((id) => {
+      if (!document.getElementById(id) && criticalSet.has(id)) {
+        const category = domRegistryMeta[id]?.category || "unknown";
+        console.warn(`[Funklix DOM Diagnostics][${category}] Missing critical element: #${id}`);
+      }
+    });
+
+    Object.entries(missingByCategory).forEach(([category, ids]) => {
+      ids.forEach((id) => {
+        if (category !== "bootCritical") {
+          const metaCategory = domRegistryMeta[id]?.category || category || "unknown";
+          console.warn(`[Funklix DOM Diagnostics][${metaCategory}] Missing element: #${id}`);
+        }
+      });
+    });
+
+    duplicateEntries.forEach(([id, count]) => {
+      console.warn(`[Funklix DOM Diagnostics] Duplicate id detected: #${id} appears ${count} times`);
+    });
+    const authMessageDuplicate = duplicateEntries.find(([id]) => id === "auth-message");
+    if (authMessageDuplicate) {
+      console.warn(`[Funklix DOM Diagnostics] Duplicate auth id warning: #auth-message appears ${authMessageDuplicate[1]} times`);
+    }
+  } catch (err) {
+    console.warn("[Funklix DOM Diagnostics] Diagnostics failed safely.", err);
+  }
+}
 
 Object.keys(NODE_TYPES).forEach((type) => {
   const option = document.createElement("option");
@@ -298,9 +410,34 @@ function formatLastSavedLabel(value = new Date()) {
   return new Intl.DateTimeFormat("de-DE", { dateStyle: "short", timeStyle: "short" }).format(value);
 }
 
+function updateBoardAccessState() {
+  const ownerEmail = state.currentBoardOwnerEmail || null;
+  const userEmail = state.user?.email || null;
+  const hasOwner = !!ownerEmail;
+  const isOwner = !!userEmail && hasOwner && userEmail === ownerEmail;
+  const reason = isOwner ? "owner" : (!hasOwner ? "unowned" : (!userEmail ? "anonymous_shared" : "non_owner"));
+  const nextAccess = { canView: true, canEdit: true, reason };
+  if (state.boardAccess?.reason !== nextAccess.reason || state.boardAccess?.canView !== nextAccess.canView || state.boardAccess?.canEdit !== nextAccess.canEdit) {
+    state.boardAccess = nextAccess;
+    console.debug("[Funklix Access] boardAccess", state.boardAccess);
+  }
+  updateReadOnlyNoticeVisibility();
+}
+
+function updateReadOnlyNoticeVisibility() {
+  const isReadOnly = state.boardAccess?.canEdit === false;
+  if (el.readonlyBoardNotice) el.readonlyBoardNotice.hidden = !isReadOnly;
+  if (el.saveBoardButton) {
+    el.saveBoardButton.disabled = isReadOnly;
+    if (isReadOnly) el.saveBoardButton.title = "View-only board. Changes cannot be saved.";
+    else el.saveBoardButton.removeAttribute("title");
+  }
+}
+
 function setSharePanelState(boardId, lastSaved = null, ownerEmail = null) {
   if (!boardId) {
     state.currentBoardOwnerEmail = null;
+    updateBoardAccessState();
     el.boardShareEmpty?.classList.remove("hidden");
     el.boardShareReady?.classList.add("hidden");
     el.claimBoardButton?.classList.add("hidden");
@@ -316,6 +453,7 @@ function setSharePanelState(boardId, lastSaved = null, ownerEmail = null) {
   }
 
   state.currentBoardOwnerEmail = ownerEmail || null;
+  updateBoardAccessState();
   const isOwnedByYou = !!state.user?.email && state.currentBoardOwnerEmail === state.user.email;
   const canClaim = !!state.user?.email && !state.currentBoardOwnerEmail;
   el.claimBoardButton?.classList.toggle("hidden", !canClaim);
@@ -421,6 +559,7 @@ async function loadSessionUser() {
   } catch (_error) {
     state.user = null;
   }
+  updateBoardAccessState();
   renderAuthState();
   setSharePanelState(state.currentBoardId || getBoardIdFromPath(), null, state.currentBoardOwnerEmail);
 }
@@ -547,6 +686,7 @@ function clearAutosaveTimer() {
 function scheduleAutosave() {
   if (state.conflictModalOpen) { return; }
   if (state.autosavePausedUntilChange) { return; }
+  if (state.boardAccess?.canEdit === false) { return; }
   if (state.isSaving) { return; }
   if (state.autosaveTimer) return;
   state.autosaveTimer = setTimeout(() => {
@@ -940,9 +1080,15 @@ async function regenerateSocialForPlatform(node, triggerBtn = null) {
 }
 
 function serializeState() {
+  // Keep serialization stable for dirty checks; do not mutate updatedAt on every call.
   const serialized = {
     nodes: state.nodes.map((n) => sanitizeNodeForPersistence(n)),
-    edges: state.edges, nodeCounter: state.nodeCounter, postitCounter: state.postitCounter, zoom: state.zoom
+    edges: state.edges, nodeCounter: state.nodeCounter, postitCounter: state.postitCounter, zoom: state.zoom,
+    schemaVersion: 1,
+    metadata: {
+      createdAt: state.canvasMetadata?.createdAt || null,
+      updatedAt: state.canvasMetadata?.updatedAt || null
+    }
   };
   const selectedNode = state.selectedPrimary ? serialized.nodes.find((n) => n.id === state.selectedPrimary) : null;
   console.log("serialized images", selectedNode?.images || []);
@@ -968,18 +1114,46 @@ function getBoardIdFromPath() {
 function loadCampaignCanvasState() {
   const raw = localStorage.getItem(STORAGE_KEY); if (!raw) return false;
   const campaignState = JSON.parse(raw); console.log("Loaded campaignCanvasState", campaignState);
-  applyCampaignState(campaignState, "Restored from local storage");
+  applyCampaignState(withBoardSchemaDefaults(campaignState), "Restored from local storage");
   return true;
 }
 
 
+function withBoardSchemaDefaults(campaignState) {
+  // Backward-compatible normalization: older boards may not have schemaVersion/metadata yet.
+  const safeState = campaignState && typeof campaignState === "object" ? campaignState : {};
+  const nowIso = new Date().toISOString();
+  return {
+    ...safeState,
+    schemaVersion: Number.isFinite(safeState.schemaVersion) ? safeState.schemaVersion : 1,
+    metadata: {
+      createdAt: safeState?.metadata?.createdAt || nowIso,
+      updatedAt: safeState?.metadata?.updatedAt || nowIso
+    }
+  };
+}
+
+function isValidCanvasStatePayload(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  if (value.nodes !== undefined && !Array.isArray(value.nodes)) return false;
+  if (value.edges !== undefined && !Array.isArray(value.edges)) return false;
+  if (value.zoom !== undefined) {
+    const zoomValue = typeof value.zoom === "object" && value.zoom !== null ? (value.zoom.zoom ?? value.zoom.scale) : value.zoom;
+    if (!Number.isFinite(zoomValue)) return false;
+  }
+  if (value.schemaVersion !== undefined && !Number.isFinite(Number(value.schemaVersion))) return false;
+  return true;
+}
+
 function applyCampaignState(campaignState, statusText = "Restored") {
-  state.nodes = (campaignState.nodes || []).map((node) => sanitizeNodeForPersistence(node));
+  const normalizedState = withBoardSchemaDefaults(campaignState);
+  state.canvasMetadata = { ...normalizedState.metadata };
+  state.nodes = (normalizedState.nodes || []).map((node) => sanitizeNodeForPersistence(node));
   state.contentPackLoadingById = {};
   state.contentPackErrorById = {};
-  state.edges = campaignState.edges || [];
-  state.nodeCounter = campaignState.nodeCounter || 1;
-  state.postitCounter = campaignState.postitCounter || 1;
+  state.edges = normalizedState.edges || [];
+  state.nodeCounter = normalizedState.nodeCounter || 1;
+  state.postitCounter = normalizedState.postitCounter || 1;
   state.selectedIds.clear();
   state.selectedPrimary = null;
   el.zoomLayer.querySelectorAll(".node").forEach((n) => n.remove());
@@ -987,7 +1161,7 @@ function applyCampaignState(campaignState, statusText = "Restored") {
   updateListView();
   updateEmptyState();
   drawLinks();
-  if (campaignState.zoom) setZoom(campaignState.zoom);
+  if (normalizedState.zoom) setZoom(normalizedState.zoom);
   state.isDirty = false;
   clearAutosaveTimer();
   setSaveStatus(statusText);
@@ -996,10 +1170,35 @@ function applyCampaignState(campaignState, statusText = "Restored") {
 }
 
 async function saveBoardToServer(trigger = "manual") {
+  if (state.isSaving) {
+    console.warn('[Funklix Save Guard] Save already in progress, skipping overlapping save', {
+      trigger,
+      currentBoardId: state.currentBoardId || getBoardIdFromPath(),
+      lastKnownUpdatedAt: state.lastKnownUpdatedAt || null,
+      isDirty: state.isDirty
+    });
+    return false;
+  }
+  if (!state.boardAccess?.canEdit) {
+    setSaveStatus("Read-only board");
+    console.warn("[Funklix Access] Save blocked by boardAccess", {
+      source: trigger,
+      reason: state.boardAccess?.reason || "unknown"
+    });
+    return false;
+  }
+  state.latestSaveRequestId += 1;
+  const saveRequestId = state.latestSaveRequestId;
   try {
+    const canvasStateForSave = serializeState();
+    const saveTimestamp = new Date().toISOString();
+    canvasStateForSave.metadata = {
+      ...(canvasStateForSave.metadata || {}),
+      updatedAt: saveTimestamp
+    };
     const payload = {
       name: `Campaign Canvas ${new Date().toISOString()}`,
-      canvas_json: serializeState(),
+      canvas_json: canvasStateForSave,
       brand_core_snapshot: state.brandCore
     };
     const pathname = window.location.pathname || '';
@@ -1016,7 +1215,6 @@ async function saveBoardToServer(trigger = "manual") {
     console.log('Save endpoint:', endpoint);
 
     if (isUpdate && state.lastKnownUpdatedAt) payload.lastKnownUpdatedAt = state.lastKnownUpdatedAt;
-
     state.isSaving = true;
     setSaveStatus('Saving...');
 
@@ -1039,14 +1237,17 @@ async function saveBoardToServer(trigger = "manual") {
         await saveBoardAsNew(payload);
       } else {
         state.autosavePausedUntilChange = true;
-        setSaveStatus('Unsaved changes');
+        if (saveRequestId === state.latestSaveRequestId) setSaveStatus('Unsaved changes');
       }
-      state.isSaving = false;
+      if (saveRequestId === state.latestSaveRequestId) state.isSaving = false;
       return;
     }
     if (!response.ok) throw new Error(data?.error || 'Failed to save board');
+    if (saveRequestId !== state.latestSaveRequestId) {
+      console.warn('[Funklix Save Guard] Ignored stale save completion');
+      return;
+    }
     console.log('Saved board response id:', data?.id);
-
     const returnedId = data?.id || currentBoardId;
     if (returnedId) state.currentBoardId = returnedId;
     state.lastKnownUpdatedAt = data?.updated_at || new Date().toISOString();
@@ -1054,6 +1255,11 @@ async function saveBoardToServer(trigger = "manual") {
     const shareUrl = `${window.location.origin}/boards/${returnedId}`;
     state.isDirty = false;
     setSaveStatus('Saved');
+    state.canvasMetadata = {
+      ...(state.canvasMetadata || {}),
+      createdAt: state.canvasMetadata?.createdAt || canvasStateForSave.metadata?.createdAt || null,
+      updatedAt: saveTimestamp
+    };
     refreshLastSavedSnapshot();
     setSharePanelState(returnedId, new Date(), data?.owner_email || state.currentBoardOwnerEmail || null);
 
@@ -1064,15 +1270,21 @@ async function saveBoardToServer(trigger = "manual") {
     }
   } catch (error) {
     console.error(error);
-    setSaveStatus('Save failed');
+    if (saveRequestId === state.latestSaveRequestId) {
+      setSaveStatus('Save failed');
+    } else {
+      console.warn('[Funklix Save Guard] Ignored stale save failure');
+    }
   } finally {
-    state.isSaving = false;
+    if (saveRequestId === state.latestSaveRequestId) state.isSaving = false;
   }
 }
 
 async function loadBoardFromUrlIfPresent() {
   const boardId = state.currentBoardId || getBoardIdFromPath();
   if (!boardId) return false;
+  state.initialServerLoadInFlight = true;
+  state.isBoardLoading = true;
   state.currentBoardId = boardId;
   try {
     const response = await fetch(`/api/boards/${boardId}`);
@@ -1087,13 +1299,37 @@ async function loadBoardFromUrlIfPresent() {
       saveBrandBrainState();
     }
     setSharePanelState(state.currentBoardId, data?.updated_at ? new Date(data.updated_at) : null, data?.owner_email || null);
-    applyCampaignState(data.canvas_json || {}, `Loaded board ${boardId.slice(0, 8)}...`);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data.canvas_json || {}));
+    if (data?.access && typeof data.access === "object") {
+      const nextAccess = {
+        canView: data.access.canView !== false,
+        canEdit: data.access.canEdit !== false,
+        reason: typeof data.access.role === "string" && data.access.role ? data.access.role : (state.boardAccess?.reason || "unknown")
+      };
+      if (state.boardAccess?.reason !== nextAccess.reason || state.boardAccess?.canView !== nextAccess.canView || state.boardAccess?.canEdit !== nextAccess.canEdit) {
+        state.boardAccess = nextAccess;
+        console.debug("[Funklix Access] boardAccess", state.boardAccess);
+      }
+      updateReadOnlyNoticeVisibility();
+    } else {
+      updateBoardAccessState();
+    }
+    const incomingCanvasState = data.canvas_json || {};
+    if (!isValidCanvasStatePayload(incomingCanvasState)) {
+      console.warn('[Funklix Board Load] Invalid canvas_json payload ignored');
+      setSaveStatus('Board data is invalid and was ignored.');
+      return false;
+    }
+    const normalizedCanvasState = withBoardSchemaDefaults(incomingCanvasState);
+    applyCampaignState(normalizedCanvasState, `Loaded board ${boardId.slice(0, 8)}...`);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(normalizedCanvasState));
     return true;
   } catch (error) {
     console.error(error);
     setSaveStatus('Board not found or could not be loaded.');
     return false;
+  } finally {
+    state.initialServerLoadInFlight = false;
+    state.isBoardLoading = false;
   }
 }
 
@@ -3913,29 +4149,57 @@ el.sidebarToggleButton?.addEventListener("click", () => {
   setSidebarCollapsed(collapsed);
 });
 
-el.addNodeButton.addEventListener("click", () => {
-  setActiveView("board");
-  openTypePicker((type) => {
-    createNode({ type });
-  }, "Idea");
-});
+if (el.addNodeButton) {
+  el.addNodeButton.addEventListener("click", () => {
+    setActiveView("board");
+    openTypePicker((type) => {
+      createNode({ type });
+    }, "Idea");
+  });
+} else {
+  console.warn("[Funklix DOM Hardening] Missing listener target: #add-node-btn");
+}
 
-el.createCampaignButton.addEventListener("click", () => {
-  openCreateCampaignModal();
-});
+if (el.createCampaignButton) {
+  el.createCampaignButton.addEventListener("click", () => {
+    openCreateCampaignModal();
+  });
+} else {
+  console.warn("[Funklix DOM Hardening] Missing listener target: #create-campaign-btn");
+}
 
-el.cycleViewButton.addEventListener("click", () => {
-  const order = ["board", "list", "calendar"];
-  const idx = order.indexOf(state.activeView);
-  setActiveView(order[(idx + 1) % order.length]);
-});
-el.viewMenuButton.addEventListener("click", (event) => {
-  event.stopPropagation();
-  el.viewMenu.classList.toggle("hidden");
-});
-el.viewBoardButton.addEventListener("click", () => { setActiveView("board"); el.viewMenu.classList.add("hidden"); });
-el.viewListButton.addEventListener("click", () => { setActiveView("list"); el.viewMenu.classList.add("hidden"); });
-el.viewCalendarButton.addEventListener("click", () => { setActiveView("calendar"); el.viewMenu.classList.add("hidden"); });
+if (el.cycleViewButton) {
+  el.cycleViewButton.addEventListener("click", () => {
+    const order = ["board", "list", "calendar"];
+    const idx = order.indexOf(state.activeView);
+    setActiveView(order[(idx + 1) % order.length]);
+  });
+} else {
+  console.warn("[Funklix DOM Hardening] Missing listener target: #cycle-view-btn");
+}
+if (el.viewMenuButton) {
+  el.viewMenuButton.addEventListener("click", (event) => {
+    event.stopPropagation();
+    el.viewMenu.classList.toggle("hidden");
+  });
+} else {
+  console.warn("[Funklix DOM Hardening] Missing listener target: #view-menu-btn");
+}
+if (el.viewBoardButton) {
+  el.viewBoardButton.addEventListener("click", () => { setActiveView("board"); el.viewMenu.classList.add("hidden"); });
+} else {
+  console.warn("[Funklix DOM Hardening] Missing listener target: #view-board-btn");
+}
+if (el.viewListButton) {
+  el.viewListButton.addEventListener("click", () => { setActiveView("list"); el.viewMenu.classList.add("hidden"); });
+} else {
+  console.warn("[Funklix DOM Hardening] Missing listener target: #view-list-btn");
+}
+if (el.viewCalendarButton) {
+  el.viewCalendarButton.addEventListener("click", () => { setActiveView("calendar"); el.viewMenu.classList.add("hidden"); });
+} else {
+  console.warn("[Funklix DOM Hardening] Missing listener target: #view-calendar-btn");
+}
 document.addEventListener("click", (event) => {
   if (!event.target.closest(".view-switcher")) el.viewMenu.classList.add("hidden");
 });
@@ -3948,7 +4212,11 @@ el.calendarNextMonthButton.addEventListener("click", () => {
   renderCalendarView();
 });
 
-el.zoomInButton.addEventListener("click", () => setZoom(state.zoom + 0.1));
+if (el.zoomInButton) {
+  el.zoomInButton.addEventListener("click", () => setZoom(state.zoom + 0.1));
+} else {
+  console.warn("[Funklix DOM Hardening] Missing listener target: #zoom-in-btn");
+}
 el.googleSigninButton?.addEventListener("click", () => {
   if (!state.authConfigured) {
     setAuthMessage("Google Login is not configured yet.");
@@ -4589,7 +4857,8 @@ function defaultBrandCoreState() {
 }
 
 function blankCanvasState() {
-  return { nodes: [], edges: [], nodeCounter: 1, postitCounter: 1, zoom: 1 };
+  const nowIso = new Date().toISOString();
+  return { nodes: [], edges: [], nodeCounter: 1, postitCounter: 1, zoom: 1, schemaVersion: 1, metadata: { createdAt: nowIso, updatedAt: nowIso } };
 }
 
 function showCreateBoardModal() {
@@ -4710,6 +4979,7 @@ function showDeleteBoardConfirmModal() {
 
 async function bootApp() {
   state.isBoardLoading = true;
+  diagnoseDomDependencies();
   createDebugPanel();
   await loadSessionUser();
   if (new URLSearchParams(window.location.search).get("auth_error") === "not_configured") setAuthMessage("Google Login is not configured yet.");
@@ -4736,8 +5006,9 @@ async function bootApp() {
   setAppMode("canvas");
   setActiveView("board");
   drawLinks();
-  refreshLastSavedSnapshot();
-  state.isBoardLoading = false;
+  // URL/server-loaded boards refresh snapshot after applyCampaignState(); avoid capturing pre-load snapshot while in-flight.
+  if (!state.initialServerLoadInFlight) refreshLastSavedSnapshot();
+  if (!state.initialServerLoadInFlight) state.isBoardLoading = false;
   startAutosaveWatcher();
 }
 
