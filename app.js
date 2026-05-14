@@ -2466,14 +2466,18 @@ function updateNodeCard(node) {
 
   nodeEl.querySelector(".type").textContent = node.type;
   nodeEl.querySelector(".type").style.color = tone;
+  const editable = !isBoardReadOnly();
   const compactToggle = nodeEl.querySelector(".node-compact-toggle");
   if (compactToggle) {
     compactToggle.textContent = node.compact ? "↗" : "−";
     compactToggle.title = node.compact ? "Expand node" : "Compact view";
     compactToggle.setAttribute("aria-label", compactToggle.title);
   }
-  nodeEl.querySelector(".title").textContent = node.title;
+  const titleEl = nodeEl.querySelector(".title");
+  titleEl.textContent = node.title;
+  titleEl.contentEditable = editable ? "true" : "false";
   const contentEl = nodeEl.querySelector(".content");
+  contentEl.contentEditable = editable ? "true" : "false";
   contentEl.textContent = node.content;
   const isSocialNodeCard = node.type === "Social Media Posting";
   contentEl.classList.toggle("hidden", isSocialNodeCard);
@@ -2636,7 +2640,7 @@ function updateNodeCard(node) {
 
     const caption = document.createElement("div");
     caption.className = "social-caption";
-    caption.contentEditable = "true";
+    caption.contentEditable = editable ? "true" : "false";
     caption.textContent = node.social.caption || "";
     caption.addEventListener("click", (event) => event.stopPropagation());
     caption.addEventListener("input", () => {
@@ -2652,7 +2656,7 @@ function updateNodeCard(node) {
 
     const cta = document.createElement("div");
     cta.className = "social-cta";
-    cta.contentEditable = "true";
+    cta.contentEditable = editable ? "true" : "false";
     cta.textContent = node.social.preview || "";
     cta.addEventListener("click", (event) => event.stopPropagation());
     cta.addEventListener("input", () => {
@@ -2666,7 +2670,7 @@ function updateNodeCard(node) {
 
     const hashtags = document.createElement("div");
     hashtags.className = "social-hashtags";
-    hashtags.contentEditable = "true";
+    hashtags.contentEditable = editable ? "true" : "false";
     hashtags.textContent = (node.social.hashtags || []).join(" ");
     hashtags.addEventListener("click", (event) => event.stopPropagation());
     hashtags.addEventListener("input", () => {
