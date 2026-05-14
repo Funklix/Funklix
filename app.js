@@ -416,7 +416,8 @@ function updateBoardAccessState() {
   const hasOwner = !!ownerEmail;
   const isOwner = !!userEmail && hasOwner && userEmail === ownerEmail;
   const reason = isOwner ? "owner" : (!hasOwner ? "unowned" : (!userEmail ? "anonymous_shared" : "non_owner"));
-  const nextAccess = { canView: true, canEdit: true, reason };
+  const canEdit = reason === "owner" || reason === "unowned";
+  const nextAccess = { canView: true, canEdit, reason };
   if (state.boardAccess?.reason !== nextAccess.reason || state.boardAccess?.canView !== nextAccess.canView || state.boardAccess?.canEdit !== nextAccess.canEdit) {
     state.boardAccess = nextAccess;
     console.debug("[Funklix Access] boardAccess", state.boardAccess);
@@ -724,6 +725,10 @@ function scheduleAutosave() {
 }
 
 function setSaveStatus(text) { el.saveStatus.textContent = text; }
+
+function isBoardReadOnly() {
+  return state.boardAccess?.canEdit === false;
+}
 
 function isPersistableImageUrl(url) {
   return typeof url === "string" && url.length > 0 && !url.startsWith("blob:") && !url.startsWith("data:");
@@ -1074,6 +1079,10 @@ function renderCampaignIntelligence() {
 }
 
 async function regenerateSocialForPlatform(node, triggerBtn = null) {
+  if (isBoardReadOnly()) {
+    setSaveStatus("Read-only board");
+    return;
+  }
   if (!node || node.type !== "Social Media Posting") return;
   const nodeEl = el.zoomLayer.querySelector(`[data-id='${node.id}']`);
   const originalText = triggerBtn?.textContent || "";
@@ -1972,6 +1981,10 @@ function closePostingPlanner() {
 }
 
 function confirmSchedulePost() {
+  if (isBoardReadOnly()) {
+    setSaveStatus("Read-only board");
+    return;
+  }
   const node = getNode(state.pendingScheduleNodeId);
   if (!node) return closePostingPlanner();
   state.scheduleDate = el.postingDateInput.value || "";
@@ -2253,6 +2266,10 @@ function drawLinks() {
     path.style.pointerEvents = "stroke";
     path.addEventListener("click", (event) => {
       event.stopPropagation();
+      if (isBoardReadOnly()) {
+        setSaveStatus("Read-only board");
+        return;
+      }
       state.edges.splice(edgeIndex, 1);
       drawLinks();
       state.nodes.forEach(updateNodeCard);
@@ -2449,14 +2466,18 @@ function updateNodeCard(node) {
 
   nodeEl.querySelector(".type").textContent = node.type;
   nodeEl.querySelector(".type").style.color = tone;
+  const editable = !isBoardReadOnly();
   const compactToggle = nodeEl.querySelector(".node-compact-toggle");
   if (compactToggle) {
     compactToggle.textContent = node.compact ? "↗" : "−";
     compactToggle.title = node.compact ? "Expand node" : "Compact view";
     compactToggle.setAttribute("aria-label", compactToggle.title);
   }
-  nodeEl.querySelector(".title").textContent = node.title;
+  const titleEl = nodeEl.querySelector(".title");
+  titleEl.textContent = node.title;
+  titleEl.contentEditable = editable ? "true" : "false";
   const contentEl = nodeEl.querySelector(".content");
+  contentEl.contentEditable = editable ? "true" : "false";
   contentEl.textContent = node.content;
   const isSocialNodeCard = node.type === "Social Media Posting";
   contentEl.classList.toggle("hidden", isSocialNodeCard);
@@ -2587,6 +2608,10 @@ function updateNodeCard(node) {
     platformSelect.value = node.social.platform || "LinkedIn";
     platformSelect.addEventListener("click", (event) => event.stopPropagation());
     platformSelect.addEventListener("change", () => {
+      if (isBoardReadOnly()) {
+        setSaveStatus("Read-only board");
+        return;
+      }
       node.social.platform = platformSelect.value;
       updateNodeCard(node);
       if (state.selectedPrimary === node.id) fillInspector(node);
@@ -2615,10 +2640,14 @@ function updateNodeCard(node) {
 
     const caption = document.createElement("div");
     caption.className = "social-caption";
-    caption.contentEditable = "true";
+    caption.contentEditable = editable ? "true" : "false";
     caption.textContent = node.social.caption || "";
     caption.addEventListener("click", (event) => event.stopPropagation());
     caption.addEventListener("input", () => {
+      if (isBoardReadOnly()) {
+        setSaveStatus("Read-only board");
+        return;
+      }
       node.social.caption = caption.textContent;
       updateNodeCard(node);
       if (state.selectedPrimary === node.id) fillInspector(node);
@@ -2627,20 +2656,28 @@ function updateNodeCard(node) {
 
     const cta = document.createElement("div");
     cta.className = "social-cta";
-    cta.contentEditable = "true";
+    cta.contentEditable = editable ? "true" : "false";
     cta.textContent = node.social.preview || "";
     cta.addEventListener("click", (event) => event.stopPropagation());
     cta.addEventListener("input", () => {
+      if (isBoardReadOnly()) {
+        setSaveStatus("Read-only board");
+        return;
+      }
       node.social.preview = cta.textContent;
       saveCampaignCanvasState();
     });
 
     const hashtags = document.createElement("div");
     hashtags.className = "social-hashtags";
-    hashtags.contentEditable = "true";
+    hashtags.contentEditable = editable ? "true" : "false";
     hashtags.textContent = (node.social.hashtags || []).join(" ");
     hashtags.addEventListener("click", (event) => event.stopPropagation());
     hashtags.addEventListener("input", () => {
+      if (isBoardReadOnly()) {
+        setSaveStatus("Read-only board");
+        return;
+      }
       node.social.hashtags = normalizeHashtagsInput(hashtags.textContent || "");
       hashtags.textContent = node.social.hashtags.join(" ");
       saveCampaignCanvasState();
@@ -2771,6 +2808,10 @@ function updateNodeCard(node) {
       item.title = "Click to remove one reaction";
       item.addEventListener("click", (event) => {
         event.stopPropagation();
+        if (isBoardReadOnly()) {
+          setSaveStatus("Read-only board");
+          return;
+        }
         pushHistorySnapshot();
         node.reactions[emoji] = Math.max(0, (node.reactions[emoji] || 0) - 1);
         if (node.reactions[emoji] === 0) delete node.reactions[emoji];
@@ -2919,6 +2960,10 @@ function renderPostits(node, nodeEl) {
     const color = postit.querySelector(".postit-color");
     color.value = note.color;
     color.addEventListener("input", () => {
+      if (isBoardReadOnly()) {
+        setSaveStatus("Read-only board");
+        return;
+      }
       note.color = color.value;
       postit.style.background = color.value;
       saveCampaignCanvasState();
@@ -2928,12 +2973,20 @@ function renderPostits(node, nodeEl) {
     area.value = note.text;
     area.style.fontSize = note.text.length > 220 ? "0.7rem" : note.text.length > 120 ? "0.82rem" : "0.96rem";
     area.addEventListener("input", () => {
+      if (isBoardReadOnly()) {
+        setSaveStatus("Read-only board");
+        return;
+      }
       note.text = area.value;
       area.style.fontSize = note.text.length > 220 ? "0.7rem" : note.text.length > 120 ? "0.82rem" : "0.96rem";
       saveCampaignCanvasState();
     });
 
     postit.querySelector(".postit-delete").addEventListener("click", () => {
+      if (isBoardReadOnly()) {
+        setSaveStatus("Read-only board");
+        return;
+      }
       node.postits = node.postits.filter((n) => n.id !== note.id);
       renderPostits(node, nodeEl);
       saveCampaignCanvasState();
@@ -2953,11 +3006,19 @@ function renderPostits(node, nodeEl) {
     addReplyBtn.className = "inspector-image-delete";
     addReplyBtn.textContent = "Reply";
     addReplyBtn.addEventListener("click", () => {
+      if (isBoardReadOnly()) {
+        setSaveStatus("Read-only board");
+        return;
+      }
       if (postit.querySelector(".postit-reply-editor")) return;
       const editor = document.createElement("div");
       editor.className = "postit-reply-editor";
       editor.innerHTML = `<input class="postit-reply-name" placeholder="Name" /><textarea class="postit-reply-input" rows="2" placeholder="Write a reply..."></textarea><button type="button" class="inspector-image-delete">Send</button>`;
       editor.querySelector("button").addEventListener("click", () => {
+        if (isBoardReadOnly()) {
+          setSaveStatus("Read-only board");
+          return;
+        }
         const user = editor.querySelector(".postit-reply-name").value.trim() || "Anonymous";
         const text = editor.querySelector(".postit-reply-input").value.trim();
         if (!text) return;
@@ -2977,6 +3038,10 @@ function renderPostits(node, nodeEl) {
 
 function enablePostitDrag(postit, note) {
   postit.addEventListener("pointerdown", (event) => {
+    if (isBoardReadOnly()) {
+      setSaveStatus("Read-only board");
+      return;
+    }
     if (event.button !== 0 || event.target.closest("textarea,input,button")) return;
 
     const startX = event.clientX;
@@ -3171,6 +3236,10 @@ function renderInspectorImages(node) {
     favoriteBtn.addEventListener("click", (event) => {
       event.preventDefault();
       event.stopPropagation();
+      if (isBoardReadOnly()) {
+        setSaveStatus("Read-only board");
+        return;
+      }
       node.favoriteImageId = node.favoriteImageId === img.id ? null : img.id;
       updateNodeCard(node);
       fillInspector(node);
@@ -3242,6 +3311,10 @@ async function refineNodeWithAI(node, instruction) {
 }
 
 async function runInlineRefine(node, instruction, triggerBtn = null) {
+  if (isBoardReadOnly()) {
+    setSaveStatus("Read-only board");
+    return;
+  }
   const nodeEl = el.zoomLayer.querySelector(`[data-id='${node.id}']`);
   if (!nodeEl) return;
   const toolbarButtons = [...nodeEl.querySelectorAll(".node-ai-toolbar button")];
@@ -3269,6 +3342,10 @@ async function runInlineRefine(node, instruction, triggerBtn = null) {
 }
 
 async function generateFullContentPack(node, triggerBtn = null, mode = "auto") {
+  if (isBoardReadOnly()) {
+    setSaveStatus("Read-only board");
+    return;
+  }
   if (!node || getContentPackLoading(node.id)) return;
   const nodeEl = el.zoomLayer.querySelector(`[data-id='${node.id}']`);
   const toolbarButtons = nodeEl ? [...nodeEl.querySelectorAll(".node-ai-toolbar button")] : [];
@@ -3350,6 +3427,10 @@ async function handleGenerateFullContentPack(contentNodeId) {
 }
 
 async function generateImageForNode(node) {
+  if (isBoardReadOnly()) {
+    setSaveStatus("Read-only board");
+    return;
+  }
   console.log("generate image start");
   const button = el.generateImageButton;
   const originalLabel = button.textContent;
@@ -3416,6 +3497,10 @@ function getParentContentNode(nodeId) {
 }
 
 async function generatePostingVisualForNode(node) {
+  if (isBoardReadOnly()) {
+    setSaveStatus("Read-only board");
+    return;
+  }
   let postingVisualAttached = false;
   const parentContent = getParentContentNode(node.id);
   if (!parentContent?.images?.length) {
@@ -3489,6 +3574,10 @@ async function generatePostingVisualForNode(node) {
 }
 
 async function runImproveNodeFlow(node) {
+  if (isBoardReadOnly()) {
+    setSaveStatus("Read-only board");
+    return;
+  }
   const presets = {
     Emotional: "Make it more emotional",
     Direct: "Make it more direct",
@@ -3825,12 +3914,20 @@ function renderNode(node) {
   content.insertAdjacentElement("afterend", expandBtn);
 
   title.addEventListener("input", () => {
+    if (isBoardReadOnly()) {
+      setSaveStatus("Read-only board");
+      return;
+    }
     node.title = title.textContent.trim();
     if (state.selectedPrimary === node.id) el.inputs.title.value = node.title;
     updateListView();
     saveCampaignCanvasState();
   });
   content.addEventListener("input", () => {
+    if (isBoardReadOnly()) {
+      setSaveStatus("Read-only board");
+      return;
+    }
     node.content = content.textContent.trim();
     if (state.selectedPrimary === node.id) el.inputs.content.value = node.content;
     if ((node.content || "").length <= 160) nodeEl.classList.remove("content-expanded");
@@ -4400,6 +4497,10 @@ el.contextMenu.querySelectorAll(".emoji-quick").forEach((btn) => {
 });
 
 el.nodeForm.addEventListener("input", (event) => {
+  if (isBoardReadOnly()) {
+    setSaveStatus("Read-only board");
+    return;
+  }
   const node = getNode(state.selectedPrimary);
   if (!node) return;
 
@@ -4432,6 +4533,10 @@ el.nodeForm.addEventListener("input", (event) => {
   saveCampaignCanvasState();
 });
 el.inputs.channel.addEventListener("keydown", (event) => {
+  if (isBoardReadOnly()) {
+    setSaveStatus("Read-only board");
+    return;
+  }
   const node = getNode(state.selectedPrimary);
   if (!node) return;
   if (event.key !== "Enter" && event.key !== " ") return;
@@ -4445,6 +4550,10 @@ el.inputs.channel.addEventListener("keydown", (event) => {
   saveCampaignCanvasState();
 });
 el.inputs.hashtags.addEventListener("blur", () => {
+  if (isBoardReadOnly()) {
+    setSaveStatus("Read-only board");
+    return;
+  }
   const node = getNode(state.selectedPrimary);
   if (!node) return;
   const normalized = normalizeHashtagsInput(state.hashtagDraftByNode[node.id] ?? el.inputs.hashtags.value);
@@ -4516,6 +4625,10 @@ el.generateFullPackButton.addEventListener("click", async () => {
   await handleGenerateFullContentPack(node.id);
 });
 el.generateHeaderVisualButton.addEventListener("click", async () => {
+  if (isBoardReadOnly()) {
+    setSaveStatus("Read-only board");
+    return;
+  }
   const node = getNode(state.selectedPrimary);
   if (!node || node.type !== "Landing Page") return;
   if (!node.landingPage?.headerVisualPrompt?.trim()) return;
