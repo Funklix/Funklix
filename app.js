@@ -725,6 +725,10 @@ function scheduleAutosave() {
 
 function setSaveStatus(text) { el.saveStatus.textContent = text; }
 
+function isBoardReadOnly() {
+  return state.boardAccess?.canEdit === false;
+}
+
 function isPersistableImageUrl(url) {
   return typeof url === "string" && url.length > 0 && !url.startsWith("blob:") && !url.startsWith("data:");
 }
@@ -4400,6 +4404,10 @@ el.contextMenu.querySelectorAll(".emoji-quick").forEach((btn) => {
 });
 
 el.nodeForm.addEventListener("input", (event) => {
+  if (isBoardReadOnly()) {
+    setSaveStatus("Read-only board");
+    return;
+  }
   const node = getNode(state.selectedPrimary);
   if (!node) return;
 
@@ -4432,6 +4440,10 @@ el.nodeForm.addEventListener("input", (event) => {
   saveCampaignCanvasState();
 });
 el.inputs.channel.addEventListener("keydown", (event) => {
+  if (isBoardReadOnly()) {
+    setSaveStatus("Read-only board");
+    return;
+  }
   const node = getNode(state.selectedPrimary);
   if (!node) return;
   if (event.key !== "Enter" && event.key !== " ") return;
@@ -4445,6 +4457,10 @@ el.inputs.channel.addEventListener("keydown", (event) => {
   saveCampaignCanvasState();
 });
 el.inputs.hashtags.addEventListener("blur", () => {
+  if (isBoardReadOnly()) {
+    setSaveStatus("Read-only board");
+    return;
+  }
   const node = getNode(state.selectedPrimary);
   if (!node) return;
   const normalized = normalizeHashtagsInput(state.hashtagDraftByNode[node.id] ?? el.inputs.hashtags.value);
