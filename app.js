@@ -2604,6 +2604,10 @@ function updateNodeCard(node) {
     platformSelect.value = node.social.platform || "LinkedIn";
     platformSelect.addEventListener("click", (event) => event.stopPropagation());
     platformSelect.addEventListener("change", () => {
+      if (isBoardReadOnly()) {
+        setSaveStatus("Read-only board");
+        return;
+      }
       node.social.platform = platformSelect.value;
       updateNodeCard(node);
       if (state.selectedPrimary === node.id) fillInspector(node);
@@ -2636,6 +2640,10 @@ function updateNodeCard(node) {
     caption.textContent = node.social.caption || "";
     caption.addEventListener("click", (event) => event.stopPropagation());
     caption.addEventListener("input", () => {
+      if (isBoardReadOnly()) {
+        setSaveStatus("Read-only board");
+        return;
+      }
       node.social.caption = caption.textContent;
       updateNodeCard(node);
       if (state.selectedPrimary === node.id) fillInspector(node);
@@ -2648,6 +2656,10 @@ function updateNodeCard(node) {
     cta.textContent = node.social.preview || "";
     cta.addEventListener("click", (event) => event.stopPropagation());
     cta.addEventListener("input", () => {
+      if (isBoardReadOnly()) {
+        setSaveStatus("Read-only board");
+        return;
+      }
       node.social.preview = cta.textContent;
       saveCampaignCanvasState();
     });
@@ -2658,6 +2670,10 @@ function updateNodeCard(node) {
     hashtags.textContent = (node.social.hashtags || []).join(" ");
     hashtags.addEventListener("click", (event) => event.stopPropagation());
     hashtags.addEventListener("input", () => {
+      if (isBoardReadOnly()) {
+        setSaveStatus("Read-only board");
+        return;
+      }
       node.social.hashtags = normalizeHashtagsInput(hashtags.textContent || "");
       hashtags.textContent = node.social.hashtags.join(" ");
       saveCampaignCanvasState();
