@@ -1078,6 +1078,10 @@ function renderCampaignIntelligence() {
 }
 
 async function regenerateSocialForPlatform(node, triggerBtn = null) {
+  if (isBoardReadOnly()) {
+    setSaveStatus("Read-only board");
+    return;
+  }
   if (!node || node.type !== "Social Media Posting") return;
   const nodeEl = el.zoomLayer.querySelector(`[data-id='${node.id}']`);
   const originalText = triggerBtn?.textContent || "";
@@ -3246,6 +3250,10 @@ async function refineNodeWithAI(node, instruction) {
 }
 
 async function runInlineRefine(node, instruction, triggerBtn = null) {
+  if (isBoardReadOnly()) {
+    setSaveStatus("Read-only board");
+    return;
+  }
   const nodeEl = el.zoomLayer.querySelector(`[data-id='${node.id}']`);
   if (!nodeEl) return;
   const toolbarButtons = [...nodeEl.querySelectorAll(".node-ai-toolbar button")];
@@ -3273,6 +3281,10 @@ async function runInlineRefine(node, instruction, triggerBtn = null) {
 }
 
 async function generateFullContentPack(node, triggerBtn = null, mode = "auto") {
+  if (isBoardReadOnly()) {
+    setSaveStatus("Read-only board");
+    return;
+  }
   if (!node || getContentPackLoading(node.id)) return;
   const nodeEl = el.zoomLayer.querySelector(`[data-id='${node.id}']`);
   const toolbarButtons = nodeEl ? [...nodeEl.querySelectorAll(".node-ai-toolbar button")] : [];
@@ -3354,6 +3366,10 @@ async function handleGenerateFullContentPack(contentNodeId) {
 }
 
 async function generateImageForNode(node) {
+  if (isBoardReadOnly()) {
+    setSaveStatus("Read-only board");
+    return;
+  }
   console.log("generate image start");
   const button = el.generateImageButton;
   const originalLabel = button.textContent;
@@ -3420,6 +3436,10 @@ function getParentContentNode(nodeId) {
 }
 
 async function generatePostingVisualForNode(node) {
+  if (isBoardReadOnly()) {
+    setSaveStatus("Read-only board");
+    return;
+  }
   let postingVisualAttached = false;
   const parentContent = getParentContentNode(node.id);
   if (!parentContent?.images?.length) {
@@ -3493,6 +3513,10 @@ async function generatePostingVisualForNode(node) {
 }
 
 async function runImproveNodeFlow(node) {
+  if (isBoardReadOnly()) {
+    setSaveStatus("Read-only board");
+    return;
+  }
   const presets = {
     Emotional: "Make it more emotional",
     Direct: "Make it more direct",
@@ -4532,6 +4556,10 @@ el.generateFullPackButton.addEventListener("click", async () => {
   await handleGenerateFullContentPack(node.id);
 });
 el.generateHeaderVisualButton.addEventListener("click", async () => {
+  if (isBoardReadOnly()) {
+    setSaveStatus("Read-only board");
+    return;
+  }
   const node = getNode(state.selectedPrimary);
   if (!node || node.type !== "Landing Page") return;
   if (!node.landingPage?.headerVisualPrompt?.trim()) return;
