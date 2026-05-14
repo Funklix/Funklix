@@ -725,6 +725,10 @@ function scheduleAutosave() {
 
 function setSaveStatus(text) { el.saveStatus.textContent = text; }
 
+function isBoardReadOnly() {
+  return state.boardAccess?.canEdit === false;
+}
+
 function isPersistableImageUrl(url) {
   return typeof url === "string" && url.length > 0 && !url.startsWith("blob:") && !url.startsWith("data:");
 }
@@ -1074,6 +1078,10 @@ function renderCampaignIntelligence() {
 }
 
 async function regenerateSocialForPlatform(node, triggerBtn = null) {
+  if (isBoardReadOnly()) {
+    setSaveStatus("Read-only board");
+    return;
+  }
   if (!node || node.type !== "Social Media Posting") return;
   const nodeEl = el.zoomLayer.querySelector(`[data-id='${node.id}']`);
   const originalText = triggerBtn?.textContent || "";
@@ -1972,6 +1980,10 @@ function closePostingPlanner() {
 }
 
 function confirmSchedulePost() {
+  if (isBoardReadOnly()) {
+    setSaveStatus("Read-only board");
+    return;
+  }
   const node = getNode(state.pendingScheduleNodeId);
   if (!node) return closePostingPlanner();
   state.scheduleDate = el.postingDateInput.value || "";
@@ -2253,6 +2265,10 @@ function drawLinks() {
     path.style.pointerEvents = "stroke";
     path.addEventListener("click", (event) => {
       event.stopPropagation();
+      if (isBoardReadOnly()) {
+        setSaveStatus("Read-only board");
+        return;
+      }
       state.edges.splice(edgeIndex, 1);
       drawLinks();
       state.nodes.forEach(updateNodeCard);
@@ -3171,6 +3187,10 @@ function renderInspectorImages(node) {
     favoriteBtn.addEventListener("click", (event) => {
       event.preventDefault();
       event.stopPropagation();
+      if (isBoardReadOnly()) {
+        setSaveStatus("Read-only board");
+        return;
+      }
       node.favoriteImageId = node.favoriteImageId === img.id ? null : img.id;
       updateNodeCard(node);
       fillInspector(node);
@@ -3242,6 +3262,10 @@ async function refineNodeWithAI(node, instruction) {
 }
 
 async function runInlineRefine(node, instruction, triggerBtn = null) {
+  if (isBoardReadOnly()) {
+    setSaveStatus("Read-only board");
+    return;
+  }
   const nodeEl = el.zoomLayer.querySelector(`[data-id='${node.id}']`);
   if (!nodeEl) return;
   const toolbarButtons = [...nodeEl.querySelectorAll(".node-ai-toolbar button")];
@@ -3269,6 +3293,10 @@ async function runInlineRefine(node, instruction, triggerBtn = null) {
 }
 
 async function generateFullContentPack(node, triggerBtn = null, mode = "auto") {
+  if (isBoardReadOnly()) {
+    setSaveStatus("Read-only board");
+    return;
+  }
   if (!node || getContentPackLoading(node.id)) return;
   const nodeEl = el.zoomLayer.querySelector(`[data-id='${node.id}']`);
   const toolbarButtons = nodeEl ? [...nodeEl.querySelectorAll(".node-ai-toolbar button")] : [];
@@ -3350,6 +3378,10 @@ async function handleGenerateFullContentPack(contentNodeId) {
 }
 
 async function generateImageForNode(node) {
+  if (isBoardReadOnly()) {
+    setSaveStatus("Read-only board");
+    return;
+  }
   console.log("generate image start");
   const button = el.generateImageButton;
   const originalLabel = button.textContent;
@@ -3416,6 +3448,10 @@ function getParentContentNode(nodeId) {
 }
 
 async function generatePostingVisualForNode(node) {
+  if (isBoardReadOnly()) {
+    setSaveStatus("Read-only board");
+    return;
+  }
   let postingVisualAttached = false;
   const parentContent = getParentContentNode(node.id);
   if (!parentContent?.images?.length) {
@@ -3489,6 +3525,10 @@ async function generatePostingVisualForNode(node) {
 }
 
 async function runImproveNodeFlow(node) {
+  if (isBoardReadOnly()) {
+    setSaveStatus("Read-only board");
+    return;
+  }
   const presets = {
     Emotional: "Make it more emotional",
     Direct: "Make it more direct",
@@ -3825,12 +3865,20 @@ function renderNode(node) {
   content.insertAdjacentElement("afterend", expandBtn);
 
   title.addEventListener("input", () => {
+    if (isBoardReadOnly()) {
+      setSaveStatus("Read-only board");
+      return;
+    }
     node.title = title.textContent.trim();
     if (state.selectedPrimary === node.id) el.inputs.title.value = node.title;
     updateListView();
     saveCampaignCanvasState();
   });
   content.addEventListener("input", () => {
+    if (isBoardReadOnly()) {
+      setSaveStatus("Read-only board");
+      return;
+    }
     node.content = content.textContent.trim();
     if (state.selectedPrimary === node.id) el.inputs.content.value = node.content;
     if ((node.content || "").length <= 160) nodeEl.classList.remove("content-expanded");
@@ -4400,6 +4448,10 @@ el.contextMenu.querySelectorAll(".emoji-quick").forEach((btn) => {
 });
 
 el.nodeForm.addEventListener("input", (event) => {
+  if (isBoardReadOnly()) {
+    setSaveStatus("Read-only board");
+    return;
+  }
   const node = getNode(state.selectedPrimary);
   if (!node) return;
 
@@ -4432,6 +4484,10 @@ el.nodeForm.addEventListener("input", (event) => {
   saveCampaignCanvasState();
 });
 el.inputs.channel.addEventListener("keydown", (event) => {
+  if (isBoardReadOnly()) {
+    setSaveStatus("Read-only board");
+    return;
+  }
   const node = getNode(state.selectedPrimary);
   if (!node) return;
   if (event.key !== "Enter" && event.key !== " ") return;
@@ -4445,6 +4501,10 @@ el.inputs.channel.addEventListener("keydown", (event) => {
   saveCampaignCanvasState();
 });
 el.inputs.hashtags.addEventListener("blur", () => {
+  if (isBoardReadOnly()) {
+    setSaveStatus("Read-only board");
+    return;
+  }
   const node = getNode(state.selectedPrimary);
   if (!node) return;
   const normalized = normalizeHashtagsInput(state.hashtagDraftByNode[node.id] ?? el.inputs.hashtags.value);
@@ -4516,6 +4576,10 @@ el.generateFullPackButton.addEventListener("click", async () => {
   await handleGenerateFullContentPack(node.id);
 });
 el.generateHeaderVisualButton.addEventListener("click", async () => {
+  if (isBoardReadOnly()) {
+    setSaveStatus("Read-only board");
+    return;
+  }
   const node = getNode(state.selectedPrimary);
   if (!node || node.type !== "Landing Page") return;
   if (!node.landingPage?.headerVisualPrompt?.trim()) return;
