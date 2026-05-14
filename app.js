@@ -2787,6 +2787,10 @@ function updateNodeCard(node) {
       item.title = "Click to remove one reaction";
       item.addEventListener("click", (event) => {
         event.stopPropagation();
+        if (isBoardReadOnly()) {
+          setSaveStatus("Read-only board");
+          return;
+        }
         pushHistorySnapshot();
         node.reactions[emoji] = Math.max(0, (node.reactions[emoji] || 0) - 1);
         if (node.reactions[emoji] === 0) delete node.reactions[emoji];
@@ -2935,6 +2939,10 @@ function renderPostits(node, nodeEl) {
     const color = postit.querySelector(".postit-color");
     color.value = note.color;
     color.addEventListener("input", () => {
+      if (isBoardReadOnly()) {
+        setSaveStatus("Read-only board");
+        return;
+      }
       note.color = color.value;
       postit.style.background = color.value;
       saveCampaignCanvasState();
@@ -2944,12 +2952,20 @@ function renderPostits(node, nodeEl) {
     area.value = note.text;
     area.style.fontSize = note.text.length > 220 ? "0.7rem" : note.text.length > 120 ? "0.82rem" : "0.96rem";
     area.addEventListener("input", () => {
+      if (isBoardReadOnly()) {
+        setSaveStatus("Read-only board");
+        return;
+      }
       note.text = area.value;
       area.style.fontSize = note.text.length > 220 ? "0.7rem" : note.text.length > 120 ? "0.82rem" : "0.96rem";
       saveCampaignCanvasState();
     });
 
     postit.querySelector(".postit-delete").addEventListener("click", () => {
+      if (isBoardReadOnly()) {
+        setSaveStatus("Read-only board");
+        return;
+      }
       node.postits = node.postits.filter((n) => n.id !== note.id);
       renderPostits(node, nodeEl);
       saveCampaignCanvasState();
@@ -2969,11 +2985,19 @@ function renderPostits(node, nodeEl) {
     addReplyBtn.className = "inspector-image-delete";
     addReplyBtn.textContent = "Reply";
     addReplyBtn.addEventListener("click", () => {
+      if (isBoardReadOnly()) {
+        setSaveStatus("Read-only board");
+        return;
+      }
       if (postit.querySelector(".postit-reply-editor")) return;
       const editor = document.createElement("div");
       editor.className = "postit-reply-editor";
       editor.innerHTML = `<input class="postit-reply-name" placeholder="Name" /><textarea class="postit-reply-input" rows="2" placeholder="Write a reply..."></textarea><button type="button" class="inspector-image-delete">Send</button>`;
       editor.querySelector("button").addEventListener("click", () => {
+        if (isBoardReadOnly()) {
+          setSaveStatus("Read-only board");
+          return;
+        }
         const user = editor.querySelector(".postit-reply-name").value.trim() || "Anonymous";
         const text = editor.querySelector(".postit-reply-input").value.trim();
         if (!text) return;
@@ -2993,6 +3017,10 @@ function renderPostits(node, nodeEl) {
 
 function enablePostitDrag(postit, note) {
   postit.addEventListener("pointerdown", (event) => {
+    if (isBoardReadOnly()) {
+      setSaveStatus("Read-only board");
+      return;
+    }
     if (event.button !== 0 || event.target.closest("textarea,input,button")) return;
 
     const startX = event.clientX;
