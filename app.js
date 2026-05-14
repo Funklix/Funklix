@@ -176,6 +176,10 @@ const el = {
   authAvatarFallback: document.getElementById("auth-avatar-fallback"),
   authMessage: document.getElementById("auth-message"),
   readonlyBoardNotice: document.getElementById("readonly-board-notice"),
+  boardAccessCluster: document.getElementById("board-access-cluster"),
+  boardAccessChipKind: document.getElementById("board-access-chip-kind"),
+  boardAccessChipMode: document.getElementById("board-access-chip-mode"),
+  boardAccessChipOwner: document.getElementById("board-access-chip-owner"),
   authSignoutButton: document.getElementById("auth-signout-btn"),
   brandCoreButton: document.getElementById("brand-core-nav-btn"),
   campaignCanvasNavButton: document.getElementById("campaign-canvas-nav-btn"),
@@ -445,6 +449,39 @@ function updateReadOnlyNoticeVisibility() {
     if (isReadOnly) button.title = readOnlyActionTitle;
     else button.removeAttribute("title");
   });
+  renderBoardAccessCluster();
+}
+
+function renderBoardAccessCluster() {
+  if (!el.boardAccessCluster || !el.boardAccessChipKind || !el.boardAccessChipMode || !el.boardAccessChipOwner) return;
+  const boardId = state.currentBoardId || getBoardIdFromPath();
+  if (!boardId) {
+    el.boardAccessCluster.classList.add("hidden");
+    return;
+  }
+  const reason = state.boardAccess?.reason || "unknown";
+  const isReadOnly = state.boardAccess?.canEdit === false;
+  const ownerLabel = state.currentBoardOwnerEmail || "";
+  let kind = "Shared Board";
+  let mode = "";
+  let owner = "";
+  if (reason === "owner") {
+    kind = "Your Board";
+  } else if (reason === "unowned") {
+    kind = "Unowned Board";
+    mode = "Claim Available";
+  } else if (reason === "anonymous_shared" || reason === "non_owner") {
+    kind = "Shared Board";
+    if (isReadOnly) mode = "View Only";
+    if (ownerLabel) owner = `Owner: ${ownerLabel}`;
+  }
+  if (isReadOnly && !mode) mode = "View Only";
+  el.boardAccessChipKind.textContent = kind;
+  el.boardAccessChipMode.textContent = mode;
+  el.boardAccessChipOwner.textContent = owner;
+  el.boardAccessChipMode.classList.toggle("hidden", !mode);
+  el.boardAccessChipOwner.classList.toggle("hidden", !owner);
+  el.boardAccessCluster.classList.remove("hidden");
 }
 
 function setSharePanelState(boardId, lastSaved = null, ownerEmail = null) {
