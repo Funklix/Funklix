@@ -2516,6 +2516,10 @@ function updateNodeCard(node) {
       chip.addEventListener("mouseleave", () => { x.style.display = "none"; });
       x.addEventListener("click", (event) => {
         event.stopPropagation();
+        if (isBoardReadOnly()) {
+          setSaveStatus("Read-only board");
+          return;
+        }
         pushHistorySnapshot();
         node.tags = node.tags.filter((t) => t !== tag);
         updateNodeCard(node);
@@ -3846,6 +3850,10 @@ function renderNode(node) {
   compactToggle.className = "node-compact-toggle";
   compactToggle.addEventListener("click", (event) => {
     event.stopPropagation();
+    if (isBoardReadOnly()) {
+      setSaveStatus("Read-only board");
+      return;
+    }
     const wasCompact = !!node.compact;
     node.compact = !node.compact;
     updateNodeCard(node);
