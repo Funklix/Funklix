@@ -416,7 +416,8 @@ function updateBoardAccessState() {
   const hasOwner = !!ownerEmail;
   const isOwner = !!userEmail && hasOwner && userEmail === ownerEmail;
   const reason = isOwner ? "owner" : (!hasOwner ? "unowned" : (!userEmail ? "anonymous_shared" : "non_owner"));
-  const nextAccess = { canView: true, canEdit: true, reason };
+  const canEdit = reason === "owner" || reason === "unowned";
+  const nextAccess = { canView: true, canEdit, reason };
   if (state.boardAccess?.reason !== nextAccess.reason || state.boardAccess?.canView !== nextAccess.canView || state.boardAccess?.canEdit !== nextAccess.canEdit) {
     state.boardAccess = nextAccess;
     console.debug("[Funklix Access] boardAccess", state.boardAccess);
