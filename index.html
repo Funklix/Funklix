@@ -76,6 +76,9 @@
       .auth-avatar-fallback { width: 24px; height: 24px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; background: #edf1ff; color: #4d5fcf; border: 1px solid #dbe0f2; }
       .auth-message { font-size: 11px; color: #b44a4a; }
       .readonly-board-notice { font-size: 11px; color: #7a5f00; background: rgba(255, 214, 10, 0.14); border: 1px solid rgba(255, 214, 10, 0.35); border-radius: 8px; padding: 4px 8px; margin-left: 8px; }
+      .board-access-cluster { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+      .board-access-chip { font-size: 11px; line-height: 1; color: #3f4a72; border: 1px solid #dbe1f4; border-radius: 999px; padding: 5px 8px; background: #f7f9ff; white-space: nowrap; }
+      .board-access-chip-owner { max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
 
     </style>
 
@@ -134,6 +137,11 @@
               </div>
               <div class="toolbar-row2-spacer"></div>
               <div class="toolbar-row2-right">
+                <div id="board-access-cluster" class="board-access-cluster hidden" aria-live="polite">
+                  <span id="board-access-chip-kind" class="board-access-chip"></span>
+                  <span id="board-access-chip-mode" class="board-access-chip hidden"></span>
+                  <span id="board-access-chip-owner" class="board-access-chip board-access-chip-owner hidden"></span>
+                </div>
                 <button id="copy-board-link-btn" type="button" class="utility-muted">Copy Link</button>
               </div>
             </div>
