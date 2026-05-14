@@ -1980,6 +1980,10 @@ function closePostingPlanner() {
 }
 
 function confirmSchedulePost() {
+  if (isBoardReadOnly()) {
+    setSaveStatus("Read-only board");
+    return;
+  }
   const node = getNode(state.pendingScheduleNodeId);
   if (!node) return closePostingPlanner();
   state.scheduleDate = el.postingDateInput.value || "";
@@ -2261,6 +2265,10 @@ function drawLinks() {
     path.style.pointerEvents = "stroke";
     path.addEventListener("click", (event) => {
       event.stopPropagation();
+      if (isBoardReadOnly()) {
+        setSaveStatus("Read-only board");
+        return;
+      }
       state.edges.splice(edgeIndex, 1);
       drawLinks();
       state.nodes.forEach(updateNodeCard);
@@ -3179,6 +3187,10 @@ function renderInspectorImages(node) {
     favoriteBtn.addEventListener("click", (event) => {
       event.preventDefault();
       event.stopPropagation();
+      if (isBoardReadOnly()) {
+        setSaveStatus("Read-only board");
+        return;
+      }
       node.favoriteImageId = node.favoriteImageId === img.id ? null : img.id;
       updateNodeCard(node);
       fillInspector(node);
@@ -3853,12 +3865,20 @@ function renderNode(node) {
   content.insertAdjacentElement("afterend", expandBtn);
 
   title.addEventListener("input", () => {
+    if (isBoardReadOnly()) {
+      setSaveStatus("Read-only board");
+      return;
+    }
     node.title = title.textContent.trim();
     if (state.selectedPrimary === node.id) el.inputs.title.value = node.title;
     updateListView();
     saveCampaignCanvasState();
   });
   content.addEventListener("input", () => {
+    if (isBoardReadOnly()) {
+      setSaveStatus("Read-only board");
+      return;
+    }
     node.content = content.textContent.trim();
     if (state.selectedPrimary === node.id) el.inputs.content.value = node.content;
     if ((node.content || "").length <= 160) nodeEl.classList.remove("content-expanded");
