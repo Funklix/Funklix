@@ -34,17 +34,19 @@ module.exports = async function handler(req, res) {
       }
       const board = current.rows[0];
       const sessionUserId = user?.id || user?.sub || null;
-      const ownerMatchByEmail = !!board.owner_email && user?.email === board.owner_email;
-      const ownerMatchById = !!board.owner_id && !!sessionUserId && board.owner_id === sessionUserId;
-      const isOwner = ownerMatchByEmail || ownerMatchById;
-      const actorType = !user?.email ? 'anonymous' : (!board.owner_email && !board.owner_id ? 'unowned_board' : (isOwner ? 'owner' : 'non_owner_signed_in'));
-      if (!isOwner) {
-        console.warn('[Funklix Authz Observe] Non-owner PUT write', {
+      const isUnowned = !board.owner_email && !board.owner_id;
+      const isOwnerByEmail = !!board.owner_email && !!user?.email && user.email === board.owner_email;
+      const isOwnerById = !!board.owner_id && !!sessionUserId && board.owner_id === sessionUserId;
+      const canEdit = isUnowned || isOwnerByEmail || isOwnerById;
+      const actorType = !user?.email ? 'anonymous' : (isUnowned ? 'unowned_board' : (canEdit ? 'owner' : 'non_owner_signed_in'));
+      if (!canEdit) {
+        console.warn('[Funklix Authz Enforce] Forbidden PUT write', {
           boardId: id,
           actorType,
           actorEmail: user?.email || null,
           ownerEmail: board.owner_email || null
         });
+        return res.status(403).json({ error: 'Forbidden' });
       }
 
       if (lastKnownUpdatedAt) {
