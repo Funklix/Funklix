@@ -3772,6 +3772,10 @@ function renderNode(node) {
   });
   nodeEl.addEventListener("dblclick", (event) => {
     if (event.target.closest("button,input,textarea,select,[contenteditable='true']")) return;
+    if (isBoardReadOnly()) {
+      setSaveStatus("Read-only board");
+      return;
+    }
     node.compact = false;
     updateNodeCard(node);
     saveCampaignCanvasState();
