@@ -84,6 +84,7 @@ const state = {
   ,currentBoardOwnerEmail: null
   ,currentBoardOwnerName: null
   ,boardAccess: { canView: true, canEdit: true, reason: "unknown" }
+  ,shareToastTimer: null
 };
 
 const el = {
@@ -556,13 +557,54 @@ async function copyCurrentBoardLink() {
       }, 1500);
     }
     el.boardCopyFeedback?.classList.add("hidden");
+    showShareLinkToast(true);
   } catch (error) {
+    showShareLinkToast(false);
     if (el.boardCopyFeedback) {
       el.boardCopyFeedback.textContent = "Could not copy link.";
       el.boardCopyFeedback.classList.remove("hidden");
       setTimeout(() => el.boardCopyFeedback?.classList.add("hidden"), 1500);
     }
   }
+}
+
+function dismissShareLinkToast() {
+  const existing = document.getElementById("share-link-toast");
+  if (existing) existing.remove();
+  if (state.shareToastTimer) {
+    clearTimeout(state.shareToastTimer);
+    state.shareToastTimer = null;
+  }
+}
+
+function showShareLinkToast(copied = true) {
+  if (!el.copyBoardLinkButton) return;
+  dismissShareLinkToast();
+  const toast = document.createElement("div");
+  toast.id = "share-link-toast";
+  toast.className = "share-link-toast";
+  toast.setAttribute("role", "status");
+  toast.setAttribute("aria-live", "polite");
+  toast.innerHTML = copied
+    ? `<div class="share-link-toast-line">Anyone with link can view</div><div class="share-link-toast-line">Duplicate to create your own version</div><div class="share-link-toast-ok">Link copied ✓</div>`
+    : `<div class="share-link-toast-ok">Could not copy link</div>`;
+  document.body.appendChild(toast);
+  const rect = el.copyBoardLinkButton.getBoundingClientRect();
+  const width = toast.offsetWidth || 220;
+  toast.style.top = `${Math.max(8, rect.bottom + 10)}px`;
+  toast.style.left = `${Math.max(8, Math.min(window.innerWidth - width - 8, rect.right - width))}px`;
+
+  const closeOnOutside = (event) => {
+    if (!toast.contains(event.target) && event.target !== el.copyBoardLinkButton) {
+      dismissShareLinkToast();
+      document.removeEventListener("pointerdown", closeOnOutside, true);
+    }
+  };
+  document.addEventListener("pointerdown", closeOnOutside, true);
+  state.shareToastTimer = setTimeout(() => {
+    dismissShareLinkToast();
+    document.removeEventListener("pointerdown", closeOnOutside, true);
+  }, copied ? 2200 : 1600);
 }
 
 
