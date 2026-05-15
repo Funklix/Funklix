@@ -614,12 +614,17 @@ function showShareLinkToast(copied = true) {
 
 
 async function saveBoardAsNew(payload) {
+  if (!state.user?.email) {
+    setSaveStatus("Sign in with Google to duplicate this board.");
+    return;
+  }
   const response = await fetch('/api/boards', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload)
   });
   const data = await response.json();
+  if (response.status === 401) throw new Error('Sign in with Google to duplicate this board.');
   if (!response.ok) throw new Error(data?.error || 'Failed to save board');
 
   const newId = data?.id;
@@ -645,6 +650,10 @@ function buildDuplicateBoardName() {
 }
 
 async function duplicateCurrentBoard() {
+  if (!state.user?.email) {
+    setSaveStatus("Sign in with Google to duplicate this board.");
+    return false;
+  }
   if (state.isSaving) {
     setSaveStatus("Please wait until saving finishes");
     return false;
@@ -667,6 +676,7 @@ async function duplicateCurrentBoard() {
       body: JSON.stringify(payload)
     });
     const data = await response.json();
+    if (response.status === 401) throw new Error('Sign in with Google to duplicate this board.');
     if (!response.ok) throw new Error(data?.error || 'Failed to duplicate board');
 
     const newId = data?.id;
@@ -684,7 +694,7 @@ async function duplicateCurrentBoard() {
     return true;
   } catch (error) {
     console.error(error);
-    setSaveStatus('Duplicate failed');
+    setSaveStatus(error?.message || 'Duplicate failed');
     return false;
   }
 }
@@ -1495,6 +1505,10 @@ async function saveBoardToServer(trigger = "manual") {
       body: JSON.stringify(payload)
     });
     const data = await response.json();
+    if (response.status === 401 && !isUpdate) {
+      setSaveStatus("Sign in with Google to create a board.");
+      return;
+    }
     if (response.status === 409 && isUpdate) {
       console.warn('[Funklix Save Debug] Save conflict 409', {
         trigger,
@@ -5347,6 +5361,10 @@ function showUnsavedLeaveModal() {
 }
 
 async function createNewBoardFlow() {
+  if (!state.user?.email) {
+    setSaveStatus("Sign in with Google to create a board.");
+    return;
+  }
   if (state.isDirty) {
     const canLeave = await showUnsavedLeaveModal();
     if (!canLeave) return;
@@ -5359,6 +5377,10 @@ async function createNewBoardFlow() {
     body: JSON.stringify({ name, canvas_json: blankCanvasState(), brand_core_snapshot: defaultBrandCoreState() })
   });
   const data = await response.json();
+  if (response.status === 401) {
+    setSaveStatus("Sign in with Google to create a board.");
+    return;
+  }
   if (!response.ok || !data?.id) return;
   window.location.href = `/boards/${data.id}`;
 }
