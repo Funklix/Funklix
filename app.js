@@ -5380,18 +5380,28 @@ function renderBoardsLibrary() {
   el.boardsLibraryList.innerHTML = '';
   if (state.user?.email) {
     if (el.boardsLibraryTitle) el.boardsLibraryTitle.textContent = 'My Boards';
-    if (el.boardsLibrarySubtitle) el.boardsLibrarySubtitle.textContent = 'Boards owned by your account are shown first. Anonymous/public boards may also appear.';
+    if (el.boardsLibrarySubtitle) el.boardsLibrarySubtitle.textContent = 'Your boards first, then shared boards.';
   } else {
     if (el.boardsLibraryTitle) el.boardsLibraryTitle.textContent = 'Boards';
-    if (el.boardsLibrarySubtitle) el.boardsLibrarySubtitle.textContent = 'Manage your saved Campaign Canvas boards. Sign in to save boards to your account.';
+    if (el.boardsLibrarySubtitle) el.boardsLibrarySubtitle.textContent = 'Open a board or sign in to save one to your account.';
+  }
+  if (!state.boardsLibrary.length) {
+    el.boardsLibraryList.innerHTML = `<div class="board-empty"><strong>No boards yet</strong><span>Create your first board to start collaborating.</span></div>`;
+    return;
   }
   state.boardsLibrary.forEach((board, index) => {
     const row = document.createElement('div');
     row.className = 'board-row';
     const savedAt = board.updated_at ? new Date(board.updated_at).toLocaleString('de-DE') : '—';
-    const preview = `${board.id?.slice(0, 8)}...`;
-    const ownerLabel = board.owner_email ? (state.user?.email && board.owner_email === state.user.email ? 'Owned by you' : `Owner: ${board.owner_name || board.owner_email}`) : 'Anonymous / Public';
-    row.innerHTML = `<div><strong>${board.name || 'Campaign Canvas Board'}</strong><div class="board-row-meta">Last saved: ${savedAt} · ${preview}</div><div class="board-row-meta">${ownerLabel}</div><div class="board-rename hidden" data-rename-wrap="${board.id}"><input data-rename-input="${board.id}" value="${board.name || ''}" /><button data-rename-save="${board.id}" type="button">Save</button><button data-rename-cancel="${board.id}" type="button">Cancel</button></div></div><div class="board-row-actions"><button class="icon-btn" data-open-board="${board.id}" title="Open" aria-label="Open board">↗</button><button class="icon-btn" data-copy-board="${board.id}" title="Copy link" aria-label="Copy link">⧉</button><button class="icon-btn" data-rename-board="${board.id}" title="Rename" aria-label="Rename board">✎</button><button class="icon-btn danger" data-delete-board="${board.id}" title="Delete" aria-label="Delete board">🗑</button><button class="icon-btn" data-up-board="${board.id}" data-index="${index}" title="Move up">↑</button><button class="icon-btn" data-down-board="${board.id}" data-index="${index}" title="Move down">↓</button>${state.user?.email && !board.owner_email ? `<button class="icon-btn" data-claim-board="${board.id}" title="Claim">Claim</button>` : ""}</div>`;
+    const boardName = board.name || 'Campaign Canvas Board';
+    const isOwner = !!state.user?.email && !!board.owner_email && board.owner_email === state.user.email;
+    const isShared = !!board.owner_email && !isOwner;
+    const isCopy = /\(copy\)$/i.test(boardName.trim());
+    const ownerBy = deriveOwnerDisplayName(board.owner_name || "", board.owner_email || "");
+    const roleChip = isOwner ? '<span class="board-row-chip owned">Your Board</span>' : (isShared ? '<span class="board-row-chip shared">Shared</span>' : '<span class="board-row-chip shared">Open</span>');
+    const copyChip = isCopy ? '<span class="board-row-chip copy">Copy</span>' : '';
+    const ownerLine = isOwner ? 'You can edit this board.' : (isShared ? `By ${ownerBy || 'another user'}` : 'No owner yet');
+    row.innerHTML = `<div><div class="board-row-titleline"><strong class="board-row-title">${boardName}</strong>${roleChip}${copyChip}</div><div class="board-row-meta">Last active: ${savedAt}</div><div class="board-row-meta">${ownerLine}</div><div class="board-rename hidden" data-rename-wrap="${board.id}"><input data-rename-input="${board.id}" value="${board.name || ''}" /><button data-rename-save="${board.id}" type="button">Save</button><button data-rename-cancel="${board.id}" type="button">Cancel</button></div></div><div class="board-row-actions"><button class="icon-btn" data-open-board="${board.id}" title="Open" aria-label="Open board">↗</button><button class="icon-btn" data-copy-board="${board.id}" title="Copy link" aria-label="Copy link">⧉</button><button class="icon-btn" data-rename-board="${board.id}" title="Rename" aria-label="Rename board">✎</button><button class="icon-btn danger" data-delete-board="${board.id}" title="Delete" aria-label="Delete board">🗑</button><button class="icon-btn" data-up-board="${board.id}" data-index="${index}" title="Move up">↑</button><button class="icon-btn" data-down-board="${board.id}" data-index="${index}" title="Move down">↓</button>${state.user?.email && !board.owner_email ? `<button class="icon-btn" data-claim-board="${board.id}" title="Claim">Claim</button>` : ""}</div>`;
     el.boardsLibraryList.appendChild(row);
   });
 }

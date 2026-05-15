@@ -65,7 +65,15 @@
       .boards-library-panel { flex: 1 1 auto; min-height: 0; max-height: calc(100vh - 210px); overflow-y: auto; overflow-x: hidden; padding-right: 8px; }
       .board-row { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; padding: 12px; border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; margin-bottom: 10px; background: rgba(255,255,255,0.03); }
       .board-row:hover { border-color: rgba(107,78,255,0.45); background: rgba(107,78,255,0.08); }
-      .board-row-meta { font-size: 12px; opacity: 0.72; margin-top: 2px; }
+      .board-row-titleline { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+      .board-row-title { font-size: 14px; font-weight: 600; }
+      .board-row-meta { font-size: 12px; opacity: 0.72; margin-top: 3px; }
+      .board-row-chip { font-size: 10px; line-height: 1; border: 1px solid rgba(140,152,195,.35); border-radius: 999px; padding: 4px 7px; opacity: .9; }
+      .board-row-chip.owned { border-color: rgba(84,164,117,.45); color: #97e1b1; }
+      .board-row-chip.shared { border-color: rgba(115,148,233,.5); color: #b9ccff; }
+      .board-row-chip.copy { border-color: rgba(172,139,255,.45); color: #d0bcff; }
+      .board-empty { border: 1px dashed rgba(135,145,182,.4); border-radius: 12px; padding: 18px; text-align: center; opacity: .85; }
+      .board-empty strong { display: block; margin-bottom: 4px; }
       .board-row-actions { display: inline-flex; gap: 6px; }
       .icon-btn { width: 30px; height: 30px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.18); background: rgba(255,255,255,0.06); color: inherit; cursor: pointer; }
       .icon-btn:hover { background: rgba(107,78,255,0.22); border-color: rgba(107,78,255,0.5); }
