@@ -41,6 +41,7 @@ const state = {
   ,scheduleDate: ""
   ,scheduleTime: "09:00"
   ,currentBoardId: null
+  ,currentBoardName: ""
   ,lastKnownUpdatedAt: null
   ,autosaveTimer: null
   ,isDirty: false
@@ -561,6 +562,7 @@ async function saveBoardAsNew(payload) {
   const newId = data?.id;
   if (newId) {
     state.currentBoardId = newId;
+    state.currentBoardName = data?.name || payload?.name || "Campaign Canvas Copy";
     state.lastKnownUpdatedAt = data?.updated_at || null;
     const nextPath = `/boards/${newId}`;
     if (window.location.pathname !== nextPath) window.history.pushState({}, '', nextPath);
@@ -574,7 +576,7 @@ async function saveBoardAsNew(payload) {
 function buildDuplicateBoardName() {
   const sourceId = state.currentBoardId || getBoardIdFromPath();
   const sourceBoard = sourceId ? state.boardsLibrary.find((b) => b.id === sourceId) : null;
-  const baseName = sourceBoard?.name || "";
+  const baseName = sourceBoard?.name || state.currentBoardName || "";
   const trimmed = typeof baseName === "string" ? baseName.trim() : "";
   return trimmed ? `${trimmed} (Copy)` : "Campaign Canvas Copy";
 }
@@ -607,6 +609,7 @@ async function duplicateCurrentBoard() {
     const newId = data?.id;
     if (!newId) throw new Error('Duplicate board response missing id');
     state.currentBoardId = newId;
+    state.currentBoardName = data?.name || payload.name;
     state.lastKnownUpdatedAt = data?.updated_at || null;
     const nextPath = `/boards/${newId}`;
     if (window.location.pathname !== nextPath) window.history.pushState({}, '', nextPath);
@@ -1387,6 +1390,7 @@ async function saveBoardToServer(trigger = "manual") {
     console.log('Saved board response id:', data?.id);
     const returnedId = data?.id || currentBoardId;
     if (returnedId) state.currentBoardId = returnedId;
+    if (data?.name && typeof data.name === "string") state.currentBoardName = data.name;
     state.lastKnownUpdatedAt = data?.updated_at || new Date().toISOString();
 
     const shareUrl = `${window.location.origin}/boards/${returnedId}`;
@@ -1428,6 +1432,7 @@ async function loadBoardFromUrlIfPresent() {
     const data = await response.json();
     if (!response.ok) throw new Error(data?.error || 'Failed to load board');
     state.currentBoardId = data?.id || boardId;
+    state.currentBoardName = data?.name || "";
     state.lastKnownUpdatedAt = data?.updated_at || null;
     if (data?.brand_core_snapshot && typeof data.brand_core_snapshot === "object") {
       state.brandCore = data.brand_core_snapshot;
