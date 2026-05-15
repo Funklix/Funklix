@@ -34,6 +34,12 @@
       .share-link-toast { position: fixed; z-index: 90; min-width: 220px; max-width: min(300px, calc(100vw - 16px)); background: rgba(20, 24, 38, 0.96); color: #f5f7ff; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 10px; box-shadow: 0 10px 28px rgba(0, 0, 0, 0.25); padding: 9px 10px; font-size: 11px; line-height: 1.35; pointer-events: auto; }
       .share-link-toast-line { opacity: 0.84; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
       .share-link-toast-ok { margin-top: 5px; font-weight: 600; }
+      .presence-lite { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+      .presence-lite.hidden { display: none !important; }
+      .presence-avatars { display: inline-flex; align-items: center; flex-direction: row-reverse; }
+      .presence-avatar { width: 20px; height: 20px; border-radius: 999px; border: 1.5px solid #fff; margin-left: -6px; background: #eef2ff; color: #4b5cc9; font-size: 9px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; overflow: hidden; box-shadow: 0 0 0 1px rgba(20,24,38,.08); }
+      .presence-avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+      .presence-count { font-size: 11px; opacity: .72; white-space: nowrap; }
       #canvas-topbar { padding-top: 6px; padding-bottom: 6px; overflow: visible; position: relative; z-index: 120; }
       #node-search-input { width: 100%; max-width: 100%; min-width: 0; }
       .topbar .view-switcher { display: none !important; }
@@ -146,6 +152,10 @@
                   <span id="board-access-chip-kind" class="board-access-chip"></span>
                   <span id="board-access-chip-mode" class="board-access-chip hidden"></span>
                   <span id="board-access-chip-owner" class="board-access-chip board-access-chip-owner hidden"></span>
+                </div>
+                <div id="presence-lite" class="presence-lite hidden" title="Currently viewing">
+                  <div id="presence-avatars" class="presence-avatars"></div>
+                  <span id="presence-count" class="presence-count"></span>
                 </div>
                 <button id="copy-board-link-btn" type="button" class="utility-muted">Copy Link</button>
               </div>

@@ -85,6 +85,8 @@ const state = {
   ,currentBoardOwnerName: null
   ,boardAccess: { canView: true, canEdit: true, reason: "unknown" }
   ,shareToastTimer: null
+  ,presencePollTimer: null
+  ,presenceViewers: []
 };
 
 const el = {
@@ -184,6 +186,9 @@ const el = {
   boardAccessChipKind: document.getElementById("board-access-chip-kind"),
   boardAccessChipMode: document.getElementById("board-access-chip-mode"),
   boardAccessChipOwner: document.getElementById("board-access-chip-owner"),
+  presenceLite: document.getElementById("presence-lite"),
+  presenceAvatars: document.getElementById("presence-avatars"),
+  presenceCount: document.getElementById("presence-count"),
   authSignoutButton: document.getElementById("auth-signout-btn"),
   brandCoreButton: document.getElementById("brand-core-nav-btn"),
   campaignCanvasNavButton: document.getElementById("campaign-canvas-nav-btn"),
@@ -690,6 +695,82 @@ function getUserInitials(user) {
   return source.split(/\s+/).slice(0, 2).map((p) => p[0]?.toUpperCase() || "").join("") || "U";
 }
 
+function getViewerInitials(viewer = {}) {
+  const source = (viewer?.name || viewer?.email || "U").trim();
+  return source.split(/\s+/).slice(0, 2).map((p) => p[0]?.toUpperCase() || "").join("") || "U";
+}
+
+function renderPresenceLite() {
+  if (!el.presenceLite || !el.presenceAvatars || !el.presenceCount) return;
+  const viewers = Array.isArray(state.presenceViewers) ? state.presenceViewers : [];
+  if (!state.user?.email || viewers.length === 0) {
+    el.presenceLite.classList.add("hidden");
+    el.presenceAvatars.innerHTML = "";
+    el.presenceCount.textContent = "";
+    return;
+  }
+  const max = 3;
+  const show = viewers.slice(0, max);
+  el.presenceAvatars.innerHTML = "";
+  show.forEach((viewer) => {
+    const badge = document.createElement("span");
+    badge.className = "presence-avatar";
+    badge.title = viewer?.name || viewer?.email || "Viewer";
+    if (viewer?.avatar) {
+      const img = document.createElement("img");
+      img.src = viewer.avatar;
+      img.alt = viewer?.name || "Viewer avatar";
+      badge.appendChild(img);
+    } else {
+      badge.textContent = getViewerInitials(viewer);
+    }
+    el.presenceAvatars.appendChild(badge);
+  });
+  el.presenceCount.textContent = viewers.length > max ? `+${viewers.length - max}` : `${viewers.length}`;
+  el.presenceLite.classList.remove("hidden");
+}
+
+function stopPresenceLite() {
+  if (state.presencePollTimer) {
+    clearInterval(state.presencePollTimer);
+    state.presencePollTimer = null;
+  }
+}
+
+async function pingPresenceLite() {
+  const boardId = state.currentBoardId || getBoardIdFromPath();
+  if (!boardId || !state.user?.email) {
+    state.presenceViewers = [];
+    renderPresenceLite();
+    return;
+  }
+  try {
+    const response = await fetch(`/api/boards/presence/${encodeURIComponent(boardId)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({})
+    });
+    if (!response.ok) throw new Error('presence unavailable');
+    const data = await response.json();
+    state.presenceViewers = Array.isArray(data?.viewers) ? data.viewers : [];
+    renderPresenceLite();
+  } catch (_error) {
+    state.presenceViewers = [];
+    renderPresenceLite();
+  }
+}
+
+function startPresenceLite() {
+  stopPresenceLite();
+  if (!state.user?.email) {
+    state.presenceViewers = [];
+    renderPresenceLite();
+    return;
+  }
+  void pingPresenceLite();
+  state.presencePollTimer = setInterval(() => { void pingPresenceLite(); }, 20000);
+}
+
 function setAuthMessage(message = "") {
   if (!el.authMessage) return;
   el.authMessage.textContent = message;
@@ -731,6 +812,7 @@ async function loadSessionUser() {
   updateBoardAccessState();
   renderAuthState();
   setSharePanelState(state.currentBoardId || getBoardIdFromPath(), null, state.currentBoardOwnerEmail);
+  startPresenceLite();
 }
 
 function showBoardConflictModal() {
@@ -1522,6 +1604,7 @@ async function loadBoardFromUrlIfPresent() {
     const normalizedCanvasState = withBoardSchemaDefaults(incomingCanvasState);
     applyCampaignState(normalizedCanvasState, `Loaded board ${boardId.slice(0, 8)}...`);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(normalizedCanvasState));
+    startPresenceLite();
     return true;
   } catch (error) {
     console.error(error);
@@ -4553,6 +4636,9 @@ el.googleSigninButton?.addEventListener("click", () => {
 el.authSignoutButton?.addEventListener("click", async () => {
   await fetch("/api/auth/session", { method: "DELETE" });
   state.user = null;
+  stopPresenceLite();
+  state.presenceViewers = [];
+  renderPresenceLite();
   setAuthMessage("");
   renderAuthState();
 });
@@ -5381,6 +5467,7 @@ async function bootApp() {
   if (!state.initialServerLoadInFlight) refreshLastSavedSnapshot();
   if (!state.initialServerLoadInFlight) state.isBoardLoading = false;
   startAutosaveWatcher();
+  startPresenceLite();
 }
 
 if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", () => { void bootApp(); });
