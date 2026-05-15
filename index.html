@@ -31,6 +31,15 @@
       .share-link-text { display: none; }
       .share-meta { opacity: 0.7; max-width: 140px; }
       .share-feedback { color: #c94a4a; }
+      .share-link-toast { position: fixed; z-index: 90; min-width: 220px; max-width: min(300px, calc(100vw - 16px)); background: rgba(20, 24, 38, 0.96); color: #f5f7ff; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 10px; box-shadow: 0 10px 28px rgba(0, 0, 0, 0.25); padding: 9px 10px; font-size: 11px; line-height: 1.35; pointer-events: auto; }
+      .share-link-toast-line { opacity: 0.84; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .share-link-toast-ok { margin-top: 5px; font-weight: 600; }
+      .presence-lite { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+      .presence-lite.hidden { display: none !important; }
+      .presence-avatars { display: inline-flex; align-items: center; flex-direction: row-reverse; }
+      .presence-avatar { width: 20px; height: 20px; border-radius: 999px; border: 1.5px solid #fff; margin-left: -6px; background: #eef2ff; color: #4b5cc9; font-size: 9px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; overflow: hidden; box-shadow: 0 0 0 1px rgba(20,24,38,.08); }
+      .presence-avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+      .presence-count { font-size: 11px; opacity: .72; white-space: nowrap; }
       #canvas-topbar { padding-top: 6px; padding-bottom: 6px; overflow: visible; position: relative; z-index: 120; }
       #node-search-input { width: 100%; max-width: 100%; min-width: 0; }
       .topbar .view-switcher { display: none !important; }
@@ -56,7 +65,15 @@
       .boards-library-panel { flex: 1 1 auto; min-height: 0; max-height: calc(100vh - 210px); overflow-y: auto; overflow-x: hidden; padding-right: 8px; }
       .board-row { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; padding: 12px; border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; margin-bottom: 10px; background: rgba(255,255,255,0.03); }
       .board-row:hover { border-color: rgba(107,78,255,0.45); background: rgba(107,78,255,0.08); }
-      .board-row-meta { font-size: 12px; opacity: 0.72; margin-top: 2px; }
+      .board-row-titleline { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+      .board-row-title { font-size: 14px; font-weight: 600; }
+      .board-row-meta { font-size: 12px; opacity: 0.72; margin-top: 3px; }
+      .board-row-chip { font-size: 10px; line-height: 1; border: 1px solid rgba(140,152,195,.35); border-radius: 999px; padding: 4px 7px; opacity: .9; }
+      .board-row-chip.owned { border-color: rgba(84,164,117,.45); color: #97e1b1; }
+      .board-row-chip.shared { border-color: rgba(115,148,233,.5); color: #b9ccff; }
+      .board-row-chip.copy { border-color: rgba(172,139,255,.45); color: #d0bcff; }
+      .board-empty { border: 1px dashed rgba(135,145,182,.4); border-radius: 12px; padding: 18px; text-align: center; opacity: .85; }
+      .board-empty strong { display: block; margin-bottom: 4px; }
       .board-row-actions { display: inline-flex; gap: 6px; }
       .icon-btn { width: 30px; height: 30px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.18); background: rgba(255,255,255,0.06); color: inherit; cursor: pointer; }
       .icon-btn:hover { background: rgba(107,78,255,0.22); border-color: rgba(107,78,255,0.5); }
@@ -75,10 +92,11 @@
       .auth-signout-btn { font-size: 10px; padding: 4px 8px; }
       .auth-avatar-fallback { width: 24px; height: 24px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; background: #edf1ff; color: #4d5fcf; border: 1px solid #dbe0f2; }
       .auth-message { font-size: 11px; color: #b44a4a; }
-      .readonly-board-notice { font-size: 11px; color: #7a5f00; background: rgba(255, 214, 10, 0.14); border: 1px solid rgba(255, 214, 10, 0.35); border-radius: 8px; padding: 4px 8px; margin: 0; }
+      .readonly-board-notice { display: none !important; font-size: 11px; color: #7a5f00; background: rgba(255, 214, 10, 0.14); border: 1px solid rgba(255, 214, 10, 0.35); border-radius: 8px; padding: 4px 8px; margin: 0; }
       .board-access-cluster { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
       .board-access-chip { font-size: 11px; line-height: 1; color: #3f4a72; border: 1px solid #dbe1f4; border-radius: 999px; padding: 5px 8px; background: #f7f9ff; white-space: nowrap; }
       .board-access-chip-owner { max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
+      .auth-user .auth-avatar.hidden, .auth-user .auth-avatar-fallback.hidden { display: none !important; }
 
     </style>
 
@@ -137,10 +155,15 @@
               <div class="toolbar-row2-spacer"></div>
               <div class="toolbar-row2-right">
                 <span id="readonly-board-notice" class="readonly-board-notice" hidden>View-only board. Changes cannot be saved.</span>
+                <button id="duplicate-board-cta-btn" type="button" class="utility-muted hidden">Duplicate to Edit</button>
                 <div id="board-access-cluster" class="board-access-cluster hidden" aria-live="polite">
                   <span id="board-access-chip-kind" class="board-access-chip"></span>
                   <span id="board-access-chip-mode" class="board-access-chip hidden"></span>
                   <span id="board-access-chip-owner" class="board-access-chip board-access-chip-owner hidden"></span>
+                </div>
+                <div id="presence-lite" class="presence-lite hidden" title="Currently viewing">
+                  <div id="presence-avatars" class="presence-avatars"></div>
+                  <span id="presence-count" class="presence-count"></span>
                 </div>
                 <button id="copy-board-link-btn" type="button" class="utility-muted">Copy Link</button>
               </div>
