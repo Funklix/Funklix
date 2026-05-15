@@ -82,6 +82,7 @@ const state = {
   ,user: null
   ,authConfigured: true
   ,currentBoardOwnerEmail: null
+  ,currentBoardOwnerName: null
   ,boardAccess: { canView: true, canEdit: true, reason: "unknown" }
 };
 
@@ -459,6 +460,18 @@ function updateReadOnlyNoticeVisibility() {
   renderBoardAccessCluster();
 }
 
+function deriveOwnerDisplayName(ownerName, ownerEmail) {
+  const byName = typeof ownerName === "string" ? ownerName.trim() : "";
+  if (byName) return byName;
+  const email = typeof ownerEmail === "string" ? ownerEmail.trim() : "";
+  if (!email || !email.includes("@")) return "";
+  const local = email.split("@")[0] || "";
+  const cleaned = local.replace(/[._-]+/g, " ").replace(/\d+/g, " ").trim();
+  const token = (cleaned.split(/\s+/)[0] || local || "").trim();
+  if (!token) return "";
+  return token.charAt(0).toUpperCase() + token.slice(1);
+}
+
 function renderBoardAccessCluster() {
   if (!el.boardAccessCluster || !el.boardAccessChipKind || !el.boardAccessChipMode || !el.boardAccessChipOwner) return;
   const boardId = state.currentBoardId || getBoardIdFromPath();
@@ -468,17 +481,17 @@ function renderBoardAccessCluster() {
   }
   const reason = state.boardAccess?.reason || "unknown";
   const isReadOnly = state.boardAccess?.canEdit === false;
-  const ownerLabel = state.currentBoardOwnerEmail || "";
-  let kind = "Shared Board";
+  const ownerLabel = deriveOwnerDisplayName(state.currentBoardOwnerName, state.currentBoardOwnerEmail);
+  let kind = "";
   let mode = "";
   let owner = "";
   if (reason === "owner") {
     kind = "Your Board";
   } else if (reason === "unowned") {
-    kind = "Unowned Board";
+    kind = "";
     mode = "Claim Available";
   } else if (reason === "anonymous_shared" || reason === "non_owner") {
-    kind = "Shared Board";
+    kind = "";
     if (isReadOnly) mode = "View Only";
     if (ownerLabel) owner = `Owner: ${ownerLabel}`;
   }
@@ -486,14 +499,16 @@ function renderBoardAccessCluster() {
   el.boardAccessChipKind.textContent = kind;
   el.boardAccessChipMode.textContent = mode;
   el.boardAccessChipOwner.textContent = owner;
+  el.boardAccessChipKind.classList.toggle("hidden", !kind);
   el.boardAccessChipMode.classList.toggle("hidden", !mode);
   el.boardAccessChipOwner.classList.toggle("hidden", !owner);
   el.boardAccessCluster.classList.remove("hidden");
 }
 
-function setSharePanelState(boardId, lastSaved = null, ownerEmail = null) {
+function setSharePanelState(boardId, lastSaved = null, ownerEmail = null, ownerName = null) {
   if (!boardId) {
     state.currentBoardOwnerEmail = null;
+    state.currentBoardOwnerName = null;
     updateBoardAccessState();
     el.boardShareEmpty?.classList.remove("hidden");
     el.boardShareReady?.classList.add("hidden");
@@ -510,6 +525,7 @@ function setSharePanelState(boardId, lastSaved = null, ownerEmail = null) {
   }
 
   state.currentBoardOwnerEmail = ownerEmail || null;
+  state.currentBoardOwnerName = ownerName || null;
   updateBoardAccessState();
   const isOwnedByYou = !!state.user?.email && state.currentBoardOwnerEmail === state.user.email;
   const canClaim = !!state.user?.email && !state.currentBoardOwnerEmail;
@@ -566,7 +582,7 @@ async function saveBoardAsNew(payload) {
     state.lastKnownUpdatedAt = data?.updated_at || null;
     const nextPath = `/boards/${newId}`;
     if (window.location.pathname !== nextPath) window.history.pushState({}, '', nextPath);
-    setSharePanelState(newId, data?.updated_at ? new Date(data.updated_at) : new Date(), data?.owner_email || null);
+    setSharePanelState(newId, data?.updated_at ? new Date(data.updated_at) : new Date(), data?.owner_email || null, data?.owner_name || null);
     state.isDirty = false;
     setSaveStatus('Saved');
     refreshLastSavedSnapshot();
@@ -613,7 +629,7 @@ async function duplicateCurrentBoard() {
     state.lastKnownUpdatedAt = data?.updated_at || null;
     const nextPath = `/boards/${newId}`;
     if (window.location.pathname !== nextPath) window.history.pushState({}, '', nextPath);
-    setSharePanelState(newId, data?.updated_at ? new Date(data.updated_at) : new Date(), data?.owner_email || null);
+    setSharePanelState(newId, data?.updated_at ? new Date(data.updated_at) : new Date(), data?.owner_email || null, data?.owner_name || null);
     state.isDirty = false;
     refreshLastSavedSnapshot();
     setSaveStatus("Board duplicated. You're editing your copy.");
@@ -1402,7 +1418,7 @@ async function saveBoardToServer(trigger = "manual") {
       updatedAt: saveTimestamp
     };
     refreshLastSavedSnapshot();
-    setSharePanelState(returnedId, new Date(), data?.owner_email || state.currentBoardOwnerEmail || null);
+    setSharePanelState(returnedId, new Date(), data?.owner_email || state.currentBoardOwnerEmail || null, data?.owner_name || state.currentBoardOwnerName || null);
 
     if (!isUpdate && returnedId) {
       const nextPath = `/boards/${returnedId}`;
@@ -1440,7 +1456,7 @@ async function loadBoardFromUrlIfPresent() {
       renderBrandCoreEditor();
       saveBrandBrainState();
     }
-    setSharePanelState(state.currentBoardId, data?.updated_at ? new Date(data.updated_at) : null, data?.owner_email || null);
+    setSharePanelState(state.currentBoardId, data?.updated_at ? new Date(data.updated_at) : null, data?.owner_email || null, data?.owner_name || null);
     if (data?.access && typeof data.access === "object") {
       const nextAccess = {
         canView: data.access.canView !== false,
@@ -4510,7 +4526,7 @@ el.claimBoardButton?.addEventListener("click", async () => {
   const response = await fetch(`/api/boards/${boardId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ claim: true }) });
   const data = await response.json();
   if (!response.ok) return;
-  setSharePanelState(boardId, data?.updated_at ? new Date(data.updated_at) : new Date(), data?.owner_email || state.user.email);
+  setSharePanelState(boardId, data?.updated_at ? new Date(data.updated_at) : new Date(), data?.owner_email || state.user.email, data?.owner_name || state.user?.name || null);
   setSaveStatus('Board claimed');
   loadBoardsLibrary();
 });
