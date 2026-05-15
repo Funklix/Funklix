@@ -18,7 +18,7 @@ module.exports = async function handler(req, res) {
       if (user?.email) {
         result = await pool.query('SELECT id, name, updated_at, order_index, owner_id, owner_email, owner_name, owner_avatar, created_by, created_at FROM boards WHERE owner_email = $1 OR owner_email IS NULL ORDER BY CASE WHEN owner_email = $1 THEN 0 ELSE 1 END, order_index ASC NULLS LAST, updated_at DESC LIMIT 200', [user.email]);
       } else {
-        result = await pool.query('SELECT id, name, updated_at, order_index, owner_id, owner_email, owner_name, owner_avatar, created_by, created_at FROM boards ORDER BY order_index ASC NULLS LAST, updated_at DESC LIMIT 200');
+        result = { rows: [] };
       }
       return res.status(200).json({ boards: result.rows });
     }

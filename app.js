@@ -615,6 +615,7 @@ function showShareLinkToast(copied = true) {
 
 async function saveBoardAsNew(payload) {
   if (!state.user?.email) {
+    setAuthMessage("Sign in with Google to duplicate this board.");
     setSaveStatus("Sign in with Google to duplicate this board.");
     return;
   }
@@ -624,7 +625,10 @@ async function saveBoardAsNew(payload) {
     body: JSON.stringify(payload)
   });
   const data = await response.json();
-  if (response.status === 401) throw new Error('Sign in with Google to duplicate this board.');
+  if (response.status === 401) {
+    setAuthMessage("Sign in with Google to duplicate this board.");
+    throw new Error('Sign in with Google to duplicate this board.');
+  }
   if (!response.ok) throw new Error(data?.error || 'Failed to save board');
 
   const newId = data?.id;
@@ -651,6 +655,7 @@ function buildDuplicateBoardName() {
 
 async function duplicateCurrentBoard() {
   if (!state.user?.email) {
+    setAuthMessage("Sign in with Google to duplicate this board.");
     setSaveStatus("Sign in with Google to duplicate this board.");
     return false;
   }
@@ -694,6 +699,7 @@ async function duplicateCurrentBoard() {
     return true;
   } catch (error) {
     console.error(error);
+    if ((error?.message || "").toLowerCase().includes("sign in with google")) setAuthMessage(error.message);
     setSaveStatus(error?.message || 'Duplicate failed');
     return false;
   }
@@ -1506,6 +1512,7 @@ async function saveBoardToServer(trigger = "manual") {
     });
     const data = await response.json();
     if (response.status === 401 && !isUpdate) {
+      setAuthMessage("Sign in with Google to create a board.");
       setSaveStatus("Sign in with Google to create a board.");
       return;
     }
@@ -5362,6 +5369,7 @@ function showUnsavedLeaveModal() {
 
 async function createNewBoardFlow() {
   if (!state.user?.email) {
+    setAuthMessage("Sign in with Google to create a board.");
     setSaveStatus("Sign in with Google to create a board.");
     return;
   }
@@ -5378,6 +5386,7 @@ async function createNewBoardFlow() {
   });
   const data = await response.json();
   if (response.status === 401) {
+    setAuthMessage("Sign in with Google to create a board.");
     setSaveStatus("Sign in with Google to create a board.");
     return;
   }
