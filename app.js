@@ -41,6 +41,7 @@ const state = {
   ,scheduleDate: ""
   ,scheduleTime: "09:00"
   ,currentBoardId: null
+  ,currentBoardName: ""
   ,lastKnownUpdatedAt: null
   ,autosaveTimer: null
   ,isDirty: false
@@ -176,6 +177,7 @@ const el = {
   authAvatarFallback: document.getElementById("auth-avatar-fallback"),
   authMessage: document.getElementById("auth-message"),
   readonlyBoardNotice: document.getElementById("readonly-board-notice"),
+  duplicateBoardCtaButton: document.getElementById("duplicate-board-cta-btn"),
   boardAccessCluster: document.getElementById("board-access-cluster"),
   boardAccessChipKind: document.getElementById("board-access-chip-kind"),
   boardAccessChipMode: document.getElementById("board-access-chip-mode"),
@@ -449,6 +451,11 @@ function updateReadOnlyNoticeVisibility() {
     if (isReadOnly) button.title = readOnlyActionTitle;
     else button.removeAttribute("title");
   });
+  if (el.duplicateBoardCtaButton) {
+    const canDuplicate = !!(state.currentBoardId || getBoardIdFromPath());
+    el.duplicateBoardCtaButton.classList.toggle("hidden", !(isReadOnly && canDuplicate));
+    el.duplicateBoardCtaButton.disabled = state.isSaving || state.conflictModalOpen;
+  }
   renderBoardAccessCluster();
 }
 
@@ -555,6 +562,7 @@ async function saveBoardAsNew(payload) {
   const newId = data?.id;
   if (newId) {
     state.currentBoardId = newId;
+    state.currentBoardName = data?.name || payload?.name || "Campaign Canvas Copy";
     state.lastKnownUpdatedAt = data?.updated_at || null;
     const nextPath = `/boards/${newId}`;
     if (window.location.pathname !== nextPath) window.history.pushState({}, '', nextPath);
@@ -562,6 +570,59 @@ async function saveBoardAsNew(payload) {
     state.isDirty = false;
     setSaveStatus('Saved');
     refreshLastSavedSnapshot();
+  }
+}
+
+function buildDuplicateBoardName() {
+  const sourceId = state.currentBoardId || getBoardIdFromPath();
+  const sourceBoard = sourceId ? state.boardsLibrary.find((b) => b.id === sourceId) : null;
+  const baseName = sourceBoard?.name || state.currentBoardName || "";
+  const trimmed = typeof baseName === "string" ? baseName.trim() : "";
+  return trimmed ? `${trimmed} (Copy)` : "Campaign Canvas Copy";
+}
+
+async function duplicateCurrentBoard() {
+  if (state.isSaving) {
+    setSaveStatus("Please wait until saving finishes");
+    return false;
+  }
+  if (state.conflictModalOpen) {
+    setSaveStatus("Please resolve the conflict prompt first");
+    return false;
+  }
+
+  const payload = {
+    name: buildDuplicateBoardName(),
+    canvas_json: serializeState(),
+    brand_core_snapshot: state.brandCore
+  };
+
+  try {
+    const response = await fetch('/api/boards', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data?.error || 'Failed to duplicate board');
+
+    const newId = data?.id;
+    if (!newId) throw new Error('Duplicate board response missing id');
+    state.currentBoardId = newId;
+    state.currentBoardName = data?.name || payload.name;
+    state.lastKnownUpdatedAt = data?.updated_at || null;
+    const nextPath = `/boards/${newId}`;
+    if (window.location.pathname !== nextPath) window.history.pushState({}, '', nextPath);
+    setSharePanelState(newId, data?.updated_at ? new Date(data.updated_at) : new Date(), data?.owner_email || null);
+    state.isDirty = false;
+    refreshLastSavedSnapshot();
+    setSaveStatus("Board duplicated. You're editing your copy.");
+    loadBoardsLibrary();
+    return true;
+  } catch (error) {
+    console.error(error);
+    setSaveStatus('Duplicate failed');
+    return false;
   }
 }
 
@@ -1329,6 +1390,7 @@ async function saveBoardToServer(trigger = "manual") {
     console.log('Saved board response id:', data?.id);
     const returnedId = data?.id || currentBoardId;
     if (returnedId) state.currentBoardId = returnedId;
+    if (data?.name && typeof data.name === "string") state.currentBoardName = data.name;
     state.lastKnownUpdatedAt = data?.updated_at || new Date().toISOString();
 
     const shareUrl = `${window.location.origin}/boards/${returnedId}`;
@@ -1370,6 +1432,7 @@ async function loadBoardFromUrlIfPresent() {
     const data = await response.json();
     if (!response.ok) throw new Error(data?.error || 'Failed to load board');
     state.currentBoardId = data?.id || boardId;
+    state.currentBoardName = data?.name || "";
     state.lastKnownUpdatedAt = data?.updated_at || null;
     if (data?.brand_core_snapshot && typeof data.brand_core_snapshot === "object") {
       state.brandCore = data.brand_core_snapshot;
@@ -2957,6 +3020,7 @@ function buildUtilitiesPopoverHtml() {
   const lastSaved = el.boardLastSaved?.textContent || '';
   return `<div class="filter-group"><strong>Board</strong><div class="node-filter-chips">
     <button type="button" data-utility-action="save-board">Save Board</button>
+    <button type="button" data-utility-action="duplicate-board">Duplicate Board</button>
     <button type="button" data-utility-action="new-board">New Board</button>
     <button type="button" data-utility-action="reset-board">Reset Board</button>
     ${canClaim ? '<button type="button" data-utility-action="claim-board">Claim Board</button>' : ''}
@@ -4836,6 +4900,11 @@ el.utilitiesToggleButton?.addEventListener("click", (event) => {
   popover.addEventListener("click", (e) => {
     const btn = e.target.closest("button[data-utility-action]");
     if (!btn) return;
+    if (btn.dataset.utilityAction === "duplicate-board") {
+      duplicateCurrentBoard();
+      closeUtilitiesPopover();
+      return;
+    }
     const map = {
       "save-board": el.saveBoardButton,
       "new-board": el.newBoardButton,
@@ -5081,6 +5150,7 @@ function bindGlobalResetDelegation() {
 }
 
 el.saveBoardButton?.addEventListener("click", () => saveBoardToServer("manual"));
+el.duplicateBoardCtaButton?.addEventListener("click", () => duplicateCurrentBoard());
 el.newBoardButton?.addEventListener("click", createNewBoardFlow);
 el.boardsCreateButton?.addEventListener("click", createNewBoardFlow);
 el.copyBoardLinkButton?.addEventListener("click", copyCurrentBoardLink);
