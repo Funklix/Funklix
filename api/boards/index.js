@@ -25,6 +25,9 @@ module.exports = async function handler(req, res) {
 
     const { name: rawName = '', canvas_json = null, brand_core_snapshot = null } = req.body || {};
     const user = getSessionUser(req);
+    if (!user?.email) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
     const trimmedName = typeof rawName === 'string' ? rawName.trim() : '';
     const name = trimmedName || `Campaign Canvas ${new Date().toISOString()}`;
     if (!canvas_json || typeof canvas_json !== 'object') {
@@ -34,7 +37,7 @@ module.exports = async function handler(req, res) {
     await ensureBoardsTable();
     const result = await pool.query(
       'INSERT INTO boards (name, canvas_json, brand_core_snapshot, owner_id, owner_email, owner_name, owner_avatar, created_by) VALUES ($1, $2::jsonb, $3::jsonb, $4, $5, $6, $7, $8) RETURNING id, name, canvas_json, brand_core_snapshot, updated_at, owner_id, owner_email, owner_name, owner_avatar, created_by, created_at',
-      [name, JSON.stringify(canvas_json), JSON.stringify(brand_core_snapshot || null), user?.email || null, user?.email || null, user?.name || null, user?.avatar || null, user?.email || null]
+      [name, JSON.stringify(canvas_json), JSON.stringify(brand_core_snapshot || null), user.email, user.email, user?.name || null, user?.avatar || null, user.email]
     );
 
     return res.status(200).json(result.rows[0]);
