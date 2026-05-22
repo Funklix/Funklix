@@ -87,6 +87,7 @@ const state = {
   ,shareToastTimer: null
   ,presencePollTimer: null
   ,presenceViewers: []
+  ,presenceNodeSignature: ""
 };
 
 const el = {
@@ -746,6 +747,81 @@ function renderPresenceLite() {
   el.presenceLite.classList.remove("hidden");
 }
 
+function getNodePresenceById() {
+  const map = new Map();
+  const viewers = Array.isArray(state.presenceViewers) ? state.presenceViewers : [];
+  const currentUserEmail = (state.user?.email || '').toLowerCase();
+  const nodeIds = new Set(state.nodes.map((node) => node.id));
+
+  viewers.forEach((viewer) => {
+    if (!viewer?.email) return;
+    const viewerEmail = String(viewer.email).toLowerCase();
+    if (!viewerEmail || viewerEmail === currentUserEmail) return;
+    const nodeId = typeof viewer.selectedNodeId === 'string' ? viewer.selectedNodeId.trim() : '';
+    if (!nodeId || !nodeIds.has(nodeId)) return;
+    const list = map.get(nodeId) || [];
+    list.push(viewer);
+    map.set(nodeId, list);
+  });
+
+  return map;
+}
+
+function renderNodePresenceBadges() {
+  if (!el.zoomLayer) return;
+  const presenceByNodeId = getNodePresenceById();
+  const signature = JSON.stringify(
+    [...presenceByNodeId.entries()].map(([nodeId, viewers]) => [
+      nodeId,
+      viewers.map((viewer) => `${viewer.email}:${viewer.selectedNodeId || ''}:${viewer.lastInteractionAt || ''}`)
+    ])
+  );
+  if (signature === state.presenceNodeSignature) return;
+  state.presenceNodeSignature = signature;
+
+  el.zoomLayer.querySelectorAll('.node-presence-overlay').forEach((x) => x.remove());
+
+  if (!presenceByNodeId.size) return;
+
+  presenceByNodeId.forEach((viewers, nodeId) => {
+    const nodeEl = el.zoomLayer.querySelector(`[data-id='${nodeId}']`);
+    if (!nodeEl) return;
+
+    const overlay = document.createElement('div');
+    overlay.className = 'node-presence-overlay';
+
+    const maxVisible = 2;
+    const shown = viewers.slice(0, maxVisible);
+    shown.forEach((viewer) => {
+      const badge = document.createElement('span');
+      badge.className = 'node-presence-avatar';
+      const label = viewer?.name || viewer?.email || 'Viewer';
+      badge.title = `${label} is viewing this node`;
+      if (viewer?.avatar) {
+        const img = document.createElement('img');
+        img.src = viewer.avatar;
+        img.alt = label;
+        badge.appendChild(img);
+      } else {
+        badge.textContent = getViewerInitials(viewer);
+      }
+      overlay.appendChild(badge);
+    });
+
+    const overflow = viewers.length - shown.length;
+    if (overflow > 0) {
+      const extra = document.createElement('span');
+      extra.className = 'node-presence-extra';
+      extra.textContent = `+${overflow}`;
+      overlay.appendChild(extra);
+    }
+
+    const firstName = viewers[0]?.name || viewers[0]?.email || 'Someone';
+    overlay.title = viewers.length === 1 ? `${firstName} is viewing this node` : `${viewers.length} people viewing`;
+    nodeEl.appendChild(overlay);
+  });
+}
+
 function stopPresenceLite() {
   if (state.presencePollTimer) {
     clearInterval(state.presencePollTimer);
@@ -758,21 +834,24 @@ async function pingPresenceLite() {
   if (!boardId || !state.user?.email) {
     state.presenceViewers = [];
     renderPresenceLite();
+    renderNodePresenceBadges();
     return;
   }
   try {
     const response = await fetch(`/api/boards/presence/${encodeURIComponent(boardId)}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({})
+      body: JSON.stringify({ selectedNodeId: state.selectedPrimary || null })
     });
     if (!response.ok) throw new Error('presence unavailable');
     const data = await response.json();
     state.presenceViewers = Array.isArray(data?.viewers) ? data.viewers : [];
     renderPresenceLite();
+    renderNodePresenceBadges();
   } catch (_error) {
     state.presenceViewers = [];
     renderPresenceLite();
+    renderNodePresenceBadges();
   }
 }
 
@@ -781,6 +860,7 @@ function startPresenceLite() {
   if (!state.user?.email) {
     state.presenceViewers = [];
     renderPresenceLite();
+    renderNodePresenceBadges();
     return;
   }
   void pingPresenceLite();
@@ -2606,6 +2686,7 @@ function updateSelectionClasses() {
     nodeEl.classList.toggle("selected", state.selectedIds.has(nodeEl.dataset.id));
   });
   updateInspectorActionVisibility();
+  renderNodePresenceBadges();
 }
 
 function collapseExpandedNodes(exceptNodeId = null) {
@@ -3407,6 +3488,7 @@ function fillInspector(node) {
     el.connectedContextBody.innerHTML = `<div><strong>Parent:</strong> ${parents}</div><div><strong>Child:</strong> ${children}</div>`;
   }
   updateInspectorActionVisibility();
+  renderNodePresenceBadges();
 }
 
 function getConnectedSocialPostingNodes(contentNodeId) {
