@@ -29,13 +29,20 @@ module.exports = async function handler(req, res) {
   const viewers = boardsPresence.get(boardId) || new Map();
 
   if (req.method === 'POST') {
+    const { selectedNodeId = null } = req.body || {};
+    const safeSelectedNodeId = typeof selectedNodeId === 'string' && selectedNodeId.trim()
+      ? selectedNodeId.trim()
+      : null;
+
     if (user?.email) {
       const key = String(user.email).toLowerCase();
       viewers.set(key, {
         email: user.email,
         name: user.name || '',
         avatar: user.avatar || '',
-        lastSeenAt: now
+        selectedNodeId: safeSelectedNodeId,
+        lastSeenAt: now,
+        lastInteractionAt: now
       });
       boardsPresence.set(boardId, viewers);
     }
@@ -45,7 +52,9 @@ module.exports = async function handler(req, res) {
   const list = Array.from((boardsPresence.get(boardId) || new Map()).values()).map((v) => ({
     email: v.email,
     name: v.name,
-    avatar: v.avatar
+    avatar: v.avatar,
+    selectedNodeId: v.selectedNodeId || null,
+    lastInteractionAt: v.lastInteractionAt || null
   }));
 
   return res.status(200).json({ viewers: list, count: list.length, ttlMs: PRESENCE_TTL_MS });
