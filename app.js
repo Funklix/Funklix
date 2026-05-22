@@ -5204,6 +5204,7 @@ el.canvas.addEventListener("pointerdown", (event) => {
   const downAt = Date.now();
   let panning = false;
   let selectionLocked = false;
+  let hadPointerMove = false;
   const forcePan = state.forcePanNextDrag;
 
   const rect = el.canvas.getBoundingClientRect();
@@ -5215,6 +5216,7 @@ el.canvas.addEventListener("pointerdown", (event) => {
   el.canvas.appendChild(box);
 
   function move(ev) {
+    hadPointerMove = true;
     const panDx = ev.clientX - panX;
     const panDy = ev.clientY - panY;
     const holdMs = Date.now() - downAt;
@@ -5257,6 +5259,12 @@ el.canvas.addEventListener("pointerdown", (event) => {
     window.removeEventListener("pointerup", up);
     box.remove();
     if (!panning) {
+      const isEmptyCanvasClick = !hadPointerMove && !appendSelection;
+      if (isEmptyCanvasClick) {
+        state.selectedIds.clear();
+        state.selectedPrimary = null;
+        updateSelectionClasses();
+      }
       fillInspector(state.selectedPrimary ? getNode(state.selectedPrimary) : null);
       state.forcePanNextDrag = true;
     } else {
