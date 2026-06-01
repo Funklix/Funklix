@@ -482,8 +482,8 @@ button:active {
 
 .zoom-layer {
   position: relative;
-  width: 10000px;
-  height: 10000px;
+  width: 20000px;
+  height: 30000px;
 }
 
 .links {

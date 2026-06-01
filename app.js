@@ -12,8 +12,8 @@ const NODE_WIDTH = 285;
 const NODE_HEIGHT = 200;
 const NODE_OVERLAP_MARGIN = 32;
 const NODE_OVERLAP_MAX_PASSES = 4;
-const BOARD_WIDTH = 10000;
-const BOARD_HEIGHT = 10000;
+const BOARD_WIDTH = 20000;
+const BOARD_HEIGHT = 30000;
 const STORAGE_KEY = "campaignCanvasState";
 const BRAND_CORE_STORAGE_KEY = "brandBrainState";
 
@@ -4688,7 +4688,7 @@ function autoArrangeBoardByHierarchy() {
   const startX = 240;
   const startY = 160;
   const colGap = 380;
-  const rowGap = 80;
+  const rowGap = 56;
 
   state.nodes.forEach((node) => {
     const rowIndex = rowForType.has(node.type) ? rowForType.get(node.type) : unknownRow;
