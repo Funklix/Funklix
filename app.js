@@ -1097,7 +1097,7 @@ function applyCanvasZoom(nextZoom) {
   return true;
 }
 
-function fitBoardContentToViewport({ padding = 120, minZoom = 0.25, maxZoom = 1, behavior = "smooth" } = {}) {
+function fitBoardContentToViewport({ padding = 120, minZoom = 0.12, maxZoom = 1, behavior = "smooth" } = {}) {
   const bounds = getBoardContentBounds({ includeMargin: padding });
   if (!bounds || !bounds.width || !bounds.height) return false;
   const canvasWidth = el.canvas.clientWidth;
@@ -1107,7 +1107,6 @@ function fitBoardContentToViewport({ padding = 120, minZoom = 0.25, maxZoom = 1,
   const fitZoom = Math.min(canvasWidth / bounds.width, canvasHeight / bounds.height);
   const targetZoom = Math.min(maxZoom, Math.max(minZoom, fitZoom));
   if (!applyCanvasZoom(targetZoom)) return false;
-
   const nextLeft = Math.max(0, bounds.centerX * targetZoom - canvasWidth / 2);
   const nextTop = Math.max(0, bounds.centerY * targetZoom - canvasHeight / 2);
   el.canvas.scrollTo({ left: nextLeft, top: nextTop, behavior });
@@ -4689,7 +4688,7 @@ function autoArrangeBoardByHierarchy() {
   const startX = 240;
   const startY = 160;
   const colGap = 380;
-  const rowGap = 120;
+  const rowGap = 80;
 
   state.nodes.forEach((node) => {
     const rowIndex = rowForType.has(node.type) ? rowForType.get(node.type) : unknownRow;
@@ -4717,7 +4716,7 @@ function autoArrangeBoardByHierarchy() {
 
   drawLinks();
   saveCampaignCanvasState();
-  fitBoardContentToViewport({ padding: 160 });
+  fitBoardContentToViewport({ padding: 160, minZoom: 0.12, behavior: "auto" });
   return true;
 }
 
@@ -4737,7 +4736,7 @@ function setCompactModeForAllNodes(compact) {
       resolveAllNodeOverlaps();
       drawLinks();
       saveCampaignCanvasState();
-      fitBoardContentToViewport({ padding: 160 });
+      fitBoardContentToViewport({ padding: 160, minZoom: 0.12, behavior: "auto" });
     });
     return;
   }
@@ -5821,9 +5820,7 @@ async function bootApp() {
     loadCampaignCanvasState();
   }
   centerBoardStartPosition();
-  el.zoomLayer.style.transform = `scale(${state.zoom})`;
-  el.zoomLayer.style.transformOrigin = "0 0";
-  el.zoomLabel.textContent = `${Math.round(state.zoom * 100)}%`;
+  applyCanvasZoom(state.zoom);
   renderCampaignCanvasFromStateIfNeeded();
   renderBrandCoreTiles();
   renderBrandCoreEditor();
