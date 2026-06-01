@@ -1074,6 +1074,29 @@ function getBoardContentBounds({ includeMargin = 120 } = {}) {
   };
 }
 
+function ensureBoardScrollBounds({ padding = 800 } = {}) {
+  if (!el.zoomLayer || !el.canvas) return false;
+  const safeZoom = Number.isFinite(state.zoom) && state.zoom > 0 ? state.zoom : 1;
+  const safePadding = Math.max(0, Number(padding) || 0);
+  const bounds = getBoardContentBounds({ includeMargin: safePadding });
+  const viewportBoardWidth = el.canvas.clientWidth / safeZoom;
+  const viewportBoardHeight = el.canvas.clientHeight / safeZoom;
+  const neededWidth = Math.max(
+    BOARD_WIDTH,
+    bounds ? bounds.maxX + safePadding + viewportBoardWidth : 0,
+    viewportBoardWidth + safePadding
+  );
+  const neededHeight = Math.max(
+    BOARD_HEIGHT,
+    bounds ? bounds.maxY + safePadding + viewportBoardHeight : 0,
+    viewportBoardHeight + safePadding
+  );
+
+  el.zoomLayer.style.width = `${neededWidth}px`;
+  el.zoomLayer.style.height = `${neededHeight}px`;
+  return true;
+}
+
 function scrollBoardContentIntoView({ padding = 120 } = {}) {
   const bounds = getBoardContentBounds({ includeMargin: padding });
   if (!bounds) return false;
@@ -1107,6 +1130,7 @@ function fitBoardContentToViewport({ padding = 120, minZoom = 0.25, maxZoom = 1,
   const fitZoom = Math.min(canvasWidth / bounds.width, canvasHeight / bounds.height);
   const targetZoom = Math.min(maxZoom, Math.max(minZoom, fitZoom));
   if (!applyCanvasZoom(targetZoom)) return false;
+  ensureBoardScrollBounds({ padding });
 
   const nextLeft = Math.max(0, bounds.centerX * targetZoom - canvasWidth / 2);
   const nextTop = Math.max(0, bounds.centerY * targetZoom - canvasHeight / 2);
@@ -1698,6 +1722,7 @@ function applyCampaignState(campaignState, statusText = "Restored") {
   updateEmptyState();
   drawLinks();
   if (normalizedState.zoom) setZoom(normalizedState.zoom);
+  ensureBoardScrollBounds();
   state.isDirty = false;
   clearAutosaveTimer();
   setSaveStatus(statusText);
@@ -2218,6 +2243,7 @@ function setZoom(nextZoom, centerClient = null) {
   const boardY = (cy - rect.top + el.canvas.scrollTop) / oldZoom;
 
   applyCanvasZoom(newZoom);
+  ensureBoardScrollBounds();
 
   el.canvas.scrollLeft = boardX * state.zoom - (cx - rect.left);
   el.canvas.scrollTop = boardY * state.zoom - (cy - rect.top);
@@ -3577,6 +3603,7 @@ function enablePostitDrag(postit, note) {
     function up() {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
+      ensureBoardScrollBounds();
       saveCampaignCanvasState();
     }
 
@@ -4562,6 +4589,7 @@ function enableNodeDrag(nodeEl, node) {
     function up() {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
+      ensureBoardScrollBounds();
       saveCampaignCanvasState();
     }
 
@@ -5821,10 +5849,9 @@ async function bootApp() {
     loadCampaignCanvasState();
   }
   centerBoardStartPosition();
-  el.zoomLayer.style.transform = `scale(${state.zoom})`;
-  el.zoomLayer.style.transformOrigin = "0 0";
-  el.zoomLabel.textContent = `${Math.round(state.zoom * 100)}%`;
+  applyCanvasZoom(state.zoom);
   renderCampaignCanvasFromStateIfNeeded();
+  ensureBoardScrollBounds();
   renderBrandCoreTiles();
   renderBrandCoreEditor();
   updateEmptyState();
