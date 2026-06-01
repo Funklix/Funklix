@@ -86,6 +86,11 @@ const state = {
   ,boardAccess: { canView: true, canEdit: true, reason: "unknown" }
   ,shareToastTimer: null
   ,presencePollTimer: null
+  ,presenceSelectionPingTimer: null
+  ,presencePingInFlight: false
+  ,presencePendingPingAfterInFlight: false
+  ,presenceSelectedNodeIdLastQueued: undefined
+  ,presenceSelectedNodeIdLastSent: undefined
   ,presenceViewers: []
   ,presenceNodeSignature: ""
 };
@@ -767,16 +772,27 @@ function getNodePresenceById() {
   return map;
 }
 
-function renderNodePresenceBadges() {
+function clearNodePresenceBadges() {
+  state.presenceNodeSignature = "";
+  if (!el.zoomLayer) return;
+  el.zoomLayer.querySelectorAll('.node-presence-overlay').forEach((x) => x.remove());
+}
+
+function renderNodePresenceBadges({ force = false } = {}) {
   if (!el.zoomLayer) return;
   const presenceByNodeId = getNodePresenceById();
   const signature = JSON.stringify(
     [...presenceByNodeId.entries()].map(([nodeId, viewers]) => [
       nodeId,
-      viewers.map((viewer) => `${viewer.email}:${viewer.selectedNodeId || ''}:${viewer.lastInteractionAt || ''}`)
+      viewers.map((viewer) => [
+        viewer.email || '',
+        viewer.name || '',
+        viewer.avatar || '',
+        viewer.selectedNodeId || ''
+      ].join(':'))
     ])
   );
-  if (signature === state.presenceNodeSignature) return;
+  if (!force && signature === state.presenceNodeSignature) return;
   state.presenceNodeSignature = signature;
 
   el.zoomLayer.querySelectorAll('.node-presence-overlay').forEach((x) => x.remove());
@@ -822,37 +838,81 @@ function renderNodePresenceBadges() {
   });
 }
 
+function resetPresenceSelectionQueue() {
+  if (state.presenceSelectionPingTimer) {
+    clearTimeout(state.presenceSelectionPingTimer);
+    state.presenceSelectionPingTimer = null;
+  }
+  state.presencePendingPingAfterInFlight = false;
+  state.presenceSelectedNodeIdLastQueued = undefined;
+  state.presenceSelectedNodeIdLastSent = undefined;
+}
+
 function stopPresenceLite() {
   if (state.presencePollTimer) {
     clearInterval(state.presencePollTimer);
     state.presencePollTimer = null;
   }
+  resetPresenceSelectionQueue();
+  clearNodePresenceBadges();
 }
 
 async function pingPresenceLite() {
   const boardId = state.currentBoardId || getBoardIdFromPath();
+  const selectedNodeId = state.selectedPrimary || null;
   if (!boardId || !state.user?.email) {
     state.presenceViewers = [];
+    state.presenceSelectedNodeIdLastSent = undefined;
     renderPresenceLite();
-    renderNodePresenceBadges();
+    clearNodePresenceBadges();
     return;
   }
+  if (state.presencePingInFlight) {
+    state.presencePendingPingAfterInFlight = true;
+    return;
+  }
+  state.presencePingInFlight = true;
   try {
     const response = await fetch(`/api/boards/presence/${encodeURIComponent(boardId)}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ selectedNodeId: state.selectedPrimary || null })
+      body: JSON.stringify({ selectedNodeId })
     });
     if (!response.ok) throw new Error('presence unavailable');
     const data = await response.json();
+    if ((state.currentBoardId || getBoardIdFromPath()) !== boardId || !state.user?.email) return;
+    state.presenceSelectedNodeIdLastSent = selectedNodeId;
     state.presenceViewers = Array.isArray(data?.viewers) ? data.viewers : [];
     renderPresenceLite();
     renderNodePresenceBadges();
   } catch (_error) {
     state.presenceViewers = [];
     renderPresenceLite();
-    renderNodePresenceBadges();
+    clearNodePresenceBadges();
+  } finally {
+    state.presencePingInFlight = false;
+    if (state.presencePendingPingAfterInFlight) {
+      state.presencePendingPingAfterInFlight = false;
+      notifyPresenceSelectionMaybe(120);
+    }
   }
+}
+
+function notifyPresenceSelectionMaybe(delayMs = 350) {
+  const boardId = state.currentBoardId || getBoardIdFromPath();
+  if (!boardId || !state.user?.email) return;
+
+  const selectedNodeId = state.selectedPrimary || null;
+  if (selectedNodeId === state.presenceSelectedNodeIdLastQueued && state.presenceSelectionPingTimer) return;
+  if (selectedNodeId === state.presenceSelectedNodeIdLastSent && !state.presenceSelectionPingTimer) return;
+
+  state.presenceSelectedNodeIdLastQueued = selectedNodeId;
+  if (state.presenceSelectionPingTimer) clearTimeout(state.presenceSelectionPingTimer);
+  state.presenceSelectionPingTimer = setTimeout(() => {
+    state.presenceSelectionPingTimer = null;
+    if (state.presenceSelectedNodeIdLastQueued === state.presenceSelectedNodeIdLastSent) return;
+    void pingPresenceLite();
+  }, delayMs);
 }
 
 function startPresenceLite() {
@@ -860,7 +920,7 @@ function startPresenceLite() {
   if (!state.user?.email) {
     state.presenceViewers = [];
     renderPresenceLite();
-    renderNodePresenceBadges();
+    clearNodePresenceBadges();
     return;
   }
   void pingPresenceLite();
@@ -991,6 +1051,7 @@ function restoreLastSnapshot() {
   state.selectedPrimary = null;
   el.zoomLayer.querySelectorAll(".node").forEach((n) => n.remove());
   state.nodes.forEach(renderNode);
+  renderNodePresenceBadges({ force: true });
   updateSelectionClasses();
   fillInspector(null);
   updateListView();
@@ -1525,6 +1586,7 @@ function applyCampaignState(campaignState, statusText = "Restored") {
   state.selectedPrimary = null;
   el.zoomLayer.querySelectorAll(".node").forEach((n) => n.remove());
   state.nodes.forEach(renderNode);
+  renderNodePresenceBadges({ force: true });
   updateListView();
   updateEmptyState();
   drawLinks();
@@ -1721,6 +1783,7 @@ function renderCampaignCanvasFromStateIfNeeded() {
   const domNodes = el.zoomLayer.querySelectorAll(".node").length;
   if (domNodes === 0 && state.nodes.length > 0) {
     state.nodes.forEach(renderNode);
+    renderNodePresenceBadges({ force: true });
   }
   drawLinks();
   updateListView();
@@ -2687,6 +2750,7 @@ function updateSelectionClasses() {
   });
   updateInspectorActionVisibility();
   renderNodePresenceBadges();
+  notifyPresenceSelectionMaybe();
 }
 
 function collapseExpandedNodes(exceptNodeId = null) {
@@ -4742,6 +4806,7 @@ el.authSignoutButton?.addEventListener("click", async () => {
   stopPresenceLite();
   state.presenceViewers = [];
   renderPresenceLite();
+  clearNodePresenceBadges();
   setAuthMessage("");
   renderAuthState();
 });
