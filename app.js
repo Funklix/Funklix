@@ -717,9 +717,25 @@ function getUserInitials(user) {
   return source.split(/\s+/).slice(0, 2).map((p) => p[0]?.toUpperCase() || "").join("") || "U";
 }
 
+function getViewerDisplayName(viewer = {}) {
+  const name = typeof viewer?.name === "string" ? viewer.name.trim() : "";
+  if (name) return name;
+  const email = typeof viewer?.email === "string" ? viewer.email.trim() : "";
+  const localPart = email.split("@")[0]?.replace(/[._-]+/g, " ").trim();
+  return localPart || "Viewer";
+}
+
 function getViewerInitials(viewer = {}) {
-  const source = (viewer?.name || viewer?.email || "U").trim();
+  const source = getViewerDisplayName(viewer);
   return source.split(/\s+/).slice(0, 2).map((p) => p[0]?.toUpperCase() || "").join("") || "U";
+}
+
+function formatNodePresenceTitle(viewers = []) {
+  const names = viewers.map(getViewerDisplayName);
+  if (names.length === 1) return `${names[0]} is viewing this node`;
+  if (names.length === 2) return `${names[0]} and ${names[1]} are viewing this node`;
+  const overflow = Math.max(0, names.length - 2);
+  return `${names.slice(0, 2).join(", ")} +${overflow} are viewing this node`;
 }
 
 function renderPresenceLite() {
@@ -736,12 +752,13 @@ function renderPresenceLite() {
   el.presenceAvatars.innerHTML = "";
   show.forEach((viewer) => {
     const badge = document.createElement("span");
+    const label = getViewerDisplayName(viewer);
     badge.className = "presence-avatar";
-    badge.title = viewer?.name || viewer?.email || "Viewer";
+    badge.title = `${label} is viewing this board`;
     if (viewer?.avatar) {
       const img = document.createElement("img");
       img.src = viewer.avatar;
-      img.alt = viewer?.name || "Viewer avatar";
+      img.alt = `${label} avatar`;
       badge.appendChild(img);
     } else {
       badge.textContent = getViewerInitials(viewer);
@@ -808,11 +825,12 @@ function renderNodePresenceBadges({ force = false } = {}) {
 
     const maxVisible = 2;
     const shown = viewers.slice(0, maxVisible);
+    const presenceTitle = formatNodePresenceTitle(viewers);
     shown.forEach((viewer) => {
       const badge = document.createElement('span');
       badge.className = 'node-presence-avatar';
-      const label = viewer?.name || viewer?.email || 'Viewer';
-      badge.title = `${label} is viewing this node`;
+      const label = getViewerDisplayName(viewer);
+      badge.title = presenceTitle;
       if (viewer?.avatar) {
         const img = document.createElement('img');
         img.src = viewer.avatar;
@@ -828,12 +846,12 @@ function renderNodePresenceBadges({ force = false } = {}) {
     if (overflow > 0) {
       const extra = document.createElement('span');
       extra.className = 'node-presence-extra';
+      extra.title = presenceTitle;
       extra.textContent = `+${overflow}`;
       overlay.appendChild(extra);
     }
 
-    const firstName = viewers[0]?.name || viewers[0]?.email || 'Someone';
-    overlay.title = viewers.length === 1 ? `${firstName} is viewing this node` : `${viewers.length} people viewing`;
+    overlay.title = presenceTitle;
     nodeEl.appendChild(overlay);
   });
 }

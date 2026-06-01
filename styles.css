@@ -670,6 +670,19 @@ button:active {
   justify-content: center;
   box-shadow: 0 0 0 1px rgba(28, 36, 78, 0.08), 0 2px 5px rgba(28, 36, 78, 0.14);
   overflow: hidden;
+  pointer-events: auto;
+  transition: transform 120ms ease, box-shadow 120ms ease;
+}
+
+.node-presence-avatar:hover,
+.node-presence-extra:hover {
+  transform: translateY(-1px) scale(1.06);
+  box-shadow: 0 0 0 1px rgba(28, 36, 78, 0.1), 0 4px 8px rgba(28, 36, 78, 0.18);
+}
+
+.node-presence-avatar + .node-presence-avatar,
+.node-presence-avatar + .node-presence-extra {
+  margin-left: -5px;
 }
 
 .node-presence-avatar + .node-presence-avatar,
@@ -697,6 +710,11 @@ button:active {
 @media (prefers-reduced-motion: reduce) {
   .node-presence-overlay {
     animation: none;
+  }
+
+  .node-presence-avatar,
+  .node-presence-extra {
+    transition: none;
   }
 }
 .node.is-compact { min-height: 90px; padding-bottom: 10px; }
