@@ -4689,7 +4689,7 @@ function autoArrangeBoardByHierarchy() {
   const startX = 240;
   const startY = 160;
   const colGap = 380;
-  const rowGap = 340;
+  const rowGap = 120;
 
   state.nodes.forEach((node) => {
     const rowIndex = rowForType.has(node.type) ? rowForType.get(node.type) : unknownRow;
@@ -4698,13 +4698,21 @@ function autoArrangeBoardByHierarchy() {
     rows.set(rowIndex, rowNodes);
   });
 
+  const getRenderedNodeHeight = (node) => {
+    const nodeEl = el.zoomLayer.querySelector(`[data-id='${node.id}']`);
+    return nodeEl?.offsetHeight || NODE_HEIGHT;
+  };
+
   pushHistorySnapshot();
-  [...rows.entries()].sort(([a], [b]) => a - b).forEach(([rowIndex, rowNodes]) => {
+  let rowY = startY;
+  [...rows.entries()].sort(([a], [b]) => a - b).forEach(([, rowNodes]) => {
+    const rowHeight = Math.max(NODE_HEIGHT, ...rowNodes.map(getRenderedNodeHeight));
     rowNodes.forEach((node, colIndex) => {
-      node.position.x = startX + colIndex * colGap;
-      node.position.y = startY + rowIndex * rowGap;
+      node.position.x = Math.max(0, startX + colIndex * colGap);
+      node.position.y = Math.max(0, rowY);
       updateNodeCard(node);
     });
+    rowY += rowHeight + rowGap;
   });
 
   drawLinks();
