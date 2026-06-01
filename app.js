@@ -3443,6 +3443,7 @@ function buildUtilitiesPopoverHtml() {
   </div></div>
   <div class="filter-group"><strong>Layout</strong><div class="node-filter-chips">
     <button type="button" data-utility-action="fit-board">Fit to Board</button>
+    <button type="button" data-utility-action="auto-arrange">Auto Arrange</button>
     <button type="button" data-utility-action="compact-all">Compact All</button>
     <button type="button" data-utility-action="expand-all">Expand All</button>
   </div></div>`;
@@ -4667,6 +4668,51 @@ function toggleListMode(showList) {
   }
 }
 
+function autoArrangeBoardByHierarchy() {
+  if (!state.nodes.length) return false;
+  if (isBoardReadOnly()) {
+    setSaveStatus("Read-only board");
+    return false;
+  }
+
+  const hierarchy = [
+    "Idea",
+    "Campaign Variation",
+    "Content",
+    "Social Media Posting",
+    "Landing Page",
+    "Email Campaign"
+  ];
+  const rowForType = new Map(hierarchy.map((type, index) => [type, index]));
+  const rows = new Map();
+  const unknownRow = hierarchy.length;
+  const startX = 240;
+  const startY = 160;
+  const colGap = 380;
+  const rowGap = 340;
+
+  state.nodes.forEach((node) => {
+    const rowIndex = rowForType.has(node.type) ? rowForType.get(node.type) : unknownRow;
+    const rowNodes = rows.get(rowIndex) || [];
+    rowNodes.push(node);
+    rows.set(rowIndex, rowNodes);
+  });
+
+  pushHistorySnapshot();
+  [...rows.entries()].sort(([a], [b]) => a - b).forEach(([rowIndex, rowNodes]) => {
+    rowNodes.forEach((node, colIndex) => {
+      node.position.x = startX + colIndex * colGap;
+      node.position.y = startY + rowIndex * rowGap;
+      updateNodeCard(node);
+    });
+  });
+
+  drawLinks();
+  saveCampaignCanvasState();
+  fitBoardContentToViewport({ padding: 160 });
+  return true;
+}
+
 function setCompactModeForAllNodes(compact) {
   if (!state.nodes.length) return;
   let changed = false;
@@ -5329,6 +5375,11 @@ el.utilitiesToggleButton?.addEventListener("click", (event) => {
     }
     if (btn.dataset.utilityAction === "fit-board") {
       fitBoardContentToViewport();
+      closeUtilitiesPopover();
+      return;
+    }
+    if (btn.dataset.utilityAction === "auto-arrange") {
+      autoArrangeBoardByHierarchy();
       closeUtilitiesPopover();
       return;
     }
