@@ -755,10 +755,12 @@ function renderPresenceLite() {
     const label = getViewerDisplayName(viewer);
     badge.className = "presence-avatar";
     badge.title = `${label} is viewing this board`;
+    badge.setAttribute("aria-label", badge.title);
     if (viewer?.avatar) {
       const img = document.createElement("img");
       img.src = viewer.avatar;
       img.alt = `${label} avatar`;
+      img.title = badge.title;
       badge.appendChild(img);
     } else {
       badge.textContent = getViewerInitials(viewer);
@@ -831,10 +833,12 @@ function renderNodePresenceBadges({ force = false } = {}) {
       badge.className = 'node-presence-avatar';
       const label = getViewerDisplayName(viewer);
       badge.title = presenceTitle;
+      badge.setAttribute('aria-label', presenceTitle);
       if (viewer?.avatar) {
         const img = document.createElement('img');
         img.src = viewer.avatar;
         img.alt = label;
+        img.title = presenceTitle;
         badge.appendChild(img);
       } else {
         badge.textContent = getViewerInitials(viewer);
@@ -847,6 +851,7 @@ function renderNodePresenceBadges({ force = false } = {}) {
       const extra = document.createElement('span');
       extra.className = 'node-presence-extra';
       extra.title = presenceTitle;
+      extra.setAttribute('aria-label', presenceTitle);
       extra.textContent = `+${overflow}`;
       overlay.appendChild(extra);
     }
