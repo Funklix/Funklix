@@ -1088,6 +1088,33 @@ function scrollBoardContentIntoView({ padding = 120 } = {}) {
   return true;
 }
 
+function applyCanvasZoom(nextZoom) {
+  if (!Number.isFinite(nextZoom)) return false;
+  state.zoom = nextZoom;
+  el.zoomLayer.style.transform = `scale(${state.zoom})`;
+  el.zoomLayer.style.transformOrigin = "0 0";
+  el.zoomLabel.textContent = `${Math.round(state.zoom * 100)}%`;
+  return true;
+}
+
+function fitBoardContentToViewport({ padding = 120, minZoom = 0.25, maxZoom = 1, behavior = "smooth" } = {}) {
+  const bounds = getBoardContentBounds({ includeMargin: padding });
+  if (!bounds || !bounds.width || !bounds.height) return false;
+  const canvasWidth = el.canvas.clientWidth;
+  const canvasHeight = el.canvas.clientHeight;
+  if (!canvasWidth || !canvasHeight) return false;
+
+  const fitZoom = Math.min(canvasWidth / bounds.width, canvasHeight / bounds.height);
+  const targetZoom = Math.min(maxZoom, Math.max(minZoom, fitZoom));
+  if (!applyCanvasZoom(targetZoom)) return false;
+
+  const nextLeft = Math.max(0, bounds.centerX * targetZoom - canvasWidth / 2);
+  const nextTop = Math.max(0, bounds.centerY * targetZoom - canvasHeight / 2);
+  el.canvas.scrollTo({ left: nextLeft, top: nextTop, behavior });
+  drawLinks();
+  return true;
+}
+
 function viewportCenterBoard() {
   const b = visibleBoardBounds();
   return { x: b.left + b.width / 2, y: b.top + b.height / 2 };
@@ -2190,14 +2217,11 @@ function setZoom(nextZoom, centerClient = null) {
   const boardX = (cx - rect.left + el.canvas.scrollLeft) / oldZoom;
   const boardY = (cy - rect.top + el.canvas.scrollTop) / oldZoom;
 
-  state.zoom = newZoom;
-  el.zoomLayer.style.transform = `scale(${state.zoom})`;
-  el.zoomLayer.style.transformOrigin = "0 0";
+  applyCanvasZoom(newZoom);
 
   el.canvas.scrollLeft = boardX * state.zoom - (cx - rect.left);
   el.canvas.scrollTop = boardY * state.zoom - (cy - rect.top);
 
-  el.zoomLabel.textContent = `${Math.round(state.zoom * 100)}%`;
   drawLinks();
   saveCampaignCanvasState();
 }
@@ -4658,8 +4682,8 @@ function setCompactModeForAllNodes(compact) {
     requestAnimationFrame(() => {
       resolveAllNodeOverlaps();
       drawLinks();
-      scrollBoardContentIntoView();
       saveCampaignCanvasState();
+      fitBoardContentToViewport({ padding: 160 });
     });
     return;
   }
@@ -5304,7 +5328,7 @@ el.utilitiesToggleButton?.addEventListener("click", (event) => {
       return;
     }
     if (btn.dataset.utilityAction === "fit-board") {
-      scrollBoardContentIntoView();
+      fitBoardContentToViewport();
       closeUtilitiesPopover();
       return;
     }
