@@ -1031,6 +1031,63 @@ function visibleBoardBounds() {
   return { left, top, width, height, right: left + width, bottom: top + height };
 }
 
+function getBoardContentBounds({ includeMargin = 120 } = {}) {
+  if (!el.zoomLayer) return null;
+  const nodes = [...el.zoomLayer.querySelectorAll('.node[data-id]')];
+  if (!nodes.length) return null;
+
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+
+  nodes.forEach((nodeEl) => {
+    const node = getNode(nodeEl.dataset.id);
+    const x = Number.isFinite(node?.position?.x) ? node.position.x : nodeEl.offsetLeft;
+    const y = Number.isFinite(node?.position?.y) ? node.position.y : nodeEl.offsetTop;
+    const width = nodeEl.offsetWidth || NODE_WIDTH;
+    const height = nodeEl.offsetHeight || NODE_HEIGHT;
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+    minX = Math.min(minX, x);
+    minY = Math.min(minY, y);
+    maxX = Math.max(maxX, x + width);
+    maxY = Math.max(maxY, y + height);
+  });
+
+  if (![minX, minY, maxX, maxY].every(Number.isFinite)) return null;
+  const margin = Math.max(0, Number(includeMargin) || 0);
+  minX -= margin;
+  minY -= margin;
+  maxX += margin;
+  maxY += margin;
+  const width = maxX - minX;
+  const height = maxY - minY;
+  return {
+    minX,
+    minY,
+    maxX,
+    maxY,
+    width,
+    height,
+    centerX: minX + width / 2,
+    centerY: minY + height / 2
+  };
+}
+
+function scrollBoardContentIntoView({ padding = 120 } = {}) {
+  const bounds = getBoardContentBounds({ includeMargin: padding });
+  if (!bounds) return false;
+  const visible = visibleBoardBounds();
+  const centerOutside = bounds.centerX < visible.left || bounds.centerX > visible.right || bounds.centerY < visible.top || bounds.centerY > visible.bottom;
+  const boundsOutside = bounds.minX < visible.left || bounds.maxX > visible.right || bounds.minY < visible.top || bounds.maxY > visible.bottom;
+  if (!centerOutside && !boundsOutside) return false;
+
+  const nextLeft = Math.max(0, bounds.centerX * state.zoom - el.canvas.clientWidth / 2);
+  const nextTop = Math.max(0, bounds.centerY * state.zoom - el.canvas.clientHeight / 2);
+  el.canvas.scrollTo({ left: nextLeft, top: nextTop, behavior: 'smooth' });
+  return true;
+}
+
 function viewportCenterBoard() {
   const b = visibleBoardBounds();
   return { x: b.left + b.width / 2, y: b.top + b.height / 2 };
@@ -3361,6 +3418,7 @@ function buildUtilitiesPopoverHtml() {
     <button type="button" data-utility-action="calendar-view">Calendar View</button>
   </div></div>
   <div class="filter-group"><strong>Layout</strong><div class="node-filter-chips">
+    <button type="button" data-utility-action="fit-board">Fit to Board</button>
     <button type="button" data-utility-action="compact-all">Compact All</button>
     <button type="button" data-utility-action="expand-all">Expand All</button>
   </div></div>`;
@@ -4598,14 +4656,18 @@ function setCompactModeForAllNodes(compact) {
   if (!compact) {
     setSaveStatus("All nodes expanded");
     requestAnimationFrame(() => {
-      const moved = resolveAllNodeOverlaps();
-      if (moved) drawLinks();
+      resolveAllNodeOverlaps();
+      drawLinks();
+      scrollBoardContentIntoView();
       saveCampaignCanvasState();
     });
     return;
   }
-  setSaveStatus(compact ? "All nodes compacted" : "All nodes expanded");
-  saveCampaignCanvasState();
+  setSaveStatus("All nodes compacted");
+  requestAnimationFrame(() => {
+    drawLinks();
+    saveCampaignCanvasState();
+  });
 }
 
 function renderCalendarView() {
@@ -5238,6 +5300,11 @@ el.utilitiesToggleButton?.addEventListener("click", (event) => {
     if (!btn) return;
     if (btn.dataset.utilityAction === "duplicate-board") {
       duplicateCurrentBoard();
+      closeUtilitiesPopover();
+      return;
+    }
+    if (btn.dataset.utilityAction === "fit-board") {
+      scrollBoardContentIntoView();
       closeUtilitiesPopover();
       return;
     }
