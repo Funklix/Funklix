@@ -4816,7 +4816,8 @@ el.googleSigninButton?.addEventListener("click", () => {
     return;
   }
   setAuthMessage("");
-  window.location.href = "/api/auth/google/start";
+  const returnTo = `${window.location.pathname || "/"}${window.location.search || ""}`;
+  window.location.href = `/api/auth/google/start?returnTo=${encodeURIComponent(returnTo)}`;
 });
 el.authSignoutButton?.addEventListener("click", async () => {
   await fetch("/api/auth/session", { method: "DELETE" });
