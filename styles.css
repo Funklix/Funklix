@@ -685,6 +685,11 @@ button:active {
   margin-left: -5px;
 }
 
+.node-presence-avatar + .node-presence-avatar,
+.node-presence-avatar + .node-presence-extra {
+  margin-left: -5px;
+}
+
 .node-presence-avatar img {
   width: 100%;
   height: 100%;
