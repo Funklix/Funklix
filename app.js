@@ -1096,12 +1096,23 @@ function formatNodePresenceTitle(viewers = []) {
 
 function formatEditingFieldLabel(field = "") {
   const safeField = String(field || "").trim().toLowerCase();
-  if (safeField === "title") return "title";
-  if (safeField === "content") return "content";
-  if (safeField === "audience") return "audience";
-  if (safeField === "postit") return "a post-it";
-  if (safeField === "textarea") return "text";
-  return "";
+  const labels = {
+    title: "title",
+    content: "description",
+    description: "description",
+    audience: "audience",
+    postit: "a post-it",
+    textarea: "text",
+    platform: "platform",
+    tags: "tags",
+    goal: "goal",
+    channel: "channel",
+    funnelstage: "funnel stage",
+    tone: "tone",
+    contentformat: "format",
+    media: "media"
+  };
+  return labels[safeField] || "";
 }
 
 function formatNodeEditingTitle(viewers = []) {
@@ -1181,6 +1192,7 @@ function clearNodePresenceBadges() {
   state.presenceNodeSignature = "";
   if (!el.zoomLayer) return;
   el.zoomLayer.querySelectorAll('.node-presence-overlay, .node-editing-indicator').forEach((x) => x.remove());
+  el.zoomLayer.querySelectorAll('.node.remote-editing').forEach((nodeEl) => nodeEl.classList.remove('remote-editing'));
 }
 
 function renderNodePresenceBadges({ force = false } = {}) {
@@ -1212,6 +1224,7 @@ function renderNodePresenceBadges({ force = false } = {}) {
   state.presenceNodeSignature = signature;
 
   el.zoomLayer.querySelectorAll('.node-presence-overlay, .node-editing-indicator').forEach((x) => x.remove());
+  el.zoomLayer.querySelectorAll('.node.remote-editing').forEach((nodeEl) => nodeEl.classList.remove('remote-editing'));
 
   presenceByNodeId.forEach((viewers, nodeId) => {
     const nodeEl = el.zoomLayer.querySelector(`[data-id='${nodeId}']`);
@@ -1258,13 +1271,52 @@ function renderNodePresenceBadges({ force = false } = {}) {
   editingByNodeId.forEach((viewers, nodeId) => {
     const nodeEl = el.zoomLayer.querySelector(`[data-id='${nodeId}']`);
     if (!nodeEl) return;
+    nodeEl.classList.add('remote-editing');
+
     const indicator = document.createElement('div');
     indicator.className = 'node-editing-indicator';
     const editingTitle = formatNodeEditingTitle(viewers);
     indicator.title = editingTitle;
     indicator.setAttribute('aria-label', editingTitle);
+
+    const avatarWrap = document.createElement('span');
+    avatarWrap.className = 'node-editing-avatars';
+    const shown = viewers.slice(0, 3);
+    shown.forEach((viewer) => {
+      const avatar = document.createElement('span');
+      avatar.className = 'node-editing-avatar';
+      avatar.title = editingTitle;
+      avatar.setAttribute('aria-label', `${getViewerDisplayName(viewer)} is editing`);
+      if (viewer?.avatar) {
+        const img = document.createElement('img');
+        img.src = viewer.avatar;
+        img.alt = getViewerDisplayName(viewer);
+        avatar.appendChild(img);
+      } else {
+        avatar.textContent = getViewerInitials(viewer);
+      }
+      avatarWrap.appendChild(avatar);
+    });
+    const overflow = viewers.length - shown.length;
+    if (overflow > 0) {
+      const extra = document.createElement('span');
+      extra.className = 'node-editing-avatar node-editing-extra';
+      extra.textContent = `+${overflow}`;
+      extra.title = editingTitle;
+      avatarWrap.appendChild(extra);
+    }
+
+    const pencil = document.createElement('span');
+    pencil.className = 'node-editing-pencil';
+    pencil.textContent = '✎';
+
+    const label = document.createElement('span');
+    label.className = 'node-editing-label';
     const first = viewers[0] || {};
-    indicator.innerHTML = `<span class="node-editing-pencil">✎</span><span class="node-editing-label">${viewers.length > 1 ? `${viewers.length} editing` : (formatEditingFieldLabel(first.editingField) ? 'editing' : 'typing…')}</span>`;
+    const fieldLabel = formatEditingFieldLabel(first.editingField);
+    label.textContent = viewers.length > 1 ? `${viewers.length} editing` : (fieldLabel ? `editing ${fieldLabel}` : 'typing…');
+
+    indicator.append(avatarWrap, pencil, label);
     nodeEl.appendChild(indicator);
   });
 }
@@ -1384,7 +1436,7 @@ function notifyPresenceSelectionMaybe(delayMs = 350) {
 }
 
 function setLocalEditingPresence(nodeId, field = 'textarea', { clearAfterMs = 4000, notifyDelayMs = 250 } = {}) {
-  if (!nodeId || !state.user?.email) return;
+  if (!nodeId || !state.user?.email || state.boardAccess?.canEdit === false) return;
   const safeField = field || 'textarea';
   const changed = state.presenceEditingNodeId !== nodeId || state.presenceEditingField !== safeField;
   state.presenceEditingNodeId = nodeId;
@@ -1421,18 +1473,36 @@ function editingInfoFromTarget(target) {
   }
   if (el.nodeForm?.contains(target) && state.selectedPrimary) {
     const fieldMap = {
+      type: 'textarea',
       title: 'title',
       content: 'content',
+      imagePrompt: 'media',
       audience: 'audience',
       caption: 'content',
-      hashtags: 'content',
-      preview: 'content'
+      hashtags: 'tags',
+      preview: 'content',
+      platform: 'platform',
+      goal: 'goal',
+      channel: 'channel',
+      funnelStage: 'funnelStage',
+      tone: 'tone',
+      contentFormat: 'contentFormat',
+      variants: 'content'
     };
     const name = target.getAttribute?.('name') || '';
     const id = target.id || '';
     if (name && fieldMap[name]) return { nodeId: state.selectedPrimary, field: fieldMap[name] };
     if (id.includes('title')) return { nodeId: state.selectedPrimary, field: 'title' };
+    if (id.includes('content') || id.includes('caption') || id.includes('preview')) return { nodeId: state.selectedPrimary, field: 'content' };
+    if (id.includes('hashtag')) return { nodeId: state.selectedPrimary, field: 'tags' };
     if (id.includes('audience')) return { nodeId: state.selectedPrimary, field: 'audience' };
+    if (id.includes('goal')) return { nodeId: state.selectedPrimary, field: 'goal' };
+    if (id.includes('channel')) return { nodeId: state.selectedPrimary, field: 'channel' };
+    if (id.includes('funnel')) return { nodeId: state.selectedPrimary, field: 'funnelStage' };
+    if (id.includes('tone')) return { nodeId: state.selectedPrimary, field: 'tone' };
+    if (id.includes('platform')) return { nodeId: state.selectedPrimary, field: 'platform' };
+    if (id.includes('format')) return { nodeId: state.selectedPrimary, field: 'contentFormat' };
+    if (id.includes('image')) return { nodeId: state.selectedPrimary, field: 'media' };
     if (target.matches?.('textarea')) return { nodeId: state.selectedPrimary, field: 'textarea' };
     return { nodeId: state.selectedPrimary, field: 'content' };
   }
@@ -1440,6 +1510,7 @@ function editingInfoFromTarget(target) {
 }
 
 function handleEditingPresenceEvent(event) {
+  if (state.boardAccess?.canEdit === false) return;
   const info = editingInfoFromTarget(event.target);
   if (!info) return;
   setLocalEditingPresence(info.nodeId, info.field, { notifyDelayMs: event.type === 'focusin' ? 150 : 650 });
@@ -1458,6 +1529,10 @@ function bindEditingPresenceTracking() {
       }, 80);
     });
   });
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) clearLocalEditingPresence({ notifyDelayMs: 0 });
+  });
+  window.addEventListener('pagehide', () => clearLocalEditingPresence({ notifyDelayMs: 0 }));
 }
 
 function startPresenceLite() {

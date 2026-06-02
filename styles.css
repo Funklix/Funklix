@@ -806,19 +806,34 @@ button:active {
 }
 
 
+
+.node.remote-editing {
+  box-shadow: 0 0 0 2px rgba(107, 78, 255, 0.22), 0 0 0 7px rgba(107, 78, 255, 0.08), 0 10px 24px rgba(107, 78, 255, 0.16) !important;
+}
+
+.node.remote-editing::after {
+  content: "";
+  position: absolute;
+  inset: -5px;
+  border: 1px solid rgba(107, 78, 255, 0.28);
+  border-radius: 18px;
+  pointer-events: none;
+  animation: node-editing-ring-pulse 1.8s ease-in-out infinite;
+}
+
 .node-editing-indicator {
   position: absolute;
-  top: -10px;
+  top: -14px;
   left: 10px;
   z-index: 9;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  max-width: 128px;
-  padding: 3px 7px;
+  gap: 5px;
+  max-width: 172px;
+  padding: 3px 8px 3px 4px;
   border: 1px solid rgba(107, 78, 255, 0.24);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.94);
+  background: rgba(255, 255, 255, 0.96);
   color: #5542c8;
   font-size: 0.64rem;
   font-weight: 800;
@@ -826,6 +841,45 @@ button:active {
   box-shadow: 0 4px 12px rgba(36, 42, 78, 0.13);
   pointer-events: auto;
   animation: node-editing-soft-pulse 1.4s ease-in-out infinite;
+}
+
+.node-editing-avatars {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+  flex: 0 0 auto;
+}
+
+.node-editing-avatar {
+  width: 20px;
+  height: 20px;
+  border: 2px solid #fff;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #efeaff 0%, #dfe6ff 100%);
+  color: #4f39db;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.56rem;
+  font-weight: 900;
+  overflow: hidden;
+  box-shadow: 0 0 0 1px rgba(80, 67, 170, 0.12);
+}
+
+.node-editing-avatar + .node-editing-avatar {
+  margin-left: -7px;
+}
+
+.node-editing-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.node-editing-extra {
+  background: #f7f8ff;
+  color: #52608f;
 }
 
 .node-editing-pencil {
@@ -842,6 +896,12 @@ button:active {
   0%, 100% { transform: translateY(0); opacity: 0.88; }
   50% { transform: translateY(-1px); opacity: 1; }
 }
+
+@keyframes node-editing-ring-pulse {
+  0%, 100% { opacity: 0.45; transform: scale(1); }
+  50% { opacity: 0.9; transform: scale(1.01); }
+}
+
 
 .node-presence-overlay {
   position: absolute;
@@ -906,6 +966,7 @@ button:active {
 @media (prefers-reduced-motion: reduce) {
   .node.remote-updated,
   .node.activity-focused,
+  .node.remote-editing::after,
   .node-editing-indicator,
   .node-presence-overlay {
     animation: none;
