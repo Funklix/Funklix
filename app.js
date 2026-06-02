@@ -915,6 +915,73 @@ function getActivityUser(fallbackName = "") {
   };
 }
 
+function getCurrentCommentActor() {
+  if (!state.user?.email) return null;
+  return {
+    authorName: getActivityUserName(),
+    authorEmail: state.user.email,
+    authorAvatar: state.user.avatar || ""
+  };
+}
+
+function commentAuthorName(item = {}) {
+  return (item.authorName || item.user || item.authorEmail || "Someone").trim();
+}
+
+function commentAuthorAvatar(item = {}) {
+  return item.authorAvatar || item.avatar || "";
+}
+
+function commentAuthorEmail(item = {}) {
+  return item.authorEmail || item.email || "";
+}
+
+function commentCreatedAt(item = {}) {
+  return item.createdAt || item.time || new Date().toISOString();
+}
+
+function formatCommentTimestamp(item = {}) {
+  const timestamp = commentCreatedAt(item);
+  const parsed = Date.parse(timestamp);
+  if (Number.isFinite(parsed)) return relativeActivityTime(timestamp);
+  return String(timestamp || "just now");
+}
+
+function ensureCommentIdentity(item = {}) {
+  if (!item || typeof item !== "object") return item;
+  item.authorName = item.authorName || item.user || item.authorEmail || "Someone";
+  item.authorEmail = item.authorEmail || item.email || "";
+  item.authorAvatar = item.authorAvatar || item.avatar || "";
+  item.createdAt = item.createdAt || item.time || new Date().toISOString();
+  item.user = item.user || item.authorName;
+  item.time = item.time || (Number.isFinite(Date.parse(item.createdAt)) ? formatCommentTimestamp({ createdAt: item.createdAt }) : item.createdAt);
+  if (!Array.isArray(item.replies)) item.replies = [];
+  item.replies.forEach((reply) => ensureCommentIdentity(reply));
+  return item;
+}
+
+function createCommentPayload(text = "") {
+  const actor = getCurrentCommentActor();
+  if (!actor) return null;
+  const createdAt = new Date().toISOString();
+  return {
+    ...actor,
+    user: actor.authorName,
+    time: nowString(),
+    createdAt,
+    text,
+    resolved: false,
+    replies: []
+  };
+}
+
+function requireCommentIdentity() {
+  if (state.user?.email) return true;
+  setAuthMessage("Sign in with Google to comment.");
+  setSaveStatus("Sign in with Google to comment.");
+  return false;
+}
+
 function sanitizeActivityFeed(feed) {
   if (!Array.isArray(feed)) return [];
   return feed
@@ -997,6 +1064,8 @@ function formatActivityAction(entry = {}) {
     media_added: `added media to ${title}`,
     media_removed: `removed media from ${title}`,
     comment_added: `added a comment on ${title}`,
+    reply_added: `replied on ${title}`,
+    comment_resolved: `resolved a comment on ${title}`,
     postit_added: `added a post-it on ${title}`,
     auto_arranged: "auto-arranged the board"
   };
@@ -4067,6 +4136,36 @@ function propagateNodeChangesDownward(node) {
   runNetworkImpulse();
 }
 
+function updateNodeCommentBadge(node, nodeEl) {
+  if (!node || !nodeEl) return;
+  let commentBadge = nodeEl.querySelector(".node-comment-badge");
+  if (!commentBadge) {
+    commentBadge = document.createElement("button");
+    commentBadge.type = "button";
+    commentBadge.className = "node-comment-badge";
+    commentBadge.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (!Array.isArray(node.postits) || node.postits.length === 0) {
+        if (isBoardReadOnly()) {
+          setSaveStatus("Read-only board");
+          return;
+        }
+        addPostitToNode(node, { x: 12, y: 48 });
+        return;
+      }
+      nodeEl.classList.toggle("comments-highlighted");
+      setTimeout(() => nodeEl.classList.remove("comments-highlighted"), 1200);
+    });
+    nodeEl.appendChild(commentBadge);
+  }
+  const activeCommentCount = (node.postits || []).filter((note) => !note.resolved).length;
+  const totalReplyCount = (node.postits || []).reduce((sum, note) => sum + (Array.isArray(note.replies) ? note.replies.length : 0), 0);
+  const totalCommentCount = activeCommentCount + totalReplyCount;
+  commentBadge.textContent = `💬 ${totalCommentCount || 0}`;
+  commentBadge.title = totalCommentCount ? `${totalCommentCount} comments/replies` : "Add comment";
+  commentBadge.classList.toggle("has-comments", totalCommentCount > 0);
+}
+
 function updateNodeCard(node) {
   const nodeEl = el.zoomLayer.querySelector(`[data-id='${node.id}']`);
   if (!nodeEl) return;
@@ -4096,6 +4195,8 @@ function updateNodeCard(node) {
     compactToggle.title = node.compact ? "Expand node" : "Compact view";
     compactToggle.setAttribute("aria-label", compactToggle.title);
   }
+  updateNodeCommentBadge(node, nodeEl);
+
   const titleEl = nodeEl.querySelector(".title");
   titleEl.textContent = node.title;
   titleEl.contentEditable = editable ? "true" : "false";
@@ -4579,19 +4680,37 @@ function syncPopoverActiveStates(popoverEl) {
 
 function renderPostits(node, nodeEl) {
   nodeEl.querySelectorAll(".postit").forEach((p) => p.remove());
+  if (!Array.isArray(node.postits)) node.postits = [];
 
   node.postits.forEach((note) => {
-    if (!Array.isArray(note.replies)) note.replies = [];
+    ensureCommentIdentity(note);
     const postit = el.postitTemplate.content.firstElementChild.cloneNode(true);
     postit.style.left = `${note.x}px`;
     postit.style.top = `${note.y}px`;
     postit.style.background = note.color;
+    postit.classList.toggle("is-resolved", !!note.resolved);
 
-    postit.querySelector(".postit-user").textContent = note.user;
-    postit.querySelector(".postit-time").textContent = note.time;
+    const header = postit.querySelector("header");
+    const avatar = document.createElement("span");
+    avatar.className = "postit-avatar";
+    const authorAvatar = commentAuthorAvatar(note);
+    const authorName = commentAuthorName(note);
+    if (authorAvatar) {
+      const img = document.createElement("img");
+      img.src = authorAvatar;
+      img.alt = authorName;
+      avatar.appendChild(img);
+    } else {
+      avatar.textContent = authorName.split(/\s+/).slice(0, 2).map((part) => part[0]?.toUpperCase() || "").join("") || "U";
+    }
+    header.prepend(avatar);
+
+    postit.querySelector(".postit-user").textContent = authorName;
+    postit.querySelector(".postit-time").textContent = formatCommentTimestamp(note);
+    postit.querySelector(".postit-time").title = commentCreatedAt(note);
 
     const color = postit.querySelector(".postit-color");
-    color.value = note.color;
+    color.value = note.color || "#ffe082";
     color.addEventListener("input", () => {
       if (isBoardReadOnly()) {
         setSaveStatus("Read-only board");
@@ -4602,8 +4721,27 @@ function renderPostits(node, nodeEl) {
       saveCampaignCanvasState();
     });
 
+    const resolveBtn = document.createElement("button");
+    resolveBtn.type = "button";
+    resolveBtn.className = "postit-resolve";
+    resolveBtn.textContent = note.resolved ? "Reopen" : "Resolve";
+    resolveBtn.title = note.resolved ? "Reopen comment" : "Resolve comment";
+    resolveBtn.addEventListener("click", () => {
+      if (isBoardReadOnly()) {
+        setSaveStatus("Read-only board");
+        return;
+      }
+      note.resolved = !note.resolved;
+      appendActivity(note.resolved ? "comment_resolved" : "comment_added", { node });
+      renderPostits(node, nodeEl);
+      updateNodeCommentBadge(node, nodeEl);
+      saveCampaignCanvasState();
+    });
+    header.insertBefore(resolveBtn, postit.querySelector(".postit-delete"));
+
     const area = postit.querySelector(".postit-text");
     area.value = note.text;
+    area.disabled = !!note.resolved;
     area.style.fontSize = note.text.length > 220 ? "0.7rem" : note.text.length > 120 ? "0.82rem" : "0.96rem";
     area.addEventListener("input", () => {
       if (isBoardReadOnly()) {
@@ -4622,45 +4760,73 @@ function renderPostits(node, nodeEl) {
       }
       node.postits = node.postits.filter((n) => n.id !== note.id);
       renderPostits(node, nodeEl);
+      updateNodeCommentBadge(node, nodeEl);
       saveCampaignCanvasState();
     });
 
     const repliesWrap = document.createElement("div");
     repliesWrap.className = "postit-replies";
     note.replies.forEach((reply) => {
-      const line = document.createElement("p");
+      ensureCommentIdentity(reply);
+      const line = document.createElement("div");
       line.className = "postit-reply";
-      line.textContent = `${reply.user} (${reply.time}): ${reply.text}`;
+      const replyAvatar = document.createElement("span");
+      replyAvatar.className = "postit-reply-avatar";
+      const replyAuthorName = commentAuthorName(reply);
+      const replyAvatarUrl = commentAuthorAvatar(reply);
+      if (replyAvatarUrl) {
+        const img = document.createElement("img");
+        img.src = replyAvatarUrl;
+        img.alt = replyAuthorName;
+        replyAvatar.appendChild(img);
+      } else {
+        replyAvatar.textContent = replyAuthorName.split(/\s+/).slice(0, 2).map((part) => part[0]?.toUpperCase() || "").join("") || "U";
+      }
+      const body = document.createElement("div");
+      body.className = "postit-reply-body";
+      const meta = document.createElement("div");
+      meta.className = "postit-reply-meta";
+      meta.textContent = `${replyAuthorName} · ${formatCommentTimestamp(reply)}`;
+      const text = document.createElement("p");
+      text.textContent = reply.text || "";
+      body.append(meta, text);
+      line.append(replyAvatar, body);
       repliesWrap.appendChild(line);
     });
 
     const addReplyBtn = document.createElement("button");
     addReplyBtn.type = "button";
-    addReplyBtn.className = "inspector-image-delete";
-    addReplyBtn.textContent = "Reply";
+    addReplyBtn.className = "postit-reply-button";
+    addReplyBtn.textContent = note.resolved ? "Resolved" : "Reply";
+    addReplyBtn.disabled = !!note.resolved;
     addReplyBtn.addEventListener("click", () => {
       if (isBoardReadOnly()) {
         setSaveStatus("Read-only board");
         return;
       }
+      if (!requireCommentIdentity()) return;
       if (postit.querySelector(".postit-reply-editor")) return;
       const editor = document.createElement("div");
       editor.className = "postit-reply-editor";
-      editor.innerHTML = `<input class="postit-reply-name" placeholder="Name" /><textarea class="postit-reply-input" rows="2" placeholder="Write a reply..."></textarea><button type="button" class="inspector-image-delete">Send</button>`;
+      editor.innerHTML = `<textarea class="postit-reply-input" rows="2" placeholder="Write a reply..."></textarea><button type="button" class="inspector-image-delete">Send</button>`;
       editor.querySelector("button").addEventListener("click", () => {
         if (isBoardReadOnly()) {
           setSaveStatus("Read-only board");
           return;
         }
-        const user = editor.querySelector(".postit-reply-name").value.trim() || "Anonymous";
+        if (!requireCommentIdentity()) return;
         const text = editor.querySelector(".postit-reply-input").value.trim();
         if (!text) return;
-        note.replies.push({ user, text, time: nowString() });
-        appendActivity("comment_added", { node, userName: user });
+        const actor = createCommentPayload(text);
+        if (!actor) return;
+        note.replies.push({ id: `reply-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, ...actor });
+        appendActivity("reply_added", { node, userName: actor.authorName });
         renderPostits(node, nodeEl);
+        updateNodeCommentBadge(node, nodeEl);
         saveCampaignCanvasState();
       });
       postit.appendChild(editor);
+      editor.querySelector("textarea")?.focus();
     });
 
     postit.append(repliesWrap, addReplyBtn);
@@ -4669,6 +4835,7 @@ function renderPostits(node, nodeEl) {
     nodeEl.appendChild(postit);
   });
 }
+
 
 function enablePostitDrag(postit, note) {
   postit.addEventListener("pointerdown", (event) => {
@@ -6174,6 +6341,26 @@ el.addContextNodeButton.addEventListener("click", () => {
   }, "Idea");
 });
 
+function addPostitToNode(node, position = null) {
+  if (!node) return null;
+  if (!requireCommentIdentity()) return null;
+  if (!Array.isArray(node.postits)) node.postits = [];
+  const actor = createCommentPayload("");
+  if (!actor) return null;
+  const note = {
+    id: `postit-${state.postitCounter++}`,
+    ...actor,
+    color: "#ffe082",
+    x: position?.x ?? ((state.contextBoardPoint?.x || node.position.x + 24) - node.position.x),
+    y: position?.y ?? ((state.contextBoardPoint?.y || node.position.y + 48) - node.position.y)
+  };
+  node.postits.push(note);
+  updateNodeCard(node);
+  appendActivity("comment_added", { node, userName: actor.authorName });
+  saveCampaignCanvasState();
+  return note;
+}
+
 el.addPostitCommentButton.addEventListener("click", () => {
   el.contextMenu.classList.add("hidden");
   if (state.boardAccess?.canEdit === false) {
@@ -6183,20 +6370,7 @@ el.addPostitCommentButton.addEventListener("click", () => {
   if (!state.selectedPrimary) return;
   const node = getNode(state.selectedPrimary);
   if (!node) return;
-
-  const user = window.prompt("Nutzername für den Kommentar:", "Felix")?.trim() || "Anonymous";
-  node.postits.push({
-    id: `postit-${state.postitCounter++}`,
-    user,
-    time: nowString(),
-    text: "",
-    color: "#ffe082",
-    x: state.contextBoardPoint.x - node.position.x,
-    y: state.contextBoardPoint.y - node.position.y
-  });
-  updateNodeCard(node);
-  appendActivity("postit_added", { node, userName: user });
-  saveCampaignCanvasState();
+  addPostitToNode(node);
 });
 el.improveContextNodeButton.addEventListener("click", async () => {
   el.contextMenu.classList.add("hidden");
