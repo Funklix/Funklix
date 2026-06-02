@@ -1417,12 +1417,40 @@ button:active {
 }
 
 .postit header {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto auto auto auto;
+  display: flex;
   align-items: center;
   gap: 4px;
   margin-bottom: 6px;
   font-size: 0.68rem;
+  line-height: 1.1;
+  min-width: 0;
+  flex-wrap: nowrap;
+}
+
+.postit-user {
+  display: block;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.1;
+}
+
+.postit-time {
+  flex: 0 1 auto;
+  max-width: 42px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0.66;
+  line-height: 1.1;
+}
+
+.postit-color,
+.postit-resolve,
+.postit-delete {
+  flex: 0 0 auto;
 }
 
 .postit-color {
