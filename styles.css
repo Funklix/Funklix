@@ -236,6 +236,23 @@ body {
   background: rgba(246, 247, 251, 0.78);
 }
 
+.activity-entry.is-clickable {
+  cursor: pointer;
+  transition: background 140ms ease, transform 140ms ease, box-shadow 140ms ease;
+}
+
+.activity-entry.is-clickable:hover,
+.activity-entry.is-clickable:focus-visible {
+  background: rgba(236, 232, 255, 0.92);
+  box-shadow: 0 4px 12px rgba(79, 67, 170, 0.08);
+  transform: translateY(-1px);
+  outline: none;
+}
+
+.activity-entry.is-clickable:hover .activity-body p {
+  color: var(--primary);
+}
+
 .activity-avatar {
   width: 24px;
   height: 24px;
@@ -772,6 +789,16 @@ button:active {
   animation: remote-node-update-pulse 1s ease-out;
 }
 
+.node.activity-focused {
+  animation: activity-node-focus-pulse 1.4s ease-out;
+}
+
+@keyframes activity-node-focus-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(105, 80, 239, 0.32), 0 8px 18px rgba(82, 67, 170, 0.08); }
+  45% { box-shadow: 0 0 0 9px rgba(105, 80, 239, 0.16), 0 12px 28px rgba(105, 80, 239, 0.2); }
+  100% { box-shadow: 0 0 0 0 rgba(105, 80, 239, 0), 0 8px 18px rgba(82, 67, 170, 0.08); }
+}
+
 @keyframes remote-node-update-pulse {
   0% { box-shadow: 0 0 0 0 rgba(107, 78, 255, 0.28), 0 8px 18px rgba(82, 67, 170, 0.08); }
   45% { box-shadow: 0 0 0 7px rgba(107, 78, 255, 0.14), 0 10px 24px rgba(107, 78, 255, 0.18); }
@@ -878,6 +905,7 @@ button:active {
 
 @media (prefers-reduced-motion: reduce) {
   .node.remote-updated,
+  .node.activity-focused,
   .node-editing-indicator,
   .node-presence-overlay {
     animation: none;

@@ -863,6 +863,19 @@ function renderActivityFeed() {
   entries.forEach((entry) => {
     const row = document.createElement("div");
     row.className = "activity-entry";
+    const canFocusNode = !!entry.nodeId && !!getNode(entry.nodeId);
+    if (canFocusNode) {
+      row.classList.add("is-clickable");
+      row.tabIndex = 0;
+      row.setAttribute("role", "button");
+      row.title = "Jump to node";
+      row.addEventListener("click", () => focusNodeInCanvas(entry.nodeId));
+      row.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        event.preventDefault();
+        focusNodeInCanvas(entry.nodeId);
+      });
+    }
     const user = entry.user || {};
     const name = getViewerDisplayName(user);
     const avatar = document.createElement("span");
@@ -2861,6 +2874,54 @@ function focusNodeInViewport(nodeId) {
   const y = nodeEl.offsetTop * state.zoom - el.canvas.clientHeight / 2 + nodeEl.offsetHeight / 2;
   el.canvas.scrollTo({ left: Math.max(0, x), top: Math.max(0, y) });
 }
+
+function pulseActivityFocusedNode(nodeId) {
+  const nodeEl = el.zoomLayer.querySelector(`[data-id='${nodeId}']`);
+  if (!nodeEl) return;
+  nodeEl.classList.remove("activity-focused");
+  void nodeEl.offsetWidth;
+  nodeEl.classList.add("activity-focused");
+  setTimeout(() => nodeEl.classList.remove("activity-focused"), 1400);
+}
+
+function focusNodeInCanvas(nodeId, { behavior = "smooth", select = true, pulse = true } = {}) {
+  const node = getNode(nodeId);
+  const nodeEl = node ? el.zoomLayer.querySelector(`[data-id='${nodeId}']`) : null;
+  if (!node || !nodeEl || !el.canvas) return false;
+
+  const runFocus = () => {
+    updateCanvasScrollSurfaceSize();
+    const width = nodeEl.offsetWidth || NODE_WIDTH;
+    const height = nodeEl.offsetHeight || NODE_HEIGHT;
+    const nodeX = Number.isFinite(node.position?.x) ? node.position.x : nodeEl.offsetLeft;
+    const nodeY = Number.isFinite(node.position?.y) ? node.position.y : nodeEl.offsetTop;
+    const centerX = (nodeX + width / 2) * state.zoom;
+    const centerY = (nodeY + height / 2) * state.zoom;
+    const maxLeft = Math.max(0, el.canvas.scrollWidth - el.canvas.clientWidth);
+    const maxTop = Math.max(0, el.canvas.scrollHeight - el.canvas.clientHeight);
+    const left = Math.max(0, Math.min(maxLeft, centerX - el.canvas.clientWidth / 2));
+    const top = Math.max(0, Math.min(maxTop, centerY - el.canvas.clientHeight / 2));
+
+    el.canvas.scrollTo({ left, top, behavior });
+    if (select) {
+      state.selectedIds.clear();
+      state.selectedIds.add(node.id);
+      state.selectedPrimary = node.id;
+      updateSelectionClasses();
+      fillInspector(node);
+    }
+    if (pulse) requestAnimationFrame(() => pulseActivityFocusedNode(node.id));
+  };
+
+  if (state.activeView !== "board") {
+    setActiveView("board");
+    requestAnimationFrame(runFocus);
+  } else {
+    runFocus();
+  }
+  return true;
+}
+
 function forceNodeVisible(nodeId) {
   focusNodeInViewport(nodeId);
   requestAnimationFrame(() => focusNodeInViewport(nodeId));
