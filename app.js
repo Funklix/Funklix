@@ -102,6 +102,7 @@ const el = {
   canvas: document.getElementById("canvas"),
   canvasTopbar: document.getElementById("canvas-topbar"),
   inspectorPanel: document.getElementById("inspector-panel"),
+  canvasScrollSurface: document.getElementById("canvas-scroll-surface"),
   zoomLayer: document.getElementById("zoom-layer"),
   links: document.getElementById("links"),
   emptyState: document.getElementById("empty-state"),
@@ -276,7 +277,7 @@ function diagnoseDomDependencies() {
         "canvas", "zoom-layer", "zoom-label", "inspector-panel", "node-form",
         "add-node-btn", "create-campaign-btn", "undo-btn", "node-search-input"
       ],
-      canvas: ["canvas", "zoom-layer", "links", "context-menu", "empty-state"],
+      canvas: ["canvas", "canvas-scroll-surface", "zoom-layer", "links", "context-menu", "empty-state"],
       toolbar: [
         "add-node-btn", "create-campaign-btn", "undo-btn", "node-search-input",
         "copy-board-link-btn", "save-board-btn", "new-board-btn", "reset-board-btn",
@@ -1097,10 +1098,39 @@ function applyCanvasZoom(nextZoom) {
   return true;
 }
 
+function updateCanvasScrollSurfaceSize() {
+  const surface = el.canvasScrollSurface || document.getElementById("canvas-scroll-surface");
+  if (!surface) return false;
+
+  const bounds = getBoardContentBounds({ includeMargin: 400 });
+  const safeZoom = Number.isFinite(state.zoom) && state.zoom > 0 ? state.zoom : 1;
+  const zoomExpansion = Math.max(1, 1 / safeZoom);
+  const safeWidth = bounds
+    ? Math.max(BOARD_WIDTH, Math.ceil((bounds.maxX + 4000) * zoomExpansion))
+    : BOARD_WIDTH;
+  const safeHeight = bounds
+    ? Math.max(BOARD_HEIGHT, Math.ceil((bounds.maxY + 4000) * zoomExpansion))
+    : BOARD_HEIGHT;
+
+  surface.style.width = `${safeWidth}px`;
+  surface.style.height = `${safeHeight}px`;
+
+  if (typeof window !== "undefined" && window.DEBUG_CANVAS_SCROLL) {
+    console.log("[CanvasSurface]", {
+      zoom: state.zoom,
+      safeWidth,
+      safeHeight,
+      bounds
+    });
+  }
+
+  return true;
+}
+
 function getCanvasScrollDebugMetrics(label = "debug", extra = {}) {
   const canvas = el.canvas;
   const zoomLayer = el.zoomLayer;
-  const canvasScrollSurface = document.getElementById("canvas-scroll-surface");
+  const canvasScrollSurface = el.canvasScrollSurface || document.getElementById("canvas-scroll-surface");
   const canvasStyle = canvas ? getComputedStyle(canvas) : null;
   const surfaceStyle = canvasScrollSurface ? getComputedStyle(canvasScrollSurface) : null;
   const zoomLayerStyle = zoomLayer ? getComputedStyle(zoomLayer) : null;
@@ -1154,6 +1184,7 @@ function fitBoardContentToViewport({ padding = 120, minZoom = 0.12, maxZoom = 1,
   const fitZoom = Math.min(canvasWidth / bounds.width, canvasHeight / bounds.height);
   const targetZoom = Math.min(maxZoom, Math.max(minZoom, fitZoom));
   if (!applyCanvasZoom(targetZoom)) return false;
+  updateCanvasScrollSurfaceSize();
   const nextLeft = Math.max(0, bounds.centerX * targetZoom - canvasWidth / 2);
   const nextTop = Math.max(0, bounds.centerY * targetZoom - canvasHeight / 2);
   const maxScrollTopBefore = Math.max(0, el.canvas.scrollHeight - el.canvas.clientHeight);
@@ -1968,6 +1999,7 @@ function renderCampaignCanvasFromStateIfNeeded() {
     state.nodes.forEach(renderNode);
     renderNodePresenceBadges({ force: true });
   }
+  updateCanvasScrollSurfaceSize();
   drawLinks();
   updateListView();
   updateEmptyState();
@@ -2294,6 +2326,7 @@ function setZoom(nextZoom, centerClient = null) {
   const boardY = (cy - rect.top + el.canvas.scrollTop) / oldZoom;
 
   applyCanvasZoom(newZoom);
+  updateCanvasScrollSurfaceSize();
 
   el.canvas.scrollLeft = boardX * state.zoom - (cx - rect.left);
   el.canvas.scrollTop = boardY * state.zoom - (cy - rect.top);
@@ -4638,6 +4671,7 @@ function enableNodeDrag(nodeEl, node) {
     function up() {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
+      updateCanvasScrollSurfaceSize();
       saveCampaignCanvasState();
     }
 
@@ -4791,6 +4825,7 @@ function autoArrangeBoardByHierarchy() {
     rowY += rowHeight + rowGap;
   });
 
+  updateCanvasScrollSurfaceSize();
   drawLinks();
   saveCampaignCanvasState();
   fitBoardContentToViewport({ padding: 160, minZoom: 0.12, behavior: "auto" });
@@ -4811,6 +4846,7 @@ function setCompactModeForAllNodes(compact) {
     setSaveStatus("All nodes expanded");
     requestAnimationFrame(() => {
       resolveAllNodeOverlaps();
+      updateCanvasScrollSurfaceSize();
       drawLinks();
       saveCampaignCanvasState();
       fitBoardContentToViewport({ padding: 160, minZoom: 0.12, behavior: "auto" });
@@ -4819,6 +4855,7 @@ function setCompactModeForAllNodes(compact) {
   }
   setSaveStatus("All nodes compacted");
   requestAnimationFrame(() => {
+    updateCanvasScrollSurfaceSize();
     drawLinks();
     saveCampaignCanvasState();
   });
