@@ -12,8 +12,8 @@ const NODE_WIDTH = 285;
 const NODE_HEIGHT = 200;
 const NODE_OVERLAP_MARGIN = 32;
 const NODE_OVERLAP_MAX_PASSES = 4;
-const BOARD_WIDTH = 10000;
-const BOARD_HEIGHT = 10000;
+const BOARD_WIDTH = 20000;
+const BOARD_HEIGHT = 30000;
 const STORAGE_KEY = "campaignCanvasState";
 const BRAND_CORE_STORAGE_KEY = "brandBrainState";
 
@@ -86,6 +86,11 @@ const state = {
   ,boardAccess: { canView: true, canEdit: true, reason: "unknown" }
   ,shareToastTimer: null
   ,presencePollTimer: null
+  ,presenceSelectionPingTimer: null
+  ,presencePingInFlight: false
+  ,presencePendingPingAfterInFlight: false
+  ,presenceSelectedNodeIdLastQueued: undefined
+  ,presenceSelectedNodeIdLastSent: undefined
   ,presenceViewers: []
   ,presenceNodeSignature: ""
 };
@@ -97,6 +102,7 @@ const el = {
   canvas: document.getElementById("canvas"),
   canvasTopbar: document.getElementById("canvas-topbar"),
   inspectorPanel: document.getElementById("inspector-panel"),
+  canvasScrollSurface: document.getElementById("canvas-scroll-surface"),
   zoomLayer: document.getElementById("zoom-layer"),
   links: document.getElementById("links"),
   emptyState: document.getElementById("empty-state"),
@@ -271,7 +277,7 @@ function diagnoseDomDependencies() {
         "canvas", "zoom-layer", "zoom-label", "inspector-panel", "node-form",
         "add-node-btn", "create-campaign-btn", "undo-btn", "node-search-input"
       ],
-      canvas: ["canvas", "zoom-layer", "links", "context-menu", "empty-state"],
+      canvas: ["canvas", "canvas-scroll-surface", "zoom-layer", "links", "context-menu", "empty-state"],
       toolbar: [
         "add-node-btn", "create-campaign-btn", "undo-btn", "node-search-input",
         "copy-board-link-btn", "save-board-btn", "new-board-btn", "reset-board-btn",
@@ -712,9 +718,25 @@ function getUserInitials(user) {
   return source.split(/\s+/).slice(0, 2).map((p) => p[0]?.toUpperCase() || "").join("") || "U";
 }
 
+function getViewerDisplayName(viewer = {}) {
+  const name = typeof viewer?.name === "string" ? viewer.name.trim() : "";
+  if (name) return name;
+  const email = typeof viewer?.email === "string" ? viewer.email.trim() : "";
+  const localPart = email.split("@")[0]?.replace(/[._-]+/g, " ").trim();
+  return localPart || "Viewer";
+}
+
 function getViewerInitials(viewer = {}) {
-  const source = (viewer?.name || viewer?.email || "U").trim();
+  const source = getViewerDisplayName(viewer);
   return source.split(/\s+/).slice(0, 2).map((p) => p[0]?.toUpperCase() || "").join("") || "U";
+}
+
+function formatNodePresenceTitle(viewers = []) {
+  const names = viewers.map(getViewerDisplayName);
+  if (names.length === 1) return `${names[0]} is viewing this node`;
+  if (names.length === 2) return `${names[0]} and ${names[1]} are viewing this node`;
+  const overflow = Math.max(0, names.length - 2);
+  return `${names.slice(0, 2).join(", ")} +${overflow} are viewing this node`;
 }
 
 function renderPresenceLite() {
@@ -731,12 +753,15 @@ function renderPresenceLite() {
   el.presenceAvatars.innerHTML = "";
   show.forEach((viewer) => {
     const badge = document.createElement("span");
+    const label = getViewerDisplayName(viewer);
     badge.className = "presence-avatar";
-    badge.title = viewer?.name || viewer?.email || "Viewer";
+    badge.title = `${label} is viewing this board`;
+    badge.setAttribute("aria-label", badge.title);
     if (viewer?.avatar) {
       const img = document.createElement("img");
       img.src = viewer.avatar;
-      img.alt = viewer?.name || "Viewer avatar";
+      img.alt = `${label} avatar`;
+      img.title = badge.title;
       badge.appendChild(img);
     } else {
       badge.textContent = getViewerInitials(viewer);
@@ -767,16 +792,27 @@ function getNodePresenceById() {
   return map;
 }
 
-function renderNodePresenceBadges() {
+function clearNodePresenceBadges() {
+  state.presenceNodeSignature = "";
+  if (!el.zoomLayer) return;
+  el.zoomLayer.querySelectorAll('.node-presence-overlay').forEach((x) => x.remove());
+}
+
+function renderNodePresenceBadges({ force = false } = {}) {
   if (!el.zoomLayer) return;
   const presenceByNodeId = getNodePresenceById();
   const signature = JSON.stringify(
     [...presenceByNodeId.entries()].map(([nodeId, viewers]) => [
       nodeId,
-      viewers.map((viewer) => `${viewer.email}:${viewer.selectedNodeId || ''}:${viewer.lastInteractionAt || ''}`)
+      viewers.map((viewer) => [
+        viewer.email || '',
+        viewer.name || '',
+        viewer.avatar || '',
+        viewer.selectedNodeId || ''
+      ].join(':'))
     ])
   );
-  if (signature === state.presenceNodeSignature) return;
+  if (!force && signature === state.presenceNodeSignature) return;
   state.presenceNodeSignature = signature;
 
   el.zoomLayer.querySelectorAll('.node-presence-overlay').forEach((x) => x.remove());
@@ -792,15 +828,18 @@ function renderNodePresenceBadges() {
 
     const maxVisible = 2;
     const shown = viewers.slice(0, maxVisible);
+    const presenceTitle = formatNodePresenceTitle(viewers);
     shown.forEach((viewer) => {
       const badge = document.createElement('span');
       badge.className = 'node-presence-avatar';
-      const label = viewer?.name || viewer?.email || 'Viewer';
-      badge.title = `${label} is viewing this node`;
+      const label = getViewerDisplayName(viewer);
+      badge.title = presenceTitle;
+      badge.setAttribute('aria-label', presenceTitle);
       if (viewer?.avatar) {
         const img = document.createElement('img');
         img.src = viewer.avatar;
         img.alt = label;
+        img.title = presenceTitle;
         badge.appendChild(img);
       } else {
         badge.textContent = getViewerInitials(viewer);
@@ -812,14 +851,25 @@ function renderNodePresenceBadges() {
     if (overflow > 0) {
       const extra = document.createElement('span');
       extra.className = 'node-presence-extra';
+      extra.title = presenceTitle;
+      extra.setAttribute('aria-label', presenceTitle);
       extra.textContent = `+${overflow}`;
       overlay.appendChild(extra);
     }
 
-    const firstName = viewers[0]?.name || viewers[0]?.email || 'Someone';
-    overlay.title = viewers.length === 1 ? `${firstName} is viewing this node` : `${viewers.length} people viewing`;
+    overlay.title = presenceTitle;
     nodeEl.appendChild(overlay);
   });
+}
+
+function resetPresenceSelectionQueue() {
+  if (state.presenceSelectionPingTimer) {
+    clearTimeout(state.presenceSelectionPingTimer);
+    state.presenceSelectionPingTimer = null;
+  }
+  state.presencePendingPingAfterInFlight = false;
+  state.presenceSelectedNodeIdLastQueued = undefined;
+  state.presenceSelectedNodeIdLastSent = undefined;
 }
 
 function stopPresenceLite() {
@@ -827,32 +877,66 @@ function stopPresenceLite() {
     clearInterval(state.presencePollTimer);
     state.presencePollTimer = null;
   }
+  resetPresenceSelectionQueue();
+  clearNodePresenceBadges();
 }
 
 async function pingPresenceLite() {
   const boardId = state.currentBoardId || getBoardIdFromPath();
+  const selectedNodeId = state.selectedPrimary || null;
   if (!boardId || !state.user?.email) {
     state.presenceViewers = [];
+    state.presenceSelectedNodeIdLastSent = undefined;
     renderPresenceLite();
-    renderNodePresenceBadges();
+    clearNodePresenceBadges();
     return;
   }
+  if (state.presencePingInFlight) {
+    state.presencePendingPingAfterInFlight = true;
+    return;
+  }
+  state.presencePingInFlight = true;
   try {
     const response = await fetch(`/api/boards/presence/${encodeURIComponent(boardId)}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ selectedNodeId: state.selectedPrimary || null })
+      body: JSON.stringify({ selectedNodeId })
     });
     if (!response.ok) throw new Error('presence unavailable');
     const data = await response.json();
+    if ((state.currentBoardId || getBoardIdFromPath()) !== boardId || !state.user?.email) return;
+    state.presenceSelectedNodeIdLastSent = selectedNodeId;
     state.presenceViewers = Array.isArray(data?.viewers) ? data.viewers : [];
     renderPresenceLite();
     renderNodePresenceBadges();
   } catch (_error) {
     state.presenceViewers = [];
     renderPresenceLite();
-    renderNodePresenceBadges();
+    clearNodePresenceBadges();
+  } finally {
+    state.presencePingInFlight = false;
+    if (state.presencePendingPingAfterInFlight) {
+      state.presencePendingPingAfterInFlight = false;
+      notifyPresenceSelectionMaybe(120);
+    }
   }
+}
+
+function notifyPresenceSelectionMaybe(delayMs = 350) {
+  const boardId = state.currentBoardId || getBoardIdFromPath();
+  if (!boardId || !state.user?.email) return;
+
+  const selectedNodeId = state.selectedPrimary || null;
+  if (selectedNodeId === state.presenceSelectedNodeIdLastQueued && state.presenceSelectionPingTimer) return;
+  if (selectedNodeId === state.presenceSelectedNodeIdLastSent && !state.presenceSelectionPingTimer) return;
+
+  state.presenceSelectedNodeIdLastQueued = selectedNodeId;
+  if (state.presenceSelectionPingTimer) clearTimeout(state.presenceSelectionPingTimer);
+  state.presenceSelectionPingTimer = setTimeout(() => {
+    state.presenceSelectionPingTimer = null;
+    if (state.presenceSelectedNodeIdLastQueued === state.presenceSelectedNodeIdLastSent) return;
+    void pingPresenceLite();
+  }, delayMs);
 }
 
 function startPresenceLite() {
@@ -860,7 +944,7 @@ function startPresenceLite() {
   if (!state.user?.email) {
     state.presenceViewers = [];
     renderPresenceLite();
-    renderNodePresenceBadges();
+    clearNodePresenceBadges();
     return;
   }
   void pingPresenceLite();
@@ -948,6 +1032,196 @@ function visibleBoardBounds() {
   return { left, top, width, height, right: left + width, bottom: top + height };
 }
 
+function getBoardContentBounds({ includeMargin = 120 } = {}) {
+  if (!el.zoomLayer) return null;
+  const nodes = [...el.zoomLayer.querySelectorAll('.node[data-id]')];
+  if (!nodes.length) return null;
+
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+
+  nodes.forEach((nodeEl) => {
+    const node = getNode(nodeEl.dataset.id);
+    const x = Number.isFinite(node?.position?.x) ? node.position.x : nodeEl.offsetLeft;
+    const y = Number.isFinite(node?.position?.y) ? node.position.y : nodeEl.offsetTop;
+    const width = nodeEl.offsetWidth || NODE_WIDTH;
+    const height = nodeEl.offsetHeight || NODE_HEIGHT;
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+    minX = Math.min(minX, x);
+    minY = Math.min(minY, y);
+    maxX = Math.max(maxX, x + width);
+    maxY = Math.max(maxY, y + height);
+  });
+
+  if (![minX, minY, maxX, maxY].every(Number.isFinite)) return null;
+  const margin = Math.max(0, Number(includeMargin) || 0);
+  minX -= margin;
+  minY -= margin;
+  maxX += margin;
+  maxY += margin;
+  const width = maxX - minX;
+  const height = maxY - minY;
+  return {
+    minX,
+    minY,
+    maxX,
+    maxY,
+    width,
+    height,
+    centerX: minX + width / 2,
+    centerY: minY + height / 2
+  };
+}
+
+function scrollBoardContentIntoView({ padding = 120 } = {}) {
+  const bounds = getBoardContentBounds({ includeMargin: padding });
+  if (!bounds) return false;
+  const visible = visibleBoardBounds();
+  const centerOutside = bounds.centerX < visible.left || bounds.centerX > visible.right || bounds.centerY < visible.top || bounds.centerY > visible.bottom;
+  const boundsOutside = bounds.minX < visible.left || bounds.maxX > visible.right || bounds.minY < visible.top || bounds.maxY > visible.bottom;
+  if (!centerOutside && !boundsOutside) return false;
+
+  const nextLeft = Math.max(0, bounds.centerX * state.zoom - el.canvas.clientWidth / 2);
+  const nextTop = Math.max(0, bounds.centerY * state.zoom - el.canvas.clientHeight / 2);
+  el.canvas.scrollTo({ left: nextLeft, top: nextTop, behavior: 'smooth' });
+  return true;
+}
+
+function applyCanvasZoom(nextZoom) {
+  if (!Number.isFinite(nextZoom)) return false;
+  state.zoom = nextZoom;
+  el.zoomLayer.style.transform = `scale(${state.zoom})`;
+  el.zoomLayer.style.transformOrigin = "0 0";
+  el.zoomLabel.textContent = `${Math.round(state.zoom * 100)}%`;
+  return true;
+}
+
+function updateCanvasScrollSurfaceSize() {
+  const surface = el.canvasScrollSurface || document.getElementById("canvas-scroll-surface");
+  if (!surface) return false;
+
+  const bounds = getBoardContentBounds({ includeMargin: 400 });
+  const safeZoom = Number.isFinite(state.zoom) && state.zoom > 0 ? state.zoom : 1;
+  const zoomExpansion = Math.max(1, 1 / safeZoom);
+  const safeWidth = bounds
+    ? Math.max(BOARD_WIDTH, Math.ceil((bounds.maxX + 4000) * zoomExpansion))
+    : BOARD_WIDTH;
+  const safeHeight = bounds
+    ? Math.max(BOARD_HEIGHT, Math.ceil((bounds.maxY + 4000) * zoomExpansion))
+    : BOARD_HEIGHT;
+
+  surface.style.width = `${safeWidth}px`;
+  surface.style.height = `${safeHeight}px`;
+
+  if (typeof window !== "undefined" && window.DEBUG_CANVAS_SCROLL) {
+    console.log("[CanvasSurface]", {
+      zoom: state.zoom,
+      safeWidth,
+      safeHeight,
+      bounds
+    });
+  }
+
+  return true;
+}
+
+function getCanvasScrollDebugMetrics(label = "debug", extra = {}) {
+  const canvas = el.canvas;
+  const zoomLayer = el.zoomLayer;
+  const canvasScrollSurface = el.canvasScrollSurface || document.getElementById("canvas-scroll-surface");
+  const canvasStyle = canvas ? getComputedStyle(canvas) : null;
+  const surfaceStyle = canvasScrollSurface ? getComputedStyle(canvasScrollSurface) : null;
+  const zoomLayerStyle = zoomLayer ? getComputedStyle(zoomLayer) : null;
+  const bounds = getBoardContentBounds({ includeMargin: 160 });
+  const visible = visibleBoardBounds();
+
+  return {
+    label,
+    zoom: state.zoom,
+    canvasClientHeight: canvas?.clientHeight ?? null,
+    canvasScrollHeight: canvas?.scrollHeight ?? null,
+    canvasScrollTop: canvas?.scrollTop ?? null,
+    canvasMaxScrollTop: canvas ? canvas.scrollHeight - canvas.clientHeight : null,
+    canvasClientWidth: canvas?.clientWidth ?? null,
+    canvasScrollWidth: canvas?.scrollWidth ?? null,
+    canvasScrollLeft: canvas?.scrollLeft ?? null,
+    canvasMaxScrollLeft: canvas ? canvas.scrollWidth - canvas.clientWidth : null,
+    zoomLayerOffsetHeight: zoomLayer?.offsetHeight ?? null,
+    zoomLayerScrollHeight: zoomLayer?.scrollHeight ?? null,
+    zoomLayerRectHeight: zoomLayer?.getBoundingClientRect?.().height ?? null,
+    zoomLayerStyleHeight: zoomLayer?.style?.height || null,
+    canvasScrollSurfaceOffsetHeight: canvasScrollSurface?.offsetHeight ?? null,
+    canvasScrollSurfaceRectHeight: canvasScrollSurface?.getBoundingClientRect?.().height ?? null,
+    canvasComputedHeight: canvasStyle?.height || null,
+    canvasScrollSurfaceComputedHeight: surfaceStyle?.height || null,
+    zoomLayerComputedHeight: zoomLayerStyle?.height || null,
+    contentBounds: bounds,
+    visibleBounds: visible,
+    ...extra
+  };
+}
+
+function debugCanvasScrollState(label = "debug", extra = {}) {
+  const metrics = getCanvasScrollDebugMetrics(label, extra);
+  console.table(metrics);
+  console.log("[Funklix Canvas Scroll Debug]", metrics);
+  return metrics;
+}
+
+if (typeof window !== "undefined") {
+  window.debugCanvasScrollState = debugCanvasScrollState;
+}
+
+function fitBoardContentToViewport({ padding = 120, minZoom = 0.12, maxZoom = 1, behavior = "smooth" } = {}) {
+  const bounds = getBoardContentBounds({ includeMargin: padding });
+  if (!bounds || !bounds.width || !bounds.height) return false;
+  const canvasWidth = el.canvas.clientWidth;
+  const canvasHeight = el.canvas.clientHeight;
+  if (!canvasWidth || !canvasHeight) return false;
+
+  const fitZoom = Math.min(canvasWidth / bounds.width, canvasHeight / bounds.height);
+  const targetZoom = Math.min(maxZoom, Math.max(minZoom, fitZoom));
+  if (!applyCanvasZoom(targetZoom)) return false;
+  updateCanvasScrollSurfaceSize();
+  const nextLeft = Math.max(0, bounds.centerX * targetZoom - canvasWidth / 2);
+  const nextTop = Math.max(0, bounds.centerY * targetZoom - canvasHeight / 2);
+  const maxScrollTopBefore = Math.max(0, el.canvas.scrollHeight - el.canvas.clientHeight);
+  const maxScrollLeftBefore = Math.max(0, el.canvas.scrollWidth - el.canvas.clientWidth);
+  if (window.DEBUG_CANVAS_SCROLL) {
+    debugCanvasScrollState("fit-before-scroll", {
+      bounds,
+      targetZoom,
+      requestedScrollLeft: nextLeft,
+      requestedScrollTop: nextTop,
+      maxScrollTopBefore,
+      maxScrollLeftBefore
+    });
+  }
+  el.canvas.scrollTo({ left: nextLeft, top: nextTop, behavior });
+  if (window.DEBUG_CANVAS_SCROLL) {
+    requestAnimationFrame(() => {
+      const actualScrollTop = el.canvas.scrollTop;
+      const actualScrollLeft = el.canvas.scrollLeft;
+      debugCanvasScrollState("fit-after-scroll", {
+        bounds,
+        targetZoom,
+        requestedScrollLeft: nextLeft,
+        requestedScrollTop: nextTop,
+        actualScrollLeft,
+        actualScrollTop,
+        scrollLeftDiffersFromRequested: Math.abs(actualScrollLeft - nextLeft) > 1,
+        scrollTopDiffersFromRequested: Math.abs(actualScrollTop - nextTop) > 1,
+        requestedTopExceededMaxBefore: nextTop > maxScrollTopBefore,
+        requestedLeftExceededMaxBefore: nextLeft > maxScrollLeftBefore
+      });
+    });
+  }
+  drawLinks();
+  return true;
+}
+
 function viewportCenterBoard() {
   const b = visibleBoardBounds();
   return { x: b.left + b.width / 2, y: b.top + b.height / 2 };
@@ -991,6 +1265,7 @@ function restoreLastSnapshot() {
   state.selectedPrimary = null;
   el.zoomLayer.querySelectorAll(".node").forEach((n) => n.remove());
   state.nodes.forEach(renderNode);
+  renderNodePresenceBadges({ force: true });
   updateSelectionClasses();
   fillInspector(null);
   updateListView();
@@ -1525,6 +1800,7 @@ function applyCampaignState(campaignState, statusText = "Restored") {
   state.selectedPrimary = null;
   el.zoomLayer.querySelectorAll(".node").forEach((n) => n.remove());
   state.nodes.forEach(renderNode);
+  renderNodePresenceBadges({ force: true });
   updateListView();
   updateEmptyState();
   drawLinks();
@@ -1721,7 +1997,9 @@ function renderCampaignCanvasFromStateIfNeeded() {
   const domNodes = el.zoomLayer.querySelectorAll(".node").length;
   if (domNodes === 0 && state.nodes.length > 0) {
     state.nodes.forEach(renderNode);
+    renderNodePresenceBadges({ force: true });
   }
+  updateCanvasScrollSurfaceSize();
   drawLinks();
   updateListView();
   updateEmptyState();
@@ -2047,14 +2325,12 @@ function setZoom(nextZoom, centerClient = null) {
   const boardX = (cx - rect.left + el.canvas.scrollLeft) / oldZoom;
   const boardY = (cy - rect.top + el.canvas.scrollTop) / oldZoom;
 
-  state.zoom = newZoom;
-  el.zoomLayer.style.transform = `scale(${state.zoom})`;
-  el.zoomLayer.style.transformOrigin = "0 0";
+  applyCanvasZoom(newZoom);
+  updateCanvasScrollSurfaceSize();
 
   el.canvas.scrollLeft = boardX * state.zoom - (cx - rect.left);
   el.canvas.scrollTop = boardY * state.zoom - (cy - rect.top);
 
-  el.zoomLabel.textContent = `${Math.round(state.zoom * 100)}%`;
   drawLinks();
   saveCampaignCanvasState();
 }
@@ -2687,6 +2963,7 @@ function updateSelectionClasses() {
   });
   updateInspectorActionVisibility();
   renderNodePresenceBadges();
+  notifyPresenceSelectionMaybe();
 }
 
 function collapseExpandedNodes(exceptNodeId = null) {
@@ -3274,6 +3551,8 @@ function buildUtilitiesPopoverHtml() {
     <button type="button" data-utility-action="calendar-view">Calendar View</button>
   </div></div>
   <div class="filter-group"><strong>Layout</strong><div class="node-filter-chips">
+    <button type="button" data-utility-action="fit-board">Fit to Board</button>
+    <button type="button" data-utility-action="auto-arrange">Auto Arrange</button>
     <button type="button" data-utility-action="compact-all">Compact All</button>
     <button type="button" data-utility-action="expand-all">Expand All</button>
   </div></div>`;
@@ -4392,6 +4671,7 @@ function enableNodeDrag(nodeEl, node) {
     function up() {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
+      updateCanvasScrollSurfaceSize();
       saveCampaignCanvasState();
     }
 
@@ -4498,6 +4778,60 @@ function toggleListMode(showList) {
   }
 }
 
+function autoArrangeBoardByHierarchy() {
+  if (!state.nodes.length) return false;
+  if (isBoardReadOnly()) {
+    setSaveStatus("Read-only board");
+    return false;
+  }
+
+  const hierarchy = [
+    "Idea",
+    "Campaign Variation",
+    "Content",
+    "Social Media Posting",
+    "Landing Page",
+    "Email Campaign"
+  ];
+  const rowForType = new Map(hierarchy.map((type, index) => [type, index]));
+  const rows = new Map();
+  const unknownRow = hierarchy.length;
+  const startX = 240;
+  const startY = 160;
+  const colGap = 380;
+  const rowGap = 56;
+
+  state.nodes.forEach((node) => {
+    const rowIndex = rowForType.has(node.type) ? rowForType.get(node.type) : unknownRow;
+    const rowNodes = rows.get(rowIndex) || [];
+    rowNodes.push(node);
+    rows.set(rowIndex, rowNodes);
+  });
+
+  const getRenderedNodeHeight = (node) => {
+    const nodeEl = el.zoomLayer.querySelector(`[data-id='${node.id}']`);
+    return nodeEl?.offsetHeight || NODE_HEIGHT;
+  };
+
+  pushHistorySnapshot();
+  let rowY = startY;
+  [...rows.entries()].sort(([a], [b]) => a - b).forEach(([, rowNodes]) => {
+    const rowHeight = Math.max(NODE_HEIGHT, ...rowNodes.map(getRenderedNodeHeight));
+    rowNodes.forEach((node, colIndex) => {
+      node.position.x = Math.max(0, startX + colIndex * colGap);
+      node.position.y = Math.max(0, rowY);
+      updateNodeCard(node);
+    });
+    rowY += rowHeight + rowGap;
+  });
+
+  updateCanvasScrollSurfaceSize();
+  drawLinks();
+  saveCampaignCanvasState();
+  fitBoardContentToViewport({ padding: 160, minZoom: 0.12, behavior: "auto" });
+  return true;
+}
+
 function setCompactModeForAllNodes(compact) {
   if (!state.nodes.length) return;
   let changed = false;
@@ -4511,14 +4845,20 @@ function setCompactModeForAllNodes(compact) {
   if (!compact) {
     setSaveStatus("All nodes expanded");
     requestAnimationFrame(() => {
-      const moved = resolveAllNodeOverlaps();
-      if (moved) drawLinks();
+      resolveAllNodeOverlaps();
+      updateCanvasScrollSurfaceSize();
+      drawLinks();
       saveCampaignCanvasState();
+      fitBoardContentToViewport({ padding: 160, minZoom: 0.12, behavior: "auto" });
     });
     return;
   }
-  setSaveStatus(compact ? "All nodes compacted" : "All nodes expanded");
-  saveCampaignCanvasState();
+  setSaveStatus("All nodes compacted");
+  requestAnimationFrame(() => {
+    updateCanvasScrollSurfaceSize();
+    drawLinks();
+    saveCampaignCanvasState();
+  });
 }
 
 function renderCalendarView() {
@@ -4734,7 +5074,8 @@ el.googleSigninButton?.addEventListener("click", () => {
     return;
   }
   setAuthMessage("");
-  window.location.href = "/api/auth/google/start";
+  const returnTo = `${window.location.pathname || "/"}${window.location.search || ""}`;
+  window.location.href = `/api/auth/google/start?returnTo=${encodeURIComponent(returnTo)}`;
 });
 el.authSignoutButton?.addEventListener("click", async () => {
   await fetch("/api/auth/session", { method: "DELETE" });
@@ -4742,6 +5083,7 @@ el.authSignoutButton?.addEventListener("click", async () => {
   stopPresenceLite();
   state.presenceViewers = [];
   renderPresenceLite();
+  clearNodePresenceBadges();
   setAuthMessage("");
   renderAuthState();
 });
@@ -5149,6 +5491,16 @@ el.utilitiesToggleButton?.addEventListener("click", (event) => {
     if (!btn) return;
     if (btn.dataset.utilityAction === "duplicate-board") {
       duplicateCurrentBoard();
+      closeUtilitiesPopover();
+      return;
+    }
+    if (btn.dataset.utilityAction === "fit-board") {
+      fitBoardContentToViewport();
+      closeUtilitiesPopover();
+      return;
+    }
+    if (btn.dataset.utilityAction === "auto-arrange") {
+      autoArrangeBoardByHierarchy();
       closeUtilitiesPopover();
       return;
     }
@@ -5582,9 +5934,7 @@ async function bootApp() {
     loadCampaignCanvasState();
   }
   centerBoardStartPosition();
-  el.zoomLayer.style.transform = `scale(${state.zoom})`;
-  el.zoomLayer.style.transformOrigin = "0 0";
-  el.zoomLabel.textContent = `${Math.round(state.zoom * 100)}%`;
+  applyCanvasZoom(state.zoom);
   renderCampaignCanvasFromStateIfNeeded();
   renderBrandCoreTiles();
   renderBrandCoreEditor();
