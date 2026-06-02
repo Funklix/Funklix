@@ -86,6 +86,10 @@ const state = {
   ,boardAccess: { canView: true, canEdit: true, reason: "unknown" }
   ,shareToastTimer: null
   ,presencePollTimer: null
+  ,boardRefreshPollTimer: null
+  ,boardRefreshInFlight: false
+  ,lastLocalSaveAt: null
+  ,remoteMergeSkippedNodeIds: new Set()
   ,presenceSelectionPingTimer: null
   ,presencePingInFlight: false
   ,presencePendingPingAfterInFlight: false
@@ -881,6 +885,22 @@ function stopPresenceLite() {
   clearNodePresenceBadges();
 }
 
+function stopBoardRefreshPolling() {
+  if (state.boardRefreshPollTimer) {
+    clearInterval(state.boardRefreshPollTimer);
+    state.boardRefreshPollTimer = null;
+  }
+  state.boardRefreshInFlight = false;
+  state.remoteMergeSkippedNodeIds.clear();
+}
+
+function startBoardRefreshPolling() {
+  stopBoardRefreshPolling();
+  const boardId = state.currentBoardId || getBoardIdFromPath();
+  if (!boardId) return;
+  state.boardRefreshPollTimer = setInterval(() => { void pollBoardForRemoteChanges(); }, 12000);
+}
+
 async function pingPresenceLite() {
   const boardId = state.currentBoardId || getBoardIdFromPath();
   const selectedNodeId = state.selectedPrimary || null;
@@ -949,6 +969,143 @@ function startPresenceLite() {
   }
   void pingPresenceLite();
   state.presencePollTimer = setInterval(() => { void pingPresenceLite(); }, 20000);
+}
+
+function remoteTimestampIsNewer(remoteUpdatedAt) {
+  if (!remoteUpdatedAt || remoteUpdatedAt === state.lastKnownUpdatedAt) return false;
+  if (state.lastLocalSaveAt && Date.parse(remoteUpdatedAt) <= Date.parse(state.lastLocalSaveAt)) return false;
+  if (state.lastKnownUpdatedAt && Date.parse(remoteUpdatedAt) <= Date.parse(state.lastKnownUpdatedAt)) return false;
+  return true;
+}
+
+function getActivelyEditedNodeIds() {
+  const ids = new Set();
+  const active = document.activeElement;
+  if (!active) return ids;
+
+  const isEditableControl = active.matches?.('input,textarea,select,[contenteditable="true"]');
+  if (!isEditableControl) return ids;
+
+  const activeNodeEl = active.closest?.('.node[data-id]');
+  if (activeNodeEl?.dataset?.id) ids.add(activeNodeEl.dataset.id);
+
+  if (el.nodeForm?.contains(active) && state.selectedPrimary) ids.add(state.selectedPrimary);
+
+  return ids;
+}
+
+function stableRemoteNodeSignature(node) {
+  return JSON.stringify(sanitizeNodeForPersistence(node));
+}
+
+function patchNodeFromRemote(localNode, remoteNode) {
+  const safeRemote = sanitizeNodeForPersistence(remoteNode);
+  Object.keys(localNode).forEach((key) => {
+    if (key !== 'id' && !(key in safeRemote)) delete localNode[key];
+  });
+  Object.entries(safeRemote).forEach(([key, value]) => {
+    if (key === 'id') return;
+    localNode[key] = value;
+  });
+}
+
+function pulseRemoteNodeUpdate(nodeId) {
+  const nodeEl = el.zoomLayer?.querySelector(`[data-id='${nodeId}']`);
+  if (!nodeEl) return;
+  nodeEl.classList.remove('remote-updated');
+  void nodeEl.offsetWidth;
+  nodeEl.classList.add('remote-updated');
+  setTimeout(() => nodeEl.classList.remove('remote-updated'), 1000);
+}
+
+function mergeRemoteBoardState(remoteCanvasState, remoteUpdatedAt) {
+  const normalizedState = withBoardSchemaDefaults(remoteCanvasState);
+  const incomingNodes = (normalizedState.nodes || []).map((node) => sanitizeNodeForPersistence(node));
+  const activeEditingIds = getActivelyEditedNodeIds();
+  const localById = new Map(state.nodes.map((node) => [node.id, node]));
+  let changedNodeCount = 0;
+  let addedNodeCount = 0;
+  let skippedNodeCount = 0;
+
+  state.canvasMetadata = { ...normalizedState.metadata };
+  state.nodeCounter = Math.max(state.nodeCounter || 1, normalizedState.nodeCounter || 1);
+  state.postitCounter = Math.max(state.postitCounter || 1, normalizedState.postitCounter || 1);
+
+  incomingNodes.forEach((remoteNode) => {
+    const localNode = localById.get(remoteNode.id);
+    if (!localNode) {
+      state.nodes.push(remoteNode);
+      renderNode(remoteNode);
+      pulseRemoteNodeUpdate(remoteNode.id);
+      addedNodeCount += 1;
+      return;
+    }
+
+    if (stableRemoteNodeSignature(localNode) === stableRemoteNodeSignature(remoteNode)) {
+      state.remoteMergeSkippedNodeIds.delete(remoteNode.id);
+      return;
+    }
+
+    if (activeEditingIds.has(remoteNode.id)) {
+      state.remoteMergeSkippedNodeIds.add(remoteNode.id);
+      skippedNodeCount += 1;
+      return;
+    }
+
+    patchNodeFromRemote(localNode, remoteNode);
+    updateNodeCard(localNode);
+    pulseRemoteNodeUpdate(localNode.id);
+    state.remoteMergeSkippedNodeIds.delete(localNode.id);
+    changedNodeCount += 1;
+  });
+
+  const incomingEdgesSignature = JSON.stringify(normalizedState.edges || []);
+  const localEdgesSignature = JSON.stringify(state.edges || []);
+  if (incomingEdgesSignature !== localEdgesSignature) {
+    state.edges = normalizedState.edges || [];
+    drawLinks();
+  }
+
+  if (changedNodeCount || addedNodeCount) {
+    updateListView();
+    updateEmptyState();
+    renderNodePresenceBadges({ force: true });
+    if (state.selectedPrimary && !activeEditingIds.has(state.selectedPrimary)) {
+      fillInspector(getNode(state.selectedPrimary));
+    }
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(serializeState()));
+    if (!state.isDirty) {
+      refreshLastSavedSnapshot();
+      setSaveStatus('Updated from collaborator');
+    }
+  }
+
+  if (!skippedNodeCount) {
+    state.lastKnownUpdatedAt = remoteUpdatedAt || state.lastKnownUpdatedAt;
+    setSharePanelState(state.currentBoardId, remoteUpdatedAt ? new Date(remoteUpdatedAt) : null, state.currentBoardOwnerEmail, state.currentBoardOwnerName);
+  }
+}
+
+
+async function pollBoardForRemoteChanges() {
+  const boardId = state.currentBoardId || getBoardIdFromPath();
+  if (!boardId || state.boardRefreshInFlight || state.isSaving || state.conflictModalOpen || state.initialServerLoadInFlight) return;
+  state.boardRefreshInFlight = true;
+  try {
+    const response = await fetch(`/api/boards/${encodeURIComponent(boardId)}`);
+    const data = await response.json();
+    if (!response.ok) throw new Error(data?.error || 'Failed to refresh board');
+    if ((state.currentBoardId || getBoardIdFromPath()) !== boardId) return;
+    const remoteUpdatedAt = data?.updated_at || null;
+    if (!remoteTimestampIsNewer(remoteUpdatedAt)) return;
+    const incomingCanvasState = data?.canvas_json || {};
+    if (!isValidCanvasStatePayload(incomingCanvasState)) return;
+    mergeRemoteBoardState(incomingCanvasState, remoteUpdatedAt);
+  } catch (error) {
+    console.debug('[Funklix Collaboration] Passive board refresh skipped', error);
+  } finally {
+    state.boardRefreshInFlight = false;
+  }
 }
 
 function setAuthMessage(message = "") {
@@ -1908,6 +2065,7 @@ async function saveBoardToServer(trigger = "manual") {
     const returnedId = data?.id || currentBoardId;
     if (returnedId) state.currentBoardId = returnedId;
     if (data?.name && typeof data.name === "string") state.currentBoardName = data.name;
+    state.lastLocalSaveAt = saveTimestamp;
     state.lastKnownUpdatedAt = data?.updated_at || new Date().toISOString();
 
     const shareUrl = `${window.location.origin}/boards/${returnedId}`;
@@ -1982,6 +2140,7 @@ async function loadBoardFromUrlIfPresent() {
     applyCampaignState(normalizedCanvasState, `Loaded board ${boardId.slice(0, 8)}...`);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(normalizedCanvasState));
     startPresenceLite();
+    startBoardRefreshPolling();
     return true;
   } catch (error) {
     console.error(error);
@@ -5949,6 +6108,7 @@ async function bootApp() {
   if (!state.initialServerLoadInFlight) state.isBoardLoading = false;
   startAutosaveWatcher();
   startPresenceLite();
+  startBoardRefreshPolling();
 }
 
 if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", () => { void bootApp(); });
