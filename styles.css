@@ -1682,8 +1682,8 @@ button:active {
 @keyframes spin { to { transform: rotate(360deg); } }
 
 .floating-zoom-control {
-  position: absolute;
-  left: 14px;
+  position: fixed;
+  left: calc(var(--sidebar-width) + 14px);
   bottom: 14px;
   z-index: 110;
   display: inline-flex;
@@ -1695,5 +1695,16 @@ button:active {
   box-shadow: 0 8px 20px rgba(27,35,77,0.16);
   padding: 6px 8px;
 }
+
+.app-shell.sidebar-collapsed .floating-zoom-control {
+  left: calc(var(--sidebar-collapsed-width) + 14px);
+}
+
 .floating-zoom-control button { width: 28px; height: 28px; border-radius: 8px; border: 1px solid #d5dcf3; background: #fff; cursor: pointer; }
 .floating-zoom-control #zoom-label { margin-left: 0; min-width: 44px; text-align: center; font-weight: 600; color: #5b6687; }
+
+@media (max-width: 1300px) {
+  .floating-zoom-control {
+    left: 102px;
+  }
+}
