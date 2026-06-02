@@ -451,10 +451,12 @@ function formatLastSavedLabel(value = new Date()) {
 function updateBoardAccessState() {
   const ownerEmail = state.currentBoardOwnerEmail || null;
   const userEmail = state.user?.email || null;
-  const hasOwner = !!ownerEmail;
-  const isOwner = !!userEmail && hasOwner && userEmail === ownerEmail;
-  const reason = isOwner ? "owner" : (!hasOwner ? "unowned" : (!userEmail ? "anonymous_shared" : "non_owner"));
-  const canEdit = reason === "owner" || reason === "unowned";
+  const normalizedOwnerEmail = typeof ownerEmail === "string" ? ownerEmail.trim().toLowerCase() : "";
+  const normalizedUserEmail = typeof userEmail === "string" ? userEmail.trim().toLowerCase() : "";
+  const hasOwner = !!normalizedOwnerEmail;
+  const isOwner = !!normalizedUserEmail && hasOwner && normalizedUserEmail === normalizedOwnerEmail;
+  const reason = isOwner ? "owner" : (!hasOwner ? (normalizedUserEmail ? "unowned" : "anonymous_shared") : (!normalizedUserEmail ? "anonymous_shared" : "non_owner"));
+  const canEdit = reason === "owner" || reason === "editor" || reason === "unowned";
   const nextAccess = { canView: true, canEdit, reason };
   if (state.boardAccess?.reason !== nextAccess.reason || state.boardAccess?.canView !== nextAccess.canView || state.boardAccess?.canEdit !== nextAccess.canEdit) {
     state.boardAccess = nextAccess;
@@ -518,6 +520,9 @@ function renderBoardAccessCluster() {
   let owner = "";
   if (reason === "owner") {
     kind = "Your Board";
+  } else if (reason === "editor") {
+    kind = "Editor";
+    if (ownerLabel) owner = `Owner: ${ownerLabel}`;
   } else if (reason === "unowned") {
     kind = "";
     mode = "Claim Available";
@@ -558,8 +563,10 @@ function setSharePanelState(boardId, lastSaved = null, ownerEmail = null, ownerN
   state.currentBoardOwnerEmail = ownerEmail || null;
   state.currentBoardOwnerName = ownerName || null;
   updateBoardAccessState();
-  const isOwnedByYou = !!state.user?.email && state.currentBoardOwnerEmail === state.user.email;
-  const canClaim = !!state.user?.email && !state.currentBoardOwnerEmail;
+  const normalizedCurrentOwnerEmail = typeof state.currentBoardOwnerEmail === "string" ? state.currentBoardOwnerEmail.trim().toLowerCase() : "";
+  const normalizedCurrentUserEmail = typeof state.user?.email === "string" ? state.user.email.trim().toLowerCase() : "";
+  const isOwnedByYou = !!normalizedCurrentUserEmail && !!normalizedCurrentOwnerEmail && normalizedCurrentOwnerEmail === normalizedCurrentUserEmail;
+  const canClaim = !!normalizedCurrentUserEmail && !state.currentBoardOwnerEmail;
   el.claimBoardButton?.classList.toggle("hidden", !canClaim);
   el.boardOwnedPill?.classList.toggle("hidden", !isOwnedByYou);
   el.boardShareEmpty?.classList.add("hidden");
@@ -2430,6 +2437,15 @@ async function saveBoardToServer(trigger = "manual") {
     };
     refreshLastSavedSnapshot();
     setSharePanelState(returnedId, new Date(), data?.owner_email || state.currentBoardOwnerEmail || null, data?.owner_name || state.currentBoardOwnerName || null);
+    if (data?.access && typeof data.access === "object") {
+      const nextAccess = {
+        canView: data.access.canView !== false,
+        canEdit: data.access.canEdit !== false,
+        reason: typeof data.access.role === "string" && data.access.role ? data.access.role : (state.boardAccess?.reason || "unknown")
+      };
+      state.boardAccess = nextAccess;
+      updateReadOnlyNoticeVisibility();
+    }
 
     if (!isUpdate && returnedId) {
       const nextPath = `/boards/${returnedId}`;
@@ -6482,13 +6498,17 @@ function renderBoardsLibrary() {
     row.className = 'board-row';
     const savedAt = board.updated_at ? new Date(board.updated_at).toLocaleString('de-DE') : '—';
     const boardName = board.name || 'Campaign Canvas Board';
-    const isOwner = !!state.user?.email && !!board.owner_email && board.owner_email === state.user.email;
+    const userEmail = typeof state.user?.email === "string" ? state.user.email.trim().toLowerCase() : "";
+    const ownerEmail = typeof board.owner_email === "string" ? board.owner_email.trim().toLowerCase() : "";
+    const accessRole = board.access_role || "";
+    const isOwner = accessRole === "owner" || (!!userEmail && !!ownerEmail && ownerEmail === userEmail);
+    const isEditor = accessRole === "editor";
     const isShared = !!board.owner_email && !isOwner;
     const isCopy = /\(copy\)$/i.test(boardName.trim());
     const ownerBy = deriveOwnerDisplayName(board.owner_name || "", board.owner_email || "");
-    const roleChip = isOwner ? '<span class="board-row-chip owned">Your Board</span>' : (isShared ? '<span class="board-row-chip shared">Shared</span>' : '<span class="board-row-chip shared">Open</span>');
+    const roleChip = isOwner ? '<span class="board-row-chip owned">Your Board</span>' : (isEditor ? '<span class="board-row-chip shared">Editor</span>' : (isShared ? '<span class="board-row-chip shared">Shared</span>' : '<span class="board-row-chip shared">Open</span>'));
     const copyChip = isCopy ? '<span class="board-row-chip copy">Copy</span>' : '';
-    const ownerLine = isOwner ? 'You can edit this board.' : (isShared ? `By ${ownerBy || 'another user'}` : 'No owner yet');
+    const ownerLine = isOwner ? 'You can edit this board.' : (isEditor ? `By ${ownerBy || 'another user'}` : (isShared ? `By ${ownerBy || 'another user'}` : 'No owner yet'));
     row.innerHTML = `<div><div class="board-row-titleline"><strong class="board-row-title">${boardName}</strong>${roleChip}${copyChip}</div><div class="board-row-meta">Last active: ${savedAt}</div><div class="board-row-meta">${ownerLine}</div><div class="board-rename hidden" data-rename-wrap="${board.id}"><input data-rename-input="${board.id}" value="${board.name || ''}" /><button data-rename-save="${board.id}" type="button">Save</button><button data-rename-cancel="${board.id}" type="button">Cancel</button></div></div><div class="board-row-actions"><button class="icon-btn" data-open-board="${board.id}" title="Open" aria-label="Open board">↗</button><button class="icon-btn" data-copy-board="${board.id}" title="Copy link" aria-label="Copy link">⧉</button><button class="icon-btn" data-rename-board="${board.id}" title="Rename" aria-label="Rename board">✎</button><button class="icon-btn danger" data-delete-board="${board.id}" title="Delete" aria-label="Delete board">🗑</button><button class="icon-btn" data-up-board="${board.id}" data-index="${index}" title="Move up">↑</button><button class="icon-btn" data-down-board="${board.id}" data-index="${index}" title="Move down">↓</button>${state.user?.email && !board.owner_email ? `<button class="icon-btn" data-claim-board="${board.id}" title="Claim">Claim</button>` : ""}</div>`;
     el.boardsLibraryList.appendChild(row);
   });
