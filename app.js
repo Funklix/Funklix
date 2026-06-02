@@ -3769,6 +3769,7 @@ function updateNodeCard(node) {
         return;
       }
       node.social.caption = caption.textContent;
+      recordNodeUpdatedActivity(node);
       updateNodeCard(node);
       if (state.selectedPrimary === node.id) fillInspector(node);
       saveCampaignCanvasState();
@@ -3785,6 +3786,7 @@ function updateNodeCard(node) {
         return;
       }
       node.social.preview = cta.textContent;
+      recordNodeUpdatedActivity(node);
       saveCampaignCanvasState();
     });
 
@@ -3800,6 +3802,7 @@ function updateNodeCard(node) {
       }
       node.social.hashtags = normalizeHashtagsInput(hashtags.textContent || "");
       hashtags.textContent = node.social.hashtags.join(" ");
+      recordNodeUpdatedActivity(node);
       saveCampaignCanvasState();
     });
 
