@@ -8,6 +8,19 @@ function parseCookies(req) {
   }));
 }
 
+function safeRelativeReturnTo(value) {
+  if (typeof value !== 'string') return '/';
+  const trimmed = value.trim();
+  if (!trimmed || !trimmed.startsWith('/') || trimmed.startsWith('//') || trimmed.includes('\\')) return '/';
+  try {
+    const parsed = new URL(trimmed, 'https://funklix.local');
+    if (parsed.origin !== 'https://funklix.local') return '/';
+    return `${parsed.pathname}${parsed.search}` || '/';
+  } catch (_error) {
+    return '/';
+  }
+}
+
 module.exports = async (req, res) => {
   try {
     const { code, state } = req.query;
@@ -44,11 +57,14 @@ module.exports = async (req, res) => {
     const user = { name: profile.name || '', email: profile.email, avatar: profile.picture || '' };
     const token = createSessionToken(user);
     setSessionCookie(res, token);
+    const secure = process.env.NODE_ENV === 'production';
+    const sessionCookie = res.getHeader('Set-Cookie');
     res.setHeader('Set-Cookie', [
-      res.getHeader('Set-Cookie'),
-      `funklix_oauth_state=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0; ${process.env.NODE_ENV === 'production' ? 'Secure;' : ''}`
+      ...(Array.isArray(sessionCookie) ? sessionCookie : [sessionCookie].filter(Boolean)),
+      `funklix_oauth_state=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0; ${secure ? 'Secure;' : ''}`,
+      `funklix_oauth_return_to=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0; ${secure ? 'Secure;' : ''}`
     ]);
-    return res.redirect('/');
+    return res.redirect(safeRelativeReturnTo(cookies.funklix_oauth_return_to));
   } catch (error) {
     return res.status(500).send(error.message || 'Google auth callback failed');
   }
