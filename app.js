@@ -1097,6 +1097,53 @@ function applyCanvasZoom(nextZoom) {
   return true;
 }
 
+function getCanvasScrollDebugMetrics(label = "debug", extra = {}) {
+  const canvas = el.canvas;
+  const zoomLayer = el.zoomLayer;
+  const canvasScrollSurface = document.getElementById("canvas-scroll-surface");
+  const canvasStyle = canvas ? getComputedStyle(canvas) : null;
+  const surfaceStyle = canvasScrollSurface ? getComputedStyle(canvasScrollSurface) : null;
+  const zoomLayerStyle = zoomLayer ? getComputedStyle(zoomLayer) : null;
+  const bounds = getBoardContentBounds({ includeMargin: 160 });
+  const visible = visibleBoardBounds();
+
+  return {
+    label,
+    zoom: state.zoom,
+    canvasClientHeight: canvas?.clientHeight ?? null,
+    canvasScrollHeight: canvas?.scrollHeight ?? null,
+    canvasScrollTop: canvas?.scrollTop ?? null,
+    canvasMaxScrollTop: canvas ? canvas.scrollHeight - canvas.clientHeight : null,
+    canvasClientWidth: canvas?.clientWidth ?? null,
+    canvasScrollWidth: canvas?.scrollWidth ?? null,
+    canvasScrollLeft: canvas?.scrollLeft ?? null,
+    canvasMaxScrollLeft: canvas ? canvas.scrollWidth - canvas.clientWidth : null,
+    zoomLayerOffsetHeight: zoomLayer?.offsetHeight ?? null,
+    zoomLayerScrollHeight: zoomLayer?.scrollHeight ?? null,
+    zoomLayerRectHeight: zoomLayer?.getBoundingClientRect?.().height ?? null,
+    zoomLayerStyleHeight: zoomLayer?.style?.height || null,
+    canvasScrollSurfaceOffsetHeight: canvasScrollSurface?.offsetHeight ?? null,
+    canvasScrollSurfaceRectHeight: canvasScrollSurface?.getBoundingClientRect?.().height ?? null,
+    canvasComputedHeight: canvasStyle?.height || null,
+    canvasScrollSurfaceComputedHeight: surfaceStyle?.height || null,
+    zoomLayerComputedHeight: zoomLayerStyle?.height || null,
+    contentBounds: bounds,
+    visibleBounds: visible,
+    ...extra
+  };
+}
+
+function debugCanvasScrollState(label = "debug", extra = {}) {
+  const metrics = getCanvasScrollDebugMetrics(label, extra);
+  console.table(metrics);
+  console.log("[Funklix Canvas Scroll Debug]", metrics);
+  return metrics;
+}
+
+if (typeof window !== "undefined") {
+  window.debugCanvasScrollState = debugCanvasScrollState;
+}
+
 function fitBoardContentToViewport({ padding = 120, minZoom = 0.12, maxZoom = 1, behavior = "smooth" } = {}) {
   const bounds = getBoardContentBounds({ includeMargin: padding });
   if (!bounds || !bounds.width || !bounds.height) return false;
@@ -1109,7 +1156,37 @@ function fitBoardContentToViewport({ padding = 120, minZoom = 0.12, maxZoom = 1,
   if (!applyCanvasZoom(targetZoom)) return false;
   const nextLeft = Math.max(0, bounds.centerX * targetZoom - canvasWidth / 2);
   const nextTop = Math.max(0, bounds.centerY * targetZoom - canvasHeight / 2);
+  const maxScrollTopBefore = Math.max(0, el.canvas.scrollHeight - el.canvas.clientHeight);
+  const maxScrollLeftBefore = Math.max(0, el.canvas.scrollWidth - el.canvas.clientWidth);
+  if (window.DEBUG_CANVAS_SCROLL) {
+    debugCanvasScrollState("fit-before-scroll", {
+      bounds,
+      targetZoom,
+      requestedScrollLeft: nextLeft,
+      requestedScrollTop: nextTop,
+      maxScrollTopBefore,
+      maxScrollLeftBefore
+    });
+  }
   el.canvas.scrollTo({ left: nextLeft, top: nextTop, behavior });
+  if (window.DEBUG_CANVAS_SCROLL) {
+    requestAnimationFrame(() => {
+      const actualScrollTop = el.canvas.scrollTop;
+      const actualScrollLeft = el.canvas.scrollLeft;
+      debugCanvasScrollState("fit-after-scroll", {
+        bounds,
+        targetZoom,
+        requestedScrollLeft: nextLeft,
+        requestedScrollTop: nextTop,
+        actualScrollLeft,
+        actualScrollTop,
+        scrollLeftDiffersFromRequested: Math.abs(actualScrollLeft - nextLeft) > 1,
+        scrollTopDiffersFromRequested: Math.abs(actualScrollTop - nextTop) > 1,
+        requestedTopExceededMaxBefore: nextTop > maxScrollTopBefore,
+        requestedLeftExceededMaxBefore: nextLeft > maxScrollLeftBefore
+      });
+    });
+  }
   drawLinks();
   return true;
 }
