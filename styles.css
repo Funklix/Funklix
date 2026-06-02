@@ -1898,3 +1898,121 @@ button:active {
     left: 102px;
   }
 }
+
+.share-link-toast.share-link-popover {
+  width: min(360px, calc(100vw - 16px));
+  max-width: min(360px, calc(100vw - 16px));
+}
+
+.share-editor-panel {
+  margin-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  padding-top: 10px;
+}
+
+.share-editor-heading {
+  display: grid;
+  gap: 2px;
+  margin-bottom: 8px;
+}
+
+.share-editor-heading strong {
+  font-size: 12px;
+}
+
+.share-editor-heading span,
+.share-editor-empty,
+.share-editor-meta span {
+  color: rgba(245, 247, 255, 0.68);
+  font-size: 11px;
+}
+
+.share-editor-form {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.share-editor-form input {
+  min-width: 0;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #f5f7ff;
+  padding: 7px 8px;
+  font-size: 12px;
+}
+
+.share-editor-form input::placeholder {
+  color: rgba(245, 247, 255, 0.52);
+}
+
+.share-editor-form button,
+.share-editor-remove {
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.1);
+  color: #f5f7ff;
+  cursor: pointer;
+  font-size: 12px;
+  padding: 7px 9px;
+}
+
+.share-editor-form button:hover,
+.share-editor-remove:hover {
+  background: rgba(115, 148, 233, 0.24);
+  border-color: rgba(185, 204, 255, 0.5);
+}
+
+.share-editor-list {
+  display: grid;
+  gap: 6px;
+  max-height: 150px;
+  overflow-y: auto;
+}
+
+.share-editor-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 9px;
+  padding: 7px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.share-editor-meta {
+  display: grid;
+  min-width: 0;
+}
+
+.share-editor-meta strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+.share-editor-remove {
+  padding: 5px 7px;
+  font-size: 11px;
+}
+
+.share-editor-status {
+  border-radius: 8px;
+  margin-bottom: 8px;
+  padding: 6px 7px;
+  font-size: 11px;
+}
+
+.share-editor-status.success {
+  background: rgba(84, 164, 117, 0.14);
+  color: #bdf2cf;
+}
+
+.share-editor-status.error {
+  background: rgba(201, 74, 74, 0.16);
+  color: #ffc0c0;
+}

@@ -86,7 +86,10 @@ const state = {
   ,authConfigured: true
   ,currentBoardOwnerEmail: null
   ,currentBoardOwnerName: null
-  ,boardAccess: { canView: true, canEdit: true, reason: "unknown" }
+  ,boardAccess: { canView: true, canEdit: true, canManagePermissions: false, canRename: false, canDelete: false, reason: "unknown" }
+  ,boardEditors: []
+  ,boardEditorsLoading: false
+  ,boardEditorsStatus: { message: "", isError: false }
   ,shareToastTimer: null
   ,presencePollTimer: null
   ,boardRefreshPollTimer: null
@@ -457,12 +460,29 @@ function updateBoardAccessState() {
   const isOwner = !!normalizedUserEmail && hasOwner && normalizedUserEmail === normalizedOwnerEmail;
   const reason = isOwner ? "owner" : (!hasOwner ? (normalizedUserEmail ? "unowned" : "anonymous_shared") : (!normalizedUserEmail ? "anonymous_shared" : "non_owner"));
   const canEdit = reason === "owner" || reason === "editor" || reason === "unowned";
-  const nextAccess = { canView: true, canEdit, reason };
-  if (state.boardAccess?.reason !== nextAccess.reason || state.boardAccess?.canView !== nextAccess.canView || state.boardAccess?.canEdit !== nextAccess.canEdit) {
+  const isOwnerRole = reason === "owner";
+  const nextAccess = { canView: true, canEdit, canManagePermissions: isOwnerRole, canRename: isOwnerRole, canDelete: isOwnerRole, reason };
+  if (state.boardAccess?.reason !== nextAccess.reason || state.boardAccess?.canView !== nextAccess.canView || state.boardAccess?.canEdit !== nextAccess.canEdit || state.boardAccess?.canManagePermissions !== nextAccess.canManagePermissions) {
     state.boardAccess = nextAccess;
     console.debug("[Funklix Access] boardAccess", state.boardAccess);
   }
+  if (!nextAccess.canManagePermissions) {
+    state.boardEditors = [];
+    state.boardEditorsStatus = { message: "", isError: false };
+  }
   updateReadOnlyNoticeVisibility();
+}
+
+function boardAccessFromServer(access, fallback = state.boardAccess) {
+  const role = typeof access?.role === "string" && access.role ? access.role : (fallback?.reason || "unknown");
+  return {
+    canView: access?.canView !== false,
+    canEdit: access?.canEdit !== false,
+    canManagePermissions: access?.canManagePermissions === true,
+    canRename: access?.canRename === true,
+    canDelete: access?.canDelete === true,
+    reason: role
+  };
 }
 
 function updateReadOnlyNoticeVisibility() {
@@ -573,6 +593,137 @@ function setSharePanelState(boardId, lastSaved = null, ownerEmail = null, ownerN
   el.boardShareReady?.classList.remove("hidden");
 }
 
+function escapeHtml(value = "") {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function canManageBoardEditors() {
+  return state.boardAccess?.canManagePermissions === true && !!(state.currentBoardId || getBoardIdFromPath());
+}
+
+function setBoardEditorsStatus(message = "", isError = false) {
+  state.boardEditorsStatus = { message, isError };
+  renderOpenShareEditorPanel();
+}
+
+function renderOpenShareEditorPanel() {
+  const panel = document.querySelector("[data-share-editor-panel]");
+  if (!panel) return;
+  panel.innerHTML = buildShareEditorPanelHtml();
+  bindShareEditorPanel(panel);
+}
+
+function buildShareEditorPanelHtml() {
+  const editors = Array.isArray(state.boardEditors) ? state.boardEditors : [];
+  const status = state.boardEditorsStatus || { message: "", isError: false };
+  const rows = state.boardEditorsLoading
+    ? '<div class="share-editor-empty">Loading editors…</div>'
+    : editors.length
+      ? editors.map((editor) => {
+        const email = escapeHtml(editor?.email || "");
+        return `<div class="share-editor-row"><div class="share-editor-meta"><strong>${email}</strong><span>Editor</span></div><button type="button" class="share-editor-remove" data-remove-editor="${email}" aria-label="Remove ${email}">Remove</button></div>`;
+      }).join("")
+      : '<div class="share-editor-empty">No editors added yet.</div>';
+  const statusHtml = status.message
+    ? `<div class="share-editor-status ${status.isError ? 'error' : 'success'}">${escapeHtml(status.message)}</div>`
+    : '';
+
+  return `<div class="share-editor-heading"><strong>Invite editor by email</strong><span>Editors can save changes to this board.</span></div>
+    <form class="share-editor-form" data-share-editor-form>
+      <input type="email" data-share-editor-email placeholder="editor@example.com" autocomplete="email" />
+      <button type="submit">Invite</button>
+    </form>
+    ${statusHtml}
+    <div class="share-editor-list" data-share-editor-list>${rows}</div>`;
+}
+
+function bindShareEditorPanel(panel) {
+  const form = panel.querySelector("[data-share-editor-form]");
+  form?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const input = panel.querySelector("[data-share-editor-email]");
+    const email = input?.value?.trim() || "";
+    await addBoardEditor(email, input);
+  });
+  panel.querySelectorAll("[data-remove-editor]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const email = button.getAttribute("data-remove-editor") || "";
+      await removeBoardEditor(email);
+    });
+  });
+}
+
+async function loadBoardEditors({ silent = false } = {}) {
+  const boardId = state.currentBoardId || getBoardIdFromPath();
+  if (!boardId || !state.boardAccess?.canManagePermissions) {
+    state.boardEditors = [];
+    state.boardEditorsLoading = false;
+    return;
+  }
+  state.boardEditorsLoading = true;
+  if (!silent) setBoardEditorsStatus("", false);
+  renderOpenShareEditorPanel();
+  try {
+    const response = await fetch(`/api/boards/${encodeURIComponent(boardId)}/editors`);
+    const data = await response.json();
+    if (!response.ok) throw new Error(data?.error || "Could not load editors");
+    state.boardEditors = Array.isArray(data?.editors) ? data.editors : [];
+  } catch (error) {
+    state.boardEditors = [];
+    if (!silent) setBoardEditorsStatus(error?.message || "Could not load editors", true);
+  } finally {
+    state.boardEditorsLoading = false;
+    renderOpenShareEditorPanel();
+  }
+}
+
+async function addBoardEditor(email, input = null) {
+  const boardId = state.currentBoardId || getBoardIdFromPath();
+  if (!boardId || !state.boardAccess?.canManagePermissions) return;
+  const normalizedEmail = typeof email === "string" ? email.trim().toLowerCase() : "";
+  if (!normalizedEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+    setBoardEditorsStatus("Enter a valid editor email.", true);
+    return;
+  }
+  setBoardEditorsStatus("Adding editor…", false);
+  try {
+    const response = await fetch(`/api/boards/${encodeURIComponent(boardId)}/editors`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: normalizedEmail })
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data?.error || "Could not add editor");
+    state.boardEditors = Array.isArray(data?.editors) ? data.editors : state.boardEditors;
+    if (input) input.value = "";
+    setBoardEditorsStatus(data?.alreadyExists ? "Editor already added." : "Editor added.", false);
+  } catch (error) {
+    setBoardEditorsStatus(error?.message || "Could not add editor", true);
+  }
+}
+
+async function removeBoardEditor(email) {
+  const boardId = state.currentBoardId || getBoardIdFromPath();
+  if (!boardId || !state.boardAccess?.canManagePermissions) return;
+  const normalizedEmail = typeof email === "string" ? email.trim().toLowerCase() : "";
+  if (!normalizedEmail) return;
+  setBoardEditorsStatus("Removing editor…", false);
+  try {
+    const response = await fetch(`/api/boards/${encodeURIComponent(boardId)}/editors/${encodeURIComponent(normalizedEmail)}`, { method: "DELETE" });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data?.error || "Could not remove editor");
+    state.boardEditors = Array.isArray(data?.editors) ? data.editors : state.boardEditors.filter((editor) => editor?.email !== normalizedEmail);
+    setBoardEditorsStatus("Editor removed.", false);
+  } catch (error) {
+    setBoardEditorsStatus(error?.message || "Could not remove editor", true);
+  }
+}
+
 async function copyCurrentBoardLink() {
   const boardId = state.currentBoardId || getBoardIdFromPath();
   if (!boardId) {
@@ -618,14 +769,19 @@ function showShareLinkToast(copied = true) {
   if (!el.copyBoardLinkButton) return;
   dismissShareLinkToast();
   const toast = document.createElement("div");
+  const showEditorManager = canManageBoardEditors();
   toast.id = "share-link-toast";
-  toast.className = "share-link-toast";
+  toast.className = `share-link-toast${showEditorManager ? " share-link-popover" : ""}`;
   toast.setAttribute("role", "status");
   toast.setAttribute("aria-live", "polite");
-  toast.innerHTML = copied
-    ? `<div class="share-link-toast-line">Anyone with link can view</div><div class="share-link-toast-line">Duplicate to create your own version</div><div class="share-link-toast-ok">Link copied ✓</div>`
-    : `<div class="share-link-toast-ok">Could not copy link</div>`;
+  const copyMessage = copied ? "Link copied ✓" : "Could not copy link";
+  if (showEditorManager) state.boardEditorsStatus = { message: "", isError: false };
+  toast.innerHTML = `<div class="share-link-toast-line">Anyone with link can view</div><div class="share-link-toast-line">Duplicate to create your own version</div><div class="share-link-toast-ok">${copyMessage}</div>${showEditorManager ? '<div class="share-editor-panel" data-share-editor-panel></div>' : ''}`;
   document.body.appendChild(toast);
+  if (showEditorManager) {
+    renderOpenShareEditorPanel();
+    loadBoardEditors({ silent: true });
+  }
   const rect = el.copyBoardLinkButton.getBoundingClientRect();
   const width = toast.offsetWidth || 220;
   toast.style.top = `${Math.max(8, rect.bottom + 10)}px`;
@@ -638,10 +794,12 @@ function showShareLinkToast(copied = true) {
     }
   };
   document.addEventListener("pointerdown", closeOnOutside, true);
-  state.shareToastTimer = setTimeout(() => {
-    dismissShareLinkToast();
-    document.removeEventListener("pointerdown", closeOnOutside, true);
-  }, copied ? 2200 : 1600);
+  if (!showEditorManager) {
+    state.shareToastTimer = setTimeout(() => {
+      dismissShareLinkToast();
+      document.removeEventListener("pointerdown", closeOnOutside, true);
+    }, copied ? 2200 : 1600);
+  }
 }
 
 
@@ -2438,13 +2596,11 @@ async function saveBoardToServer(trigger = "manual") {
     refreshLastSavedSnapshot();
     setSharePanelState(returnedId, new Date(), data?.owner_email || state.currentBoardOwnerEmail || null, data?.owner_name || state.currentBoardOwnerName || null);
     if (data?.access && typeof data.access === "object") {
-      const nextAccess = {
-        canView: data.access.canView !== false,
-        canEdit: data.access.canEdit !== false,
-        reason: typeof data.access.role === "string" && data.access.role ? data.access.role : (state.boardAccess?.reason || "unknown")
-      };
+      const nextAccess = boardAccessFromServer(data.access);
       state.boardAccess = nextAccess;
       updateReadOnlyNoticeVisibility();
+      if (nextAccess.canManagePermissions) loadBoardEditors({ silent: true });
+      else state.boardEditors = [];
     }
 
     if (!isUpdate && returnedId) {
@@ -2485,16 +2641,14 @@ async function loadBoardFromUrlIfPresent() {
     }
     setSharePanelState(state.currentBoardId, data?.updated_at ? new Date(data.updated_at) : null, data?.owner_email || null, data?.owner_name || null);
     if (data?.access && typeof data.access === "object") {
-      const nextAccess = {
-        canView: data.access.canView !== false,
-        canEdit: data.access.canEdit !== false,
-        reason: typeof data.access.role === "string" && data.access.role ? data.access.role : (state.boardAccess?.reason || "unknown")
-      };
-      if (state.boardAccess?.reason !== nextAccess.reason || state.boardAccess?.canView !== nextAccess.canView || state.boardAccess?.canEdit !== nextAccess.canEdit) {
+      const nextAccess = boardAccessFromServer(data.access);
+      if (state.boardAccess?.reason !== nextAccess.reason || state.boardAccess?.canView !== nextAccess.canView || state.boardAccess?.canEdit !== nextAccess.canEdit || state.boardAccess?.canManagePermissions !== nextAccess.canManagePermissions) {
         state.boardAccess = nextAccess;
         console.debug("[Funklix Access] boardAccess", state.boardAccess);
       }
       updateReadOnlyNoticeVisibility();
+      if (nextAccess.canManagePermissions) loadBoardEditors({ silent: true });
+      else state.boardEditors = [];
     } else {
       updateBoardAccessState();
     }
