@@ -819,6 +819,11 @@ function formatActivityAction(entry = {}) {
     node_created: `created ${title}`,
     node_updated: `edited ${title}`,
     node_moved: `moved ${title}`,
+    node_deleted: `deleted ${title}`,
+    edge_connected: `connected ${title}`,
+    edge_disconnected: `disconnected ${title}`,
+    media_added: `added media to ${title}`,
+    media_removed: `removed media from ${title}`,
     comment_added: `added a comment on ${title}`,
     postit_added: `added a post-it on ${title}`,
     auto_arranged: "auto-arranged the board"
@@ -3115,17 +3120,18 @@ function confirmSchedulePost() {
   closePostingPlanner();
 }
 
-function removeNode(nodeId) {
+function removeNode(nodeId, { logActivity = true } = {}) {
   // Read-only guard: prevent local destructive node mutation on view-only boards.
   if (state.boardAccess?.canEdit === false) {
     setSaveStatus("Read-only board");
-    return;
+    return null;
   }
   pushHistorySnapshot();
   const idx = state.nodes.findIndex((n) => n.id === nodeId);
-  if (idx === -1) return;
+  if (idx === -1) return null;
 
   const [removed] = state.nodes.splice(idx, 1);
+  const removedNodeTitle = activityNodeTitle(removed);
   removed.images.forEach(revokeImageObjectUrl);
 
   state.edges = state.edges.filter(([a, b]) => a !== nodeId && b !== nodeId);
@@ -3139,7 +3145,15 @@ function removeNode(nodeId) {
   updateListView();
   updateEmptyState();
   drawLinks();
+  if (logActivity) appendActivity("node_deleted", { nodeId, nodeTitle: removedNodeTitle });
   saveCampaignCanvasState();
+  return removed;
+}
+
+function edgeActivityTitle(fromId, toId) {
+  const sourceTitle = activityNodeTitle(getNode(fromId), fromId || "Source");
+  const targetTitle = activityNodeTitle(getNode(toId), toId || "Target");
+  return `${sourceTitle} → ${targetTitle}`;
 }
 
 function addEdge(fromId, toId) {
@@ -3151,6 +3165,7 @@ function addEdge(fromId, toId) {
   if (!fromId || !toId || fromId === toId) return;
   if (state.edges.some(([a, b]) => a === fromId && b === toId)) return;
   state.edges.push([fromId, toId]);
+  appendActivity("edge_connected", { nodeId: toId, nodeTitle: edgeActivityTitle(fromId, toId) });
 
   const source = getNode(fromId);
   const target = getNode(toId);
@@ -3383,7 +3398,9 @@ function drawLinks() {
         setSaveStatus("Read-only board");
         return;
       }
+      const edgeTitle = edgeActivityTitle(from, to);
       state.edges.splice(edgeIndex, 1);
+      appendActivity("edge_disconnected", { nodeId: to, nodeTitle: edgeTitle });
       drawLinks();
       state.nodes.forEach(updateNodeCard);
       saveCampaignCanvasState();
@@ -4304,6 +4321,7 @@ function removeNodeImage(node, imageId) {
   const [removed] = node.images.splice(idx, 1);
   if (node.favoriteImageId === imageId) node.favoriteImageId = null;
   revokeImageObjectUrl(removed);
+  appendActivity("media_removed", { node });
   updateNodeCard(node);
   if (state.selectedPrimary === node.id) fillInspector(node);
 }
@@ -5795,10 +5813,16 @@ el.imageUpload.addEventListener("change", () => {
   }
   const node = getNode(state.selectedPrimary);
   if (!node) return;
-  [...el.imageUpload.files]
+  const addedImages = [...el.imageUpload.files]
     .filter((file) => file.type.startsWith("image/"))
-    .forEach((file) => node.images.push({ id: crypto.randomUUID(), name: file.name, url: URL.createObjectURL(file) }));
+    .map((file) => ({ id: crypto.randomUUID(), name: file.name, url: URL.createObjectURL(file) }));
+  if (!addedImages.length) {
+    el.imageUpload.value = "";
+    return;
+  }
+  node.images.push(...addedImages);
   el.imageUpload.value = "";
+  appendActivity("media_added", { node });
   updateNodeCard(node);
   fillInspector(node);
   saveCampaignCanvasState();
@@ -5889,7 +5913,15 @@ el.generatePostingVisualButton.addEventListener("click", async () => {
 el.deleteSelectedButton.addEventListener("click", () => {
   if (!state.selectedIds.size) return;
   pushHistorySnapshot();
-  [...state.selectedIds].forEach((id) => removeNode(id));
+  const selectedIds = [...state.selectedIds];
+  const removedNodes = selectedIds.map((id) => removeNode(id, { logActivity: false })).filter(Boolean);
+  if (removedNodes.length === 1) {
+    appendActivity("node_deleted", { nodeId: removedNodes[0].id, nodeTitle: activityNodeTitle(removedNodes[0]) });
+    saveCampaignCanvasState();
+  } else if (removedNodes.length > 1) {
+    appendActivity("node_deleted", { nodeTitle: `${removedNodes.length} nodes` });
+    saveCampaignCanvasState();
+  }
 });
 el.disconnectSelectedButton.addEventListener("click", () => {
   if (state.boardAccess?.canEdit === false) {
@@ -5898,7 +5930,13 @@ el.disconnectSelectedButton.addEventListener("click", () => {
   }
   if (!state.selectedIds.size) return;
   pushHistorySnapshot();
+  const removedEdges = state.edges.filter(([a, b]) => state.selectedIds.has(a) || state.selectedIds.has(b));
   state.edges = state.edges.filter(([a, b]) => !state.selectedIds.has(a) && !state.selectedIds.has(b));
+  if (removedEdges.length === 1) {
+    appendActivity("edge_disconnected", { nodeId: removedEdges[0][1], nodeTitle: edgeActivityTitle(removedEdges[0][0], removedEdges[0][1]) });
+  } else if (removedEdges.length > 1) {
+    appendActivity("edge_disconnected", { nodeTitle: `${removedEdges.length} connections` });
+  }
   state.nodes.forEach(updateNodeCard);
   drawLinks();
   saveCampaignCanvasState();
