@@ -95,6 +95,11 @@ const state = {
   ,presencePendingPingAfterInFlight: false
   ,presenceSelectedNodeIdLastQueued: undefined
   ,presenceSelectedNodeIdLastSent: undefined
+  ,presencePayloadSignatureLastQueued: undefined
+  ,presencePayloadSignatureLastSent: undefined
+  ,presenceEditingNodeId: null
+  ,presenceEditingField: null
+  ,presenceEditingClearTimer: null
   ,presenceViewers: []
   ,presenceNodeSignature: ""
 };
@@ -743,6 +748,28 @@ function formatNodePresenceTitle(viewers = []) {
   return `${names.slice(0, 2).join(", ")} +${overflow} are viewing this node`;
 }
 
+function formatEditingFieldLabel(field = "") {
+  const safeField = String(field || "").trim().toLowerCase();
+  if (safeField === "title") return "title";
+  if (safeField === "content") return "content";
+  if (safeField === "audience") return "audience";
+  if (safeField === "postit") return "a post-it";
+  if (safeField === "textarea") return "text";
+  return "";
+}
+
+function formatNodeEditingTitle(viewers = []) {
+  const names = viewers.map(getViewerDisplayName);
+  if (!names.length) return "Someone is editing";
+  if (viewers.length === 1) {
+    const field = formatEditingFieldLabel(viewers[0]?.editingField);
+    return field ? `${names[0]} is editing ${field}` : `${names[0]} is typing`;
+  }
+  if (viewers.length === 2) return `${names[0]} and ${names[1]} are editing`;
+  const overflow = Math.max(0, names.length - 2);
+  return `${names.slice(0, 2).join(", ")} +${overflow} are editing`;
+}
+
 function renderPresenceLite() {
   if (!el.presenceLite || !el.presenceAvatars || !el.presenceCount) return;
   const viewers = Array.isArray(state.presenceViewers) ? state.presenceViewers : [];
@@ -776,7 +803,7 @@ function renderPresenceLite() {
   el.presenceLite.classList.remove("hidden");
 }
 
-function getNodePresenceById() {
+function getRemotePresenceByNodeId(fieldName = 'selectedNodeId') {
   const map = new Map();
   const viewers = Array.isArray(state.presenceViewers) ? state.presenceViewers : [];
   const currentUserEmail = (state.user?.email || '').toLowerCase();
@@ -786,7 +813,7 @@ function getNodePresenceById() {
     if (!viewer?.email) return;
     const viewerEmail = String(viewer.email).toLowerCase();
     if (!viewerEmail || viewerEmail === currentUserEmail) return;
-    const nodeId = typeof viewer.selectedNodeId === 'string' ? viewer.selectedNodeId.trim() : '';
+    const nodeId = typeof viewer[fieldName] === 'string' ? viewer[fieldName].trim() : '';
     if (!nodeId || !nodeIds.has(nodeId)) return;
     const list = map.get(nodeId) || [];
     list.push(viewer);
@@ -796,17 +823,26 @@ function getNodePresenceById() {
   return map;
 }
 
+function getNodePresenceById() {
+  return getRemotePresenceByNodeId('selectedNodeId');
+}
+
+function getNodeEditingPresenceById() {
+  return getRemotePresenceByNodeId('editingNodeId');
+}
+
 function clearNodePresenceBadges() {
   state.presenceNodeSignature = "";
   if (!el.zoomLayer) return;
-  el.zoomLayer.querySelectorAll('.node-presence-overlay').forEach((x) => x.remove());
+  el.zoomLayer.querySelectorAll('.node-presence-overlay, .node-editing-indicator').forEach((x) => x.remove());
 }
 
 function renderNodePresenceBadges({ force = false } = {}) {
   if (!el.zoomLayer) return;
   const presenceByNodeId = getNodePresenceById();
-  const signature = JSON.stringify(
-    [...presenceByNodeId.entries()].map(([nodeId, viewers]) => [
+  const editingByNodeId = getNodeEditingPresenceById();
+  const signature = JSON.stringify({
+    viewing: [...presenceByNodeId.entries()].map(([nodeId, viewers]) => [
       nodeId,
       viewers.map((viewer) => [
         viewer.email || '',
@@ -814,14 +850,22 @@ function renderNodePresenceBadges({ force = false } = {}) {
         viewer.avatar || '',
         viewer.selectedNodeId || ''
       ].join(':'))
+    ]),
+    editing: [...editingByNodeId.entries()].map(([nodeId, viewers]) => [
+      nodeId,
+      viewers.map((viewer) => [
+        viewer.email || '',
+        viewer.name || '',
+        viewer.avatar || '',
+        viewer.editingNodeId || '',
+        viewer.editingField || ''
+      ].join(':'))
     ])
-  );
+  });
   if (!force && signature === state.presenceNodeSignature) return;
   state.presenceNodeSignature = signature;
 
-  el.zoomLayer.querySelectorAll('.node-presence-overlay').forEach((x) => x.remove());
-
-  if (!presenceByNodeId.size) return;
+  el.zoomLayer.querySelectorAll('.node-presence-overlay, .node-editing-indicator').forEach((x) => x.remove());
 
   presenceByNodeId.forEach((viewers, nodeId) => {
     const nodeEl = el.zoomLayer.querySelector(`[data-id='${nodeId}']`);
@@ -864,6 +908,19 @@ function renderNodePresenceBadges({ force = false } = {}) {
     overlay.title = presenceTitle;
     nodeEl.appendChild(overlay);
   });
+
+  editingByNodeId.forEach((viewers, nodeId) => {
+    const nodeEl = el.zoomLayer.querySelector(`[data-id='${nodeId}']`);
+    if (!nodeEl) return;
+    const indicator = document.createElement('div');
+    indicator.className = 'node-editing-indicator';
+    const editingTitle = formatNodeEditingTitle(viewers);
+    indicator.title = editingTitle;
+    indicator.setAttribute('aria-label', editingTitle);
+    const first = viewers[0] || {};
+    indicator.innerHTML = `<span class="node-editing-pencil">✎</span><span class="node-editing-label">${viewers.length > 1 ? `${viewers.length} editing` : (formatEditingFieldLabel(first.editingField) ? 'editing' : 'typing…')}</span>`;
+    nodeEl.appendChild(indicator);
+  });
 }
 
 function resetPresenceSelectionQueue() {
@@ -874,6 +931,14 @@ function resetPresenceSelectionQueue() {
   state.presencePendingPingAfterInFlight = false;
   state.presenceSelectedNodeIdLastQueued = undefined;
   state.presenceSelectedNodeIdLastSent = undefined;
+  state.presencePayloadSignatureLastQueued = undefined;
+  state.presencePayloadSignatureLastSent = undefined;
+  if (state.presenceEditingClearTimer) {
+    clearTimeout(state.presenceEditingClearTimer);
+    state.presenceEditingClearTimer = null;
+  }
+  state.presenceEditingNodeId = null;
+  state.presenceEditingField = null;
 }
 
 function stopPresenceLite() {
@@ -904,6 +969,8 @@ function startBoardRefreshPolling() {
 async function pingPresenceLite() {
   const boardId = state.currentBoardId || getBoardIdFromPath();
   const selectedNodeId = state.selectedPrimary || null;
+  const editingNodeId = state.presenceEditingNodeId || null;
+  const editingField = editingNodeId ? (state.presenceEditingField || null) : null;
   if (!boardId || !state.user?.email) {
     state.presenceViewers = [];
     state.presenceSelectedNodeIdLastSent = undefined;
@@ -920,12 +987,13 @@ async function pingPresenceLite() {
     const response = await fetch(`/api/boards/presence/${encodeURIComponent(boardId)}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ selectedNodeId })
+      body: JSON.stringify({ selectedNodeId, editingNodeId, editingField })
     });
     if (!response.ok) throw new Error('presence unavailable');
     const data = await response.json();
     if ((state.currentBoardId || getBoardIdFromPath()) !== boardId || !state.user?.email) return;
     state.presenceSelectedNodeIdLastSent = selectedNodeId;
+    state.presencePayloadSignatureLastSent = buildPresencePayloadSignature();
     state.presenceViewers = Array.isArray(data?.viewers) ? data.viewers : [];
     renderPresenceLite();
     renderNodePresenceBadges();
@@ -942,21 +1010,108 @@ async function pingPresenceLite() {
   }
 }
 
+function buildPresencePayloadSignature() {
+  return JSON.stringify({
+    selectedNodeId: state.selectedPrimary || null,
+    editingNodeId: state.presenceEditingNodeId || null,
+    editingField: state.presenceEditingNodeId ? (state.presenceEditingField || null) : null
+  });
+}
+
 function notifyPresenceSelectionMaybe(delayMs = 350) {
   const boardId = state.currentBoardId || getBoardIdFromPath();
   if (!boardId || !state.user?.email) return;
 
   const selectedNodeId = state.selectedPrimary || null;
-  if (selectedNodeId === state.presenceSelectedNodeIdLastQueued && state.presenceSelectionPingTimer) return;
-  if (selectedNodeId === state.presenceSelectedNodeIdLastSent && !state.presenceSelectionPingTimer) return;
+  const payloadSignature = buildPresencePayloadSignature();
+  if (payloadSignature === state.presencePayloadSignatureLastQueued && state.presenceSelectionPingTimer) return;
+  if (payloadSignature === state.presencePayloadSignatureLastSent && !state.presenceSelectionPingTimer) return;
 
   state.presenceSelectedNodeIdLastQueued = selectedNodeId;
+  state.presencePayloadSignatureLastQueued = payloadSignature;
   if (state.presenceSelectionPingTimer) clearTimeout(state.presenceSelectionPingTimer);
   state.presenceSelectionPingTimer = setTimeout(() => {
     state.presenceSelectionPingTimer = null;
-    if (state.presenceSelectedNodeIdLastQueued === state.presenceSelectedNodeIdLastSent) return;
+    if (state.presencePayloadSignatureLastQueued === state.presencePayloadSignatureLastSent) return;
     void pingPresenceLite();
   }, delayMs);
+}
+
+function setLocalEditingPresence(nodeId, field = 'textarea', { clearAfterMs = 4000, notifyDelayMs = 250 } = {}) {
+  if (!nodeId || !state.user?.email) return;
+  const safeField = field || 'textarea';
+  const changed = state.presenceEditingNodeId !== nodeId || state.presenceEditingField !== safeField;
+  state.presenceEditingNodeId = nodeId;
+  state.presenceEditingField = safeField;
+  if (state.presenceEditingClearTimer) clearTimeout(state.presenceEditingClearTimer);
+  state.presenceEditingClearTimer = setTimeout(() => {
+    clearLocalEditingPresence({ notifyDelayMs: 250 });
+  }, clearAfterMs);
+  if (changed) notifyPresenceSelectionMaybe(notifyDelayMs);
+}
+
+function clearLocalEditingPresence({ notifyDelayMs = 250 } = {}) {
+  if (state.presenceEditingClearTimer) {
+    clearTimeout(state.presenceEditingClearTimer);
+    state.presenceEditingClearTimer = null;
+  }
+  if (!state.presenceEditingNodeId && !state.presenceEditingField) return;
+  state.presenceEditingNodeId = null;
+  state.presenceEditingField = null;
+  notifyPresenceSelectionMaybe(notifyDelayMs);
+}
+
+function editingInfoFromTarget(target) {
+  if (!target || !target.closest) return null;
+  if (target.closest('.postit')) {
+    const nodeEl = target.closest('.node[data-id]');
+    return nodeEl?.dataset?.id ? { nodeId: nodeEl.dataset.id, field: 'postit' } : null;
+  }
+  const nodeEl = target.closest('.node[data-id]');
+  if (nodeEl?.dataset?.id) {
+    if (target.closest('.title')) return { nodeId: nodeEl.dataset.id, field: 'title' };
+    if (target.closest('.content')) return { nodeId: nodeEl.dataset.id, field: 'content' };
+    return { nodeId: nodeEl.dataset.id, field: 'textarea' };
+  }
+  if (el.nodeForm?.contains(target) && state.selectedPrimary) {
+    const fieldMap = {
+      title: 'title',
+      content: 'content',
+      audience: 'audience',
+      caption: 'content',
+      hashtags: 'content',
+      preview: 'content'
+    };
+    const name = target.getAttribute?.('name') || '';
+    const id = target.id || '';
+    if (name && fieldMap[name]) return { nodeId: state.selectedPrimary, field: fieldMap[name] };
+    if (id.includes('title')) return { nodeId: state.selectedPrimary, field: 'title' };
+    if (id.includes('audience')) return { nodeId: state.selectedPrimary, field: 'audience' };
+    if (target.matches?.('textarea')) return { nodeId: state.selectedPrimary, field: 'textarea' };
+    return { nodeId: state.selectedPrimary, field: 'content' };
+  }
+  return null;
+}
+
+function handleEditingPresenceEvent(event) {
+  const info = editingInfoFromTarget(event.target);
+  if (!info) return;
+  setLocalEditingPresence(info.nodeId, info.field, { notifyDelayMs: event.type === 'focusin' ? 150 : 650 });
+}
+
+function bindEditingPresenceTracking() {
+  [el.nodeForm, el.zoomLayer].forEach((root) => {
+    if (!root) return;
+    root.addEventListener('focusin', handleEditingPresenceEvent);
+    root.addEventListener('input', handleEditingPresenceEvent);
+    root.addEventListener('focusout', (event) => {
+      if (!editingInfoFromTarget(event.target)) return;
+      setTimeout(() => {
+        const activeInfo = editingInfoFromTarget(document.activeElement);
+        if (!activeInfo || activeInfo.nodeId !== state.presenceEditingNodeId) clearLocalEditingPresence({ notifyDelayMs: 250 });
+      }, 80);
+    });
+  });
 }
 
 function startPresenceLite() {
@@ -3121,6 +3276,7 @@ function updateSelectionClasses() {
     nodeEl.classList.toggle("selected", state.selectedIds.has(nodeEl.dataset.id));
   });
   updateInspectorActionVisibility();
+  if (!state.selectedPrimary || (state.presenceEditingNodeId && !state.selectedIds.has(state.presenceEditingNodeId))) clearLocalEditingPresence({ notifyDelayMs: 250 });
   renderNodePresenceBadges();
   notifyPresenceSelectionMaybe();
 }
@@ -6107,6 +6263,7 @@ async function bootApp() {
   if (!state.initialServerLoadInFlight) refreshLastSavedSnapshot();
   if (!state.initialServerLoadInFlight) state.isBoardLoading = false;
   startAutosaveWatcher();
+  bindEditingPresenceTracking();
   startPresenceLite();
   startBoardRefreshPolling();
 }
