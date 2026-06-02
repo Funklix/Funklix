@@ -29,9 +29,15 @@ module.exports = async function handler(req, res) {
   const viewers = boardsPresence.get(boardId) || new Map();
 
   if (req.method === 'POST') {
-    const { selectedNodeId = null } = req.body || {};
+    const { selectedNodeId = null, editingNodeId = null, editingField = null } = req.body || {};
     const safeSelectedNodeId = typeof selectedNodeId === 'string' && selectedNodeId.trim()
       ? selectedNodeId.trim()
+      : null;
+    const safeEditingNodeId = typeof editingNodeId === 'string' && editingNodeId.trim()
+      ? editingNodeId.trim()
+      : null;
+    const safeEditingField = safeEditingNodeId && typeof editingField === 'string' && editingField.trim()
+      ? editingField.trim().slice(0, 40)
       : null;
 
     if (user?.email) {
@@ -41,6 +47,8 @@ module.exports = async function handler(req, res) {
         name: user.name || '',
         avatar: user.avatar || '',
         selectedNodeId: safeSelectedNodeId,
+        editingNodeId: safeEditingNodeId,
+        editingField: safeEditingField,
         lastSeenAt: now,
         lastInteractionAt: now
       });
@@ -54,6 +62,8 @@ module.exports = async function handler(req, res) {
     name: v.name,
     avatar: v.avatar,
     selectedNodeId: v.selectedNodeId || null,
+    editingNodeId: v.editingNodeId || null,
+    editingField: v.editingField || null,
     lastInteractionAt: v.lastInteractionAt || null
   }));
 
