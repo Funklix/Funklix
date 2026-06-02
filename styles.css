@@ -480,8 +480,15 @@ button:active {
   background-size: 18px 18px;
 }
 
-.zoom-layer {
+.canvas-scroll-surface {
   position: relative;
+  width: 20000px;
+  height: 30000px;
+}
+
+.zoom-layer {
+  position: absolute;
+  inset: 0;
   width: 20000px;
   height: 30000px;
 }
