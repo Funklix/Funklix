@@ -16,6 +16,9 @@ const BOARD_WIDTH = 20000;
 const BOARD_HEIGHT = 30000;
 const STORAGE_KEY = "campaignCanvasState";
 const BRAND_CORE_STORAGE_KEY = "brandBrainState";
+const ACTIVITY_FEED_MAX_ENTRIES = 50;
+const ACTIVITY_FEED_VISIBLE_ENTRIES = 15;
+const ACTIVITY_DEBOUNCE_MS = 12 * 1000;
 
 let activeLightbox = null;
 
@@ -86,13 +89,24 @@ const state = {
   ,boardAccess: { canView: true, canEdit: true, reason: "unknown" }
   ,shareToastTimer: null
   ,presencePollTimer: null
+  ,boardRefreshPollTimer: null
+  ,boardRefreshInFlight: false
+  ,lastLocalSaveAt: null
+  ,remoteMergeSkippedNodeIds: new Set()
   ,presenceSelectionPingTimer: null
   ,presencePingInFlight: false
   ,presencePendingPingAfterInFlight: false
   ,presenceSelectedNodeIdLastQueued: undefined
   ,presenceSelectedNodeIdLastSent: undefined
+  ,presencePayloadSignatureLastQueued: undefined
+  ,presencePayloadSignatureLastSent: undefined
+  ,presenceEditingNodeId: null
+  ,presenceEditingField: null
+  ,presenceEditingClearTimer: null
   ,presenceViewers: []
   ,presenceNodeSignature: ""
+  ,activityFeed: []
+  ,activityCollapsed: false
 };
 
 const el = {
@@ -196,6 +210,10 @@ const el = {
   presenceLite: document.getElementById("presence-lite"),
   presenceAvatars: document.getElementById("presence-avatars"),
   presenceCount: document.getElementById("presence-count"),
+  activityPanel: document.getElementById("activity-panel"),
+  activityToggleButton: document.getElementById("activity-toggle-btn"),
+  activityFeed: document.getElementById("activity-feed"),
+  activityCount: document.getElementById("activity-count"),
   authSignoutButton: document.getElementById("auth-signout-btn"),
   brandCoreButton: document.getElementById("brand-core-nav-btn"),
   campaignCanvasNavButton: document.getElementById("campaign-canvas-nav-btn"),
@@ -713,6 +731,178 @@ async function duplicateCurrentBoard() {
 }
 
 
+function getActivityUserName(fallbackName = "") {
+  return (state.user?.name || state.user?.email || fallbackName || "Someone").trim();
+}
+
+function getActivityUser(fallbackName = "") {
+  return {
+    name: getActivityUserName(fallbackName),
+    email: state.user?.email || "",
+    avatar: state.user?.avatar || ""
+  };
+}
+
+function sanitizeActivityFeed(feed) {
+  if (!Array.isArray(feed)) return [];
+  return feed
+    .filter((entry) => entry && typeof entry === "object")
+    .map((entry) => ({
+      id: String(entry.id || `activity-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`),
+      type: String(entry.type || "node_updated"),
+      user: typeof entry.user === "object" && entry.user
+        ? {
+            name: String(entry.user.name || entry.user.email || "Someone").slice(0, 80),
+            email: String(entry.user.email || "").slice(0, 120),
+            avatar: String(entry.user.avatar || "")
+          }
+        : { name: String(entry.user || "Someone").slice(0, 80), email: "", avatar: "" },
+      nodeId: entry.nodeId ? String(entry.nodeId) : null,
+      nodeTitle: entry.nodeTitle ? String(entry.nodeTitle).slice(0, 120) : "",
+      timestamp: entry.timestamp || new Date().toISOString()
+    }))
+    .sort((a, b) => Date.parse(b.timestamp || 0) - Date.parse(a.timestamp || 0))
+    .slice(0, ACTIVITY_FEED_MAX_ENTRIES);
+}
+
+function activityId() {
+  return `activity-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function activityNodeTitle(node, fallback = "this node") {
+  return (node?.title || node?.type || fallback || "this node").trim();
+}
+
+function appendActivity(type, { node = null, nodeId = null, nodeTitle = "", userName = "" } = {}) {
+  if (state.isBoardLoading || state.initialServerLoadInFlight) return null;
+  const resolvedNode = node || (nodeId ? getNode(nodeId) : null);
+  const safeNodeId = nodeId || resolvedNode?.id || null;
+  const safeNodeTitle = nodeTitle || activityNodeTitle(resolvedNode);
+  const user = getActivityUser(userName);
+  const nowIso = new Date().toISOString();
+  const recent = state.activityFeed.find((entry) => {
+    if (entry.type !== type || entry.nodeId !== safeNodeId) return false;
+    const entryEmail = entry.user?.email || "";
+    const entryName = entry.user?.name || "";
+    const sameUser = user.email ? entryEmail === user.email : entryName === user.name;
+    return sameUser && Date.now() - Date.parse(entry.timestamp || 0) < ACTIVITY_DEBOUNCE_MS;
+  });
+
+  if (recent) {
+    recent.timestamp = nowIso;
+    recent.nodeTitle = safeNodeTitle;
+    renderActivityFeed();
+    return recent;
+  }
+
+  const entry = {
+    id: activityId(),
+    type,
+    user,
+    nodeId: safeNodeId,
+    nodeTitle: safeNodeTitle,
+    timestamp: nowIso
+  };
+  state.activityFeed = [entry, ...state.activityFeed].slice(0, ACTIVITY_FEED_MAX_ENTRIES);
+  renderActivityFeed();
+  return entry;
+}
+
+function recordNodeUpdatedActivity(node) {
+  if (!node || state.isBoardLoading) return;
+  appendActivity("node_updated", { node });
+}
+
+function formatActivityAction(entry = {}) {
+  const title = entry.nodeTitle ? `“${entry.nodeTitle}”` : "a node";
+  const map = {
+    node_created: `created ${title}`,
+    node_updated: `edited ${title}`,
+    node_moved: `moved ${title}`,
+    node_deleted: `deleted ${title}`,
+    edge_connected: `connected ${title}`,
+    edge_disconnected: `disconnected ${title}`,
+    media_added: `added media to ${title}`,
+    media_removed: `removed media from ${title}`,
+    comment_added: `added a comment on ${title}`,
+    postit_added: `added a post-it on ${title}`,
+    auto_arranged: "auto-arranged the board"
+  };
+  return map[entry.type] || `updated ${title}`;
+}
+
+function relativeActivityTime(timestamp) {
+  const then = Date.parse(timestamp || "");
+  if (!Number.isFinite(then)) return "just now";
+  const seconds = Math.max(0, Math.floor((Date.now() - then) / 1000));
+  if (seconds < 45) return "just now";
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} hr ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days} day${days === 1 ? "" : "s"} ago`;
+  return new Date(then).toLocaleDateString();
+}
+
+function renderActivityFeed() {
+  if (!el.activityFeed) return;
+  const entries = sanitizeActivityFeed(state.activityFeed).slice(0, ACTIVITY_FEED_VISIBLE_ENTRIES);
+  if (el.activityCount) el.activityCount.textContent = state.activityFeed.length ? String(Math.min(state.activityFeed.length, ACTIVITY_FEED_VISIBLE_ENTRIES)) : "";
+  if (el.activityToggleButton) el.activityToggleButton.setAttribute("aria-expanded", String(!state.activityCollapsed));
+  el.activityPanel?.classList.toggle("is-collapsed", !!state.activityCollapsed);
+  if (state.activityCollapsed) return;
+  el.activityFeed.innerHTML = "";
+  if (!entries.length) {
+    const empty = document.createElement("p");
+    empty.className = "activity-empty";
+    empty.textContent = "Recent collaboration activity will appear here.";
+    el.activityFeed.appendChild(empty);
+    return;
+  }
+  entries.forEach((entry) => {
+    const row = document.createElement("div");
+    row.className = "activity-entry";
+    const canFocusNode = !!entry.nodeId && !!getNode(entry.nodeId);
+    if (canFocusNode) {
+      row.classList.add("is-clickable");
+      row.tabIndex = 0;
+      row.setAttribute("role", "button");
+      row.title = "Jump to node";
+      row.addEventListener("click", () => focusNodeInCanvas(entry.nodeId));
+      row.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        event.preventDefault();
+        focusNodeInCanvas(entry.nodeId);
+      });
+    }
+    const user = entry.user || {};
+    const name = getViewerDisplayName(user);
+    const avatar = document.createElement("span");
+    avatar.className = "activity-avatar";
+    if (user.avatar) {
+      const img = document.createElement("img");
+      img.src = user.avatar;
+      img.alt = `${name} avatar`;
+      avatar.appendChild(img);
+    } else {
+      avatar.textContent = getViewerInitials(user);
+    }
+    const body = document.createElement("div");
+    body.className = "activity-body";
+    const line = document.createElement("p");
+    const strong = document.createElement("strong");
+    strong.textContent = name;
+    line.append(strong, document.createTextNode(` ${formatActivityAction(entry)}`));
+    const time = document.createElement("time");
+    time.dateTime = entry.timestamp || "";
+    time.textContent = relativeActivityTime(entry.timestamp);
+    body.append(line, time);
+    row.append(avatar, body);
+    el.activityFeed.appendChild(row);
+  });
+}
+
 function getUserInitials(user) {
   const source = (user?.name || user?.email || "U").trim();
   return source.split(/\s+/).slice(0, 2).map((p) => p[0]?.toUpperCase() || "").join("") || "U";
@@ -737,6 +927,28 @@ function formatNodePresenceTitle(viewers = []) {
   if (names.length === 2) return `${names[0]} and ${names[1]} are viewing this node`;
   const overflow = Math.max(0, names.length - 2);
   return `${names.slice(0, 2).join(", ")} +${overflow} are viewing this node`;
+}
+
+function formatEditingFieldLabel(field = "") {
+  const safeField = String(field || "").trim().toLowerCase();
+  if (safeField === "title") return "title";
+  if (safeField === "content") return "content";
+  if (safeField === "audience") return "audience";
+  if (safeField === "postit") return "a post-it";
+  if (safeField === "textarea") return "text";
+  return "";
+}
+
+function formatNodeEditingTitle(viewers = []) {
+  const names = viewers.map(getViewerDisplayName);
+  if (!names.length) return "Someone is editing";
+  if (viewers.length === 1) {
+    const field = formatEditingFieldLabel(viewers[0]?.editingField);
+    return field ? `${names[0]} is editing ${field}` : `${names[0]} is typing`;
+  }
+  if (viewers.length === 2) return `${names[0]} and ${names[1]} are editing`;
+  const overflow = Math.max(0, names.length - 2);
+  return `${names.slice(0, 2).join(", ")} +${overflow} are editing`;
 }
 
 function renderPresenceLite() {
@@ -772,7 +984,7 @@ function renderPresenceLite() {
   el.presenceLite.classList.remove("hidden");
 }
 
-function getNodePresenceById() {
+function getRemotePresenceByNodeId(fieldName = 'selectedNodeId') {
   const map = new Map();
   const viewers = Array.isArray(state.presenceViewers) ? state.presenceViewers : [];
   const currentUserEmail = (state.user?.email || '').toLowerCase();
@@ -782,7 +994,7 @@ function getNodePresenceById() {
     if (!viewer?.email) return;
     const viewerEmail = String(viewer.email).toLowerCase();
     if (!viewerEmail || viewerEmail === currentUserEmail) return;
-    const nodeId = typeof viewer.selectedNodeId === 'string' ? viewer.selectedNodeId.trim() : '';
+    const nodeId = typeof viewer[fieldName] === 'string' ? viewer[fieldName].trim() : '';
     if (!nodeId || !nodeIds.has(nodeId)) return;
     const list = map.get(nodeId) || [];
     list.push(viewer);
@@ -792,17 +1004,26 @@ function getNodePresenceById() {
   return map;
 }
 
+function getNodePresenceById() {
+  return getRemotePresenceByNodeId('selectedNodeId');
+}
+
+function getNodeEditingPresenceById() {
+  return getRemotePresenceByNodeId('editingNodeId');
+}
+
 function clearNodePresenceBadges() {
   state.presenceNodeSignature = "";
   if (!el.zoomLayer) return;
-  el.zoomLayer.querySelectorAll('.node-presence-overlay').forEach((x) => x.remove());
+  el.zoomLayer.querySelectorAll('.node-presence-overlay, .node-editing-indicator').forEach((x) => x.remove());
 }
 
 function renderNodePresenceBadges({ force = false } = {}) {
   if (!el.zoomLayer) return;
   const presenceByNodeId = getNodePresenceById();
-  const signature = JSON.stringify(
-    [...presenceByNodeId.entries()].map(([nodeId, viewers]) => [
+  const editingByNodeId = getNodeEditingPresenceById();
+  const signature = JSON.stringify({
+    viewing: [...presenceByNodeId.entries()].map(([nodeId, viewers]) => [
       nodeId,
       viewers.map((viewer) => [
         viewer.email || '',
@@ -810,14 +1031,22 @@ function renderNodePresenceBadges({ force = false } = {}) {
         viewer.avatar || '',
         viewer.selectedNodeId || ''
       ].join(':'))
+    ]),
+    editing: [...editingByNodeId.entries()].map(([nodeId, viewers]) => [
+      nodeId,
+      viewers.map((viewer) => [
+        viewer.email || '',
+        viewer.name || '',
+        viewer.avatar || '',
+        viewer.editingNodeId || '',
+        viewer.editingField || ''
+      ].join(':'))
     ])
-  );
+  });
   if (!force && signature === state.presenceNodeSignature) return;
   state.presenceNodeSignature = signature;
 
-  el.zoomLayer.querySelectorAll('.node-presence-overlay').forEach((x) => x.remove());
-
-  if (!presenceByNodeId.size) return;
+  el.zoomLayer.querySelectorAll('.node-presence-overlay, .node-editing-indicator').forEach((x) => x.remove());
 
   presenceByNodeId.forEach((viewers, nodeId) => {
     const nodeEl = el.zoomLayer.querySelector(`[data-id='${nodeId}']`);
@@ -860,6 +1089,19 @@ function renderNodePresenceBadges({ force = false } = {}) {
     overlay.title = presenceTitle;
     nodeEl.appendChild(overlay);
   });
+
+  editingByNodeId.forEach((viewers, nodeId) => {
+    const nodeEl = el.zoomLayer.querySelector(`[data-id='${nodeId}']`);
+    if (!nodeEl) return;
+    const indicator = document.createElement('div');
+    indicator.className = 'node-editing-indicator';
+    const editingTitle = formatNodeEditingTitle(viewers);
+    indicator.title = editingTitle;
+    indicator.setAttribute('aria-label', editingTitle);
+    const first = viewers[0] || {};
+    indicator.innerHTML = `<span class="node-editing-pencil">✎</span><span class="node-editing-label">${viewers.length > 1 ? `${viewers.length} editing` : (formatEditingFieldLabel(first.editingField) ? 'editing' : 'typing…')}</span>`;
+    nodeEl.appendChild(indicator);
+  });
 }
 
 function resetPresenceSelectionQueue() {
@@ -870,6 +1112,14 @@ function resetPresenceSelectionQueue() {
   state.presencePendingPingAfterInFlight = false;
   state.presenceSelectedNodeIdLastQueued = undefined;
   state.presenceSelectedNodeIdLastSent = undefined;
+  state.presencePayloadSignatureLastQueued = undefined;
+  state.presencePayloadSignatureLastSent = undefined;
+  if (state.presenceEditingClearTimer) {
+    clearTimeout(state.presenceEditingClearTimer);
+    state.presenceEditingClearTimer = null;
+  }
+  state.presenceEditingNodeId = null;
+  state.presenceEditingField = null;
 }
 
 function stopPresenceLite() {
@@ -881,9 +1131,27 @@ function stopPresenceLite() {
   clearNodePresenceBadges();
 }
 
+function stopBoardRefreshPolling() {
+  if (state.boardRefreshPollTimer) {
+    clearInterval(state.boardRefreshPollTimer);
+    state.boardRefreshPollTimer = null;
+  }
+  state.boardRefreshInFlight = false;
+  state.remoteMergeSkippedNodeIds.clear();
+}
+
+function startBoardRefreshPolling() {
+  stopBoardRefreshPolling();
+  const boardId = state.currentBoardId || getBoardIdFromPath();
+  if (!boardId) return;
+  state.boardRefreshPollTimer = setInterval(() => { void pollBoardForRemoteChanges(); }, 12000);
+}
+
 async function pingPresenceLite() {
   const boardId = state.currentBoardId || getBoardIdFromPath();
   const selectedNodeId = state.selectedPrimary || null;
+  const editingNodeId = state.presenceEditingNodeId || null;
+  const editingField = editingNodeId ? (state.presenceEditingField || null) : null;
   if (!boardId || !state.user?.email) {
     state.presenceViewers = [];
     state.presenceSelectedNodeIdLastSent = undefined;
@@ -900,12 +1168,13 @@ async function pingPresenceLite() {
     const response = await fetch(`/api/boards/presence/${encodeURIComponent(boardId)}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ selectedNodeId })
+      body: JSON.stringify({ selectedNodeId, editingNodeId, editingField })
     });
     if (!response.ok) throw new Error('presence unavailable');
     const data = await response.json();
     if ((state.currentBoardId || getBoardIdFromPath()) !== boardId || !state.user?.email) return;
     state.presenceSelectedNodeIdLastSent = selectedNodeId;
+    state.presencePayloadSignatureLastSent = buildPresencePayloadSignature();
     state.presenceViewers = Array.isArray(data?.viewers) ? data.viewers : [];
     renderPresenceLite();
     renderNodePresenceBadges();
@@ -922,21 +1191,108 @@ async function pingPresenceLite() {
   }
 }
 
+function buildPresencePayloadSignature() {
+  return JSON.stringify({
+    selectedNodeId: state.selectedPrimary || null,
+    editingNodeId: state.presenceEditingNodeId || null,
+    editingField: state.presenceEditingNodeId ? (state.presenceEditingField || null) : null
+  });
+}
+
 function notifyPresenceSelectionMaybe(delayMs = 350) {
   const boardId = state.currentBoardId || getBoardIdFromPath();
   if (!boardId || !state.user?.email) return;
 
   const selectedNodeId = state.selectedPrimary || null;
-  if (selectedNodeId === state.presenceSelectedNodeIdLastQueued && state.presenceSelectionPingTimer) return;
-  if (selectedNodeId === state.presenceSelectedNodeIdLastSent && !state.presenceSelectionPingTimer) return;
+  const payloadSignature = buildPresencePayloadSignature();
+  if (payloadSignature === state.presencePayloadSignatureLastQueued && state.presenceSelectionPingTimer) return;
+  if (payloadSignature === state.presencePayloadSignatureLastSent && !state.presenceSelectionPingTimer) return;
 
   state.presenceSelectedNodeIdLastQueued = selectedNodeId;
+  state.presencePayloadSignatureLastQueued = payloadSignature;
   if (state.presenceSelectionPingTimer) clearTimeout(state.presenceSelectionPingTimer);
   state.presenceSelectionPingTimer = setTimeout(() => {
     state.presenceSelectionPingTimer = null;
-    if (state.presenceSelectedNodeIdLastQueued === state.presenceSelectedNodeIdLastSent) return;
+    if (state.presencePayloadSignatureLastQueued === state.presencePayloadSignatureLastSent) return;
     void pingPresenceLite();
   }, delayMs);
+}
+
+function setLocalEditingPresence(nodeId, field = 'textarea', { clearAfterMs = 4000, notifyDelayMs = 250 } = {}) {
+  if (!nodeId || !state.user?.email) return;
+  const safeField = field || 'textarea';
+  const changed = state.presenceEditingNodeId !== nodeId || state.presenceEditingField !== safeField;
+  state.presenceEditingNodeId = nodeId;
+  state.presenceEditingField = safeField;
+  if (state.presenceEditingClearTimer) clearTimeout(state.presenceEditingClearTimer);
+  state.presenceEditingClearTimer = setTimeout(() => {
+    clearLocalEditingPresence({ notifyDelayMs: 250 });
+  }, clearAfterMs);
+  if (changed) notifyPresenceSelectionMaybe(notifyDelayMs);
+}
+
+function clearLocalEditingPresence({ notifyDelayMs = 250 } = {}) {
+  if (state.presenceEditingClearTimer) {
+    clearTimeout(state.presenceEditingClearTimer);
+    state.presenceEditingClearTimer = null;
+  }
+  if (!state.presenceEditingNodeId && !state.presenceEditingField) return;
+  state.presenceEditingNodeId = null;
+  state.presenceEditingField = null;
+  notifyPresenceSelectionMaybe(notifyDelayMs);
+}
+
+function editingInfoFromTarget(target) {
+  if (!target || !target.closest) return null;
+  if (target.closest('.postit')) {
+    const nodeEl = target.closest('.node[data-id]');
+    return nodeEl?.dataset?.id ? { nodeId: nodeEl.dataset.id, field: 'postit' } : null;
+  }
+  const nodeEl = target.closest('.node[data-id]');
+  if (nodeEl?.dataset?.id) {
+    if (target.closest('.title')) return { nodeId: nodeEl.dataset.id, field: 'title' };
+    if (target.closest('.content')) return { nodeId: nodeEl.dataset.id, field: 'content' };
+    return { nodeId: nodeEl.dataset.id, field: 'textarea' };
+  }
+  if (el.nodeForm?.contains(target) && state.selectedPrimary) {
+    const fieldMap = {
+      title: 'title',
+      content: 'content',
+      audience: 'audience',
+      caption: 'content',
+      hashtags: 'content',
+      preview: 'content'
+    };
+    const name = target.getAttribute?.('name') || '';
+    const id = target.id || '';
+    if (name && fieldMap[name]) return { nodeId: state.selectedPrimary, field: fieldMap[name] };
+    if (id.includes('title')) return { nodeId: state.selectedPrimary, field: 'title' };
+    if (id.includes('audience')) return { nodeId: state.selectedPrimary, field: 'audience' };
+    if (target.matches?.('textarea')) return { nodeId: state.selectedPrimary, field: 'textarea' };
+    return { nodeId: state.selectedPrimary, field: 'content' };
+  }
+  return null;
+}
+
+function handleEditingPresenceEvent(event) {
+  const info = editingInfoFromTarget(event.target);
+  if (!info) return;
+  setLocalEditingPresence(info.nodeId, info.field, { notifyDelayMs: event.type === 'focusin' ? 150 : 650 });
+}
+
+function bindEditingPresenceTracking() {
+  [el.nodeForm, el.zoomLayer].forEach((root) => {
+    if (!root) return;
+    root.addEventListener('focusin', handleEditingPresenceEvent);
+    root.addEventListener('input', handleEditingPresenceEvent);
+    root.addEventListener('focusout', (event) => {
+      if (!editingInfoFromTarget(event.target)) return;
+      setTimeout(() => {
+        const activeInfo = editingInfoFromTarget(document.activeElement);
+        if (!activeInfo || activeInfo.nodeId !== state.presenceEditingNodeId) clearLocalEditingPresence({ notifyDelayMs: 250 });
+      }, 80);
+    });
+  });
 }
 
 function startPresenceLite() {
@@ -949,6 +1305,155 @@ function startPresenceLite() {
   }
   void pingPresenceLite();
   state.presencePollTimer = setInterval(() => { void pingPresenceLite(); }, 20000);
+}
+
+function remoteTimestampIsNewer(remoteUpdatedAt) {
+  if (!remoteUpdatedAt || remoteUpdatedAt === state.lastKnownUpdatedAt) return false;
+  if (state.lastLocalSaveAt && Date.parse(remoteUpdatedAt) <= Date.parse(state.lastLocalSaveAt)) return false;
+  if (state.lastKnownUpdatedAt && Date.parse(remoteUpdatedAt) <= Date.parse(state.lastKnownUpdatedAt)) return false;
+  return true;
+}
+
+function getActivelyEditedNodeIds() {
+  const ids = new Set();
+  const active = document.activeElement;
+  if (!active) return ids;
+
+  const isEditableControl = active.matches?.('input,textarea,select,[contenteditable="true"]');
+  if (!isEditableControl) return ids;
+
+  const activeNodeEl = active.closest?.('.node[data-id]');
+  if (activeNodeEl?.dataset?.id) ids.add(activeNodeEl.dataset.id);
+
+  if (el.nodeForm?.contains(active) && state.selectedPrimary) ids.add(state.selectedPrimary);
+
+  return ids;
+}
+
+function stableRemoteNodeSignature(node) {
+  return JSON.stringify(sanitizeNodeForPersistence(node));
+}
+
+function patchNodeFromRemote(localNode, remoteNode) {
+  const safeRemote = sanitizeNodeForPersistence(remoteNode);
+  Object.keys(localNode).forEach((key) => {
+    if (key !== 'id' && !(key in safeRemote)) delete localNode[key];
+  });
+  Object.entries(safeRemote).forEach(([key, value]) => {
+    if (key === 'id') return;
+    localNode[key] = value;
+  });
+}
+
+function pulseRemoteNodeUpdate(nodeId) {
+  const nodeEl = el.zoomLayer?.querySelector(`[data-id='${nodeId}']`);
+  if (!nodeEl) return;
+  nodeEl.classList.remove('remote-updated');
+  void nodeEl.offsetWidth;
+  nodeEl.classList.add('remote-updated');
+  setTimeout(() => nodeEl.classList.remove('remote-updated'), 1000);
+}
+
+function mergeRemoteBoardState(remoteCanvasState, remoteUpdatedAt) {
+  const normalizedState = withBoardSchemaDefaults(remoteCanvasState);
+  const incomingNodes = (normalizedState.nodes || []).map((node) => sanitizeNodeForPersistence(node));
+  const activeEditingIds = getActivelyEditedNodeIds();
+  const localById = new Map(state.nodes.map((node) => [node.id, node]));
+  let changedNodeCount = 0;
+  let addedNodeCount = 0;
+  let skippedNodeCount = 0;
+
+  state.canvasMetadata = { ...normalizedState.metadata };
+  state.nodeCounter = Math.max(state.nodeCounter || 1, normalizedState.nodeCounter || 1);
+  state.postitCounter = Math.max(state.postitCounter || 1, normalizedState.postitCounter || 1);
+  const hasRemoteActivityFeed = Array.isArray(remoteCanvasState?.activityFeed);
+  const incomingActivityFeed = hasRemoteActivityFeed ? sanitizeActivityFeed(normalizedState.activityFeed) : state.activityFeed;
+  const activityChanged = hasRemoteActivityFeed && JSON.stringify(incomingActivityFeed) !== JSON.stringify(state.activityFeed);
+  if (activityChanged) {
+    state.activityFeed = incomingActivityFeed;
+    renderActivityFeed();
+  }
+
+  incomingNodes.forEach((remoteNode) => {
+    const localNode = localById.get(remoteNode.id);
+    if (!localNode) {
+      state.nodes.push(remoteNode);
+      renderNode(remoteNode);
+      pulseRemoteNodeUpdate(remoteNode.id);
+      addedNodeCount += 1;
+      return;
+    }
+
+    if (stableRemoteNodeSignature(localNode) === stableRemoteNodeSignature(remoteNode)) {
+      state.remoteMergeSkippedNodeIds.delete(remoteNode.id);
+      return;
+    }
+
+    if (activeEditingIds.has(remoteNode.id)) {
+      state.remoteMergeSkippedNodeIds.add(remoteNode.id);
+      skippedNodeCount += 1;
+      return;
+    }
+
+    patchNodeFromRemote(localNode, remoteNode);
+    updateNodeCard(localNode);
+    pulseRemoteNodeUpdate(localNode.id);
+    state.remoteMergeSkippedNodeIds.delete(localNode.id);
+    changedNodeCount += 1;
+  });
+
+  const incomingEdgesSignature = JSON.stringify(normalizedState.edges || []);
+  const localEdgesSignature = JSON.stringify(state.edges || []);
+  if (incomingEdgesSignature !== localEdgesSignature) {
+    state.edges = normalizedState.edges || [];
+    drawLinks();
+  }
+
+  if (changedNodeCount || addedNodeCount) {
+    updateListView();
+    updateEmptyState();
+    renderNodePresenceBadges({ force: true });
+    if (state.selectedPrimary && !activeEditingIds.has(state.selectedPrimary)) {
+      fillInspector(getNode(state.selectedPrimary));
+    }
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(serializeState()));
+    if (!state.isDirty) {
+      refreshLastSavedSnapshot();
+      setSaveStatus('Updated from collaborator');
+    }
+  }
+
+  if (activityChanged && !changedNodeCount && !addedNodeCount) {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(serializeState()));
+    if (!state.isDirty) refreshLastSavedSnapshot();
+  }
+
+  if (!skippedNodeCount) {
+    state.lastKnownUpdatedAt = remoteUpdatedAt || state.lastKnownUpdatedAt;
+    setSharePanelState(state.currentBoardId, remoteUpdatedAt ? new Date(remoteUpdatedAt) : null, state.currentBoardOwnerEmail, state.currentBoardOwnerName);
+  }
+}
+
+
+async function pollBoardForRemoteChanges() {
+  const boardId = state.currentBoardId || getBoardIdFromPath();
+  if (!boardId || state.boardRefreshInFlight || state.isSaving || state.conflictModalOpen || state.initialServerLoadInFlight) return;
+  state.boardRefreshInFlight = true;
+  try {
+    const response = await fetch(`/api/boards/${encodeURIComponent(boardId)}`);
+    const data = await response.json();
+    if (!response.ok) throw new Error(data?.error || 'Failed to refresh board');
+    if ((state.currentBoardId || getBoardIdFromPath()) !== boardId) return;
+    const remoteUpdatedAt = data?.updated_at || null;
+    if (!remoteTimestampIsNewer(remoteUpdatedAt)) return;
+    const incomingCanvasState = data?.canvas_json || {};
+    if (!isValidCanvasStatePayload(incomingCanvasState)) return;
+    mergeRemoteBoardState(incomingCanvasState, remoteUpdatedAt);
+  } catch (error) {
+    console.debug('[Funklix Collaboration] Passive board refresh skipped', error);
+  } finally {
+    state.boardRefreshInFlight = false;
+  }
 }
 
 function setAuthMessage(message = "") {
@@ -1726,6 +2231,7 @@ function serializeState() {
   const serialized = {
     nodes: state.nodes.map((n) => sanitizeNodeForPersistence(n)),
     edges: state.edges, nodeCounter: state.nodeCounter, postitCounter: state.postitCounter, zoom: state.zoom,
+    activityFeed: sanitizeActivityFeed(state.activityFeed),
     schemaVersion: 1,
     metadata: {
       createdAt: state.canvasMetadata?.createdAt || null,
@@ -1767,6 +2273,7 @@ function withBoardSchemaDefaults(campaignState) {
   const nowIso = new Date().toISOString();
   return {
     ...safeState,
+    activityFeed: sanitizeActivityFeed(safeState.activityFeed),
     schemaVersion: Number.isFinite(safeState.schemaVersion) ? safeState.schemaVersion : 1,
     metadata: {
       createdAt: safeState?.metadata?.createdAt || nowIso,
@@ -1796,11 +2303,13 @@ function applyCampaignState(campaignState, statusText = "Restored") {
   state.edges = normalizedState.edges || [];
   state.nodeCounter = normalizedState.nodeCounter || 1;
   state.postitCounter = normalizedState.postitCounter || 1;
+  state.activityFeed = sanitizeActivityFeed(normalizedState.activityFeed);
   state.selectedIds.clear();
   state.selectedPrimary = null;
   el.zoomLayer.querySelectorAll(".node").forEach((n) => n.remove());
   state.nodes.forEach(renderNode);
   renderNodePresenceBadges({ force: true });
+  renderActivityFeed();
   updateListView();
   updateEmptyState();
   drawLinks();
@@ -1908,6 +2417,7 @@ async function saveBoardToServer(trigger = "manual") {
     const returnedId = data?.id || currentBoardId;
     if (returnedId) state.currentBoardId = returnedId;
     if (data?.name && typeof data.name === "string") state.currentBoardName = data.name;
+    state.lastLocalSaveAt = saveTimestamp;
     state.lastKnownUpdatedAt = data?.updated_at || new Date().toISOString();
 
     const shareUrl = `${window.location.origin}/boards/${returnedId}`;
@@ -1982,6 +2492,7 @@ async function loadBoardFromUrlIfPresent() {
     applyCampaignState(normalizedCanvasState, `Loaded board ${boardId.slice(0, 8)}...`);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(normalizedCanvasState));
     startPresenceLite();
+    startBoardRefreshPolling();
     return true;
   } catch (error) {
     console.error(error);
@@ -2037,6 +2548,7 @@ function resetBrandBrainState() {
   loadBrandBrainState();
   renderBrandCoreTiles();
   renderBrandCoreEditor();
+  renderActivityFeed();
 }
 
 
@@ -2362,6 +2874,54 @@ function focusNodeInViewport(nodeId) {
   const y = nodeEl.offsetTop * state.zoom - el.canvas.clientHeight / 2 + nodeEl.offsetHeight / 2;
   el.canvas.scrollTo({ left: Math.max(0, x), top: Math.max(0, y) });
 }
+
+function pulseActivityFocusedNode(nodeId) {
+  const nodeEl = el.zoomLayer.querySelector(`[data-id='${nodeId}']`);
+  if (!nodeEl) return;
+  nodeEl.classList.remove("activity-focused");
+  void nodeEl.offsetWidth;
+  nodeEl.classList.add("activity-focused");
+  setTimeout(() => nodeEl.classList.remove("activity-focused"), 1400);
+}
+
+function focusNodeInCanvas(nodeId, { behavior = "smooth", select = true, pulse = true } = {}) {
+  const node = getNode(nodeId);
+  const nodeEl = node ? el.zoomLayer.querySelector(`[data-id='${nodeId}']`) : null;
+  if (!node || !nodeEl || !el.canvas) return false;
+
+  const runFocus = () => {
+    updateCanvasScrollSurfaceSize();
+    const width = nodeEl.offsetWidth || NODE_WIDTH;
+    const height = nodeEl.offsetHeight || NODE_HEIGHT;
+    const nodeX = Number.isFinite(node.position?.x) ? node.position.x : nodeEl.offsetLeft;
+    const nodeY = Number.isFinite(node.position?.y) ? node.position.y : nodeEl.offsetTop;
+    const centerX = (nodeX + width / 2) * state.zoom;
+    const centerY = (nodeY + height / 2) * state.zoom;
+    const maxLeft = Math.max(0, el.canvas.scrollWidth - el.canvas.clientWidth);
+    const maxTop = Math.max(0, el.canvas.scrollHeight - el.canvas.clientHeight);
+    const left = Math.max(0, Math.min(maxLeft, centerX - el.canvas.clientWidth / 2));
+    const top = Math.max(0, Math.min(maxTop, centerY - el.canvas.clientHeight / 2));
+
+    el.canvas.scrollTo({ left, top, behavior });
+    if (select) {
+      state.selectedIds.clear();
+      state.selectedIds.add(node.id);
+      state.selectedPrimary = node.id;
+      updateSelectionClasses();
+      fillInspector(node);
+    }
+    if (pulse) requestAnimationFrame(() => pulseActivityFocusedNode(node.id));
+  };
+
+  if (state.activeView !== "board") {
+    setActiveView("board");
+    requestAnimationFrame(runFocus);
+  } else {
+    runFocus();
+  }
+  return true;
+}
+
 function forceNodeVisible(nodeId) {
   focusNodeInViewport(nodeId);
   requestAnimationFrame(() => focusNodeInViewport(nodeId));
@@ -2507,6 +3067,7 @@ function createNode({ type = "Idea", parentId = null, position = null, images = 
   setTimeout(() => { forceNodeVisible(node.id); ensureNodeActuallyVisible(node); }, 30);
   autoZoomOutIfBoardCrowded();
   setSaveStatus("Unsaved changes");
+  appendActivity("node_created", { node });
   saveCampaignCanvasState();
   return node;
 }
@@ -2620,17 +3181,18 @@ function confirmSchedulePost() {
   closePostingPlanner();
 }
 
-function removeNode(nodeId) {
+function removeNode(nodeId, { logActivity = true } = {}) {
   // Read-only guard: prevent local destructive node mutation on view-only boards.
   if (state.boardAccess?.canEdit === false) {
     setSaveStatus("Read-only board");
-    return;
+    return null;
   }
   pushHistorySnapshot();
   const idx = state.nodes.findIndex((n) => n.id === nodeId);
-  if (idx === -1) return;
+  if (idx === -1) return null;
 
   const [removed] = state.nodes.splice(idx, 1);
+  const removedNodeTitle = activityNodeTitle(removed);
   removed.images.forEach(revokeImageObjectUrl);
 
   state.edges = state.edges.filter(([a, b]) => a !== nodeId && b !== nodeId);
@@ -2644,7 +3206,15 @@ function removeNode(nodeId) {
   updateListView();
   updateEmptyState();
   drawLinks();
+  if (logActivity) appendActivity("node_deleted", { nodeId, nodeTitle: removedNodeTitle });
   saveCampaignCanvasState();
+  return removed;
+}
+
+function edgeActivityTitle(fromId, toId) {
+  const sourceTitle = activityNodeTitle(getNode(fromId), fromId || "Source");
+  const targetTitle = activityNodeTitle(getNode(toId), toId || "Target");
+  return `${sourceTitle} → ${targetTitle}`;
 }
 
 function addEdge(fromId, toId) {
@@ -2656,6 +3226,7 @@ function addEdge(fromId, toId) {
   if (!fromId || !toId || fromId === toId) return;
   if (state.edges.some(([a, b]) => a === fromId && b === toId)) return;
   state.edges.push([fromId, toId]);
+  appendActivity("edge_connected", { nodeId: toId, nodeTitle: edgeActivityTitle(fromId, toId) });
 
   const source = getNode(fromId);
   const target = getNode(toId);
@@ -2888,7 +3459,9 @@ function drawLinks() {
         setSaveStatus("Read-only board");
         return;
       }
+      const edgeTitle = edgeActivityTitle(from, to);
       state.edges.splice(edgeIndex, 1);
+      appendActivity("edge_disconnected", { nodeId: to, nodeTitle: edgeTitle });
       drawLinks();
       state.nodes.forEach(updateNodeCard);
       saveCampaignCanvasState();
@@ -2962,6 +3535,7 @@ function updateSelectionClasses() {
     nodeEl.classList.toggle("selected", state.selectedIds.has(nodeEl.dataset.id));
   });
   updateInspectorActionVisibility();
+  if (!state.selectedPrimary || (state.presenceEditingNodeId && !state.selectedIds.has(state.presenceEditingNodeId))) clearLocalEditingPresence({ notifyDelayMs: 250 });
   renderNodePresenceBadges();
   notifyPresenceSelectionMaybe();
 }
@@ -3273,6 +3847,7 @@ function updateNodeCard(node) {
         return;
       }
       node.social.caption = caption.textContent;
+      recordNodeUpdatedActivity(node);
       updateNodeCard(node);
       if (state.selectedPrimary === node.id) fillInspector(node);
       saveCampaignCanvasState();
@@ -3289,6 +3864,7 @@ function updateNodeCard(node) {
         return;
       }
       node.social.preview = cta.textContent;
+      recordNodeUpdatedActivity(node);
       saveCampaignCanvasState();
     });
 
@@ -3304,6 +3880,7 @@ function updateNodeCard(node) {
       }
       node.social.hashtags = normalizeHashtagsInput(hashtags.textContent || "");
       hashtags.textContent = node.social.hashtags.join(" ");
+      recordNodeUpdatedActivity(node);
       saveCampaignCanvasState();
     });
 
@@ -3650,6 +4227,7 @@ function renderPostits(node, nodeEl) {
         const text = editor.querySelector(".postit-reply-input").value.trim();
         if (!text) return;
         note.replies.push({ user, text, time: nowString() });
+        appendActivity("comment_added", { node, userName: user });
         renderPostits(node, nodeEl);
         saveCampaignCanvasState();
       });
@@ -3804,6 +4382,7 @@ function removeNodeImage(node, imageId) {
   const [removed] = node.images.splice(idx, 1);
   if (node.favoriteImageId === imageId) node.favoriteImageId = null;
   revokeImageObjectUrl(removed);
+  appendActivity("media_removed", { node });
   updateNodeCard(node);
   if (state.selectedPrimary === node.id) fillInspector(node);
 }
@@ -4557,6 +5136,7 @@ function renderNode(node) {
     node.title = title.textContent.trim();
     if (state.selectedPrimary === node.id) el.inputs.title.value = node.title;
     updateListView();
+    recordNodeUpdatedActivity(node);
     saveCampaignCanvasState();
   });
   content.addEventListener("input", () => {
@@ -4571,6 +5151,7 @@ function renderNode(node) {
     const isExpanded = nodeEl.classList.contains("content-expanded");
     content.classList.toggle("clamped", shouldTruncate && !isExpanded && document.activeElement !== content);
     expandBtn.classList.toggle("hidden", !shouldTruncate || isExpanded);
+    recordNodeUpdatedActivity(node);
     saveCampaignCanvasState();
   });
   content.addEventListener("focus", () => content.classList.remove("clamped"));
@@ -4671,6 +5252,11 @@ function enableNodeDrag(nodeEl, node) {
     function up() {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
+      const moved = origins.some((o) => {
+        const n = getNode(o.id);
+        return n && (Math.abs(n.position.x - o.x) > 2 || Math.abs(n.position.y - o.y) > 2);
+      });
+      if (moved) appendActivity("node_moved", { node: getNode(moveIds[0]) });
       updateCanvasScrollSurfaceSize();
       saveCampaignCanvasState();
     }
@@ -4827,6 +5413,7 @@ function autoArrangeBoardByHierarchy() {
 
   updateCanvasScrollSurfaceSize();
   drawLinks();
+  appendActivity("auto_arranged");
   saveCampaignCanvasState();
   fitBoardContentToViewport({ padding: 160, minZoom: 0.12, behavior: "auto" });
   return true;
@@ -4999,6 +5586,10 @@ el.sidebarToggleButton?.addEventListener("click", () => {
   const collapsed = !el.appShell.classList.contains("sidebar-collapsed");
   setSidebarCollapsed(collapsed);
 });
+el.activityToggleButton?.addEventListener("click", () => {
+  state.activityCollapsed = !state.activityCollapsed;
+  renderActivityFeed();
+});
 
 if (el.addNodeButton) {
   el.addNodeButton.addEventListener("click", () => {
@@ -5167,6 +5758,7 @@ el.addPostitCommentButton.addEventListener("click", () => {
     y: state.contextBoardPoint.y - node.position.y
   });
   updateNodeCard(node);
+  appendActivity("postit_added", { node, userName: user });
   saveCampaignCanvasState();
 });
 el.improveContextNodeButton.addEventListener("click", async () => {
@@ -5232,6 +5824,7 @@ el.nodeForm.addEventListener("input", (event) => {
   updateNodeCard(node);
   updateListView();
   fillInspector(node);
+  recordNodeUpdatedActivity(node);
   saveCampaignCanvasState();
 });
 el.inputs.channel.addEventListener("keydown", (event) => {
@@ -5247,6 +5840,7 @@ el.inputs.channel.addEventListener("keydown", (event) => {
   if (!value) return;
   pushHistorySnapshot();
   node.channel = value;
+  recordNodeUpdatedActivity(node);
   updateNodeCard(node);
   fillInspector(node);
   saveCampaignCanvasState();
@@ -5263,6 +5857,7 @@ el.inputs.hashtags.addEventListener("blur", () => {
   delete state.hashtagDraftByNode[node.id];
   el.inputs.hashtags.value = normalized.join(", ");
   updateNodeCard(node);
+  recordNodeUpdatedActivity(node);
   saveCampaignCanvasState();
 });
 el.inputs.hashtags.addEventListener("keydown", (event) => {
@@ -5279,10 +5874,16 @@ el.imageUpload.addEventListener("change", () => {
   }
   const node = getNode(state.selectedPrimary);
   if (!node) return;
-  [...el.imageUpload.files]
+  const addedImages = [...el.imageUpload.files]
     .filter((file) => file.type.startsWith("image/"))
-    .forEach((file) => node.images.push({ id: crypto.randomUUID(), name: file.name, url: URL.createObjectURL(file) }));
+    .map((file) => ({ id: crypto.randomUUID(), name: file.name, url: URL.createObjectURL(file) }));
+  if (!addedImages.length) {
+    el.imageUpload.value = "";
+    return;
+  }
+  node.images.push(...addedImages);
   el.imageUpload.value = "";
+  appendActivity("media_added", { node });
   updateNodeCard(node);
   fillInspector(node);
   saveCampaignCanvasState();
@@ -5373,7 +5974,15 @@ el.generatePostingVisualButton.addEventListener("click", async () => {
 el.deleteSelectedButton.addEventListener("click", () => {
   if (!state.selectedIds.size) return;
   pushHistorySnapshot();
-  [...state.selectedIds].forEach((id) => removeNode(id));
+  const selectedIds = [...state.selectedIds];
+  const removedNodes = selectedIds.map((id) => removeNode(id, { logActivity: false })).filter(Boolean);
+  if (removedNodes.length === 1) {
+    appendActivity("node_deleted", { nodeId: removedNodes[0].id, nodeTitle: activityNodeTitle(removedNodes[0]) });
+    saveCampaignCanvasState();
+  } else if (removedNodes.length > 1) {
+    appendActivity("node_deleted", { nodeTitle: `${removedNodes.length} nodes` });
+    saveCampaignCanvasState();
+  }
 });
 el.disconnectSelectedButton.addEventListener("click", () => {
   if (state.boardAccess?.canEdit === false) {
@@ -5382,7 +5991,13 @@ el.disconnectSelectedButton.addEventListener("click", () => {
   }
   if (!state.selectedIds.size) return;
   pushHistorySnapshot();
+  const removedEdges = state.edges.filter(([a, b]) => state.selectedIds.has(a) || state.selectedIds.has(b));
   state.edges = state.edges.filter(([a, b]) => !state.selectedIds.has(a) && !state.selectedIds.has(b));
+  if (removedEdges.length === 1) {
+    appendActivity("edge_disconnected", { nodeId: removedEdges[0][1], nodeTitle: edgeActivityTitle(removedEdges[0][0], removedEdges[0][1]) });
+  } else if (removedEdges.length > 1) {
+    appendActivity("edge_disconnected", { nodeTitle: `${removedEdges.length} connections` });
+  }
   state.nodes.forEach(updateNodeCard);
   drawLinks();
   saveCampaignCanvasState();
@@ -5938,6 +6553,7 @@ async function bootApp() {
   renderCampaignCanvasFromStateIfNeeded();
   renderBrandCoreTiles();
   renderBrandCoreEditor();
+  renderActivityFeed();
   updateEmptyState();
   updateListView();
   fillInspector(null);
@@ -5948,7 +6564,9 @@ async function bootApp() {
   if (!state.initialServerLoadInFlight) refreshLastSavedSnapshot();
   if (!state.initialServerLoadInFlight) state.isBoardLoading = false;
   startAutosaveWatcher();
+  bindEditingPresenceTracking();
   startPresenceLite();
+  startBoardRefreshPolling();
 }
 
 if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", () => { void bootApp(); });
