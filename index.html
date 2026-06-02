@@ -116,6 +116,14 @@
           <button id="ai-brain-nav-btn" class="nav-item" data-icon="✨"><span class="nav-label">AI Brain</span></button>
           <button id="insights-nav-btn" class="nav-item" data-icon="📈"><span class="nav-label">Insights</span></button>
         </nav>
+        <section class="activity-panel" id="activity-panel" aria-label="Board activity">
+          <button class="activity-toggle" id="activity-toggle-btn" type="button" aria-expanded="true">
+            <span>Activity</span><span id="activity-count" class="activity-count"></span>
+          </button>
+          <div class="activity-feed" id="activity-feed">
+            <p class="activity-empty">Recent collaboration activity will appear here.</p>
+          </div>
+        </section>
       </aside>
 
       <main class="workspace-wrap">

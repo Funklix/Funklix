@@ -26,6 +26,21 @@ async function ensureBoardsTable() {
       await pool.query('ALTER TABLE boards ADD COLUMN IF NOT EXISTS owner_name TEXT;');
       await pool.query('ALTER TABLE boards ADD COLUMN IF NOT EXISTS owner_avatar TEXT;');
       await pool.query('ALTER TABLE boards ADD COLUMN IF NOT EXISTS created_by TEXT;');
+
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS board_editors (
+          board_id UUID NOT NULL REFERENCES boards(id) ON DELETE CASCADE,
+          email TEXT NOT NULL,
+          role TEXT NOT NULL DEFAULT 'editor',
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          created_by TEXT,
+          CHECK (email = LOWER(email)),
+          CHECK (role IN ('editor'))
+        );
+      `);
+      await pool.query('CREATE UNIQUE INDEX IF NOT EXISTS board_editors_board_email_uidx ON board_editors (board_id, email);');
+      await pool.query('CREATE INDEX IF NOT EXISTS board_editors_email_idx ON board_editors (email);');
+      await pool.query('CREATE INDEX IF NOT EXISTS board_editors_board_id_idx ON board_editors (board_id);');
     })();
   }
   return schemaReadyPromise;
