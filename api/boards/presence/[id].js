@@ -15,6 +15,15 @@ function cleanupBoard(boardId, now = Date.now()) {
   if (viewers.size === 0) boardsPresence.delete(boardId);
 }
 
+function safeNumber(value) {
+  const numberValue = Number(value);
+  return Number.isFinite(numberValue) ? numberValue : null;
+}
+
+function safeString(value, max = 80) {
+  return typeof value === 'string' && value.trim() ? value.trim().slice(0, max) : null;
+}
+
 module.exports = async function handler(req, res) {
   if (req.method !== 'GET' && req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -29,16 +38,16 @@ module.exports = async function handler(req, res) {
   const viewers = boardsPresence.get(boardId) || new Map();
 
   if (req.method === 'POST') {
-    const { selectedNodeId = null, editingNodeId = null, editingField = null } = req.body || {};
-    const safeSelectedNodeId = typeof selectedNodeId === 'string' && selectedNodeId.trim()
-      ? selectedNodeId.trim()
-      : null;
-    const safeEditingNodeId = typeof editingNodeId === 'string' && editingNodeId.trim()
-      ? editingNodeId.trim()
-      : null;
-    const safeEditingField = safeEditingNodeId && typeof editingField === 'string' && editingField.trim()
-      ? editingField.trim().slice(0, 40)
-      : null;
+    const { selectedNodeId = null, editingNodeId = null, editingField = null, cursorX = null, cursorY = null, viewportCenterX = null, viewportCenterY = null, hoveredNodeId = null } = req.body || {};
+    const safeSelectedNodeId = safeString(selectedNodeId);
+    const safeEditingNodeId = safeString(editingNodeId);
+    const safeEditingField = safeEditingNodeId ? safeString(editingField, 40) : null;
+    const safeCursorX = safeNumber(cursorX);
+    const safeCursorY = safeNumber(cursorY);
+    const hasCursor = safeCursorX !== null && safeCursorY !== null;
+    const safeViewportCenterX = safeNumber(viewportCenterX);
+    const safeViewportCenterY = safeNumber(viewportCenterY);
+    const safeHoveredNodeId = safeString(hoveredNodeId);
 
     if (user?.email) {
       const key = String(user.email).toLowerCase();
@@ -49,6 +58,12 @@ module.exports = async function handler(req, res) {
         selectedNodeId: safeSelectedNodeId,
         editingNodeId: safeEditingNodeId,
         editingField: safeEditingField,
+        cursorX: hasCursor ? safeCursorX : null,
+        cursorY: hasCursor ? safeCursorY : null,
+        viewportCenterX: safeViewportCenterX,
+        viewportCenterY: safeViewportCenterY,
+        hoveredNodeId: safeHoveredNodeId,
+        cursorUpdatedAt: hasCursor ? now : null,
         lastSeenAt: now,
         lastInteractionAt: now
       });
@@ -64,6 +79,12 @@ module.exports = async function handler(req, res) {
     selectedNodeId: v.selectedNodeId || null,
     editingNodeId: v.editingNodeId || null,
     editingField: v.editingField || null,
+    cursorX: Number.isFinite(v.cursorX) ? v.cursorX : null,
+    cursorY: Number.isFinite(v.cursorY) ? v.cursorY : null,
+    viewportCenterX: Number.isFinite(v.viewportCenterX) ? v.viewportCenterX : null,
+    viewportCenterY: Number.isFinite(v.viewportCenterY) ? v.viewportCenterY : null,
+    hoveredNodeId: v.hoveredNodeId || null,
+    cursorUpdatedAt: v.cursorUpdatedAt || null,
     lastInteractionAt: v.lastInteractionAt || null
   }));
 

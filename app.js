@@ -108,6 +108,13 @@ const state = {
   ,presenceEditingClearTimer: null
   ,presenceViewers: []
   ,presenceNodeSignature: ""
+  ,presenceCursorX: null
+  ,presenceCursorY: null
+  ,presenceCursorHoveredNodeId: null
+  ,presenceCursorLastMovedAt: null
+  ,presenceCursorPublishTimer: null
+  ,presenceCursorClearTimer: null
+  ,presenceCursorRenderFrame: null
   ,activityFeed: []
   ,activityCollapsed: false
 };
@@ -1193,6 +1200,7 @@ function clearNodePresenceBadges() {
   if (!el.zoomLayer) return;
   el.zoomLayer.querySelectorAll('.node-presence-overlay, .node-editing-indicator').forEach((x) => x.remove());
   el.zoomLayer.querySelectorAll('.node.remote-editing').forEach((nodeEl) => nodeEl.classList.remove('remote-editing'));
+  clearCollaboratorCursors();
 }
 
 function renderNodePresenceBadges({ force = false } = {}) {
@@ -1335,8 +1343,20 @@ function resetPresenceSelectionQueue() {
     clearTimeout(state.presenceEditingClearTimer);
     state.presenceEditingClearTimer = null;
   }
+  if (state.presenceCursorPublishTimer) {
+    clearTimeout(state.presenceCursorPublishTimer);
+    state.presenceCursorPublishTimer = null;
+  }
+  if (state.presenceCursorClearTimer) {
+    clearTimeout(state.presenceCursorClearTimer);
+    state.presenceCursorClearTimer = null;
+  }
   state.presenceEditingNodeId = null;
   state.presenceEditingField = null;
+  state.presenceCursorX = null;
+  state.presenceCursorY = null;
+  state.presenceCursorHoveredNodeId = null;
+  state.presenceCursorLastMovedAt = null;
 }
 
 function stopPresenceLite() {
@@ -1369,6 +1389,7 @@ async function pingPresenceLite() {
   const selectedNodeId = state.selectedPrimary || null;
   const editingNodeId = state.presenceEditingNodeId || null;
   const editingField = editingNodeId ? (state.presenceEditingField || null) : null;
+  const cursorPayload = cursorPresencePayload();
   if (!boardId || !state.user?.email) {
     state.presenceViewers = [];
     state.presenceSelectedNodeIdLastSent = undefined;
@@ -1385,7 +1406,7 @@ async function pingPresenceLite() {
     const response = await fetch(`/api/boards/presence/${encodeURIComponent(boardId)}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ selectedNodeId, editingNodeId, editingField })
+      body: JSON.stringify({ selectedNodeId, editingNodeId, editingField, ...cursorPayload })
     });
     if (!response.ok) throw new Error('presence unavailable');
     const data = await response.json();
@@ -1395,6 +1416,7 @@ async function pingPresenceLite() {
     state.presenceViewers = Array.isArray(data?.viewers) ? data.viewers : [];
     renderPresenceLite();
     renderNodePresenceBadges();
+    scheduleCollaboratorCursorRender();
   } catch (_error) {
     state.presenceViewers = [];
     renderPresenceLite();
@@ -1412,7 +1434,8 @@ function buildPresencePayloadSignature() {
   return JSON.stringify({
     selectedNodeId: state.selectedPrimary || null,
     editingNodeId: state.presenceEditingNodeId || null,
-    editingField: state.presenceEditingNodeId ? (state.presenceEditingField || null) : null
+    editingField: state.presenceEditingNodeId ? (state.presenceEditingField || null) : null,
+    ...cursorPresencePayload()
   });
 }
 
@@ -1530,9 +1553,15 @@ function bindEditingPresenceTracking() {
     });
   });
   document.addEventListener('visibilitychange', () => {
-    if (document.hidden) clearLocalEditingPresence({ notifyDelayMs: 0 });
+    if (document.hidden) {
+      clearLocalEditingPresence({ notifyDelayMs: 0 });
+      clearLocalCursorPresence({ notifyDelayMs: 0 });
+    }
   });
-  window.addEventListener('pagehide', () => clearLocalEditingPresence({ notifyDelayMs: 0 }));
+  window.addEventListener('pagehide', () => {
+    clearLocalEditingPresence({ notifyDelayMs: 0 });
+    clearLocalCursorPresence({ notifyDelayMs: 0 });
+  });
 }
 
 function startPresenceLite() {
@@ -1769,6 +1798,157 @@ function boardPointFromClient(clientX, clientY) {
   };
 }
 
+function viewportPresenceCenter() {
+  return {
+    x: (el.canvas.scrollLeft + el.canvas.clientWidth / 2) / state.zoom,
+    y: (el.canvas.scrollTop + el.canvas.clientHeight / 2) / state.zoom
+  };
+}
+
+function roundedPresenceNumber(value) {
+  return Number.isFinite(value) ? Math.round(value) : null;
+}
+
+function cursorPresencePayload() {
+  const center = viewportPresenceCenter();
+  return {
+    cursorX: roundedPresenceNumber(state.presenceCursorX),
+    cursorY: roundedPresenceNumber(state.presenceCursorY),
+    viewportCenterX: roundedPresenceNumber(center.x),
+    viewportCenterY: roundedPresenceNumber(center.y),
+    hoveredNodeId: state.presenceCursorHoveredNodeId || null
+  };
+}
+
+function ensureCursorPresenceLayer() {
+  if (!el.canvasScrollSurface) return null;
+  let layer = el.canvasScrollSurface.querySelector('.collab-cursor-layer');
+  if (!layer) {
+    layer = document.createElement('div');
+    layer.className = 'collab-cursor-layer';
+    el.canvasScrollSurface.appendChild(layer);
+  }
+  return layer;
+}
+
+function clearCollaboratorCursors() {
+  if (state.presenceCursorRenderFrame) {
+    cancelAnimationFrame(state.presenceCursorRenderFrame);
+    state.presenceCursorRenderFrame = null;
+  }
+  el.canvasScrollSurface?.querySelector('.collab-cursor-layer')?.remove();
+}
+
+function getRemoteCursorViewers() {
+  const viewers = Array.isArray(state.presenceViewers) ? state.presenceViewers : [];
+  const currentUserEmail = (state.user?.email || '').toLowerCase();
+  const now = Date.now();
+  return viewers.filter((viewer) => {
+    const viewerEmail = String(viewer?.email || '').toLowerCase();
+    if (!viewerEmail || viewerEmail === currentUserEmail) return false;
+    if (!Number.isFinite(viewer.cursorX) || !Number.isFinite(viewer.cursorY)) return false;
+    const lastCursorAt = Number(viewer.cursorUpdatedAt || viewer.lastInteractionAt || 0);
+    if (lastCursorAt && now - lastCursorAt > 15000) return false;
+    return true;
+  });
+}
+
+function renderCollaboratorCursors() {
+  state.presenceCursorRenderFrame = null;
+  const layer = ensureCursorPresenceLayer();
+  if (!layer) return;
+  const viewers = getRemoteCursorViewers();
+  if (!viewers.length) {
+    layer.innerHTML = '';
+    return;
+  }
+  layer.innerHTML = '';
+  viewers.slice(0, 8).forEach((viewer) => {
+    const cursor = document.createElement('div');
+    cursor.className = 'collab-cursor';
+    const name = getViewerDisplayName(viewer);
+    const hoverNode = viewer.hoveredNodeId ? getNode(viewer.hoveredNodeId) : null;
+    const hoverText = hoverNode ? ` · viewing ${hoverNode.title || hoverNode.type || 'node'}` : '';
+    cursor.title = `${name}${hoverText}`;
+    cursor.setAttribute('aria-label', cursor.title);
+    cursor.style.transform = `translate(${Math.round(viewer.cursorX * state.zoom)}px, ${Math.round(viewer.cursorY * state.zoom)}px)`;
+
+    const pointer = document.createElement('span');
+    pointer.className = 'collab-cursor-pointer';
+    pointer.textContent = '➤';
+
+    const pill = document.createElement('span');
+    pill.className = 'collab-cursor-pill';
+    if (viewer?.avatar) {
+      const img = document.createElement('img');
+      img.src = viewer.avatar;
+      img.alt = name;
+      pill.appendChild(img);
+    } else {
+      const initials = document.createElement('span');
+      initials.className = 'collab-cursor-initials';
+      initials.textContent = getViewerInitials(viewer);
+      pill.appendChild(initials);
+    }
+    const label = document.createElement('span');
+    label.className = 'collab-cursor-name';
+    label.textContent = name;
+    pill.appendChild(label);
+
+    cursor.append(pointer, pill);
+    layer.appendChild(cursor);
+  });
+}
+
+function scheduleCollaboratorCursorRender() {
+  if (state.presenceCursorRenderFrame) return;
+  state.presenceCursorRenderFrame = requestAnimationFrame(renderCollaboratorCursors);
+}
+
+function clearLocalCursorPresence({ notifyDelayMs = 0 } = {}) {
+  if (state.presenceCursorClearTimer) {
+    clearTimeout(state.presenceCursorClearTimer);
+    state.presenceCursorClearTimer = null;
+  }
+  if (state.presenceCursorPublishTimer) {
+    clearTimeout(state.presenceCursorPublishTimer);
+    state.presenceCursorPublishTimer = null;
+  }
+  if (state.presenceCursorX === null && state.presenceCursorY === null && !state.presenceCursorHoveredNodeId) return;
+  state.presenceCursorX = null;
+  state.presenceCursorY = null;
+  state.presenceCursorHoveredNodeId = null;
+  state.presenceCursorLastMovedAt = null;
+  notifyPresenceSelectionMaybe(notifyDelayMs);
+}
+
+function scheduleCursorPresencePublish(delayMs = 180) {
+  if (!state.user?.email || !(state.currentBoardId || getBoardIdFromPath()) || document.hidden) return;
+  if (state.presenceCursorPublishTimer) return;
+  state.presenceCursorPublishTimer = setTimeout(() => {
+    state.presenceCursorPublishTimer = null;
+    notifyPresenceSelectionMaybe(0);
+  }, delayMs);
+}
+
+function handleLocalCursorMove(event) {
+  if (!state.user?.email || document.hidden || el.canvas.classList.contains('hidden')) return;
+  const point = boardPointFromClient(event.clientX, event.clientY);
+  const hoveredNodeId = event.target.closest?.('.node[data-id]')?.dataset?.id || null;
+  state.presenceCursorX = point.x;
+  state.presenceCursorY = point.y;
+  state.presenceCursorHoveredNodeId = hoveredNodeId;
+  state.presenceCursorLastMovedAt = Date.now();
+  if (state.presenceCursorClearTimer) clearTimeout(state.presenceCursorClearTimer);
+  state.presenceCursorClearTimer = setTimeout(() => clearLocalCursorPresence({ notifyDelayMs: 0 }), 9000);
+  scheduleCursorPresencePublish(160);
+}
+
+function handleViewportPresenceChange() {
+  scheduleCollaboratorCursorRender();
+  scheduleCursorPresencePublish(240);
+}
+
 function visibleBoardBounds() {
   const left = el.canvas.scrollLeft / state.zoom;
   const top = el.canvas.scrollTop / state.zoom;
@@ -1964,6 +2144,8 @@ function fitBoardContentToViewport({ padding = 120, minZoom = 0.12, maxZoom = 1,
     });
   }
   drawLinks();
+  scheduleCollaboratorCursorRender();
+  handleViewportPresenceChange();
   return true;
 }
 
@@ -3089,6 +3271,8 @@ function setZoom(nextZoom, centerClient = null) {
   el.canvas.scrollTop = boardY * state.zoom - (cy - rect.top);
 
   drawLinks();
+  scheduleCollaboratorCursorRender();
+  handleViewportPresenceChange();
   saveCampaignCanvasState();
 }
 
@@ -5953,9 +6137,17 @@ el.canvas.addEventListener(
     event.preventDefault();
     el.canvas.scrollTop += event.deltaY;
     el.canvas.scrollLeft += event.deltaX;
+    handleViewportPresenceChange();
   },
   { passive: false }
 );
+
+el.canvas.addEventListener("pointermove", handleLocalCursorMove, { passive: true });
+el.canvas.addEventListener("pointerleave", () => {
+  if (state.presenceCursorClearTimer) clearTimeout(state.presenceCursorClearTimer);
+  state.presenceCursorClearTimer = setTimeout(() => clearLocalCursorPresence({ notifyDelayMs: 0 }), 1200);
+});
+el.canvas.addEventListener("scroll", handleViewportPresenceChange, { passive: true });
 
 el.canvas.addEventListener("contextmenu", (event) => {
   event.preventDefault();
@@ -6440,6 +6632,7 @@ el.canvas.addEventListener("pointerdown", (event) => {
       panning = true;
       el.canvas.scrollLeft = startLeft - panDx;
       el.canvas.scrollTop = startTop - panDy;
+      handleViewportPresenceChange();
       return;
     }
     const cx = ev.clientX - rect.left;

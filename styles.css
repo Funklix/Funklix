@@ -2077,3 +2077,84 @@ button:active {
   background: rgba(201, 74, 74, 0.16);
   color: #ffc0c0;
 }
+
+.collab-cursor-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  pointer-events: none;
+  overflow: visible;
+}
+
+.collab-cursor {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 3px;
+  pointer-events: none;
+  filter: drop-shadow(0 6px 12px rgba(25, 30, 70, 0.2));
+  transition: transform 140ms ease-out, opacity 160ms ease-out;
+  will-change: transform;
+}
+
+.collab-cursor-pointer {
+  color: #6b4eff;
+  font-size: 17px;
+  line-height: 1;
+  transform: translate(-2px, -1px) rotate(-18deg);
+  text-shadow: 0 0 0 #fff, 0 1px 5px rgba(44, 37, 120, 0.22);
+}
+
+.collab-cursor-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 150px;
+  margin-top: 12px;
+  padding: 3px 7px 3px 4px;
+  border: 1px solid rgba(107, 78, 255, 0.2);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.95);
+  color: #4c3cc4;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.collab-cursor-pill img,
+.collab-cursor-initials {
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  flex: 0 0 auto;
+}
+
+.collab-cursor-pill img {
+  object-fit: cover;
+  border: 1px solid rgba(107, 78, 255, 0.16);
+}
+
+.collab-cursor-initials {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #efeaff;
+  color: #4f39db;
+  font-size: 9px;
+  font-weight: 900;
+}
+
+.collab-cursor-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .collab-cursor {
+    transition: none;
+  }
+}
