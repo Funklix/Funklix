@@ -19,6 +19,14 @@ const BRAND_CORE_STORAGE_KEY = "brandBrainState";
 const ACTIVITY_FEED_MAX_ENTRIES = 50;
 const ACTIVITY_FEED_VISIBLE_ENTRIES = 15;
 const ACTIVITY_DEBOUNCE_MS = 12 * 1000;
+const NODE_STATUSES = [
+  { value: "Draft", label: "Draft", tone: "draft" },
+  { value: "In Review", label: "In Review", tone: "review" },
+  { value: "Needs Changes", label: "Needs Changes", tone: "changes" },
+  { value: "Approved", label: "Approved", tone: "approved" },
+  { value: "Published", label: "Published", tone: "published" }
+];
+const NODE_STATUS_BY_VALUE = new Map(NODE_STATUSES.map((status) => [status.value, status]));
 
 let activeLightbox = null;
 
@@ -81,7 +89,7 @@ const state = {
   ,analysisLastUpdatedAt: null
   ,analysisError: ""
   ,nodeSearchQuery: ""
-  ,nodeFilters: { type: new Set(), platform: new Set(), state: new Set() }
+  ,nodeFilters: { type: new Set(), platform: new Set(), state: new Set(), status: new Set() }
   ,user: null
   ,authConfigured: true
   ,currentBoardOwnerEmail: null
@@ -250,6 +258,7 @@ const el = {
   connectedContextBody: document.getElementById("connected-context-body"),
   inputs: {
     type: document.getElementById("node-type"),
+    status: document.getElementById("node-status"),
     title: document.getElementById("node-title"),
     content: document.getElementById("node-content"),
     imagePrompt: document.getElementById("node-image-prompt"),
@@ -541,6 +550,7 @@ function updateReadOnlyNoticeVisibility() {
     el.duplicateBoardCtaButton.classList.toggle("hidden", !(isReadOnly && canDuplicate));
     el.duplicateBoardCtaButton.disabled = state.isSaving || state.conflictModalOpen;
   }
+  if (el.inputs?.status) el.inputs.status.disabled = isReadOnly || !state.selectedPrimary;
   renderBoardAccessCluster();
 }
 
@@ -1033,6 +1043,24 @@ function requireCommentIdentity() {
   return false;
 }
 
+function normalizeNodeStatus(status) {
+  const value = typeof status === "string" ? status.trim() : "";
+  return NODE_STATUS_BY_VALUE.has(value) ? value : "Draft";
+}
+
+function getNodeStatusDefinition(status) {
+  return NODE_STATUS_BY_VALUE.get(normalizeNodeStatus(status)) || NODE_STATUSES[0];
+}
+
+function nodeStatusLabel(status) {
+  return getNodeStatusDefinition(status).label;
+}
+
+function recordStatusChangedActivity(node, statusLabel = "") {
+  if (!node || state.isBoardLoading) return;
+  appendActivity("status_changed", { node, statusLabel: statusLabel || nodeStatusLabel(node.status) });
+}
+
 function sanitizeActivityFeed(feed) {
   if (!Array.isArray(feed)) return [];
   return feed
@@ -1049,6 +1077,7 @@ function sanitizeActivityFeed(feed) {
         : { name: String(entry.user || "Someone").slice(0, 80), email: "", avatar: "" },
       nodeId: entry.nodeId ? String(entry.nodeId) : null,
       nodeTitle: entry.nodeTitle ? String(entry.nodeTitle).slice(0, 120) : "",
+      statusLabel: entry.statusLabel ? String(entry.statusLabel).slice(0, 80) : "",
       timestamp: entry.timestamp || new Date().toISOString()
     }))
     .sort((a, b) => Date.parse(b.timestamp || 0) - Date.parse(a.timestamp || 0))
@@ -1063,7 +1092,7 @@ function activityNodeTitle(node, fallback = "this node") {
   return (node?.title || node?.type || fallback || "this node").trim();
 }
 
-function appendActivity(type, { node = null, nodeId = null, nodeTitle = "", userName = "" } = {}) {
+function appendActivity(type, { node = null, nodeId = null, nodeTitle = "", userName = "", statusLabel = "" } = {}) {
   if (state.isBoardLoading || state.initialServerLoadInFlight) return null;
   const resolvedNode = node || (nodeId ? getNode(nodeId) : null);
   const safeNodeId = nodeId || resolvedNode?.id || null;
@@ -1081,6 +1110,7 @@ function appendActivity(type, { node = null, nodeId = null, nodeTitle = "", user
   if (recent) {
     recent.timestamp = nowIso;
     recent.nodeTitle = safeNodeTitle;
+    if (statusLabel) recent.statusLabel = statusLabel;
     renderActivityFeed();
     return recent;
   }
@@ -1091,6 +1121,7 @@ function appendActivity(type, { node = null, nodeId = null, nodeTitle = "", user
     user,
     nodeId: safeNodeId,
     nodeTitle: safeNodeTitle,
+    statusLabel: statusLabel || "",
     timestamp: nowIso
   };
   state.activityFeed = [entry, ...state.activityFeed].slice(0, ACTIVITY_FEED_MAX_ENTRIES);
@@ -1108,6 +1139,7 @@ function formatActivityAction(entry = {}) {
   const map = {
     node_created: `created ${title}`,
     node_updated: `edited ${title}`,
+    status_changed: `changed status to ${entry.statusLabel || "Draft"} on ${title}`,
     node_moved: `moved ${title}`,
     node_deleted: `deleted ${title}`,
     edge_connected: `connected ${title}`,
@@ -2623,6 +2655,7 @@ function sanitizeNodeImages(images) {
 
 function sanitizeNodeForPersistence(node) {
   const clean = { ...node, images: sanitizeNodeImages(node.images) };
+  clean.status = normalizeNodeStatus(clean.status);
   delete clean.isGeneratingContentPack;
   delete clean.generatingContentPack;
   delete clean.isGenerating;
@@ -3748,6 +3781,7 @@ function createNode({ type = "Idea", parentId = null, position = null, images = 
     type,
     title: "",
     content: "",
+    status: "Draft",
     tags: [],
     variants: [],
     contentFormat: "1:1",
@@ -4467,6 +4501,23 @@ function updateNodeCommentBadge(node, nodeEl) {
   commentBadge.classList.toggle("has-recent", hasRecentUnopenedComment(node));
 }
 
+function updateNodeStatusChip(node, nodeEl) {
+  if (!node || !nodeEl) return;
+  const typeEl = nodeEl.querySelector(".type");
+  let chip = nodeEl.querySelector(".node-status-chip");
+  if (!chip) {
+    chip = document.createElement("span");
+    chip.className = "node-status-chip";
+    if (typeEl) typeEl.insertAdjacentElement("afterend", chip);
+    else nodeEl.prepend(chip);
+  }
+  const status = getNodeStatusDefinition(node.status);
+  chip.textContent = status.label;
+  chip.dataset.statusTone = status.tone;
+  chip.title = `Workflow status: ${status.label}`;
+  chip.setAttribute("aria-label", chip.title);
+}
+
 function updateNodeCard(node) {
   const nodeEl = el.zoomLayer.querySelector(`[data-id='${node.id}']`);
   if (!nodeEl) return;
@@ -4489,6 +4540,8 @@ function updateNodeCard(node) {
 
   nodeEl.querySelector(".type").textContent = node.type;
   nodeEl.querySelector(".type").style.color = tone;
+  updateNodeStatusChip(node, nodeEl);
+  nodeEl.classList.toggle("is-in-review", normalizeNodeStatus(node.status) === "In Review");
   const editable = !isBoardReadOnly();
   const compactToggle = nodeEl.querySelector(".node-compact-toggle");
   if (compactToggle) {
@@ -4867,6 +4920,7 @@ function nodeSearchText(node) {
     node.type,
     node.title,
     node.content,
+    node.status,
     node.audience,
     node.goal,
     node.funnelStage,
@@ -4884,6 +4938,7 @@ function nodeMatchesSearchAndFilters(node) {
   if (q && !nodeSearchText(node).includes(q)) return false;
   if (state.nodeFilters.type.size && !state.nodeFilters.type.has(node.type)) return false;
   if (state.nodeFilters.platform.size && !state.nodeFilters.platform.has(node.social?.platform || "")) return false;
+  if (state.nodeFilters.status?.size && !state.nodeFilters.status.has(normalizeNodeStatus(node.status))) return false;
   if (state.nodeFilters.state.size) {
     const strategyStage = node.strategy?.funnelStage || "";
     const states = new Set([
@@ -4927,6 +4982,9 @@ function buildFiltersPopoverHtml() {
     <button type="button" data-filter-group="platform" data-filter-value="X / Twitter">X</button>
     <button type="button" data-filter-group="platform" data-filter-value="Instagram">Instagram</button>
     <button type="button" data-filter-group="platform" data-filter-value="TikTok">TikTok</button>
+  </div></div>
+  <div class="filter-group"><strong>Status</strong><div class="node-filter-chips">
+    ${NODE_STATUSES.map((status) => `<button type="button" data-filter-group="status" data-filter-value="${status.value}">${status.label}</button>`).join("")}
   </div></div>
   <div class="filter-group"><strong>State / Funnel</strong><div class="node-filter-chips">
     <button type="button" data-filter-group="state" data-filter-value="scheduled">Scheduled</button>
@@ -5205,6 +5263,7 @@ function fillInspector(node) {
     variantsLabel?.classList.remove("hidden");
     el.inputs.variants.classList.remove("hidden");
     el.inspectorImageList.innerHTML = "";
+    if (el.inputs.status) el.inputs.status.disabled = true;
     if (el.connectedContextSummary) el.connectedContextSummary.textContent = "Parents: 0 · Children: 0";
     if (el.connectedContextBody) el.connectedContextBody.textContent = "";
     updateInspectorActionVisibility();
@@ -5213,6 +5272,10 @@ function fillInspector(node) {
 
   el.inspectorMeta.textContent = `Bearbeite ${node.id}`;
   el.inputs.type.value = node.type;
+  if (el.inputs.status) {
+    el.inputs.status.value = normalizeNodeStatus(node.status);
+    el.inputs.status.disabled = isBoardReadOnly();
+  }
   el.inputs.title.value = node.title;
   el.inputs.content.value = node.content;
   el.inputs.imagePrompt.value = node.imagePrompt || "";
@@ -6749,6 +6812,11 @@ el.nodeForm.addEventListener("input", (event) => {
   if (!node) return;
 
   if (event.target === el.inputs.type) node.type = el.inputs.type.value;
+  if (event.target === el.inputs.status) {
+    const previousStatus = normalizeNodeStatus(node.status);
+    node.status = normalizeNodeStatus(el.inputs.status.value);
+    if (previousStatus !== node.status) recordStatusChangedActivity(node, nodeStatusLabel(node.status));
+  }
   if (event.target === el.inputs.title) node.title = el.inputs.title.value.trim();
   if (event.target === el.inputs.content) node.content = el.inputs.content.value;
   if (event.target === el.inputs.imagePrompt) node.imagePrompt = el.inputs.imagePrompt.value;
@@ -6774,7 +6842,7 @@ el.nodeForm.addEventListener("input", (event) => {
   updateNodeCard(node);
   updateListView();
   fillInspector(node);
-  recordNodeUpdatedActivity(node);
+  if (event.target !== el.inputs.status) recordNodeUpdatedActivity(node);
   saveCampaignCanvasState();
 });
 el.inputs.channel.addEventListener("keydown", (event) => {
