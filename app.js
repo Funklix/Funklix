@@ -525,6 +525,35 @@ function applyBoardAccessFromServer(access, source = "server") {
   return true;
 }
 
+function boardAccessFromServer(access, fallback = state.boardAccess) {
+  const role = typeof access?.role === "string" && access.role ? access.role : (fallback?.reason || "unknown");
+  return {
+    canView: access?.canView !== false,
+    canEdit: access?.canEdit !== false,
+    canManagePermissions: access?.canManagePermissions === true,
+    canRename: access?.canRename === true,
+    canDelete: access?.canDelete === true,
+    reason: role
+  };
+}
+
+function applyBoardAccessFromServer(access, source = "server") {
+  if (!access || typeof access !== "object" || typeof access.role !== "string") return false;
+  const nextAccess = boardAccessFromServer(access);
+  const changed = state.boardAccess?.reason !== nextAccess.reason
+    || state.boardAccess?.canView !== nextAccess.canView
+    || state.boardAccess?.canEdit !== nextAccess.canEdit
+    || state.boardAccess?.canManagePermissions !== nextAccess.canManagePermissions
+    || state.boardAccess?.canRename !== nextAccess.canRename
+    || state.boardAccess?.canDelete !== nextAccess.canDelete;
+  state.boardAccess = nextAccess;
+  if (changed) console.debug("[Funklix Access] boardAccess", { source, access: state.boardAccess });
+  updateReadOnlyNoticeVisibility();
+  if (nextAccess.canManagePermissions) loadBoardEditors({ silent: true });
+  else state.boardEditors = [];
+  return true;
+}
+
 function updateReadOnlyNoticeVisibility() {
   const isReadOnly = state.boardAccess?.canEdit === false;
   const readOnlyActionTitle = "View-only board. This action is disabled.";
