@@ -2447,14 +2447,14 @@ button:active {
   100% { opacity: 0; transform: translate(var(--focus-x, 0), var(--focus-y, 0)) scale(2.5); }
 }
 
-.presence-lite .presence-avatars {
+.topbar .presence-lite .presence-avatars {
   align-items: center;
   gap: 3px;
   flex-direction: row-reverse;
   overflow: visible;
 }
 
-.presence-lite .presence-avatar {
+.topbar .presence-lite .presence-avatar {
   box-sizing: border-box;
   width: 24px;
   height: 24px;
@@ -2462,10 +2462,16 @@ button:active {
   min-height: 24px;
   flex: 0 0 24px;
   margin-left: 0;
+  padding: 0;
   border-width: 2px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 1 / 1;
   line-height: 1;
   vertical-align: middle;
   text-align: center;
+  overflow: hidden;
   font-size: 10px;
   font-weight: 800;
   letter-spacing: -0.01em;
@@ -2473,18 +2479,19 @@ button:active {
   opacity: 1;
 }
 
-.presence-lite .presence-avatar img {
+.topbar .presence-lite .presence-avatar img {
   width: 100%;
   height: 100%;
   min-width: 100%;
   min-height: 100%;
+  display: block;
   border-radius: inherit;
   object-fit: cover;
   object-position: center;
   flex: 0 0 auto;
 }
 
-.presence-lite .presence-avatar:not(:disabled):hover,
-.presence-lite .presence-avatar.is-following {
+.topbar .presence-lite .presence-avatar:not(:disabled):hover,
+.topbar .presence-lite .presence-avatar.is-following {
   transform: translateY(-1px) scale(1.06);
 }
