@@ -531,6 +531,35 @@ function applyBoardAccessFromServer(access, source = "server") {
   return true;
 }
 
+function boardAccessFromServer(access, fallback = state.boardAccess) {
+  const role = typeof access?.role === "string" && access.role ? access.role : (fallback?.reason || "unknown");
+  return {
+    canView: access?.canView !== false,
+    canEdit: access?.canEdit !== false,
+    canManagePermissions: access?.canManagePermissions === true,
+    canRename: access?.canRename === true,
+    canDelete: access?.canDelete === true,
+    reason: role
+  };
+}
+
+function applyBoardAccessFromServer(access, source = "server") {
+  if (!access || typeof access !== "object" || typeof access.role !== "string") return false;
+  const nextAccess = boardAccessFromServer(access);
+  const changed = state.boardAccess?.reason !== nextAccess.reason
+    || state.boardAccess?.canView !== nextAccess.canView
+    || state.boardAccess?.canEdit !== nextAccess.canEdit
+    || state.boardAccess?.canManagePermissions !== nextAccess.canManagePermissions
+    || state.boardAccess?.canRename !== nextAccess.canRename
+    || state.boardAccess?.canDelete !== nextAccess.canDelete;
+  state.boardAccess = nextAccess;
+  if (changed) console.debug("[Funklix Access] boardAccess", { source, access: state.boardAccess });
+  updateReadOnlyNoticeVisibility();
+  if (nextAccess.canManagePermissions) loadBoardEditors({ silent: true });
+  else state.boardEditors = [];
+  return true;
+}
+
 function updateReadOnlyNoticeVisibility() {
   const isReadOnly = state.boardAccess?.canEdit === false;
   const readOnlyActionTitle = "View-only board. This action is disabled.";
@@ -1184,12 +1213,17 @@ function parseStoredTimestamp(value) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function awarenessUserKey() {
+  const email = String(state.user?.email || "").trim().toLowerCase();
+  return email ? encodeURIComponent(email) : "anonymous";
+}
+
 function activitySeenStorageKey() {
-  return `${ACTIVITY_SEEN_STORAGE_PREFIX}${currentBoardAwarenessKey()}`;
+  return `${ACTIVITY_SEEN_STORAGE_PREFIX}${currentBoardAwarenessKey()}.${awarenessUserKey()}`;
 }
 
 function commentSeenStorageKey() {
-  return `${COMMENT_SEEN_STORAGE_PREFIX}${currentBoardAwarenessKey()}`;
+  return `${COMMENT_SEEN_STORAGE_PREFIX}${currentBoardAwarenessKey()}.${awarenessUserKey()}`;
 }
 
 function getLastSeenActivityAt() {
@@ -1226,21 +1260,23 @@ function latestActivityTimestamp(feed = state.activityFeed) {
 
 function updateActivityUnreadIndicator() {
   const unreadCount = getUnreadActivityEntries().length;
-  if (el.activityCount) el.activityCount.textContent = unreadCount ? String(Math.min(unreadCount, 99)) : "";
+  if (el.activityCount) el.activityCount.textContent = unreadCount ? `${Math.min(unreadCount, 99)} new` : "";
   el.activityPanel?.classList.toggle("has-unread", unreadCount > 0);
   el.activityToggleButton?.classList.toggle("has-unread", unreadCount > 0);
 }
 
-function markActivityFeedSeen() {
+function markActivityFeedSeen({ rerender = false } = {}) {
   const latest = latestActivityTimestamp();
   if (!latest || latest <= getLastSeenActivityAt()) {
     updateActivityUnreadIndicator();
+    if (rerender) renderActivityFeed();
     return;
   }
   state.lastSeenActivityAt = latest;
   localStorage.setItem(activitySeenStorageKey(), String(latest));
   updateActivityUnreadIndicator();
   if (state.activeView === "list" || (el.boardListView && !el.boardListView.classList.contains("hidden"))) updateListView();
+  if (rerender) renderActivityFeed();
 }
 
 function readCommentSeenMap() {
@@ -1378,7 +1414,6 @@ function renderActivityFeed() {
     row.append(avatar, body);
     el.activityFeed.appendChild(row);
   });
-  queueMicrotask(markActivityFeedSeen);
 }
 
 function getUserInitials(user) {
@@ -4612,6 +4647,7 @@ function openNodeCommentThread(nodeId, { highlight = true } = {}) {
 }
 
 function handleActivityEntryFocus(entry) {
+  markActivityFeedSeen({ rerender: true });
   if (!entry?.nodeId) return;
   const didFocus = focusNodeInCanvas(entry.nodeId);
   if (!didFocus) return;
@@ -6161,6 +6197,7 @@ function updateListView() {
       if (hasNodeUnreadActivity || hasUnreadComments) {
         const dot = document.createElement("span");
         dot.className = "node-summary-new-dot";
+        dot.textContent = "New";
         dot.title = hasUnreadComments ? "New discussion activity" : "New activity";
         titleWrap.appendChild(dot);
       }
@@ -6840,9 +6877,11 @@ el.sidebarToggleButton?.addEventListener("click", () => {
   setSidebarCollapsed(collapsed);
 });
 el.activityToggleButton?.addEventListener("click", () => {
+  const wasCollapsed = state.activityCollapsed;
+  const hadUnreadActivity = getUnreadActivityEntries().length > 0;
   state.activityCollapsed = !state.activityCollapsed;
   renderActivityFeed();
-  if (!state.activityCollapsed) markActivityFeedSeen();
+  if (wasCollapsed || hadUnreadActivity) markActivityFeedSeen({ rerender: !state.activityCollapsed });
 });
 
 if (el.addNodeButton) {

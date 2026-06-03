@@ -194,13 +194,17 @@ body {
 .activity-count {
   min-width: 18px;
   height: 18px;
+  padding: 0 6px;
   border-radius: 999px;
   background: #eef0ff;
   color: #5b4ce0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.66rem;
+  font-size: 0.64rem;
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 .activity-count:empty {
@@ -844,12 +848,22 @@ button:active {
 }
 
 .node-summary-new-dot {
-  width: 8px;
-  height: 8px;
-  flex: 0 0 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 30px;
+  height: 18px;
+  flex: 0 0 auto;
+  padding: 0 6px;
   border-radius: 999px;
-  background: #ff8a3d;
-  box-shadow: 0 0 0 3px rgba(255, 138, 61, 0.14);
+  background: #fff1e4;
+  color: #9a4a0f;
+  font-size: 0.58rem;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  box-shadow: 0 0 0 3px rgba(255, 138, 61, 0.12);
 }
 
 .node-summary-row.has-recent-activity {
@@ -1134,6 +1148,82 @@ button:active {
   margin-left: -7px;
 }
 
+.node-editing-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.node-editing-extra {
+  background: #f7f8ff;
+  color: #52608f;
+}
+
+.node-editing-pencil {
+  font-size: 0.72rem;
+}
+
+.node-editing-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@keyframes node-editing-soft-pulse {
+  0%, 100% { transform: translateY(0); opacity: 0.88; }
+  50% { transform: translateY(-1px); opacity: 1; }
+}
+
+@keyframes node-editing-ring-pulse {
+  0%, 100% { opacity: 0.45; transform: scale(1); }
+  50% { opacity: 0.9; transform: scale(1.01); }
+}
+
+
+.node-presence-overlay {
+  position: absolute;
+  top: -12px;
+  right: -10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+  pointer-events: none;
+  z-index: 8;
+  filter: drop-shadow(0 5px 10px rgba(24, 30, 58, 0.18));
+  animation: node-presence-fade-in 160ms ease-out both;
+}
+
+.node-presence-avatar,
+.node-presence-extra {
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  border: 2px solid #fff;
+  background: linear-gradient(135deg, #f2f5ff 0%, #e8ecff 100%);
+  color: #4655b9;
+  font-size: 0.68rem;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 0 1px rgba(28, 36, 78, 0.1), 0 3px 8px rgba(28, 36, 78, 0.2);
+  overflow: hidden;
+  pointer-events: auto;
+  transition: transform 120ms ease, box-shadow 120ms ease;
+}
+
+.node-presence-avatar:hover,
+.node-presence-extra:hover {
+  transform: translateY(-1px) scale(1.06);
+  box-shadow: 0 0 0 1px rgba(28, 36, 78, 0.12), 0 5px 12px rgba(28, 36, 78, 0.24);
+}
+
+.node-presence-avatar + .node-presence-avatar,
+.node-presence-avatar + .node-presence-extra {
+  margin-left: -7px;
+}
+
 .node-presence-avatar img {
   width: 100%;
   height: 100%;
@@ -1237,54 +1327,6 @@ button:active {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.node-status-chip[data-status-tone="draft"] {
-  border-color: rgba(91, 102, 135, 0.18);
-  background: #f5f7fb;
-  color: #5b6687;
-}
-
-.node-status-chip[data-status-tone="review"] {
-  border-color: rgba(67, 111, 255, 0.2);
-  background: #eef3ff;
-  color: #3159d4;
-}
-
-.node-status-chip[data-status-tone="changes"] {
-  border-color: rgba(238, 135, 55, 0.24);
-  background: #fff4e8;
-  color: #b65b12;
-}
-
-.node-status-chip[data-status-tone="approved"] {
-  border-color: rgba(54, 164, 104, 0.24);
-  background: #ecfbf2;
-  color: #247a4b;
-}
-
-.node-status-chip[data-status-tone="published"] {
-  border-color: rgba(107, 78, 255, 0.2);
-  background: #f1efff;
-  color: #4b3bc4;
-}
-
-.node.is-compact .node-status-chip {
-  max-width: 118px;
-  padding-inline: 6px;
-}
-
-.node.is-in-review .node-comment-badge.has-unresolved {
-  border-color: rgba(67, 111, 255, 0.36);
-  box-shadow: 0 0 0 2px rgba(67, 111, 255, 0.1);
-}
-
-.node h3,
-.node p {
-  margin: 8px 0;
-  border-radius: 6px;
-  padding: 4px;
-  min-height: 22px;
 }
 
 .node-status-chip[data-status-tone="draft"] {
@@ -2590,6 +2632,19 @@ button:active {
   border-color: rgba(255, 138, 61, 0.48);
   background: #fff3e6;
   color: #9a4a0f;
+}
+
+.node-comment-badge.has-unread::before {
+  content: "";
+  position: absolute;
+  top: -3px;
+  left: -3px;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #ff8a3d;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 2px rgba(255, 138, 61, 0.18);
 }
 
 .node-comment-badge.has-recent::after {
