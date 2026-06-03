@@ -19,6 +19,8 @@ const BRAND_CORE_STORAGE_KEY = "brandBrainState";
 const ACTIVITY_FEED_MAX_ENTRIES = 50;
 const ACTIVITY_FEED_VISIBLE_ENTRIES = 15;
 const ACTIVITY_DEBOUNCE_MS = 12 * 1000;
+const ACTIVITY_SEEN_STORAGE_PREFIX = "funklix.activitySeen.";
+const COMMENT_SEEN_STORAGE_PREFIX = "funklix.commentSeen.";
 const NODE_STATUSES = [
   { value: "Draft", label: "Draft", tone: "draft" },
   { value: "In Review", label: "In Review", tone: "review" },
@@ -127,6 +129,7 @@ const state = {
   ,followingCollaboratorName: ""
   ,activityFeed: []
   ,activityCollapsed: false
+  ,lastSeenActivityAt: 0
   ,commentThreadsOpenedByNode: new Set()
 };
 
@@ -493,32 +496,6 @@ function updateBoardAccessState() {
     state.boardEditors = [];
     state.boardEditorsStatus = { message: "", isError: false };
   }
-  updateReadOnlyNoticeVisibility();
-}
-
-function boardAccessFromServer(access, fallback = state.boardAccess) {
-  const role = typeof access?.role === "string" && access.role ? access.role : (fallback?.reason || "unknown");
-  return {
-    canView: access?.canView !== false,
-    canEdit: access?.canEdit !== false,
-    canManagePermissions: access?.canManagePermissions === true,
-    canRename: access?.canRename === true,
-    canDelete: access?.canDelete === true,
-    reason: role
-  };
-}
-
-function applyBoardAccessFromServer(access, source = "server") {
-  if (!access || typeof access !== "object" || typeof access.role !== "string") return false;
-  const nextAccess = boardAccessFromServer(access);
-  const changed = state.boardAccess?.reason !== nextAccess.reason
-    || state.boardAccess?.canView !== nextAccess.canView
-    || state.boardAccess?.canEdit !== nextAccess.canEdit
-    || state.boardAccess?.canManagePermissions !== nextAccess.canManagePermissions
-    || state.boardAccess?.canRename !== nextAccess.canRename
-    || state.boardAccess?.canDelete !== nextAccess.canDelete;
-  state.boardAccess = nextAccess;
-  if (changed) console.debug("[Funklix Access] boardAccess", { source, access: state.boardAccess });
   updateReadOnlyNoticeVisibility();
   if (nextAccess.canManagePermissions) loadBoardEditors({ silent: true });
   else state.boardEditors = [];
@@ -1198,13 +1175,152 @@ function relativeActivityTime(timestamp) {
   return new Date(then).toLocaleDateString();
 }
 
+function currentBoardAwarenessKey() {
+  return state.currentBoardId || getBoardIdFromPath() || "local";
+}
+
+function parseStoredTimestamp(value) {
+  const parsed = Number(value || 0);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function activitySeenStorageKey() {
+  return `${ACTIVITY_SEEN_STORAGE_PREFIX}${currentBoardAwarenessKey()}`;
+}
+
+function commentSeenStorageKey() {
+  return `${COMMENT_SEEN_STORAGE_PREFIX}${currentBoardAwarenessKey()}`;
+}
+
+function getLastSeenActivityAt() {
+  if (!state.lastSeenActivityAt) state.lastSeenActivityAt = parseStoredTimestamp(localStorage.getItem(activitySeenStorageKey()));
+  return state.lastSeenActivityAt || 0;
+}
+
+function isActivityByCurrentUser(entry = {}) {
+  const currentEmail = String(state.user?.email || "").trim().toLowerCase();
+  const entryEmail = String(entry.user?.email || "").trim().toLowerCase();
+  if (currentEmail && entryEmail) return currentEmail === entryEmail;
+  const currentName = String(state.user?.name || "").trim();
+  const entryName = String(entry.user?.name || "").trim();
+  return !!currentName && !!entryName && currentName === entryName;
+}
+
+function activityTimestamp(entry = {}) {
+  const parsed = Date.parse(entry.timestamp || "");
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function isActivityUnread(entry = {}, seenAt = getLastSeenActivityAt()) {
+  return activityTimestamp(entry) > seenAt && !isActivityByCurrentUser(entry);
+}
+
+function getUnreadActivityEntries(feed = state.activityFeed) {
+  const seenAt = getLastSeenActivityAt();
+  return sanitizeActivityFeed(feed).filter((entry) => isActivityUnread(entry, seenAt));
+}
+
+function latestActivityTimestamp(feed = state.activityFeed) {
+  return sanitizeActivityFeed(feed).reduce((latest, entry) => Math.max(latest, activityTimestamp(entry)), 0);
+}
+
+function updateActivityUnreadIndicator() {
+  const unreadCount = getUnreadActivityEntries().length;
+  if (el.activityCount) el.activityCount.textContent = unreadCount ? String(Math.min(unreadCount, 99)) : "";
+  el.activityPanel?.classList.toggle("has-unread", unreadCount > 0);
+  el.activityToggleButton?.classList.toggle("has-unread", unreadCount > 0);
+}
+
+function markActivityFeedSeen() {
+  const latest = latestActivityTimestamp();
+  if (!latest || latest <= getLastSeenActivityAt()) {
+    updateActivityUnreadIndicator();
+    return;
+  }
+  state.lastSeenActivityAt = latest;
+  localStorage.setItem(activitySeenStorageKey(), String(latest));
+  updateActivityUnreadIndicator();
+  if (state.activeView === "list" || (el.boardListView && !el.boardListView.classList.contains("hidden"))) updateListView();
+}
+
+function readCommentSeenMap() {
+  try {
+    const raw = localStorage.getItem(commentSeenStorageKey());
+    const parsed = raw ? JSON.parse(raw) : {};
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeCommentSeenMap(map) {
+  localStorage.setItem(commentSeenStorageKey(), JSON.stringify(map || {}));
+}
+
+function getNodeCommentsSeenAt(nodeId) {
+  if (!nodeId) return 0;
+  return parseStoredTimestamp(readCommentSeenMap()[nodeId]);
+}
+
+function latestNodeCommentTimestamp(node = {}) {
+  const comments = Array.isArray(node.postits) ? node.postits : [];
+  return comments.reduce((latest, note) => {
+    const noteTime = Date.parse(noteUpdatedAt(note) || "");
+    let nextLatest = Number.isFinite(noteTime) ? Math.max(latest, noteTime) : latest;
+    (Array.isArray(note.replies) ? note.replies : []).forEach((reply) => {
+      const replyTime = Date.parse(reply.updatedAt || reply.createdAt || reply.time || "");
+      if (Number.isFinite(replyTime)) nextLatest = Math.max(nextLatest, replyTime);
+    });
+    return nextLatest;
+  }, 0);
+}
+
+function hasUnreadNodeComments(node) {
+  if (!node?.id) return false;
+  const latest = latestNodeCommentTimestamp(node);
+  return latest > 0 && latest > getNodeCommentsSeenAt(node.id);
+}
+
+function markNodeCommentsSeen(nodeId) {
+  const node = getNode(nodeId);
+  if (!node?.id) return;
+  const latest = latestNodeCommentTimestamp(node) || Date.now();
+  const map = readCommentSeenMap();
+  if (parseStoredTimestamp(map[node.id]) >= latest) return;
+  map[node.id] = latest;
+  writeCommentSeenMap(map);
+  updateNodeCard(node);
+  if (state.activeView === "list" || (el.boardListView && !el.boardListView.classList.contains("hidden"))) updateListView();
+}
+
+function ensureCommentSeenBaseline() {
+  if (localStorage.getItem(commentSeenStorageKey()) !== null) return;
+  const map = {};
+  state.nodes.forEach((node) => {
+    const latest = latestNodeCommentTimestamp(node);
+    if (latest > 0) map[node.id] = latest;
+  });
+  writeCommentSeenMap(map);
+}
+
+function hasUnreadActivityForNode(nodeId) {
+  if (!nodeId) return false;
+  return getUnreadActivityEntries().some((entry) => entry.nodeId === nodeId);
+}
+
+function hasUnreadStatusActivityForNode(nodeId) {
+  if (!nodeId) return false;
+  return getUnreadActivityEntries().some((entry) => entry.nodeId === nodeId && entry.type === "status_changed");
+}
+
 function renderActivityFeed() {
   if (!el.activityFeed) return;
   const entries = sanitizeActivityFeed(state.activityFeed).slice(0, ACTIVITY_FEED_VISIBLE_ENTRIES);
-  if (el.activityCount) el.activityCount.textContent = state.activityFeed.length ? String(Math.min(state.activityFeed.length, ACTIVITY_FEED_VISIBLE_ENTRIES)) : "";
+  updateActivityUnreadIndicator();
   if (el.activityToggleButton) el.activityToggleButton.setAttribute("aria-expanded", String(!state.activityCollapsed));
   el.activityPanel?.classList.toggle("is-collapsed", !!state.activityCollapsed);
   if (state.activityCollapsed) return;
+  const seenAt = getLastSeenActivityAt();
   el.activityFeed.innerHTML = "";
   if (!entries.length) {
     const empty = document.createElement("p");
@@ -1216,6 +1332,8 @@ function renderActivityFeed() {
   entries.forEach((entry) => {
     const row = document.createElement("div");
     row.className = "activity-entry";
+    const isUnread = isActivityUnread(entry, seenAt);
+    row.classList.toggle("is-new", isUnread);
     const canFocusNode = !!entry.nodeId && !!getNode(entry.nodeId);
     if (canFocusNode) {
       row.classList.add("is-clickable");
@@ -1251,9 +1369,16 @@ function renderActivityFeed() {
     time.dateTime = entry.timestamp || "";
     time.textContent = relativeActivityTime(entry.timestamp);
     body.append(line, time);
+    if (isUnread) {
+      const newLabel = document.createElement("span");
+      newLabel.className = "activity-new-label";
+      newLabel.textContent = "New";
+      body.appendChild(newLabel);
+    }
     row.append(avatar, body);
     el.activityFeed.appendChild(row);
   });
+  queueMicrotask(markActivityFeedSeen);
 }
 
 function getUserInitials(user) {
@@ -3127,6 +3252,8 @@ function applyCampaignState(campaignState, statusText = "Restored") {
   state.nodeCounter = normalizedState.nodeCounter || 1;
   state.postitCounter = normalizedState.postitCounter || 1;
   state.activityFeed = sanitizeActivityFeed(normalizedState.activityFeed);
+  state.lastSeenActivityAt = parseStoredTimestamp(localStorage.getItem(activitySeenStorageKey()));
+  ensureCommentSeenBaseline();
   state.selectedIds.clear();
   state.selectedPrimary = null;
   el.zoomLayer.querySelectorAll(".node").forEach((n) => n.remove());
@@ -4464,12 +4591,7 @@ function noteUpdatedAt(note = {}) {
 
 function hasRecentUnopenedComment(node) {
   if (!node?.id || state.commentThreadsOpenedByNode.has(node.id)) return false;
-  const now = Date.now();
-  return (node.postits || []).some((note) => {
-    const timestamp = Date.parse(noteUpdatedAt(note) || "");
-    if (!Number.isFinite(timestamp) || now - timestamp > 2 * 60 * 1000) return false;
-    return !note.resolved || (Array.isArray(note.replies) && note.replies.length > 0);
-  });
+  return hasUnreadNodeComments(node);
 }
 
 function openNodeCommentThread(nodeId, { highlight = true } = {}) {
@@ -4477,6 +4599,7 @@ function openNodeCommentThread(nodeId, { highlight = true } = {}) {
   const nodeEl = node ? el.zoomLayer.querySelector(`[data-id='${nodeId}']`) : null;
   if (!node || !nodeEl) return false;
   state.commentThreadsOpenedByNode.add(node.id);
+  markNodeCommentsSeen(node.id);
   updateNodeCommentBadge(node, nodeEl);
   nodeEl.classList.add("comments-open");
   if (highlight) {
@@ -4528,6 +4651,7 @@ function updateNodeCommentBadge(node, nodeEl) {
   commentBadge.classList.toggle("has-comments", totalCommentCount > 0);
   commentBadge.classList.toggle("has-unresolved", unresolvedCount > 0);
   commentBadge.classList.toggle("has-recent", hasRecentUnopenedComment(node));
+  commentBadge.classList.toggle("has-unread", hasUnreadNodeComments(node));
 }
 
 function updateNodeStatusChip(node, nodeEl) {
@@ -5179,6 +5303,7 @@ function renderPostits(node, nodeEl) {
         note.resolvedAt = new Date().toISOString();
       }
       note.updatedAt = new Date().toISOString();
+      markNodeCommentsSeen(node.id);
       appendActivity(note.resolved ? "comment_resolved" : "comment_added", { node });
       renderPostits(node, nodeEl);
       updateNodeCommentBadge(node, nodeEl);
@@ -5281,6 +5406,7 @@ function renderPostits(node, nodeEl) {
         if (!actor) return;
         note.replies.push({ id: `reply-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, ...actor });
         note.updatedAt = new Date().toISOString();
+        markNodeCommentsSeen(node.id);
         state.commentThreadsOpenedByNode.delete(node.id);
         appendActivity("reply_added", { node, userName: actor.authorName });
         renderPostits(node, nodeEl);
@@ -6013,6 +6139,12 @@ function updateListView() {
     groups[type].forEach((node) => {
       const li = document.createElement("li");
       li.className = "node-summary-row";
+      const hasUnreadComments = hasUnreadNodeComments(node);
+      const hasNodeUnreadActivity = hasUnreadActivityForNode(node.id);
+      const hasRecentStatusChange = hasUnreadStatusActivityForNode(node.id);
+      li.classList.toggle("has-unread-comments", hasUnreadComments);
+      li.classList.toggle("has-recent-activity", hasNodeUnreadActivity);
+      li.classList.toggle("has-recent-status", hasRecentStatusChange);
       li.tabIndex = 0;
       li.setAttribute("role", "button");
       li.setAttribute("aria-label", `Focus ${node.title || node.type || "node"}`);
@@ -6026,6 +6158,12 @@ function updateListView() {
       title.className = "node-summary-title";
       title.textContent = node.title || "(ohne Titel)";
       titleWrap.appendChild(title);
+      if (hasNodeUnreadActivity || hasUnreadComments) {
+        const dot = document.createElement("span");
+        dot.className = "node-summary-new-dot";
+        dot.title = hasUnreadComments ? "New discussion activity" : "New activity";
+        titleWrap.appendChild(dot);
+      }
       top.appendChild(titleWrap);
 
       const discussion = getNodeDiscussionCounts(node);
@@ -6034,6 +6172,7 @@ function updateListView() {
         commentBtn.type = "button";
         commentBtn.className = "node-summary-comments";
         commentBtn.classList.toggle("has-unresolved", discussion.unresolved > 0);
+        commentBtn.classList.toggle("has-unread", hasUnreadComments);
         commentBtn.textContent = discussion.unresolved ? `💬 ${discussion.unresolved}` : `💬 ${discussion.total}`;
         commentBtn.title = discussion.unresolved
           ? `${discussion.unresolved} unresolved · ${discussion.total} total discussion items`
@@ -6703,6 +6842,7 @@ el.sidebarToggleButton?.addEventListener("click", () => {
 el.activityToggleButton?.addEventListener("click", () => {
   state.activityCollapsed = !state.activityCollapsed;
   renderActivityFeed();
+  if (!state.activityCollapsed) markActivityFeedSeen();
 });
 
 if (el.addNodeButton) {
@@ -6888,6 +7028,7 @@ function addPostitToNode(node, position = null) {
     y: position?.y ?? ((state.contextBoardPoint?.y || node.position.y + 48) - node.position.y)
   };
   node.postits.push(note);
+  markNodeCommentsSeen(node.id);
   updateNodeCard(node);
   appendActivity("comment_added", { node, userName: actor.authorName });
   saveCampaignCanvasState();
