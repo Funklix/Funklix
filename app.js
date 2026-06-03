@@ -1668,22 +1668,6 @@ function startBoardRefreshPolling() {
   state.boardRefreshPollTimer = setInterval(() => { void pollBoardForRemoteChanges(); }, 12000);
 }
 
-function stopBoardRefreshPolling() {
-  if (state.boardRefreshPollTimer) {
-    clearInterval(state.boardRefreshPollTimer);
-    state.boardRefreshPollTimer = null;
-  }
-  state.boardRefreshInFlight = false;
-  state.remoteMergeSkippedNodeIds.clear();
-}
-
-function startBoardRefreshPolling() {
-  stopBoardRefreshPolling();
-  const boardId = state.currentBoardId || getBoardIdFromPath();
-  if (!boardId) return;
-  state.boardRefreshPollTimer = setInterval(() => { void pollBoardForRemoteChanges(); }, 12000);
-}
-
 async function pingPresenceLite() {
   const boardId = state.currentBoardId || getBoardIdFromPath();
   const selectedNodeId = state.selectedPrimary || null;
