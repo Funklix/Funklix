@@ -117,6 +117,7 @@ const state = {
   ,presenceCursorRenderFrame: null
   ,activityFeed: []
   ,activityCollapsed: false
+  ,commentThreadsOpenedByNode: new Set()
 };
 
 const el = {
@@ -1109,12 +1110,12 @@ function renderActivityFeed() {
       row.classList.add("is-clickable");
       row.tabIndex = 0;
       row.setAttribute("role", "button");
-      row.title = "Jump to node";
-      row.addEventListener("click", () => focusNodeInCanvas(entry.nodeId));
+      row.title = isCommentActivityType(entry.type) ? "Jump to discussion" : "Jump to node";
+      row.addEventListener("click", () => handleActivityEntryFocus(entry));
       row.addEventListener("keydown", (event) => {
         if (event.key !== "Enter" && event.key !== " ") return;
         event.preventDefault();
-        focusNodeInCanvas(entry.nodeId);
+        handleActivityEntryFocus(entry);
       });
     }
     const user = entry.user || {};
@@ -4136,6 +4137,49 @@ function propagateNodeChangesDownward(node) {
   runNetworkImpulse();
 }
 
+function isCommentActivityType(type = "") {
+  return type === "comment_added" || type === "reply_added" || type === "comment_resolved" || type === "postit_added";
+}
+
+function noteUpdatedAt(note = {}) {
+  return note.updatedAt || note.createdAt || note.time || null;
+}
+
+function hasRecentUnopenedComment(node) {
+  if (!node?.id || state.commentThreadsOpenedByNode.has(node.id)) return false;
+  const now = Date.now();
+  return (node.postits || []).some((note) => {
+    const timestamp = Date.parse(noteUpdatedAt(note) || "");
+    if (!Number.isFinite(timestamp) || now - timestamp > 2 * 60 * 1000) return false;
+    return !note.resolved || (Array.isArray(note.replies) && note.replies.length > 0);
+  });
+}
+
+function openNodeCommentThread(nodeId, { highlight = true } = {}) {
+  const node = getNode(nodeId);
+  const nodeEl = node ? el.zoomLayer.querySelector(`[data-id='${nodeId}']`) : null;
+  if (!node || !nodeEl) return false;
+  state.commentThreadsOpenedByNode.add(node.id);
+  updateNodeCommentBadge(node, nodeEl);
+  nodeEl.classList.add("comments-open");
+  if (highlight) {
+    nodeEl.classList.add("comments-highlighted");
+    setTimeout(() => nodeEl.classList.remove("comments-highlighted"), 1400);
+  }
+  const firstPostit = nodeEl.querySelector(".postit");
+  if (firstPostit) firstPostit.scrollIntoView?.({ block: "nearest", inline: "nearest", behavior: "smooth" });
+  return true;
+}
+
+function handleActivityEntryFocus(entry) {
+  if (!entry?.nodeId) return;
+  const didFocus = focusNodeInCanvas(entry.nodeId);
+  if (!didFocus) return;
+  if (isCommentActivityType(entry.type)) {
+    setTimeout(() => openNodeCommentThread(entry.nodeId), 180);
+  }
+}
+
 function updateNodeCommentBadge(node, nodeEl) {
   if (!node || !nodeEl) return;
   let commentBadge = nodeEl.querySelector(".node-comment-badge");
@@ -4153,17 +4197,20 @@ function updateNodeCommentBadge(node, nodeEl) {
         addPostitToNode(node, { x: 12, y: 48 });
         return;
       }
-      nodeEl.classList.toggle("comments-highlighted");
-      setTimeout(() => nodeEl.classList.remove("comments-highlighted"), 1200);
+      openNodeCommentThread(node.id);
     });
     nodeEl.appendChild(commentBadge);
   }
-  const activeCommentCount = (node.postits || []).filter((note) => !note.resolved).length;
+  const unresolvedCount = (node.postits || []).filter((note) => !note.resolved).length;
+  const resolvedCount = (node.postits || []).filter((note) => !!note.resolved).length;
   const totalReplyCount = (node.postits || []).reduce((sum, note) => sum + (Array.isArray(note.replies) ? note.replies.length : 0), 0);
-  const totalCommentCount = activeCommentCount + totalReplyCount;
-  commentBadge.textContent = `💬 ${totalCommentCount || 0}`;
-  commentBadge.title = totalCommentCount ? `${totalCommentCount} comments/replies` : "Add comment";
+  const totalCommentCount = unresolvedCount + resolvedCount + totalReplyCount;
+  const displayCount = unresolvedCount || totalCommentCount || 0;
+  commentBadge.textContent = `💬 ${displayCount}`;
+  commentBadge.title = totalCommentCount ? `${unresolvedCount} unresolved · ${totalReplyCount} replies · ${resolvedCount} resolved` : "Add comment";
   commentBadge.classList.toggle("has-comments", totalCommentCount > 0);
+  commentBadge.classList.toggle("has-unresolved", unresolvedCount > 0);
+  commentBadge.classList.toggle("has-recent", hasRecentUnopenedComment(node));
 }
 
 function updateNodeCard(node) {
@@ -4732,6 +4779,14 @@ function renderPostits(node, nodeEl) {
         return;
       }
       note.resolved = !note.resolved;
+      const actor = getCurrentCommentActor();
+      if (note.resolved && actor) {
+        note.resolvedByName = actor.authorName;
+        note.resolvedByEmail = actor.authorEmail;
+        note.resolvedByAvatar = actor.authorAvatar;
+        note.resolvedAt = new Date().toISOString();
+      }
+      note.updatedAt = new Date().toISOString();
       appendActivity(note.resolved ? "comment_resolved" : "comment_added", { node });
       renderPostits(node, nodeEl);
       updateNodeCommentBadge(node, nodeEl);
@@ -4763,6 +4818,19 @@ function renderPostits(node, nodeEl) {
       updateNodeCommentBadge(node, nodeEl);
       saveCampaignCanvasState();
     });
+
+    if (note.resolved) {
+      const summary = document.createElement("div");
+      summary.className = "postit-resolved-summary";
+      const resolvedBy = note.resolvedByName || "Someone";
+      const replyCount = Array.isArray(note.replies) ? note.replies.length : 0;
+      summary.textContent = `Resolved by ${resolvedBy}${note.resolvedAt ? ` · ${relativeActivityTime(note.resolvedAt)}` : ""}${replyCount ? ` · ${replyCount} repl${replyCount === 1 ? "y" : "ies"} hidden` : ""}`;
+      postit.querySelector(".postit-text")?.remove();
+      postit.appendChild(summary);
+      enablePostitDrag(postit, note);
+      nodeEl.appendChild(postit);
+      return;
+    }
 
     const repliesWrap = document.createElement("div");
     repliesWrap.className = "postit-replies";
@@ -4820,6 +4888,8 @@ function renderPostits(node, nodeEl) {
         const actor = createCommentPayload(text);
         if (!actor) return;
         note.replies.push({ id: `reply-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, ...actor });
+        note.updatedAt = new Date().toISOString();
+        state.commentThreadsOpenedByNode.delete(node.id);
         appendActivity("reply_added", { node, userName: actor.authorName });
         renderPostits(node, nodeEl);
         updateNodeCommentBadge(node, nodeEl);
@@ -6351,6 +6421,7 @@ function addPostitToNode(node, position = null) {
     id: `postit-${state.postitCounter++}`,
     ...actor,
     color: "#ffe082",
+    updatedAt: actor.createdAt,
     x: position?.x ?? ((state.contextBoardPoint?.x || node.position.x + 24) - node.position.x),
     y: position?.y ?? ((state.contextBoardPoint?.y || node.position.y + 48) - node.position.y)
   };
