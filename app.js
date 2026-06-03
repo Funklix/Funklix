@@ -525,6 +525,35 @@ function applyBoardAccessFromServer(access, source = "server") {
   return true;
 }
 
+function boardAccessFromServer(access, fallback = state.boardAccess) {
+  const role = typeof access?.role === "string" && access.role ? access.role : (fallback?.reason || "unknown");
+  return {
+    canView: access?.canView !== false,
+    canEdit: access?.canEdit !== false,
+    canManagePermissions: access?.canManagePermissions === true,
+    canRename: access?.canRename === true,
+    canDelete: access?.canDelete === true,
+    reason: role
+  };
+}
+
+function applyBoardAccessFromServer(access, source = "server") {
+  if (!access || typeof access !== "object" || typeof access.role !== "string") return false;
+  const nextAccess = boardAccessFromServer(access);
+  const changed = state.boardAccess?.reason !== nextAccess.reason
+    || state.boardAccess?.canView !== nextAccess.canView
+    || state.boardAccess?.canEdit !== nextAccess.canEdit
+    || state.boardAccess?.canManagePermissions !== nextAccess.canManagePermissions
+    || state.boardAccess?.canRename !== nextAccess.canRename
+    || state.boardAccess?.canDelete !== nextAccess.canDelete;
+  state.boardAccess = nextAccess;
+  if (changed) console.debug("[Funklix Access] boardAccess", { source, access: state.boardAccess });
+  updateReadOnlyNoticeVisibility();
+  if (nextAccess.canManagePermissions) loadBoardEditors({ silent: true });
+  else state.boardEditors = [];
+  return true;
+}
+
 function updateReadOnlyNoticeVisibility() {
   const isReadOnly = state.boardAccess?.canEdit === false;
   const readOnlyActionTitle = "View-only board. This action is disabled.";
@@ -4518,6 +4547,56 @@ function updateNodeStatusChip(node, nodeEl) {
   chip.setAttribute("aria-label", chip.title);
 }
 
+function createListStatusChip(node) {
+  const status = getNodeStatusDefinition(node.status);
+  const chip = document.createElement("span");
+  chip.className = "node-status-chip list-status-chip";
+  chip.dataset.statusTone = status.tone;
+  chip.textContent = status.label;
+  chip.title = `Workflow status: ${status.label}`;
+  return chip;
+}
+
+function getNodeListPreview(node) {
+  if (!node) return "";
+  const preview = node.type === "Social Media Posting"
+    ? (node.social?.caption || node.social?.preview || node.content || node.title || "")
+    : node.type === "Landing Page"
+      ? (node.landingPage?.headerClaim || node.landingPage?.cta || node.landingPage?.solution || node.content || node.title || "")
+      : (node.content || node.title || "");
+  return String(preview || "").replace(/\s+/g, " ").trim();
+}
+
+function getNodeDiscussionCounts(node) {
+  const comments = Array.isArray(node?.postits) ? node.postits : [];
+  const unresolved = comments.filter((note) => !note.resolved).length;
+  const replies = comments.reduce((sum, note) => sum + (Array.isArray(note.replies) ? note.replies.length : 0), 0);
+  return { comments: comments.length, unresolved, replies, total: comments.length + replies };
+}
+
+function getNodeListMeta(node) {
+  const meta = [node.type];
+  if (node.goal) meta.push(`Goal: ${node.goal}`);
+  if (node.channel) meta.push(`Channel: ${node.channel}`);
+  if (node.funnelStage) meta.push(`Stage: ${node.funnelStage}`);
+  if (node.type === "Social Media Posting" && node.social?.platform) meta.push(node.social.platform);
+  if (node.type === "Social Media Posting" && node.social?.scheduledAt) {
+    const schedule = formatScheduleMeta(node.social.scheduledAt);
+    meta.push(schedule ? `Scheduled ${schedule.dateLabel} · ${schedule.timeLabel}` : "Scheduled");
+  }
+  return meta.filter(Boolean);
+}
+
+function focusListViewNode(nodeId, { openComments = false } = {}) {
+  const didFocus = focusNodeInCanvas(nodeId);
+  if (!didFocus) return;
+  if (openComments) setTimeout(() => openNodeCommentThread(nodeId), 180);
+}
+
+function isNodeSearchOrFilterActive() {
+  return !!state.nodeSearchQuery.trim() || Object.values(state.nodeFilters).some((set) => set.size > 0);
+}
+
 function updateNodeCard(node) {
   const nodeEl = el.zoomLayer.querySelector(`[data-id='${node.id}']`);
   if (!nodeEl) return;
@@ -4967,6 +5046,7 @@ function refreshNodeSearchUI() {
     const activeFilters = Object.values(state.nodeFilters).reduce((n, set) => n + set.size, 0);
     el.filtersToggleButton.textContent = activeFilters > 0 ? `Filters (${activeFilters})` : "Filters";
   }
+  if (state.activeView === "list" || (el.boardListView && !el.boardListView.classList.contains("hidden"))) updateListView();
 }
 
 function buildFiltersPopoverHtml() {
@@ -5902,39 +5982,88 @@ async function runImproveNodeFlow(node) {
 function updateListView() {
   el.nodeListView.innerHTML = "";
 
-  const groups = state.nodes.reduce((acc, node) => {
+  const hasFilters = isNodeSearchOrFilterActive();
+  const visibleNodes = state.nodes.filter((node) => nodeMatchesSearchAndFilters(node));
+  if (!state.nodes.length) {
+    el.nodeListView.innerHTML = '<p class="list-empty">Keine Nodes vorhanden.</p>';
+    return;
+  }
+  if (!visibleNodes.length) {
+    el.nodeListView.innerHTML = `<p class="list-empty">${hasFilters ? "No nodes match current filters." : "Keine Nodes vorhanden."}</p>`;
+    return;
+  }
+
+  const groups = visibleNodes.reduce((acc, node) => {
     if (!acc[node.type]) acc[node.type] = [];
     acc[node.type].push(node);
     return acc;
   }, {});
 
   const types = Object.keys(groups).sort();
-  if (types.length === 0) {
-    el.nodeListView.innerHTML = '<p class="list-empty">Keine Nodes vorhanden.</p>';
-    return;
-  }
-
   types.forEach((type) => {
     const section = document.createElement("section");
-    section.className = "list-group";
+    section.className = "list-group node-list-group";
     const h = document.createElement("h4");
     h.textContent = `${type} (${groups[type].length})`;
     h.style.color = NODE_TYPES[type]?.color || "#333";
     section.appendChild(h);
 
     const ul = document.createElement("ul");
+    ul.className = "node-summary-list";
     groups[type].forEach((node) => {
       const li = document.createElement("li");
-      li.textContent = node.title || "(ohne Titel)";
-      li.addEventListener("click", () => {
-        toggleListMode(false);
-        state.selectedIds.clear();
-        state.selectedIds.add(node.id);
-        state.selectedPrimary = node.id;
-        updateSelectionClasses();
-        fillInspector(node);
-        forceNodeVisible(node.id);
-        ensureNodeActuallyVisible(node);
+      li.className = "node-summary-row";
+      li.tabIndex = 0;
+      li.setAttribute("role", "button");
+      li.setAttribute("aria-label", `Focus ${node.title || node.type || "node"}`);
+
+      const top = document.createElement("div");
+      top.className = "node-summary-topline";
+      const titleWrap = document.createElement("div");
+      titleWrap.className = "node-summary-titlewrap";
+      titleWrap.appendChild(createListStatusChip(node));
+      const title = document.createElement("strong");
+      title.className = "node-summary-title";
+      title.textContent = node.title || "(ohne Titel)";
+      titleWrap.appendChild(title);
+      top.appendChild(titleWrap);
+
+      const discussion = getNodeDiscussionCounts(node);
+      if (discussion.total > 0) {
+        const commentBtn = document.createElement("button");
+        commentBtn.type = "button";
+        commentBtn.className = "node-summary-comments";
+        commentBtn.classList.toggle("has-unresolved", discussion.unresolved > 0);
+        commentBtn.textContent = discussion.unresolved ? `💬 ${discussion.unresolved}` : `💬 ${discussion.total}`;
+        commentBtn.title = discussion.unresolved
+          ? `${discussion.unresolved} unresolved · ${discussion.total} total discussion items`
+          : `${discussion.total} discussion item${discussion.total === 1 ? "" : "s"}`;
+        commentBtn.addEventListener("click", (event) => {
+          event.stopPropagation();
+          focusListViewNode(node.id, { openComments: true });
+        });
+        top.appendChild(commentBtn);
+      }
+
+      const preview = document.createElement("p");
+      preview.className = "node-summary-preview";
+      preview.textContent = getNodeListPreview(node) || "No content yet.";
+
+      const meta = document.createElement("div");
+      meta.className = "node-summary-meta";
+      getNodeListMeta(node).slice(0, 6).forEach((item) => {
+        const chip = document.createElement("span");
+        chip.textContent = item;
+        meta.appendChild(chip);
+      });
+
+      li.append(top, preview, meta);
+      li.addEventListener("click", () => focusListViewNode(node.id));
+      li.addEventListener("keydown", (event) => {
+        if (event.target !== li) return;
+        if (event.key !== "Enter" && event.key !== " ") return;
+        event.preventDefault();
+        focusListViewNode(node.id);
       });
       ul.appendChild(li);
     });
@@ -6337,6 +6466,7 @@ function toggleListMode(showList) {
   const shouldShowList = typeof showList === "boolean" ? showList : !el.canvas.classList.contains("hidden");
   el.canvas.classList.toggle("hidden", shouldShowList);
   el.boardListView.classList.toggle("hidden", !shouldShowList);
+  if (shouldShowList) updateListView();
 
   if (!shouldShowList && state.selectedPrimary) {
     const selected = getNode(state.selectedPrimary);
@@ -6510,6 +6640,7 @@ function setActiveView(view) {
   el.brandCoreButton.classList.toggle("active", view === "brand-core");
   el.cycleViewButton.textContent =
     view === "board" ? "Board View" : view === "list" ? "List View" : view === "calendar" ? "Calendar View" : view === "insights" ? "Insights" : view === "ai_brain" ? "AI Brain" : "Brand Core";
+  if (view === "list") updateListView();
   if (view === "calendar") renderCalendarView();
   if (view === "insights" || view === "ai_brain") renderCampaignIntelligence();
 }

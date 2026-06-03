@@ -684,6 +684,128 @@ button:active {
   cursor: pointer;
 }
 
+.node-list-group {
+  background: rgba(255, 255, 255, 0.76);
+}
+
+.node-summary-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.node-summary-row {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  border: 1px solid #e4e8f7;
+  border-radius: 12px;
+  background: #fff;
+  padding: 9px 10px;
+  cursor: pointer;
+  transition: border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease;
+}
+
+.node-summary-row:hover,
+.node-summary-row:focus-visible {
+  border-color: rgba(107, 78, 255, 0.28);
+  box-shadow: 0 8px 18px rgba(55, 64, 120, 0.1);
+  outline: none;
+  transform: translateY(-1px);
+}
+
+.node-summary-topline,
+.node-summary-titlewrap,
+.node-summary-meta {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.node-summary-topline {
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.node-summary-titlewrap {
+  gap: 7px;
+  flex: 1 1 auto;
+}
+
+.list-status-chip {
+  flex: 0 0 auto;
+  margin-left: 0;
+  max-width: 110px;
+  font-size: 0.6rem;
+  padding: 3px 6px;
+}
+
+.node-summary-title {
+  min-width: 0;
+  color: #26315c;
+  font-size: 0.86rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.node-summary-preview {
+  margin: 0;
+  color: #5d6686;
+  font-size: 0.74rem;
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.node-summary-meta {
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.node-summary-meta span {
+  border: 1px solid #e0e5f7;
+  border-radius: 999px;
+  background: #f7f8ff;
+  color: #59647e;
+  font-size: 0.62rem;
+  font-weight: 700;
+  line-height: 1;
+  padding: 3px 7px;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.node-summary-comments {
+  flex: 0 0 auto;
+  border: 1px solid rgba(107, 78, 255, 0.2);
+  border-radius: 999px;
+  background: #f4f1ff;
+  color: #5640d4;
+  cursor: pointer;
+  font-size: 0.68rem;
+  font-weight: 900;
+  line-height: 1;
+  padding: 5px 8px;
+}
+
+.node-summary-comments.has-unresolved {
+  border-color: rgba(238, 135, 55, 0.32);
+  background: #fff4e8;
+  color: #a75112;
+}
+
+.node-summary-comments:hover,
+.node-summary-comments:focus-visible {
+  box-shadow: 0 0 0 3px rgba(107, 78, 255, 0.1);
+  outline: none;
+}
+
 .list-empty {
   color: var(--muted);
   font-size: 0.9rem;
