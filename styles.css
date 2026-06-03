@@ -1287,6 +1287,54 @@ button:active {
   min-height: 22px;
 }
 
+.node-status-chip[data-status-tone="draft"] {
+  border-color: rgba(91, 102, 135, 0.18);
+  background: #f5f7fb;
+  color: #5b6687;
+}
+
+.node-status-chip[data-status-tone="review"] {
+  border-color: rgba(67, 111, 255, 0.2);
+  background: #eef3ff;
+  color: #3159d4;
+}
+
+.node-status-chip[data-status-tone="changes"] {
+  border-color: rgba(238, 135, 55, 0.24);
+  background: #fff4e8;
+  color: #b65b12;
+}
+
+.node-status-chip[data-status-tone="approved"] {
+  border-color: rgba(54, 164, 104, 0.24);
+  background: #ecfbf2;
+  color: #247a4b;
+}
+
+.node-status-chip[data-status-tone="published"] {
+  border-color: rgba(107, 78, 255, 0.2);
+  background: #f1efff;
+  color: #4b3bc4;
+}
+
+.node.is-compact .node-status-chip {
+  max-width: 118px;
+  padding-inline: 6px;
+}
+
+.node.is-in-review .node-comment-badge.has-unresolved {
+  border-color: rgba(67, 111, 255, 0.36);
+  box-shadow: 0 0 0 2px rgba(67, 111, 255, 0.1);
+}
+
+.node h3,
+.node p {
+  margin: 8px 0;
+  border-radius: 6px;
+  padding: 4px;
+  min-height: 22px;
+}
+
 .node h3[contenteditable="true"]:empty:not(:focus)::before,
 .node p[contenteditable="true"]:empty:not(:focus)::before {
   content: attr(data-placeholder);

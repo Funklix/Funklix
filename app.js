@@ -497,6 +497,9 @@ function updateBoardAccessState() {
     state.boardEditorsStatus = { message: "", isError: false };
   }
   updateReadOnlyNoticeVisibility();
+  if (nextAccess.canManagePermissions) loadBoardEditors({ silent: true });
+  else state.boardEditors = [];
+  return true;
 }
 
 function boardAccessFromServer(access, fallback = state.boardAccess) {
