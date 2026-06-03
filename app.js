@@ -16,6 +16,9 @@ const BOARD_WIDTH = 20000;
 const BOARD_HEIGHT = 30000;
 const STORAGE_KEY = "campaignCanvasState";
 const BRAND_CORE_STORAGE_KEY = "brandBrainState";
+const ACTIVITY_FEED_MAX_ENTRIES = 50;
+const ACTIVITY_FEED_VISIBLE_ENTRIES = 15;
+const ACTIVITY_DEBOUNCE_MS = 12 * 1000;
 
 let activeLightbox = null;
 
@@ -83,16 +86,40 @@ const state = {
   ,authConfigured: true
   ,currentBoardOwnerEmail: null
   ,currentBoardOwnerName: null
-  ,boardAccess: { canView: true, canEdit: true, reason: "unknown" }
+  ,boardAccess: { canView: true, canEdit: true, canManagePermissions: false, canRename: false, canDelete: false, reason: "unknown" }
+  ,boardEditors: []
+  ,boardEditorsLoading: false
+  ,boardEditorsStatus: { message: "", isError: false }
   ,shareToastTimer: null
   ,presencePollTimer: null
+  ,boardRefreshPollTimer: null
+  ,boardRefreshInFlight: false
+  ,lastLocalSaveAt: null
+  ,remoteMergeSkippedNodeIds: new Set()
   ,presenceSelectionPingTimer: null
   ,presencePingInFlight: false
   ,presencePendingPingAfterInFlight: false
   ,presenceSelectedNodeIdLastQueued: undefined
   ,presenceSelectedNodeIdLastSent: undefined
+  ,presencePayloadSignatureLastQueued: undefined
+  ,presencePayloadSignatureLastSent: undefined
+  ,presenceEditingNodeId: null
+  ,presenceEditingField: null
+  ,presenceEditingClearTimer: null
   ,presenceViewers: []
   ,presenceNodeSignature: ""
+  ,presenceCursorX: null
+  ,presenceCursorY: null
+  ,presenceCursorHoveredNodeId: null
+  ,presenceCursorLastMovedAt: null
+  ,presenceCursorPublishTimer: null
+  ,presenceCursorClearTimer: null
+  ,presenceCursorRenderFrame: null
+  ,followingCollaboratorEmail: null
+  ,followingCollaboratorName: ""
+  ,activityFeed: []
+  ,activityCollapsed: false
+  ,commentThreadsOpenedByNode: new Set()
 };
 
 const el = {
@@ -196,6 +223,10 @@ const el = {
   presenceLite: document.getElementById("presence-lite"),
   presenceAvatars: document.getElementById("presence-avatars"),
   presenceCount: document.getElementById("presence-count"),
+  activityPanel: document.getElementById("activity-panel"),
+  activityToggleButton: document.getElementById("activity-toggle-btn"),
+  activityFeed: document.getElementById("activity-feed"),
+  activityCount: document.getElementById("activity-count"),
   authSignoutButton: document.getElementById("auth-signout-btn"),
   brandCoreButton: document.getElementById("brand-core-nav-btn"),
   campaignCanvasNavButton: document.getElementById("campaign-canvas-nav-btn"),
@@ -433,16 +464,56 @@ function formatLastSavedLabel(value = new Date()) {
 function updateBoardAccessState() {
   const ownerEmail = state.currentBoardOwnerEmail || null;
   const userEmail = state.user?.email || null;
-  const hasOwner = !!ownerEmail;
-  const isOwner = !!userEmail && hasOwner && userEmail === ownerEmail;
-  const reason = isOwner ? "owner" : (!hasOwner ? "unowned" : (!userEmail ? "anonymous_shared" : "non_owner"));
-  const canEdit = reason === "owner" || reason === "unowned";
-  const nextAccess = { canView: true, canEdit, reason };
-  if (state.boardAccess?.reason !== nextAccess.reason || state.boardAccess?.canView !== nextAccess.canView || state.boardAccess?.canEdit !== nextAccess.canEdit) {
+  const normalizedOwnerEmail = typeof ownerEmail === "string" ? ownerEmail.trim().toLowerCase() : "";
+  const normalizedUserEmail = typeof userEmail === "string" ? userEmail.trim().toLowerCase() : "";
+  const hasOwner = !!normalizedOwnerEmail;
+  const isOwner = !!normalizedUserEmail && hasOwner && normalizedUserEmail === normalizedOwnerEmail;
+  const reason = isOwner ? "owner" : (!hasOwner ? (normalizedUserEmail ? "unowned" : "anonymous_shared") : (!normalizedUserEmail ? "anonymous_shared" : "non_owner"));
+  const canEdit = reason === "owner" || reason === "editor" || reason === "unowned";
+  const isOwnerRole = reason === "owner";
+  const nextAccess = { canView: true, canEdit, canManagePermissions: isOwnerRole, canRename: isOwnerRole, canDelete: isOwnerRole, reason };
+  if (state.boardAccess?.reason === "editor" && nextAccess.reason === "non_owner") {
+    updateReadOnlyNoticeVisibility();
+    return;
+  }
+  if (state.boardAccess?.reason !== nextAccess.reason || state.boardAccess?.canView !== nextAccess.canView || state.boardAccess?.canEdit !== nextAccess.canEdit || state.boardAccess?.canManagePermissions !== nextAccess.canManagePermissions) {
     state.boardAccess = nextAccess;
     console.debug("[Funklix Access] boardAccess", state.boardAccess);
   }
+  if (!nextAccess.canManagePermissions) {
+    state.boardEditors = [];
+    state.boardEditorsStatus = { message: "", isError: false };
+  }
   updateReadOnlyNoticeVisibility();
+}
+
+function boardAccessFromServer(access, fallback = state.boardAccess) {
+  const role = typeof access?.role === "string" && access.role ? access.role : (fallback?.reason || "unknown");
+  return {
+    canView: access?.canView !== false,
+    canEdit: access?.canEdit !== false,
+    canManagePermissions: access?.canManagePermissions === true,
+    canRename: access?.canRename === true,
+    canDelete: access?.canDelete === true,
+    reason: role
+  };
+}
+
+function applyBoardAccessFromServer(access, source = "server") {
+  if (!access || typeof access !== "object" || typeof access.role !== "string") return false;
+  const nextAccess = boardAccessFromServer(access);
+  const changed = state.boardAccess?.reason !== nextAccess.reason
+    || state.boardAccess?.canView !== nextAccess.canView
+    || state.boardAccess?.canEdit !== nextAccess.canEdit
+    || state.boardAccess?.canManagePermissions !== nextAccess.canManagePermissions
+    || state.boardAccess?.canRename !== nextAccess.canRename
+    || state.boardAccess?.canDelete !== nextAccess.canDelete;
+  state.boardAccess = nextAccess;
+  if (changed) console.debug("[Funklix Access] boardAccess", { source, access: state.boardAccess });
+  updateReadOnlyNoticeVisibility();
+  if (nextAccess.canManagePermissions) loadBoardEditors({ silent: true });
+  else state.boardEditors = [];
+  return true;
 }
 
 function updateReadOnlyNoticeVisibility() {
@@ -500,6 +571,9 @@ function renderBoardAccessCluster() {
   let owner = "";
   if (reason === "owner") {
     kind = "Your Board";
+  } else if (reason === "editor") {
+    kind = "Editor";
+    if (ownerLabel) owner = `Owner: ${ownerLabel}`;
   } else if (reason === "unowned") {
     kind = "";
     mode = "Claim Available";
@@ -509,6 +583,13 @@ function renderBoardAccessCluster() {
     if (ownerLabel) owner = `Owner: ${ownerLabel}`;
   }
   if (isReadOnly && !mode) mode = "View Only";
+  [el.boardAccessChipKind, el.boardAccessChipMode].forEach((chip) => {
+    chip.classList.remove("owner", "editor", "viewer", "unowned");
+    chip.classList.add(reason === "owner" ? "owner" : reason === "editor" ? "editor" : reason === "unowned" ? "unowned" : "viewer");
+  });
+  el.boardAccessChipKind.title = kind ? (reason === "owner" ? "You own this board" : reason === "editor" ? "You can edit this board" : kind) : "";
+  el.boardAccessChipMode.title = mode ? (isReadOnly ? "View-only board. Duplicate to edit your own copy." : mode) : "";
+  el.boardAccessChipOwner.title = owner || "";
   el.boardAccessChipKind.textContent = kind;
   el.boardAccessChipMode.textContent = mode;
   el.boardAccessChipOwner.textContent = owner;
@@ -540,12 +621,164 @@ function setSharePanelState(boardId, lastSaved = null, ownerEmail = null, ownerN
   state.currentBoardOwnerEmail = ownerEmail || null;
   state.currentBoardOwnerName = ownerName || null;
   updateBoardAccessState();
-  const isOwnedByYou = !!state.user?.email && state.currentBoardOwnerEmail === state.user.email;
-  const canClaim = !!state.user?.email && !state.currentBoardOwnerEmail;
+  const normalizedCurrentOwnerEmail = typeof state.currentBoardOwnerEmail === "string" ? state.currentBoardOwnerEmail.trim().toLowerCase() : "";
+  const normalizedCurrentUserEmail = typeof state.user?.email === "string" ? state.user.email.trim().toLowerCase() : "";
+  const isOwnedByYou = !!normalizedCurrentUserEmail && !!normalizedCurrentOwnerEmail && normalizedCurrentOwnerEmail === normalizedCurrentUserEmail;
+  const canClaim = !!normalizedCurrentUserEmail && !state.currentBoardOwnerEmail;
   el.claimBoardButton?.classList.toggle("hidden", !canClaim);
   el.boardOwnedPill?.classList.toggle("hidden", !isOwnedByYou);
   el.boardShareEmpty?.classList.add("hidden");
   el.boardShareReady?.classList.remove("hidden");
+}
+
+function escapeHtml(value = "") {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function canManageBoardEditors() {
+  return state.boardAccess?.canManagePermissions === true && !!(state.currentBoardId || getBoardIdFromPath());
+}
+
+function permissionShareLines() {
+  const role = state.boardAccess?.reason || "unknown";
+  if (role === "owner") return ["Anyone with the link can view", "Editors can make changes to this board"];
+  if (role === "editor") return ["You can edit this board", "Only the owner can manage access"];
+  if (role === "unowned") return ["Anyone with the link can view", "Sign in to claim this board"];
+  return ["View-only board", "Duplicate to edit your own copy"];
+}
+
+function permissionErrorMessage(errorMessage = "") {
+  const message = String(errorMessage || "").trim();
+  const lower = message.toLowerCase();
+  if (lower.includes("valid email")) return "Enter a valid email.";
+  if (lower.includes("owner is already")) return "Owner already has access.";
+  if (lower.includes("forbidden") || lower.includes("unauthorized")) return "Only the owner can manage access.";
+  if (lower.includes("authentication")) return "Sign in to manage access.";
+  return message || "Permission update failed.";
+}
+
+function setBoardEditorsStatus(message = "", isError = false) {
+  state.boardEditorsStatus = { message, isError };
+  renderOpenShareEditorPanel();
+}
+
+function renderOpenShareEditorPanel() {
+  const panel = document.querySelector("[data-share-editor-panel]");
+  if (!panel) return;
+  panel.innerHTML = buildShareEditorPanelHtml();
+  bindShareEditorPanel(panel);
+}
+
+function buildShareEditorPanelHtml() {
+  const editors = Array.isArray(state.boardEditors) ? state.boardEditors : [];
+  const status = state.boardEditorsStatus || { message: "", isError: false };
+  const rows = state.boardEditorsLoading
+    ? '<div class="share-editor-empty">Loading editors…</div>'
+    : editors.length
+      ? editors.map((editor) => {
+        const normalizedEmail = typeof editor?.email === "string" ? editor.email.trim().toLowerCase() : "";
+        const email = escapeHtml(normalizedEmail);
+        return `<div class="share-editor-row"><div class="share-editor-meta"><strong title="${email}">${email}</strong><span class="share-editor-role">Editor</span></div><button type="button" class="share-editor-remove" data-remove-editor="${email}" aria-label="Remove ${email}">Remove</button></div>`;
+      }).join("")
+      : '<div class="share-editor-empty">No editors yet</div>';
+  const statusHtml = status.message
+    ? `<div class="share-editor-status ${status.isError ? 'error' : 'success'}">${escapeHtml(status.message)}</div>`
+    : '';
+
+  return `<div class="share-editor-heading"><strong>Invite editor by email</strong><span>Editors can make changes to this board.</span></div>
+    <form class="share-editor-form" data-share-editor-form>
+      <input type="email" data-share-editor-email placeholder="editor@example.com" autocomplete="email" aria-label="Editor email" />
+      <button type="submit">Invite</button>
+    </form>
+    ${statusHtml}
+    <div class="share-editor-list" data-share-editor-list>${rows}</div>`;
+}
+
+function bindShareEditorPanel(panel) {
+  const form = panel.querySelector("[data-share-editor-form]");
+  form?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const input = panel.querySelector("[data-share-editor-email]");
+    const email = input?.value?.trim() || "";
+    await addBoardEditor(email, input);
+  });
+  panel.querySelectorAll("[data-remove-editor]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const email = button.getAttribute("data-remove-editor") || "";
+      await removeBoardEditor(email);
+    });
+  });
+}
+
+async function loadBoardEditors({ silent = false } = {}) {
+  const boardId = state.currentBoardId || getBoardIdFromPath();
+  if (!boardId || !state.boardAccess?.canManagePermissions) {
+    state.boardEditors = [];
+    state.boardEditorsLoading = false;
+    return;
+  }
+  state.boardEditorsLoading = true;
+  if (!silent) setBoardEditorsStatus("", false);
+  renderOpenShareEditorPanel();
+  try {
+    const response = await fetch(`/api/boards/${encodeURIComponent(boardId)}/editors`);
+    const data = await response.json();
+    if (!response.ok) throw new Error(data?.error || "Could not load editors");
+    state.boardEditors = Array.isArray(data?.editors) ? data.editors : [];
+  } catch (error) {
+    state.boardEditors = [];
+    if (!silent) setBoardEditorsStatus(error?.message || "Could not load editors", true);
+  } finally {
+    state.boardEditorsLoading = false;
+    renderOpenShareEditorPanel();
+  }
+}
+
+async function addBoardEditor(email, input = null) {
+  const boardId = state.currentBoardId || getBoardIdFromPath();
+  if (!boardId || !state.boardAccess?.canManagePermissions) return;
+  const normalizedEmail = typeof email === "string" ? email.trim().toLowerCase() : "";
+  if (!normalizedEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+    setBoardEditorsStatus("Enter a valid email.", true);
+    return;
+  }
+  setBoardEditorsStatus("Adding editor…", false);
+  try {
+    const response = await fetch(`/api/boards/${encodeURIComponent(boardId)}/editors`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: normalizedEmail })
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data?.error || "Could not add editor");
+    state.boardEditors = Array.isArray(data?.editors) ? data.editors : state.boardEditors;
+    if (input) input.value = "";
+    setBoardEditorsStatus(data?.alreadyExists ? "Editor already added." : "Editor added.", false);
+  } catch (error) {
+    setBoardEditorsStatus(permissionErrorMessage(error?.message || "Could not add editor"), true);
+  }
+}
+
+async function removeBoardEditor(email) {
+  const boardId = state.currentBoardId || getBoardIdFromPath();
+  if (!boardId || !state.boardAccess?.canManagePermissions) return;
+  const normalizedEmail = typeof email === "string" ? email.trim().toLowerCase() : "";
+  if (!normalizedEmail) return;
+  setBoardEditorsStatus("Removing editor…", false);
+  try {
+    const response = await fetch(`/api/boards/${encodeURIComponent(boardId)}/editors/${encodeURIComponent(normalizedEmail)}`, { method: "DELETE" });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data?.error || "Could not remove editor");
+    state.boardEditors = Array.isArray(data?.editors) ? data.editors : state.boardEditors.filter((editor) => editor?.email !== normalizedEmail);
+    setBoardEditorsStatus("Editor removed.", false);
+  } catch (error) {
+    setBoardEditorsStatus(permissionErrorMessage(error?.message || "Could not remove editor"), true);
+  }
 }
 
 async function copyCurrentBoardLink() {
@@ -593,14 +826,20 @@ function showShareLinkToast(copied = true) {
   if (!el.copyBoardLinkButton) return;
   dismissShareLinkToast();
   const toast = document.createElement("div");
+  const showEditorManager = canManageBoardEditors();
   toast.id = "share-link-toast";
-  toast.className = "share-link-toast";
+  toast.className = `share-link-toast${showEditorManager ? " share-link-popover" : ""}`;
   toast.setAttribute("role", "status");
   toast.setAttribute("aria-live", "polite");
-  toast.innerHTML = copied
-    ? `<div class="share-link-toast-line">Anyone with link can view</div><div class="share-link-toast-line">Duplicate to create your own version</div><div class="share-link-toast-ok">Link copied ✓</div>`
-    : `<div class="share-link-toast-ok">Could not copy link</div>`;
+  const copyMessage = copied ? "Link copied ✓" : "Could not copy link";
+  const lines = permissionShareLines().map((line) => `<div class="share-link-toast-line">${escapeHtml(line)}</div>`).join("");
+  if (showEditorManager) state.boardEditorsStatus = { message: "", isError: false };
+  toast.innerHTML = `${lines}<div class="share-link-toast-ok">${copyMessage}</div>${showEditorManager ? '<div class="share-editor-panel" data-share-editor-panel></div>' : ''}`;
   document.body.appendChild(toast);
+  if (showEditorManager) {
+    renderOpenShareEditorPanel();
+    loadBoardEditors({ silent: true });
+  }
   const rect = el.copyBoardLinkButton.getBoundingClientRect();
   const width = toast.offsetWidth || 220;
   toast.style.top = `${Math.max(8, rect.bottom + 10)}px`;
@@ -613,10 +852,12 @@ function showShareLinkToast(copied = true) {
     }
   };
   document.addEventListener("pointerdown", closeOnOutside, true);
-  state.shareToastTimer = setTimeout(() => {
-    dismissShareLinkToast();
-    document.removeEventListener("pointerdown", closeOnOutside, true);
-  }, copied ? 2200 : 1600);
+  if (!showEditorManager) {
+    state.shareToastTimer = setTimeout(() => {
+      dismissShareLinkToast();
+      document.removeEventListener("pointerdown", closeOnOutside, true);
+    }, copied ? 2200 : 1600);
+  }
 }
 
 
@@ -713,6 +954,247 @@ async function duplicateCurrentBoard() {
 }
 
 
+function getActivityUserName(fallbackName = "") {
+  return (state.user?.name || state.user?.email || fallbackName || "Someone").trim();
+}
+
+function getActivityUser(fallbackName = "") {
+  return {
+    name: getActivityUserName(fallbackName),
+    email: state.user?.email || "",
+    avatar: state.user?.avatar || ""
+  };
+}
+
+function getCurrentCommentActor() {
+  if (!state.user?.email) return null;
+  return {
+    authorName: getActivityUserName(),
+    authorEmail: state.user.email,
+    authorAvatar: state.user.avatar || ""
+  };
+}
+
+function commentAuthorName(item = {}) {
+  return (item.authorName || item.user || item.authorEmail || "Someone").trim();
+}
+
+function commentAuthorAvatar(item = {}) {
+  return item.authorAvatar || item.avatar || "";
+}
+
+function commentAuthorEmail(item = {}) {
+  return item.authorEmail || item.email || "";
+}
+
+function commentCreatedAt(item = {}) {
+  return item.createdAt || item.time || new Date().toISOString();
+}
+
+function formatCommentTimestamp(item = {}) {
+  const timestamp = commentCreatedAt(item);
+  const parsed = Date.parse(timestamp);
+  if (Number.isFinite(parsed)) return relativeActivityTime(timestamp);
+  return String(timestamp || "just now");
+}
+
+function ensureCommentIdentity(item = {}) {
+  if (!item || typeof item !== "object") return item;
+  item.authorName = item.authorName || item.user || item.authorEmail || "Someone";
+  item.authorEmail = item.authorEmail || item.email || "";
+  item.authorAvatar = item.authorAvatar || item.avatar || "";
+  item.createdAt = item.createdAt || item.time || new Date().toISOString();
+  item.user = item.user || item.authorName;
+  item.time = item.time || (Number.isFinite(Date.parse(item.createdAt)) ? formatCommentTimestamp({ createdAt: item.createdAt }) : item.createdAt);
+  if (!Array.isArray(item.replies)) item.replies = [];
+  item.replies.forEach((reply) => ensureCommentIdentity(reply));
+  return item;
+}
+
+function createCommentPayload(text = "") {
+  const actor = getCurrentCommentActor();
+  if (!actor) return null;
+  const createdAt = new Date().toISOString();
+  return {
+    ...actor,
+    user: actor.authorName,
+    time: nowString(),
+    createdAt,
+    text,
+    resolved: false,
+    replies: []
+  };
+}
+
+function requireCommentIdentity() {
+  if (state.user?.email) return true;
+  setAuthMessage("Sign in with Google to comment.");
+  setSaveStatus("Sign in with Google to comment.");
+  return false;
+}
+
+function sanitizeActivityFeed(feed) {
+  if (!Array.isArray(feed)) return [];
+  return feed
+    .filter((entry) => entry && typeof entry === "object")
+    .map((entry) => ({
+      id: String(entry.id || `activity-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`),
+      type: String(entry.type || "node_updated"),
+      user: typeof entry.user === "object" && entry.user
+        ? {
+            name: String(entry.user.name || entry.user.email || "Someone").slice(0, 80),
+            email: String(entry.user.email || "").slice(0, 120),
+            avatar: String(entry.user.avatar || "")
+          }
+        : { name: String(entry.user || "Someone").slice(0, 80), email: "", avatar: "" },
+      nodeId: entry.nodeId ? String(entry.nodeId) : null,
+      nodeTitle: entry.nodeTitle ? String(entry.nodeTitle).slice(0, 120) : "",
+      timestamp: entry.timestamp || new Date().toISOString()
+    }))
+    .sort((a, b) => Date.parse(b.timestamp || 0) - Date.parse(a.timestamp || 0))
+    .slice(0, ACTIVITY_FEED_MAX_ENTRIES);
+}
+
+function activityId() {
+  return `activity-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function activityNodeTitle(node, fallback = "this node") {
+  return (node?.title || node?.type || fallback || "this node").trim();
+}
+
+function appendActivity(type, { node = null, nodeId = null, nodeTitle = "", userName = "" } = {}) {
+  if (state.isBoardLoading || state.initialServerLoadInFlight) return null;
+  const resolvedNode = node || (nodeId ? getNode(nodeId) : null);
+  const safeNodeId = nodeId || resolvedNode?.id || null;
+  const safeNodeTitle = nodeTitle || activityNodeTitle(resolvedNode);
+  const user = getActivityUser(userName);
+  const nowIso = new Date().toISOString();
+  const recent = state.activityFeed.find((entry) => {
+    if (entry.type !== type || entry.nodeId !== safeNodeId) return false;
+    const entryEmail = entry.user?.email || "";
+    const entryName = entry.user?.name || "";
+    const sameUser = user.email ? entryEmail === user.email : entryName === user.name;
+    return sameUser && Date.now() - Date.parse(entry.timestamp || 0) < ACTIVITY_DEBOUNCE_MS;
+  });
+
+  if (recent) {
+    recent.timestamp = nowIso;
+    recent.nodeTitle = safeNodeTitle;
+    renderActivityFeed();
+    return recent;
+  }
+
+  const entry = {
+    id: activityId(),
+    type,
+    user,
+    nodeId: safeNodeId,
+    nodeTitle: safeNodeTitle,
+    timestamp: nowIso
+  };
+  state.activityFeed = [entry, ...state.activityFeed].slice(0, ACTIVITY_FEED_MAX_ENTRIES);
+  renderActivityFeed();
+  return entry;
+}
+
+function recordNodeUpdatedActivity(node) {
+  if (!node || state.isBoardLoading) return;
+  appendActivity("node_updated", { node });
+}
+
+function formatActivityAction(entry = {}) {
+  const title = entry.nodeTitle ? `“${entry.nodeTitle}”` : "a node";
+  const map = {
+    node_created: `created ${title}`,
+    node_updated: `edited ${title}`,
+    node_moved: `moved ${title}`,
+    node_deleted: `deleted ${title}`,
+    edge_connected: `connected ${title}`,
+    edge_disconnected: `disconnected ${title}`,
+    media_added: `added media to ${title}`,
+    media_removed: `removed media from ${title}`,
+    comment_added: `added a comment on ${title}`,
+    reply_added: `replied on ${title}`,
+    comment_resolved: `resolved a comment on ${title}`,
+    postit_added: `added a post-it on ${title}`,
+    auto_arranged: "auto-arranged the board"
+  };
+  return map[entry.type] || `updated ${title}`;
+}
+
+function relativeActivityTime(timestamp) {
+  const then = Date.parse(timestamp || "");
+  if (!Number.isFinite(then)) return "just now";
+  const seconds = Math.max(0, Math.floor((Date.now() - then) / 1000));
+  if (seconds < 45) return "just now";
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} hr ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days} day${days === 1 ? "" : "s"} ago`;
+  return new Date(then).toLocaleDateString();
+}
+
+function renderActivityFeed() {
+  if (!el.activityFeed) return;
+  const entries = sanitizeActivityFeed(state.activityFeed).slice(0, ACTIVITY_FEED_VISIBLE_ENTRIES);
+  if (el.activityCount) el.activityCount.textContent = state.activityFeed.length ? String(Math.min(state.activityFeed.length, ACTIVITY_FEED_VISIBLE_ENTRIES)) : "";
+  if (el.activityToggleButton) el.activityToggleButton.setAttribute("aria-expanded", String(!state.activityCollapsed));
+  el.activityPanel?.classList.toggle("is-collapsed", !!state.activityCollapsed);
+  if (state.activityCollapsed) return;
+  el.activityFeed.innerHTML = "";
+  if (!entries.length) {
+    const empty = document.createElement("p");
+    empty.className = "activity-empty";
+    empty.textContent = "Recent collaboration activity will appear here.";
+    el.activityFeed.appendChild(empty);
+    return;
+  }
+  entries.forEach((entry) => {
+    const row = document.createElement("div");
+    row.className = "activity-entry";
+    const canFocusNode = !!entry.nodeId && !!getNode(entry.nodeId);
+    if (canFocusNode) {
+      row.classList.add("is-clickable");
+      row.tabIndex = 0;
+      row.setAttribute("role", "button");
+      row.title = isCommentActivityType(entry.type) ? "Jump to discussion" : "Jump to node";
+      row.addEventListener("click", () => handleActivityEntryFocus(entry));
+      row.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        event.preventDefault();
+        handleActivityEntryFocus(entry);
+      });
+    }
+    const user = entry.user || {};
+    const name = getViewerDisplayName(user);
+    const avatar = document.createElement("span");
+    avatar.className = "activity-avatar";
+    if (user.avatar) {
+      const img = document.createElement("img");
+      img.src = user.avatar;
+      img.alt = `${name} avatar`;
+      avatar.appendChild(img);
+    } else {
+      avatar.textContent = getViewerInitials(user);
+    }
+    const body = document.createElement("div");
+    body.className = "activity-body";
+    const line = document.createElement("p");
+    const strong = document.createElement("strong");
+    strong.textContent = name;
+    line.append(strong, document.createTextNode(` ${formatActivityAction(entry)}`));
+    const time = document.createElement("time");
+    time.dateTime = entry.timestamp || "";
+    time.textContent = relativeActivityTime(entry.timestamp);
+    body.append(line, time);
+    row.append(avatar, body);
+    el.activityFeed.appendChild(row);
+  });
+}
+
 function getUserInitials(user) {
   const source = (user?.name || user?.email || "U").trim();
   return source.split(/\s+/).slice(0, 2).map((p) => p[0]?.toUpperCase() || "").join("") || "U";
@@ -731,12 +1213,76 @@ function getViewerInitials(viewer = {}) {
   return source.split(/\s+/).slice(0, 2).map((p) => p[0]?.toUpperCase() || "").join("") || "U";
 }
 
+function normalizedViewerEmail(viewer = {}) {
+  return String(viewer?.email || "").trim().toLowerCase();
+}
+
+function isRemoteViewer(viewer = {}) {
+  const viewerEmail = normalizedViewerEmail(viewer);
+  const currentEmail = String(state.user?.email || "").trim().toLowerCase();
+  return !!viewerEmail && !!currentEmail && viewerEmail !== currentEmail;
+}
+
+function viewerBoardPoint(viewer = {}) {
+  if (Number.isFinite(viewer.viewportCenterX) && Number.isFinite(viewer.viewportCenterY)) {
+    return { x: Number(viewer.viewportCenterX), y: Number(viewer.viewportCenterY) };
+  }
+  if (Number.isFinite(viewer.cursorX) && Number.isFinite(viewer.cursorY)) {
+    return { x: Number(viewer.cursorX), y: Number(viewer.cursorY) };
+  }
+  const nodeId = viewer.hoveredNodeId || viewer.editingNodeId || viewer.selectedNodeId;
+  const node = nodeId ? getNode(nodeId) : null;
+  if (!node) return null;
+  return { x: (node.position?.x || 0) + NODE_WIDTH / 2, y: (node.position?.y || 0) + NODE_HEIGHT / 2 };
+}
+
 function formatNodePresenceTitle(viewers = []) {
   const names = viewers.map(getViewerDisplayName);
   if (names.length === 1) return `${names[0]} is viewing this node`;
   if (names.length === 2) return `${names[0]} and ${names[1]} are viewing this node`;
   const overflow = Math.max(0, names.length - 2);
   return `${names.slice(0, 2).join(", ")} +${overflow} are viewing this node`;
+}
+
+function formatEditingFieldLabel(field = "") {
+  const safeField = String(field || "").trim().toLowerCase();
+  const labels = {
+    title: "title",
+    content: "description",
+    description: "description",
+    audience: "audience",
+    postit: "a post-it",
+    textarea: "text",
+    platform: "platform",
+    tags: "tags",
+    goal: "goal",
+    channel: "channel",
+    funnelstage: "funnel stage",
+    tone: "tone",
+    contentformat: "format",
+    media: "media"
+  };
+  return labels[safeField] || "";
+}
+
+function formatCollaboratorSpatialStatus(viewer = {}) {
+  const field = formatEditingFieldLabel(viewer.editingField);
+  if (viewer.editingNodeId) return field ? `editing ${field}` : 'editing';
+  const hoverNode = viewer.hoveredNodeId ? getNode(viewer.hoveredNodeId) : null;
+  if (hoverNode) return `viewing ${hoverNode.title || hoverNode.type || 'node'}`;
+  return '';
+}
+
+function formatNodeEditingTitle(viewers = []) {
+  const names = viewers.map(getViewerDisplayName);
+  if (!names.length) return "Someone is editing";
+  if (viewers.length === 1) {
+    const field = formatEditingFieldLabel(viewers[0]?.editingField);
+    return field ? `${names[0]} is editing ${field}` : `${names[0]} is typing`;
+  }
+  if (viewers.length === 2) return `${names[0]} and ${names[1]} are editing`;
+  const overflow = Math.max(0, names.length - 2);
+  return `${names.slice(0, 2).join(", ")} +${overflow} are editing`;
 }
 
 function renderPresenceLite() {
@@ -752,11 +1298,18 @@ function renderPresenceLite() {
   const show = viewers.slice(0, max);
   el.presenceAvatars.innerHTML = "";
   show.forEach((viewer) => {
-    const badge = document.createElement("span");
+    const badge = document.createElement("button");
     const label = getViewerDisplayName(viewer);
+    const canNavigate = isRemoteViewer(viewer) && !!viewerBoardPoint(viewer);
+    badge.type = "button";
     badge.className = "presence-avatar";
-    badge.title = `${label} is viewing this board`;
+    badge.title = canNavigate ? `Jump to or follow ${label}` : `${label} is viewing this board`;
     badge.setAttribute("aria-label", badge.title);
+    badge.classList.toggle("is-following", state.followingCollaboratorEmail === normalizedViewerEmail(viewer));
+    badge.disabled = !canNavigate;
+    if (canNavigate) {
+      badge.addEventListener("click", (event) => openCollaboratorFollowMenu(viewer, badge, event));
+    }
     if (viewer?.avatar) {
       const img = document.createElement("img");
       img.src = viewer.avatar;
@@ -772,7 +1325,166 @@ function renderPresenceLite() {
   el.presenceLite.classList.remove("hidden");
 }
 
-function getNodePresenceById() {
+function closeCollaboratorFollowMenu() {
+  document.querySelector('.collab-follow-menu')?.remove();
+}
+
+function openCollaboratorFollowMenu(viewer, anchorEl, event = null) {
+  event?.preventDefault?.();
+  event?.stopPropagation?.();
+  if (!isRemoteViewer(viewer) || !viewerBoardPoint(viewer)) return;
+  closeCollaboratorFollowMenu();
+
+  const name = getViewerDisplayName(viewer);
+  const menu = document.createElement('div');
+  menu.className = 'collab-follow-menu';
+  menu.setAttribute('role', 'menu');
+  const heading = document.createElement('strong');
+  heading.textContent = name;
+  const jumpButton = document.createElement('button');
+  jumpButton.type = 'button';
+  jumpButton.dataset.collabAction = 'jump';
+  jumpButton.textContent = `Jump to ${name}`;
+  const followButton = document.createElement('button');
+  followButton.type = 'button';
+  followButton.dataset.collabAction = 'follow';
+  followButton.textContent = `Follow ${name}`;
+  menu.append(heading, jumpButton, followButton);
+  document.body.appendChild(menu);
+
+  const rect = anchorEl.getBoundingClientRect();
+  menu.style.left = `${Math.min(window.innerWidth - menu.offsetWidth - 10, Math.max(10, rect.left))}px`;
+  menu.style.top = `${Math.min(window.innerHeight - menu.offsetHeight - 10, rect.bottom + 8)}px`;
+
+  let close;
+  const cleanup = () => {
+    closeCollaboratorFollowMenu();
+    if (close) document.removeEventListener('pointerdown', close, true);
+  };
+
+  jumpButton.addEventListener('click', () => {
+    cleanup();
+    focusCollaborator(viewer);
+  });
+  followButton.addEventListener('click', () => {
+    cleanup();
+    startFollowCollaborator(viewer);
+  });
+
+  close = (closeEvent) => {
+    if (menu.contains(closeEvent.target) || anchorEl.contains(closeEvent.target)) return;
+    cleanup();
+  };
+  setTimeout(() => document.addEventListener('pointerdown', close, true), 0);
+}
+
+function pulseCollaboratorFocus(point, label = '') {
+  const layer = ensureCursorPresenceLayer();
+  if (!layer || !point) return;
+  const pulse = document.createElement('div');
+  pulse.className = 'collab-focus-pulse';
+  pulse.style.setProperty('--focus-x', `${Math.round(point.x * state.zoom)}px`);
+  pulse.style.setProperty('--focus-y', `${Math.round(point.y * state.zoom)}px`);
+  pulse.textContent = label;
+  layer.appendChild(pulse);
+  setTimeout(() => pulse.remove(), 1600);
+}
+
+function focusBoardPointInCanvas(point, { behavior = 'smooth', pulseLabel = '' } = {}) {
+  if (!point || !Number.isFinite(point.x) || !Number.isFinite(point.y) || !el.canvas) return false;
+
+  const runFocus = () => {
+    updateCanvasScrollSurfaceSize();
+    const maxLeft = Math.max(0, el.canvas.scrollWidth - el.canvas.clientWidth);
+    const maxTop = Math.max(0, el.canvas.scrollHeight - el.canvas.clientHeight);
+    const left = Math.max(0, Math.min(maxLeft, point.x * state.zoom - el.canvas.clientWidth / 2));
+    const top = Math.max(0, Math.min(maxTop, point.y * state.zoom - el.canvas.clientHeight / 2));
+    el.canvas.scrollTo({ left, top, behavior });
+    requestAnimationFrame(() => pulseCollaboratorFocus(point, pulseLabel));
+  };
+
+  if (state.activeView !== 'board') {
+    setActiveView('board');
+    requestAnimationFrame(runFocus);
+  } else {
+    runFocus();
+  }
+  return true;
+}
+
+function focusCollaborator(viewer, { behavior = 'smooth', pulse = true, preferNode = false } = {}) {
+  if (!isRemoteViewer(viewer)) return false;
+  const nodeId = viewer.editingNodeId || viewer.hoveredNodeId || viewer.selectedNodeId || null;
+  const node = nodeId ? getNode(nodeId) : null;
+  const name = getViewerDisplayName(viewer);
+  const point = viewerBoardPoint(viewer);
+
+  if (!preferNode && point) {
+    return focusBoardPointInCanvas(point, { behavior, pulseLabel: pulse ? name : '' });
+  }
+
+  if (node) {
+    const didFocusNode = focusNodeInCanvas(node.id, { behavior, select: true, pulse });
+    if (didFocusNode && pulse) {
+      pulseCollaboratorFocus(point || { x: node.position.x + NODE_WIDTH / 2, y: node.position.y + NODE_HEIGHT / 2 }, name);
+    }
+    return didFocusNode;
+  }
+
+  return focusBoardPointInCanvas(point, { behavior, pulseLabel: pulse ? name : '' });
+}
+
+function renderFollowModeIndicator() {
+  let indicator = document.querySelector('.collab-follow-indicator');
+  if (!state.followingCollaboratorEmail) {
+    indicator?.remove();
+    return;
+  }
+  if (!indicator) {
+    indicator = document.createElement('div');
+    indicator.className = 'collab-follow-indicator';
+    indicator.innerHTML = '<span></span><button type="button">Stop</button>';
+    indicator.querySelector('button')?.addEventListener('click', () => stopFollowCollaborator('Follow stopped'));
+    document.body.appendChild(indicator);
+  }
+  indicator.querySelector('span').textContent = `Following ${state.followingCollaboratorName || 'collaborator'}`;
+}
+
+function startFollowCollaborator(viewer) {
+  if (!isRemoteViewer(viewer) || !viewerBoardPoint(viewer)) return false;
+  state.followingCollaboratorEmail = normalizedViewerEmail(viewer);
+  state.followingCollaboratorName = getViewerDisplayName(viewer);
+  renderFollowModeIndicator();
+  renderPresenceLite();
+  focusCollaborator(viewer);
+  setSaveStatus(`Following ${state.followingCollaboratorName}`);
+  return true;
+}
+
+function stopFollowCollaborator(message = '') {
+  if (!state.followingCollaboratorEmail) return;
+  state.followingCollaboratorEmail = null;
+  state.followingCollaboratorName = '';
+  renderFollowModeIndicator();
+  renderPresenceLite();
+  if (message) setSaveStatus(message);
+}
+
+function stopFollowForManualNavigation() {
+  if (state.followingCollaboratorEmail) stopFollowCollaborator('Follow stopped');
+}
+
+function applyFollowModeFromPresence() {
+  if (!state.followingCollaboratorEmail) return;
+  const viewer = (state.presenceViewers || []).find((candidate) => normalizedViewerEmail(candidate) === state.followingCollaboratorEmail);
+  if (!viewer || !viewerBoardPoint(viewer)) {
+    stopFollowCollaborator('Collaborator unavailable');
+    return;
+  }
+  focusCollaborator(viewer, { behavior: 'smooth', pulse: false });
+}
+
+function getRemotePresenceByNodeId(fieldName = 'selectedNodeId') {
   const map = new Map();
   const viewers = Array.isArray(state.presenceViewers) ? state.presenceViewers : [];
   const currentUserEmail = (state.user?.email || '').toLowerCase();
@@ -782,7 +1494,7 @@ function getNodePresenceById() {
     if (!viewer?.email) return;
     const viewerEmail = String(viewer.email).toLowerCase();
     if (!viewerEmail || viewerEmail === currentUserEmail) return;
-    const nodeId = typeof viewer.selectedNodeId === 'string' ? viewer.selectedNodeId.trim() : '';
+    const nodeId = typeof viewer[fieldName] === 'string' ? viewer[fieldName].trim() : '';
     if (!nodeId || !nodeIds.has(nodeId)) return;
     const list = map.get(nodeId) || [];
     list.push(viewer);
@@ -792,17 +1504,28 @@ function getNodePresenceById() {
   return map;
 }
 
+function getNodePresenceById() {
+  return getRemotePresenceByNodeId('selectedNodeId');
+}
+
+function getNodeEditingPresenceById() {
+  return getRemotePresenceByNodeId('editingNodeId');
+}
+
 function clearNodePresenceBadges() {
   state.presenceNodeSignature = "";
   if (!el.zoomLayer) return;
-  el.zoomLayer.querySelectorAll('.node-presence-overlay').forEach((x) => x.remove());
+  el.zoomLayer.querySelectorAll('.node-presence-overlay, .node-editing-indicator').forEach((x) => x.remove());
+  el.zoomLayer.querySelectorAll('.node.remote-editing').forEach((nodeEl) => nodeEl.classList.remove('remote-editing'));
+  clearCollaboratorCursors();
 }
 
 function renderNodePresenceBadges({ force = false } = {}) {
   if (!el.zoomLayer) return;
   const presenceByNodeId = getNodePresenceById();
-  const signature = JSON.stringify(
-    [...presenceByNodeId.entries()].map(([nodeId, viewers]) => [
+  const editingByNodeId = getNodeEditingPresenceById();
+  const signature = JSON.stringify({
+    viewing: [...presenceByNodeId.entries()].map(([nodeId, viewers]) => [
       nodeId,
       viewers.map((viewer) => [
         viewer.email || '',
@@ -810,14 +1533,23 @@ function renderNodePresenceBadges({ force = false } = {}) {
         viewer.avatar || '',
         viewer.selectedNodeId || ''
       ].join(':'))
+    ]),
+    editing: [...editingByNodeId.entries()].map(([nodeId, viewers]) => [
+      nodeId,
+      viewers.map((viewer) => [
+        viewer.email || '',
+        viewer.name || '',
+        viewer.avatar || '',
+        viewer.editingNodeId || '',
+        viewer.editingField || ''
+      ].join(':'))
     ])
-  );
+  });
   if (!force && signature === state.presenceNodeSignature) return;
   state.presenceNodeSignature = signature;
 
-  el.zoomLayer.querySelectorAll('.node-presence-overlay').forEach((x) => x.remove());
-
-  if (!presenceByNodeId.size) return;
+  el.zoomLayer.querySelectorAll('.node-presence-overlay, .node-editing-indicator').forEach((x) => x.remove());
+  el.zoomLayer.querySelectorAll('.node.remote-editing').forEach((nodeEl) => nodeEl.classList.remove('remote-editing'));
 
   presenceByNodeId.forEach((viewers, nodeId) => {
     const nodeEl = el.zoomLayer.querySelector(`[data-id='${nodeId}']`);
@@ -835,6 +1567,13 @@ function renderNodePresenceBadges({ force = false } = {}) {
       const label = getViewerDisplayName(viewer);
       badge.title = presenceTitle;
       badge.setAttribute('aria-label', presenceTitle);
+      if (isRemoteViewer(viewer)) {
+        badge.classList.add('is-clickable');
+        badge.addEventListener('click', (event) => {
+          event.stopPropagation();
+          focusCollaborator(viewer, { preferNode: true });
+        });
+      }
       if (viewer?.avatar) {
         const img = document.createElement('img');
         img.src = viewer.avatar;
@@ -860,6 +1599,65 @@ function renderNodePresenceBadges({ force = false } = {}) {
     overlay.title = presenceTitle;
     nodeEl.appendChild(overlay);
   });
+
+  editingByNodeId.forEach((viewers, nodeId) => {
+    const nodeEl = el.zoomLayer.querySelector(`[data-id='${nodeId}']`);
+    if (!nodeEl) return;
+    nodeEl.classList.add('remote-editing');
+
+    const indicator = document.createElement('div');
+    indicator.className = 'node-editing-indicator';
+    const editingTitle = formatNodeEditingTitle(viewers);
+    indicator.title = editingTitle;
+    indicator.setAttribute('aria-label', editingTitle);
+
+    const avatarWrap = document.createElement('span');
+    avatarWrap.className = 'node-editing-avatars';
+    const shown = viewers.slice(0, 3);
+    shown.forEach((viewer) => {
+      const avatar = document.createElement('span');
+      avatar.className = 'node-editing-avatar';
+      avatar.title = editingTitle;
+      avatar.setAttribute('aria-label', `${getViewerDisplayName(viewer)} is editing`);
+      if (isRemoteViewer(viewer)) {
+        avatar.classList.add('is-clickable');
+        avatar.addEventListener('click', (event) => {
+          event.stopPropagation();
+          focusCollaborator(viewer, { preferNode: true });
+        });
+      }
+      if (viewer?.avatar) {
+        const img = document.createElement('img');
+        img.src = viewer.avatar;
+        img.alt = getViewerDisplayName(viewer);
+        avatar.appendChild(img);
+      } else {
+        avatar.textContent = getViewerInitials(viewer);
+      }
+      avatarWrap.appendChild(avatar);
+    });
+    const overflow = viewers.length - shown.length;
+    if (overflow > 0) {
+      const extra = document.createElement('span');
+      extra.className = 'node-editing-avatar node-editing-extra';
+      extra.textContent = `+${overflow}`;
+      extra.title = editingTitle;
+      avatarWrap.appendChild(extra);
+    }
+
+    const pencil = document.createElement('span');
+    pencil.className = 'node-editing-pencil';
+    pencil.textContent = '✎';
+
+    const label = document.createElement('span');
+    label.className = 'node-editing-label';
+    const first = viewers[0] || {};
+    const fieldLabel = formatEditingFieldLabel(first.editingField);
+    label.textContent = viewers.length > 1 ? `${viewers.length} editing` : (fieldLabel ? `editing ${fieldLabel}` : 'typing…');
+
+    indicator.append(avatarWrap, pencil, label);
+    nodeEl.appendChild(indicator);
+  });
 }
 
 function resetPresenceSelectionQueue() {
@@ -870,6 +1668,26 @@ function resetPresenceSelectionQueue() {
   state.presencePendingPingAfterInFlight = false;
   state.presenceSelectedNodeIdLastQueued = undefined;
   state.presenceSelectedNodeIdLastSent = undefined;
+  state.presencePayloadSignatureLastQueued = undefined;
+  state.presencePayloadSignatureLastSent = undefined;
+  if (state.presenceEditingClearTimer) {
+    clearTimeout(state.presenceEditingClearTimer);
+    state.presenceEditingClearTimer = null;
+  }
+  if (state.presenceCursorPublishTimer) {
+    clearTimeout(state.presenceCursorPublishTimer);
+    state.presenceCursorPublishTimer = null;
+  }
+  if (state.presenceCursorClearTimer) {
+    clearTimeout(state.presenceCursorClearTimer);
+    state.presenceCursorClearTimer = null;
+  }
+  state.presenceEditingNodeId = null;
+  state.presenceEditingField = null;
+  state.presenceCursorX = null;
+  state.presenceCursorY = null;
+  state.presenceCursorHoveredNodeId = null;
+  state.presenceCursorLastMovedAt = null;
 }
 
 function stopPresenceLite() {
@@ -879,11 +1697,31 @@ function stopPresenceLite() {
   }
   resetPresenceSelectionQueue();
   clearNodePresenceBadges();
+  stopFollowCollaborator();
+}
+
+function stopBoardRefreshPolling() {
+  if (state.boardRefreshPollTimer) {
+    clearInterval(state.boardRefreshPollTimer);
+    state.boardRefreshPollTimer = null;
+  }
+  state.boardRefreshInFlight = false;
+  state.remoteMergeSkippedNodeIds.clear();
+}
+
+function startBoardRefreshPolling() {
+  stopBoardRefreshPolling();
+  const boardId = state.currentBoardId || getBoardIdFromPath();
+  if (!boardId) return;
+  state.boardRefreshPollTimer = setInterval(() => { void pollBoardForRemoteChanges(); }, 12000);
 }
 
 async function pingPresenceLite() {
   const boardId = state.currentBoardId || getBoardIdFromPath();
   const selectedNodeId = state.selectedPrimary || null;
+  const editingNodeId = state.presenceEditingNodeId || null;
+  const editingField = editingNodeId ? (state.presenceEditingField || null) : null;
+  const cursorPayload = cursorPresencePayload();
   if (!boardId || !state.user?.email) {
     state.presenceViewers = [];
     state.presenceSelectedNodeIdLastSent = undefined;
@@ -900,15 +1738,18 @@ async function pingPresenceLite() {
     const response = await fetch(`/api/boards/presence/${encodeURIComponent(boardId)}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ selectedNodeId })
+      body: JSON.stringify({ selectedNodeId, editingNodeId, editingField, ...cursorPayload })
     });
     if (!response.ok) throw new Error('presence unavailable');
     const data = await response.json();
     if ((state.currentBoardId || getBoardIdFromPath()) !== boardId || !state.user?.email) return;
     state.presenceSelectedNodeIdLastSent = selectedNodeId;
+    state.presencePayloadSignatureLastSent = buildPresencePayloadSignature();
     state.presenceViewers = Array.isArray(data?.viewers) ? data.viewers : [];
     renderPresenceLite();
     renderNodePresenceBadges();
+    scheduleCollaboratorCursorRender();
+    applyFollowModeFromPresence();
   } catch (_error) {
     state.presenceViewers = [];
     renderPresenceLite();
@@ -922,21 +1763,138 @@ async function pingPresenceLite() {
   }
 }
 
+function buildPresencePayloadSignature() {
+  return JSON.stringify({
+    selectedNodeId: state.selectedPrimary || null,
+    editingNodeId: state.presenceEditingNodeId || null,
+    editingField: state.presenceEditingNodeId ? (state.presenceEditingField || null) : null,
+    ...cursorPresencePayload()
+  });
+}
+
 function notifyPresenceSelectionMaybe(delayMs = 350) {
   const boardId = state.currentBoardId || getBoardIdFromPath();
   if (!boardId || !state.user?.email) return;
 
   const selectedNodeId = state.selectedPrimary || null;
-  if (selectedNodeId === state.presenceSelectedNodeIdLastQueued && state.presenceSelectionPingTimer) return;
-  if (selectedNodeId === state.presenceSelectedNodeIdLastSent && !state.presenceSelectionPingTimer) return;
+  const payloadSignature = buildPresencePayloadSignature();
+  if (payloadSignature === state.presencePayloadSignatureLastQueued && state.presenceSelectionPingTimer) return;
+  if (payloadSignature === state.presencePayloadSignatureLastSent && !state.presenceSelectionPingTimer) return;
 
   state.presenceSelectedNodeIdLastQueued = selectedNodeId;
+  state.presencePayloadSignatureLastQueued = payloadSignature;
   if (state.presenceSelectionPingTimer) clearTimeout(state.presenceSelectionPingTimer);
   state.presenceSelectionPingTimer = setTimeout(() => {
     state.presenceSelectionPingTimer = null;
-    if (state.presenceSelectedNodeIdLastQueued === state.presenceSelectedNodeIdLastSent) return;
+    if (state.presencePayloadSignatureLastQueued === state.presencePayloadSignatureLastSent) return;
     void pingPresenceLite();
   }, delayMs);
+}
+
+function setLocalEditingPresence(nodeId, field = 'textarea', { clearAfterMs = 4000, notifyDelayMs = 250 } = {}) {
+  if (!nodeId || !state.user?.email || state.boardAccess?.canEdit === false) return;
+  const safeField = field || 'textarea';
+  const changed = state.presenceEditingNodeId !== nodeId || state.presenceEditingField !== safeField;
+  state.presenceEditingNodeId = nodeId;
+  state.presenceEditingField = safeField;
+  if (state.presenceEditingClearTimer) clearTimeout(state.presenceEditingClearTimer);
+  state.presenceEditingClearTimer = setTimeout(() => {
+    clearLocalEditingPresence({ notifyDelayMs: 250 });
+  }, clearAfterMs);
+  if (changed) notifyPresenceSelectionMaybe(notifyDelayMs);
+}
+
+function clearLocalEditingPresence({ notifyDelayMs = 250 } = {}) {
+  if (state.presenceEditingClearTimer) {
+    clearTimeout(state.presenceEditingClearTimer);
+    state.presenceEditingClearTimer = null;
+  }
+  if (!state.presenceEditingNodeId && !state.presenceEditingField) return;
+  state.presenceEditingNodeId = null;
+  state.presenceEditingField = null;
+  notifyPresenceSelectionMaybe(notifyDelayMs);
+}
+
+function editingInfoFromTarget(target) {
+  if (!target || !target.closest) return null;
+  if (target.closest('.postit')) {
+    const nodeEl = target.closest('.node[data-id]');
+    return nodeEl?.dataset?.id ? { nodeId: nodeEl.dataset.id, field: 'postit' } : null;
+  }
+  const nodeEl = target.closest('.node[data-id]');
+  if (nodeEl?.dataset?.id) {
+    if (target.closest('.title')) return { nodeId: nodeEl.dataset.id, field: 'title' };
+    if (target.closest('.content')) return { nodeId: nodeEl.dataset.id, field: 'content' };
+    return { nodeId: nodeEl.dataset.id, field: 'textarea' };
+  }
+  if (el.nodeForm?.contains(target) && state.selectedPrimary) {
+    const fieldMap = {
+      type: 'textarea',
+      title: 'title',
+      content: 'content',
+      imagePrompt: 'media',
+      audience: 'audience',
+      caption: 'content',
+      hashtags: 'tags',
+      preview: 'content',
+      platform: 'platform',
+      goal: 'goal',
+      channel: 'channel',
+      funnelStage: 'funnelStage',
+      tone: 'tone',
+      contentFormat: 'contentFormat',
+      variants: 'content'
+    };
+    const name = target.getAttribute?.('name') || '';
+    const id = target.id || '';
+    if (name && fieldMap[name]) return { nodeId: state.selectedPrimary, field: fieldMap[name] };
+    if (id.includes('title')) return { nodeId: state.selectedPrimary, field: 'title' };
+    if (id.includes('content') || id.includes('caption') || id.includes('preview')) return { nodeId: state.selectedPrimary, field: 'content' };
+    if (id.includes('hashtag')) return { nodeId: state.selectedPrimary, field: 'tags' };
+    if (id.includes('audience')) return { nodeId: state.selectedPrimary, field: 'audience' };
+    if (id.includes('goal')) return { nodeId: state.selectedPrimary, field: 'goal' };
+    if (id.includes('channel')) return { nodeId: state.selectedPrimary, field: 'channel' };
+    if (id.includes('funnel')) return { nodeId: state.selectedPrimary, field: 'funnelStage' };
+    if (id.includes('tone')) return { nodeId: state.selectedPrimary, field: 'tone' };
+    if (id.includes('platform')) return { nodeId: state.selectedPrimary, field: 'platform' };
+    if (id.includes('format')) return { nodeId: state.selectedPrimary, field: 'contentFormat' };
+    if (id.includes('image')) return { nodeId: state.selectedPrimary, field: 'media' };
+    if (target.matches?.('textarea')) return { nodeId: state.selectedPrimary, field: 'textarea' };
+    return { nodeId: state.selectedPrimary, field: 'content' };
+  }
+  return null;
+}
+
+function handleEditingPresenceEvent(event) {
+  if (state.boardAccess?.canEdit === false) return;
+  const info = editingInfoFromTarget(event.target);
+  if (!info) return;
+  setLocalEditingPresence(info.nodeId, info.field, { notifyDelayMs: event.type === 'focusin' ? 150 : 650 });
+}
+
+function bindEditingPresenceTracking() {
+  [el.nodeForm, el.zoomLayer].forEach((root) => {
+    if (!root) return;
+    root.addEventListener('focusin', handleEditingPresenceEvent);
+    root.addEventListener('input', handleEditingPresenceEvent);
+    root.addEventListener('focusout', (event) => {
+      if (!editingInfoFromTarget(event.target)) return;
+      setTimeout(() => {
+        const activeInfo = editingInfoFromTarget(document.activeElement);
+        if (!activeInfo || activeInfo.nodeId !== state.presenceEditingNodeId) clearLocalEditingPresence({ notifyDelayMs: 250 });
+      }, 80);
+    });
+  });
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      clearLocalEditingPresence({ notifyDelayMs: 0 });
+      clearLocalCursorPresence({ notifyDelayMs: 0 });
+    }
+  });
+  window.addEventListener('pagehide', () => {
+    clearLocalEditingPresence({ notifyDelayMs: 0 });
+    clearLocalCursorPresence({ notifyDelayMs: 0 });
+  });
 }
 
 function startPresenceLite() {
@@ -949,6 +1907,162 @@ function startPresenceLite() {
   }
   void pingPresenceLite();
   state.presencePollTimer = setInterval(() => { void pingPresenceLite(); }, 20000);
+}
+
+function remoteTimestampIsNewer(remoteUpdatedAt) {
+  if (!remoteUpdatedAt || remoteUpdatedAt === state.lastKnownUpdatedAt) return false;
+  if (state.lastLocalSaveAt && Date.parse(remoteUpdatedAt) <= Date.parse(state.lastLocalSaveAt)) return false;
+  if (state.lastKnownUpdatedAt && Date.parse(remoteUpdatedAt) <= Date.parse(state.lastKnownUpdatedAt)) return false;
+  return true;
+}
+
+function getActivelyEditedNodeIds() {
+  const ids = new Set();
+  const active = document.activeElement;
+  if (!active) return ids;
+
+  const isEditableControl = active.matches?.('input,textarea,select,[contenteditable="true"]');
+  if (!isEditableControl) return ids;
+
+  const activeNodeEl = active.closest?.('.node[data-id]');
+  if (activeNodeEl?.dataset?.id) ids.add(activeNodeEl.dataset.id);
+
+  if (el.nodeForm?.contains(active) && state.selectedPrimary) ids.add(state.selectedPrimary);
+
+  return ids;
+}
+
+function stableRemoteNodeSignature(node) {
+  return JSON.stringify(sanitizeNodeForPersistence(node));
+}
+
+function patchNodeFromRemote(localNode, remoteNode) {
+  const safeRemote = sanitizeNodeForPersistence(remoteNode);
+  Object.keys(localNode).forEach((key) => {
+    if (key !== 'id' && !(key in safeRemote)) delete localNode[key];
+  });
+  Object.entries(safeRemote).forEach(([key, value]) => {
+    if (key === 'id') return;
+    localNode[key] = value;
+  });
+}
+
+function pulseRemoteNodeUpdate(nodeId) {
+  const nodeEl = el.zoomLayer?.querySelector(`[data-id='${nodeId}']`);
+  if (!nodeEl) return;
+  nodeEl.classList.remove('remote-updated');
+  void nodeEl.offsetWidth;
+  nodeEl.classList.add('remote-updated');
+  setTimeout(() => nodeEl.classList.remove('remote-updated'), 1000);
+}
+
+function mergeRemoteBoardState(remoteCanvasState, remoteUpdatedAt) {
+  const normalizedState = withBoardSchemaDefaults(remoteCanvasState);
+  const incomingNodes = (normalizedState.nodes || []).map((node) => sanitizeNodeForPersistence(node));
+  const activeEditingIds = getActivelyEditedNodeIds();
+  const localById = new Map(state.nodes.map((node) => [node.id, node]));
+  let changedNodeCount = 0;
+  let addedNodeCount = 0;
+  let skippedNodeCount = 0;
+
+  state.canvasMetadata = { ...normalizedState.metadata };
+  state.nodeCounter = Math.max(state.nodeCounter || 1, normalizedState.nodeCounter || 1);
+  state.postitCounter = Math.max(state.postitCounter || 1, normalizedState.postitCounter || 1);
+  const hasRemoteActivityFeed = Array.isArray(remoteCanvasState?.activityFeed);
+  const incomingActivityFeed = hasRemoteActivityFeed ? sanitizeActivityFeed(normalizedState.activityFeed) : state.activityFeed;
+  const activityChanged = hasRemoteActivityFeed && JSON.stringify(incomingActivityFeed) !== JSON.stringify(state.activityFeed);
+  if (activityChanged) {
+    state.activityFeed = incomingActivityFeed;
+    renderActivityFeed();
+  }
+
+  incomingNodes.forEach((remoteNode) => {
+    const localNode = localById.get(remoteNode.id);
+    if (!localNode) {
+      state.nodes.push(remoteNode);
+      renderNode(remoteNode);
+      pulseRemoteNodeUpdate(remoteNode.id);
+      addedNodeCount += 1;
+      return;
+    }
+
+    if (stableRemoteNodeSignature(localNode) === stableRemoteNodeSignature(remoteNode)) {
+      state.remoteMergeSkippedNodeIds.delete(remoteNode.id);
+      return;
+    }
+
+    if (activeEditingIds.has(remoteNode.id)) {
+      state.remoteMergeSkippedNodeIds.add(remoteNode.id);
+      skippedNodeCount += 1;
+      return;
+    }
+
+    patchNodeFromRemote(localNode, remoteNode);
+    updateNodeCard(localNode);
+    pulseRemoteNodeUpdate(localNode.id);
+    state.remoteMergeSkippedNodeIds.delete(localNode.id);
+    changedNodeCount += 1;
+  });
+
+  const incomingEdgesSignature = JSON.stringify(normalizedState.edges || []);
+  const localEdgesSignature = JSON.stringify(state.edges || []);
+  if (incomingEdgesSignature !== localEdgesSignature) {
+    state.edges = normalizedState.edges || [];
+    drawLinks();
+  }
+
+  if (changedNodeCount || addedNodeCount) {
+    updateListView();
+    updateEmptyState();
+    renderNodePresenceBadges({ force: true });
+    if (state.selectedPrimary && !activeEditingIds.has(state.selectedPrimary)) {
+      fillInspector(getNode(state.selectedPrimary));
+    }
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(serializeState()));
+    if (!state.isDirty) {
+      refreshLastSavedSnapshot();
+      setSaveStatus('Updated from collaborator');
+    }
+  }
+
+  if (activityChanged && !changedNodeCount && !addedNodeCount) {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(serializeState()));
+    if (!state.isDirty) refreshLastSavedSnapshot();
+  }
+
+  if (!skippedNodeCount) {
+    state.lastKnownUpdatedAt = remoteUpdatedAt || state.lastKnownUpdatedAt;
+    setSharePanelState(state.currentBoardId, remoteUpdatedAt ? new Date(remoteUpdatedAt) : null, state.currentBoardOwnerEmail, state.currentBoardOwnerName);
+  }
+}
+
+
+async function pollBoardForRemoteChanges() {
+  const boardId = state.currentBoardId || getBoardIdFromPath();
+  if (!boardId || state.boardRefreshInFlight || state.isSaving || state.conflictModalOpen || state.initialServerLoadInFlight) return;
+  state.boardRefreshInFlight = true;
+  try {
+    const response = await fetch(`/api/boards/${encodeURIComponent(boardId)}`);
+    const data = await response.json();
+    if (!response.ok) throw new Error(data?.error || 'Failed to refresh board');
+    if ((state.currentBoardId || getBoardIdFromPath()) !== boardId) return;
+    const remoteUpdatedAt = data?.updated_at || null;
+    if (!remoteTimestampIsNewer(remoteUpdatedAt)) {
+      applyBoardAccessFromServer(data?.access, "pollBoardForRemoteChanges");
+      return;
+    }
+    const incomingCanvasState = data?.canvas_json || {};
+    if (!isValidCanvasStatePayload(incomingCanvasState)) {
+      applyBoardAccessFromServer(data?.access, "pollBoardForRemoteChanges");
+      return;
+    }
+    mergeRemoteBoardState(incomingCanvasState, remoteUpdatedAt);
+    applyBoardAccessFromServer(data?.access, "pollBoardForRemoteChanges");
+  } catch (error) {
+    console.debug('[Funklix Collaboration] Passive board refresh skipped', error);
+  } finally {
+    state.boardRefreshInFlight = false;
+  }
 }
 
 function setAuthMessage(message = "") {
@@ -1022,6 +2136,156 @@ function boardPointFromClient(clientX, clientY) {
     x: (clientX - rect.left + el.canvas.scrollLeft) / state.zoom,
     y: (clientY - rect.top + el.canvas.scrollTop) / state.zoom
   };
+}
+
+function viewportPresenceCenter() {
+  return {
+    x: (el.canvas.scrollLeft + el.canvas.clientWidth / 2) / state.zoom,
+    y: (el.canvas.scrollTop + el.canvas.clientHeight / 2) / state.zoom
+  };
+}
+
+function roundedPresenceNumber(value) {
+  return Number.isFinite(value) ? Math.round(value) : null;
+}
+
+function cursorPresencePayload() {
+  const center = viewportPresenceCenter();
+  return {
+    cursorX: roundedPresenceNumber(state.presenceCursorX),
+    cursorY: roundedPresenceNumber(state.presenceCursorY),
+    viewportCenterX: roundedPresenceNumber(center.x),
+    viewportCenterY: roundedPresenceNumber(center.y),
+    hoveredNodeId: state.presenceCursorHoveredNodeId || null
+  };
+}
+
+function ensureCursorPresenceLayer() {
+  if (!el.canvasScrollSurface) return null;
+  let layer = el.canvasScrollSurface.querySelector('.collab-cursor-layer');
+  if (!layer) {
+    layer = document.createElement('div');
+    layer.className = 'collab-cursor-layer';
+    el.canvasScrollSurface.appendChild(layer);
+  }
+  return layer;
+}
+
+function clearCollaboratorCursors() {
+  if (state.presenceCursorRenderFrame) {
+    cancelAnimationFrame(state.presenceCursorRenderFrame);
+    state.presenceCursorRenderFrame = null;
+  }
+  el.canvasScrollSurface?.querySelector('.collab-cursor-layer')?.remove();
+}
+
+function getRemoteCursorViewers() {
+  const viewers = Array.isArray(state.presenceViewers) ? state.presenceViewers : [];
+  const currentUserEmail = (state.user?.email || '').toLowerCase();
+  const now = Date.now();
+  return viewers.filter((viewer) => {
+    const viewerEmail = String(viewer?.email || '').toLowerCase();
+    if (!viewerEmail || viewerEmail === currentUserEmail) return false;
+    if (!Number.isFinite(viewer.cursorX) || !Number.isFinite(viewer.cursorY)) return false;
+    const lastCursorAt = Number(viewer.cursorUpdatedAt || viewer.lastInteractionAt || 0);
+    if (lastCursorAt && now - lastCursorAt > 15000) return false;
+    return true;
+  });
+}
+
+function renderCollaboratorCursors() {
+  state.presenceCursorRenderFrame = null;
+  const layer = ensureCursorPresenceLayer();
+  if (!layer) return;
+  const viewers = getRemoteCursorViewers();
+  if (!viewers.length) {
+    layer.innerHTML = '';
+    return;
+  }
+  layer.innerHTML = '';
+  viewers.slice(0, 8).forEach((viewer) => {
+    const cursor = document.createElement('div');
+    cursor.className = 'collab-cursor';
+    const name = getViewerDisplayName(viewer);
+    const status = formatCollaboratorSpatialStatus(viewer);
+    cursor.title = status ? `${name} · ${status}` : name;
+    cursor.setAttribute('aria-label', cursor.title);
+    cursor.style.transform = `translate(${Math.round(viewer.cursorX * state.zoom)}px, ${Math.round(viewer.cursorY * state.zoom)}px)`;
+
+    const pointer = document.createElement('span');
+    pointer.className = 'collab-cursor-pointer';
+    pointer.textContent = '➤';
+
+    const pill = document.createElement('span');
+    pill.className = 'collab-cursor-pill';
+    if (viewer?.avatar) {
+      const img = document.createElement('img');
+      img.src = viewer.avatar;
+      img.alt = name;
+      pill.appendChild(img);
+    } else {
+      const initials = document.createElement('span');
+      initials.className = 'collab-cursor-initials';
+      initials.textContent = getViewerInitials(viewer);
+      pill.appendChild(initials);
+    }
+    const label = document.createElement('span');
+    label.className = 'collab-cursor-name';
+    label.textContent = status ? `${name} · ${status}` : name;
+    pill.appendChild(label);
+
+    cursor.append(pointer, pill);
+    layer.appendChild(cursor);
+  });
+}
+
+function scheduleCollaboratorCursorRender() {
+  if (state.presenceCursorRenderFrame) return;
+  state.presenceCursorRenderFrame = requestAnimationFrame(renderCollaboratorCursors);
+}
+
+function clearLocalCursorPresence({ notifyDelayMs = 0 } = {}) {
+  if (state.presenceCursorClearTimer) {
+    clearTimeout(state.presenceCursorClearTimer);
+    state.presenceCursorClearTimer = null;
+  }
+  if (state.presenceCursorPublishTimer) {
+    clearTimeout(state.presenceCursorPublishTimer);
+    state.presenceCursorPublishTimer = null;
+  }
+  if (state.presenceCursorX === null && state.presenceCursorY === null && !state.presenceCursorHoveredNodeId) return;
+  state.presenceCursorX = null;
+  state.presenceCursorY = null;
+  state.presenceCursorHoveredNodeId = null;
+  state.presenceCursorLastMovedAt = null;
+  notifyPresenceSelectionMaybe(notifyDelayMs);
+}
+
+function scheduleCursorPresencePublish(delayMs = 180) {
+  if (!state.user?.email || !(state.currentBoardId || getBoardIdFromPath()) || document.hidden) return;
+  if (state.presenceCursorPublishTimer) return;
+  state.presenceCursorPublishTimer = setTimeout(() => {
+    state.presenceCursorPublishTimer = null;
+    notifyPresenceSelectionMaybe(0);
+  }, delayMs);
+}
+
+function handleLocalCursorMove(event) {
+  if (!state.user?.email || document.hidden || el.canvas.classList.contains('hidden')) return;
+  const point = boardPointFromClient(event.clientX, event.clientY);
+  const hoveredNodeId = event.target.closest?.('.node[data-id]')?.dataset?.id || null;
+  state.presenceCursorX = point.x;
+  state.presenceCursorY = point.y;
+  state.presenceCursorHoveredNodeId = hoveredNodeId;
+  state.presenceCursorLastMovedAt = Date.now();
+  if (state.presenceCursorClearTimer) clearTimeout(state.presenceCursorClearTimer);
+  state.presenceCursorClearTimer = setTimeout(() => clearLocalCursorPresence({ notifyDelayMs: 0 }), 9000);
+  scheduleCursorPresencePublish(160);
+}
+
+function handleViewportPresenceChange() {
+  scheduleCollaboratorCursorRender();
+  scheduleCursorPresencePublish(240);
 }
 
 function visibleBoardBounds() {
@@ -1219,6 +2483,8 @@ function fitBoardContentToViewport({ padding = 120, minZoom = 0.12, maxZoom = 1,
     });
   }
   drawLinks();
+  scheduleCollaboratorCursorRender();
+  handleViewportPresenceChange();
   return true;
 }
 
@@ -1726,6 +2992,7 @@ function serializeState() {
   const serialized = {
     nodes: state.nodes.map((n) => sanitizeNodeForPersistence(n)),
     edges: state.edges, nodeCounter: state.nodeCounter, postitCounter: state.postitCounter, zoom: state.zoom,
+    activityFeed: sanitizeActivityFeed(state.activityFeed),
     schemaVersion: 1,
     metadata: {
       createdAt: state.canvasMetadata?.createdAt || null,
@@ -1767,6 +3034,7 @@ function withBoardSchemaDefaults(campaignState) {
   const nowIso = new Date().toISOString();
   return {
     ...safeState,
+    activityFeed: sanitizeActivityFeed(safeState.activityFeed),
     schemaVersion: Number.isFinite(safeState.schemaVersion) ? safeState.schemaVersion : 1,
     metadata: {
       createdAt: safeState?.metadata?.createdAt || nowIso,
@@ -1796,11 +3064,13 @@ function applyCampaignState(campaignState, statusText = "Restored") {
   state.edges = normalizedState.edges || [];
   state.nodeCounter = normalizedState.nodeCounter || 1;
   state.postitCounter = normalizedState.postitCounter || 1;
+  state.activityFeed = sanitizeActivityFeed(normalizedState.activityFeed);
   state.selectedIds.clear();
   state.selectedPrimary = null;
   el.zoomLayer.querySelectorAll(".node").forEach((n) => n.remove());
   state.nodes.forEach(renderNode);
   renderNodePresenceBadges({ force: true });
+  renderActivityFeed();
   updateListView();
   updateEmptyState();
   drawLinks();
@@ -1908,6 +3178,7 @@ async function saveBoardToServer(trigger = "manual") {
     const returnedId = data?.id || currentBoardId;
     if (returnedId) state.currentBoardId = returnedId;
     if (data?.name && typeof data.name === "string") state.currentBoardName = data.name;
+    state.lastLocalSaveAt = saveTimestamp;
     state.lastKnownUpdatedAt = data?.updated_at || new Date().toISOString();
 
     const shareUrl = `${window.location.origin}/boards/${returnedId}`;
@@ -1920,6 +3191,7 @@ async function saveBoardToServer(trigger = "manual") {
     };
     refreshLastSavedSnapshot();
     setSharePanelState(returnedId, new Date(), data?.owner_email || state.currentBoardOwnerEmail || null, data?.owner_name || state.currentBoardOwnerName || null);
+    applyBoardAccessFromServer(data?.access, "saveBoardToServer");
 
     if (!isUpdate && returnedId) {
       const nextPath = `/boards/${returnedId}`;
@@ -1958,18 +3230,7 @@ async function loadBoardFromUrlIfPresent() {
       saveBrandBrainState();
     }
     setSharePanelState(state.currentBoardId, data?.updated_at ? new Date(data.updated_at) : null, data?.owner_email || null, data?.owner_name || null);
-    if (data?.access && typeof data.access === "object") {
-      const nextAccess = {
-        canView: data.access.canView !== false,
-        canEdit: data.access.canEdit !== false,
-        reason: typeof data.access.role === "string" && data.access.role ? data.access.role : (state.boardAccess?.reason || "unknown")
-      };
-      if (state.boardAccess?.reason !== nextAccess.reason || state.boardAccess?.canView !== nextAccess.canView || state.boardAccess?.canEdit !== nextAccess.canEdit) {
-        state.boardAccess = nextAccess;
-        console.debug("[Funklix Access] boardAccess", state.boardAccess);
-      }
-      updateReadOnlyNoticeVisibility();
-    } else {
+    if (!applyBoardAccessFromServer(data?.access, "loadBoardFromUrlIfPresent")) {
       updateBoardAccessState();
     }
     const incomingCanvasState = data.canvas_json || {};
@@ -1982,6 +3243,7 @@ async function loadBoardFromUrlIfPresent() {
     applyCampaignState(normalizedCanvasState, `Loaded board ${boardId.slice(0, 8)}...`);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(normalizedCanvasState));
     startPresenceLite();
+    startBoardRefreshPolling();
     return true;
   } catch (error) {
     console.error(error);
@@ -2037,6 +3299,7 @@ function resetBrandBrainState() {
   loadBrandBrainState();
   renderBrandCoreTiles();
   renderBrandCoreEditor();
+  renderActivityFeed();
 }
 
 
@@ -2332,6 +3595,8 @@ function setZoom(nextZoom, centerClient = null) {
   el.canvas.scrollTop = boardY * state.zoom - (cy - rect.top);
 
   drawLinks();
+  scheduleCollaboratorCursorRender();
+  handleViewportPresenceChange();
   saveCampaignCanvasState();
 }
 
@@ -2362,6 +3627,54 @@ function focusNodeInViewport(nodeId) {
   const y = nodeEl.offsetTop * state.zoom - el.canvas.clientHeight / 2 + nodeEl.offsetHeight / 2;
   el.canvas.scrollTo({ left: Math.max(0, x), top: Math.max(0, y) });
 }
+
+function pulseActivityFocusedNode(nodeId) {
+  const nodeEl = el.zoomLayer.querySelector(`[data-id='${nodeId}']`);
+  if (!nodeEl) return;
+  nodeEl.classList.remove("activity-focused");
+  void nodeEl.offsetWidth;
+  nodeEl.classList.add("activity-focused");
+  setTimeout(() => nodeEl.classList.remove("activity-focused"), 1400);
+}
+
+function focusNodeInCanvas(nodeId, { behavior = "smooth", select = true, pulse = true } = {}) {
+  const node = getNode(nodeId);
+  const nodeEl = node ? el.zoomLayer.querySelector(`[data-id='${nodeId}']`) : null;
+  if (!node || !nodeEl || !el.canvas) return false;
+
+  const runFocus = () => {
+    updateCanvasScrollSurfaceSize();
+    const width = nodeEl.offsetWidth || NODE_WIDTH;
+    const height = nodeEl.offsetHeight || NODE_HEIGHT;
+    const nodeX = Number.isFinite(node.position?.x) ? node.position.x : nodeEl.offsetLeft;
+    const nodeY = Number.isFinite(node.position?.y) ? node.position.y : nodeEl.offsetTop;
+    const centerX = (nodeX + width / 2) * state.zoom;
+    const centerY = (nodeY + height / 2) * state.zoom;
+    const maxLeft = Math.max(0, el.canvas.scrollWidth - el.canvas.clientWidth);
+    const maxTop = Math.max(0, el.canvas.scrollHeight - el.canvas.clientHeight);
+    const left = Math.max(0, Math.min(maxLeft, centerX - el.canvas.clientWidth / 2));
+    const top = Math.max(0, Math.min(maxTop, centerY - el.canvas.clientHeight / 2));
+
+    el.canvas.scrollTo({ left, top, behavior });
+    if (select) {
+      state.selectedIds.clear();
+      state.selectedIds.add(node.id);
+      state.selectedPrimary = node.id;
+      updateSelectionClasses();
+      fillInspector(node);
+    }
+    if (pulse) requestAnimationFrame(() => pulseActivityFocusedNode(node.id));
+  };
+
+  if (state.activeView !== "board") {
+    setActiveView("board");
+    requestAnimationFrame(runFocus);
+  } else {
+    runFocus();
+  }
+  return true;
+}
+
 function forceNodeVisible(nodeId) {
   focusNodeInViewport(nodeId);
   requestAnimationFrame(() => focusNodeInViewport(nodeId));
@@ -2507,6 +3820,7 @@ function createNode({ type = "Idea", parentId = null, position = null, images = 
   setTimeout(() => { forceNodeVisible(node.id); ensureNodeActuallyVisible(node); }, 30);
   autoZoomOutIfBoardCrowded();
   setSaveStatus("Unsaved changes");
+  appendActivity("node_created", { node });
   saveCampaignCanvasState();
   return node;
 }
@@ -2620,17 +3934,18 @@ function confirmSchedulePost() {
   closePostingPlanner();
 }
 
-function removeNode(nodeId) {
+function removeNode(nodeId, { logActivity = true } = {}) {
   // Read-only guard: prevent local destructive node mutation on view-only boards.
   if (state.boardAccess?.canEdit === false) {
     setSaveStatus("Read-only board");
-    return;
+    return null;
   }
   pushHistorySnapshot();
   const idx = state.nodes.findIndex((n) => n.id === nodeId);
-  if (idx === -1) return;
+  if (idx === -1) return null;
 
   const [removed] = state.nodes.splice(idx, 1);
+  const removedNodeTitle = activityNodeTitle(removed);
   removed.images.forEach(revokeImageObjectUrl);
 
   state.edges = state.edges.filter(([a, b]) => a !== nodeId && b !== nodeId);
@@ -2644,7 +3959,15 @@ function removeNode(nodeId) {
   updateListView();
   updateEmptyState();
   drawLinks();
+  if (logActivity) appendActivity("node_deleted", { nodeId, nodeTitle: removedNodeTitle });
   saveCampaignCanvasState();
+  return removed;
+}
+
+function edgeActivityTitle(fromId, toId) {
+  const sourceTitle = activityNodeTitle(getNode(fromId), fromId || "Source");
+  const targetTitle = activityNodeTitle(getNode(toId), toId || "Target");
+  return `${sourceTitle} → ${targetTitle}`;
 }
 
 function addEdge(fromId, toId) {
@@ -2656,6 +3979,7 @@ function addEdge(fromId, toId) {
   if (!fromId || !toId || fromId === toId) return;
   if (state.edges.some(([a, b]) => a === fromId && b === toId)) return;
   state.edges.push([fromId, toId]);
+  appendActivity("edge_connected", { nodeId: toId, nodeTitle: edgeActivityTitle(fromId, toId) });
 
   const source = getNode(fromId);
   const target = getNode(toId);
@@ -2888,7 +4212,9 @@ function drawLinks() {
         setSaveStatus("Read-only board");
         return;
       }
+      const edgeTitle = edgeActivityTitle(from, to);
       state.edges.splice(edgeIndex, 1);
+      appendActivity("edge_disconnected", { nodeId: to, nodeTitle: edgeTitle });
       drawLinks();
       state.nodes.forEach(updateNodeCard);
       saveCampaignCanvasState();
@@ -2962,6 +4288,7 @@ function updateSelectionClasses() {
     nodeEl.classList.toggle("selected", state.selectedIds.has(nodeEl.dataset.id));
   });
   updateInspectorActionVisibility();
+  if (!state.selectedPrimary || (state.presenceEditingNodeId && !state.selectedIds.has(state.presenceEditingNodeId))) clearLocalEditingPresence({ notifyDelayMs: 250 });
   renderNodePresenceBadges();
   notifyPresenceSelectionMaybe();
 }
@@ -3064,6 +4391,82 @@ function propagateNodeChangesDownward(node) {
   runNetworkImpulse();
 }
 
+function isCommentActivityType(type = "") {
+  return type === "comment_added" || type === "reply_added" || type === "comment_resolved" || type === "postit_added";
+}
+
+function noteUpdatedAt(note = {}) {
+  return note.updatedAt || note.createdAt || note.time || null;
+}
+
+function hasRecentUnopenedComment(node) {
+  if (!node?.id || state.commentThreadsOpenedByNode.has(node.id)) return false;
+  const now = Date.now();
+  return (node.postits || []).some((note) => {
+    const timestamp = Date.parse(noteUpdatedAt(note) || "");
+    if (!Number.isFinite(timestamp) || now - timestamp > 2 * 60 * 1000) return false;
+    return !note.resolved || (Array.isArray(note.replies) && note.replies.length > 0);
+  });
+}
+
+function openNodeCommentThread(nodeId, { highlight = true } = {}) {
+  const node = getNode(nodeId);
+  const nodeEl = node ? el.zoomLayer.querySelector(`[data-id='${nodeId}']`) : null;
+  if (!node || !nodeEl) return false;
+  state.commentThreadsOpenedByNode.add(node.id);
+  updateNodeCommentBadge(node, nodeEl);
+  nodeEl.classList.add("comments-open");
+  if (highlight) {
+    nodeEl.classList.add("comments-highlighted");
+    setTimeout(() => nodeEl.classList.remove("comments-highlighted"), 1400);
+  }
+  const firstPostit = nodeEl.querySelector(".postit");
+  if (firstPostit) firstPostit.scrollIntoView?.({ block: "nearest", inline: "nearest", behavior: "smooth" });
+  return true;
+}
+
+function handleActivityEntryFocus(entry) {
+  if (!entry?.nodeId) return;
+  const didFocus = focusNodeInCanvas(entry.nodeId);
+  if (!didFocus) return;
+  if (isCommentActivityType(entry.type)) {
+    setTimeout(() => openNodeCommentThread(entry.nodeId), 180);
+  }
+}
+
+function updateNodeCommentBadge(node, nodeEl) {
+  if (!node || !nodeEl) return;
+  let commentBadge = nodeEl.querySelector(".node-comment-badge");
+  if (!commentBadge) {
+    commentBadge = document.createElement("button");
+    commentBadge.type = "button";
+    commentBadge.className = "node-comment-badge";
+    commentBadge.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (!Array.isArray(node.postits) || node.postits.length === 0) {
+        if (isBoardReadOnly()) {
+          setSaveStatus("Read-only board");
+          return;
+        }
+        addPostitToNode(node, { x: 12, y: 48 });
+        return;
+      }
+      openNodeCommentThread(node.id);
+    });
+    nodeEl.appendChild(commentBadge);
+  }
+  const unresolvedCount = (node.postits || []).filter((note) => !note.resolved).length;
+  const resolvedCount = (node.postits || []).filter((note) => !!note.resolved).length;
+  const totalReplyCount = (node.postits || []).reduce((sum, note) => sum + (Array.isArray(note.replies) ? note.replies.length : 0), 0);
+  const totalCommentCount = unresolvedCount + resolvedCount + totalReplyCount;
+  const displayCount = unresolvedCount || totalCommentCount || 0;
+  commentBadge.textContent = `💬 ${displayCount}`;
+  commentBadge.title = totalCommentCount ? `${unresolvedCount} unresolved · ${totalReplyCount} replies · ${resolvedCount} resolved` : "Add comment";
+  commentBadge.classList.toggle("has-comments", totalCommentCount > 0);
+  commentBadge.classList.toggle("has-unresolved", unresolvedCount > 0);
+  commentBadge.classList.toggle("has-recent", hasRecentUnopenedComment(node));
+}
+
 function updateNodeCard(node) {
   const nodeEl = el.zoomLayer.querySelector(`[data-id='${node.id}']`);
   if (!nodeEl) return;
@@ -3093,6 +4496,8 @@ function updateNodeCard(node) {
     compactToggle.title = node.compact ? "Expand node" : "Compact view";
     compactToggle.setAttribute("aria-label", compactToggle.title);
   }
+  updateNodeCommentBadge(node, nodeEl);
+
   const titleEl = nodeEl.querySelector(".title");
   titleEl.textContent = node.title;
   titleEl.contentEditable = editable ? "true" : "false";
@@ -3273,6 +4678,7 @@ function updateNodeCard(node) {
         return;
       }
       node.social.caption = caption.textContent;
+      recordNodeUpdatedActivity(node);
       updateNodeCard(node);
       if (state.selectedPrimary === node.id) fillInspector(node);
       saveCampaignCanvasState();
@@ -3289,6 +4695,7 @@ function updateNodeCard(node) {
         return;
       }
       node.social.preview = cta.textContent;
+      recordNodeUpdatedActivity(node);
       saveCampaignCanvasState();
     });
 
@@ -3304,6 +4711,7 @@ function updateNodeCard(node) {
       }
       node.social.hashtags = normalizeHashtagsInput(hashtags.textContent || "");
       hashtags.textContent = node.social.hashtags.join(" ");
+      recordNodeUpdatedActivity(node);
       saveCampaignCanvasState();
     });
 
@@ -3573,19 +4981,37 @@ function syncPopoverActiveStates(popoverEl) {
 
 function renderPostits(node, nodeEl) {
   nodeEl.querySelectorAll(".postit").forEach((p) => p.remove());
+  if (!Array.isArray(node.postits)) node.postits = [];
 
   node.postits.forEach((note) => {
-    if (!Array.isArray(note.replies)) note.replies = [];
+    ensureCommentIdentity(note);
     const postit = el.postitTemplate.content.firstElementChild.cloneNode(true);
     postit.style.left = `${note.x}px`;
     postit.style.top = `${note.y}px`;
     postit.style.background = note.color;
+    postit.classList.toggle("is-resolved", !!note.resolved);
 
-    postit.querySelector(".postit-user").textContent = note.user;
-    postit.querySelector(".postit-time").textContent = note.time;
+    const header = postit.querySelector("header");
+    const avatar = document.createElement("span");
+    avatar.className = "postit-avatar";
+    const authorAvatar = commentAuthorAvatar(note);
+    const authorName = commentAuthorName(note);
+    if (authorAvatar) {
+      const img = document.createElement("img");
+      img.src = authorAvatar;
+      img.alt = authorName;
+      avatar.appendChild(img);
+    } else {
+      avatar.textContent = authorName.split(/\s+/).slice(0, 2).map((part) => part[0]?.toUpperCase() || "").join("") || "U";
+    }
+    header.prepend(avatar);
+
+    postit.querySelector(".postit-user").textContent = authorName;
+    postit.querySelector(".postit-time").textContent = formatCommentTimestamp(note);
+    postit.querySelector(".postit-time").title = commentCreatedAt(note);
 
     const color = postit.querySelector(".postit-color");
-    color.value = note.color;
+    color.value = note.color || "#ffe082";
     color.addEventListener("input", () => {
       if (isBoardReadOnly()) {
         setSaveStatus("Read-only board");
@@ -3596,8 +5022,35 @@ function renderPostits(node, nodeEl) {
       saveCampaignCanvasState();
     });
 
+    const resolveBtn = document.createElement("button");
+    resolveBtn.type = "button";
+    resolveBtn.className = "postit-resolve";
+    resolveBtn.textContent = note.resolved ? "Reopen" : "Resolve";
+    resolveBtn.title = note.resolved ? "Reopen comment" : "Resolve comment";
+    resolveBtn.addEventListener("click", () => {
+      if (isBoardReadOnly()) {
+        setSaveStatus("Read-only board");
+        return;
+      }
+      note.resolved = !note.resolved;
+      const actor = getCurrentCommentActor();
+      if (note.resolved && actor) {
+        note.resolvedByName = actor.authorName;
+        note.resolvedByEmail = actor.authorEmail;
+        note.resolvedByAvatar = actor.authorAvatar;
+        note.resolvedAt = new Date().toISOString();
+      }
+      note.updatedAt = new Date().toISOString();
+      appendActivity(note.resolved ? "comment_resolved" : "comment_added", { node });
+      renderPostits(node, nodeEl);
+      updateNodeCommentBadge(node, nodeEl);
+      saveCampaignCanvasState();
+    });
+    header.insertBefore(resolveBtn, postit.querySelector(".postit-delete"));
+
     const area = postit.querySelector(".postit-text");
     area.value = note.text;
+    area.disabled = !!note.resolved;
     area.style.fontSize = note.text.length > 220 ? "0.7rem" : note.text.length > 120 ? "0.82rem" : "0.96rem";
     area.addEventListener("input", () => {
       if (isBoardReadOnly()) {
@@ -3616,44 +5069,88 @@ function renderPostits(node, nodeEl) {
       }
       node.postits = node.postits.filter((n) => n.id !== note.id);
       renderPostits(node, nodeEl);
+      updateNodeCommentBadge(node, nodeEl);
       saveCampaignCanvasState();
     });
+
+    if (note.resolved) {
+      const summary = document.createElement("div");
+      summary.className = "postit-resolved-summary";
+      const resolvedBy = note.resolvedByName || "Someone";
+      const replyCount = Array.isArray(note.replies) ? note.replies.length : 0;
+      summary.textContent = `Resolved by ${resolvedBy}${note.resolvedAt ? ` · ${relativeActivityTime(note.resolvedAt)}` : ""}${replyCount ? ` · ${replyCount} repl${replyCount === 1 ? "y" : "ies"} hidden` : ""}`;
+      postit.querySelector(".postit-text")?.remove();
+      postit.appendChild(summary);
+      enablePostitDrag(postit, note);
+      nodeEl.appendChild(postit);
+      return;
+    }
 
     const repliesWrap = document.createElement("div");
     repliesWrap.className = "postit-replies";
     note.replies.forEach((reply) => {
-      const line = document.createElement("p");
+      ensureCommentIdentity(reply);
+      const line = document.createElement("div");
       line.className = "postit-reply";
-      line.textContent = `${reply.user} (${reply.time}): ${reply.text}`;
+      const replyAvatar = document.createElement("span");
+      replyAvatar.className = "postit-reply-avatar";
+      const replyAuthorName = commentAuthorName(reply);
+      const replyAvatarUrl = commentAuthorAvatar(reply);
+      if (replyAvatarUrl) {
+        const img = document.createElement("img");
+        img.src = replyAvatarUrl;
+        img.alt = replyAuthorName;
+        replyAvatar.appendChild(img);
+      } else {
+        replyAvatar.textContent = replyAuthorName.split(/\s+/).slice(0, 2).map((part) => part[0]?.toUpperCase() || "").join("") || "U";
+      }
+      const body = document.createElement("div");
+      body.className = "postit-reply-body";
+      const meta = document.createElement("div");
+      meta.className = "postit-reply-meta";
+      meta.textContent = `${replyAuthorName} · ${formatCommentTimestamp(reply)}`;
+      const text = document.createElement("p");
+      text.textContent = reply.text || "";
+      body.append(meta, text);
+      line.append(replyAvatar, body);
       repliesWrap.appendChild(line);
     });
 
     const addReplyBtn = document.createElement("button");
     addReplyBtn.type = "button";
-    addReplyBtn.className = "inspector-image-delete";
-    addReplyBtn.textContent = "Reply";
+    addReplyBtn.className = "postit-reply-button";
+    addReplyBtn.textContent = note.resolved ? "Resolved" : "Reply";
+    addReplyBtn.disabled = !!note.resolved;
     addReplyBtn.addEventListener("click", () => {
       if (isBoardReadOnly()) {
         setSaveStatus("Read-only board");
         return;
       }
+      if (!requireCommentIdentity()) return;
       if (postit.querySelector(".postit-reply-editor")) return;
       const editor = document.createElement("div");
       editor.className = "postit-reply-editor";
-      editor.innerHTML = `<input class="postit-reply-name" placeholder="Name" /><textarea class="postit-reply-input" rows="2" placeholder="Write a reply..."></textarea><button type="button" class="inspector-image-delete">Send</button>`;
+      editor.innerHTML = `<textarea class="postit-reply-input" rows="2" placeholder="Write a reply..."></textarea><button type="button" class="inspector-image-delete">Send</button>`;
       editor.querySelector("button").addEventListener("click", () => {
         if (isBoardReadOnly()) {
           setSaveStatus("Read-only board");
           return;
         }
-        const user = editor.querySelector(".postit-reply-name").value.trim() || "Anonymous";
+        if (!requireCommentIdentity()) return;
         const text = editor.querySelector(".postit-reply-input").value.trim();
         if (!text) return;
-        note.replies.push({ user, text, time: nowString() });
+        const actor = createCommentPayload(text);
+        if (!actor) return;
+        note.replies.push({ id: `reply-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, ...actor });
+        note.updatedAt = new Date().toISOString();
+        state.commentThreadsOpenedByNode.delete(node.id);
+        appendActivity("reply_added", { node, userName: actor.authorName });
         renderPostits(node, nodeEl);
+        updateNodeCommentBadge(node, nodeEl);
         saveCampaignCanvasState();
       });
       postit.appendChild(editor);
+      editor.querySelector("textarea")?.focus();
     });
 
     postit.append(repliesWrap, addReplyBtn);
@@ -3662,6 +5159,7 @@ function renderPostits(node, nodeEl) {
     nodeEl.appendChild(postit);
   });
 }
+
 
 function enablePostitDrag(postit, note) {
   postit.addEventListener("pointerdown", (event) => {
@@ -3804,6 +5302,7 @@ function removeNodeImage(node, imageId) {
   const [removed] = node.images.splice(idx, 1);
   if (node.favoriteImageId === imageId) node.favoriteImageId = null;
   revokeImageObjectUrl(removed);
+  appendActivity("media_removed", { node });
   updateNodeCard(node);
   if (state.selectedPrimary === node.id) fillInspector(node);
 }
@@ -4557,6 +6056,7 @@ function renderNode(node) {
     node.title = title.textContent.trim();
     if (state.selectedPrimary === node.id) el.inputs.title.value = node.title;
     updateListView();
+    recordNodeUpdatedActivity(node);
     saveCampaignCanvasState();
   });
   content.addEventListener("input", () => {
@@ -4571,6 +6071,7 @@ function renderNode(node) {
     const isExpanded = nodeEl.classList.contains("content-expanded");
     content.classList.toggle("clamped", shouldTruncate && !isExpanded && document.activeElement !== content);
     expandBtn.classList.toggle("hidden", !shouldTruncate || isExpanded);
+    recordNodeUpdatedActivity(node);
     saveCampaignCanvasState();
   });
   content.addEventListener("focus", () => content.classList.remove("clamped"));
@@ -4671,6 +6172,11 @@ function enableNodeDrag(nodeEl, node) {
     function up() {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
+      const moved = origins.some((o) => {
+        const n = getNode(o.id);
+        return n && (Math.abs(n.position.x - o.x) > 2 || Math.abs(n.position.y - o.y) > 2);
+      });
+      if (moved) appendActivity("node_moved", { node: getNode(moveIds[0]) });
       updateCanvasScrollSurfaceSize();
       saveCampaignCanvasState();
     }
@@ -4827,6 +6333,7 @@ function autoArrangeBoardByHierarchy() {
 
   updateCanvasScrollSurfaceSize();
   drawLinks();
+  appendActivity("auto_arranged");
   saveCampaignCanvasState();
   fitBoardContentToViewport({ padding: 160, minZoom: 0.12, behavior: "auto" });
   return true;
@@ -4999,6 +6506,10 @@ el.sidebarToggleButton?.addEventListener("click", () => {
   const collapsed = !el.appShell.classList.contains("sidebar-collapsed");
   setSidebarCollapsed(collapsed);
 });
+el.activityToggleButton?.addEventListener("click", () => {
+  state.activityCollapsed = !state.activityCollapsed;
+  renderActivityFeed();
+});
 
 if (el.addNodeButton) {
   el.addNodeButton.addEventListener("click", () => {
@@ -5064,7 +6575,10 @@ el.calendarNextMonthButton.addEventListener("click", () => {
 });
 
 if (el.zoomInButton) {
-  el.zoomInButton.addEventListener("click", () => setZoom(state.zoom + 0.1));
+  el.zoomInButton.addEventListener("click", () => {
+    stopFollowForManualNavigation();
+    setZoom(state.zoom + 0.1);
+  });
 } else {
   console.warn("[Funklix DOM Hardening] Missing listener target: #zoom-in-btn");
 }
@@ -5104,22 +6618,41 @@ el.claimBoardButton?.addEventListener("click", async () => {
   loadBoardsLibrary();
 });
 
-el.zoomOutButton.addEventListener("click", () => setZoom(state.zoom - 0.1));
+el.zoomOutButton.addEventListener("click", () => {
+  stopFollowForManualNavigation();
+  setZoom(state.zoom - 0.1);
+});
 
 el.canvas.addEventListener(
   "wheel",
   (event) => {
     if (event.ctrlKey) {
       event.preventDefault();
+      stopFollowForManualNavigation();
       setZoom(state.zoom + (event.deltaY < 0 ? 0.1 : -0.1), { x: event.clientX, y: event.clientY });
       return;
     }
     event.preventDefault();
+    stopFollowForManualNavigation();
     el.canvas.scrollTop += event.deltaY;
     el.canvas.scrollLeft += event.deltaX;
+    handleViewportPresenceChange();
   },
   { passive: false }
 );
+
+el.canvas.addEventListener("pointermove", handleLocalCursorMove, { passive: true });
+el.canvas.addEventListener("pointerleave", () => {
+  if (state.presenceCursorClearTimer) clearTimeout(state.presenceCursorClearTimer);
+  state.presenceCursorClearTimer = setTimeout(() => clearLocalCursorPresence({ notifyDelayMs: 0 }), 1200);
+});
+el.canvas.addEventListener("scroll", handleViewportPresenceChange, { passive: true });
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") {
+    closeCollaboratorFollowMenu();
+    stopFollowCollaborator("Follow stopped");
+  }
+});
 
 el.canvas.addEventListener("contextmenu", (event) => {
   event.preventDefault();
@@ -5146,6 +6679,27 @@ el.addContextNodeButton.addEventListener("click", () => {
   }, "Idea");
 });
 
+function addPostitToNode(node, position = null) {
+  if (!node) return null;
+  if (!requireCommentIdentity()) return null;
+  if (!Array.isArray(node.postits)) node.postits = [];
+  const actor = createCommentPayload("");
+  if (!actor) return null;
+  const note = {
+    id: `postit-${state.postitCounter++}`,
+    ...actor,
+    color: "#ffe082",
+    updatedAt: actor.createdAt,
+    x: position?.x ?? ((state.contextBoardPoint?.x || node.position.x + 24) - node.position.x),
+    y: position?.y ?? ((state.contextBoardPoint?.y || node.position.y + 48) - node.position.y)
+  };
+  node.postits.push(note);
+  updateNodeCard(node);
+  appendActivity("comment_added", { node, userName: actor.authorName });
+  saveCampaignCanvasState();
+  return note;
+}
+
 el.addPostitCommentButton.addEventListener("click", () => {
   el.contextMenu.classList.add("hidden");
   if (state.boardAccess?.canEdit === false) {
@@ -5155,19 +6709,7 @@ el.addPostitCommentButton.addEventListener("click", () => {
   if (!state.selectedPrimary) return;
   const node = getNode(state.selectedPrimary);
   if (!node) return;
-
-  const user = window.prompt("Nutzername für den Kommentar:", "Felix")?.trim() || "Anonymous";
-  node.postits.push({
-    id: `postit-${state.postitCounter++}`,
-    user,
-    time: nowString(),
-    text: "",
-    color: "#ffe082",
-    x: state.contextBoardPoint.x - node.position.x,
-    y: state.contextBoardPoint.y - node.position.y
-  });
-  updateNodeCard(node);
-  saveCampaignCanvasState();
+  addPostitToNode(node);
 });
 el.improveContextNodeButton.addEventListener("click", async () => {
   el.contextMenu.classList.add("hidden");
@@ -5232,6 +6774,7 @@ el.nodeForm.addEventListener("input", (event) => {
   updateNodeCard(node);
   updateListView();
   fillInspector(node);
+  recordNodeUpdatedActivity(node);
   saveCampaignCanvasState();
 });
 el.inputs.channel.addEventListener("keydown", (event) => {
@@ -5247,6 +6790,7 @@ el.inputs.channel.addEventListener("keydown", (event) => {
   if (!value) return;
   pushHistorySnapshot();
   node.channel = value;
+  recordNodeUpdatedActivity(node);
   updateNodeCard(node);
   fillInspector(node);
   saveCampaignCanvasState();
@@ -5263,6 +6807,7 @@ el.inputs.hashtags.addEventListener("blur", () => {
   delete state.hashtagDraftByNode[node.id];
   el.inputs.hashtags.value = normalized.join(", ");
   updateNodeCard(node);
+  recordNodeUpdatedActivity(node);
   saveCampaignCanvasState();
 });
 el.inputs.hashtags.addEventListener("keydown", (event) => {
@@ -5279,10 +6824,16 @@ el.imageUpload.addEventListener("change", () => {
   }
   const node = getNode(state.selectedPrimary);
   if (!node) return;
-  [...el.imageUpload.files]
+  const addedImages = [...el.imageUpload.files]
     .filter((file) => file.type.startsWith("image/"))
-    .forEach((file) => node.images.push({ id: crypto.randomUUID(), name: file.name, url: URL.createObjectURL(file) }));
+    .map((file) => ({ id: crypto.randomUUID(), name: file.name, url: URL.createObjectURL(file) }));
+  if (!addedImages.length) {
+    el.imageUpload.value = "";
+    return;
+  }
+  node.images.push(...addedImages);
   el.imageUpload.value = "";
+  appendActivity("media_added", { node });
   updateNodeCard(node);
   fillInspector(node);
   saveCampaignCanvasState();
@@ -5373,7 +6924,15 @@ el.generatePostingVisualButton.addEventListener("click", async () => {
 el.deleteSelectedButton.addEventListener("click", () => {
   if (!state.selectedIds.size) return;
   pushHistorySnapshot();
-  [...state.selectedIds].forEach((id) => removeNode(id));
+  const selectedIds = [...state.selectedIds];
+  const removedNodes = selectedIds.map((id) => removeNode(id, { logActivity: false })).filter(Boolean);
+  if (removedNodes.length === 1) {
+    appendActivity("node_deleted", { nodeId: removedNodes[0].id, nodeTitle: activityNodeTitle(removedNodes[0]) });
+    saveCampaignCanvasState();
+  } else if (removedNodes.length > 1) {
+    appendActivity("node_deleted", { nodeTitle: `${removedNodes.length} nodes` });
+    saveCampaignCanvasState();
+  }
 });
 el.disconnectSelectedButton.addEventListener("click", () => {
   if (state.boardAccess?.canEdit === false) {
@@ -5382,7 +6941,13 @@ el.disconnectSelectedButton.addEventListener("click", () => {
   }
   if (!state.selectedIds.size) return;
   pushHistorySnapshot();
+  const removedEdges = state.edges.filter(([a, b]) => state.selectedIds.has(a) || state.selectedIds.has(b));
   state.edges = state.edges.filter(([a, b]) => !state.selectedIds.has(a) && !state.selectedIds.has(b));
+  if (removedEdges.length === 1) {
+    appendActivity("edge_disconnected", { nodeId: removedEdges[0][1], nodeTitle: edgeActivityTitle(removedEdges[0][0], removedEdges[0][1]) });
+  } else if (removedEdges.length > 1) {
+    appendActivity("edge_disconnected", { nodeTitle: `${removedEdges.length} connections` });
+  }
   state.nodes.forEach(updateNodeCard);
   drawLinks();
   saveCampaignCanvasState();
@@ -5577,9 +7142,11 @@ el.canvas.addEventListener("pointerdown", (event) => {
       selectionLocked = true;
     }
     if (!appendSelection && !selectionLocked && (forcePan || holdMs > 450) && movedEnough) {
+      if (!panning) stopFollowForManualNavigation();
       panning = true;
       el.canvas.scrollLeft = startLeft - panDx;
       el.canvas.scrollTop = startTop - panDy;
+      handleViewportPresenceChange();
       return;
     }
     const cx = ev.clientX - rect.left;
@@ -5867,13 +7434,17 @@ function renderBoardsLibrary() {
     row.className = 'board-row';
     const savedAt = board.updated_at ? new Date(board.updated_at).toLocaleString('de-DE') : '—';
     const boardName = board.name || 'Campaign Canvas Board';
-    const isOwner = !!state.user?.email && !!board.owner_email && board.owner_email === state.user.email;
+    const userEmail = typeof state.user?.email === "string" ? state.user.email.trim().toLowerCase() : "";
+    const ownerEmail = typeof board.owner_email === "string" ? board.owner_email.trim().toLowerCase() : "";
+    const accessRole = board.access_role || "";
+    const isOwner = accessRole === "owner" || (!!userEmail && !!ownerEmail && ownerEmail === userEmail);
+    const isEditor = accessRole === "editor";
     const isShared = !!board.owner_email && !isOwner;
     const isCopy = /\(copy\)$/i.test(boardName.trim());
     const ownerBy = deriveOwnerDisplayName(board.owner_name || "", board.owner_email || "");
-    const roleChip = isOwner ? '<span class="board-row-chip owned">Your Board</span>' : (isShared ? '<span class="board-row-chip shared">Shared</span>' : '<span class="board-row-chip shared">Open</span>');
+    const roleChip = isOwner ? '<span class="board-row-chip owned">Your Board</span>' : (isEditor ? '<span class="board-row-chip shared">Editor</span>' : (isShared ? '<span class="board-row-chip shared">Shared</span>' : '<span class="board-row-chip shared">Open</span>'));
     const copyChip = isCopy ? '<span class="board-row-chip copy">Copy</span>' : '';
-    const ownerLine = isOwner ? 'You can edit this board.' : (isShared ? `By ${ownerBy || 'another user'}` : 'No owner yet');
+    const ownerLine = isOwner ? 'You can edit this board.' : (isEditor ? `By ${ownerBy || 'another user'}` : (isShared ? `By ${ownerBy || 'another user'}` : 'No owner yet'));
     row.innerHTML = `<div><div class="board-row-titleline"><strong class="board-row-title">${boardName}</strong>${roleChip}${copyChip}</div><div class="board-row-meta">Last active: ${savedAt}</div><div class="board-row-meta">${ownerLine}</div><div class="board-rename hidden" data-rename-wrap="${board.id}"><input data-rename-input="${board.id}" value="${board.name || ''}" /><button data-rename-save="${board.id}" type="button">Save</button><button data-rename-cancel="${board.id}" type="button">Cancel</button></div></div><div class="board-row-actions"><button class="icon-btn" data-open-board="${board.id}" title="Open" aria-label="Open board">↗</button><button class="icon-btn" data-copy-board="${board.id}" title="Copy link" aria-label="Copy link">⧉</button><button class="icon-btn" data-rename-board="${board.id}" title="Rename" aria-label="Rename board">✎</button><button class="icon-btn danger" data-delete-board="${board.id}" title="Delete" aria-label="Delete board">🗑</button><button class="icon-btn" data-up-board="${board.id}" data-index="${index}" title="Move up">↑</button><button class="icon-btn" data-down-board="${board.id}" data-index="${index}" title="Move down">↓</button>${state.user?.email && !board.owner_email ? `<button class="icon-btn" data-claim-board="${board.id}" title="Claim">Claim</button>` : ""}</div>`;
     el.boardsLibraryList.appendChild(row);
   });
@@ -5938,6 +7509,7 @@ async function bootApp() {
   renderCampaignCanvasFromStateIfNeeded();
   renderBrandCoreTiles();
   renderBrandCoreEditor();
+  renderActivityFeed();
   updateEmptyState();
   updateListView();
   fillInspector(null);
@@ -5948,7 +7520,9 @@ async function bootApp() {
   if (!state.initialServerLoadInFlight) refreshLastSavedSnapshot();
   if (!state.initialServerLoadInFlight) state.isBoardLoading = false;
   startAutosaveWatcher();
+  bindEditingPresenceTracking();
   startPresenceLite();
+  startBoardRefreshPolling();
 }
 
 if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", () => { void bootApp(); });
