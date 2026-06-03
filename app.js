@@ -472,6 +472,10 @@ function updateBoardAccessState() {
   const canEdit = reason === "owner" || reason === "editor" || reason === "unowned";
   const isOwnerRole = reason === "owner";
   const nextAccess = { canView: true, canEdit, canManagePermissions: isOwnerRole, canRename: isOwnerRole, canDelete: isOwnerRole, reason };
+  if (state.boardAccess?.reason === "editor" && nextAccess.reason === "non_owner") {
+    updateReadOnlyNoticeVisibility();
+    return;
+  }
   if (state.boardAccess?.reason !== nextAccess.reason || state.boardAccess?.canView !== nextAccess.canView || state.boardAccess?.canEdit !== nextAccess.canEdit || state.boardAccess?.canManagePermissions !== nextAccess.canManagePermissions) {
     state.boardAccess = nextAccess;
     console.debug("[Funklix Access] boardAccess", state.boardAccess);
@@ -493,6 +497,23 @@ function boardAccessFromServer(access, fallback = state.boardAccess) {
     canDelete: access?.canDelete === true,
     reason: role
   };
+}
+
+function applyBoardAccessFromServer(access, source = "server") {
+  if (!access || typeof access !== "object" || typeof access.role !== "string") return false;
+  const nextAccess = boardAccessFromServer(access);
+  const changed = state.boardAccess?.reason !== nextAccess.reason
+    || state.boardAccess?.canView !== nextAccess.canView
+    || state.boardAccess?.canEdit !== nextAccess.canEdit
+    || state.boardAccess?.canManagePermissions !== nextAccess.canManagePermissions
+    || state.boardAccess?.canRename !== nextAccess.canRename
+    || state.boardAccess?.canDelete !== nextAccess.canDelete;
+  state.boardAccess = nextAccess;
+  if (changed) console.debug("[Funklix Access] boardAccess", { source, access: state.boardAccess });
+  updateReadOnlyNoticeVisibility();
+  if (nextAccess.canManagePermissions) loadBoardEditors({ silent: true });
+  else state.boardEditors = [];
+  return true;
 }
 
 function updateReadOnlyNoticeVisibility() {
@@ -1999,10 +2020,17 @@ async function pollBoardForRemoteChanges() {
     if (!response.ok) throw new Error(data?.error || 'Failed to refresh board');
     if ((state.currentBoardId || getBoardIdFromPath()) !== boardId) return;
     const remoteUpdatedAt = data?.updated_at || null;
-    if (!remoteTimestampIsNewer(remoteUpdatedAt)) return;
+    if (!remoteTimestampIsNewer(remoteUpdatedAt)) {
+      applyBoardAccessFromServer(data?.access, "pollBoardForRemoteChanges");
+      return;
+    }
     const incomingCanvasState = data?.canvas_json || {};
-    if (!isValidCanvasStatePayload(incomingCanvasState)) return;
+    if (!isValidCanvasStatePayload(incomingCanvasState)) {
+      applyBoardAccessFromServer(data?.access, "pollBoardForRemoteChanges");
+      return;
+    }
     mergeRemoteBoardState(incomingCanvasState, remoteUpdatedAt);
+    applyBoardAccessFromServer(data?.access, "pollBoardForRemoteChanges");
   } catch (error) {
     console.debug('[Funklix Collaboration] Passive board refresh skipped', error);
   } finally {
@@ -3136,13 +3164,7 @@ async function saveBoardToServer(trigger = "manual") {
     };
     refreshLastSavedSnapshot();
     setSharePanelState(returnedId, new Date(), data?.owner_email || state.currentBoardOwnerEmail || null, data?.owner_name || state.currentBoardOwnerName || null);
-    if (data?.access && typeof data.access === "object") {
-      const nextAccess = boardAccessFromServer(data.access);
-      state.boardAccess = nextAccess;
-      updateReadOnlyNoticeVisibility();
-      if (nextAccess.canManagePermissions) loadBoardEditors({ silent: true });
-      else state.boardEditors = [];
-    }
+    applyBoardAccessFromServer(data?.access, "saveBoardToServer");
 
     if (!isUpdate && returnedId) {
       const nextPath = `/boards/${returnedId}`;
@@ -3181,16 +3203,7 @@ async function loadBoardFromUrlIfPresent() {
       saveBrandBrainState();
     }
     setSharePanelState(state.currentBoardId, data?.updated_at ? new Date(data.updated_at) : null, data?.owner_email || null, data?.owner_name || null);
-    if (data?.access && typeof data.access === "object") {
-      const nextAccess = boardAccessFromServer(data.access);
-      if (state.boardAccess?.reason !== nextAccess.reason || state.boardAccess?.canView !== nextAccess.canView || state.boardAccess?.canEdit !== nextAccess.canEdit || state.boardAccess?.canManagePermissions !== nextAccess.canManagePermissions) {
-        state.boardAccess = nextAccess;
-        console.debug("[Funklix Access] boardAccess", state.boardAccess);
-      }
-      updateReadOnlyNoticeVisibility();
-      if (nextAccess.canManagePermissions) loadBoardEditors({ silent: true });
-      else state.boardEditors = [];
-    } else {
+    if (!applyBoardAccessFromServer(data?.access, "loadBoardFromUrlIfPresent")) {
       updateBoardAccessState();
     }
     const incomingCanvasState = data.canvas_json || {};
