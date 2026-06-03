@@ -1,5 +1,6 @@
 const { pool, ensureBoardsTable } = require('../_boards-storage');
 const { getSessionUser } = require('../_auth-session');
+const { normalizeEmail } = require('../_board-access');
 
 module.exports = async function handler(req, res) {
   if (req.method !== 'POST' && req.method !== 'GET') {
@@ -16,7 +17,28 @@ module.exports = async function handler(req, res) {
       const user = getSessionUser(req);
       let result;
       if (user?.email) {
-        result = await pool.query('SELECT id, name, updated_at, order_index, owner_id, owner_email, owner_name, owner_avatar, created_by, created_at FROM boards WHERE owner_email = $1 OR owner_email IS NULL ORDER BY CASE WHEN owner_email = $1 THEN 0 ELSE 1 END, order_index ASC NULLS LAST, updated_at DESC LIMIT 200', [user.email]);
+        const email = normalizeEmail(user.email);
+        result = await pool.query(
+          `SELECT b.id, b.name, b.updated_at, b.order_index, b.owner_id, b.owner_email, b.owner_name, b.owner_avatar, b.created_by, b.created_at,
+                  CASE
+                    WHEN LOWER(COALESCE(b.owner_email, '')) = $1 THEN 'owner'
+                    WHEN be.email IS NOT NULL THEN 'editor'
+                    WHEN b.owner_email IS NULL AND b.owner_id IS NULL THEN 'unowned'
+                    ELSE 'non_owner'
+                  END AS access_role
+           FROM boards b
+           LEFT JOIN board_editors be ON be.board_id = b.id AND be.email = $1 AND be.role = 'editor'
+           WHERE LOWER(COALESCE(b.owner_email, '')) = $1 OR be.email IS NOT NULL OR (b.owner_email IS NULL AND b.owner_id IS NULL)
+           ORDER BY CASE
+                      WHEN LOWER(COALESCE(b.owner_email, '')) = $1 THEN 0
+                      WHEN be.email IS NOT NULL THEN 1
+                      ELSE 2
+                    END,
+                    b.order_index ASC NULLS LAST,
+                    b.updated_at DESC
+           LIMIT 200`,
+          [email]
+        );
       } else {
         result = { rows: [] };
       }
@@ -35,9 +57,10 @@ module.exports = async function handler(req, res) {
     }
 
     await ensureBoardsTable();
+    const ownerEmail = normalizeEmail(user.email);
     const result = await pool.query(
       'INSERT INTO boards (name, canvas_json, brand_core_snapshot, owner_id, owner_email, owner_name, owner_avatar, created_by) VALUES ($1, $2::jsonb, $3::jsonb, $4, $5, $6, $7, $8) RETURNING id, name, canvas_json, brand_core_snapshot, updated_at, owner_id, owner_email, owner_name, owner_avatar, created_by, created_at',
-      [name, JSON.stringify(canvas_json), JSON.stringify(brand_core_snapshot || null), user.email, user.email, user?.name || null, user?.avatar || null, user.email]
+      [name, JSON.stringify(canvas_json), JSON.stringify(brand_core_snapshot || null), ownerEmail, ownerEmail, user?.name || null, user?.avatar || null, ownerEmail]
     );
 
     return res.status(200).json(result.rows[0]);
