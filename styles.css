@@ -2495,3 +2495,39 @@ button:active {
 .topbar .presence-lite .presence-avatar.is-following {
   transform: translateY(-1px) scale(1.06);
 }
+
+.board-access-chip.owner {
+  border-color: rgba(84, 164, 117, 0.28);
+  background: #eefaf4;
+  color: #2f7c56;
+}
+
+.board-access-chip.editor {
+  border-color: rgba(107, 78, 255, 0.24);
+  background: #f1efff;
+  color: #4b3bc4;
+}
+
+.board-access-chip.viewer {
+  border-color: rgba(234, 179, 8, 0.28);
+  background: #fff8df;
+  color: #84620d;
+}
+
+.board-access-chip.unowned {
+  border-color: rgba(91, 102, 135, 0.22);
+  background: #f5f7fb;
+  color: #59647e;
+}
+
+.share-editor-role {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  margin-top: 2px;
+  border-radius: 999px;
+  background: rgba(185, 204, 255, 0.14);
+  padding: 2px 6px;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+}

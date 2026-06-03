@@ -583,6 +583,13 @@ function renderBoardAccessCluster() {
     if (ownerLabel) owner = `Owner: ${ownerLabel}`;
   }
   if (isReadOnly && !mode) mode = "View Only";
+  [el.boardAccessChipKind, el.boardAccessChipMode].forEach((chip) => {
+    chip.classList.remove("owner", "editor", "viewer", "unowned");
+    chip.classList.add(reason === "owner" ? "owner" : reason === "editor" ? "editor" : reason === "unowned" ? "unowned" : "viewer");
+  });
+  el.boardAccessChipKind.title = kind ? (reason === "owner" ? "You own this board" : reason === "editor" ? "You can edit this board" : kind) : "";
+  el.boardAccessChipMode.title = mode ? (isReadOnly ? "View-only board. Duplicate to edit your own copy." : mode) : "";
+  el.boardAccessChipOwner.title = owner || "";
   el.boardAccessChipKind.textContent = kind;
   el.boardAccessChipMode.textContent = mode;
   el.boardAccessChipOwner.textContent = owner;
@@ -637,6 +644,24 @@ function canManageBoardEditors() {
   return state.boardAccess?.canManagePermissions === true && !!(state.currentBoardId || getBoardIdFromPath());
 }
 
+function permissionShareLines() {
+  const role = state.boardAccess?.reason || "unknown";
+  if (role === "owner") return ["Anyone with the link can view", "Editors can make changes to this board"];
+  if (role === "editor") return ["You can edit this board", "Only the owner can manage access"];
+  if (role === "unowned") return ["Anyone with the link can view", "Sign in to claim this board"];
+  return ["View-only board", "Duplicate to edit your own copy"];
+}
+
+function permissionErrorMessage(errorMessage = "") {
+  const message = String(errorMessage || "").trim();
+  const lower = message.toLowerCase();
+  if (lower.includes("valid email")) return "Enter a valid email.";
+  if (lower.includes("owner is already")) return "Owner already has access.";
+  if (lower.includes("forbidden") || lower.includes("unauthorized")) return "Only the owner can manage access.";
+  if (lower.includes("authentication")) return "Sign in to manage access.";
+  return message || "Permission update failed.";
+}
+
 function setBoardEditorsStatus(message = "", isError = false) {
   state.boardEditorsStatus = { message, isError };
   renderOpenShareEditorPanel();
@@ -656,17 +681,18 @@ function buildShareEditorPanelHtml() {
     ? '<div class="share-editor-empty">Loading editors…</div>'
     : editors.length
       ? editors.map((editor) => {
-        const email = escapeHtml(editor?.email || "");
-        return `<div class="share-editor-row"><div class="share-editor-meta"><strong>${email}</strong><span>Editor</span></div><button type="button" class="share-editor-remove" data-remove-editor="${email}" aria-label="Remove ${email}">Remove</button></div>`;
+        const normalizedEmail = typeof editor?.email === "string" ? editor.email.trim().toLowerCase() : "";
+        const email = escapeHtml(normalizedEmail);
+        return `<div class="share-editor-row"><div class="share-editor-meta"><strong title="${email}">${email}</strong><span class="share-editor-role">Editor</span></div><button type="button" class="share-editor-remove" data-remove-editor="${email}" aria-label="Remove ${email}">Remove</button></div>`;
       }).join("")
-      : '<div class="share-editor-empty">No editors added yet.</div>';
+      : '<div class="share-editor-empty">No editors yet</div>';
   const statusHtml = status.message
     ? `<div class="share-editor-status ${status.isError ? 'error' : 'success'}">${escapeHtml(status.message)}</div>`
     : '';
 
-  return `<div class="share-editor-heading"><strong>Invite editor by email</strong><span>Editors can save changes to this board.</span></div>
+  return `<div class="share-editor-heading"><strong>Invite editor by email</strong><span>Editors can make changes to this board.</span></div>
     <form class="share-editor-form" data-share-editor-form>
-      <input type="email" data-share-editor-email placeholder="editor@example.com" autocomplete="email" />
+      <input type="email" data-share-editor-email placeholder="editor@example.com" autocomplete="email" aria-label="Editor email" />
       <button type="submit">Invite</button>
     </form>
     ${statusHtml}
@@ -718,7 +744,7 @@ async function addBoardEditor(email, input = null) {
   if (!boardId || !state.boardAccess?.canManagePermissions) return;
   const normalizedEmail = typeof email === "string" ? email.trim().toLowerCase() : "";
   if (!normalizedEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
-    setBoardEditorsStatus("Enter a valid editor email.", true);
+    setBoardEditorsStatus("Enter a valid email.", true);
     return;
   }
   setBoardEditorsStatus("Adding editor…", false);
@@ -734,7 +760,7 @@ async function addBoardEditor(email, input = null) {
     if (input) input.value = "";
     setBoardEditorsStatus(data?.alreadyExists ? "Editor already added." : "Editor added.", false);
   } catch (error) {
-    setBoardEditorsStatus(error?.message || "Could not add editor", true);
+    setBoardEditorsStatus(permissionErrorMessage(error?.message || "Could not add editor"), true);
   }
 }
 
@@ -751,7 +777,7 @@ async function removeBoardEditor(email) {
     state.boardEditors = Array.isArray(data?.editors) ? data.editors : state.boardEditors.filter((editor) => editor?.email !== normalizedEmail);
     setBoardEditorsStatus("Editor removed.", false);
   } catch (error) {
-    setBoardEditorsStatus(error?.message || "Could not remove editor", true);
+    setBoardEditorsStatus(permissionErrorMessage(error?.message || "Could not remove editor"), true);
   }
 }
 
@@ -806,8 +832,9 @@ function showShareLinkToast(copied = true) {
   toast.setAttribute("role", "status");
   toast.setAttribute("aria-live", "polite");
   const copyMessage = copied ? "Link copied ✓" : "Could not copy link";
+  const lines = permissionShareLines().map((line) => `<div class="share-link-toast-line">${escapeHtml(line)}</div>`).join("");
   if (showEditorManager) state.boardEditorsStatus = { message: "", isError: false };
-  toast.innerHTML = `<div class="share-link-toast-line">Anyone with link can view</div><div class="share-link-toast-line">Duplicate to create your own version</div><div class="share-link-toast-ok">${copyMessage}</div>${showEditorManager ? '<div class="share-editor-panel" data-share-editor-panel></div>' : ''}`;
+  toast.innerHTML = `${lines}<div class="share-link-toast-ok">${copyMessage}</div>${showEditorManager ? '<div class="share-editor-panel" data-share-editor-panel></div>' : ''}`;
   document.body.appendChild(toast);
   if (showEditorManager) {
     renderOpenShareEditorPanel();
