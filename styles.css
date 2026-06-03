@@ -2333,3 +2333,116 @@ button:active {
 .postit-reply-editor button {
   justify-self: end;
 }
+
+.presence-avatar {
+  appearance: none;
+  padding: 0;
+  cursor: pointer;
+  transition: transform 140ms ease, box-shadow 140ms ease;
+}
+
+.presence-avatar:disabled {
+  cursor: default;
+}
+
+.presence-avatar:not(:disabled):hover,
+.presence-avatar.is-following {
+  transform: translateY(-1px) scale(1.08);
+  box-shadow: 0 0 0 2px rgba(107, 78, 255, 0.22), 0 6px 14px rgba(34, 44, 90, 0.18);
+}
+
+.node-presence-avatar.is-clickable,
+.node-editing-avatar.is-clickable {
+  cursor: pointer;
+}
+
+.collab-follow-menu {
+  position: fixed;
+  z-index: 1200;
+  display: grid;
+  gap: 6px;
+  min-width: 160px;
+  padding: 8px;
+  border: 1px solid rgba(216, 222, 244, 0.96);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 14px 34px rgba(31, 38, 84, 0.18);
+  color: #26315c;
+}
+
+.collab-follow-menu strong {
+  padding: 0 4px 2px;
+  font-size: 0.74rem;
+}
+
+.collab-follow-menu button {
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: #f6f7ff;
+  color: #4651a8;
+  cursor: pointer;
+  font-size: 0.72rem;
+  font-weight: 800;
+  padding: 7px 8px;
+  text-align: left;
+}
+
+.collab-follow-menu button:hover {
+  border-color: rgba(107, 78, 255, 0.22);
+  background: #eeecff;
+}
+
+.collab-follow-indicator {
+  position: fixed;
+  left: 50%;
+  bottom: 18px;
+  z-index: 1100;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  transform: translateX(-50%);
+  border: 1px solid rgba(107, 78, 255, 0.2);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 12px 30px rgba(31, 38, 84, 0.18);
+  color: #4738bd;
+  font-size: 0.76rem;
+  font-weight: 900;
+  padding: 7px 8px 7px 12px;
+}
+
+.collab-follow-indicator button {
+  border: 1px solid rgba(107, 78, 255, 0.18);
+  border-radius: 999px;
+  background: #f1efff;
+  color: #4b3bc4;
+  cursor: pointer;
+  font-size: 0.68rem;
+  font-weight: 900;
+  padding: 4px 9px;
+}
+
+.collab-focus-pulse {
+  position: absolute;
+  left: 0;
+  top: 0;
+  min-width: 18px;
+  min-height: 18px;
+  transform-origin: center;
+  border: 2px solid rgba(107, 78, 255, 0.44);
+  border-radius: 999px;
+  color: #4b3bc4;
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 1;
+  padding: 18px 10px 0;
+  pointer-events: none;
+  white-space: nowrap;
+  animation: collab-focus-pulse 1.5s ease-out both;
+}
+
+@keyframes collab-focus-pulse {
+  0% { opacity: 0; transform: translate(var(--focus-x, 0), var(--focus-y, 0)) scale(0.6); }
+  15% { opacity: 1; }
+  100% { opacity: 0; transform: translate(var(--focus-x, 0), var(--focus-y, 0)) scale(2.5); }
+}

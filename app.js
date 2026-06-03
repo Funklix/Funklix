@@ -115,6 +115,8 @@ const state = {
   ,presenceCursorPublishTimer: null
   ,presenceCursorClearTimer: null
   ,presenceCursorRenderFrame: null
+  ,followingCollaboratorEmail: null
+  ,followingCollaboratorName: ""
   ,activityFeed: []
   ,activityCollapsed: false
   ,commentThreadsOpenedByNode: new Set()
@@ -1163,6 +1165,29 @@ function getViewerInitials(viewer = {}) {
   return source.split(/\s+/).slice(0, 2).map((p) => p[0]?.toUpperCase() || "").join("") || "U";
 }
 
+function normalizedViewerEmail(viewer = {}) {
+  return String(viewer?.email || "").trim().toLowerCase();
+}
+
+function isRemoteViewer(viewer = {}) {
+  const viewerEmail = normalizedViewerEmail(viewer);
+  const currentEmail = String(state.user?.email || "").trim().toLowerCase();
+  return !!viewerEmail && !!currentEmail && viewerEmail !== currentEmail;
+}
+
+function viewerBoardPoint(viewer = {}) {
+  if (Number.isFinite(viewer.viewportCenterX) && Number.isFinite(viewer.viewportCenterY)) {
+    return { x: Number(viewer.viewportCenterX), y: Number(viewer.viewportCenterY) };
+  }
+  if (Number.isFinite(viewer.cursorX) && Number.isFinite(viewer.cursorY)) {
+    return { x: Number(viewer.cursorX), y: Number(viewer.cursorY) };
+  }
+  const nodeId = viewer.hoveredNodeId || viewer.editingNodeId || viewer.selectedNodeId;
+  const node = nodeId ? getNode(nodeId) : null;
+  if (!node) return null;
+  return { x: (node.position?.x || 0) + NODE_WIDTH / 2, y: (node.position?.y || 0) + NODE_HEIGHT / 2 };
+}
+
 function formatNodePresenceTitle(viewers = []) {
   const names = viewers.map(getViewerDisplayName);
   if (names.length === 1) return `${names[0]} is viewing this node`;
@@ -1192,6 +1217,14 @@ function formatEditingFieldLabel(field = "") {
   return labels[safeField] || "";
 }
 
+function formatCollaboratorSpatialStatus(viewer = {}) {
+  const field = formatEditingFieldLabel(viewer.editingField);
+  if (viewer.editingNodeId) return field ? `editing ${field}` : 'editing';
+  const hoverNode = viewer.hoveredNodeId ? getNode(viewer.hoveredNodeId) : null;
+  if (hoverNode) return `viewing ${hoverNode.title || hoverNode.type || 'node'}`;
+  return '';
+}
+
 function formatNodeEditingTitle(viewers = []) {
   const names = viewers.map(getViewerDisplayName);
   if (!names.length) return "Someone is editing";
@@ -1217,11 +1250,18 @@ function renderPresenceLite() {
   const show = viewers.slice(0, max);
   el.presenceAvatars.innerHTML = "";
   show.forEach((viewer) => {
-    const badge = document.createElement("span");
+    const badge = document.createElement("button");
     const label = getViewerDisplayName(viewer);
+    const canNavigate = isRemoteViewer(viewer) && !!viewerBoardPoint(viewer);
+    badge.type = "button";
     badge.className = "presence-avatar";
-    badge.title = `${label} is viewing this board`;
+    badge.title = canNavigate ? `Jump to or follow ${label}` : `${label} is viewing this board`;
     badge.setAttribute("aria-label", badge.title);
+    badge.classList.toggle("is-following", state.followingCollaboratorEmail === normalizedViewerEmail(viewer));
+    badge.disabled = !canNavigate;
+    if (canNavigate) {
+      badge.addEventListener("click", (event) => openCollaboratorFollowMenu(viewer, badge, event));
+    }
     if (viewer?.avatar) {
       const img = document.createElement("img");
       img.src = viewer.avatar;
@@ -1235,6 +1275,165 @@ function renderPresenceLite() {
   });
   el.presenceCount.textContent = viewers.length > max ? `+${viewers.length - max}` : `${viewers.length}`;
   el.presenceLite.classList.remove("hidden");
+}
+
+function closeCollaboratorFollowMenu() {
+  document.querySelector('.collab-follow-menu')?.remove();
+}
+
+function openCollaboratorFollowMenu(viewer, anchorEl, event = null) {
+  event?.preventDefault?.();
+  event?.stopPropagation?.();
+  if (!isRemoteViewer(viewer) || !viewerBoardPoint(viewer)) return;
+  closeCollaboratorFollowMenu();
+
+  const name = getViewerDisplayName(viewer);
+  const menu = document.createElement('div');
+  menu.className = 'collab-follow-menu';
+  menu.setAttribute('role', 'menu');
+  const heading = document.createElement('strong');
+  heading.textContent = name;
+  const jumpButton = document.createElement('button');
+  jumpButton.type = 'button';
+  jumpButton.dataset.collabAction = 'jump';
+  jumpButton.textContent = `Jump to ${name}`;
+  const followButton = document.createElement('button');
+  followButton.type = 'button';
+  followButton.dataset.collabAction = 'follow';
+  followButton.textContent = `Follow ${name}`;
+  menu.append(heading, jumpButton, followButton);
+  document.body.appendChild(menu);
+
+  const rect = anchorEl.getBoundingClientRect();
+  menu.style.left = `${Math.min(window.innerWidth - menu.offsetWidth - 10, Math.max(10, rect.left))}px`;
+  menu.style.top = `${Math.min(window.innerHeight - menu.offsetHeight - 10, rect.bottom + 8)}px`;
+
+  let close;
+  const cleanup = () => {
+    closeCollaboratorFollowMenu();
+    if (close) document.removeEventListener('pointerdown', close, true);
+  };
+
+  jumpButton.addEventListener('click', () => {
+    cleanup();
+    focusCollaborator(viewer);
+  });
+  followButton.addEventListener('click', () => {
+    cleanup();
+    startFollowCollaborator(viewer);
+  });
+
+  close = (closeEvent) => {
+    if (menu.contains(closeEvent.target) || anchorEl.contains(closeEvent.target)) return;
+    cleanup();
+  };
+  setTimeout(() => document.addEventListener('pointerdown', close, true), 0);
+}
+
+function pulseCollaboratorFocus(point, label = '') {
+  const layer = ensureCursorPresenceLayer();
+  if (!layer || !point) return;
+  const pulse = document.createElement('div');
+  pulse.className = 'collab-focus-pulse';
+  pulse.style.setProperty('--focus-x', `${Math.round(point.x * state.zoom)}px`);
+  pulse.style.setProperty('--focus-y', `${Math.round(point.y * state.zoom)}px`);
+  pulse.textContent = label;
+  layer.appendChild(pulse);
+  setTimeout(() => pulse.remove(), 1600);
+}
+
+function focusBoardPointInCanvas(point, { behavior = 'smooth', pulseLabel = '' } = {}) {
+  if (!point || !Number.isFinite(point.x) || !Number.isFinite(point.y) || !el.canvas) return false;
+
+  const runFocus = () => {
+    updateCanvasScrollSurfaceSize();
+    const maxLeft = Math.max(0, el.canvas.scrollWidth - el.canvas.clientWidth);
+    const maxTop = Math.max(0, el.canvas.scrollHeight - el.canvas.clientHeight);
+    const left = Math.max(0, Math.min(maxLeft, point.x * state.zoom - el.canvas.clientWidth / 2));
+    const top = Math.max(0, Math.min(maxTop, point.y * state.zoom - el.canvas.clientHeight / 2));
+    el.canvas.scrollTo({ left, top, behavior });
+    requestAnimationFrame(() => pulseCollaboratorFocus(point, pulseLabel));
+  };
+
+  if (state.activeView !== 'board') {
+    setActiveView('board');
+    requestAnimationFrame(runFocus);
+  } else {
+    runFocus();
+  }
+  return true;
+}
+
+function focusCollaborator(viewer, { behavior = 'smooth', pulse = true, preferNode = false } = {}) {
+  if (!isRemoteViewer(viewer)) return false;
+  const nodeId = viewer.editingNodeId || viewer.hoveredNodeId || viewer.selectedNodeId || null;
+  const node = nodeId ? getNode(nodeId) : null;
+  const name = getViewerDisplayName(viewer);
+  const point = viewerBoardPoint(viewer);
+
+  if (!preferNode && point) {
+    return focusBoardPointInCanvas(point, { behavior, pulseLabel: pulse ? name : '' });
+  }
+
+  if (node) {
+    const didFocusNode = focusNodeInCanvas(node.id, { behavior, select: true, pulse });
+    if (didFocusNode && pulse) {
+      pulseCollaboratorFocus(point || { x: node.position.x + NODE_WIDTH / 2, y: node.position.y + NODE_HEIGHT / 2 }, name);
+    }
+    return didFocusNode;
+  }
+
+  return focusBoardPointInCanvas(point, { behavior, pulseLabel: pulse ? name : '' });
+}
+
+function renderFollowModeIndicator() {
+  let indicator = document.querySelector('.collab-follow-indicator');
+  if (!state.followingCollaboratorEmail) {
+    indicator?.remove();
+    return;
+  }
+  if (!indicator) {
+    indicator = document.createElement('div');
+    indicator.className = 'collab-follow-indicator';
+    indicator.innerHTML = '<span></span><button type="button">Stop</button>';
+    indicator.querySelector('button')?.addEventListener('click', () => stopFollowCollaborator('Follow stopped'));
+    document.body.appendChild(indicator);
+  }
+  indicator.querySelector('span').textContent = `Following ${state.followingCollaboratorName || 'collaborator'}`;
+}
+
+function startFollowCollaborator(viewer) {
+  if (!isRemoteViewer(viewer) || !viewerBoardPoint(viewer)) return false;
+  state.followingCollaboratorEmail = normalizedViewerEmail(viewer);
+  state.followingCollaboratorName = getViewerDisplayName(viewer);
+  renderFollowModeIndicator();
+  renderPresenceLite();
+  focusCollaborator(viewer);
+  setSaveStatus(`Following ${state.followingCollaboratorName}`);
+  return true;
+}
+
+function stopFollowCollaborator(message = '') {
+  if (!state.followingCollaboratorEmail) return;
+  state.followingCollaboratorEmail = null;
+  state.followingCollaboratorName = '';
+  renderFollowModeIndicator();
+  renderPresenceLite();
+  if (message) setSaveStatus(message);
+}
+
+function stopFollowForManualNavigation() {
+  if (state.followingCollaboratorEmail) stopFollowCollaborator('Follow stopped');
+}
+
+function applyFollowModeFromPresence() {
+  if (!state.followingCollaboratorEmail) return;
+  const viewer = (state.presenceViewers || []).find((candidate) => normalizedViewerEmail(candidate) === state.followingCollaboratorEmail);
+  if (!viewer || !viewerBoardPoint(viewer)) {
+    stopFollowCollaborator('Collaborator unavailable');
+    return;
+  }
+  focusCollaborator(viewer, { behavior: 'smooth', pulse: false });
 }
 
 function getRemotePresenceByNodeId(fieldName = 'selectedNodeId') {
@@ -1320,6 +1519,13 @@ function renderNodePresenceBadges({ force = false } = {}) {
       const label = getViewerDisplayName(viewer);
       badge.title = presenceTitle;
       badge.setAttribute('aria-label', presenceTitle);
+      if (isRemoteViewer(viewer)) {
+        badge.classList.add('is-clickable');
+        badge.addEventListener('click', (event) => {
+          event.stopPropagation();
+          focusCollaborator(viewer, { preferNode: true });
+        });
+      }
       if (viewer?.avatar) {
         const img = document.createElement('img');
         img.src = viewer.avatar;
@@ -1365,6 +1571,13 @@ function renderNodePresenceBadges({ force = false } = {}) {
       avatar.className = 'node-editing-avatar';
       avatar.title = editingTitle;
       avatar.setAttribute('aria-label', `${getViewerDisplayName(viewer)} is editing`);
+      if (isRemoteViewer(viewer)) {
+        avatar.classList.add('is-clickable');
+        avatar.addEventListener('click', (event) => {
+          event.stopPropagation();
+          focusCollaborator(viewer, { preferNode: true });
+        });
+      }
       if (viewer?.avatar) {
         const img = document.createElement('img');
         img.src = viewer.avatar;
@@ -1436,6 +1649,23 @@ function stopPresenceLite() {
   }
   resetPresenceSelectionQueue();
   clearNodePresenceBadges();
+  stopFollowCollaborator();
+}
+
+function stopBoardRefreshPolling() {
+  if (state.boardRefreshPollTimer) {
+    clearInterval(state.boardRefreshPollTimer);
+    state.boardRefreshPollTimer = null;
+  }
+  state.boardRefreshInFlight = false;
+  state.remoteMergeSkippedNodeIds.clear();
+}
+
+function startBoardRefreshPolling() {
+  stopBoardRefreshPolling();
+  const boardId = state.currentBoardId || getBoardIdFromPath();
+  if (!boardId) return;
+  state.boardRefreshPollTimer = setInterval(() => { void pollBoardForRemoteChanges(); }, 12000);
 }
 
 function stopBoardRefreshPolling() {
@@ -1487,6 +1717,7 @@ async function pingPresenceLite() {
     renderPresenceLite();
     renderNodePresenceBadges();
     scheduleCollaboratorCursorRender();
+    applyFollowModeFromPresence();
   } catch (_error) {
     state.presenceViewers = [];
     renderPresenceLite();
@@ -1937,9 +2168,8 @@ function renderCollaboratorCursors() {
     const cursor = document.createElement('div');
     cursor.className = 'collab-cursor';
     const name = getViewerDisplayName(viewer);
-    const hoverNode = viewer.hoveredNodeId ? getNode(viewer.hoveredNodeId) : null;
-    const hoverText = hoverNode ? ` · viewing ${hoverNode.title || hoverNode.type || 'node'}` : '';
-    cursor.title = `${name}${hoverText}`;
+    const status = formatCollaboratorSpatialStatus(viewer);
+    cursor.title = status ? `${name} · ${status}` : name;
     cursor.setAttribute('aria-label', cursor.title);
     cursor.style.transform = `translate(${Math.round(viewer.cursorX * state.zoom)}px, ${Math.round(viewer.cursorY * state.zoom)}px)`;
 
@@ -1962,7 +2192,7 @@ function renderCollaboratorCursors() {
     }
     const label = document.createElement('span');
     label.className = 'collab-cursor-name';
-    label.textContent = name;
+    label.textContent = status ? `${name} · ${status}` : name;
     pill.appendChild(label);
 
     cursor.append(pointer, pill);
@@ -6321,7 +6551,10 @@ el.calendarNextMonthButton.addEventListener("click", () => {
 });
 
 if (el.zoomInButton) {
-  el.zoomInButton.addEventListener("click", () => setZoom(state.zoom + 0.1));
+  el.zoomInButton.addEventListener("click", () => {
+    stopFollowForManualNavigation();
+    setZoom(state.zoom + 0.1);
+  });
 } else {
   console.warn("[Funklix DOM Hardening] Missing listener target: #zoom-in-btn");
 }
@@ -6361,17 +6594,22 @@ el.claimBoardButton?.addEventListener("click", async () => {
   loadBoardsLibrary();
 });
 
-el.zoomOutButton.addEventListener("click", () => setZoom(state.zoom - 0.1));
+el.zoomOutButton.addEventListener("click", () => {
+  stopFollowForManualNavigation();
+  setZoom(state.zoom - 0.1);
+});
 
 el.canvas.addEventListener(
   "wheel",
   (event) => {
     if (event.ctrlKey) {
       event.preventDefault();
+      stopFollowForManualNavigation();
       setZoom(state.zoom + (event.deltaY < 0 ? 0.1 : -0.1), { x: event.clientX, y: event.clientY });
       return;
     }
     event.preventDefault();
+    stopFollowForManualNavigation();
     el.canvas.scrollTop += event.deltaY;
     el.canvas.scrollLeft += event.deltaX;
     handleViewportPresenceChange();
@@ -6385,6 +6623,12 @@ el.canvas.addEventListener("pointerleave", () => {
   state.presenceCursorClearTimer = setTimeout(() => clearLocalCursorPresence({ notifyDelayMs: 0 }), 1200);
 });
 el.canvas.addEventListener("scroll", handleViewportPresenceChange, { passive: true });
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") {
+    closeCollaboratorFollowMenu();
+    stopFollowCollaborator("Follow stopped");
+  }
+});
 
 el.canvas.addEventListener("contextmenu", (event) => {
   event.preventDefault();
@@ -6874,6 +7118,7 @@ el.canvas.addEventListener("pointerdown", (event) => {
       selectionLocked = true;
     }
     if (!appendSelection && !selectionLocked && (forcePan || holdMs > 450) && movedEnough) {
+      if (!panning) stopFollowForManualNavigation();
       panning = true;
       el.canvas.scrollLeft = startLeft - panDx;
       el.canvas.scrollTop = startTop - panDy;
