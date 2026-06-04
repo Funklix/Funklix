@@ -41,7 +41,7 @@ module.exports = async function handler(req, res) {
       }
 
       if (access?.role === 'editor') {
-        await refreshOwnEditorIdentity(id, user);
+        await refreshOwnEditorIdentity(id, user, { role: access?.role, route: 'PUT /api/boards/:id' });
       }
 
       if (lastKnownUpdatedAt) {
@@ -128,7 +128,7 @@ module.exports = async function handler(req, res) {
     const { board, access } = await getBoardAccess(id, user, { columns: BOARD_COLUMNS });
     if (!board) return res.status(404).json({ error: 'Board not found' });
     if (access?.role === 'editor') {
-      await refreshOwnEditorIdentity(id, user);
+      await refreshOwnEditorIdentity(id, user, { role: access?.role, route: 'GET /api/boards/:id' });
     }
 
     return res.status(200).json({

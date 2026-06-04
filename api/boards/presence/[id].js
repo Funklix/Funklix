@@ -34,7 +34,7 @@ async function refreshPresenceEditorIdentity(boardId, user) {
   if (!process.env.POSTGRES_URL || !user?.email) return;
   try {
     await ensureBoardsTable();
-    const updated = await refreshOwnEditorIdentity(boardId, user);
+    const updated = await refreshOwnEditorIdentity(boardId, user, { route: 'POST /api/boards/presence/:id', role: 'unknown_presence' });
     if (ownerIdentityDebugEnabled()) {
       console.debug('[Funklix Owner Identity] Presence editor identity refresh', {
         boardId,
