@@ -101,6 +101,7 @@ const state = {
   ,boardEditors: []
   ,boardEditorsLoading: false
   ,boardEditorsStatus: { message: "", isError: false }
+  ,lastEditorIdentityRefreshAt: 0
   ,shareToastTimer: null
   ,presencePollTimer: null
   ,boardRefreshPollTimer: null
@@ -2221,6 +2222,7 @@ async function pingPresenceLite() {
     state.presencePayloadSignatureLastSent = buildPresencePayloadSignature();
     state.presenceViewers = Array.isArray(data?.viewers) ? data.viewers : [];
     refreshOwnershipDisplays();
+    maybeRefreshEditorIdentitiesFromPresence();
     renderPresenceLite();
     renderNodePresenceBadges();
     scheduleCollaboratorCursorRender();
@@ -5887,8 +5889,17 @@ function ownerFromSelect(select) {
 function refreshOwnerSelectorIdentities() {
   refreshOwnershipDisplays();
   if (canManageBoardEditors() && !state.boardEditorsLoading) {
+    state.lastEditorIdentityRefreshAt = Date.now();
     void loadBoardEditors({ silent: true });
   }
+}
+
+function maybeRefreshEditorIdentitiesFromPresence() {
+  if (!canManageBoardEditors() || state.boardEditorsLoading) return;
+  const now = Date.now();
+  if (now - (state.lastEditorIdentityRefreshAt || 0) < 30 * 1000) return;
+  state.lastEditorIdentityRefreshAt = now;
+  void loadBoardEditors({ silent: true });
 }
 
 function fillInspector(node) {

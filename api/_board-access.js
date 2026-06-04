@@ -20,17 +20,40 @@ function sessionIdentityValue(value, max = 500) {
   return typeof value === 'string' && value.trim() ? value.trim().slice(0, max) : null;
 }
 
+function ownerIdentityDebugEnabled() {
+  return process.env.OWNER_IDENTITY_DEBUG === '1' || process.env.NODE_ENV !== 'production';
+}
+
+function logOwnerIdentityDebug(message, details = {}) {
+  if (!ownerIdentityDebugEnabled()) return;
+  console.debug(`[Funklix Owner Identity] ${message}`, details);
+}
+
 async function refreshOwnEditorIdentity(boardId, user) {
   const email = normalizeEmail(user?.email);
-  if (!boardId || !email) return false;
+  const name = sessionIdentityValue(user?.name, 120);
+  const avatar = sessionIdentityValue(user?.avatar, 1000);
+  const diagnosticBase = {
+    boardId: boardId || null,
+    sessionEmail: email || null,
+    hasName: !!name,
+    hasAvatar: !!avatar,
+    userKeys: Object.keys(user || {})
+  };
+  if (!boardId || !email) {
+    logOwnerIdentityDebug('Skipped editor identity refresh: missing boardId or session email', diagnosticBase);
+    return false;
+  }
+  logOwnerIdentityDebug('Refreshing editor identity', diagnosticBase);
   const result = await pool.query(
     `UPDATE board_editors
      SET name = COALESCE($3, name), avatar = COALESCE($4, avatar)
      WHERE board_id = $1 AND email = $2 AND role = 'editor'
        AND (COALESCE(name, '') IS DISTINCT FROM COALESCE($3, name, '')
          OR COALESCE(avatar, '') IS DISTINCT FROM COALESCE($4, avatar, ''))`,
-    [boardId, email, sessionIdentityValue(user?.name, 120), sessionIdentityValue(user?.avatar, 1000)]
+    [boardId, email, name, avatar]
   );
+  logOwnerIdentityDebug('Editor identity refresh complete', { ...diagnosticBase, rowCount: result.rowCount });
   return result.rowCount > 0;
 }
 
