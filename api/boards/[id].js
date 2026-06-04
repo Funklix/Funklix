@@ -18,6 +18,9 @@ module.exports = async function handler(req, res) {
     return res.status(400).json({ error: 'id is required' });
   }
 
+  let requestUser = null;
+  let requestAccess = null;
+
   try {
     await ensureBoardsTable();
 
@@ -125,17 +128,54 @@ module.exports = async function handler(req, res) {
     }
 
     const user = getSessionUser(req);
+    requestUser = user;
     const { board, access } = await getBoardAccess(id, user, { columns: BOARD_COLUMNS });
+    requestAccess = access;
     if (!board) return res.status(404).json({ error: 'Board not found' });
     if (access?.role === 'editor') {
-      await refreshOwnEditorIdentity(id, user, { role: access?.role, route: 'GET /api/boards/:id' });
+      console.error('[BOARD_GET_EDITOR_IDENTITY_REFRESH_BEFORE]', {
+        boardId: id,
+        email: user?.email || null,
+        role: access?.role || null
+      });
+      try {
+        await refreshOwnEditorIdentity(id, user, { role: access?.role, route: 'GET /api/boards/:id' });
+      } catch (error) {
+        console.error('[BOARD_GET_EDITOR_IDENTITY_REFRESH_ERROR]', {
+          boardId: id,
+          email: user?.email || null,
+          role: access?.role || null,
+          error: error?.message || 'unknown',
+          stack: error?.stack || null
+        });
+        throw error;
+      }
+      console.error('[BOARD_GET_EDITOR_IDENTITY_REFRESH_AFTER]', {
+        boardId: id,
+        email: user?.email || null,
+        role: access?.role || null
+      });
     }
+
+    console.error('[BOARD_GET_SUCCESS]', {
+      boardId: id,
+      role: access?.role || null
+    });
 
     return res.status(200).json({
       ...board,
       access
     });
   } catch (error) {
+    if (req.method === 'GET') {
+      console.error('[BOARD_GET_FAILURE]', {
+        boardId: id,
+        role: requestAccess?.role || null,
+        email: requestUser?.email || null,
+        error: error?.message || 'unknown',
+        stack: error?.stack || null
+      });
+    }
     return res.status(500).json({ error: error?.message || 'Failed to load board' });
   }
 };
