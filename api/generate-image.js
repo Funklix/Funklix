@@ -1,5 +1,16 @@
 const { uploadGeneratedImage } = require("./_image-storage");
 
+const IMAGE_SIZE_BY_FORMAT = {
+  "1:1": "1024x1024",
+  "16:9": "1536x1024",
+  "9:16": "1024x1536"
+};
+
+function normalizeContentFormat(value = "1:1") {
+  const normalized = String(value || "1:1").trim();
+  return IMAGE_SIZE_BY_FORMAT[normalized] ? normalized : "1:1";
+}
+
 module.exports = async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
@@ -8,9 +19,11 @@ module.exports = async function handler(req, res) {
 
   try {
     const { nodeTitle = "", nodeContent = "", brandBrainData = {}, campaignContext = "", contentFormat = "1:1" } = req.body || {};
-    const formatGuidance = contentFormat === "16:9"
+    const normalizedFormat = normalizeContentFormat(contentFormat);
+    const imageSize = IMAGE_SIZE_BY_FORMAT[normalizedFormat];
+    const formatGuidance = normalizedFormat === "16:9"
       ? "Create a wide 16:9 landing-page/hero-style visual composition."
-      : contentFormat === "9:16"
+      : normalizedFormat === "9:16"
         ? "Create a vertical 9:16 story/reel-style visual composition."
         : "Create a square 1:1 social/creative visual composition.";
     const prompt = `Create a conceptual marketing visual based on the structured context below.
@@ -20,7 +33,7 @@ Structured context:
 - nodeContent: ${nodeContent}
 - brandBrainData (tone/style/assets): ${JSON.stringify(brandBrainData)}
 - campaignContext: ${campaignContext || "none"}
-- contentFormat: ${contentFormat}
+- contentFormat: ${normalizedFormat}
 
 Creative direction:
 - Create a visual metaphor or scene that represents the idea.
@@ -51,7 +64,7 @@ Internal style preset:
       body: JSON.stringify({
         model: "gpt-image-1",
         prompt,
-        size: "1024x1024",
+        size: imageSize,
         quality: "high",
         n: 1
       })
@@ -67,7 +80,7 @@ Internal style preset:
     if (!imageBase64) return res.status(500).json({ error: "OpenAI returned no image" });
 
     const uploaded = await uploadGeneratedImage({ imageBase64, mimeType: "image/png", prefix: "content" });
-    return res.status(200).json(uploaded);
+    return res.status(200).json({ ...uploaded, contentFormat: normalizedFormat, size: imageSize });
   } catch (error) {
     return res.status(500).json({ error: error?.message || "Failed to generate image" });
   }
