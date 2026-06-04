@@ -79,17 +79,17 @@ Avoid:
   'Landing Page': `NEXT NODE TYPE: Landing Page
 
 Strategic purpose:
-Transform the source Social Media Posting into landing page copy that can convert campaign interest into action.
+Transform the source Social Media Posting into structured landing page fields that can convert campaign interest into action.
 
-The generated node content must include clean plain-text sections:
-Hero headline:
-Subheadline:
-Problem:
-Solution:
-Benefits:
-- ...
-- ...
-CTA:
+Return the landing page copy in the landingPage object using these exact fields:
+headerVisualPrompt: production-ready visual direction for a 16:9 hero image.
+headerClaim: short main headline claim.
+problem: concise Problem of ICP clearly stated paragraph.
+solution: concise Solution for ICP presented paragraph.
+trust: concise Building Trust / credibility section.
+cta: short Call to action for conversion button text.
+
+Keep content empty or use only a one-sentence summary. Do not dump the full landing page into content.
 
 Use the social post's promise and audience insight, but do not copy the caption verbatim.
 
@@ -97,7 +97,8 @@ Avoid:
 - Hashtags
 - Social post formatting
 - Email subject lines
-- Image-generation instructions`,
+- Giant text blocks
+- Markdown formatting`,
 
   'Email Campaign': `NEXT NODE TYPE: Email Campaign
 
@@ -129,6 +130,17 @@ function cleanGeneratedText(value = '') {
     .replace(/^\s*[-*+]\s+/gm, '- ')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
+}
+
+function cleanLandingPageFields(value = {}) {
+  return {
+    headerVisualPrompt: cleanGeneratedText(value.headerVisualPrompt || ''),
+    headerClaim: cleanGeneratedText(value.headerClaim || ''),
+    problem: cleanGeneratedText(value.problem || value.problemOfIcp || ''),
+    solution: cleanGeneratedText(value.solution || value.solutionForIcp || ''),
+    trust: cleanGeneratedText(value.trust || value.buildingTrust || ''),
+    cta: cleanGeneratedText(value.cta || value.conversionCta || '')
+  };
 }
 
 module.exports = async function handler(req, res) {
@@ -187,7 +199,8 @@ Shared constraints:
 - Do not use code fences.
 - Do not put JSON inside content fields.
 - Avoid excessive line breaks.
-- Use clean section labels such as Hook:, Narrative:, CTA:.`;
+- Use clean section labels such as Hook:, Narrative:, CTA:.
+- Use landingPage fields only when the next node type is Landing Page; otherwise return empty landingPage field values.`;
 
     const prompt = `${sharedContext}
 
@@ -199,7 +212,15 @@ Return strict JSON only with this schema:
   "title": "",
   "description": "",
   "content": "",
-  "imagePrompt": ""
+  "imagePrompt": "",
+  "landingPage": {
+    "headerVisualPrompt": "",
+    "headerClaim": "",
+    "problem": "",
+    "solution": "",
+    "trust": "",
+    "cta": ""
+  }
 }`;
 
     const response = await fetch('https://api.openai.com/v1/responses', {
@@ -225,13 +246,26 @@ Return strict JSON only with this schema:
             schema: {
               type: 'object',
               additionalProperties: false,
-              required: ['nodeType', 'title', 'description', 'content', 'imagePrompt'],
+              required: ['nodeType', 'title', 'description', 'content', 'imagePrompt', 'landingPage'],
               properties: {
                 nodeType: { type: 'string', enum: [nextNodeType] },
                 title: { type: 'string' },
                 description: { type: 'string' },
                 content: { type: 'string' },
-                imagePrompt: { type: 'string' }
+                imagePrompt: { type: 'string' },
+                landingPage: {
+                  type: 'object',
+                  additionalProperties: false,
+                  required: ['headerVisualPrompt', 'headerClaim', 'problem', 'solution', 'trust', 'cta'],
+                  properties: {
+                    headerVisualPrompt: { type: 'string' },
+                    headerClaim: { type: 'string' },
+                    problem: { type: 'string' },
+                    solution: { type: 'string' },
+                    trust: { type: 'string' },
+                    cta: { type: 'string' }
+                  }
+                }
               }
             }
           }
@@ -258,7 +292,8 @@ Return strict JSON only with this schema:
         title: cleanGeneratedText(parsed.title || nextNodeType),
         description: cleanGeneratedText(parsed.description || ''),
         content: cleanGeneratedText(parsed.content || parsed.description || ''),
-        imagePrompt: cleanGeneratedText(parsed.imagePrompt || '')
+        imagePrompt: cleanGeneratedText(parsed.imagePrompt || ''),
+        landingPage: cleanLandingPageFields(parsed.landingPage || {})
       });
     } catch (_error) {
       return res.status(500).json({ error: 'Failed to parse OpenAI JSON', rawText });

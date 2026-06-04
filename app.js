@@ -6526,6 +6526,7 @@ function applyGeneratedNextStepContent(node, generated = {}) {
   const generatedDescription = (generated.description || "").trim();
   const generatedContent = (generated.content || generatedDescription || "").trim();
   const generatedImagePrompt = (generated.imagePrompt || "").trim();
+  const generatedLandingPage = generated.landingPage || {};
   node.title = (generated.title || generated.nodeType || node.type || "").trim();
   node.content = generatedContent;
   if (generatedDescription && !node.content.includes(generatedDescription)) {
@@ -6533,6 +6534,17 @@ function applyGeneratedNextStepContent(node, generated = {}) {
   }
   if (node.type === "Content" && generatedImagePrompt) {
     node.imagePrompt = generatedImagePrompt;
+  }
+  if (node.type === "Landing Page") {
+    node.landingPage = {
+      headerVisualPrompt: (generatedLandingPage.headerVisualPrompt || "").trim(),
+      headerClaim: (generatedLandingPage.headerClaim || "").trim(),
+      problem: (generatedLandingPage.problem || generatedLandingPage.problemOfIcp || "").trim(),
+      solution: (generatedLandingPage.solution || generatedLandingPage.solutionForIcp || "").trim(),
+      trust: (generatedLandingPage.trust || generatedLandingPage.buildingTrust || "").trim(),
+      cta: (generatedLandingPage.cta || generatedLandingPage.conversionCta || "").trim()
+    };
+    node.content = generatedContent || generatedDescription || node.landingPage.headerClaim || "";
   }
   if (node.type === "Social Media Posting") {
     node.social.caption = node.content || node.title;
