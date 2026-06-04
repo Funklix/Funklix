@@ -96,6 +96,7 @@ const state = {
   ,authConfigured: true
   ,currentBoardOwnerEmail: null
   ,currentBoardOwnerName: null
+  ,currentBoardOwnerAvatar: null
   ,boardAccess: { canView: true, canEdit: true, canManagePermissions: false, canRename: false, canDelete: false, reason: "unknown" }
   ,boardEditors: []
   ,boardEditorsLoading: false
@@ -608,16 +609,24 @@ function normalizeOwnerEmail(email) {
   return typeof email === "string" ? email.trim().toLowerCase() : "";
 }
 
-function normalizeOwnerName(name, email = "") {
-  return deriveOwnerDisplayName(name, email) || normalizeOwnerEmail(email) || "";
+function normalizeOwnerName(name) {
+  return typeof name === "string" ? name.trim() : "";
 }
 
 function normalizeOwnerAvatar(avatar) {
   return typeof avatar === "string" ? avatar.trim() : "";
 }
 
+function ownerFallbackLabel(email) {
+  return normalizeOwnerEmail(email) || "";
+}
+
+function ownerDisplayLabel(identity = {}) {
+  return normalizeOwnerName(identity.name || identity.ownerName) || ownerFallbackLabel(identity.email || identity.ownerEmail) || "Unassigned";
+}
+
 function nodeOwnerDisplayName(node = {}) {
-  return normalizeOwnerName(node.ownerName, node.ownerEmail) || "Unassigned";
+  return ownerDisplayLabel(resolveOwnerIdentity(node));
 }
 
 function getOwnerInitials(name = "") {
@@ -625,39 +634,48 @@ function getOwnerInitials(name = "") {
   return source.split(/\s+/).slice(0, 2).map((part) => part[0]?.toUpperCase() || "").join("") || "U";
 }
 
-function upsertOwnershipOption(options, option) {
+function mergeOwnershipOption(options, option) {
   const email = normalizeOwnerEmail(option?.email);
-  if (!email || options.some((existing) => existing.email === email)) return;
-  options.push({
-    email,
-    name: normalizeOwnerName(option?.name, email),
-    avatar: normalizeOwnerAvatar(option?.avatar),
-    role: option?.role || "editor"
-  });
+  if (!email) return;
+  const name = normalizeOwnerName(option?.name);
+  const avatar = normalizeOwnerAvatar(option?.avatar);
+  const existing = options.find((candidate) => candidate.email === email);
+  if (!existing) {
+    options.push({
+      email,
+      name,
+      avatar,
+      role: option?.role || "Collaborator"
+    });
+    return;
+  }
+  if (!existing.name && name) existing.name = name;
+  if (!existing.avatar && avatar) existing.avatar = avatar;
+  if ((!existing.role || existing.role === "Collaborator") && option?.role) existing.role = option.role;
 }
 
 function getNodeOwnerOptions() {
   const options = [];
   const boardOwnerEmail = normalizeOwnerEmail(state.currentBoardOwnerEmail);
   const currentUserEmail = normalizeOwnerEmail(state.user?.email);
-  upsertOwnershipOption(options, {
+  mergeOwnershipOption(options, {
     email: state.currentBoardOwnerEmail,
     name: state.currentBoardOwnerName || (boardOwnerEmail && boardOwnerEmail === currentUserEmail ? state.user?.name : ""),
-    avatar: boardOwnerEmail && boardOwnerEmail === currentUserEmail ? state.user?.avatar : "",
+    avatar: state.currentBoardOwnerAvatar || (boardOwnerEmail && boardOwnerEmail === currentUserEmail ? state.user?.avatar : ""),
     role: "Board owner"
   });
 
   (Array.isArray(state.boardEditors) ? state.boardEditors : []).forEach((editor) => {
-    upsertOwnershipOption(options, {
+    mergeOwnershipOption(options, {
       email: editor?.email,
-      name: editor?.name || editor?.email,
+      name: editor?.name || "",
       avatar: editor?.avatar || "",
       role: "Board editor"
     });
   });
 
   if (state.boardAccess?.reason === "editor" && state.user?.email) {
-    upsertOwnershipOption(options, {
+    mergeOwnershipOption(options, {
       email: state.user.email,
       name: state.user.name,
       avatar: state.user.avatar,
@@ -667,7 +685,7 @@ function getNodeOwnerOptions() {
 
   (Array.isArray(state.presenceViewers) ? state.presenceViewers : []).forEach((viewer) => {
     if (!viewer?.email) return;
-    upsertOwnershipOption(options, {
+    mergeOwnershipOption(options, {
       email: viewer.email,
       name: viewer.name,
       avatar: viewer.avatar,
@@ -678,6 +696,17 @@ function getNodeOwnerOptions() {
   return options;
 }
 
+function resolveOwnerIdentity(owner = {}) {
+  const email = normalizeOwnerEmail(owner?.ownerEmail || owner?.email);
+  if (!email) return { email: "", name: "", avatar: "" };
+  const enriched = getNodeOwnerOptions().find((candidate) => candidate.email === email) || {};
+  return {
+    email,
+    name: normalizeOwnerName(owner?.ownerName || owner?.name) || normalizeOwnerName(enriched.name),
+    avatar: normalizeOwnerAvatar(owner?.ownerAvatar || owner?.avatar) || normalizeOwnerAvatar(enriched.avatar)
+  };
+}
+
 function setNodeOwner(node, owner) {
   const email = normalizeOwnerEmail(owner?.email);
   if (!email) {
@@ -686,23 +715,33 @@ function setNodeOwner(node, owner) {
     delete node.ownerAvatar;
     return;
   }
+  const identity = resolveOwnerIdentity(owner);
   node.ownerEmail = email;
-  node.ownerName = normalizeOwnerName(owner?.name, email);
-  const avatar = normalizeOwnerAvatar(owner?.avatar);
+  const name = normalizeOwnerName(identity.name || owner?.name);
+  const avatar = normalizeOwnerAvatar(identity.avatar || owner?.avatar);
+  if (name) node.ownerName = name;
+  else delete node.ownerName;
   if (avatar) node.ownerAvatar = avatar;
   else delete node.ownerAvatar;
 }
 
 function ownersAreEqual(a = {}, b = {}) {
   return normalizeOwnerEmail(a.ownerEmail) === normalizeOwnerEmail(b.ownerEmail)
-    && normalizeOwnerName(a.ownerName, a.ownerEmail) === normalizeOwnerName(b.ownerName, b.ownerEmail)
+    && normalizeOwnerName(a.ownerName) === normalizeOwnerName(b.ownerName)
     && normalizeOwnerAvatar(a.ownerAvatar) === normalizeOwnerAvatar(b.ownerAvatar);
 }
 
 function recordOwnerChangedActivity(node, owner = null) {
   if (!node || state.isBoardLoading) return;
-  if (owner?.email) appendActivity("owner_assigned", { node, ownerName: owner.name, ownerEmail: owner.email, ownerAvatar: owner.avatar });
+  const identity = owner?.email ? resolveOwnerIdentity(owner) : null;
+  if (identity?.email) appendActivity("owner_assigned", { node, ownerName: ownerDisplayLabel(identity), ownerEmail: identity.email, ownerAvatar: identity.avatar });
   else appendActivity("owner_unassigned", { node });
+}
+
+function refreshOwnershipDisplays() {
+  state.nodes.forEach((node) => updateNodeCard(node));
+  if (state.selectedPrimary) populateOwnerSelect(getNode(state.selectedPrimary));
+  if (state.activeView === "list" || (el.boardListView && !el.boardListView.classList.contains("hidden"))) updateListView();
 }
 
 function renderBoardAccessCluster() {
@@ -714,7 +753,7 @@ function renderBoardAccessCluster() {
   }
   const reason = state.boardAccess?.reason || "unknown";
   const isReadOnly = state.boardAccess?.canEdit === false;
-  const ownerLabel = deriveOwnerDisplayName(state.currentBoardOwnerName, state.currentBoardOwnerEmail);
+  const ownerLabel = deriveOwnerDisplayName(state.currentBoardOwnerName, state.currentBoardOwnerEmail, state.currentBoardOwnerName, state.currentBoardOwnerAvatar);
   let kind = "";
   let mode = "";
   let owner = "";
@@ -748,10 +787,11 @@ function renderBoardAccessCluster() {
   el.boardAccessCluster.classList.remove("hidden");
 }
 
-function setSharePanelState(boardId, lastSaved = null, ownerEmail = null, ownerName = null) {
+function setSharePanelState(boardId, lastSaved = null, ownerEmail = null, ownerName = null, ownerAvatar = null) {
   if (!boardId) {
     state.currentBoardOwnerEmail = null;
     state.currentBoardOwnerName = null;
+    state.currentBoardOwnerAvatar = null;
     updateBoardAccessState();
     el.boardShareEmpty?.classList.remove("hidden");
     el.boardShareReady?.classList.add("hidden");
@@ -769,6 +809,7 @@ function setSharePanelState(boardId, lastSaved = null, ownerEmail = null, ownerN
 
   state.currentBoardOwnerEmail = ownerEmail || null;
   state.currentBoardOwnerName = ownerName || null;
+  state.currentBoardOwnerAvatar = ownerAvatar || null;
   updateBoardAccessState();
   const normalizedCurrentOwnerEmail = typeof state.currentBoardOwnerEmail === "string" ? state.currentBoardOwnerEmail.trim().toLowerCase() : "";
   const normalizedCurrentUserEmail = typeof state.user?.email === "string" ? state.user.email.trim().toLowerCase() : "";
@@ -884,7 +925,7 @@ async function loadBoardEditors({ silent = false } = {}) {
     if (!silent) setBoardEditorsStatus(error?.message || "Could not load editors", true);
   } finally {
     state.boardEditorsLoading = false;
-    if (state.selectedPrimary) fillInspector(getNode(state.selectedPrimary));
+    refreshOwnershipDisplays();
     renderOpenShareEditorPanel();
   }
 }
@@ -1036,7 +1077,7 @@ async function saveBoardAsNew(payload) {
     state.lastKnownUpdatedAt = data?.updated_at || null;
     const nextPath = `/boards/${newId}`;
     if (window.location.pathname !== nextPath) window.history.pushState({}, '', nextPath);
-    setSharePanelState(newId, data?.updated_at ? new Date(data.updated_at) : new Date(), data?.owner_email || null, data?.owner_name || null);
+    setSharePanelState(newId, data?.updated_at ? new Date(data.updated_at) : new Date(), data?.owner_email || null, data?.owner_name || null, data?.owner_avatar || null);
     state.isDirty = false;
     setSaveStatus('Saved');
     refreshLastSavedSnapshot();
@@ -1089,7 +1130,7 @@ async function duplicateCurrentBoard() {
     state.lastKnownUpdatedAt = data?.updated_at || null;
     const nextPath = `/boards/${newId}`;
     if (window.location.pathname !== nextPath) window.history.pushState({}, '', nextPath);
-    setSharePanelState(newId, data?.updated_at ? new Date(data.updated_at) : new Date(), data?.owner_email || null, data?.owner_name || null);
+    setSharePanelState(newId, data?.updated_at ? new Date(data.updated_at) : new Date(), data?.owner_email || null, data?.owner_name || null, data?.owner_avatar || null);
     state.isDirty = false;
     refreshLastSavedSnapshot();
     setSaveStatus("Board duplicated. You're editing your copy.");
@@ -2083,6 +2124,7 @@ async function pingPresenceLite() {
     state.presenceSelectedNodeIdLastSent = selectedNodeId;
     state.presencePayloadSignatureLastSent = buildPresencePayloadSignature();
     state.presenceViewers = Array.isArray(data?.viewers) ? data.viewers : [];
+    refreshOwnershipDisplays();
     renderPresenceLite();
     renderNodePresenceBadges();
     scheduleCollaboratorCursorRender();
@@ -2369,7 +2411,7 @@ function mergeRemoteBoardState(remoteCanvasState, remoteUpdatedAt) {
 
   if (!skippedNodeCount) {
     state.lastKnownUpdatedAt = remoteUpdatedAt || state.lastKnownUpdatedAt;
-    setSharePanelState(state.currentBoardId, remoteUpdatedAt ? new Date(remoteUpdatedAt) : null, state.currentBoardOwnerEmail, state.currentBoardOwnerName);
+    setSharePanelState(state.currentBoardId, remoteUpdatedAt ? new Date(remoteUpdatedAt) : null, state.currentBoardOwnerEmail, state.currentBoardOwnerName, state.currentBoardOwnerAvatar);
   }
 }
 
@@ -2442,7 +2484,7 @@ async function loadSessionUser() {
   }
   updateBoardAccessState();
   renderAuthState();
-  setSharePanelState(state.currentBoardId || getBoardIdFromPath(), null, state.currentBoardOwnerEmail);
+  setSharePanelState(state.currentBoardId || getBoardIdFromPath(), null, state.currentBoardOwnerEmail, state.currentBoardOwnerName, state.currentBoardOwnerAvatar);
   startPresenceLite();
 }
 
@@ -2964,7 +3006,9 @@ function sanitizeNodeForPersistence(node) {
   const ownerEmail = normalizeOwnerEmail(clean.ownerEmail);
   if (ownerEmail) {
     clean.ownerEmail = ownerEmail;
-    clean.ownerName = normalizeOwnerName(clean.ownerName, ownerEmail);
+    const ownerName = normalizeOwnerName(clean.ownerName);
+    if (ownerName) clean.ownerName = ownerName;
+    else delete clean.ownerName;
     const ownerAvatar = normalizeOwnerAvatar(clean.ownerAvatar);
     if (ownerAvatar) clean.ownerAvatar = ownerAvatar;
     else delete clean.ownerAvatar;
@@ -3542,7 +3586,7 @@ async function saveBoardToServer(trigger = "manual") {
       updatedAt: saveTimestamp
     };
     refreshLastSavedSnapshot();
-    setSharePanelState(returnedId, new Date(), data?.owner_email || state.currentBoardOwnerEmail || null, data?.owner_name || state.currentBoardOwnerName || null);
+    setSharePanelState(returnedId, new Date(), data?.owner_email || state.currentBoardOwnerEmail || null, data?.owner_name || state.currentBoardOwnerName || null, data?.owner_avatar || state.currentBoardOwnerAvatar || null);
     applyBoardAccessFromServer(data?.access, "saveBoardToServer");
 
     if (!isUpdate && returnedId) {
@@ -3581,7 +3625,7 @@ async function loadBoardFromUrlIfPresent() {
       renderBrandCoreEditor();
       saveBrandBrainState();
     }
-    setSharePanelState(state.currentBoardId, data?.updated_at ? new Date(data.updated_at) : null, data?.owner_email || null, data?.owner_name || null);
+    setSharePanelState(state.currentBoardId, data?.updated_at ? new Date(data.updated_at) : null, data?.owner_email || null, data?.owner_name || null, data?.owner_avatar || null);
     if (!applyBoardAccessFromServer(data?.access, "loadBoardFromUrlIfPresent")) {
       updateBoardAccessState();
     }
@@ -4911,13 +4955,14 @@ function updateNodeOwnerChip(node, nodeEl) {
     chip.removeAttribute("title");
     return;
   }
-  const name = nodeOwnerDisplayName(node);
+  const identity = resolveOwnerIdentity(node);
+  const name = ownerDisplayLabel(identity);
   chip.title = `Owner: ${name}`;
-  if (node.ownerAvatar) {
+  if (identity.avatar) {
     chip.classList.add("has-avatar");
     const avatar = document.createElement("span");
     avatar.className = "node-owner-avatar";
-    renderOwnerAvatar(avatar, name, node.ownerAvatar, "node-owner-avatar");
+    renderOwnerAvatar(avatar, name, identity.avatar, "node-owner-avatar");
     const label = document.createElement("span");
     label.textContent = name;
     chip.append(avatar, label);
@@ -4930,13 +4975,14 @@ function updateNodeOwnerChip(node, nodeEl) {
 function createOwnerDisplay(node, { includeUnassigned = true } = {}) {
   const wrap = document.createElement("span");
   wrap.className = "node-owner-display";
-  const ownerEmail = normalizeOwnerEmail(node?.ownerEmail);
-  const name = ownerEmail ? nodeOwnerDisplayName(node) : "Unassigned";
+  const identity = resolveOwnerIdentity(node);
+  const ownerEmail = identity.email;
+  const name = ownerEmail ? ownerDisplayLabel(identity) : "Unassigned";
   if (!ownerEmail && !includeUnassigned) return wrap;
-  if (ownerEmail && node.ownerAvatar) {
+  if (ownerEmail && identity.avatar) {
     const avatar = document.createElement("span");
     avatar.className = "node-owner-avatar";
-    renderOwnerAvatar(avatar, name, node.ownerAvatar, "node-owner-avatar");
+    renderOwnerAvatar(avatar, name, identity.avatar, "node-owner-avatar");
     wrap.appendChild(avatar);
   } else if (ownerEmail) {
     const icon = document.createElement("span");
@@ -5704,7 +5750,7 @@ function populateOwnerSelect(node) {
   if (currentOwnerEmail && !options.some((option) => option.email === currentOwnerEmail)) {
     options.push({
       email: currentOwnerEmail,
-      name: nodeOwnerDisplayName(node),
+      name: normalizeOwnerName(node?.ownerName),
       avatar: normalizeOwnerAvatar(node?.ownerAvatar),
       role: "Current owner"
     });
@@ -5735,7 +5781,7 @@ function ownerFromSelect(select) {
   const selected = select.selectedOptions?.[0];
   return {
     email,
-    name: selected?.dataset?.ownerName || deriveOwnerDisplayName("", email),
+    name: selected?.dataset?.ownerName || "",
     avatar: selected?.dataset?.ownerAvatar || ""
   };
 }
@@ -7243,7 +7289,7 @@ el.claimBoardButton?.addEventListener("click", async () => {
   const response = await fetch(`/api/boards/${boardId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ claim: true }) });
   const data = await response.json();
   if (!response.ok) return;
-  setSharePanelState(boardId, data?.updated_at ? new Date(data.updated_at) : new Date(), data?.owner_email || state.user.email, data?.owner_name || state.user?.name || null);
+  setSharePanelState(boardId, data?.updated_at ? new Date(data.updated_at) : new Date(), data?.owner_email || state.user.email, data?.owner_name || state.user?.name || null, data?.owner_avatar || state.user?.avatar || null);
   setSaveStatus('Board claimed');
   loadBoardsLibrary();
 });
