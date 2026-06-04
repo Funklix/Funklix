@@ -16,6 +16,62 @@ function isBoardOwner(board, user) {
   return (!!ownerEmail && !!userEmail && ownerEmail === userEmail) || (!!ownerId && !!userId && ownerId === userId);
 }
 
+function sessionIdentityValue(value, max = 500) {
+  return typeof value === 'string' && value.trim() ? value.trim().slice(0, max) : null;
+}
+
+function ownerIdentityDebugEnabled() {
+  return process.env.OWNER_IDENTITY_DEBUG === '1' || process.env.NODE_ENV !== 'production';
+}
+
+function logOwnerIdentityDebug(message, details = {}) {
+  if (!ownerIdentityDebugEnabled()) return;
+  console.debug(`[Funklix Owner Identity] ${message}`, details);
+}
+
+async function refreshOwnEditorIdentity(boardId, user, context = {}) {
+  const email = normalizeEmail(user?.email);
+  const name = sessionIdentityValue(user?.name, 120);
+  const avatar = sessionIdentityValue(user?.avatar, 1000);
+  const diagnosticBase = {
+    boardId: boardId || null,
+    rawSessionEmail: typeof user?.email === 'string' ? user.email : null,
+    normalizedSessionEmail: email || null,
+    sessionName: typeof user?.name === 'string' ? user.name : null,
+    sessionAvatar: typeof user?.avatar === 'string' ? user.avatar : null,
+    hasName: !!name,
+    hasAvatar: !!avatar,
+    boardRole: context?.role || context?.accessRole || null,
+    route: context?.route || null,
+    userKeys: Object.keys(user || {})
+  };
+  if (!boardId || !email) {
+    logOwnerIdentityDebug('Skipped editor identity refresh: missing boardId or session email', diagnosticBase);
+    return false;
+  }
+  const sqlInputs = { boardId, email, role: 'editor', name, avatar };
+  logOwnerIdentityDebug('Refreshing editor identity', { ...diagnosticBase, sqlInputs });
+  try {
+    const result = await pool.query(
+      `UPDATE board_editors
+       SET name = COALESCE($3, name), avatar = COALESCE($4, avatar)
+       WHERE board_id = $1 AND email = $2 AND role = 'editor'
+         AND (($3 IS NOT NULL AND name IS DISTINCT FROM $3)
+           OR ($4 IS NOT NULL AND avatar IS DISTINCT FROM $4))`,
+      [boardId, email, name, avatar]
+    );
+    logOwnerIdentityDebug('Editor identity refresh complete', { ...diagnosticBase, sqlInputs, rowCount: result.rowCount });
+    return result.rowCount > 0;
+  } catch (error) {
+    logOwnerIdentityDebug('Editor identity refresh failed', {
+      ...diagnosticBase,
+      sqlInputs,
+      error: error?.message || 'unknown'
+    });
+    throw error;
+  }
+}
+
 async function isBoardEditor(boardId, user) {
   const email = normalizeEmail(user?.email);
   if (!boardId || !email) return false;
@@ -68,5 +124,6 @@ async function getBoardAccess(boardId, user, { columns = '*' } = {}) {
 module.exports = {
   normalizeEmail,
   isBoardOwner,
-  getBoardAccess
+  getBoardAccess,
+  refreshOwnEditorIdentity
 };
