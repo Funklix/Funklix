@@ -7,6 +7,119 @@ const NEXT_NODE_BY_TYPE = {
   'Visual Concept': 'Image Brief'
 };
 
+const STAGE_INSTRUCTIONS_BY_NEXT_TYPE = {
+  'Campaign Variation': `NEXT NODE TYPE: Campaign Variation
+
+Strategic purpose:
+Create one distinct campaign angle from the source Idea. The Idea is the strategic seed; do not simply restate it.
+
+Choose exactly ONE angle type:
+- Emotional
+- Rational
+- Authority
+- Community
+- Transformation
+- Contrarian
+
+The generated node must include:
+- Angle type
+- Core promise
+- Why this matters to the audience
+- How it differs from the source idea
+
+Avoid:
+- Rewriting the Idea with similar words
+- Multiple angle options
+- Structured content, social copy, visual direction, or image prompt details`,
+
+  Content: `NEXT NODE TYPE: Content
+
+Strategic purpose:
+Expand the source Campaign Variation into structured marketing content. The variation defines the angle; do not create another angle.
+
+The generated node must include:
+- Hook
+- Narrative
+- Supporting points
+- CTA
+
+Use audience, goal, channel, funnel stage, tone, and Brand Brain data when available to shape the message.
+
+Avoid:
+- Social-media formatting
+- Hashtag-heavy copy
+- Visual storytelling or image prompt instructions
+- Repeating the variation instead of developing it`,
+
+  'Social Media Posting': `NEXT NODE TYPE: Social Media Posting
+
+Strategic purpose:
+Adapt the source Content into platform-ready social copy. The content contains the substance; your job is adaptation.
+
+Platform/channel guidance:
+- LinkedIn: professional, insight-led, credibility-focused
+- Instagram: concise, visual, emotionally clear
+- TikTok: hook-first, punchy, creator-native
+- X / Twitter or X: compressed, sharp, direct
+- If no platform/channel is available, default to LinkedIn
+
+The generated node must include:
+- Opening hook
+- Main caption/body
+- CTA
+- Suggested hashtags only if appropriate for the platform
+
+Avoid:
+- Long-form article structure
+- Image-generation instructions
+- Repeating the Content node verbatim`,
+
+  'Visual Concept': `NEXT NODE TYPE: Visual Concept
+
+Strategic purpose:
+Translate the source Social Media Posting into visual storytelling only. The post contains the message; this node defines the visual direction.
+
+The generated node must include:
+- Scene
+- Composition
+- Main subjects
+- Emotion
+- Symbolism
+- Brand fit
+
+Use Brand Brain visual guidance, audience, tone, and platform/channel when available.
+
+Avoid:
+- Rewriting the caption
+- Marketing copy
+- CTA language
+- Hashtags
+- Technical image-generation prompt syntax`,
+
+  'Image Brief': `NEXT NODE TYPE: Image Brief
+
+Strategic purpose:
+Convert the source Visual Concept into a high-quality image-generation prompt. This is for image creation only.
+
+The generated node must include:
+- Subject
+- Setting
+- Composition
+- Lighting
+- Mood/emotion
+- Style
+- Brand fit
+- Camera/framing
+- Negative constraints if useful
+
+Avoid:
+- Marketing copy
+- Captions
+- CTA language
+- Hashtags
+- Multiple prompt options`
+};
+
 module.exports = async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
@@ -22,6 +135,8 @@ module.exports = async function handler(req, res) {
       goal = '',
       audience = '',
       channel = '',
+      funnelStage = '',
+      tone = '',
       tags = [],
       parentContext = null,
       connectedParentContext = null,
@@ -32,31 +147,35 @@ module.exports = async function handler(req, res) {
     const nextNodeType = NEXT_NODE_BY_TYPE[nodeType];
     if (!nextNodeType) return res.status(400).json({ error: 'No next step available.' });
 
-    const prompt = `Generate exactly one logical next campaign canvas node.
+    const stageInstructions = STAGE_INSTRUCTIONS_BY_NEXT_TYPE[nextNodeType] || '';
+    const sharedContext = `You are generating exactly ONE next Campaign Canvas node.
 
-Current node context:
-${JSON.stringify({ nodeType, title, description, content, goal, audience, channel, tags })}
+Source node context:
+${JSON.stringify({ nodeType, title, description, content, goal, audience, channel, funnelStage, tone, tags })}
 
-Connected parent context:
+Connected parent/context nodes:
 ${JSON.stringify(parentContext || connectedParentContext || null)}
 
 Campaign context:
 ${campaignContext || 'none'}
 
-Brand brain data:
+Brand Brain data:
 ${JSON.stringify(brandBrainData || {})}
 
-Next node type must be: ${nextNodeType}
+Shared constraints:
+- Generate exactly ONE next node.
+- Do not branch.
+- Do not create a full content pack.
+- Do not repeat the source node in different words.
+- Create a distinct next-stage artifact with a different strategic purpose.
+- Use audience, goal, channel, funnel stage, tone, and Brand Brain data when available.
+- Keep the output practical, specific, and directly connected to the source node.`;
 
-Guidelines:
-- Create a natural next campaign step, not a full content pack.
-- Keep it practical, specific, and directly connected to the source node.
-- Preserve goal, audience, and channel intent when relevant.
-- For Social Media Posting to Visual Concept, describe the creative visual idea.
-- For Visual Concept to Image Brief, describe a concise production/image-generation brief.
-- Do not create multiple options or branches.
+    const prompt = `${sharedContext}
 
-Return strict JSON only with:
+${stageInstructions}
+
+Return strict JSON only with this schema:
 {
   "nodeType": "${nextNodeType}",
   "title": "",
