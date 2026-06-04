@@ -45,6 +45,13 @@ async function refreshPresenceEditorIdentity(boardId, user) {
       });
     }
   } catch (error) {
+    console.error('[EDITOR_IDENTITY_ENRICHMENT_FAILED]', {
+      boardId,
+      email: user?.email || null,
+      role: 'unknown_presence',
+      message: error?.message || 'unknown',
+      stack: error?.stack || null
+    });
     if (ownerIdentityDebugEnabled()) {
       console.debug('[Funklix Owner Identity] Presence editor identity refresh skipped', {
         boardId,

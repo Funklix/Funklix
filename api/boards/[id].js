@@ -44,7 +44,17 @@ module.exports = async function handler(req, res) {
       }
 
       if (access?.role === 'editor') {
-        await refreshOwnEditorIdentity(id, user, { role: access?.role, route: 'PUT /api/boards/:id' });
+        try {
+          await refreshOwnEditorIdentity(id, user, { role: access?.role, route: 'PUT /api/boards/:id' });
+        } catch (error) {
+          console.error('[EDITOR_IDENTITY_ENRICHMENT_FAILED]', {
+            boardId: id,
+            email: user?.email || null,
+            role: access?.role || null,
+            message: error?.message || 'unknown',
+            stack: error?.stack || null
+          });
+        }
       }
 
       if (lastKnownUpdatedAt) {
@@ -141,14 +151,13 @@ module.exports = async function handler(req, res) {
       try {
         await refreshOwnEditorIdentity(id, user, { role: access?.role, route: 'GET /api/boards/:id' });
       } catch (error) {
-        console.error('[BOARD_GET_EDITOR_IDENTITY_REFRESH_ERROR]', {
+        console.error('[EDITOR_IDENTITY_ENRICHMENT_FAILED]', {
           boardId: id,
           email: user?.email || null,
           role: access?.role || null,
-          error: error?.message || 'unknown',
+          message: error?.message || 'unknown',
           stack: error?.stack || null
         });
-        throw error;
       }
       console.error('[BOARD_GET_EDITOR_IDENTITY_REFRESH_AFTER]', {
         boardId: id,
