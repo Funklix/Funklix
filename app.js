@@ -5036,7 +5036,9 @@ function updateNodeCommentBadge(node, nodeEl) {
       }
       openNodeCommentThread(node.id);
     });
-    nodeEl.appendChild(commentBadge);
+    const actions = nodeEl.querySelector(".node-header-actions");
+    if (actions) actions.insertBefore(commentBadge, actions.firstChild);
+    else nodeEl.appendChild(commentBadge);
   }
   const unresolvedCount = (node.postits || []).filter((note) => !note.resolved).length;
   const resolvedCount = (node.postits || []).filter((note) => !!note.resolved).length;
@@ -5157,7 +5159,12 @@ function updateNodeOwnerChip(node, nodeEl) {
     chip.append(avatar, label);
   } else {
     chip.classList.remove("has-avatar");
-    chip.textContent = `👤 ${name}`;
+    const icon = document.createElement("span");
+    icon.className = "node-owner-icon";
+    icon.textContent = "👤";
+    const label = document.createElement("span");
+    label.textContent = name;
+    chip.append(icon, label);
   }
 }
 
@@ -6870,7 +6877,8 @@ function renderNode(node) {
       saveCampaignCanvasState();
     }
   });
-  nodeEl.appendChild(compactToggle);
+  const headerActions = nodeEl.querySelector(".node-header-actions");
+  (headerActions || nodeEl).appendChild(compactToggle);
   const compactSummary = document.createElement("div");
   compactSummary.className = "node-compact-summary";
   nodeEl.insertBefore(compactSummary, nodeEl.querySelector(".tags"));

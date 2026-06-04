@@ -902,10 +902,37 @@ button:active {
   box-shadow: 0 8px 18px rgba(82, 67, 170, 0.08);
   transition: transform 180ms ease-out, box-shadow 180ms ease-out;
 }
+
+.node-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+  margin-bottom: 4px;
+}
+
+.node-header-meta {
+  display: flex;
+  align-items: center;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  gap: 4px 5px;
+  min-width: 0;
+}
+
+.node-header-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex: 0 0 auto;
+  gap: 4px;
+  min-height: 22px;
+}
+
 .node-compact-toggle {
-  position: absolute;
-  top: 8px;
-  right: 8px;
+  position: relative;
+  flex: 0 0 auto;
   width: 22px;
   height: 22px;
   border-radius: 999px;
@@ -1302,6 +1329,11 @@ button:active {
 
 .node .type {
   display: inline-block;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
   font-size: 0.72rem;
   font-weight: 700;
   text-transform: uppercase;
@@ -1311,8 +1343,8 @@ button:active {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  flex: 0 1 auto;
   max-width: 128px;
-  margin-left: 6px;
   border: 1px solid rgba(91, 102, 135, 0.16);
   border-radius: 999px;
   background: #f6f7fb;
@@ -2527,9 +2559,8 @@ button:active {
 }
 
 .node-comment-badge {
-  position: absolute;
-  right: 42px;
-  top: 8px;
+  position: relative;
+  flex: 0 0 auto;
   z-index: 5;
   border: 1px solid rgba(107, 78, 255, 0.18);
   border-radius: 999px;
@@ -2910,8 +2941,14 @@ button:active {
 }
 
 .node-owner-chip {
-  max-width: 92px;
-  margin-left: 5px;
+  flex: 0 1 auto;
+  max-width: 104px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.node-owner-chip span:last-child {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
 }
