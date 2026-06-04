@@ -2,9 +2,9 @@ const NEXT_NODE_BY_TYPE = {
   Idea: 'Campaign Variation',
   'Campaign Variation': 'Content',
   Content: 'Social Media Posting',
-  'Social Media Posting': 'Visual Concept',
-  'Social Media Post': 'Visual Concept',
-  'Visual Concept': 'Image Brief'
+  'Social Media Posting': 'Landing Page',
+  'Social Media Post': 'Landing Page',
+  'Landing Page': 'Email Campaign'
 };
 
 const STAGE_INSTRUCTIONS_BY_NEXT_TYPE = {
@@ -22,33 +22,35 @@ Choose exactly ONE angle type:
 - Contrarian
 
 The generated node must include:
-- Angle type
-- Core promise
-- Why this matters to the audience
-- How it differs from the source idea
+Angle type:
+Core promise:
+Why this matters to the audience:
+How it differs from the source idea:
 
 Avoid:
 - Rewriting the Idea with similar words
 - Multiple angle options
-- Structured content, social copy, visual direction, or image prompt details`,
+- Structured content, social copy, landing page copy, or email copy`,
 
   Content: `NEXT NODE TYPE: Content
 
 Strategic purpose:
-Expand the source Campaign Variation into structured marketing content. The variation defines the angle; do not create another angle.
+Expand the source Campaign Variation into a structured, platform-neutral marketing content asset. The variation defines the angle; do not create another angle.
 
-The generated node must include:
-- Hook
-- Narrative
-- Supporting points
-- CTA
+The generated node content must include clean plain-text sections:
+Hook:
+Narrative:
+Supporting points:
+- ...
+- ...
+CTA:
 
-Use audience, goal, channel, funnel stage, tone, and Brand Brain data when available to shape the message.
+Also generate a production-ready image prompt in the imagePrompt field. The image prompt should describe the subject, setting, visual style, composition, mood, and brand fit. It should be usable directly for image generation.
 
 Avoid:
 - Social-media formatting
 - Hashtag-heavy copy
-- Visual storytelling or image prompt instructions
+- Landing page sections
 - Repeating the variation instead of developing it`,
 
   'Social Media Posting': `NEXT NODE TYPE: Social Media Posting
@@ -63,62 +65,71 @@ Platform/channel guidance:
 - X / Twitter or X: compressed, sharp, direct
 - If no platform/channel is available, default to LinkedIn
 
-The generated node must include:
-- Opening hook
-- Main caption/body
-- CTA
-- Suggested hashtags only if appropriate for the platform
+The generated node content must include clean plain-text sections:
+Opening hook:
+Caption/body:
+CTA:
+Hashtags: include only if appropriate for the platform
 
 Avoid:
 - Long-form article structure
 - Image-generation instructions
 - Repeating the Content node verbatim`,
 
-  'Visual Concept': `NEXT NODE TYPE: Visual Concept
+  'Landing Page': `NEXT NODE TYPE: Landing Page
 
 Strategic purpose:
-Translate the source Social Media Posting into visual storytelling only. The post contains the message; this node defines the visual direction.
+Transform the source Social Media Posting into landing page copy that can convert campaign interest into action.
 
-The generated node must include:
-- Scene
-- Composition
-- Main subjects
-- Emotion
-- Symbolism
-- Brand fit
+The generated node content must include clean plain-text sections:
+Hero headline:
+Subheadline:
+Problem:
+Solution:
+Benefits:
+- ...
+- ...
+CTA:
 
-Use Brand Brain visual guidance, audience, tone, and platform/channel when available.
+Use the social post's promise and audience insight, but do not copy the caption verbatim.
 
 Avoid:
-- Rewriting the caption
-- Marketing copy
-- CTA language
 - Hashtags
-- Technical image-generation prompt syntax`,
+- Social post formatting
+- Email subject lines
+- Image-generation instructions`,
 
-  'Image Brief': `NEXT NODE TYPE: Image Brief
+  'Email Campaign': `NEXT NODE TYPE: Email Campaign
 
 Strategic purpose:
-Convert the source Visual Concept into a high-quality image-generation prompt. This is for image creation only.
+Transform the source Landing Page into an email campaign that drives the same conversion goal in an inbox-native format.
 
-The generated node must include:
-- Subject
-- Setting
-- Composition
-- Lighting
-- Mood/emotion
-- Style
-- Brand fit
-- Camera/framing
-- Negative constraints if useful
+The generated node content must include clean plain-text sections:
+Subject line:
+Preview text:
+Email body:
+CTA:
+
+Use the landing page's promise, problem, solution, and CTA, but adapt it for email.
 
 Avoid:
-- Marketing copy
-- Captions
-- CTA language
+- Landing page section repetition without email framing
 - Hashtags
-- Multiple prompt options`
+- Image-generation instructions
+- Multiple email variants`
 };
+
+
+function cleanGeneratedText(value = '') {
+  return String(value || '')
+    .replace(/```[\s\S]*?```/g, '')
+    .replace(/\*\*(.*?)\*\*/g, '$1')
+    .replace(/__(.*?)__/g, '$1')
+    .replace(/^\s{0,3}#{1,6}\s+/gm, '')
+    .replace(/^\s*[-*+]\s+/gm, '- ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
 
 module.exports = async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
@@ -169,7 +180,14 @@ Shared constraints:
 - Do not repeat the source node in different words.
 - Create a distinct next-stage artifact with a different strategic purpose.
 - Use audience, goal, channel, funnel stage, tone, and Brand Brain data when available.
-- Keep the output practical, specific, and directly connected to the source node.`;
+- Keep the output practical, specific, and directly connected to the source node.
+- Generated fields must be plain text suitable for UI text fields.
+- Do not use markdown bold syntax like **text**.
+- Do not use markdown headings like ## Heading.
+- Do not use code fences.
+- Do not put JSON inside content fields.
+- Avoid excessive line breaks.
+- Use clean section labels such as Hook:, Narrative:, CTA:.`;
 
     const prompt = `${sharedContext}
 
@@ -180,7 +198,8 @@ Return strict JSON only with this schema:
   "nodeType": "${nextNodeType}",
   "title": "",
   "description": "",
-  "content": ""
+  "content": "",
+  "imagePrompt": ""
 }`;
 
     const response = await fetch('https://api.openai.com/v1/responses', {
@@ -206,12 +225,13 @@ Return strict JSON only with this schema:
             schema: {
               type: 'object',
               additionalProperties: false,
-              required: ['nodeType', 'title', 'description', 'content'],
+              required: ['nodeType', 'title', 'description', 'content', 'imagePrompt'],
               properties: {
                 nodeType: { type: 'string', enum: [nextNodeType] },
                 title: { type: 'string' },
                 description: { type: 'string' },
-                content: { type: 'string' }
+                content: { type: 'string' },
+                imagePrompt: { type: 'string' }
               }
             }
           }
@@ -235,9 +255,10 @@ Return strict JSON only with this schema:
       const parsed = JSON.parse(rawText);
       return res.status(200).json({
         nodeType: parsed.nodeType || nextNodeType,
-        title: parsed.title || nextNodeType,
-        description: parsed.description || '',
-        content: parsed.content || parsed.description || ''
+        title: cleanGeneratedText(parsed.title || nextNodeType),
+        description: cleanGeneratedText(parsed.description || ''),
+        content: cleanGeneratedText(parsed.content || parsed.description || ''),
+        imagePrompt: cleanGeneratedText(parsed.imagePrompt || '')
       });
     } catch (_error) {
       return res.status(500).json({ error: 'Failed to parse OpenAI JSON', rawText });

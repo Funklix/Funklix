@@ -13,9 +13,9 @@ const NEXT_STEP_NODE_TYPE = {
   Idea: "Campaign Variation",
   "Campaign Variation": "Content",
   Content: "Social Media Posting",
-  "Social Media Posting": "Visual Concept",
-  "Social Media Post": "Visual Concept",
-  "Visual Concept": "Image Brief"
+  "Social Media Posting": "Landing Page",
+  "Social Media Post": "Landing Page",
+  "Landing Page": "Email Campaign"
 };
 
 const NODE_WIDTH = 285;
@@ -6490,6 +6490,8 @@ function buildNextStepNodeContext(node) {
     goal: node.goal || "",
     audience: node.audience || "",
     channel: node.channel || node.social?.platform || "",
+    funnelStage: node.funnelStage || "",
+    tone: node.tone || "",
     tags: Array.isArray(node.tags) ? node.tags : [],
     parentContext: parentNode
       ? {
@@ -6498,7 +6500,9 @@ function buildNextStepNodeContext(node) {
           content: parentNode.content || "",
           goal: parentNode.goal || "",
           audience: parentNode.audience || "",
-          channel: parentNode.channel || parentNode.social?.platform || ""
+          channel: parentNode.channel || parentNode.social?.platform || "",
+          funnelStage: parentNode.funnelStage || "",
+          tone: parentNode.tone || ""
         }
       : null,
     connectedParentContext: getConnectedNodeContext(node.id).parentNodes,
@@ -6519,20 +6523,20 @@ async function fetchGeneratedNextStep(node) {
 }
 
 function applyGeneratedNextStepContent(node, generated = {}) {
+  const generatedDescription = (generated.description || "").trim();
+  const generatedContent = (generated.content || generatedDescription || "").trim();
+  const generatedImagePrompt = (generated.imagePrompt || "").trim();
   node.title = (generated.title || generated.nodeType || node.type || "").trim();
-  node.content = (generated.content || generated.description || "").trim();
-  if (generated.description && !node.content.includes(generated.description)) {
-    node.content = [generated.description, node.content].filter(Boolean).join("\n\n");
+  node.content = generatedContent;
+  if (generatedDescription && !node.content.includes(generatedDescription)) {
+    node.content = [generatedDescription, node.content].filter(Boolean).join("\n\n");
+  }
+  if (node.type === "Content" && generatedImagePrompt) {
+    node.imagePrompt = generatedImagePrompt;
   }
   if (node.type === "Social Media Posting") {
     node.social.caption = node.content || node.title;
-    node.social.preview = generated.description || "";
-  }
-  if (node.type === "Visual Concept") {
-    node.imagePrompt = node.content || generated.description || node.title;
-  }
-  if (node.type === "Image Brief") {
-    node.imagePrompt = node.content || generated.description || node.title;
+    node.social.preview = generatedDescription;
   }
 }
 
