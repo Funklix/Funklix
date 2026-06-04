@@ -5,7 +5,17 @@ const NODE_TYPES = {
   Content: { color: "#16a47b" },
   "Social Media Posting": { color: "#f56f46" },
   "Landing Page": { color: "#a04ad8" },
-  "Email Campaign": { color: "#d8961a" }
+  "Email Campaign": { color: "#d8961a" },
+  "Visual Concept": { color: "#0f9bb5" },
+  "Image Brief": { color: "#7c6bd8" }
+};
+const NEXT_STEP_NODE_TYPE = {
+  Idea: "Campaign Variation",
+  "Campaign Variation": "Content",
+  Content: "Social Media Posting",
+  "Social Media Posting": "Visual Concept",
+  "Social Media Post": "Visual Concept",
+  "Visual Concept": "Image Brief"
 };
 
 const NODE_WIDTH = 285;
@@ -1443,6 +1453,7 @@ function formatActivityAction(entry = {}) {
     reply_added: `replied on ${title}`,
     comment_resolved: `resolved a comment on ${title}`,
     postit_added: `added a post-it on ${title}`,
+    generated_next_step: `generated next step from ${title}`,
     auto_arranged: "auto-arranged the board"
   };
   return map[entry.type] || `updated ${title}`;
@@ -6463,6 +6474,116 @@ async function handleGenerateFullContentPack(contentNodeId) {
   await generateFullContentPack(node, el.generateFullPackButton, "new");
 }
 
+function getNextStepNodeType(nodeType = "") {
+  return NEXT_STEP_NODE_TYPE[nodeType] || "";
+}
+
+function buildNextStepNodeContext(node) {
+  const parentNode = getDirectParentNode(node.id);
+  return {
+    nodeType: node.type,
+    title: node.title || "",
+    description: node.description || "",
+    content: node.type === "Social Media Posting"
+      ? (node.social?.caption || node.social?.preview || node.content || "")
+      : (node.content || ""),
+    goal: node.goal || "",
+    audience: node.audience || "",
+    channel: node.channel || node.social?.platform || "",
+    tags: Array.isArray(node.tags) ? node.tags : [],
+    parentContext: parentNode
+      ? {
+          nodeType: parentNode.type,
+          title: parentNode.title || "",
+          content: parentNode.content || "",
+          goal: parentNode.goal || "",
+          audience: parentNode.audience || "",
+          channel: parentNode.channel || parentNode.social?.platform || ""
+        }
+      : null,
+    connectedParentContext: getConnectedNodeContext(node.id).parentNodes,
+    campaignContext: getCampaignContextSummary() || undefined,
+    brandBrainData: state.brandCore
+  };
+}
+
+async function fetchGeneratedNextStep(node) {
+  const response = await fetch("/api/generate-next-step", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(buildNextStepNodeContext(node))
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data?.error || "Failed to generate next step");
+  return data;
+}
+
+function applyGeneratedNextStepContent(node, generated = {}) {
+  node.title = (generated.title || generated.nodeType || node.type || "").trim();
+  node.content = (generated.content || generated.description || "").trim();
+  if (generated.description && !node.content.includes(generated.description)) {
+    node.content = [generated.description, node.content].filter(Boolean).join("\n\n");
+  }
+  if (node.type === "Social Media Posting") {
+    node.social.caption = node.content || node.title;
+    node.social.preview = generated.description || "";
+  }
+  if (node.type === "Visual Concept") {
+    node.imagePrompt = node.content || generated.description || node.title;
+  }
+  if (node.type === "Image Brief") {
+    node.imagePrompt = node.content || generated.description || node.title;
+  }
+}
+
+async function generateNextStepFromNode(sourceNode, triggerBtn = null) {
+  if (!sourceNode) return null;
+  if (isBoardReadOnly()) {
+    setSaveStatus("Read-only board");
+    return null;
+  }
+  const nextNodeType = getNextStepNodeType(sourceNode.type);
+  if (!nextNodeType) {
+    setSaveStatus("No next step available.");
+    return null;
+  }
+  const originalText = triggerBtn?.textContent || "";
+  if (triggerBtn) {
+    triggerBtn.disabled = true;
+    triggerBtn.textContent = "Generating next step...";
+  }
+  setSaveStatus("Generating next step...");
+  try {
+    const generated = await fetchGeneratedNextStep(sourceNode);
+    const position = {
+      x: sourceNode.position.x + NODE_WIDTH + 80,
+      y: sourceNode.position.y + 80
+    };
+    const created = createNode({ type: generated.nodeType || nextNodeType, parentId: sourceNode.id, position });
+    if (!created) return null;
+    created.goal = sourceNode.goal || created.goal;
+    created.audience = sourceNode.audience || created.audience;
+    created.channel = sourceNode.channel || sourceNode.social?.platform || created.channel;
+    applyGeneratedNextStepContent(created, generated);
+    updateNodeCard(created);
+    fillInspector(created);
+    updateListView();
+    drawLinks();
+    appendActivity("generated_next_step", { node: sourceNode });
+    saveCampaignCanvasState();
+    return created;
+  } catch (error) {
+    console.error("[Funklix AI] Generate next step failed", error);
+    setSaveStatus("Could not generate next step.");
+    return null;
+  } finally {
+    if (triggerBtn) {
+      triggerBtn.disabled = false;
+      triggerBtn.textContent = originalText;
+    }
+  }
+}
+
 async function generateImageForNode(node) {
   if (isBoardReadOnly()) {
     setSaveStatus("Read-only board");
@@ -6979,6 +7100,7 @@ function renderNode(node) {
   const aiToolbar = document.createElement("div");
   aiToolbar.className = "node-ai-toolbar";
   [
+    ["🧠 Generate Next Step", "__generate_next_step__"],
     ["✨ Improve", "Improve this node while keeping the original intent."],
     ["🔄 Regenerate", "Regenerate this node as a fresh alternative version while keeping it aligned with the campaign context and brand voice."],
     ["Shorter", "Make this shorter and more concise."],
@@ -6991,6 +7113,10 @@ function renderNode(node) {
     btn.textContent = label;
     btn.addEventListener("click", async (event) => {
       event.stopPropagation();
+      if (instruction === "__generate_next_step__") {
+        await generateNextStepFromNode(node, btn);
+        return;
+      }
       await runInlineRefine(node, instruction, btn);
     });
     aiToolbar.appendChild(btn);
@@ -8019,6 +8145,10 @@ el.zoomLayer.addEventListener("click", async (event) => {
   const label = (quickBtn.textContent || "").trim();
   if (label === "Generate Full Content Pack") {
     await handleGenerateFullContentPack(node.id);
+    return;
+  }
+  if (label === "🧠 Generate Next Step") {
+    await generateNextStepFromNode(node, quickBtn);
     return;
   }
   const map = {
