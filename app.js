@@ -5245,11 +5245,11 @@ function updateNodeCard(node) {
   updateNodeCommentBadge(node, nodeEl);
 
   const titleEl = nodeEl.querySelector(".title");
-  titleEl.textContent = node.title;
+  if (document.activeElement !== titleEl) titleEl.textContent = node.title;
   titleEl.contentEditable = editable ? "true" : "false";
   const contentEl = nodeEl.querySelector(".content");
   contentEl.contentEditable = editable ? "true" : "false";
-  contentEl.textContent = node.content;
+  if (document.activeElement !== contentEl) contentEl.textContent = node.content;
   const isSocialNodeCard = node.type === "Social Media Posting";
   contentEl.classList.toggle("hidden", isSocialNodeCard);
   const expandBtn = nodeEl.querySelector(".node-expand-content");
@@ -7157,7 +7157,7 @@ function renderNode(node) {
       setSaveStatus("Read-only board");
       return;
     }
-    node.title = title.textContent.trim();
+    node.title = title.textContent;
     if (state.selectedPrimary === node.id) el.inputs.title.value = node.title;
     updateListView();
     recordNodeUpdatedActivity(node);
@@ -7168,7 +7168,7 @@ function renderNode(node) {
       setSaveStatus("Read-only board");
       return;
     }
-    node.content = content.textContent.trim();
+    node.content = content.textContent;
     if (state.selectedPrimary === node.id) el.inputs.content.value = node.content;
     if ((node.content || "").length <= 160) nodeEl.classList.remove("content-expanded");
     const shouldTruncate = !isSocialNodeCard && (node.content || "").length > 160;
@@ -7864,7 +7864,7 @@ el.nodeForm.addEventListener("input", (event) => {
     node.status = normalizeNodeStatus(el.inputs.status.value);
     if (previousStatus !== node.status) recordStatusChangedActivity(node, nodeStatusLabel(node.status));
   }
-  if (event.target === el.inputs.title) node.title = el.inputs.title.value.trim();
+  if (event.target === el.inputs.title) node.title = el.inputs.title.value;
   if (event.target === el.inputs.content) node.content = el.inputs.content.value;
   if (event.target === el.inputs.imagePrompt) node.imagePrompt = el.inputs.imagePrompt.value;
   if (event.target === el.inputs.variants) node.variants = parseList(el.inputs.variants.value);
@@ -7894,7 +7894,12 @@ el.nodeForm.addEventListener("input", (event) => {
 
   updateNodeCard(node);
   updateListView();
-  fillInspector(node);
+  const shouldRefreshInspector = event.target === el.inputs.type
+    || event.target === el.inputs.platform
+    || event.target === el.inputs.contentFormat
+    || event.target === el.inputs.status
+    || event.target === el.inputs.owner;
+  if (shouldRefreshInspector) fillInspector(node);
   if (event.target !== el.inputs.status && event.target !== el.inputs.owner) recordNodeUpdatedActivity(node);
   saveCampaignCanvasState();
 });
