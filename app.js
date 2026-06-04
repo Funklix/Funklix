@@ -621,6 +621,21 @@ function ownerFallbackLabel(email) {
   return normalizeOwnerEmail(email) || "";
 }
 
+function isEmailLikeOwnerValue(value = "") {
+  const text = normalizeOwnerName(value).toLowerCase();
+  return !!text && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(text);
+}
+
+function isFallbackOwnerName(name = "", email = "") {
+  const safeName = normalizeOwnerName(name);
+  if (!safeName) return false;
+  const normalizedName = safeName.toLowerCase();
+  const normalizedEmail = normalizeOwnerEmail(email);
+  if (normalizedEmail && normalizedName === normalizedEmail) return true;
+  if (isEmailLikeOwnerValue(safeName)) return true;
+  return ["unassigned", "unknown", "someone", "viewer", "collaborator", "editor"].includes(normalizedName);
+}
+
 function ownerDisplayLabel(identity = {}) {
   return normalizeOwnerName(identity.name || identity.ownerName) || ownerFallbackLabel(identity.email || identity.ownerEmail) || "Unassigned";
 }
@@ -645,43 +660,99 @@ function mergeOwnershipOption(options, option) {
       email,
       name,
       avatar,
-      role: option?.role || "Collaborator"
+      role: option?.role || "Collaborator",
+      source: option?.source || "collaborator"
     });
     return;
   }
   if (!existing.name && name) existing.name = name;
   if (!existing.avatar && avatar) existing.avatar = avatar;
   if ((!existing.role || existing.role === "Collaborator") && option?.role) existing.role = option.role;
+  if (!existing.source && option?.source) existing.source = option.source;
+}
+
+function findEditorOwnerIdentity(email) {
+  const normalizedEmail = normalizeOwnerEmail(email);
+  if (!normalizedEmail) return null;
+  const editor = (Array.isArray(state.boardEditors) ? state.boardEditors : [])
+    .find((candidate) => normalizeOwnerEmail(candidate?.email) === normalizedEmail);
+  if (!editor) return null;
+  return {
+    email: normalizedEmail,
+    name: normalizeOwnerName(editor.name),
+    avatar: normalizeOwnerAvatar(editor.avatar),
+    role: "Board editor",
+    source: "editor"
+  };
+}
+
+function findPresenceOwnerIdentity(email) {
+  const normalizedEmail = normalizeOwnerEmail(email);
+  if (!normalizedEmail) return null;
+  const viewer = (Array.isArray(state.presenceViewers) ? state.presenceViewers : [])
+    .find((candidate) => normalizeOwnerEmail(candidate?.email) === normalizedEmail);
+  if (!viewer) return null;
+  return {
+    email: normalizedEmail,
+    name: normalizeOwnerName(viewer.name),
+    avatar: normalizeOwnerAvatar(viewer.avatar),
+    role: "Collaborator",
+    source: "presence"
+  };
+}
+
+function findBoardOwnerIdentity(email) {
+  const normalizedEmail = normalizeOwnerEmail(email);
+  const boardOwnerEmail = normalizeOwnerEmail(state.currentBoardOwnerEmail);
+  if (!normalizedEmail || normalizedEmail !== boardOwnerEmail) return null;
+  const currentUserEmail = normalizeOwnerEmail(state.user?.email);
+  return {
+    email: normalizedEmail,
+    name: normalizeOwnerName(state.currentBoardOwnerName || (boardOwnerEmail === currentUserEmail ? state.user?.name : "")),
+    avatar: normalizeOwnerAvatar(state.currentBoardOwnerAvatar || (boardOwnerEmail === currentUserEmail ? state.user?.avatar : "")),
+    role: "Board owner",
+    source: "boardOwner"
+  };
+}
+
+function findCurrentUserOwnerIdentity(email) {
+  const normalizedEmail = normalizeOwnerEmail(email);
+  const currentUserEmail = normalizeOwnerEmail(state.user?.email);
+  if (!normalizedEmail || normalizedEmail !== currentUserEmail) return null;
+  return {
+    email: normalizedEmail,
+    name: normalizeOwnerName(state.user?.name),
+    avatar: normalizeOwnerAvatar(state.user?.avatar),
+    role: state.boardAccess?.reason === "owner" ? "Board owner" : "Board editor",
+    source: "currentUser"
+  };
+}
+
+function mergeOwnerIdentityByPriority(email, identities = [], fallback = {}) {
+  const normalizedEmail = normalizeOwnerEmail(email);
+  const result = { email: normalizedEmail, name: "", avatar: "" };
+  identities.filter(Boolean).forEach((identity) => {
+    if (!result.name && normalizeOwnerName(identity.name)) result.name = normalizeOwnerName(identity.name);
+    if (!result.avatar && normalizeOwnerAvatar(identity.avatar)) result.avatar = normalizeOwnerAvatar(identity.avatar);
+  });
+  if (!result.name && normalizeOwnerName(fallback.name) && !isFallbackOwnerName(fallback.name, normalizedEmail)) {
+    result.name = normalizeOwnerName(fallback.name);
+  }
+  if (!result.avatar && normalizeOwnerAvatar(fallback.avatar)) result.avatar = normalizeOwnerAvatar(fallback.avatar);
+  return result;
 }
 
 function getNodeOwnerOptions() {
   const options = [];
-  const boardOwnerEmail = normalizeOwnerEmail(state.currentBoardOwnerEmail);
-  const currentUserEmail = normalizeOwnerEmail(state.user?.email);
-  mergeOwnershipOption(options, {
-    email: state.currentBoardOwnerEmail,
-    name: state.currentBoardOwnerName || (boardOwnerEmail && boardOwnerEmail === currentUserEmail ? state.user?.name : ""),
-    avatar: state.currentBoardOwnerAvatar || (boardOwnerEmail && boardOwnerEmail === currentUserEmail ? state.user?.avatar : ""),
-    role: "Board owner"
-  });
-
   (Array.isArray(state.boardEditors) ? state.boardEditors : []).forEach((editor) => {
     mergeOwnershipOption(options, {
       email: editor?.email,
       name: editor?.name || "",
       avatar: editor?.avatar || "",
-      role: "Board editor"
+      role: "Board editor",
+      source: "editor"
     });
   });
-
-  if (state.boardAccess?.reason === "editor" && state.user?.email) {
-    mergeOwnershipOption(options, {
-      email: state.user.email,
-      name: state.user.name,
-      avatar: state.user.avatar,
-      role: "Board editor"
-    });
-  }
 
   (Array.isArray(state.presenceViewers) ? state.presenceViewers : []).forEach((viewer) => {
     if (!viewer?.email) return;
@@ -689,9 +760,30 @@ function getNodeOwnerOptions() {
       email: viewer.email,
       name: viewer.name,
       avatar: viewer.avatar,
-      role: "Collaborator"
+      role: "Collaborator",
+      source: "presence"
     });
   });
+
+  const boardOwnerEmail = normalizeOwnerEmail(state.currentBoardOwnerEmail);
+  const currentUserEmail = normalizeOwnerEmail(state.user?.email);
+  mergeOwnershipOption(options, {
+    email: state.currentBoardOwnerEmail,
+    name: state.currentBoardOwnerName || (boardOwnerEmail && boardOwnerEmail === currentUserEmail ? state.user?.name : ""),
+    avatar: state.currentBoardOwnerAvatar || (boardOwnerEmail && boardOwnerEmail === currentUserEmail ? state.user?.avatar : ""),
+    role: "Board owner",
+    source: "boardOwner"
+  });
+
+  if (state.boardAccess?.reason === "editor" && state.user?.email) {
+    mergeOwnershipOption(options, {
+      email: state.user.email,
+      name: state.user.name,
+      avatar: state.user.avatar,
+      role: "Board editor",
+      source: "currentUser"
+    });
+  }
 
   return options;
 }
@@ -699,12 +791,15 @@ function getNodeOwnerOptions() {
 function resolveOwnerIdentity(owner = {}) {
   const email = normalizeOwnerEmail(owner?.ownerEmail || owner?.email);
   if (!email) return { email: "", name: "", avatar: "" };
-  const enriched = getNodeOwnerOptions().find((candidate) => candidate.email === email) || {};
-  return {
-    email,
-    name: normalizeOwnerName(owner?.ownerName || owner?.name) || normalizeOwnerName(enriched.name),
-    avatar: normalizeOwnerAvatar(owner?.ownerAvatar || owner?.avatar) || normalizeOwnerAvatar(enriched.avatar)
-  };
+  return mergeOwnerIdentityByPriority(email, [
+    findEditorOwnerIdentity(email),
+    findPresenceOwnerIdentity(email),
+    findBoardOwnerIdentity(email),
+    findCurrentUserOwnerIdentity(email)
+  ], {
+    name: owner?.ownerName || owner?.name,
+    avatar: owner?.ownerAvatar || owner?.avatar
+  });
 }
 
 function setNodeOwner(node, owner) {
@@ -2103,6 +2198,7 @@ async function pingPresenceLite() {
   if (!boardId || !state.user?.email) {
     state.presenceViewers = [];
     state.presenceSelectedNodeIdLastSent = undefined;
+    refreshOwnershipDisplays();
     renderPresenceLite();
     clearNodePresenceBadges();
     return;
@@ -2131,6 +2227,7 @@ async function pingPresenceLite() {
     applyFollowModeFromPresence();
   } catch (_error) {
     state.presenceViewers = [];
+    refreshOwnershipDisplays();
     renderPresenceLite();
     clearNodePresenceBadges();
   } finally {
@@ -2280,6 +2377,7 @@ function startPresenceLite() {
   stopPresenceLite();
   if (!state.user?.email) {
     state.presenceViewers = [];
+    refreshOwnershipDisplays();
     renderPresenceLite();
     clearNodePresenceBadges();
     return;
@@ -5786,6 +5884,13 @@ function ownerFromSelect(select) {
   };
 }
 
+function refreshOwnerSelectorIdentities() {
+  refreshOwnershipDisplays();
+  if (canManageBoardEditors() && !state.boardEditorsLoading) {
+    void loadBoardEditors({ silent: true });
+  }
+}
+
 function fillInspector(node) {
   if (!node) {
     el.inspectorMeta.textContent = "Wähle oder erstelle einen Node.";
@@ -7465,6 +7570,9 @@ el.nodeForm.addEventListener("input", (event) => {
   if (event.target !== el.inputs.status && event.target !== el.inputs.owner) recordNodeUpdatedActivity(node);
   saveCampaignCanvasState();
 });
+
+el.inputs.owner?.addEventListener("focus", refreshOwnerSelectorIdentities);
+el.inputs.owner?.addEventListener("pointerdown", refreshOwnerSelectorIdentities);
 
 el.inputs.owner?.addEventListener("change", (event) => {
   if (isBoardReadOnly()) {
