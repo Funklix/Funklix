@@ -1,5 +1,5 @@
 const { pool, ensureBoardsTable } = require('../_boards-storage');
-const { getBoardAccess, normalizeEmail } = require('../_board-access');
+const { getBoardAccess, normalizeEmail, refreshOwnEditorIdentity } = require('../_board-access');
 const { getSessionUser } = require('../_auth-session');
 
 const BOARD_COLUMNS = 'id, name, canvas_json, brand_core_snapshot, created_at, updated_at, order_index, owner_id, owner_email, owner_name, owner_avatar, created_by';
@@ -38,6 +38,10 @@ module.exports = async function handler(req, res) {
           ownerEmail: board.owner_email || null
         });
         return res.status(403).json({ error: 'Forbidden' });
+      }
+
+      if (access?.role === 'editor') {
+        await refreshOwnEditorIdentity(id, user);
       }
 
       if (lastKnownUpdatedAt) {
@@ -123,6 +127,9 @@ module.exports = async function handler(req, res) {
     const user = getSessionUser(req);
     const { board, access } = await getBoardAccess(id, user, { columns: BOARD_COLUMNS });
     if (!board) return res.status(404).json({ error: 'Board not found' });
+    if (access?.role === 'editor') {
+      await refreshOwnEditorIdentity(id, user);
+    }
 
     return res.status(200).json({
       ...board,

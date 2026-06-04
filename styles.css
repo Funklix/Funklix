@@ -2890,3 +2890,82 @@ button:active {
   font-weight: 800;
   letter-spacing: 0.01em;
 }
+
+.node-owner-chip,
+.node-owner-display {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  border: 1px solid rgba(107, 78, 255, 0.16);
+  border-radius: 999px;
+  background: #f6f3ff;
+  color: #4f45ad;
+  font-size: 0.62rem;
+  font-weight: 800;
+  line-height: 1;
+  padding: 3px 6px;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.node-owner-chip {
+  max-width: 92px;
+  margin-left: 5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.node-owner-chip.hidden {
+  display: none !important;
+}
+
+.node-owner-avatar {
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: #e8e3ff;
+  color: #4f45ad;
+  font-size: 0.5rem;
+  font-weight: 900;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.node-owner-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.node-owner-display {
+  flex: 0 0 auto;
+  max-width: 150px;
+  color: #4f5a7f;
+  background: #f7f8ff;
+  border-color: #e0e5f7;
+}
+
+.node-owner-display span:last-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.node-owner-display.is-unassigned {
+  color: #858ba3;
+  background: #fafbff;
+}
+
+.node-summary-owner {
+  justify-self: end;
+}
+
+.node.is-compact .node-owner-chip {
+  max-width: 82px;
+  padding-inline: 5px;
+}
