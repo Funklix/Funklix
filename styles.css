@@ -1315,6 +1315,34 @@ button:active {
 .node-filter-chips { display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; max-width: 100%; }
 .node-filter-chips button { border: 1px solid #d8dcef; background: #f7f8ff; color: #4a5889; border-radius: 999px; font-size: 0.62rem; padding: 2px 7px; cursor: pointer; }
 .node-filter-chips button.active { background: #ebe7ff; border-color: #c8bcff; color: #4f39db; }
+.node-filter-chips .owner-filter-option {
+  display: inline-flex;
+  align-items: center;
+  max-width: 168px;
+  gap: 4px;
+}
+.node-filter-chips .owner-filter-option span:last-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.node-filter-owner-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: #e8e3ff;
+}
+.node-filter-owner-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
 .node-search-count { font-size: 0.66rem; color: #66719a; min-width: 78px; }
 .floating-filter-popover {
   position: fixed;

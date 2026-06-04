@@ -776,12 +776,12 @@ function getNodeOwnerOptions() {
     source: "boardOwner"
   });
 
-  if (state.boardAccess?.reason === "editor" && state.user?.email) {
+  if (state.user?.email) {
     mergeOwnershipOption(options, {
       email: state.user.email,
       name: state.user.name,
       avatar: state.user.avatar,
-      role: "Board editor",
+      role: state.boardAccess?.reason === "owner" ? "Board owner" : "Collaborator",
       source: "currentUser"
     });
   }
@@ -837,6 +837,11 @@ function recordOwnerChangedActivity(node, owner = null) {
 function refreshOwnershipDisplays() {
   state.nodes.forEach((node) => updateNodeCard(node));
   if (state.selectedPrimary) populateOwnerSelect(getNode(state.selectedPrimary));
+  const filtersPopover = document.getElementById("floating-filters-popover");
+  if (filtersPopover) {
+    filtersPopover.innerHTML = buildFiltersPopoverHtml();
+    syncPopoverActiveStates(filtersPopover);
+  }
   if (state.activeView === "list" || (el.boardListView && !el.boardListView.classList.contains("hidden"))) updateListView();
 }
 
@@ -5610,16 +5615,60 @@ function nodeSearchText(node) {
   ].filter(Boolean).join(" ").toLowerCase();
 }
 
+function ownerFilterValue(email) {
+  const normalizedEmail = normalizeOwnerEmail(email);
+  return normalizedEmail ? `owner:${normalizedEmail}` : "";
+}
+
+function nodeMatchesOwnerFilters(node) {
+  const ownerFilters = state.nodeFilters.owner;
+  if (!ownerFilters?.size) return true;
+  const ownerEmail = normalizeOwnerEmail(node?.ownerEmail);
+  const currentEmail = normalizeOwnerEmail(state.user?.email);
+  return [...ownerFilters].some((value) => {
+    if (value === "mine") return !!currentEmail && ownerEmail === currentEmail;
+    if (value === "unassigned") return !ownerEmail;
+    if (String(value).startsWith("owner:")) {
+      const filterEmail = normalizeOwnerEmail(String(value).slice("owner:".length));
+      return !!filterEmail && ownerEmail === filterEmail;
+    }
+    return false;
+  });
+}
+
+function ownerFilterCandidateLabel(candidate = {}) {
+  const identity = resolveOwnerIdentity(candidate);
+  return ownerDisplayLabel(identity || candidate);
+}
+
+function ownerFilterLabelForValue(value) {
+  if (value === "mine") return "Owner: Me";
+  if (value === "unassigned") return "Owner: Unassigned";
+  if (String(value).startsWith("owner:")) {
+    const email = normalizeOwnerEmail(String(value).slice("owner:".length));
+    const candidate = getNodeOwnerOptions().find((option) => normalizeOwnerEmail(option.email) === email);
+    return `Owner: ${candidate ? ownerFilterCandidateLabel(candidate) : (email || "Unknown")}`;
+  }
+  return String(value || "");
+}
+
+function activeNodeFilterLabels() {
+  const labels = [];
+  state.nodeFilters.type.forEach((value) => labels.push(`Type: ${value}`));
+  state.nodeFilters.platform.forEach((value) => labels.push(`Platform: ${value}`));
+  state.nodeFilters.status?.forEach((value) => labels.push(`Status: ${nodeStatusLabel(value)}`));
+  state.nodeFilters.owner?.forEach((value) => labels.push(ownerFilterLabelForValue(value)));
+  state.nodeFilters.state.forEach((value) => labels.push(`State: ${value}`));
+  return labels.filter(Boolean);
+}
+
 function nodeMatchesSearchAndFilters(node) {
   const q = state.nodeSearchQuery.trim().toLowerCase();
   if (q && !nodeSearchText(node).includes(q)) return false;
   if (state.nodeFilters.type.size && !state.nodeFilters.type.has(node.type)) return false;
   if (state.nodeFilters.platform.size && !state.nodeFilters.platform.has(node.social?.platform || "")) return false;
   if (state.nodeFilters.status?.size && !state.nodeFilters.status.has(normalizeNodeStatus(node.status))) return false;
-  if (state.nodeFilters.owner?.has("mine")) {
-    const currentEmail = normalizeOwnerEmail(state.user?.email);
-    if (!currentEmail || normalizeOwnerEmail(node.ownerEmail) !== currentEmail) return false;
-  }
+  if (!nodeMatchesOwnerFilters(node)) return false;
   if (state.nodeFilters.state.size) {
     const strategyStage = node.strategy?.funnelStage || "";
     const states = new Set([
@@ -5645,10 +5694,55 @@ function refreshNodeSearchUI() {
     if (hasSearchActive && matches === 0) el.nodeSearchCount.textContent = "No matching nodes";
   }
   if (el.filtersToggleButton) {
-    const activeFilters = Object.values(state.nodeFilters).reduce((n, set) => n + set.size, 0);
+    const labels = activeNodeFilterLabels();
+    const activeFilters = labels.length;
     el.filtersToggleButton.textContent = activeFilters > 0 ? `Filters (${activeFilters})` : "Filters";
+    if (activeFilters) el.filtersToggleButton.title = `Active filters: ${labels.join(", ")}`;
+    else el.filtersToggleButton.removeAttribute("title");
   }
   if (state.activeView === "list" || (el.boardListView && !el.boardListView.classList.contains("hidden"))) updateListView();
+}
+
+function ownerFilterButtonHtml(value, label, { avatar = "", title = "" } = {}) {
+  const safeValue = escapeHtml(value);
+  const safeLabel = escapeHtml(label);
+  const safeTitle = escapeHtml(title || label);
+  const avatarHtml = avatar
+    ? `<span class="node-filter-owner-avatar"><img src="${escapeHtml(avatar)}" alt="" loading="lazy"></span>`
+    : "";
+  return `<button type="button" class="owner-filter-option" data-filter-group="owner" data-filter-value="${safeValue}" title="${safeTitle}">${avatarHtml}<span>${safeLabel}</span></button>`;
+}
+
+function buildOwnershipFilterButtonsHtml() {
+  const options = getNodeOwnerOptions();
+  const activeOwnerEmails = [...(state.nodeFilters.owner || new Set())]
+    .filter((value) => String(value).startsWith("owner:"))
+    .map((value) => normalizeOwnerEmail(String(value).slice("owner:".length)))
+    .filter(Boolean);
+  activeOwnerEmails.forEach((email) => {
+    mergeOwnershipOption(options, {
+      email,
+      name: "",
+      avatar: "",
+      role: "Filtered owner",
+      source: "activeFilter"
+    });
+  });
+  const collaboratorButtons = options
+    .slice()
+    .sort((a, b) => ownerFilterCandidateLabel(a).localeCompare(ownerFilterCandidateLabel(b)))
+    .map((candidate) => {
+      const email = normalizeOwnerEmail(candidate.email);
+      const label = ownerFilterCandidateLabel(candidate);
+      return ownerFilterButtonHtml(ownerFilterValue(email), label, {
+        avatar: normalizeOwnerAvatar(candidate.avatar),
+        title: email ? `Owner: ${label} · ${email}` : `Owner: ${label}`
+      });
+    })
+    .join("");
+  return `${ownerFilterButtonHtml("mine", "My Nodes", { title: "Owner: Me" })}
+    ${ownerFilterButtonHtml("unassigned", "Unassigned", { title: "Owner: Unassigned" })}
+    ${collaboratorButtons}`;
 }
 
 function buildFiltersPopoverHtml() {
@@ -5668,8 +5762,8 @@ function buildFiltersPopoverHtml() {
   <div class="filter-group"><strong>Status</strong><div class="node-filter-chips">
     ${NODE_STATUSES.map((status) => `<button type="button" data-filter-group="status" data-filter-value="${status.value}">${status.label}</button>`).join("")}
   </div></div>
-  <div class="filter-group"><strong>Ownership</strong><div class="node-filter-chips">
-    <button type="button" data-filter-group="owner" data-filter-value="mine">My Nodes</button>
+  <div class="filter-group"><strong>Ownership</strong><div class="node-filter-chips ownership-filter-chips">
+    ${buildOwnershipFilterButtonsHtml()}
   </div></div>
   <div class="filter-group"><strong>State / Funnel</strong><div class="node-filter-chips">
     <button type="button" data-filter-group="state" data-filter-value="scheduled">Scheduled</button>
