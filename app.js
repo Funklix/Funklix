@@ -2986,6 +2986,95 @@ function getNode(id) {
   return state.nodes.find((n) => n.id === id) || null;
 }
 
+function ownerIdentityDebugCandidate(identity, label) {
+  if (!identity) return null;
+  return {
+    source: identity.source || label,
+    email: normalizeOwnerEmail(identity.email),
+    name: normalizeOwnerName(identity.name),
+    avatar: normalizeOwnerAvatar(identity.avatar),
+    role: identity.role || ""
+  };
+}
+
+function traceOwnerIdentityForNode(nodeId = state.selectedPrimary) {
+  const node = getNode(nodeId);
+  if (!node) {
+    const availableOwnedNodes = state.nodes
+      .filter((candidate) => normalizeOwnerEmail(candidate.ownerEmail))
+      .map((candidate) => ({ id: candidate.id, title: candidate.title || candidate.type || "", ownerEmail: candidate.ownerEmail }));
+    const missingResult = { error: `Node not found: ${nodeId || "(none selected)"}`, availableOwnedNodes };
+    console.warn("[Funklix Owner Identity Debug] Node not found", missingResult);
+    return missingResult;
+  }
+
+  const ownerEmail = normalizeOwnerEmail(node.ownerEmail);
+  const candidates = {
+    editor: ownerIdentityDebugCandidate(findEditorOwnerIdentity(ownerEmail), "editor"),
+    presence: ownerIdentityDebugCandidate(findPresenceOwnerIdentity(ownerEmail), "presence"),
+    boardOwner: ownerIdentityDebugCandidate(findBoardOwnerIdentity(ownerEmail), "boardOwner"),
+    currentUser: ownerIdentityDebugCandidate(findCurrentUserOwnerIdentity(ownerEmail), "currentUser"),
+    nodeFallback: ownerIdentityDebugCandidate({
+      source: "nodeFallback",
+      email: ownerEmail,
+      name: isFallbackOwnerName(node.ownerName, ownerEmail) ? "" : node.ownerName,
+      avatar: node.ownerAvatar,
+      role: "stored node owner"
+    }, "nodeFallback"),
+    emailFallback: ownerEmail ? { source: "emailFallback", email: ownerEmail, name: ownerEmail, avatar: "", role: "fallback" } : null
+  };
+  const priority = ["editor", "presence", "boardOwner", "currentUser", "nodeFallback", "emailFallback"];
+  const nameWinner = priority.find((key) => normalizeOwnerName(candidates[key]?.name)) || null;
+  const avatarWinner = priority.find((key) => normalizeOwnerAvatar(candidates[key]?.avatar)) || null;
+  const finalIdentity = resolveOwnerIdentity(node);
+  const result = {
+    node: {
+      id: node.id,
+      title: node.title || "",
+      ownerEmail: node.ownerEmail || "",
+      ownerName: node.ownerName || "",
+      ownerAvatar: node.ownerAvatar || ""
+    },
+    matches: {
+      boardEditors: (Array.isArray(state.boardEditors) ? state.boardEditors : [])
+        .filter((editor) => normalizeOwnerEmail(editor?.email) === ownerEmail),
+      presenceViewers: (Array.isArray(state.presenceViewers) ? state.presenceViewers : [])
+        .filter((viewer) => normalizeOwnerEmail(viewer?.email) === ownerEmail)
+    },
+    candidates,
+    winners: {
+      name: nameWinner ? candidates[nameWinner] : null,
+      avatar: avatarWinner ? candidates[avatarWinner] : null,
+      primarySource: avatarWinner || nameWinner || (ownerEmail ? "emailFallback" : null)
+    },
+    finalIdentity,
+    stateSnapshot: {
+      boardEditors: state.boardEditors,
+      presenceViewers: state.presenceViewers,
+      currentUser: state.user,
+      boardOwner: {
+        email: state.currentBoardOwnerEmail,
+        name: state.currentBoardOwnerName,
+        avatar: state.currentBoardOwnerAvatar
+      }
+    }
+  };
+  console.group(`[Funklix Owner Identity Debug] ${node.id}`);
+  console.log("node owner fields", result.node);
+  console.log("matching editor records", result.matches.boardEditors);
+  console.log("matching presence viewers", result.matches.presenceViewers);
+  console.log("candidate identities", result.candidates);
+  console.log("winning sources", result.winners);
+  console.log("final resolved identity", result.finalIdentity);
+  console.groupEnd();
+  return result;
+}
+
+if (typeof window !== "undefined") {
+  window.debugOwnerIdentity = traceOwnerIdentityForNode;
+}
+
+
 function pushHistorySnapshot() {
   const snapshot = JSON.stringify({
     nodes: state.nodes,
