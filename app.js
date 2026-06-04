@@ -91,7 +91,7 @@ const state = {
   ,analysisLastUpdatedAt: null
   ,analysisError: ""
   ,nodeSearchQuery: ""
-  ,nodeFilters: { type: new Set(), platform: new Set(), state: new Set(), status: new Set() }
+  ,nodeFilters: { type: new Set(), platform: new Set(), state: new Set(), status: new Set(), owner: new Set() }
   ,user: null
   ,authConfigured: true
   ,currentBoardOwnerEmail: null
@@ -276,6 +276,7 @@ const el = {
     funnelStage: document.getElementById("node-funnel-stage"),
     tone: document.getElementById("node-tone"),
     contentFormat: document.getElementById("node-content-format")
+    ,owner: document.getElementById("node-owner")
     ,lpHeaderVisualPrompt: document.getElementById("lp-header-visual-prompt")
     ,lpHeaderClaim: document.getElementById("lp-header-claim")
     ,lpProblem: document.getElementById("lp-problem")
@@ -586,6 +587,7 @@ function updateReadOnlyNoticeVisibility() {
     el.duplicateBoardCtaButton.disabled = state.isSaving || state.conflictModalOpen;
   }
   if (el.inputs?.status) el.inputs.status.disabled = isReadOnly || !state.selectedPrimary;
+  if (el.inputs?.owner) el.inputs.owner.disabled = isReadOnly || !state.selectedPrimary;
   renderBoardAccessCluster();
 }
 
@@ -599,6 +601,108 @@ function deriveOwnerDisplayName(ownerName, ownerEmail) {
   const token = (cleaned.split(/\s+/)[0] || local || "").trim();
   if (!token) return "";
   return token.charAt(0).toUpperCase() + token.slice(1);
+}
+
+
+function normalizeOwnerEmail(email) {
+  return typeof email === "string" ? email.trim().toLowerCase() : "";
+}
+
+function normalizeOwnerName(name, email = "") {
+  return deriveOwnerDisplayName(name, email) || normalizeOwnerEmail(email) || "";
+}
+
+function normalizeOwnerAvatar(avatar) {
+  return typeof avatar === "string" ? avatar.trim() : "";
+}
+
+function nodeOwnerDisplayName(node = {}) {
+  return normalizeOwnerName(node.ownerName, node.ownerEmail) || "Unassigned";
+}
+
+function getOwnerInitials(name = "") {
+  const source = String(name || "Unassigned").trim();
+  return source.split(/\s+/).slice(0, 2).map((part) => part[0]?.toUpperCase() || "").join("") || "U";
+}
+
+function upsertOwnershipOption(options, option) {
+  const email = normalizeOwnerEmail(option?.email);
+  if (!email || options.some((existing) => existing.email === email)) return;
+  options.push({
+    email,
+    name: normalizeOwnerName(option?.name, email),
+    avatar: normalizeOwnerAvatar(option?.avatar),
+    role: option?.role || "editor"
+  });
+}
+
+function getNodeOwnerOptions() {
+  const options = [];
+  const boardOwnerEmail = normalizeOwnerEmail(state.currentBoardOwnerEmail);
+  const currentUserEmail = normalizeOwnerEmail(state.user?.email);
+  upsertOwnershipOption(options, {
+    email: state.currentBoardOwnerEmail,
+    name: state.currentBoardOwnerName || (boardOwnerEmail && boardOwnerEmail === currentUserEmail ? state.user?.name : ""),
+    avatar: boardOwnerEmail && boardOwnerEmail === currentUserEmail ? state.user?.avatar : "",
+    role: "Board owner"
+  });
+
+  (Array.isArray(state.boardEditors) ? state.boardEditors : []).forEach((editor) => {
+    upsertOwnershipOption(options, {
+      email: editor?.email,
+      name: editor?.name || editor?.email,
+      avatar: editor?.avatar || "",
+      role: "Board editor"
+    });
+  });
+
+  if (state.boardAccess?.reason === "editor" && state.user?.email) {
+    upsertOwnershipOption(options, {
+      email: state.user.email,
+      name: state.user.name,
+      avatar: state.user.avatar,
+      role: "Board editor"
+    });
+  }
+
+  (Array.isArray(state.presenceViewers) ? state.presenceViewers : []).forEach((viewer) => {
+    if (!viewer?.email) return;
+    upsertOwnershipOption(options, {
+      email: viewer.email,
+      name: viewer.name,
+      avatar: viewer.avatar,
+      role: "Collaborator"
+    });
+  });
+
+  return options;
+}
+
+function setNodeOwner(node, owner) {
+  const email = normalizeOwnerEmail(owner?.email);
+  if (!email) {
+    delete node.ownerEmail;
+    delete node.ownerName;
+    delete node.ownerAvatar;
+    return;
+  }
+  node.ownerEmail = email;
+  node.ownerName = normalizeOwnerName(owner?.name, email);
+  const avatar = normalizeOwnerAvatar(owner?.avatar);
+  if (avatar) node.ownerAvatar = avatar;
+  else delete node.ownerAvatar;
+}
+
+function ownersAreEqual(a = {}, b = {}) {
+  return normalizeOwnerEmail(a.ownerEmail) === normalizeOwnerEmail(b.ownerEmail)
+    && normalizeOwnerName(a.ownerName, a.ownerEmail) === normalizeOwnerName(b.ownerName, b.ownerEmail)
+    && normalizeOwnerAvatar(a.ownerAvatar) === normalizeOwnerAvatar(b.ownerAvatar);
+}
+
+function recordOwnerChangedActivity(node, owner = null) {
+  if (!node || state.isBoardLoading) return;
+  if (owner?.email) appendActivity("owner_assigned", { node, ownerName: owner.name, ownerEmail: owner.email, ownerAvatar: owner.avatar });
+  else appendActivity("owner_unassigned", { node });
 }
 
 function renderBoardAccessCluster() {
@@ -780,6 +884,7 @@ async function loadBoardEditors({ silent = false } = {}) {
     if (!silent) setBoardEditorsStatus(error?.message || "Could not load editors", true);
   } finally {
     state.boardEditorsLoading = false;
+    if (state.selectedPrimary) fillInspector(getNode(state.selectedPrimary));
     renderOpenShareEditorPanel();
   }
 }
@@ -1113,6 +1218,9 @@ function sanitizeActivityFeed(feed) {
       nodeId: entry.nodeId ? String(entry.nodeId) : null,
       nodeTitle: entry.nodeTitle ? String(entry.nodeTitle).slice(0, 120) : "",
       statusLabel: entry.statusLabel ? String(entry.statusLabel).slice(0, 80) : "",
+      ownerName: entry.ownerName ? String(entry.ownerName).slice(0, 80) : "",
+      ownerEmail: entry.ownerEmail ? String(entry.ownerEmail).slice(0, 120) : "",
+      ownerAvatar: entry.ownerAvatar ? String(entry.ownerAvatar) : "",
       timestamp: entry.timestamp || new Date().toISOString()
     }))
     .sort((a, b) => Date.parse(b.timestamp || 0) - Date.parse(a.timestamp || 0))
@@ -1127,14 +1235,14 @@ function activityNodeTitle(node, fallback = "this node") {
   return (node?.title || node?.type || fallback || "this node").trim();
 }
 
-function appendActivity(type, { node = null, nodeId = null, nodeTitle = "", userName = "", statusLabel = "" } = {}) {
+function appendActivity(type, { node = null, nodeId = null, nodeTitle = "", userName = "", statusLabel = "", ownerName = "", ownerEmail = "", ownerAvatar = "" } = {}) {
   if (state.isBoardLoading || state.initialServerLoadInFlight) return null;
   const resolvedNode = node || (nodeId ? getNode(nodeId) : null);
   const safeNodeId = nodeId || resolvedNode?.id || null;
   const safeNodeTitle = nodeTitle || activityNodeTitle(resolvedNode);
   const user = getActivityUser(userName);
   const nowIso = new Date().toISOString();
-  const recent = state.activityFeed.find((entry) => {
+  const recent = (type === "owner_assigned" || type === "owner_unassigned") ? null : state.activityFeed.find((entry) => {
     if (entry.type !== type || entry.nodeId !== safeNodeId) return false;
     const entryEmail = entry.user?.email || "";
     const entryName = entry.user?.name || "";
@@ -1146,6 +1254,9 @@ function appendActivity(type, { node = null, nodeId = null, nodeTitle = "", user
     recent.timestamp = nowIso;
     recent.nodeTitle = safeNodeTitle;
     if (statusLabel) recent.statusLabel = statusLabel;
+    if (ownerName) recent.ownerName = ownerName;
+    if (ownerEmail) recent.ownerEmail = ownerEmail;
+    if (ownerAvatar) recent.ownerAvatar = ownerAvatar;
     renderActivityFeed();
     return recent;
   }
@@ -1157,6 +1268,9 @@ function appendActivity(type, { node = null, nodeId = null, nodeTitle = "", user
     nodeId: safeNodeId,
     nodeTitle: safeNodeTitle,
     statusLabel: statusLabel || "",
+    ownerName: ownerName || "",
+    ownerEmail: ownerEmail || "",
+    ownerAvatar: ownerAvatar || "",
     timestamp: nowIso
   };
   state.activityFeed = [entry, ...state.activityFeed].slice(0, ACTIVITY_FEED_MAX_ENTRIES);
@@ -1175,6 +1289,8 @@ function formatActivityAction(entry = {}) {
     node_created: `created ${title}`,
     node_updated: `edited ${title}`,
     status_changed: `changed status to ${entry.statusLabel || "Draft"} on ${title}`,
+    owner_assigned: `assigned node to ${entry.ownerName || deriveOwnerDisplayName(entry.ownerName, entry.ownerEmail) || "someone"}`,
+    owner_unassigned: "unassigned node",
     node_moved: `moved ${title}`,
     node_deleted: `deleted ${title}`,
     edge_connected: `connected ${title}`,
@@ -2845,6 +2961,18 @@ function sanitizeNodeImages(images) {
 function sanitizeNodeForPersistence(node) {
   const clean = { ...node, images: sanitizeNodeImages(node.images) };
   clean.status = normalizeNodeStatus(clean.status);
+  const ownerEmail = normalizeOwnerEmail(clean.ownerEmail);
+  if (ownerEmail) {
+    clean.ownerEmail = ownerEmail;
+    clean.ownerName = normalizeOwnerName(clean.ownerName, ownerEmail);
+    const ownerAvatar = normalizeOwnerAvatar(clean.ownerAvatar);
+    if (ownerAvatar) clean.ownerAvatar = ownerAvatar;
+    else delete clean.ownerAvatar;
+  } else {
+    delete clean.ownerEmail;
+    delete clean.ownerName;
+    delete clean.ownerAvatar;
+  }
   delete clean.isGeneratingContentPack;
   delete clean.generatingContentPack;
   delete clean.isGenerating;
@@ -4757,6 +4885,73 @@ function isNodeSearchOrFilterActive() {
   return !!state.nodeSearchQuery.trim() || Object.values(state.nodeFilters).some((set) => set.size > 0);
 }
 
+
+function renderOwnerAvatar(parent, name, avatarUrl, className = "owner-avatar") {
+  parent.innerHTML = "";
+  if (avatarUrl) {
+    const img = document.createElement("img");
+    img.src = avatarUrl;
+    img.alt = `${name} avatar`;
+    parent.appendChild(img);
+    return;
+  }
+  const fallback = document.createElement("span");
+  fallback.className = `${className}-fallback`;
+  fallback.textContent = getOwnerInitials(name);
+  parent.appendChild(fallback);
+}
+
+function updateNodeOwnerChip(node, nodeEl) {
+  const chip = nodeEl.querySelector(".node-owner-chip");
+  if (!chip) return;
+  const ownerEmail = normalizeOwnerEmail(node.ownerEmail);
+  chip.innerHTML = "";
+  chip.classList.toggle("hidden", !ownerEmail);
+  if (!ownerEmail) {
+    chip.removeAttribute("title");
+    return;
+  }
+  const name = nodeOwnerDisplayName(node);
+  chip.title = `Owner: ${name}`;
+  if (node.ownerAvatar) {
+    chip.classList.add("has-avatar");
+    const avatar = document.createElement("span");
+    avatar.className = "node-owner-avatar";
+    renderOwnerAvatar(avatar, name, node.ownerAvatar, "node-owner-avatar");
+    const label = document.createElement("span");
+    label.textContent = name;
+    chip.append(avatar, label);
+  } else {
+    chip.classList.remove("has-avatar");
+    chip.textContent = `👤 ${name}`;
+  }
+}
+
+function createOwnerDisplay(node, { includeUnassigned = true } = {}) {
+  const wrap = document.createElement("span");
+  wrap.className = "node-owner-display";
+  const ownerEmail = normalizeOwnerEmail(node?.ownerEmail);
+  const name = ownerEmail ? nodeOwnerDisplayName(node) : "Unassigned";
+  if (!ownerEmail && !includeUnassigned) return wrap;
+  if (ownerEmail && node.ownerAvatar) {
+    const avatar = document.createElement("span");
+    avatar.className = "node-owner-avatar";
+    renderOwnerAvatar(avatar, name, node.ownerAvatar, "node-owner-avatar");
+    wrap.appendChild(avatar);
+  } else if (ownerEmail) {
+    const icon = document.createElement("span");
+    icon.className = "node-owner-icon";
+    icon.textContent = "👤";
+    wrap.appendChild(icon);
+  }
+  const text = document.createElement("span");
+  text.textContent = name;
+  wrap.appendChild(text);
+  wrap.title = ownerEmail ? `Owner: ${name}` : "Owner: Unassigned";
+  wrap.classList.toggle("is-unassigned", !ownerEmail);
+  return wrap;
+}
+
 function updateNodeCard(node) {
   const nodeEl = el.zoomLayer.querySelector(`[data-id='${node.id}']`);
   if (!nodeEl) return;
@@ -4779,6 +4974,7 @@ function updateNodeCard(node) {
 
   nodeEl.querySelector(".type").textContent = node.type;
   nodeEl.querySelector(".type").style.color = tone;
+  updateNodeOwnerChip(node, nodeEl);
   updateNodeStatusChip(node, nodeEl);
   nodeEl.classList.toggle("is-in-review", normalizeNodeStatus(node.status) === "In Review");
   const editable = !isBoardReadOnly();
@@ -5178,6 +5374,10 @@ function nodeMatchesSearchAndFilters(node) {
   if (state.nodeFilters.type.size && !state.nodeFilters.type.has(node.type)) return false;
   if (state.nodeFilters.platform.size && !state.nodeFilters.platform.has(node.social?.platform || "")) return false;
   if (state.nodeFilters.status?.size && !state.nodeFilters.status.has(normalizeNodeStatus(node.status))) return false;
+  if (state.nodeFilters.owner?.has("mine")) {
+    const currentEmail = normalizeOwnerEmail(state.user?.email);
+    if (!currentEmail || normalizeOwnerEmail(node.ownerEmail) !== currentEmail) return false;
+  }
   if (state.nodeFilters.state.size) {
     const strategyStage = node.strategy?.funnelStage || "";
     const states = new Set([
@@ -5225,6 +5425,9 @@ function buildFiltersPopoverHtml() {
   </div></div>
   <div class="filter-group"><strong>Status</strong><div class="node-filter-chips">
     ${NODE_STATUSES.map((status) => `<button type="button" data-filter-group="status" data-filter-value="${status.value}">${status.label}</button>`).join("")}
+  </div></div>
+  <div class="filter-group"><strong>Ownership</strong><div class="node-filter-chips">
+    <button type="button" data-filter-group="owner" data-filter-value="mine">My Nodes</button>
   </div></div>
   <div class="filter-group"><strong>State / Funnel</strong><div class="node-filter-chips">
     <button type="button" data-filter-group="state" data-filter-value="scheduled">Scheduled</button>
@@ -5492,6 +5695,51 @@ function enablePostitDrag(postit, note) {
   });
 }
 
+
+function populateOwnerSelect(node) {
+  const select = el.inputs?.owner;
+  if (!select) return;
+  const currentOwnerEmail = normalizeOwnerEmail(node?.ownerEmail);
+  const options = getNodeOwnerOptions();
+  if (currentOwnerEmail && !options.some((option) => option.email === currentOwnerEmail)) {
+    options.push({
+      email: currentOwnerEmail,
+      name: nodeOwnerDisplayName(node),
+      avatar: normalizeOwnerAvatar(node?.ownerAvatar),
+      role: "Current owner"
+    });
+  }
+
+  select.innerHTML = "";
+  const unassigned = document.createElement("option");
+  unassigned.value = "";
+  unassigned.textContent = "Unassigned";
+  select.appendChild(unassigned);
+
+  options.forEach((owner) => {
+    const option = document.createElement("option");
+    option.value = owner.email;
+    option.textContent = `${owner.role || "Collaborator"}: ${owner.name || owner.email}`;
+    option.dataset.ownerName = owner.name || "";
+    option.dataset.ownerAvatar = owner.avatar || "";
+    select.appendChild(option);
+  });
+
+  select.value = currentOwnerEmail;
+  select.disabled = isBoardReadOnly() || !node;
+}
+
+function ownerFromSelect(select) {
+  const email = normalizeOwnerEmail(select?.value);
+  if (!email) return null;
+  const selected = select.selectedOptions?.[0];
+  return {
+    email,
+    name: selected?.dataset?.ownerName || deriveOwnerDisplayName("", email),
+    avatar: selected?.dataset?.ownerAvatar || ""
+  };
+}
+
 function fillInspector(node) {
   if (!node) {
     el.inspectorMeta.textContent = "Wähle oder erstelle einen Node.";
@@ -5506,6 +5754,10 @@ function fillInspector(node) {
     el.inputs.variants.classList.remove("hidden");
     el.inspectorImageList.innerHTML = "";
     if (el.inputs.status) el.inputs.status.disabled = true;
+    if (el.inputs.owner) {
+      el.inputs.owner.innerHTML = '<option value="">Unassigned</option>';
+      el.inputs.owner.disabled = true;
+    }
     if (el.connectedContextSummary) el.connectedContextSummary.textContent = "Parents: 0 · Children: 0";
     if (el.connectedContextBody) el.connectedContextBody.textContent = "";
     updateInspectorActionVisibility();
@@ -5519,6 +5771,7 @@ function fillInspector(node) {
     el.inputs.status.disabled = isBoardReadOnly();
   }
   el.inputs.title.value = node.title;
+  populateOwnerSelect(node);
   el.inputs.content.value = node.content;
   el.inputs.imagePrompt.value = node.imagePrompt || "";
   el.inputs.variants.value = node.variants.join(", ");
@@ -6202,6 +6455,10 @@ function updateListView() {
         titleWrap.appendChild(dot);
       }
       top.appendChild(titleWrap);
+
+      const owner = createOwnerDisplay(node);
+      owner.classList.add("node-summary-owner");
+      top.appendChild(owner);
 
       const discussion = getNodeDiscussionCounts(node);
       if (discussion.total > 0) {
@@ -7142,6 +7399,12 @@ el.nodeForm.addEventListener("input", (event) => {
   if (event.target === el.inputs.funnelStage) node.funnelStage = el.inputs.funnelStage.value.trim();
   if (event.target === el.inputs.tone) node.tone = el.inputs.tone.value.trim();
   if (event.target === el.inputs.contentFormat) node.contentFormat = el.inputs.contentFormat.value || "1:1";
+  if (event.target === el.inputs.owner) {
+    const before = { ownerEmail: node.ownerEmail, ownerName: node.ownerName, ownerAvatar: node.ownerAvatar };
+    const nextOwner = ownerFromSelect(el.inputs.owner);
+    setNodeOwner(node, nextOwner);
+    if (!ownersAreEqual(before, node)) recordOwnerChangedActivity(node, nextOwner);
+  }
   if (!node.landingPage) node.landingPage = { headerVisualPrompt: "", headerClaim: "", problem: "", solution: "", trust: "", cta: "" };
   if (event.target === el.inputs.lpHeaderVisualPrompt) node.landingPage.headerVisualPrompt = el.inputs.lpHeaderVisualPrompt.value;
   if (event.target === el.inputs.lpHeaderClaim) node.landingPage.headerClaim = el.inputs.lpHeaderClaim.value;
@@ -7153,9 +7416,30 @@ el.nodeForm.addEventListener("input", (event) => {
   updateNodeCard(node);
   updateListView();
   fillInspector(node);
-  if (event.target !== el.inputs.status) recordNodeUpdatedActivity(node);
+  if (event.target !== el.inputs.status && event.target !== el.inputs.owner) recordNodeUpdatedActivity(node);
   saveCampaignCanvasState();
 });
+
+el.inputs.owner?.addEventListener("change", (event) => {
+  if (isBoardReadOnly()) {
+    setSaveStatus("Read-only board");
+    fillInspector(getNode(state.selectedPrimary));
+    return;
+  }
+  const node = getNode(state.selectedPrimary);
+  if (!node) return;
+  const before = { ownerEmail: node.ownerEmail, ownerName: node.ownerName, ownerAvatar: node.ownerAvatar };
+  const nextOwner = ownerFromSelect(event.target);
+  setNodeOwner(node, nextOwner);
+  if (!ownersAreEqual(before, node)) {
+    recordOwnerChangedActivity(node, nextOwner);
+    updateNodeCard(node);
+    updateListView();
+    refreshNodeSearchUI();
+    saveCampaignCanvasState();
+  }
+});
+
 el.inputs.channel.addEventListener("keydown", (event) => {
   if (isBoardReadOnly()) {
     setSaveStatus("Read-only board");
