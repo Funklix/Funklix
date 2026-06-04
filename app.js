@@ -5210,6 +5210,11 @@ function createOwnerDisplay(node, { includeUnassigned = true } = {}) {
   return wrap;
 }
 
+function nodeHasActivePostitEditor(nodeEl) {
+  const active = document.activeElement;
+  return !!active?.closest?.(".postit") && !!nodeEl?.contains(active);
+}
+
 function updateNodeCard(node) {
   const nodeEl = el.zoomLayer.querySelector(`[data-id='${node.id}']`);
   if (!nodeEl) return;
@@ -5605,7 +5610,9 @@ function updateNodeCard(node) {
     }
   }
 
-  renderPostits(node, nodeEl);
+  if (!nodeHasActivePostitEditor(nodeEl)) {
+    renderPostits(node, nodeEl);
+  }
 }
 
 function nodeSearchText(node) {
