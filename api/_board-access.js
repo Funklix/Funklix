@@ -16,6 +16,24 @@ function isBoardOwner(board, user) {
   return (!!ownerEmail && !!userEmail && ownerEmail === userEmail) || (!!ownerId && !!userId && ownerId === userId);
 }
 
+function sessionIdentityValue(value, max = 500) {
+  return typeof value === 'string' && value.trim() ? value.trim().slice(0, max) : null;
+}
+
+async function refreshOwnEditorIdentity(boardId, user) {
+  const email = normalizeEmail(user?.email);
+  if (!boardId || !email) return false;
+  const result = await pool.query(
+    `UPDATE board_editors
+     SET name = COALESCE($3, name), avatar = COALESCE($4, avatar)
+     WHERE board_id = $1 AND email = $2 AND role = 'editor'
+       AND (COALESCE(name, '') IS DISTINCT FROM COALESCE($3, name, '')
+         OR COALESCE(avatar, '') IS DISTINCT FROM COALESCE($4, avatar, ''))`,
+    [boardId, email, sessionIdentityValue(user?.name, 120), sessionIdentityValue(user?.avatar, 1000)]
+  );
+  return result.rowCount > 0;
+}
+
 async function isBoardEditor(boardId, user) {
   const email = normalizeEmail(user?.email);
   if (!boardId || !email) return false;
@@ -68,5 +86,6 @@ async function getBoardAccess(boardId, user, { columns = '*' } = {}) {
 module.exports = {
   normalizeEmail,
   isBoardOwner,
-  getBoardAccess
+  getBoardAccess,
+  refreshOwnEditorIdentity
 };

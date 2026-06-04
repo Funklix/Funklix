@@ -4,7 +4,7 @@ const { getSessionUser } = require('../../../_auth-session');
 
 async function listEditors(boardId) {
   const result = await pool.query(
-    `SELECT email, role, created_at, created_by
+    `SELECT email, role, name, avatar, created_at, created_by
      FROM board_editors
      WHERE board_id = $1
      ORDER BY created_at ASC, email ASC`,
