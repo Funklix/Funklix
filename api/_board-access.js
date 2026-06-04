@@ -56,8 +56,8 @@ async function refreshOwnEditorIdentity(boardId, user, context = {}) {
       `UPDATE board_editors
        SET name = COALESCE($3, name), avatar = COALESCE($4, avatar)
        WHERE board_id = $1 AND email = $2 AND role = 'editor'
-         AND (COALESCE(name, '') IS DISTINCT FROM COALESCE($3, name, '')
-           OR COALESCE(avatar, '') IS DISTINCT FROM COALESCE($4, avatar, ''))`,
+         AND (($3 IS NOT NULL AND name IS DISTINCT FROM $3)
+           OR ($4 IS NOT NULL AND avatar IS DISTINCT FROM $4))`,
       [boardId, email, name, avatar]
     );
     logOwnerIdentityDebug('Editor identity refresh complete', { ...diagnosticBase, sqlInputs, rowCount: result.rowCount });
