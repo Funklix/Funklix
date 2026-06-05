@@ -4902,6 +4902,7 @@ function openCreateCampaignModal() {
     if (thinkingTimer) clearInterval(thinkingTimer);
     thinkingTimer = null;
     dotsEl.textContent = "";
+    subtextEl.textContent = message;
   };
   const setWorkerStatus = (message) => {
     loader.classList.remove("hidden");
