@@ -200,6 +200,7 @@ const el = {
   inspectorImageList: document.getElementById("inspector-image-list"),
   deleteNodeButton: document.getElementById("delete-node-btn"),
   improveNodeButton: document.getElementById("improve-node-btn"),
+  generateNextStepInspectorButton: document.getElementById("generate-next-step-inspector-btn"),
   regenerateNodeButton: document.getElementById("regenerate-node-btn"),
   regeneratePlatformButton: document.getElementById("regenerate-platform-btn"),
   addToPostingCalendarButton: document.getElementById("add-to-posting-calendar-btn"),
@@ -4915,6 +4916,8 @@ function updateInspectorActionVisibility() {
 
   const showGenerateImage = !!selectedNode && selectedNode.type === "Content";
   const showGeneratePostingVisual = !!selectedNode && selectedNode.type === "Social Media Posting";
+  const inspectorNextStepType = selectedNode ? getNextStepNodeType(selectedNode.type) : "";
+  const canGenerateInspectorNextStep = hasSingleNode && !!inspectorNextStepType && !isBoardReadOnly();
 
   el.deleteNodeButton.style.display = hasSingleNode ? "block" : "none";
   el.deleteSelectedButton.style.display = hasMultipleNodes ? "block" : "none";
@@ -4924,6 +4927,7 @@ function updateInspectorActionVisibility() {
   el.generateFullPackButton.style.display = showGenerateImage ? "block" : "none";
 
   el.improveNodeButton.style.display = hasSingleNode ? "block" : "none";
+  el.generateNextStepInspectorButton.style.display = hasSingleNode ? "block" : "none";
   el.regenerateNodeButton.style.display = hasSingleNode ? "block" : "none";
   el.regeneratePlatformButton.style.display = selectedNode?.type === "Social Media Posting" ? "block" : "none";
   el.addToPostingCalendarButton.style.display = selectedNode?.type === "Social Media Posting" ? "block" : "none";
@@ -4935,6 +4939,10 @@ function updateInspectorActionVisibility() {
   el.deleteNodeButton.disabled = !hasSingleNode;
   el.deleteSelectedButton.disabled = !hasMultipleNodes;
   el.improveNodeButton.disabled = !hasSingleNode;
+  el.generateNextStepInspectorButton.disabled = !canGenerateInspectorNextStep;
+  el.generateNextStepInspectorButton.title = hasSingleNode
+    ? (inspectorNextStepType ? (isBoardReadOnly() ? "Read-only board" : `Generate ${inspectorNextStepType}`) : "No next step available")
+    : "Select a node";
   el.regenerateNodeButton.disabled = !hasSingleNode;
   el.regeneratePlatformButton.disabled = !(selectedNode?.type === "Social Media Posting");
   el.addToPostingCalendarButton.disabled = !(selectedNode?.type === "Social Media Posting");
@@ -8051,6 +8059,12 @@ el.improveNodeButton.addEventListener("click", async () => {
   const node = getNode(state.selectedPrimary);
   if (!node) return;
   await runImproveNodeFlow(node);
+});
+el.generateNextStepInspectorButton?.addEventListener("click", async () => {
+  const node = getNode(state.selectedPrimary);
+  if (!node) return;
+  await generateNextStepFromNode(node, el.generateNextStepInspectorButton);
+  updateInspectorActionVisibility();
 });
 el.regenerateNodeButton.addEventListener("click", async () => {
   const node = getNode(state.selectedPrimary);
