@@ -50,7 +50,7 @@ Shared requirements:
 - Do not create multiple variations.
 - Do not include Visual Concept or Image Brief.
 - Every stage must have a distinct strategic purpose and must not repeat the same copy in different words.
-- Use ICP, positioning, USP/value proposition, offer, messaging pillars, tone, CTA guidance, and visual style from Brand Brain when available.
+- Use ICP, positioning, USP/value proposition, offer, messaging pillars, archetype guidance, tone, CTA guidance, and visual style from Brand Brain when available.
 - Plain text only: no markdown bold, no markdown headings, no code fences, no JSON inside fields.
 - Keep fields UI-ready: concise, practical, and specific.
 - Do not fabricate unavailable metrics, testimonials, logos, customers, or proof.
@@ -72,7 +72,7 @@ Content:
 - Do not create another angle.
 - Do not create a social post yet.
 - Include clean sections: Hook, Narrative, Supporting points, CTA.
-- Include a production-ready imagePrompt for visual generation that reflects Brand Brain visual style.
+- Include a production-ready imagePrompt for visual generation that reflects Brand Brain visual style and archetype-aligned emotional/symbolic direction.
 
 Social Media Posting:
 - Adapt Content into one platform-ready social post.
@@ -88,7 +88,7 @@ Landing Page:
 - Transform the Social Media Posting into landing page copy.
 - Fill structured landingPage fields instead of dumping everything into content.
 - Keep content empty or only a one-sentence summary.
-- headerVisualPrompt: production-ready visual direction for a 16:9 hero image.
+- headerVisualPrompt: production-ready visual direction for a 16:9 hero image that respects Brand Brain visual style and archetype guidance.
 - headerClaim: short main headline claim.
 - problem: concise ICP problem paragraph.
 - solution: concise solution paragraph.
