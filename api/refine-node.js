@@ -1,3 +1,5 @@
+const { buildBrandBrainContext } = require("./_brand-brain-context");
+
 module.exports = async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
@@ -10,9 +12,11 @@ module.exports = async function handler(req, res) {
       currentContent = {},
       instruction = "",
       brandBrainData = {},
+      boardId = "",
       parentNode = null,
       campaignContext = ""
     } = req.body || {};
+    const brandBrainContext = buildBrandBrainContext(boardId, brandBrainData);
     const parentNodeSection = parentNode
       ? `Parent node: ${JSON.stringify(parentNode)}`
       : "Parent node: none";
@@ -23,10 +27,10 @@ module.exports = async function handler(req, res) {
 Node type: ${nodeType}
 Instruction: ${instruction}
 Current content: ${JSON.stringify(currentContent)}
-Brand brain data: ${JSON.stringify(brandBrainData)}
+${brandBrainContext.text}
 ${parentNodeSection}
 ${campaignContextSection}
-Guidance: Use parent node and brand brain to guide tone and intent. Do not change core meaning unless the instruction implies it.
+Guidance: Use parent node and normalized Brand Brain context to guide tone and intent. Do not change core meaning unless the instruction implies it.
 Return strict JSON only:
 {
   "title": "",
