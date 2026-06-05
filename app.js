@@ -5,7 +5,17 @@ const NODE_TYPES = {
   Content: { color: "#16a47b" },
   "Social Media Posting": { color: "#f56f46" },
   "Landing Page": { color: "#a04ad8" },
-  "Email Campaign": { color: "#d8961a" }
+  "Email Campaign": { color: "#d8961a" },
+  "Visual Concept": { color: "#0f9bb5" },
+  "Image Brief": { color: "#7c6bd8" }
+};
+const NEXT_STEP_NODE_TYPE = {
+  Idea: "Campaign Variation",
+  "Campaign Variation": "Content",
+  Content: "Social Media Posting",
+  "Social Media Posting": "Landing Page",
+  "Social Media Post": "Landing Page",
+  "Landing Page": "Email Campaign"
 };
 
 const NODE_WIDTH = 285;
@@ -91,15 +101,17 @@ const state = {
   ,analysisLastUpdatedAt: null
   ,analysisError: ""
   ,nodeSearchQuery: ""
-  ,nodeFilters: { type: new Set(), platform: new Set(), state: new Set(), status: new Set() }
+  ,nodeFilters: { type: new Set(), platform: new Set(), state: new Set(), status: new Set(), owner: new Set() }
   ,user: null
   ,authConfigured: true
   ,currentBoardOwnerEmail: null
   ,currentBoardOwnerName: null
+  ,currentBoardOwnerAvatar: null
   ,boardAccess: { canView: true, canEdit: true, canManagePermissions: false, canRename: false, canDelete: false, reason: "unknown" }
   ,boardEditors: []
   ,boardEditorsLoading: false
   ,boardEditorsStatus: { message: "", isError: false }
+  ,lastEditorIdentityRefreshAt: 0
   ,shareToastTimer: null
   ,presencePollTimer: null
   ,boardRefreshPollTimer: null
@@ -188,6 +200,8 @@ const el = {
   inspectorImageList: document.getElementById("inspector-image-list"),
   deleteNodeButton: document.getElementById("delete-node-btn"),
   improveNodeButton: document.getElementById("improve-node-btn"),
+  generateNextStepInspectorButton: document.getElementById("generate-next-step-inspector-btn"),
+  reviewNodeButton: document.getElementById("review-node-btn"),
   regenerateNodeButton: document.getElementById("regenerate-node-btn"),
   regeneratePlatformButton: document.getElementById("regenerate-platform-btn"),
   addToPostingCalendarButton: document.getElementById("add-to-posting-calendar-btn"),
@@ -276,6 +290,7 @@ const el = {
     funnelStage: document.getElementById("node-funnel-stage"),
     tone: document.getElementById("node-tone"),
     contentFormat: document.getElementById("node-content-format")
+    ,owner: document.getElementById("node-owner")
     ,lpHeaderVisualPrompt: document.getElementById("lp-header-visual-prompt")
     ,lpHeaderClaim: document.getElementById("lp-header-claim")
     ,lpProblem: document.getElementById("lp-problem")
@@ -586,6 +601,7 @@ function updateReadOnlyNoticeVisibility() {
     el.duplicateBoardCtaButton.disabled = state.isSaving || state.conflictModalOpen;
   }
   if (el.inputs?.status) el.inputs.status.disabled = isReadOnly || !state.selectedPrimary;
+  if (el.inputs?.owner) el.inputs.owner.disabled = isReadOnly || !state.selectedPrimary;
   renderBoardAccessCluster();
 }
 
@@ -601,6 +617,246 @@ function deriveOwnerDisplayName(ownerName, ownerEmail) {
   return token.charAt(0).toUpperCase() + token.slice(1);
 }
 
+
+function normalizeOwnerEmail(email) {
+  return typeof email === "string" ? email.trim().toLowerCase() : "";
+}
+
+function normalizeOwnerName(name) {
+  return typeof name === "string" ? name.trim() : "";
+}
+
+function normalizeOwnerAvatar(avatar) {
+  return typeof avatar === "string" ? avatar.trim() : "";
+}
+
+function ownerFallbackLabel(email) {
+  return normalizeOwnerEmail(email) || "";
+}
+
+function isEmailLikeOwnerValue(value = "") {
+  const text = normalizeOwnerName(value).toLowerCase();
+  return !!text && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(text);
+}
+
+function isFallbackOwnerName(name = "", email = "") {
+  const safeName = normalizeOwnerName(name);
+  if (!safeName) return false;
+  const normalizedName = safeName.toLowerCase();
+  const normalizedEmail = normalizeOwnerEmail(email);
+  if (normalizedEmail && normalizedName === normalizedEmail) return true;
+  if (isEmailLikeOwnerValue(safeName)) return true;
+  return ["unassigned", "unknown", "someone", "viewer", "collaborator", "editor"].includes(normalizedName);
+}
+
+function ownerDisplayLabel(identity = {}) {
+  return normalizeOwnerName(identity.name || identity.ownerName) || ownerFallbackLabel(identity.email || identity.ownerEmail) || "Unassigned";
+}
+
+function nodeOwnerDisplayName(node = {}) {
+  return ownerDisplayLabel(resolveOwnerIdentity(node));
+}
+
+function getOwnerInitials(name = "") {
+  const source = String(name || "Unassigned").trim();
+  return source.split(/\s+/).slice(0, 2).map((part) => part[0]?.toUpperCase() || "").join("") || "U";
+}
+
+function mergeOwnershipOption(options, option) {
+  const email = normalizeOwnerEmail(option?.email);
+  if (!email) return;
+  const name = normalizeOwnerName(option?.name);
+  const avatar = normalizeOwnerAvatar(option?.avatar);
+  const existing = options.find((candidate) => candidate.email === email);
+  if (!existing) {
+    options.push({
+      email,
+      name,
+      avatar,
+      role: option?.role || "Collaborator",
+      source: option?.source || "collaborator"
+    });
+    return;
+  }
+  if (!existing.name && name) existing.name = name;
+  if (!existing.avatar && avatar) existing.avatar = avatar;
+  if ((!existing.role || existing.role === "Collaborator") && option?.role) existing.role = option.role;
+  if (!existing.source && option?.source) existing.source = option.source;
+}
+
+function findEditorOwnerIdentity(email) {
+  const normalizedEmail = normalizeOwnerEmail(email);
+  if (!normalizedEmail) return null;
+  const editor = (Array.isArray(state.boardEditors) ? state.boardEditors : [])
+    .find((candidate) => normalizeOwnerEmail(candidate?.email) === normalizedEmail);
+  if (!editor) return null;
+  return {
+    email: normalizedEmail,
+    name: normalizeOwnerName(editor.name),
+    avatar: normalizeOwnerAvatar(editor.avatar),
+    role: "Board editor",
+    source: "editor"
+  };
+}
+
+function findPresenceOwnerIdentity(email) {
+  const normalizedEmail = normalizeOwnerEmail(email);
+  if (!normalizedEmail) return null;
+  const viewer = (Array.isArray(state.presenceViewers) ? state.presenceViewers : [])
+    .find((candidate) => normalizeOwnerEmail(candidate?.email) === normalizedEmail);
+  if (!viewer) return null;
+  return {
+    email: normalizedEmail,
+    name: normalizeOwnerName(viewer.name),
+    avatar: normalizeOwnerAvatar(viewer.avatar),
+    role: "Collaborator",
+    source: "presence"
+  };
+}
+
+function findBoardOwnerIdentity(email) {
+  const normalizedEmail = normalizeOwnerEmail(email);
+  const boardOwnerEmail = normalizeOwnerEmail(state.currentBoardOwnerEmail);
+  if (!normalizedEmail || normalizedEmail !== boardOwnerEmail) return null;
+  const currentUserEmail = normalizeOwnerEmail(state.user?.email);
+  return {
+    email: normalizedEmail,
+    name: normalizeOwnerName(state.currentBoardOwnerName || (boardOwnerEmail === currentUserEmail ? state.user?.name : "")),
+    avatar: normalizeOwnerAvatar(state.currentBoardOwnerAvatar || (boardOwnerEmail === currentUserEmail ? state.user?.avatar : "")),
+    role: "Board owner",
+    source: "boardOwner"
+  };
+}
+
+function findCurrentUserOwnerIdentity(email) {
+  const normalizedEmail = normalizeOwnerEmail(email);
+  const currentUserEmail = normalizeOwnerEmail(state.user?.email);
+  if (!normalizedEmail || normalizedEmail !== currentUserEmail) return null;
+  return {
+    email: normalizedEmail,
+    name: normalizeOwnerName(state.user?.name),
+    avatar: normalizeOwnerAvatar(state.user?.avatar),
+    role: state.boardAccess?.reason === "owner" ? "Board owner" : "Board editor",
+    source: "currentUser"
+  };
+}
+
+function mergeOwnerIdentityByPriority(email, identities = [], fallback = {}) {
+  const normalizedEmail = normalizeOwnerEmail(email);
+  const result = { email: normalizedEmail, name: "", avatar: "" };
+  identities.filter(Boolean).forEach((identity) => {
+    if (!result.name && normalizeOwnerName(identity.name)) result.name = normalizeOwnerName(identity.name);
+    if (!result.avatar && normalizeOwnerAvatar(identity.avatar)) result.avatar = normalizeOwnerAvatar(identity.avatar);
+  });
+  if (!result.name && normalizeOwnerName(fallback.name) && !isFallbackOwnerName(fallback.name, normalizedEmail)) {
+    result.name = normalizeOwnerName(fallback.name);
+  }
+  if (!result.avatar && normalizeOwnerAvatar(fallback.avatar)) result.avatar = normalizeOwnerAvatar(fallback.avatar);
+  return result;
+}
+
+function getNodeOwnerOptions() {
+  const options = [];
+  (Array.isArray(state.boardEditors) ? state.boardEditors : []).forEach((editor) => {
+    mergeOwnershipOption(options, {
+      email: editor?.email,
+      name: editor?.name || "",
+      avatar: editor?.avatar || "",
+      role: "Board editor",
+      source: "editor"
+    });
+  });
+
+  (Array.isArray(state.presenceViewers) ? state.presenceViewers : []).forEach((viewer) => {
+    if (!viewer?.email) return;
+    mergeOwnershipOption(options, {
+      email: viewer.email,
+      name: viewer.name,
+      avatar: viewer.avatar,
+      role: "Collaborator",
+      source: "presence"
+    });
+  });
+
+  const boardOwnerEmail = normalizeOwnerEmail(state.currentBoardOwnerEmail);
+  const currentUserEmail = normalizeOwnerEmail(state.user?.email);
+  mergeOwnershipOption(options, {
+    email: state.currentBoardOwnerEmail,
+    name: state.currentBoardOwnerName || (boardOwnerEmail && boardOwnerEmail === currentUserEmail ? state.user?.name : ""),
+    avatar: state.currentBoardOwnerAvatar || (boardOwnerEmail && boardOwnerEmail === currentUserEmail ? state.user?.avatar : ""),
+    role: "Board owner",
+    source: "boardOwner"
+  });
+
+  if (state.user?.email) {
+    mergeOwnershipOption(options, {
+      email: state.user.email,
+      name: state.user.name,
+      avatar: state.user.avatar,
+      role: state.boardAccess?.reason === "owner" ? "Board owner" : "Collaborator",
+      source: "currentUser"
+    });
+  }
+
+  return options;
+}
+
+function resolveOwnerIdentity(owner = {}) {
+  const email = normalizeOwnerEmail(owner?.ownerEmail || owner?.email);
+  if (!email) return { email: "", name: "", avatar: "" };
+  return mergeOwnerIdentityByPriority(email, [
+    findEditorOwnerIdentity(email),
+    findPresenceOwnerIdentity(email),
+    findBoardOwnerIdentity(email),
+    findCurrentUserOwnerIdentity(email)
+  ], {
+    name: owner?.ownerName || owner?.name,
+    avatar: owner?.ownerAvatar || owner?.avatar
+  });
+}
+
+function setNodeOwner(node, owner) {
+  const email = normalizeOwnerEmail(owner?.email);
+  if (!email) {
+    delete node.ownerEmail;
+    delete node.ownerName;
+    delete node.ownerAvatar;
+    return;
+  }
+  const identity = resolveOwnerIdentity(owner);
+  node.ownerEmail = email;
+  const name = normalizeOwnerName(identity.name || owner?.name);
+  const avatar = normalizeOwnerAvatar(identity.avatar || owner?.avatar);
+  if (name) node.ownerName = name;
+  else delete node.ownerName;
+  if (avatar) node.ownerAvatar = avatar;
+  else delete node.ownerAvatar;
+}
+
+function ownersAreEqual(a = {}, b = {}) {
+  return normalizeOwnerEmail(a.ownerEmail) === normalizeOwnerEmail(b.ownerEmail)
+    && normalizeOwnerName(a.ownerName) === normalizeOwnerName(b.ownerName)
+    && normalizeOwnerAvatar(a.ownerAvatar) === normalizeOwnerAvatar(b.ownerAvatar);
+}
+
+function recordOwnerChangedActivity(node, owner = null) {
+  if (!node || state.isBoardLoading) return;
+  const identity = owner?.email ? resolveOwnerIdentity(owner) : null;
+  if (identity?.email) appendActivity("owner_assigned", { node, ownerName: ownerDisplayLabel(identity), ownerEmail: identity.email, ownerAvatar: identity.avatar });
+  else appendActivity("owner_unassigned", { node });
+}
+
+function refreshOwnershipDisplays() {
+  state.nodes.forEach((node) => updateNodeCard(node));
+  if (state.selectedPrimary) populateOwnerSelect(getNode(state.selectedPrimary));
+  const filtersPopover = document.getElementById("floating-filters-popover");
+  if (filtersPopover) {
+    filtersPopover.innerHTML = buildFiltersPopoverHtml();
+    syncPopoverActiveStates(filtersPopover);
+  }
+  if (state.activeView === "list" || (el.boardListView && !el.boardListView.classList.contains("hidden"))) updateListView();
+}
+
 function renderBoardAccessCluster() {
   if (!el.boardAccessCluster || !el.boardAccessChipKind || !el.boardAccessChipMode || !el.boardAccessChipOwner) return;
   const boardId = state.currentBoardId || getBoardIdFromPath();
@@ -610,7 +866,7 @@ function renderBoardAccessCluster() {
   }
   const reason = state.boardAccess?.reason || "unknown";
   const isReadOnly = state.boardAccess?.canEdit === false;
-  const ownerLabel = deriveOwnerDisplayName(state.currentBoardOwnerName, state.currentBoardOwnerEmail);
+  const ownerLabel = deriveOwnerDisplayName(state.currentBoardOwnerName, state.currentBoardOwnerEmail, state.currentBoardOwnerName, state.currentBoardOwnerAvatar);
   let kind = "";
   let mode = "";
   let owner = "";
@@ -644,10 +900,11 @@ function renderBoardAccessCluster() {
   el.boardAccessCluster.classList.remove("hidden");
 }
 
-function setSharePanelState(boardId, lastSaved = null, ownerEmail = null, ownerName = null) {
+function setSharePanelState(boardId, lastSaved = null, ownerEmail = null, ownerName = null, ownerAvatar = null) {
   if (!boardId) {
     state.currentBoardOwnerEmail = null;
     state.currentBoardOwnerName = null;
+    state.currentBoardOwnerAvatar = null;
     updateBoardAccessState();
     el.boardShareEmpty?.classList.remove("hidden");
     el.boardShareReady?.classList.add("hidden");
@@ -665,6 +922,7 @@ function setSharePanelState(boardId, lastSaved = null, ownerEmail = null, ownerN
 
   state.currentBoardOwnerEmail = ownerEmail || null;
   state.currentBoardOwnerName = ownerName || null;
+  state.currentBoardOwnerAvatar = ownerAvatar || null;
   updateBoardAccessState();
   const normalizedCurrentOwnerEmail = typeof state.currentBoardOwnerEmail === "string" ? state.currentBoardOwnerEmail.trim().toLowerCase() : "";
   const normalizedCurrentUserEmail = typeof state.user?.email === "string" ? state.user.email.trim().toLowerCase() : "";
@@ -780,6 +1038,7 @@ async function loadBoardEditors({ silent = false } = {}) {
     if (!silent) setBoardEditorsStatus(error?.message || "Could not load editors", true);
   } finally {
     state.boardEditorsLoading = false;
+    refreshOwnershipDisplays();
     renderOpenShareEditorPanel();
   }
 }
@@ -931,7 +1190,7 @@ async function saveBoardAsNew(payload) {
     state.lastKnownUpdatedAt = data?.updated_at || null;
     const nextPath = `/boards/${newId}`;
     if (window.location.pathname !== nextPath) window.history.pushState({}, '', nextPath);
-    setSharePanelState(newId, data?.updated_at ? new Date(data.updated_at) : new Date(), data?.owner_email || null, data?.owner_name || null);
+    setSharePanelState(newId, data?.updated_at ? new Date(data.updated_at) : new Date(), data?.owner_email || null, data?.owner_name || null, data?.owner_avatar || null);
     state.isDirty = false;
     setSaveStatus('Saved');
     refreshLastSavedSnapshot();
@@ -984,7 +1243,7 @@ async function duplicateCurrentBoard() {
     state.lastKnownUpdatedAt = data?.updated_at || null;
     const nextPath = `/boards/${newId}`;
     if (window.location.pathname !== nextPath) window.history.pushState({}, '', nextPath);
-    setSharePanelState(newId, data?.updated_at ? new Date(data.updated_at) : new Date(), data?.owner_email || null, data?.owner_name || null);
+    setSharePanelState(newId, data?.updated_at ? new Date(data.updated_at) : new Date(), data?.owner_email || null, data?.owner_name || null, data?.owner_avatar || null);
     state.isDirty = false;
     refreshLastSavedSnapshot();
     setSaveStatus("Board duplicated. You're editing your copy.");
@@ -1113,6 +1372,9 @@ function sanitizeActivityFeed(feed) {
       nodeId: entry.nodeId ? String(entry.nodeId) : null,
       nodeTitle: entry.nodeTitle ? String(entry.nodeTitle).slice(0, 120) : "",
       statusLabel: entry.statusLabel ? String(entry.statusLabel).slice(0, 80) : "",
+      ownerName: entry.ownerName ? String(entry.ownerName).slice(0, 80) : "",
+      ownerEmail: entry.ownerEmail ? String(entry.ownerEmail).slice(0, 120) : "",
+      ownerAvatar: entry.ownerAvatar ? String(entry.ownerAvatar) : "",
       timestamp: entry.timestamp || new Date().toISOString()
     }))
     .sort((a, b) => Date.parse(b.timestamp || 0) - Date.parse(a.timestamp || 0))
@@ -1127,14 +1389,14 @@ function activityNodeTitle(node, fallback = "this node") {
   return (node?.title || node?.type || fallback || "this node").trim();
 }
 
-function appendActivity(type, { node = null, nodeId = null, nodeTitle = "", userName = "", statusLabel = "" } = {}) {
+function appendActivity(type, { node = null, nodeId = null, nodeTitle = "", userName = "", statusLabel = "", ownerName = "", ownerEmail = "", ownerAvatar = "" } = {}) {
   if (state.isBoardLoading || state.initialServerLoadInFlight) return null;
   const resolvedNode = node || (nodeId ? getNode(nodeId) : null);
   const safeNodeId = nodeId || resolvedNode?.id || null;
   const safeNodeTitle = nodeTitle || activityNodeTitle(resolvedNode);
   const user = getActivityUser(userName);
   const nowIso = new Date().toISOString();
-  const recent = state.activityFeed.find((entry) => {
+  const recent = (type === "owner_assigned" || type === "owner_unassigned") ? null : state.activityFeed.find((entry) => {
     if (entry.type !== type || entry.nodeId !== safeNodeId) return false;
     const entryEmail = entry.user?.email || "";
     const entryName = entry.user?.name || "";
@@ -1146,6 +1408,9 @@ function appendActivity(type, { node = null, nodeId = null, nodeTitle = "", user
     recent.timestamp = nowIso;
     recent.nodeTitle = safeNodeTitle;
     if (statusLabel) recent.statusLabel = statusLabel;
+    if (ownerName) recent.ownerName = ownerName;
+    if (ownerEmail) recent.ownerEmail = ownerEmail;
+    if (ownerAvatar) recent.ownerAvatar = ownerAvatar;
     renderActivityFeed();
     return recent;
   }
@@ -1157,6 +1422,9 @@ function appendActivity(type, { node = null, nodeId = null, nodeTitle = "", user
     nodeId: safeNodeId,
     nodeTitle: safeNodeTitle,
     statusLabel: statusLabel || "",
+    ownerName: ownerName || "",
+    ownerEmail: ownerEmail || "",
+    ownerAvatar: ownerAvatar || "",
     timestamp: nowIso
   };
   state.activityFeed = [entry, ...state.activityFeed].slice(0, ACTIVITY_FEED_MAX_ENTRIES);
@@ -1175,6 +1443,8 @@ function formatActivityAction(entry = {}) {
     node_created: `created ${title}`,
     node_updated: `edited ${title}`,
     status_changed: `changed status to ${entry.statusLabel || "Draft"} on ${title}`,
+    owner_assigned: `assigned node to ${entry.ownerName || deriveOwnerDisplayName(entry.ownerName, entry.ownerEmail) || "someone"}`,
+    owner_unassigned: "unassigned node",
     node_moved: `moved ${title}`,
     node_deleted: `deleted ${title}`,
     edge_connected: `connected ${title}`,
@@ -1185,6 +1455,9 @@ function formatActivityAction(entry = {}) {
     reply_added: `replied on ${title}`,
     comment_resolved: `resolved a comment on ${title}`,
     postit_added: `added a post-it on ${title}`,
+    generated_next_step: `generated next step from ${title}`,
+    ai_reviewed_node: `reviewed ${title}`,
+    generated_campaign_chain: `generated campaign chain from ${title}`,
     auto_arranged: "auto-arranged the board"
   };
   return map[entry.type] || `updated ${title}`;
@@ -1946,6 +2219,7 @@ async function pingPresenceLite() {
   if (!boardId || !state.user?.email) {
     state.presenceViewers = [];
     state.presenceSelectedNodeIdLastSent = undefined;
+    refreshOwnershipDisplays();
     renderPresenceLite();
     clearNodePresenceBadges();
     return;
@@ -1967,12 +2241,15 @@ async function pingPresenceLite() {
     state.presenceSelectedNodeIdLastSent = selectedNodeId;
     state.presencePayloadSignatureLastSent = buildPresencePayloadSignature();
     state.presenceViewers = Array.isArray(data?.viewers) ? data.viewers : [];
+    refreshOwnershipDisplays();
+    maybeRefreshEditorIdentitiesFromPresence();
     renderPresenceLite();
     renderNodePresenceBadges();
     scheduleCollaboratorCursorRender();
     applyFollowModeFromPresence();
   } catch (_error) {
     state.presenceViewers = [];
+    refreshOwnershipDisplays();
     renderPresenceLite();
     clearNodePresenceBadges();
   } finally {
@@ -2122,6 +2399,7 @@ function startPresenceLite() {
   stopPresenceLite();
   if (!state.user?.email) {
     state.presenceViewers = [];
+    refreshOwnershipDisplays();
     renderPresenceLite();
     clearNodePresenceBadges();
     return;
@@ -2253,7 +2531,7 @@ function mergeRemoteBoardState(remoteCanvasState, remoteUpdatedAt) {
 
   if (!skippedNodeCount) {
     state.lastKnownUpdatedAt = remoteUpdatedAt || state.lastKnownUpdatedAt;
-    setSharePanelState(state.currentBoardId, remoteUpdatedAt ? new Date(remoteUpdatedAt) : null, state.currentBoardOwnerEmail, state.currentBoardOwnerName);
+    setSharePanelState(state.currentBoardId, remoteUpdatedAt ? new Date(remoteUpdatedAt) : null, state.currentBoardOwnerEmail, state.currentBoardOwnerName, state.currentBoardOwnerAvatar);
   }
 }
 
@@ -2326,7 +2604,7 @@ async function loadSessionUser() {
   }
   updateBoardAccessState();
   renderAuthState();
-  setSharePanelState(state.currentBoardId || getBoardIdFromPath(), null, state.currentBoardOwnerEmail);
+  setSharePanelState(state.currentBoardId || getBoardIdFromPath(), null, state.currentBoardOwnerEmail, state.currentBoardOwnerName, state.currentBoardOwnerAvatar);
   startPresenceLite();
 }
 
@@ -2719,14 +2997,103 @@ function clampNodePosition(rawX, rawY) {
   const y = Number.isFinite(rawY) ? rawY : 180;
 
   return {
-    x: Math.max(40, Math.min(1600, x)),
-    y: Math.max(40, Math.min(1200, y))
+    x: Math.max(40, Math.min(12000, x)),
+    y: Math.max(40, Math.min(8000, y))
   };
 }
 
 function getNode(id) {
   return state.nodes.find((n) => n.id === id) || null;
 }
+
+function ownerIdentityDebugCandidate(identity, label) {
+  if (!identity) return null;
+  return {
+    source: identity.source || label,
+    email: normalizeOwnerEmail(identity.email),
+    name: normalizeOwnerName(identity.name),
+    avatar: normalizeOwnerAvatar(identity.avatar),
+    role: identity.role || ""
+  };
+}
+
+function traceOwnerIdentityForNode(nodeId = state.selectedPrimary) {
+  const node = getNode(nodeId);
+  if (!node) {
+    const availableOwnedNodes = state.nodes
+      .filter((candidate) => normalizeOwnerEmail(candidate.ownerEmail))
+      .map((candidate) => ({ id: candidate.id, title: candidate.title || candidate.type || "", ownerEmail: candidate.ownerEmail }));
+    const missingResult = { error: `Node not found: ${nodeId || "(none selected)"}`, availableOwnedNodes };
+    console.warn("[Funklix Owner Identity Debug] Node not found", missingResult);
+    return missingResult;
+  }
+
+  const ownerEmail = normalizeOwnerEmail(node.ownerEmail);
+  const candidates = {
+    editor: ownerIdentityDebugCandidate(findEditorOwnerIdentity(ownerEmail), "editor"),
+    presence: ownerIdentityDebugCandidate(findPresenceOwnerIdentity(ownerEmail), "presence"),
+    boardOwner: ownerIdentityDebugCandidate(findBoardOwnerIdentity(ownerEmail), "boardOwner"),
+    currentUser: ownerIdentityDebugCandidate(findCurrentUserOwnerIdentity(ownerEmail), "currentUser"),
+    nodeFallback: ownerIdentityDebugCandidate({
+      source: "nodeFallback",
+      email: ownerEmail,
+      name: isFallbackOwnerName(node.ownerName, ownerEmail) ? "" : node.ownerName,
+      avatar: node.ownerAvatar,
+      role: "stored node owner"
+    }, "nodeFallback"),
+    emailFallback: ownerEmail ? { source: "emailFallback", email: ownerEmail, name: ownerEmail, avatar: "", role: "fallback" } : null
+  };
+  const priority = ["editor", "presence", "boardOwner", "currentUser", "nodeFallback", "emailFallback"];
+  const nameWinner = priority.find((key) => normalizeOwnerName(candidates[key]?.name)) || null;
+  const avatarWinner = priority.find((key) => normalizeOwnerAvatar(candidates[key]?.avatar)) || null;
+  const finalIdentity = resolveOwnerIdentity(node);
+  const result = {
+    node: {
+      id: node.id,
+      title: node.title || "",
+      ownerEmail: node.ownerEmail || "",
+      ownerName: node.ownerName || "",
+      ownerAvatar: node.ownerAvatar || ""
+    },
+    matches: {
+      boardEditors: (Array.isArray(state.boardEditors) ? state.boardEditors : [])
+        .filter((editor) => normalizeOwnerEmail(editor?.email) === ownerEmail),
+      presenceViewers: (Array.isArray(state.presenceViewers) ? state.presenceViewers : [])
+        .filter((viewer) => normalizeOwnerEmail(viewer?.email) === ownerEmail)
+    },
+    candidates,
+    winners: {
+      name: nameWinner ? candidates[nameWinner] : null,
+      avatar: avatarWinner ? candidates[avatarWinner] : null,
+      primarySource: avatarWinner || nameWinner || (ownerEmail ? "emailFallback" : null)
+    },
+    finalIdentity,
+    stateSnapshot: {
+      boardEditors: state.boardEditors,
+      presenceViewers: state.presenceViewers,
+      currentUser: state.user,
+      boardOwner: {
+        email: state.currentBoardOwnerEmail,
+        name: state.currentBoardOwnerName,
+        avatar: state.currentBoardOwnerAvatar
+      }
+    }
+  };
+  console.group(`[Funklix Owner Identity Debug] ${node.id}`);
+  console.log("node owner fields", result.node);
+  console.log("matching editor records", result.matches.boardEditors);
+  console.log("matching presence viewers", result.matches.presenceViewers);
+  console.log("candidate identities", result.candidates);
+  console.log("winning sources", result.winners);
+  console.log("final resolved identity", result.finalIdentity);
+  console.groupEnd();
+  return result;
+}
+
+if (typeof window !== "undefined") {
+  window.debugOwnerIdentity = traceOwnerIdentityForNode;
+}
+
 
 function pushHistorySnapshot() {
   const snapshot = JSON.stringify({
@@ -2845,6 +3212,20 @@ function sanitizeNodeImages(images) {
 function sanitizeNodeForPersistence(node) {
   const clean = { ...node, images: sanitizeNodeImages(node.images) };
   clean.status = normalizeNodeStatus(clean.status);
+  const ownerEmail = normalizeOwnerEmail(clean.ownerEmail);
+  if (ownerEmail) {
+    clean.ownerEmail = ownerEmail;
+    const ownerName = normalizeOwnerName(clean.ownerName);
+    if (ownerName) clean.ownerName = ownerName;
+    else delete clean.ownerName;
+    const ownerAvatar = normalizeOwnerAvatar(clean.ownerAvatar);
+    if (ownerAvatar) clean.ownerAvatar = ownerAvatar;
+    else delete clean.ownerAvatar;
+  } else {
+    delete clean.ownerEmail;
+    delete clean.ownerName;
+    delete clean.ownerAvatar;
+  }
   delete clean.isGeneratingContentPack;
   delete clean.generatingContentPack;
   delete clean.isGenerating;
@@ -3242,6 +3623,10 @@ function getBoardIdFromPath() {
   return null;
 }
 
+function getCurrentBrandBrainBoardId() {
+  return state.currentBoardId || getBoardIdFromPath() || "";
+}
+
 function loadCampaignCanvasState() {
   const raw = localStorage.getItem(STORAGE_KEY); if (!raw) return false;
   const campaignState = JSON.parse(raw); console.log("Loaded campaignCanvasState", campaignState);
@@ -3414,7 +3799,7 @@ async function saveBoardToServer(trigger = "manual") {
       updatedAt: saveTimestamp
     };
     refreshLastSavedSnapshot();
-    setSharePanelState(returnedId, new Date(), data?.owner_email || state.currentBoardOwnerEmail || null, data?.owner_name || state.currentBoardOwnerName || null);
+    setSharePanelState(returnedId, new Date(), data?.owner_email || state.currentBoardOwnerEmail || null, data?.owner_name || state.currentBoardOwnerName || null, data?.owner_avatar || state.currentBoardOwnerAvatar || null);
     applyBoardAccessFromServer(data?.access, "saveBoardToServer");
 
     if (!isUpdate && returnedId) {
@@ -3453,7 +3838,7 @@ async function loadBoardFromUrlIfPresent() {
       renderBrandCoreEditor();
       saveBrandBrainState();
     }
-    setSharePanelState(state.currentBoardId, data?.updated_at ? new Date(data.updated_at) : null, data?.owner_email || null, data?.owner_name || null);
+    setSharePanelState(state.currentBoardId, data?.updated_at ? new Date(data.updated_at) : null, data?.owner_email || null, data?.owner_name || null, data?.owner_avatar || null);
     if (!applyBoardAccessFromServer(data?.access, "loadBoardFromUrlIfPresent")) {
       updateBoardAccessState();
     }
@@ -4257,6 +4642,7 @@ async function fetchGeneratedCampaignPlan(ideaText, contextText) {
     body: JSON.stringify({
       campaignIdea: ideaText,
       additionalContext: contextText,
+      boardId: getCurrentBrandBrainBoardId(),
       brandBrainData: state.brandCore
     })
   });
@@ -4264,80 +4650,223 @@ async function fetchGeneratedCampaignPlan(ideaText, contextText) {
   return response.json();
 }
 
-function generateCampaignFromIdea(ideaText, contextText, providedPlan = null) {
-  if (state.nodes.length > 0) {
-    const clear = window.confirm("Canvas already has nodes. Clear board before generating?");
-    if (!clear) return;
-    resetCampaignCanvasState();
+const CAMPAIGN_CHAIN_TYPES = [
+  "Idea",
+  "Campaign Variation",
+  "Content",
+  "Social Media Posting",
+  "Landing Page",
+  "Email Campaign"
+];
+
+const CAMPAIGN_CHAIN_EDGES = [
+  { fromIndex: 0, toIndex: 1 },
+  { fromIndex: 1, toIndex: 2 },
+  { fromIndex: 2, toIndex: 3 },
+  { fromIndex: 3, toIndex: 4 },
+  { fromIndex: 4, toIndex: 5 }
+];
+
+const CAMPAIGN_WORKER_STATUS = {
+  "Idea": "🧠 Strategist is shaping the idea...",
+  "Campaign Variation": "🎯 Strategist is finding the strongest angle...",
+  "Content": "✍️ Copywriter is drafting the content...",
+  "Social Media Posting": "📱 Social editor is adapting it for the feed...",
+  "Landing Page": "🧱 Funnel builder is creating the landing page...",
+  "Email Campaign": "📧 CRM writer is preparing the follow-up email..."
+};
+
+function waitForCampaignWorker(ms = 650) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function cleanCampaignField(value = "") {
+  return String(value || "")
+    .replace(/```[\s\S]*?```/g, "")
+    .replace(/\*\*(.*?)\*\*/g, "$1")
+    .replace(/__(.*?)__/g, "$1")
+    .replace(/^\s{0,3}#{1,6}\s+/gm, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function validateGeneratedCampaignPlan(plan = {}) {
+  const nodes = Array.isArray(plan.nodes) ? plan.nodes : [];
+  const edges = Array.isArray(plan.edges) ? plan.edges : [];
+  if (nodes.length !== CAMPAIGN_CHAIN_TYPES.length) {
+    throw new Error("Campaign plan must include exactly six nodes.");
   }
-  const plan = providedPlan || buildGeneratedCampaignPlan(ideaText, contextText);
-  const variations = Array.isArray(plan.variations) && plan.variations.length
-    ? plan.variations.slice(0, 2)
-    : [
-      { title: plan.varA.title, content: plan.varA.content, contentNode: plan.contentA, socialPost: { title: plan.socialA.title, caption: plan.socialA.content, platform: "Instagram" } },
-      { title: plan.varB.title, content: plan.varB.content, contentNode: plan.contentB, socialPost: { title: plan.socialB.title, caption: plan.socialB.content, platform: "Instagram" } }
-    ];
+  const normalizedNodes = nodes.map((node, index) => {
+    const expectedType = CAMPAIGN_CHAIN_TYPES[index];
+    if (node?.type !== expectedType) {
+      throw new Error(`Campaign node ${index + 1} must be ${expectedType}.`);
+    }
+    return {
+      type: expectedType,
+      title: cleanCampaignField(node.title) || expectedType,
+      description: cleanCampaignField(node.description),
+      content: cleanCampaignField(node.content),
+      metadata: node.metadata && typeof node.metadata === "object" ? node.metadata : {},
+      imagePrompt: cleanCampaignField(node.imagePrompt),
+      social: node.social && typeof node.social === "object" ? node.social : {},
+      landingPage: node.landingPage && typeof node.landingPage === "object" ? node.landingPage : {}
+    };
+  });
+  const expectedEdgeKey = CAMPAIGN_CHAIN_EDGES.map((edge) => `${edge.fromIndex}->${edge.toIndex}`).join("|");
+  const edgeKey = edges.map((edge) => `${edge?.fromIndex}->${edge?.toIndex}`).join("|");
+  if (edgeKey !== expectedEdgeKey) {
+    throw new Error("Campaign plan must include the standard linear chain edges.");
+  }
+  return { nodes: normalizedNodes, edges: CAMPAIGN_CHAIN_EDGES };
+}
 
-  const idea = createNode({ type: "Idea", position: { x: 620, y: 120 } });
-  Object.assign(idea, { title: plan.idea.title, content: plan.idea.content });
-  Object.assign(idea, { goal: "Awareness", channel: "Campaign Strategy", funnelStage: "Awareness", audience: state.brandCore?.personas?.[0]?.name || "Primary ICP", tone: "Professional" });
-  updateNodeCard(idea);
+function applyGeneratedCampaignNodePayload(node, payload = {}, previousNode = null) {
+  const metadata = payload.metadata || {};
+  const description = cleanCampaignField(payload.description);
+  const content = cleanCampaignField(payload.content);
+  node.title = cleanCampaignField(payload.title) || payload.type || node.type;
+  node.content = [description, content].filter(Boolean).join("\n\n") || node.content || node.title;
+  node.goal = cleanCampaignField(metadata.goal) || previousNode?.goal || node.goal;
+  node.audience = cleanCampaignField(metadata.audience) || previousNode?.audience || node.audience;
+  node.channel = cleanCampaignField(metadata.channel) || previousNode?.channel || node.channel;
+  node.funnelStage = cleanCampaignField(metadata.funnelStage) || previousNode?.funnelStage || node.funnelStage;
+  node.tone = cleanCampaignField(metadata.tone) || previousNode?.tone || node.tone;
 
-  const variationA = createNode({ type: "Campaign Variation", position: { x: 320, y: 340 } });
-  Object.assign(variationA, { title: variations[0]?.title || "Variation A", content: variations[0]?.content || "" });
-  updateNodeCard(variationA);
-  const contentA = createNode({ type: "Content", position: { x: 260, y: 560 } });
-  Object.assign(contentA, { title: variations[0]?.contentNode?.title || "Content A", content: variations[0]?.contentNode?.content || "" });
-  contentA.imagePrompt = buildContentImagePrompt(contentA.title, contentA.content);
-  Object.assign(contentA, { goal: "Education", channel: "Blog", funnelStage: "Interest", audience: idea.audience, tone: idea.tone });
-  updateNodeCard(contentA);
-  const socialA = createNode({ type: "Social Media Posting", position: { x: 220, y: 820 } });
-  Object.assign(socialA, { title: variations[0]?.socialPost?.title || "Social A", content: variations[0]?.socialPost?.caption || "" });
-  socialA.social.platform = variations[0]?.socialPost?.platform || "Instagram";
-  socialA.social.caption = variations[0]?.socialPost?.caption || "";
-  socialA.social.hashtags = finalizeGeneratedHashtags(variations[0]?.socialPost?.hashtags || `${socialA.title}, ${socialA.social.caption}`, socialA.social.platform);
-  Object.assign(socialA, { goal: "Community", channel: socialA.social.platform, funnelStage: "Awareness", audience: idea.audience, tone: "Emotional" });
-  updateNodeCard(socialA);
+  if (node.type === "Content") {
+    node.imagePrompt = cleanCampaignField(payload.imagePrompt) || buildContentImagePrompt(node.title, node.content);
+  }
 
-  const variationB = createNode({ type: "Campaign Variation", position: { x: 900, y: 340 } });
-  Object.assign(variationB, { title: variations[1]?.title || "Variation B", content: variations[1]?.content || "" });
-  updateNodeCard(variationB);
-  const contentB = createNode({ type: "Content", position: { x: 980, y: 560 } });
-  Object.assign(contentB, { title: variations[1]?.contentNode?.title || "Content B", content: variations[1]?.contentNode?.content || "" });
-  contentB.imagePrompt = buildContentImagePrompt(contentB.title, contentB.content);
-  Object.assign(contentB, { goal: "Consideration", channel: "Email", funnelStage: "Consideration", audience: idea.audience, tone: "Direct" });
-  updateNodeCard(contentB);
-  const socialB = createNode({ type: "Social Media Posting", position: { x: 1040, y: 820 } });
-  Object.assign(socialB, { title: variations[1]?.socialPost?.title || "Social B", content: variations[1]?.socialPost?.caption || "" });
-  socialB.social.platform = variations[1]?.socialPost?.platform || "Instagram";
-  socialB.social.caption = variations[1]?.socialPost?.caption || "";
-  socialB.social.hashtags = finalizeGeneratedHashtags(variations[1]?.socialPost?.hashtags || `${socialB.title}, ${socialB.social.caption}`, socialB.social.platform);
-  Object.assign(socialB, { goal: "Lead Gen", channel: socialB.social.platform, funnelStage: "Conversion", audience: idea.audience, tone: "Direct" });
-  updateNodeCard(socialB);
+  if (node.type === "Social Media Posting") {
+    const platform = cleanCampaignField(payload.social?.platform) || node.channel || "LinkedIn";
+    const caption = cleanCampaignField(payload.social?.caption) || node.content || node.title;
+    node.social.platform = platform;
+    node.social.caption = caption;
+    node.social.preview = description;
+    node.social.hashtags = finalizeGeneratedHashtags(payload.social?.hashtags || `${node.title}, ${caption}`, platform);
+    node.content = caption;
+    node.channel = platform;
+  }
 
-  const landing = createNode({ type: "Landing Page", position: { x: 520, y: 560 } });
-  Object.assign(landing, { title: plan.landingPage?.title || plan.landing?.title || "Landing Page", content: plan.landingPage?.content || plan.landing?.content || "" });
-  const lpStructured = plan.landingPageStructured || {};
-  landing.landingPage = {
-    headerVisualPrompt: lpStructured.headerVisualPrompt || `16:9 hero visual for ${landing.title}: modern product-focused scene, clean composition, confident and trustworthy mood.`,
-    headerClaim: lpStructured.headerClaim || landing.title || "High-converting landing page",
-    problem: lpStructured.problemOfIcp || (landing.content || "").split("\n")[0] || "Your audience struggles with inconsistent campaign execution.",
-    solution: lpStructured.solutionForIcp || (landing.content || "").split("\n")[1] || "Our solution helps teams launch clearer, more effective campaigns faster.",
-    trust: lpStructured.buildingTrust || "Trusted by teams looking for clearer, more effective campaign execution.",
-    cta: lpStructured.conversionCta || "Get started"
+  if (node.type === "Landing Page") {
+    const landing = payload.landingPage || {};
+    node.landingPage = {
+      headerVisualPrompt: cleanCampaignField(landing.headerVisualPrompt),
+      headerClaim: cleanCampaignField(landing.headerClaim),
+      problem: cleanCampaignField(landing.problem || landing.problemOfIcp),
+      solution: cleanCampaignField(landing.solution || landing.solutionForIcp),
+      trust: cleanCampaignField(landing.trust || landing.buildingTrust),
+      cta: cleanCampaignField(landing.cta || landing.conversionCta)
+    };
+    node.content = description || node.landingPage.headerClaim || "";
+  }
+}
+
+const CAMPAIGN_CHAIN_X_STEP = 420;
+const CAMPAIGN_CHAIN_PADDING = 420;
+
+function campaignNodePosition(index, origin = { x: 220, y: 150 }) {
+  return {
+    x: origin.x + index * CAMPAIGN_CHAIN_X_STEP,
+    y: origin.y
   };
-  Object.assign(landing, { goal: "Conversion", channel: "Landing Page", funnelStage: "Conversion", audience: idea.audience, tone: "Professional" });
-  updateNodeCard(landing);
-  const email = createNode({ type: "Email Campaign", position: { x: 700, y: 560 } });
-  Object.assign(email, { title: plan.emailCampaign?.title || plan.email?.title || "Email Campaign", content: plan.emailCampaign?.content || plan.email?.content || "" });
-  Object.assign(email, { goal: "Lead Gen", channel: "Email", funnelStage: "Consideration", audience: idea.audience, tone: "Professional" });
-  updateNodeCard(email);
+}
 
-  addEdge(idea.id, variationA.id); addEdge(variationA.id, contentA.id); addEdge(contentA.id, socialA.id);
-  addEdge(idea.id, variationB.id); addEdge(variationB.id, contentB.id); addEdge(contentB.id, socialB.id);
-  addEdge(idea.id, landing.id); addEdge(idea.id, email.id);
-  drawLinks();
-  saveCampaignCanvasState();
+function campaignChainRect(origin) {
+  return {
+    minX: origin.x,
+    minY: origin.y,
+    maxX: origin.x + NODE_WIDTH + (CAMPAIGN_CHAIN_TYPES.length - 1) * CAMPAIGN_CHAIN_X_STEP,
+    maxY: origin.y + NODE_HEIGHT + 180
+  };
+}
+
+function campaignRectOverlapsExisting(rect, padding = 80) {
+  return state.nodes.some((node) => {
+    const nodeEl = el.zoomLayer?.querySelector(`[data-id='${node.id}']`);
+    const x = Number.isFinite(node?.position?.x) ? node.position.x : 0;
+    const y = Number.isFinite(node?.position?.y) ? node.position.y : 0;
+    const width = nodeEl?.offsetWidth || NODE_WIDTH;
+    const height = nodeEl?.offsetHeight || NODE_HEIGHT;
+    return !(
+      rect.maxX + padding < x
+      || rect.minX - padding > x + width
+      || rect.maxY + padding < y
+      || rect.minY - padding > y + height
+    );
+  });
+}
+
+function calculateCampaignChainOrigin() {
+  const visible = visibleBoardBounds();
+  const chainWidth = NODE_WIDTH + (CAMPAIGN_CHAIN_TYPES.length - 1) * CAMPAIGN_CHAIN_X_STEP;
+  const chainHeight = NODE_HEIGHT + 180;
+  const visibleOrigin = clampNodePosition(
+    visible.left + Math.max(80, (visible.width - chainWidth) / 2),
+    visible.top + Math.max(80, (visible.height - chainHeight) / 2)
+  );
+  if (!state.nodes.length) return visibleOrigin;
+
+  const visibleRect = campaignChainRect(visibleOrigin);
+  const viewportHasRoom = visible.width >= chainWidth + 160 && visible.height >= chainHeight + 120;
+  if (viewportHasRoom && !campaignRectOverlapsExisting(visibleRect, 120)) return visibleOrigin;
+
+  const bounds = getBoardContentBounds({ includeMargin: 0 });
+  if (!bounds) return visibleOrigin;
+
+  const rightOrigin = clampNodePosition(bounds.maxX + CAMPAIGN_CHAIN_PADDING, Math.max(120, bounds.minY));
+  if (!campaignRectOverlapsExisting(campaignChainRect(rightOrigin), 120)) return rightOrigin;
+
+  return clampNodePosition(Math.max(120, bounds.minX), bounds.maxY + CAMPAIGN_CHAIN_PADDING);
+}
+
+async function generateCampaignChainProgressively(plan, { onStatus = null } = {}) {
+  const validated = validateGeneratedCampaignPlan(plan);
+  setActiveView("board");
+  toggleListMode(false);
+  const chainOrigin = calculateCampaignChainOrigin();
+  const createdNodes = [];
+  try {
+    for (let index = 0; index < validated.nodes.length; index += 1) {
+      const payload = validated.nodes[index];
+      const status = CAMPAIGN_WORKER_STATUS[payload.type] || "✨ AI teammate is building the campaign...";
+      if (onStatus) onStatus(status);
+      setSaveStatus(status);
+      const node = createNode({ type: payload.type, parentId: null, position: campaignNodePosition(index, chainOrigin) });
+      if (!node) throw new Error(`Could not create ${payload.type}.`);
+      applyGeneratedCampaignNodePayload(node, payload, createdNodes[index - 1] || null);
+      updateNodeCard(node);
+      fillInspector(node);
+      updateListView();
+      const nodeEl = el.zoomLayer.querySelector(`[data-id='${node.id}']`);
+      nodeEl?.classList.add("ai-updated");
+      setTimeout(() => nodeEl?.classList.remove("ai-updated"), 1000);
+      createdNodes.push(node);
+      if (index > 0) {
+        addEdge(createdNodes[index - 1].id, node.id);
+        drawLinks();
+      }
+      markUnsaved();
+      await waitForCampaignWorker(650);
+    }
+    updateEmptyState();
+    drawLinks();
+    updateListView();
+    const ideaNode = createdNodes[0];
+    appendActivity("generated_campaign_chain", { node: ideaNode, nodeTitle: activityNodeTitle(ideaNode) });
+    markUnsaved();
+    setSaveStatus("Campaign chain generated");
+    return createdNodes;
+  } catch (error) {
+    console.error("[Funklix AI] Progressive campaign generation stopped", error);
+    error.partialCampaign = createdNodes.length > 0;
+    setSaveStatus("Campaign generation stopped early. You can continue manually or use Generate Next Step.");
+    throw error;
+  }
+}
+
+async function generateCampaignFromIdea(ideaText, contextText, providedPlan = null, options = {}) {
+  const plan = providedPlan || await fetchGeneratedCampaignPlan(ideaText, contextText);
+  return generateCampaignChainProgressively(plan, options);
 }
 
 function openCreateCampaignModal() {
@@ -4368,11 +4897,18 @@ function openCreateCampaignModal() {
       subtextEl.textContent = steps[thinkingTick % steps.length];
     }, 450);
   };
-  const stopThinking = () => {
-    loader.classList.add("hidden");
+  const stopThinking = ({ hide = true } = {}) => {
+    if (hide) loader.classList.add("hidden");
     if (thinkingTimer) clearInterval(thinkingTimer);
     thinkingTimer = null;
     dotsEl.textContent = "";
+  };
+  const setWorkerStatus = (message) => {
+    loader.classList.remove("hidden");
+    if (thinkingTimer) clearInterval(thinkingTimer);
+    thinkingTimer = null;
+    dotsEl.textContent = "";
+    subtextEl.textContent = message;
   };
   overlay.querySelector("#campaign-modal-cancel").addEventListener("click", () => overlay.remove());
   overlay.querySelector("#campaign-modal-generate").addEventListener("click", async () => {
@@ -4382,6 +4918,13 @@ function openCreateCampaignModal() {
     const cancelBtn = overlay.querySelector("#campaign-modal-cancel");
     const ideaInput = overlay.querySelector("#campaign-idea-input");
     const contextInput = overlay.querySelector("#campaign-context-input");
+    const restoreControls = () => {
+      generateBtn.disabled = false;
+      generateBtn.textContent = "Generate Campaign";
+      cancelBtn.disabled = false;
+      ideaInput.disabled = false;
+      contextInput.disabled = false;
+    };
     generateBtn.disabled = true;
     generateBtn.textContent = "Generating...";
     cancelBtn.disabled = true;
@@ -4390,14 +4933,20 @@ function openCreateCampaignModal() {
     startThinking();
     try {
       const apiPlan = await fetchGeneratedCampaignPlan(ideaText || "Campaign Idea", contextText);
-      generateCampaignFromIdea(ideaText || "Campaign Idea", contextText, apiPlan);
-      overlay.remove();
+      setWorkerStatus("✨ Campaign plan ready. AI teammate is entering the board...");
+      const createdNodes = await generateCampaignFromIdea(ideaText || "Campaign Idea", contextText, apiPlan, { onStatus: setWorkerStatus });
+      if (createdNodes.length) overlay.remove();
+      else {
+        stopThinking();
+        restoreControls();
+      }
     } catch (error) {
-      alert("Could not generate with AI right now. Using fallback campaign template.");
-      generateCampaignFromIdea(ideaText || "Campaign Idea", contextText);
-      overlay.remove();
-    } finally {
+      console.error("[Funklix AI] Generate Campaign failed", error);
+      alert(error?.partialCampaign
+        ? "Campaign generation stopped early. You can continue manually or use Generate Next Step."
+        : "Could not generate campaign right now. No nodes were created.");
       stopThinking();
+      restoreControls();
     }
   });
 }
@@ -4538,6 +5087,8 @@ function updateInspectorActionVisibility() {
 
   const showGenerateImage = !!selectedNode && selectedNode.type === "Content";
   const showGeneratePostingVisual = !!selectedNode && selectedNode.type === "Social Media Posting";
+  const inspectorNextStepType = selectedNode ? getNextStepNodeType(selectedNode.type) : "";
+  const canGenerateInspectorNextStep = hasSingleNode && !!inspectorNextStepType && !isBoardReadOnly();
 
   el.deleteNodeButton.style.display = hasSingleNode ? "block" : "none";
   el.deleteSelectedButton.style.display = hasMultipleNodes ? "block" : "none";
@@ -4547,6 +5098,8 @@ function updateInspectorActionVisibility() {
   el.generateFullPackButton.style.display = showGenerateImage ? "block" : "none";
 
   el.improveNodeButton.style.display = hasSingleNode ? "block" : "none";
+  el.generateNextStepInspectorButton.style.display = hasSingleNode ? "block" : "none";
+  el.reviewNodeButton.style.display = hasSingleNode ? "block" : "none";
   el.regenerateNodeButton.style.display = hasSingleNode ? "block" : "none";
   el.regeneratePlatformButton.style.display = selectedNode?.type === "Social Media Posting" ? "block" : "none";
   el.addToPostingCalendarButton.style.display = selectedNode?.type === "Social Media Posting" ? "block" : "none";
@@ -4558,6 +5111,12 @@ function updateInspectorActionVisibility() {
   el.deleteNodeButton.disabled = !hasSingleNode;
   el.deleteSelectedButton.disabled = !hasMultipleNodes;
   el.improveNodeButton.disabled = !hasSingleNode;
+  el.generateNextStepInspectorButton.disabled = !canGenerateInspectorNextStep;
+  el.generateNextStepInspectorButton.title = hasSingleNode
+    ? (inspectorNextStepType ? (isBoardReadOnly() ? "Read-only board" : `Generate ${inspectorNextStepType}`) : "No next step available")
+    : "Select a node";
+  el.reviewNodeButton.disabled = !hasSingleNode || isBoardReadOnly();
+  el.reviewNodeButton.title = hasSingleNode ? (isBoardReadOnly() ? "Read-only board" : "Review selected node") : "Select a node";
   el.regenerateNodeButton.disabled = !hasSingleNode;
   el.regeneratePlatformButton.disabled = !(selectedNode?.type === "Social Media Posting");
   el.addToPostingCalendarButton.disabled = !(selectedNode?.type === "Social Media Posting");
@@ -4675,7 +5234,9 @@ function updateNodeCommentBadge(node, nodeEl) {
       }
       openNodeCommentThread(node.id);
     });
-    nodeEl.appendChild(commentBadge);
+    const actions = nodeEl.querySelector(".node-header-actions");
+    if (actions) actions.insertBefore(commentBadge, actions.firstChild);
+    else nodeEl.appendChild(commentBadge);
   }
   const unresolvedCount = (node.postits || []).filter((note) => !note.resolved).length;
   const resolvedCount = (node.postits || []).filter((note) => !!note.resolved).length;
@@ -4757,6 +5318,102 @@ function isNodeSearchOrFilterActive() {
   return !!state.nodeSearchQuery.trim() || Object.values(state.nodeFilters).some((set) => set.size > 0);
 }
 
+
+function renderOwnerAvatar(parent, name, avatarUrl, className = "owner-avatar") {
+  parent.innerHTML = "";
+  if (avatarUrl) {
+    const img = document.createElement("img");
+    img.src = avatarUrl;
+    img.alt = `${name} avatar`;
+    parent.appendChild(img);
+    return;
+  }
+  const fallback = document.createElement("span");
+  fallback.className = `${className}-fallback`;
+  fallback.textContent = getOwnerInitials(name);
+  parent.appendChild(fallback);
+}
+
+function updateNodeOwnerChip(node, nodeEl) {
+  const chip = nodeEl.querySelector(".node-owner-chip");
+  if (!chip) return;
+  const ownerEmail = normalizeOwnerEmail(node.ownerEmail);
+  chip.innerHTML = "";
+  chip.classList.toggle("hidden", !ownerEmail);
+  if (!ownerEmail) {
+    chip.removeAttribute("title");
+    return;
+  }
+  const identity = resolveOwnerIdentity(node);
+  const name = ownerDisplayLabel(identity);
+  chip.title = `Owner: ${name}`;
+  if (identity.avatar) {
+    chip.classList.add("has-avatar");
+    const avatar = document.createElement("span");
+    avatar.className = "node-owner-avatar";
+    renderOwnerAvatar(avatar, name, identity.avatar, "node-owner-avatar");
+    const label = document.createElement("span");
+    label.textContent = name;
+    chip.append(avatar, label);
+  } else {
+    chip.classList.remove("has-avatar");
+    const icon = document.createElement("span");
+    icon.className = "node-owner-icon";
+    icon.textContent = "👤";
+    const label = document.createElement("span");
+    label.textContent = name;
+    chip.append(icon, label);
+  }
+}
+
+function createOwnerDisplay(node, { includeUnassigned = true } = {}) {
+  const wrap = document.createElement("span");
+  wrap.className = "node-owner-display";
+  const identity = resolveOwnerIdentity(node);
+  const ownerEmail = identity.email;
+  const name = ownerEmail ? ownerDisplayLabel(identity) : "Unassigned";
+  if (!ownerEmail && !includeUnassigned) return wrap;
+  if (ownerEmail && identity.avatar) {
+    const avatar = document.createElement("span");
+    avatar.className = "node-owner-avatar";
+    renderOwnerAvatar(avatar, name, identity.avatar, "node-owner-avatar");
+    wrap.appendChild(avatar);
+  } else if (ownerEmail) {
+    const icon = document.createElement("span");
+    icon.className = "node-owner-icon";
+    icon.textContent = "👤";
+    wrap.appendChild(icon);
+  }
+  const text = document.createElement("span");
+  text.textContent = name;
+  wrap.appendChild(text);
+  wrap.title = ownerEmail ? `Owner: ${name}` : "Owner: Unassigned";
+  wrap.classList.toggle("is-unassigned", !ownerEmail);
+  return wrap;
+}
+
+function nodeHasActivePostitEditor(nodeEl) {
+  const active = document.activeElement;
+  return !!active?.closest?.(".postit") && !!nodeEl?.contains(active);
+}
+
+function nodeHasActiveSocialPreviewEditor(nodeEl) {
+  const active = document.activeElement;
+  return !!nodeEl?.contains(active)
+    && !!active?.closest?.(".social-preview")
+    && !!active.closest(".social-caption, .social-cta, .social-hashtags");
+}
+
+function updateSocialPreviewCharCount(socialRoot, node) {
+  const charCount = socialRoot?.querySelector(".social-char-count");
+  if (!charCount) return;
+  const captionLen = (node.social?.caption || "").length;
+  const limits = { "X / Twitter": 280, LinkedIn: 3000, Instagram: 2200, TikTok: 2200 };
+  const limit = limits[node.social?.platform] || 3000;
+  charCount.textContent = `${captionLen} characters${captionLen > limit ? ` (over ${limit})` : ""}`;
+  charCount.classList.toggle("warning", captionLen > limit);
+}
+
 function updateNodeCard(node) {
   const nodeEl = el.zoomLayer.querySelector(`[data-id='${node.id}']`);
   if (!nodeEl) return;
@@ -4779,6 +5436,7 @@ function updateNodeCard(node) {
 
   nodeEl.querySelector(".type").textContent = node.type;
   nodeEl.querySelector(".type").style.color = tone;
+  updateNodeOwnerChip(node, nodeEl);
   updateNodeStatusChip(node, nodeEl);
   nodeEl.classList.toggle("is-in-review", normalizeNodeStatus(node.status) === "In Review");
   const editable = !isBoardReadOnly();
@@ -4791,11 +5449,11 @@ function updateNodeCard(node) {
   updateNodeCommentBadge(node, nodeEl);
 
   const titleEl = nodeEl.querySelector(".title");
-  titleEl.textContent = node.title;
+  if (document.activeElement !== titleEl) titleEl.textContent = node.title;
   titleEl.contentEditable = editable ? "true" : "false";
   const contentEl = nodeEl.querySelector(".content");
   contentEl.contentEditable = editable ? "true" : "false";
-  contentEl.textContent = node.content;
+  if (document.activeElement !== contentEl) contentEl.textContent = node.content;
   const isSocialNodeCard = node.type === "Social Media Posting";
   contentEl.classList.toggle("hidden", isSocialNodeCard);
   const expandBtn = nodeEl.querySelector(".node-expand-content");
@@ -4910,8 +5568,11 @@ function updateNodeCard(node) {
   const social = nodeEl.querySelector(".social-preview");
   const isSocial = node.type === "Social Media Posting";
   const isLandingPage = node.type === "Landing Page";
+  const hasActiveSocialPreviewEditor = isSocial && nodeHasActiveSocialPreviewEditor(nodeEl);
   social.classList.toggle("hidden", !(isSocial || isLandingPage));
-  if (isSocial) {
+  if (hasActiveSocialPreviewEditor) {
+    updateSocialPreviewCharCount(social, node);
+  } else if (isSocial) {
     social.innerHTML = "";
     const wrapper = document.createElement("div");
     wrapper.className = "social-card";
@@ -4971,8 +5632,8 @@ function updateNodeCard(node) {
       }
       node.social.caption = caption.textContent;
       recordNodeUpdatedActivity(node);
-      updateNodeCard(node);
-      if (state.selectedPrimary === node.id) fillInspector(node);
+      updateSocialPreviewCharCount(social, node);
+      if (state.selectedPrimary === node.id) el.inputs.caption.value = node.social.caption;
       saveCampaignCanvasState();
     });
 
@@ -4988,6 +5649,7 @@ function updateNodeCard(node) {
       }
       node.social.preview = cta.textContent;
       recordNodeUpdatedActivity(node);
+      if (state.selectedPrimary === node.id && el.inputs.preview) el.inputs.preview.value = node.social.preview;
       saveCampaignCanvasState();
     });
 
@@ -5001,9 +5663,19 @@ function updateNodeCard(node) {
         setSaveStatus("Read-only board");
         return;
       }
-      node.social.hashtags = normalizeHashtagsInput(hashtags.textContent || "");
-      hashtags.textContent = node.social.hashtags.join(" ");
+      const rawHashtags = hashtags.textContent || "";
+      state.hashtagDraftByNode[node.id] = rawHashtags;
+      node.social.hashtags = normalizeHashtagsInput(rawHashtags);
+      if (state.selectedPrimary === node.id) el.inputs.hashtags.value = rawHashtags;
       recordNodeUpdatedActivity(node);
+      saveCampaignCanvasState();
+    });
+    hashtags.addEventListener("blur", () => {
+      const normalized = normalizeHashtagsInput(state.hashtagDraftByNode[node.id] ?? hashtags.textContent ?? "");
+      node.social.hashtags = normalized;
+      delete state.hashtagDraftByNode[node.id];
+      hashtags.textContent = normalized.join(" ");
+      if (state.selectedPrimary === node.id) el.inputs.hashtags.value = normalized.join(", ");
       saveCampaignCanvasState();
     });
 
@@ -5151,7 +5823,9 @@ function updateNodeCard(node) {
     }
   }
 
-  renderPostits(node, nodeEl);
+  if (!nodeHasActivePostitEditor(nodeEl)) {
+    renderPostits(node, nodeEl);
+  }
 }
 
 function nodeSearchText(node) {
@@ -5172,12 +5846,60 @@ function nodeSearchText(node) {
   ].filter(Boolean).join(" ").toLowerCase();
 }
 
+function ownerFilterValue(email) {
+  const normalizedEmail = normalizeOwnerEmail(email);
+  return normalizedEmail ? `owner:${normalizedEmail}` : "";
+}
+
+function nodeMatchesOwnerFilters(node) {
+  const ownerFilters = state.nodeFilters.owner;
+  if (!ownerFilters?.size) return true;
+  const ownerEmail = normalizeOwnerEmail(node?.ownerEmail);
+  const currentEmail = normalizeOwnerEmail(state.user?.email);
+  return [...ownerFilters].some((value) => {
+    if (value === "mine") return !!currentEmail && ownerEmail === currentEmail;
+    if (value === "unassigned") return !ownerEmail;
+    if (String(value).startsWith("owner:")) {
+      const filterEmail = normalizeOwnerEmail(String(value).slice("owner:".length));
+      return !!filterEmail && ownerEmail === filterEmail;
+    }
+    return false;
+  });
+}
+
+function ownerFilterCandidateLabel(candidate = {}) {
+  const identity = resolveOwnerIdentity(candidate);
+  return ownerDisplayLabel(identity || candidate);
+}
+
+function ownerFilterLabelForValue(value) {
+  if (value === "mine") return "Owner: Me";
+  if (value === "unassigned") return "Owner: Unassigned";
+  if (String(value).startsWith("owner:")) {
+    const email = normalizeOwnerEmail(String(value).slice("owner:".length));
+    const candidate = getNodeOwnerOptions().find((option) => normalizeOwnerEmail(option.email) === email);
+    return `Owner: ${candidate ? ownerFilterCandidateLabel(candidate) : (email || "Unknown")}`;
+  }
+  return String(value || "");
+}
+
+function activeNodeFilterLabels() {
+  const labels = [];
+  state.nodeFilters.type.forEach((value) => labels.push(`Type: ${value}`));
+  state.nodeFilters.platform.forEach((value) => labels.push(`Platform: ${value}`));
+  state.nodeFilters.status?.forEach((value) => labels.push(`Status: ${nodeStatusLabel(value)}`));
+  state.nodeFilters.owner?.forEach((value) => labels.push(ownerFilterLabelForValue(value)));
+  state.nodeFilters.state.forEach((value) => labels.push(`State: ${value}`));
+  return labels.filter(Boolean);
+}
+
 function nodeMatchesSearchAndFilters(node) {
   const q = state.nodeSearchQuery.trim().toLowerCase();
   if (q && !nodeSearchText(node).includes(q)) return false;
   if (state.nodeFilters.type.size && !state.nodeFilters.type.has(node.type)) return false;
   if (state.nodeFilters.platform.size && !state.nodeFilters.platform.has(node.social?.platform || "")) return false;
   if (state.nodeFilters.status?.size && !state.nodeFilters.status.has(normalizeNodeStatus(node.status))) return false;
+  if (!nodeMatchesOwnerFilters(node)) return false;
   if (state.nodeFilters.state.size) {
     const strategyStage = node.strategy?.funnelStage || "";
     const states = new Set([
@@ -5203,10 +5925,55 @@ function refreshNodeSearchUI() {
     if (hasSearchActive && matches === 0) el.nodeSearchCount.textContent = "No matching nodes";
   }
   if (el.filtersToggleButton) {
-    const activeFilters = Object.values(state.nodeFilters).reduce((n, set) => n + set.size, 0);
+    const labels = activeNodeFilterLabels();
+    const activeFilters = labels.length;
     el.filtersToggleButton.textContent = activeFilters > 0 ? `Filters (${activeFilters})` : "Filters";
+    if (activeFilters) el.filtersToggleButton.title = `Active filters: ${labels.join(", ")}`;
+    else el.filtersToggleButton.removeAttribute("title");
   }
   if (state.activeView === "list" || (el.boardListView && !el.boardListView.classList.contains("hidden"))) updateListView();
+}
+
+function ownerFilterButtonHtml(value, label, { avatar = "", title = "" } = {}) {
+  const safeValue = escapeHtml(value);
+  const safeLabel = escapeHtml(label);
+  const safeTitle = escapeHtml(title || label);
+  const avatarHtml = avatar
+    ? `<span class="node-filter-owner-avatar"><img src="${escapeHtml(avatar)}" alt="" loading="lazy"></span>`
+    : "";
+  return `<button type="button" class="owner-filter-option" data-filter-group="owner" data-filter-value="${safeValue}" title="${safeTitle}">${avatarHtml}<span>${safeLabel}</span></button>`;
+}
+
+function buildOwnershipFilterButtonsHtml() {
+  const options = getNodeOwnerOptions();
+  const activeOwnerEmails = [...(state.nodeFilters.owner || new Set())]
+    .filter((value) => String(value).startsWith("owner:"))
+    .map((value) => normalizeOwnerEmail(String(value).slice("owner:".length)))
+    .filter(Boolean);
+  activeOwnerEmails.forEach((email) => {
+    mergeOwnershipOption(options, {
+      email,
+      name: "",
+      avatar: "",
+      role: "Filtered owner",
+      source: "activeFilter"
+    });
+  });
+  const collaboratorButtons = options
+    .slice()
+    .sort((a, b) => ownerFilterCandidateLabel(a).localeCompare(ownerFilterCandidateLabel(b)))
+    .map((candidate) => {
+      const email = normalizeOwnerEmail(candidate.email);
+      const label = ownerFilterCandidateLabel(candidate);
+      return ownerFilterButtonHtml(ownerFilterValue(email), label, {
+        avatar: normalizeOwnerAvatar(candidate.avatar),
+        title: email ? `Owner: ${label} · ${email}` : `Owner: ${label}`
+      });
+    })
+    .join("");
+  return `${ownerFilterButtonHtml("mine", "My Nodes", { title: "Owner: Me" })}
+    ${ownerFilterButtonHtml("unassigned", "Unassigned", { title: "Owner: Unassigned" })}
+    ${collaboratorButtons}`;
 }
 
 function buildFiltersPopoverHtml() {
@@ -5225,6 +5992,9 @@ function buildFiltersPopoverHtml() {
   </div></div>
   <div class="filter-group"><strong>Status</strong><div class="node-filter-chips">
     ${NODE_STATUSES.map((status) => `<button type="button" data-filter-group="status" data-filter-value="${status.value}">${status.label}</button>`).join("")}
+  </div></div>
+  <div class="filter-group"><strong>Ownership</strong><div class="node-filter-chips ownership-filter-chips">
+    ${buildOwnershipFilterButtonsHtml()}
   </div></div>
   <div class="filter-group"><strong>State / Funnel</strong><div class="node-filter-chips">
     <button type="button" data-filter-group="state" data-filter-value="scheduled">Scheduled</button>
@@ -5492,6 +6262,67 @@ function enablePostitDrag(postit, note) {
   });
 }
 
+
+function populateOwnerSelect(node) {
+  const select = el.inputs?.owner;
+  if (!select) return;
+  const currentOwnerEmail = normalizeOwnerEmail(node?.ownerEmail);
+  const options = getNodeOwnerOptions();
+  if (currentOwnerEmail && !options.some((option) => option.email === currentOwnerEmail)) {
+    options.push({
+      email: currentOwnerEmail,
+      name: normalizeOwnerName(node?.ownerName),
+      avatar: normalizeOwnerAvatar(node?.ownerAvatar),
+      role: "Current owner"
+    });
+  }
+
+  select.innerHTML = "";
+  const unassigned = document.createElement("option");
+  unassigned.value = "";
+  unassigned.textContent = "Unassigned";
+  select.appendChild(unassigned);
+
+  options.forEach((owner) => {
+    const option = document.createElement("option");
+    option.value = owner.email;
+    option.textContent = `${owner.role || "Collaborator"}: ${owner.name || owner.email}`;
+    option.dataset.ownerName = owner.name || "";
+    option.dataset.ownerAvatar = owner.avatar || "";
+    select.appendChild(option);
+  });
+
+  select.value = currentOwnerEmail;
+  select.disabled = isBoardReadOnly() || !node;
+}
+
+function ownerFromSelect(select) {
+  const email = normalizeOwnerEmail(select?.value);
+  if (!email) return null;
+  const selected = select.selectedOptions?.[0];
+  return {
+    email,
+    name: selected?.dataset?.ownerName || "",
+    avatar: selected?.dataset?.ownerAvatar || ""
+  };
+}
+
+function refreshOwnerSelectorIdentities() {
+  refreshOwnershipDisplays();
+  if (canManageBoardEditors() && !state.boardEditorsLoading) {
+    state.lastEditorIdentityRefreshAt = Date.now();
+    void loadBoardEditors({ silent: true });
+  }
+}
+
+function maybeRefreshEditorIdentitiesFromPresence() {
+  if (!canManageBoardEditors() || state.boardEditorsLoading) return;
+  const now = Date.now();
+  if (now - (state.lastEditorIdentityRefreshAt || 0) < 30 * 1000) return;
+  state.lastEditorIdentityRefreshAt = now;
+  void loadBoardEditors({ silent: true });
+}
+
 function fillInspector(node) {
   if (!node) {
     el.inspectorMeta.textContent = "Wähle oder erstelle einen Node.";
@@ -5506,6 +6337,10 @@ function fillInspector(node) {
     el.inputs.variants.classList.remove("hidden");
     el.inspectorImageList.innerHTML = "";
     if (el.inputs.status) el.inputs.status.disabled = true;
+    if (el.inputs.owner) {
+      el.inputs.owner.innerHTML = '<option value="">Unassigned</option>';
+      el.inputs.owner.disabled = true;
+    }
     if (el.connectedContextSummary) el.connectedContextSummary.textContent = "Parents: 0 · Children: 0";
     if (el.connectedContextBody) el.connectedContextBody.textContent = "";
     updateInspectorActionVisibility();
@@ -5519,6 +6354,7 @@ function fillInspector(node) {
     el.inputs.status.disabled = isBoardReadOnly();
   }
   el.inputs.title.value = node.title;
+  populateOwnerSelect(node);
   el.inputs.content.value = node.content;
   el.inputs.imagePrompt.value = node.imagePrompt || "";
   el.inputs.variants.value = node.variants.join(", ");
@@ -5726,6 +6562,7 @@ async function refineNodeWithAI(node, instruction) {
         caption: node.social?.caption || ""
       },
       instruction,
+      boardId: getCurrentBrandBrainBoardId(),
       brandBrainData: state.brandCore,
       parentNode: parentNode
         ? { title: parentNode.title || "", content: parentNode.content || "", type: parentNode.type || "" }
@@ -5858,6 +6695,248 @@ async function handleGenerateFullContentPack(contentNodeId) {
   await generateFullContentPack(node, el.generateFullPackButton, "new");
 }
 
+function getNextStepNodeType(nodeType = "") {
+  return NEXT_STEP_NODE_TYPE[nodeType] || "";
+}
+
+function buildNextStepNodeContext(node) {
+  const parentNode = getDirectParentNode(node.id);
+  return {
+    nodeType: node.type,
+    title: node.title || "",
+    description: node.description || "",
+    content: node.type === "Social Media Posting"
+      ? (node.social?.caption || node.social?.preview || node.content || "")
+      : (node.content || ""),
+    goal: node.goal || "",
+    audience: node.audience || "",
+    channel: node.channel || node.social?.platform || "",
+    funnelStage: node.funnelStage || "",
+    tone: node.tone || "",
+    tags: Array.isArray(node.tags) ? node.tags : [],
+    parentContext: parentNode
+      ? {
+          nodeType: parentNode.type,
+          title: parentNode.title || "",
+          content: parentNode.content || "",
+          goal: parentNode.goal || "",
+          audience: parentNode.audience || "",
+          channel: parentNode.channel || parentNode.social?.platform || "",
+          funnelStage: parentNode.funnelStage || "",
+          tone: parentNode.tone || ""
+        }
+      : null,
+    connectedParentContext: getConnectedNodeContext(node.id).parentNodes,
+    campaignContext: getCampaignContextSummary() || undefined,
+    boardId: getCurrentBrandBrainBoardId(),
+    brandBrainData: state.brandCore
+  };
+}
+
+function buildReviewNodeContext(node) {
+  return {
+    nodeType: node.type,
+    title: node.title || "",
+    content: node.content || "",
+    social: node.social || {},
+    landingPage: node.landingPage || {},
+    imagePrompt: node.imagePrompt || "",
+    goal: node.goal || "",
+    audience: node.audience || "",
+    channel: node.channel || node.social?.platform || "",
+    funnelStage: node.funnelStage || "",
+    tone: node.tone || "",
+    tags: Array.isArray(node.tags) ? node.tags : [],
+    campaignContext: getCampaignContextSummary() || "",
+    connectedNodeContext: getConnectedNodeContext(node.id),
+    boardId: getCurrentBrandBrainBoardId(),
+    brandBrainData: state.brandCore
+  };
+}
+
+async function fetchNodeReview(node) {
+  const response = await fetch("/api/review-node", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(buildReviewNodeContext(node))
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data?.error || "Failed to review node");
+  return data;
+}
+
+function formatAiReviewComment(review = {}) {
+  const score = Number.isFinite(Number(review.score)) ? Number(review.score).toFixed(1).replace(/\.0$/, "") : "0";
+  const strengths = (Array.isArray(review.strengths) ? review.strengths : []).filter(Boolean).slice(0, 4);
+  const improvements = (Array.isArray(review.improvements) ? review.improvements : []).filter(Boolean).slice(0, 4);
+  return [
+    `AI Review: ${score}/10`,
+    "",
+    "Summary:",
+    review.summary || "No summary returned.",
+    "",
+    "Strengths:",
+    ...(strengths.length ? strengths.map((item) => `- ${item}`) : ["- No clear strengths identified."]),
+    "",
+    "Improve:",
+    ...(improvements.length ? improvements.map((item) => `- ${item}`) : ["- No major improvements identified."]),
+    review.suggestedRewrite ? "" : null,
+    review.suggestedRewrite ? "Suggested rewrite:" : null,
+    review.suggestedRewrite || null
+  ].filter((line) => line !== null).join("\n").trim();
+}
+
+function addAiReviewPostitToNode(node, review) {
+  if (!node) return null;
+  if (!Array.isArray(node.postits)) node.postits = [];
+  const createdAt = new Date().toISOString();
+  const existingCount = node.postits.length;
+  const note = {
+    id: `postit-${state.postitCounter++}`,
+    authorName: "AI Review",
+    authorEmail: "ai@funklix.local",
+    authorAvatar: "",
+    user: "AI Review",
+    time: nowString(),
+    createdAt,
+    updatedAt: createdAt,
+    text: formatAiReviewComment(review),
+    color: "#e9f1ff",
+    resolved: false,
+    replies: [],
+    x: 16 + (existingCount % 3) * 18,
+    y: 56 + (existingCount % 3) * 18
+  };
+  node.postits.push(note);
+  markNodeCommentsSeen(node.id);
+  updateNodeCard(node);
+  const entry = appendActivity("ai_reviewed_node", { node, userName: "AI" });
+  if (entry) {
+    entry.user = { name: "AI", email: "ai@funklix.local", avatar: "" };
+    renderActivityFeed();
+  }
+  saveCampaignCanvasState();
+  return note;
+}
+
+async function reviewNodeWithAI(node, triggerBtn = null) {
+  if (!node) return null;
+  if (isBoardReadOnly()) {
+    setSaveStatus("Read-only board");
+    return null;
+  }
+  const originalText = triggerBtn?.textContent || "";
+  if (triggerBtn) {
+    triggerBtn.disabled = true;
+    triggerBtn.textContent = "Reviewing...";
+  }
+  setSaveStatus("Reviewing node...");
+  try {
+    const review = await fetchNodeReview(node);
+    const note = addAiReviewPostitToNode(node, review);
+    setSaveStatus("AI review added");
+    return note;
+  } catch (error) {
+    console.error("[Funklix AI] Review node failed", error);
+    setSaveStatus("Could not review node.");
+    return null;
+  } finally {
+    if (triggerBtn) {
+      triggerBtn.disabled = false;
+      triggerBtn.textContent = originalText;
+    }
+  }
+}
+
+async function fetchGeneratedNextStep(node) {
+  const response = await fetch("/api/generate-next-step", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(buildNextStepNodeContext(node))
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data?.error || "Failed to generate next step");
+  return data;
+}
+
+function applyGeneratedNextStepContent(node, generated = {}) {
+  const generatedDescription = (generated.description || "").trim();
+  const generatedContent = (generated.content || generatedDescription || "").trim();
+  const generatedImagePrompt = (generated.imagePrompt || "").trim();
+  const generatedLandingPage = generated.landingPage || {};
+  node.title = (generated.title || generated.nodeType || node.type || "").trim();
+  node.content = generatedContent;
+  if (generatedDescription && !node.content.includes(generatedDescription)) {
+    node.content = [generatedDescription, node.content].filter(Boolean).join("\n\n");
+  }
+  if (node.type === "Content" && generatedImagePrompt) {
+    node.imagePrompt = generatedImagePrompt;
+  }
+  if (node.type === "Landing Page") {
+    node.landingPage = {
+      headerVisualPrompt: (generatedLandingPage.headerVisualPrompt || "").trim(),
+      headerClaim: (generatedLandingPage.headerClaim || "").trim(),
+      problem: (generatedLandingPage.problem || generatedLandingPage.problemOfIcp || "").trim(),
+      solution: (generatedLandingPage.solution || generatedLandingPage.solutionForIcp || "").trim(),
+      trust: (generatedLandingPage.trust || generatedLandingPage.buildingTrust || "").trim(),
+      cta: (generatedLandingPage.cta || generatedLandingPage.conversionCta || "").trim()
+    };
+    node.content = generatedContent || generatedDescription || node.landingPage.headerClaim || "";
+  }
+  if (node.type === "Social Media Posting") {
+    node.social.caption = node.content || node.title;
+    node.social.preview = generatedDescription;
+  }
+}
+
+async function generateNextStepFromNode(sourceNode, triggerBtn = null) {
+  if (!sourceNode) return null;
+  if (isBoardReadOnly()) {
+    setSaveStatus("Read-only board");
+    return null;
+  }
+  const nextNodeType = getNextStepNodeType(sourceNode.type);
+  if (!nextNodeType) {
+    setSaveStatus("No next step available.");
+    return null;
+  }
+  const originalText = triggerBtn?.textContent || "";
+  if (triggerBtn) {
+    triggerBtn.disabled = true;
+    triggerBtn.textContent = "Generating next step...";
+  }
+  setSaveStatus("Generating next step...");
+  try {
+    const generated = await fetchGeneratedNextStep(sourceNode);
+    const position = {
+      x: sourceNode.position.x + NODE_WIDTH + 80,
+      y: sourceNode.position.y + 80
+    };
+    const created = createNode({ type: generated.nodeType || nextNodeType, parentId: sourceNode.id, position });
+    if (!created) return null;
+    created.goal = sourceNode.goal || created.goal;
+    created.audience = sourceNode.audience || created.audience;
+    created.channel = sourceNode.channel || sourceNode.social?.platform || created.channel;
+    applyGeneratedNextStepContent(created, generated);
+    updateNodeCard(created);
+    fillInspector(created);
+    updateListView();
+    drawLinks();
+    appendActivity("generated_next_step", { node: sourceNode });
+    saveCampaignCanvasState();
+    return created;
+  } catch (error) {
+    console.error("[Funklix AI] Generate next step failed", error);
+    setSaveStatus("Could not generate next step.");
+    return null;
+  } finally {
+    if (triggerBtn) {
+      triggerBtn.disabled = false;
+      triggerBtn.textContent = originalText;
+    }
+  }
+}
+
 async function generateImageForNode(node) {
   if (isBoardReadOnly()) {
     setSaveStatus("Read-only board");
@@ -5878,6 +6957,7 @@ async function generateImageForNode(node) {
       body: JSON.stringify({
         nodeTitle: node.title || "",
         nodeContent: [node.imagePrompt || node.content || "", nodeStrategyContext(node)].filter(Boolean).join(" | "),
+        boardId: getCurrentBrandBrainBoardId(),
         brandBrainData: state.brandCore,
         campaignContext: getCampaignContextSummary(),
         contentFormat: node.contentFormat || "1:1",
@@ -5967,6 +7047,7 @@ async function generatePostingVisualForNode(node) {
         sourceImage: sourceImage.url,
         overlayText,
         format: node.contentFormat || "1:1",
+        boardId: getCurrentBrandBrainBoardId(),
         brandBrainData: state.brandCore,
         campaignContext: getCampaignContextSummary()
       })
@@ -6203,6 +7284,10 @@ function updateListView() {
       }
       top.appendChild(titleWrap);
 
+      const owner = createOwnerDisplay(node);
+      owner.classList.add("node-summary-owner");
+      top.appendChild(owner);
+
       const discussion = getNodeDiscussionCounts(node);
       if (discussion.total > 0) {
         const commentBtn = document.createElement("button");
@@ -6362,13 +7447,15 @@ function renderNode(node) {
       saveCampaignCanvasState();
     }
   });
-  nodeEl.appendChild(compactToggle);
+  const headerActions = nodeEl.querySelector(".node-header-actions");
+  (headerActions || nodeEl).appendChild(compactToggle);
   const compactSummary = document.createElement("div");
   compactSummary.className = "node-compact-summary";
   nodeEl.insertBefore(compactSummary, nodeEl.querySelector(".tags"));
   const aiToolbar = document.createElement("div");
   aiToolbar.className = "node-ai-toolbar";
   [
+    ["🧠 Generate Next Step", "__generate_next_step__"],
     ["✨ Improve", "Improve this node while keeping the original intent."],
     ["🔄 Regenerate", "Regenerate this node as a fresh alternative version while keeping it aligned with the campaign context and brand voice."],
     ["Shorter", "Make this shorter and more concise."],
@@ -6381,6 +7468,10 @@ function renderNode(node) {
     btn.textContent = label;
     btn.addEventListener("click", async (event) => {
       event.stopPropagation();
+      if (instruction === "__generate_next_step__") {
+        await generateNextStepFromNode(node, btn);
+        return;
+      }
       await runInlineRefine(node, instruction, btn);
     });
     aiToolbar.appendChild(btn);
@@ -6421,7 +7512,7 @@ function renderNode(node) {
       setSaveStatus("Read-only board");
       return;
     }
-    node.title = title.textContent.trim();
+    node.title = title.textContent;
     if (state.selectedPrimary === node.id) el.inputs.title.value = node.title;
     updateListView();
     recordNodeUpdatedActivity(node);
@@ -6432,7 +7523,7 @@ function renderNode(node) {
       setSaveStatus("Read-only board");
       return;
     }
-    node.content = content.textContent.trim();
+    node.content = content.textContent;
     if (state.selectedPrimary === node.id) el.inputs.content.value = node.content;
     if ((node.content || "").length <= 160) nodeEl.classList.remove("content-expanded");
     const shouldTruncate = !isSocialNodeCard && (node.content || "").length > 160;
@@ -6986,7 +8077,7 @@ el.claimBoardButton?.addEventListener("click", async () => {
   const response = await fetch(`/api/boards/${boardId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ claim: true }) });
   const data = await response.json();
   if (!response.ok) return;
-  setSharePanelState(boardId, data?.updated_at ? new Date(data.updated_at) : new Date(), data?.owner_email || state.user.email, data?.owner_name || state.user?.name || null);
+  setSharePanelState(boardId, data?.updated_at ? new Date(data.updated_at) : new Date(), data?.owner_email || state.user.email, data?.owner_name || state.user?.name || null, data?.owner_avatar || state.user?.avatar || null);
   setSaveStatus('Board claimed');
   loadBoardsLibrary();
 });
@@ -7128,7 +8219,7 @@ el.nodeForm.addEventListener("input", (event) => {
     node.status = normalizeNodeStatus(el.inputs.status.value);
     if (previousStatus !== node.status) recordStatusChangedActivity(node, nodeStatusLabel(node.status));
   }
-  if (event.target === el.inputs.title) node.title = el.inputs.title.value.trim();
+  if (event.target === el.inputs.title) node.title = el.inputs.title.value;
   if (event.target === el.inputs.content) node.content = el.inputs.content.value;
   if (event.target === el.inputs.imagePrompt) node.imagePrompt = el.inputs.imagePrompt.value;
   if (event.target === el.inputs.variants) node.variants = parseList(el.inputs.variants.value);
@@ -7142,6 +8233,12 @@ el.nodeForm.addEventListener("input", (event) => {
   if (event.target === el.inputs.funnelStage) node.funnelStage = el.inputs.funnelStage.value.trim();
   if (event.target === el.inputs.tone) node.tone = el.inputs.tone.value.trim();
   if (event.target === el.inputs.contentFormat) node.contentFormat = el.inputs.contentFormat.value || "1:1";
+  if (event.target === el.inputs.owner) {
+    const before = { ownerEmail: node.ownerEmail, ownerName: node.ownerName, ownerAvatar: node.ownerAvatar };
+    const nextOwner = ownerFromSelect(el.inputs.owner);
+    setNodeOwner(node, nextOwner);
+    if (!ownersAreEqual(before, node)) recordOwnerChangedActivity(node, nextOwner);
+  }
   if (!node.landingPage) node.landingPage = { headerVisualPrompt: "", headerClaim: "", problem: "", solution: "", trust: "", cta: "" };
   if (event.target === el.inputs.lpHeaderVisualPrompt) node.landingPage.headerVisualPrompt = el.inputs.lpHeaderVisualPrompt.value;
   if (event.target === el.inputs.lpHeaderClaim) node.landingPage.headerClaim = el.inputs.lpHeaderClaim.value;
@@ -7152,10 +8249,39 @@ el.nodeForm.addEventListener("input", (event) => {
 
   updateNodeCard(node);
   updateListView();
-  fillInspector(node);
-  if (event.target !== el.inputs.status) recordNodeUpdatedActivity(node);
+  const shouldRefreshInspector = event.target === el.inputs.type
+    || event.target === el.inputs.platform
+    || event.target === el.inputs.contentFormat
+    || event.target === el.inputs.status
+    || event.target === el.inputs.owner;
+  if (shouldRefreshInspector) fillInspector(node);
+  if (event.target !== el.inputs.status && event.target !== el.inputs.owner) recordNodeUpdatedActivity(node);
   saveCampaignCanvasState();
 });
+
+el.inputs.owner?.addEventListener("focus", refreshOwnerSelectorIdentities);
+el.inputs.owner?.addEventListener("pointerdown", refreshOwnerSelectorIdentities);
+
+el.inputs.owner?.addEventListener("change", (event) => {
+  if (isBoardReadOnly()) {
+    setSaveStatus("Read-only board");
+    fillInspector(getNode(state.selectedPrimary));
+    return;
+  }
+  const node = getNode(state.selectedPrimary);
+  if (!node) return;
+  const before = { ownerEmail: node.ownerEmail, ownerName: node.ownerName, ownerAvatar: node.ownerAvatar };
+  const nextOwner = ownerFromSelect(event.target);
+  setNodeOwner(node, nextOwner);
+  if (!ownersAreEqual(before, node)) {
+    recordOwnerChangedActivity(node, nextOwner);
+    updateNodeCard(node);
+    updateListView();
+    refreshNodeSearchUI();
+    saveCampaignCanvasState();
+  }
+});
+
 el.inputs.channel.addEventListener("keydown", (event) => {
   if (isBoardReadOnly()) {
     setSaveStatus("Read-only board");
@@ -7227,6 +8353,18 @@ el.improveNodeButton.addEventListener("click", async () => {
   if (!node) return;
   await runImproveNodeFlow(node);
 });
+el.generateNextStepInspectorButton?.addEventListener("click", async () => {
+  const node = getNode(state.selectedPrimary);
+  if (!node) return;
+  await generateNextStepFromNode(node, el.generateNextStepInspectorButton);
+  updateInspectorActionVisibility();
+});
+el.reviewNodeButton?.addEventListener("click", async () => {
+  const node = getNode(state.selectedPrimary);
+  if (!node) return;
+  await reviewNodeWithAI(node, el.reviewNodeButton);
+  updateInspectorActionVisibility();
+});
 el.regenerateNodeButton.addEventListener("click", async () => {
   const node = getNode(state.selectedPrimary);
   if (!node) return;
@@ -7275,6 +8413,7 @@ el.generateHeaderVisualButton.addEventListener("click", async () => {
       body: JSON.stringify({
         nodeTitle: node.title || "",
         nodeContent: node.landingPage.headerVisualPrompt,
+        boardId: getCurrentBrandBrainBoardId(),
         brandBrainData: state.brandCore,
         campaignContext: getCampaignContextSummary(),
         contentFormat: "16:9",
@@ -7379,6 +8518,10 @@ el.zoomLayer.addEventListener("click", async (event) => {
   const label = (quickBtn.textContent || "").trim();
   if (label === "Generate Full Content Pack") {
     await handleGenerateFullContentPack(node.id);
+    return;
+  }
+  if (label === "🧠 Generate Next Step") {
+    await generateNextStepFromNode(node, quickBtn);
     return;
   }
   const map = {
