@@ -3220,6 +3220,94 @@ button:active {
   margin-top: 2px;
 }
 
+
+.brand-dna-avatar-section {
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid #dcd7ff;
+  border-radius: 16px;
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+}
+
+.brand-dna-avatar-copy h3 {
+  color: #312a78;
+  font-size: 1.08rem;
+  margin: 8px 0 4px;
+}
+
+.brand-dna-avatar-copy p {
+  color: #626982;
+  font-size: 0.86rem;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.brand-dna-avatar-preview {
+  align-items: flex-start;
+  display: flex;
+  gap: 12px;
+}
+
+.brand-dna-avatar-image {
+  background: #fff;
+  border: 1px solid #d8d2ff;
+  border-radius: 18px;
+  box-shadow: 0 10px 24px rgba(73, 61, 171, 0.14);
+  cursor: pointer;
+  flex: 0 0 auto;
+  overflow: hidden;
+  padding: 0;
+}
+
+.brand-dna-avatar-image img {
+  aspect-ratio: 1;
+  display: block;
+  height: 132px;
+  object-fit: cover;
+  width: 132px;
+}
+
+.brand-dna-avatar-details {
+  color: #626982;
+  display: grid;
+  font-size: 0.82rem;
+  gap: 6px;
+  line-height: 1.45;
+  min-width: 0;
+}
+
+.brand-dna-avatar-details strong {
+  color: #312a78;
+  font-size: 0.95rem;
+}
+
+.brand-dna-avatar-details details {
+  background: rgba(244, 241, 255, 0.72);
+  border: 1px solid #ece9ff;
+  border-radius: 12px;
+  padding: 8px 10px;
+}
+
+.brand-dna-avatar-details summary {
+  color: #5f52cf;
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.brand-dna-avatar-details p {
+  color: #626982;
+  margin: 8px 0 0;
+  max-height: 180px;
+  overflow: auto;
+  white-space: pre-wrap;
+}
+
+.brand-dna-avatar-actions {
+  justify-content: flex-start;
+  min-width: 0;
+}
+
 @media (max-width: 1180px) {
   .brand-dna-header,
   .brand-dna-actions {
@@ -3232,5 +3320,8 @@ button:active {
   }
   .brand-dna-signals {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .brand-dna-avatar-preview {
+    flex-direction: column;
   }
 }

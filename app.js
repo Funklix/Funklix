@@ -95,6 +95,7 @@ const state = {
   brandCoreSelectedKey: "brandCore"
   ,brandDnaDraft: null
   ,brandDnaLoading: false
+  ,brandAvatarLoading: false
   ,appMode: "canvas"
   ,boardsLibrary: []
   ,contentPackLoadingById: {}
@@ -1226,7 +1227,7 @@ async function duplicateCurrentBoard() {
   const payload = {
     name: buildDuplicateBoardName(),
     canvas_json: serializeState(),
-    brand_core_snapshot: state.brandCore
+    brand_core_snapshot: serializeBrandCoreSnapshot()
   };
 
   try {
@@ -3134,8 +3135,15 @@ function restoreLastSnapshot() {
 
 
 
+function buildLastSavedSnapshot() {
+  return JSON.stringify({
+    canvas_json: serializeState(),
+    brand_core_snapshot: serializeBrandCoreSnapshot()
+  });
+}
+
 function refreshLastSavedSnapshot() {
-  state.lastSavedSnapshot = JSON.stringify(serializeState());
+  state.lastSavedSnapshot = buildLastSavedSnapshot();
 }
 
 function detectDirtyFromSnapshot() {
@@ -3143,7 +3151,7 @@ function detectDirtyFromSnapshot() {
   if (state.isSaving) { return; }
   if (state.conflictModalOpen) { return; }
 
-  const currentSnapshot = JSON.stringify(serializeState());
+  const currentSnapshot = buildLastSavedSnapshot();
   if (currentSnapshot !== state.lastSavedSnapshot) {
     if (!state.isDirty) {
       markUnsaved();
@@ -3724,7 +3732,7 @@ async function saveBoardToServer(trigger = "manual") {
     const payload = {
       name: `Campaign Canvas ${new Date().toISOString()}`,
       canvas_json: canvasStateForSave,
-      brand_core_snapshot: state.brandCore
+      brand_core_snapshot: serializeBrandCoreSnapshot()
     };
     const pathname = window.location.pathname || '';
     const pathBoardId = pathname.startsWith('/boards/')
@@ -3836,10 +3844,10 @@ async function loadBoardFromUrlIfPresent() {
     state.currentBoardName = data?.name || "";
     state.lastKnownUpdatedAt = data?.updated_at || null;
     if (data?.brand_core_snapshot && typeof data.brand_core_snapshot === "object") {
-      state.brandCore = data.brand_core_snapshot;
+      state.brandCore = normalizeBrandCoreState(data.brand_core_snapshot, state.brandCore, { preserveFallbackBrandDNA: true });
       renderBrandCoreTiles();
       renderBrandCoreEditor();
-      saveBrandBrainState();
+      saveBrandBrainState({ markDirty: false });
     }
     setSharePanelState(state.currentBoardId, data?.updated_at ? new Date(data.updated_at) : null, data?.owner_email || null, data?.owner_name || null, data?.owner_avatar || null);
     if (!applyBoardAccessFromServer(data?.access, "loadBoardFromUrlIfPresent")) {
@@ -3885,27 +3893,80 @@ function resetCampaignCanvasState() {
   el.zoomLayer.querySelectorAll(".node").forEach((n) => n.remove()); fillInspector(null); updateListView(); updateEmptyState(); drawLinks(); setSaveStatus("Unsaved changes");
 }
 
+function clonePlainObject(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  return JSON.parse(JSON.stringify(value));
+}
+
+function normalizeBrandDnaSnapshot(brandDNA = null, fallbackBrandDNA = null) {
+  const source = brandDNA && typeof brandDNA === "object" && !Array.isArray(brandDNA)
+    ? brandDNA
+    : fallbackBrandDNA && typeof fallbackBrandDNA === "object" && !Array.isArray(fallbackBrandDNA)
+      ? fallbackBrandDNA
+      : null;
+  if (!source) return null;
+  return clonePlainObject(source);
+}
+
+function normalizeBrandCoreState(brandCore = {}, fallbackBrandCore = {}, options = {}) {
+  const { preserveFallbackBrandDNA = false } = options;
+  const defaults = defaultBrandCoreState();
+  const safeBrandCore = brandCore && typeof brandCore === "object" && !Array.isArray(brandCore) ? brandCore : {};
+  const safeFallback = fallbackBrandCore && typeof fallbackBrandCore === "object" && !Array.isArray(fallbackBrandCore) ? fallbackBrandCore : {};
+  const hasIncomingBrandDNA = safeBrandCore.brandDNA && typeof safeBrandCore.brandDNA === "object" && !Array.isArray(safeBrandCore.brandDNA);
+
+  return {
+    ...defaults,
+    ...safeBrandCore,
+    dosAndDonts: {
+      ...defaults.dosAndDonts,
+      ...(safeBrandCore.dosAndDonts && typeof safeBrandCore.dosAndDonts === "object" ? safeBrandCore.dosAndDonts : {})
+    },
+    brandVoiceExamples: {
+      ...defaults.brandVoiceExamples,
+      ...(safeBrandCore.brandVoiceExamples && typeof safeBrandCore.brandVoiceExamples === "object" ? safeBrandCore.brandVoiceExamples : {})
+    },
+    brandAssets: {
+      ...defaults.brandAssets,
+      ...(safeBrandCore.brandAssets && typeof safeBrandCore.brandAssets === "object" ? safeBrandCore.brandAssets : {})
+    },
+    customTiles: Array.isArray(safeBrandCore.customTiles) ? safeBrandCore.customTiles : [],
+    brandDNA: normalizeBrandDnaSnapshot(
+      hasIncomingBrandDNA ? safeBrandCore.brandDNA : null,
+      !hasIncomingBrandDNA && preserveFallbackBrandDNA ? safeFallback.brandDNA : null
+    )
+  };
+}
+
+function serializeBrandCoreSnapshot() {
+  state.brandCore = normalizeBrandCoreState(state.brandCore);
+  return clonePlainObject(state.brandCore);
+}
+
 function getBrandCoreData() {
-  return state.brandCore;
+  return serializeBrandCoreSnapshot();
 }
 window.getBrandCoreData = getBrandCoreData;
 
-function saveBrandBrainState() {
+function saveBrandBrainState(options = {}) {
+  const { markDirty: shouldMarkDirty = true } = options;
   const brandState = getBrandCoreData();
   console.log("Saving brandBrainState", brandState);
   localStorage.setItem(BRAND_CORE_STORAGE_KEY, JSON.stringify(brandState));
+  if (shouldMarkDirty) markUnsaved();
 }
 
 function loadBrandBrainState() {
   const raw = localStorage.getItem(BRAND_CORE_STORAGE_KEY);
-  if (raw) { state.brandCore = JSON.parse(raw); console.log("Loaded brandBrainState", state.brandCore); }
-  else {
-    state.brandCore = { brandCore: "", toneOfVoice: [], messagingPillars: [], valueProposition: "", personas: [], contentGuidelines: [], dosAndDonts: { dos: [], donts: [] }, brandVoiceExamples: { good: "", avoid: "" }, keywords: [], brandAssets: { domain: "", logo: "", colors: [], typography: "", references: [] }, brandDNA: null, customTiles: [] };
+  if (raw) {
+    state.brandCore = normalizeBrandCoreState(JSON.parse(raw), state.brandCore, { preserveFallbackBrandDNA: true });
+    console.log("Loaded brandBrainState", state.brandCore);
+  } else {
+    state.brandCore = normalizeBrandCoreState(defaultBrandCoreState(), state.brandCore);
   }
-  if (!Array.isArray(state.brandCore.customTiles)) state.brandCore.customTiles = [];
-  if (state.brandCore.brandDNA && typeof state.brandCore.brandDNA !== "object") state.brandCore.brandDNA = null;
   state.brandDnaDraft = null;
   state.brandDnaLoading = false;
+  state.brandAvatarLoading = false;
 }
 
 function resetBrandBrainState() {
@@ -4049,6 +4110,20 @@ function normalizeBrandDnaSignals(signals = {}) {
   }, {});
 }
 
+function normalizeBrandAvatar(avatar = null) {
+  if (!avatar || typeof avatar !== "object" || Array.isArray(avatar)) return null;
+  const imageUrl = String(avatar.imageUrl || "").trim();
+  const prompt = String(avatar.prompt || "").trim();
+  if (!imageUrl && !prompt) return null;
+  return {
+    imageUrl,
+    prompt,
+    style: String(avatar.style || "semi-realistic symbolic figure").trim() || "semi-realistic symbolic figure",
+    generatedAt: avatar.generatedAt || new Date().toISOString(),
+    userApproved: Boolean(avatar.userApproved)
+  };
+}
+
 function normalizeBrandDnaResult(result = {}, approved = false) {
   const primaryArchetype = BRAND_DNA_ARCHETYPES.has(result.primaryArchetype) ? result.primaryArchetype : "";
   const secondaryArchetype = BRAND_DNA_ARCHETYPES.has(result.secondaryArchetype) ? result.secondaryArchetype : "";
@@ -4070,7 +4145,8 @@ function normalizeBrandDnaResult(result = {}, approved = false) {
     recommendedVoice: String(result.recommendedVoice || "").trim(),
     recommendedVisualDirection: String(result.recommendedVisualDirection || "").trim(),
     generatedAt: result.generatedAt || new Date().toISOString(),
-    userApproved: Boolean(approved || result.userApproved)
+    userApproved: Boolean(approved || result.userApproved),
+    avatar: normalizeBrandAvatar(result.avatar)
   };
 }
 
@@ -4115,6 +4191,38 @@ function brandDnaResultHtml(result) {
     </div>`;
 }
 
+function renderBrandAvatarSection(result) {
+  if (!result?.userApproved) return "";
+  const avatar = normalizeBrandAvatar(result.avatar);
+  const isLoading = Boolean(state.brandAvatarLoading);
+  const hasAvatar = Boolean(avatar?.imageUrl);
+  return `
+    <div class="brand-dna-avatar-section">
+      <div class="brand-dna-avatar-copy">
+        <span class="brand-dna-eyebrow">Phase 2</span>
+        <h3>Brand Avatar</h3>
+        <p>Visualize your brand personality as an avatar your AI can use across reviews, comments and future team workflows.</p>
+      </div>
+      ${isLoading ? `<div class="brand-dna-loading">Generating Brand Avatar…</div>` : ""}
+      ${hasAvatar ? `
+        <div class="brand-dna-avatar-preview">
+          <button type="button" class="brand-dna-avatar-image" id="brand-avatar-preview" aria-label="Open Brand Avatar preview">
+            <img src="${escapeHtml(avatar.imageUrl)}" alt="Brand Avatar preview" />
+          </button>
+          <div class="brand-dna-avatar-details">
+            <strong>${avatar.userApproved ? "Accepted Brand Avatar" : "Generated Brand Avatar"}</strong>
+            <span>${escapeHtml(avatar.style || "semi-realistic symbolic figure")}${avatar.generatedAt ? ` · ${escapeHtml(new Date(avatar.generatedAt).toLocaleDateString())}` : ""}</span>
+            ${avatar.prompt ? `<details><summary>Avatar prompt / description</summary><p>${escapeHtml(avatar.prompt)}</p></details>` : ""}
+          </div>
+        </div>` : `<div class="brand-dna-empty"><strong>No Brand Avatar yet.</strong><span>Generate a symbolic identity image from your accepted Brand DNA.</span></div>`}
+      <div class="brand-dna-actions brand-dna-avatar-actions">
+        ${hasAvatar && !avatar.userApproved ? `<button type="button" class="primary-add" id="brand-avatar-accept" ${isLoading ? "disabled" : ""}>Accept Avatar</button>` : ""}
+        <button type="button" id="brand-avatar-generate" ${isLoading ? "disabled" : ""}>${hasAvatar ? "Regenerate" : "Generate Brand Avatar"}</button>
+        ${hasAvatar ? `<button type="button" id="brand-avatar-edit" ${isLoading ? "disabled" : ""}>Edit Prompt</button>` : ""}
+      </div>
+    </div>`;
+}
+
 function renderBrandDnaCard() {
   if (!el.brandCoreCanvas) return;
   let card = el.brandCoreCanvas.querySelector("#brand-dna-card");
@@ -4146,10 +4254,78 @@ function renderBrandDnaCard() {
     </div>
     ${loading ? `<div class="brand-dna-loading">Analyzing your Brand Brain, founder signals, voice, ICP, and visual assets…</div>` : ""}
     ${result ? brandDnaResultHtml(result) : `<div class="brand-dna-empty"><strong>Ready when your Brand Brain has enough context.</strong><span>We will look at your founder story, mission, value proposition, messaging pillars, ICP, tone, website/domain, and visual assets.</span></div>`}
+    ${hasAcceptedResult ? renderBrandAvatarSection(accepted) : ""}
   `;
   card.querySelector("#brand-dna-regenerate")?.addEventListener("click", () => discoverBrandDna());
   card.querySelector("#brand-dna-refine")?.addEventListener("click", () => refineBrandDna());
   card.querySelector("#brand-dna-accept")?.addEventListener("click", () => acceptBrandDna());
+  card.querySelector("#brand-avatar-generate")?.addEventListener("click", () => generateBrandAvatar());
+  card.querySelector("#brand-avatar-accept")?.addEventListener("click", () => acceptBrandAvatar());
+  card.querySelector("#brand-avatar-edit")?.addEventListener("click", () => editBrandAvatarPrompt());
+  card.querySelector("#brand-avatar-preview")?.addEventListener("click", () => {
+    const imageUrl = state.brandCore?.brandDNA?.avatar?.imageUrl;
+    if (imageUrl) openLightbox(imageUrl, "Brand Avatar preview");
+  });
+}
+
+function getAcceptedBrandDna() {
+  const brandDNA = state.brandCore?.brandDNA;
+  return brandDNA?.primaryArchetype && brandDNA.userApproved ? brandDNA : null;
+}
+
+async function generateBrandAvatar(optionalUserDirection = "") {
+  const brandDNA = getAcceptedBrandDna();
+  if (!brandDNA || state.brandAvatarLoading) return;
+  state.brandAvatarLoading = true;
+  renderBrandDnaCard();
+  try {
+    const response = await fetch("/api/generate-brand-avatar", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        boardId: state.currentBoardId || getBoardIdFromPath() || "",
+        brandBrainData: state.brandCore,
+        brandDNA,
+        optionalUserDirection
+      })
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload?.error || "Could not generate Brand Avatar");
+    if (!payload?.imageUrl) throw new Error("Brand Avatar response did not include an image URL.");
+    state.brandCore = normalizeBrandCoreState(state.brandCore);
+    state.brandCore.brandDNA = normalizeBrandDnaResult({ ...state.brandCore.brandDNA, userApproved: true }, true);
+    state.brandCore.brandDNA.avatar = normalizeBrandAvatar({
+      imageUrl: payload.imageUrl,
+      prompt: payload.prompt,
+      style: "semi-realistic symbolic figure",
+      generatedAt: payload.generatedAt || new Date().toISOString(),
+      userApproved: false
+    });
+    saveBrandBrainState({ markDirty: true });
+  } catch (error) {
+    alert(error?.message || "Could not generate Brand Avatar right now.");
+  } finally {
+    state.brandAvatarLoading = false;
+    renderBrandDnaCard();
+  }
+}
+
+function acceptBrandAvatar() {
+  const avatar = normalizeBrandAvatar(state.brandCore?.brandDNA?.avatar);
+  if (!avatar?.imageUrl || !getAcceptedBrandDna()) return;
+  state.brandCore.brandDNA.avatar = { ...avatar, userApproved: true };
+  saveBrandBrainState({ markDirty: true });
+  renderBrandDnaCard();
+}
+
+function editBrandAvatarPrompt() {
+  const currentPrompt = state.brandCore?.brandDNA?.avatar?.prompt || "";
+  const direction = window.prompt(
+    "Add direction for the next Brand Avatar generation.",
+    currentPrompt ? "Keep the same strategy, but adjust the visual expression." : ""
+  );
+  if (!direction || !direction.trim()) return;
+  generateBrandAvatar(direction.trim());
 }
 
 async function discoverBrandDna(refineGuidance = "") {
@@ -4191,9 +4367,10 @@ function refineBrandDna() {
 function acceptBrandDna() {
   const result = state.brandDnaDraft || state.brandCore?.brandDNA;
   if (!result?.primaryArchetype) return;
-  state.brandCore.brandDNA = normalizeBrandDnaResult(result, true);
+  state.brandCore = normalizeBrandCoreState(state.brandCore);
+  state.brandCore.brandDNA = normalizeBrandDnaResult({ ...result, userApproved: true }, true);
   state.brandDnaDraft = null;
-  saveBrandBrainState();
+  saveBrandBrainState({ markDirty: true });
   renderBrandCoreTiles();
   renderBrandCoreEditor();
 }
@@ -6990,6 +7167,11 @@ function formatAiReviewComment(review = {}) {
   ].filter((line) => line !== null).join("\n").trim();
 }
 
+function getApprovedBrandAvatarUrl() {
+  const avatar = state.brandCore?.brandDNA?.avatar;
+  return avatar?.userApproved && avatar?.imageUrl ? avatar.imageUrl : "";
+}
+
 function addAiReviewPostitToNode(node, review) {
   if (!node) return null;
   if (!Array.isArray(node.postits)) node.postits = [];
@@ -6999,7 +7181,7 @@ function addAiReviewPostitToNode(node, review) {
     id: `postit-${state.postitCounter++}`,
     authorName: "AI Review",
     authorEmail: "ai@funklix.local",
-    authorAvatar: "",
+    authorAvatar: getApprovedBrandAvatarUrl(),
     user: "AI Review",
     time: nowString(),
     createdAt,
@@ -7016,7 +7198,7 @@ function addAiReviewPostitToNode(node, review) {
   updateNodeCard(node);
   const entry = appendActivity("ai_reviewed_node", { node, userName: "AI" });
   if (entry) {
-    entry.user = { name: "AI", email: "ai@funklix.local", avatar: "" };
+    entry.user = { name: "AI", email: "ai@funklix.local", avatar: getApprovedBrandAvatarUrl() };
     renderActivityFeed();
   }
   saveCampaignCanvasState();
