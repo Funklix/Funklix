@@ -194,8 +194,8 @@ Shared constraints:
 - Do not create a full content pack.
 - Do not repeat the source node in different words.
 - Create a distinct next-stage artifact with a different strategic purpose.
-- Use audience, goal, channel, funnel stage, tone, and Brand Brain data when available.
-- Keep the output practical, specific, and directly connected to the source node.
+- Use audience, goal, channel, funnel stage, normalized Brand Brain data, and archetype guidance when available.
+- Keep the output practical, specific, archetype-aware, and directly connected to the source node.
 - Generated fields must be plain text suitable for UI text fields.
 - Do not use markdown bold syntax like **text**.
 - Do not use markdown headings like ## Heading.

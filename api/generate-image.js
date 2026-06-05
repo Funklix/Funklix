@@ -38,8 +38,8 @@ ${brandBrainContext.text}
 - contentFormat: ${normalizedFormat}
 
 Creative direction:
-- Create a visual metaphor or scene that represents the idea.
-- Use brand tone/style/visual cues from the normalized Brand Brain context where relevant.
+- Create a visual metaphor or scene that represents the idea and reflects archetype-aligned emotional/symbolic traits when available.
+- Use brand tone/style/visual cues and archetype guidance from the normalized Brand Brain context where relevant.
 - ${formatGuidance}
 - Make it modern, minimal, premium, and high-quality.
 - Use cinematic lighting and strong composition.

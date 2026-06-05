@@ -31,7 +31,7 @@ module.exports = async function handler(req, res) {
 
     const form = new FormData();
     form.append("model", "gpt-image-1");
-    form.append("prompt", `Create a polished, minimal, marketing-ready social visual from this source image.\nOverlay text to include prominently: "${overlayText}".\n${formatGuidance}\nCampaign context: ${campaignContext || "none"}\n${brandBrainContext.text}\nKeep typography clean and legible with strong composition.`);
+    form.append("prompt", `Create a polished, minimal, marketing-ready social visual from this source image.\nOverlay text to include prominently: "${overlayText}".\n${formatGuidance}\nCampaign context: ${campaignContext || "none"}\n${brandBrainContext.text}\nUse Brand Brain archetype guidance to shape the emotional mood, symbolism, and visual concept without overriding campaign context. Keep typography clean and legible with strong composition.`);
     form.append("size", "1024x1024");
     form.append("quality", "medium");
     form.append("image", new Blob([imageBuffer], { type: "image/png" }), "source.png");

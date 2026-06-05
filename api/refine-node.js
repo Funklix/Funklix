@@ -30,7 +30,7 @@ Current content: ${JSON.stringify(currentContent)}
 ${brandBrainContext.text}
 ${parentNodeSection}
 ${campaignContextSection}
-Guidance: Use parent node and normalized Brand Brain context to guide tone and intent. Do not change core meaning unless the instruction implies it.
+Guidance: Use parent node and normalized Brand Brain context to guide tone, archetype-aligned behavior, emotional direction, and intent. Do not let archetype guidance override strategy or change core meaning unless the instruction implies it.
 Return strict JSON only:
 {
   "title": "",
