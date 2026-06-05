@@ -1190,6 +1190,7 @@ async function saveBoardAsNew(payload) {
   const newId = data?.id;
   if (newId) {
     state.currentBoardId = newId;
+    saveBrandBrainState({ markDirty: false });
     state.currentBoardName = data?.name || payload?.name || "Campaign Canvas Copy";
     state.lastKnownUpdatedAt = data?.updated_at || null;
     const nextPath = `/boards/${newId}`;
@@ -1243,6 +1244,7 @@ async function duplicateCurrentBoard() {
     const newId = data?.id;
     if (!newId) throw new Error('Duplicate board response missing id');
     state.currentBoardId = newId;
+    saveBrandBrainState({ markDirty: false });
     state.currentBoardName = data?.name || payload.name;
     state.lastKnownUpdatedAt = data?.updated_at || null;
     const nextPath = `/boards/${newId}`;
@@ -3638,6 +3640,11 @@ function getCurrentBrandBrainBoardId() {
   return state.currentBoardId || getBoardIdFromPath() || "";
 }
 
+function brandBrainStorageKey(boardId = getCurrentBrandBrainBoardId()) {
+  const scopedBoardId = String(boardId || "").trim();
+  return scopedBoardId ? `${BRAND_CORE_STORAGE_KEY}:${scopedBoardId}` : BRAND_CORE_STORAGE_KEY;
+}
+
 function loadCampaignCanvasState() {
   const raw = localStorage.getItem(STORAGE_KEY); if (!raw) return false;
   const campaignState = JSON.parse(raw); console.log("Loaded campaignCanvasState", campaignState);
@@ -3843,12 +3850,12 @@ async function loadBoardFromUrlIfPresent() {
     state.currentBoardId = data?.id || boardId;
     state.currentBoardName = data?.name || "";
     state.lastKnownUpdatedAt = data?.updated_at || null;
-    if (data?.brand_core_snapshot && typeof data.brand_core_snapshot === "object") {
-      state.brandCore = normalizeBrandCoreState(data.brand_core_snapshot, state.brandCore, { preserveFallbackBrandDNA: true });
-      renderBrandCoreTiles();
-      renderBrandCoreEditor();
-      saveBrandBrainState({ markDirty: false });
-    }
+    state.brandCore = data?.brand_core_snapshot && typeof data.brand_core_snapshot === "object"
+      ? normalizeBrandCoreState(data.brand_core_snapshot)
+      : normalizeBrandCoreState(defaultBrandCoreState());
+    renderBrandCoreTiles();
+    renderBrandCoreEditor();
+    saveBrandBrainState({ markDirty: false });
     setSharePanelState(state.currentBoardId, data?.updated_at ? new Date(data.updated_at) : null, data?.owner_email || null, data?.owner_name || null, data?.owner_avatar || null);
     if (!applyBoardAccessFromServer(data?.access, "loadBoardFromUrlIfPresent")) {
       updateBoardAccessState();
@@ -3898,21 +3905,14 @@ function clonePlainObject(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
-function normalizeBrandDnaSnapshot(brandDNA = null, fallbackBrandDNA = null) {
-  const source = brandDNA && typeof brandDNA === "object" && !Array.isArray(brandDNA)
-    ? brandDNA
-    : fallbackBrandDNA && typeof fallbackBrandDNA === "object" && !Array.isArray(fallbackBrandDNA)
-      ? fallbackBrandDNA
-      : null;
-  if (!source) return null;
-  return clonePlainObject(source);
+function normalizeBrandDnaSnapshot(brandDNA = null) {
+  if (!brandDNA || typeof brandDNA !== "object" || Array.isArray(brandDNA)) return null;
+  return clonePlainObject(brandDNA);
 }
 
-function normalizeBrandCoreState(brandCore = {}, fallbackBrandCore = {}, options = {}) {
-  const { preserveFallbackBrandDNA = false } = options;
+function normalizeBrandCoreState(brandCore = {}) {
   const defaults = defaultBrandCoreState();
   const safeBrandCore = brandCore && typeof brandCore === "object" && !Array.isArray(brandCore) ? brandCore : {};
-  const safeFallback = fallbackBrandCore && typeof fallbackBrandCore === "object" && !Array.isArray(fallbackBrandCore) ? fallbackBrandCore : {};
   const hasIncomingBrandDNA = safeBrandCore.brandDNA && typeof safeBrandCore.brandDNA === "object" && !Array.isArray(safeBrandCore.brandDNA);
 
   return {
@@ -3931,10 +3931,7 @@ function normalizeBrandCoreState(brandCore = {}, fallbackBrandCore = {}, options
       ...(safeBrandCore.brandAssets && typeof safeBrandCore.brandAssets === "object" ? safeBrandCore.brandAssets : {})
     },
     customTiles: Array.isArray(safeBrandCore.customTiles) ? safeBrandCore.customTiles : [],
-    brandDNA: normalizeBrandDnaSnapshot(
-      hasIncomingBrandDNA ? safeBrandCore.brandDNA : null,
-      !hasIncomingBrandDNA && preserveFallbackBrandDNA ? safeFallback.brandDNA : null
-    )
+    brandDNA: normalizeBrandDnaSnapshot(hasIncomingBrandDNA ? safeBrandCore.brandDNA : null)
   };
 }
 
@@ -3952,17 +3949,17 @@ function saveBrandBrainState(options = {}) {
   const { markDirty: shouldMarkDirty = true } = options;
   const brandState = getBrandCoreData();
   console.log("Saving brandBrainState", brandState);
-  localStorage.setItem(BRAND_CORE_STORAGE_KEY, JSON.stringify(brandState));
+  localStorage.setItem(brandBrainStorageKey(), JSON.stringify(brandState));
   if (shouldMarkDirty) markUnsaved();
 }
 
 function loadBrandBrainState() {
-  const raw = localStorage.getItem(BRAND_CORE_STORAGE_KEY);
+  const raw = localStorage.getItem(brandBrainStorageKey());
   if (raw) {
-    state.brandCore = normalizeBrandCoreState(JSON.parse(raw), state.brandCore, { preserveFallbackBrandDNA: true });
+    state.brandCore = normalizeBrandCoreState(JSON.parse(raw));
     console.log("Loaded brandBrainState", state.brandCore);
   } else {
-    state.brandCore = normalizeBrandCoreState(defaultBrandCoreState(), state.brandCore);
+    state.brandCore = normalizeBrandCoreState(defaultBrandCoreState());
   }
   state.brandDnaDraft = null;
   state.brandDnaLoading = false;
@@ -3971,7 +3968,7 @@ function loadBrandBrainState() {
 
 function resetBrandBrainState() {
   console.log("RESET BRAND CORE CLICKED");
-  localStorage.removeItem(BRAND_CORE_STORAGE_KEY);
+  localStorage.removeItem(brandBrainStorageKey());
   loadBrandBrainState();
   renderBrandCoreTiles();
   renderBrandCoreEditor();
@@ -9403,9 +9400,9 @@ async function bootApp() {
   await loadSessionUser();
   if (new URLSearchParams(window.location.search).get("auth_error") === "not_configured") setAuthMessage("Google Login is not configured yet.");
   bindGlobalResetDelegation();
-  loadBrandBrainState();
   const boardIdFromPath = getBoardIdFromPath();
   state.currentBoardId = boardIdFromPath;
+  loadBrandBrainState();
   setSharePanelState(state.currentBoardId);
   if (boardIdFromPath) {
     loadBoardFromUrlIfPresent();
