@@ -12,6 +12,17 @@ function normalizeContentFormat(value = "1:1") {
   return IMAGE_SIZE_BY_FORMAT[normalized] ? normalized : "1:1";
 }
 
+const IMAGE_SIZE_BY_FORMAT = {
+  "1:1": "1024x1024",
+  "16:9": "1536x1024",
+  "9:16": "1024x1536"
+};
+
+function normalizeContentFormat(value = "1:1") {
+  const normalized = String(value || "1:1").trim();
+  return IMAGE_SIZE_BY_FORMAT[normalized] ? normalized : "1:1";
+}
+
 module.exports = async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
