@@ -1226,7 +1226,7 @@ async function duplicateCurrentBoard() {
   const payload = {
     name: buildDuplicateBoardName(),
     canvas_json: serializeState(),
-    brand_core_snapshot: state.brandCore
+    brand_core_snapshot: serializeBrandCoreSnapshot()
   };
 
   try {
@@ -3134,8 +3134,15 @@ function restoreLastSnapshot() {
 
 
 
+function buildLastSavedSnapshot() {
+  return JSON.stringify({
+    canvas_json: serializeState(),
+    brand_core_snapshot: serializeBrandCoreSnapshot()
+  });
+}
+
 function refreshLastSavedSnapshot() {
-  state.lastSavedSnapshot = JSON.stringify(serializeState());
+  state.lastSavedSnapshot = buildLastSavedSnapshot();
 }
 
 function detectDirtyFromSnapshot() {
@@ -3143,7 +3150,7 @@ function detectDirtyFromSnapshot() {
   if (state.isSaving) { return; }
   if (state.conflictModalOpen) { return; }
 
-  const currentSnapshot = JSON.stringify(serializeState());
+  const currentSnapshot = buildLastSavedSnapshot();
   if (currentSnapshot !== state.lastSavedSnapshot) {
     if (!state.isDirty) {
       markUnsaved();
@@ -3724,7 +3731,7 @@ async function saveBoardToServer(trigger = "manual") {
     const payload = {
       name: `Campaign Canvas ${new Date().toISOString()}`,
       canvas_json: canvasStateForSave,
-      brand_core_snapshot: state.brandCore
+      brand_core_snapshot: serializeBrandCoreSnapshot()
     };
     const pathname = window.location.pathname || '';
     const pathBoardId = pathname.startsWith('/boards/')
@@ -3836,10 +3843,10 @@ async function loadBoardFromUrlIfPresent() {
     state.currentBoardName = data?.name || "";
     state.lastKnownUpdatedAt = data?.updated_at || null;
     if (data?.brand_core_snapshot && typeof data.brand_core_snapshot === "object") {
-      state.brandCore = data.brand_core_snapshot;
+      state.brandCore = normalizeBrandCoreState(data.brand_core_snapshot, state.brandCore, { preserveFallbackBrandDNA: true });
       renderBrandCoreTiles();
       renderBrandCoreEditor();
-      saveBrandBrainState();
+      saveBrandBrainState({ markDirty: false });
     }
     setSharePanelState(state.currentBoardId, data?.updated_at ? new Date(data.updated_at) : null, data?.owner_email || null, data?.owner_name || null, data?.owner_avatar || null);
     if (!applyBoardAccessFromServer(data?.access, "loadBoardFromUrlIfPresent")) {
@@ -3885,25 +3892,77 @@ function resetCampaignCanvasState() {
   el.zoomLayer.querySelectorAll(".node").forEach((n) => n.remove()); fillInspector(null); updateListView(); updateEmptyState(); drawLinks(); setSaveStatus("Unsaved changes");
 }
 
+function clonePlainObject(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  return JSON.parse(JSON.stringify(value));
+}
+
+function normalizeBrandDnaSnapshot(brandDNA = null, fallbackBrandDNA = null) {
+  const source = brandDNA && typeof brandDNA === "object" && !Array.isArray(brandDNA)
+    ? brandDNA
+    : fallbackBrandDNA && typeof fallbackBrandDNA === "object" && !Array.isArray(fallbackBrandDNA)
+      ? fallbackBrandDNA
+      : null;
+  if (!source) return null;
+  return clonePlainObject(source);
+}
+
+function normalizeBrandCoreState(brandCore = {}, fallbackBrandCore = {}, options = {}) {
+  const { preserveFallbackBrandDNA = false } = options;
+  const defaults = defaultBrandCoreState();
+  const safeBrandCore = brandCore && typeof brandCore === "object" && !Array.isArray(brandCore) ? brandCore : {};
+  const safeFallback = fallbackBrandCore && typeof fallbackBrandCore === "object" && !Array.isArray(fallbackBrandCore) ? fallbackBrandCore : {};
+  const hasIncomingBrandDNA = safeBrandCore.brandDNA && typeof safeBrandCore.brandDNA === "object" && !Array.isArray(safeBrandCore.brandDNA);
+
+  return {
+    ...defaults,
+    ...safeBrandCore,
+    dosAndDonts: {
+      ...defaults.dosAndDonts,
+      ...(safeBrandCore.dosAndDonts && typeof safeBrandCore.dosAndDonts === "object" ? safeBrandCore.dosAndDonts : {})
+    },
+    brandVoiceExamples: {
+      ...defaults.brandVoiceExamples,
+      ...(safeBrandCore.brandVoiceExamples && typeof safeBrandCore.brandVoiceExamples === "object" ? safeBrandCore.brandVoiceExamples : {})
+    },
+    brandAssets: {
+      ...defaults.brandAssets,
+      ...(safeBrandCore.brandAssets && typeof safeBrandCore.brandAssets === "object" ? safeBrandCore.brandAssets : {})
+    },
+    customTiles: Array.isArray(safeBrandCore.customTiles) ? safeBrandCore.customTiles : [],
+    brandDNA: normalizeBrandDnaSnapshot(
+      hasIncomingBrandDNA ? safeBrandCore.brandDNA : null,
+      !hasIncomingBrandDNA && preserveFallbackBrandDNA ? safeFallback.brandDNA : null
+    )
+  };
+}
+
+function serializeBrandCoreSnapshot() {
+  state.brandCore = normalizeBrandCoreState(state.brandCore);
+  return clonePlainObject(state.brandCore);
+}
+
 function getBrandCoreData() {
-  return state.brandCore;
+  return serializeBrandCoreSnapshot();
 }
 window.getBrandCoreData = getBrandCoreData;
 
-function saveBrandBrainState() {
+function saveBrandBrainState(options = {}) {
+  const { markDirty: shouldMarkDirty = true } = options;
   const brandState = getBrandCoreData();
   console.log("Saving brandBrainState", brandState);
   localStorage.setItem(BRAND_CORE_STORAGE_KEY, JSON.stringify(brandState));
+  if (shouldMarkDirty) markUnsaved();
 }
 
 function loadBrandBrainState() {
   const raw = localStorage.getItem(BRAND_CORE_STORAGE_KEY);
-  if (raw) { state.brandCore = JSON.parse(raw); console.log("Loaded brandBrainState", state.brandCore); }
-  else {
-    state.brandCore = { brandCore: "", toneOfVoice: [], messagingPillars: [], valueProposition: "", personas: [], contentGuidelines: [], dosAndDonts: { dos: [], donts: [] }, brandVoiceExamples: { good: "", avoid: "" }, keywords: [], brandAssets: { domain: "", logo: "", colors: [], typography: "", references: [] }, brandDNA: null, customTiles: [] };
+  if (raw) {
+    state.brandCore = normalizeBrandCoreState(JSON.parse(raw), state.brandCore, { preserveFallbackBrandDNA: true });
+    console.log("Loaded brandBrainState", state.brandCore);
+  } else {
+    state.brandCore = normalizeBrandCoreState(defaultBrandCoreState(), state.brandCore);
   }
-  if (!Array.isArray(state.brandCore.customTiles)) state.brandCore.customTiles = [];
-  if (state.brandCore.brandDNA && typeof state.brandCore.brandDNA !== "object") state.brandCore.brandDNA = null;
   state.brandDnaDraft = null;
   state.brandDnaLoading = false;
 }
@@ -4191,9 +4250,10 @@ function refineBrandDna() {
 function acceptBrandDna() {
   const result = state.brandDnaDraft || state.brandCore?.brandDNA;
   if (!result?.primaryArchetype) return;
-  state.brandCore.brandDNA = normalizeBrandDnaResult(result, true);
+  state.brandCore = normalizeBrandCoreState(state.brandCore);
+  state.brandCore.brandDNA = normalizeBrandDnaResult({ ...result, userApproved: true }, true);
   state.brandDnaDraft = null;
-  saveBrandBrainState();
+  saveBrandBrainState({ markDirty: true });
   renderBrandCoreTiles();
   renderBrandCoreEditor();
 }
