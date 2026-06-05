@@ -8,7 +8,7 @@ function isValidEmail(email) {
 
 async function listEditors(boardId) {
   const result = await pool.query(
-    `SELECT email, role, created_at, created_by
+    `SELECT email, role, name, avatar, created_at, created_by
      FROM board_editors
      WHERE board_id = $1
      ORDER BY created_at ASC, email ASC`,
@@ -54,7 +54,7 @@ module.exports = async function handler(req, res) {
     }
 
     const existing = await pool.query(
-      `SELECT email, role, created_at, created_by
+      `SELECT email, role, name, avatar, created_at, created_by
        FROM board_editors
        WHERE board_id = $1 AND email = $2 AND role = 'editor'
        LIMIT 1`,
@@ -68,7 +68,7 @@ module.exports = async function handler(req, res) {
        VALUES ($1, $2, 'editor', $3)
        ON CONFLICT (board_id, email)
        DO UPDATE SET role = 'editor'
-       RETURNING email, role, created_at, created_by`,
+       RETURNING email, role, name, avatar, created_at, created_by`,
       [id, email, createdBy]
     );
 

@@ -1,4 +1,6 @@
 const { getSessionUser } = require('../../_auth-session');
+const { ensureBoardsTable } = require('../../_boards-storage');
+const { refreshOwnEditorIdentity, normalizeEmail } = require('../../_board-access');
 
 const PRESENCE_TTL_MS = 45 * 1000;
 const boardsPresence = global.__funklixBoardsPresence || new Map();
@@ -22,6 +24,42 @@ function safeNumber(value) {
 
 function safeString(value, max = 80) {
   return typeof value === 'string' && value.trim() ? value.trim().slice(0, max) : null;
+}
+
+function ownerIdentityDebugEnabled() {
+  return process.env.OWNER_IDENTITY_DEBUG === '1' || process.env.NODE_ENV !== 'production';
+}
+
+async function refreshPresenceEditorIdentity(boardId, user) {
+  if (!process.env.POSTGRES_URL || !user?.email) return;
+  try {
+    await ensureBoardsTable();
+    const updated = await refreshOwnEditorIdentity(boardId, user, { route: 'POST /api/boards/presence/:id', role: 'unknown_presence' });
+    if (ownerIdentityDebugEnabled()) {
+      console.debug('[Funklix Owner Identity] Presence editor identity refresh', {
+        boardId,
+        sessionEmail: normalizeEmail(user.email),
+        hasName: !!safeString(user.name, 120),
+        hasAvatar: !!safeString(user.avatar, 1000),
+        updated
+      });
+    }
+  } catch (error) {
+    console.error('[EDITOR_IDENTITY_ENRICHMENT_FAILED]', {
+      boardId,
+      email: user?.email || null,
+      role: 'unknown_presence',
+      message: error?.message || 'unknown',
+      stack: error?.stack || null
+    });
+    if (ownerIdentityDebugEnabled()) {
+      console.debug('[Funklix Owner Identity] Presence editor identity refresh skipped', {
+        boardId,
+        sessionEmail: normalizeEmail(user.email),
+        error: error?.message || 'unknown'
+      });
+    }
+  }
 }
 
 module.exports = async function handler(req, res) {
@@ -50,6 +88,7 @@ module.exports = async function handler(req, res) {
     const safeHoveredNodeId = safeString(hoveredNodeId);
 
     if (user?.email) {
+      await refreshPresenceEditorIdentity(boardId, user);
       const key = String(user.email).toLowerCase();
       viewers.set(key, {
         email: user.email,
