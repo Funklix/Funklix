@@ -4930,13 +4930,25 @@ function openCreateCampaignModal() {
     cancelBtn.disabled = true;
     ideaInput.disabled = true;
     contextInput.disabled = true;
+    let modalHiddenForBuild = false;
+    const hideModalForProgressiveBuild = () => {
+      modalHiddenForBuild = true;
+      overlay.style.opacity = "0";
+      overlay.style.pointerEvents = "none";
+      overlay.setAttribute("aria-hidden", "true");
+    };
     startThinking();
     try {
       const apiPlan = await fetchGeneratedCampaignPlan(ideaText || "Campaign Idea", contextText);
       setWorkerStatus("✨ Campaign plan ready. AI teammate is entering the board...");
+      hideModalForProgressiveBuild();
       const createdNodes = await generateCampaignFromIdea(ideaText || "Campaign Idea", contextText, apiPlan, { onStatus: setWorkerStatus });
       if (createdNodes.length) overlay.remove();
       else {
+        overlay.style.opacity = "";
+        overlay.style.pointerEvents = "";
+        overlay.removeAttribute("aria-hidden");
+        modalHiddenForBuild = false;
         stopThinking();
         restoreControls();
       }
@@ -4946,7 +4958,8 @@ function openCreateCampaignModal() {
         ? "Campaign generation stopped early. You can continue manually or use Generate Next Step."
         : "Could not generate campaign right now. No nodes were created.");
       stopThinking();
-      restoreControls();
+      if (modalHiddenForBuild) overlay.remove();
+      else restoreControls();
     }
   });
 }
