@@ -78,6 +78,7 @@ Constraints:
 - No markdown headings.
 - No code fences.
 - No giant walls of text.
+- Evaluate whether wording, framing, storytelling, and visual prompts reflect available archetype guidance without overriding positioning, ICP, value proposition, or messaging pillars.
 - Do not fabricate proof, metrics, testimonials, or brand facts not present in context.
 - Return strict JSON only.`;
 
