@@ -1,4 +1,5 @@
 const { uploadGeneratedImage } = require("./_image-storage");
+const { buildBrandBrainContext } = require("./_brand-brain-context");
 
 module.exports = async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
@@ -7,10 +8,11 @@ module.exports = async function handler(req, res) {
   if (!apiKey) return res.status(500).json({ error: "Server is missing OPENAI_API_KEY" });
 
   try {
-    const { sourceImage = "", overlayText = "", format = "1:1", brandBrainData = {}, campaignContext = "" } = req.body || {};
+    const { sourceImage = "", overlayText = "", format = "1:1", brandBrainData = {}, boardId = "", campaignContext = "" } = req.body || {};
     if (!sourceImage) return res.status(400).json({ error: "sourceImage is required" });
     if (!overlayText) return res.status(400).json({ error: "overlayText is required" });
 
+    const brandBrainContext = buildBrandBrainContext(boardId, brandBrainData);
     const formatGuidance = format === "16:9"
       ? "Design for a wide 16:9 social hero visual."
       : format === "9:16"
@@ -29,7 +31,7 @@ module.exports = async function handler(req, res) {
 
     const form = new FormData();
     form.append("model", "gpt-image-1");
-    form.append("prompt", `Create a polished, minimal, marketing-ready social visual from this source image.\nOverlay text to include prominently: "${overlayText}".\n${formatGuidance}\nCampaign context: ${campaignContext || "none"}\nBrand guidance: ${JSON.stringify(brandBrainData)}\nKeep typography clean and legible with strong composition.`);
+    form.append("prompt", `Create a polished, minimal, marketing-ready social visual from this source image.\nOverlay text to include prominently: "${overlayText}".\n${formatGuidance}\nCampaign context: ${campaignContext || "none"}\n${brandBrainContext.text}\nKeep typography clean and legible with strong composition.`);
     form.append("size", "1024x1024");
     form.append("quality", "medium");
     form.append("image", new Blob([imageBuffer], { type: "image/png" }), "source.png");
