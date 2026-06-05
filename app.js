@@ -9450,6 +9450,7 @@ async function bootApp() {
   bindGlobalResetDelegation();
   const boardIdFromPath = getBoardIdFromPath();
   state.currentBoardId = boardIdFromPath;
+  loadBrandBrainState();
   setSharePanelState(state.currentBoardId);
   if (boardIdFromPath) {
     resetBrandBrainForBoardHydration();
