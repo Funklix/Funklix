@@ -5215,6 +5215,23 @@ function nodeHasActivePostitEditor(nodeEl) {
   return !!active?.closest?.(".postit") && !!nodeEl?.contains(active);
 }
 
+function nodeHasActiveSocialPreviewEditor(nodeEl) {
+  const active = document.activeElement;
+  return !!nodeEl?.contains(active)
+    && !!active?.closest?.(".social-preview")
+    && !!active.closest(".social-caption, .social-cta, .social-hashtags");
+}
+
+function updateSocialPreviewCharCount(socialRoot, node) {
+  const charCount = socialRoot?.querySelector(".social-char-count");
+  if (!charCount) return;
+  const captionLen = (node.social?.caption || "").length;
+  const limits = { "X / Twitter": 280, LinkedIn: 3000, Instagram: 2200, TikTok: 2200 };
+  const limit = limits[node.social?.platform] || 3000;
+  charCount.textContent = `${captionLen} characters${captionLen > limit ? ` (over ${limit})` : ""}`;
+  charCount.classList.toggle("warning", captionLen > limit);
+}
+
 function updateNodeCard(node) {
   const nodeEl = el.zoomLayer.querySelector(`[data-id='${node.id}']`);
   if (!nodeEl) return;
@@ -5369,8 +5386,11 @@ function updateNodeCard(node) {
   const social = nodeEl.querySelector(".social-preview");
   const isSocial = node.type === "Social Media Posting";
   const isLandingPage = node.type === "Landing Page";
+  const hasActiveSocialPreviewEditor = isSocial && nodeHasActiveSocialPreviewEditor(nodeEl);
   social.classList.toggle("hidden", !(isSocial || isLandingPage));
-  if (isSocial) {
+  if (hasActiveSocialPreviewEditor) {
+    updateSocialPreviewCharCount(social, node);
+  } else if (isSocial) {
     social.innerHTML = "";
     const wrapper = document.createElement("div");
     wrapper.className = "social-card";
@@ -5430,8 +5450,8 @@ function updateNodeCard(node) {
       }
       node.social.caption = caption.textContent;
       recordNodeUpdatedActivity(node);
-      updateNodeCard(node);
-      if (state.selectedPrimary === node.id) fillInspector(node);
+      updateSocialPreviewCharCount(social, node);
+      if (state.selectedPrimary === node.id) el.inputs.caption.value = node.social.caption;
       saveCampaignCanvasState();
     });
 
@@ -5447,6 +5467,7 @@ function updateNodeCard(node) {
       }
       node.social.preview = cta.textContent;
       recordNodeUpdatedActivity(node);
+      if (state.selectedPrimary === node.id && el.inputs.preview) el.inputs.preview.value = node.social.preview;
       saveCampaignCanvasState();
     });
 
@@ -5460,9 +5481,19 @@ function updateNodeCard(node) {
         setSaveStatus("Read-only board");
         return;
       }
-      node.social.hashtags = normalizeHashtagsInput(hashtags.textContent || "");
-      hashtags.textContent = node.social.hashtags.join(" ");
+      const rawHashtags = hashtags.textContent || "";
+      state.hashtagDraftByNode[node.id] = rawHashtags;
+      node.social.hashtags = normalizeHashtagsInput(rawHashtags);
+      if (state.selectedPrimary === node.id) el.inputs.hashtags.value = rawHashtags;
       recordNodeUpdatedActivity(node);
+      saveCampaignCanvasState();
+    });
+    hashtags.addEventListener("blur", () => {
+      const normalized = normalizeHashtagsInput(state.hashtagDraftByNode[node.id] ?? hashtags.textContent ?? "");
+      node.social.hashtags = normalized;
+      delete state.hashtagDraftByNode[node.id];
+      hashtags.textContent = normalized.join(" ");
+      if (state.selectedPrimary === node.id) el.inputs.hashtags.value = normalized.join(", ");
       saveCampaignCanvasState();
     });
 
