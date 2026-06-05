@@ -201,6 +201,7 @@ const el = {
   deleteNodeButton: document.getElementById("delete-node-btn"),
   improveNodeButton: document.getElementById("improve-node-btn"),
   generateNextStepInspectorButton: document.getElementById("generate-next-step-inspector-btn"),
+  reviewNodeButton: document.getElementById("review-node-btn"),
   regenerateNodeButton: document.getElementById("regenerate-node-btn"),
   regeneratePlatformButton: document.getElementById("regenerate-platform-btn"),
   addToPostingCalendarButton: document.getElementById("add-to-posting-calendar-btn"),
@@ -1455,6 +1456,7 @@ function formatActivityAction(entry = {}) {
     comment_resolved: `resolved a comment on ${title}`,
     postit_added: `added a post-it on ${title}`,
     generated_next_step: `generated next step from ${title}`,
+    ai_reviewed_node: `reviewed ${title}`,
     auto_arranged: "auto-arranged the board"
   };
   return map[entry.type] || `updated ${title}`;
@@ -4928,6 +4930,7 @@ function updateInspectorActionVisibility() {
 
   el.improveNodeButton.style.display = hasSingleNode ? "block" : "none";
   el.generateNextStepInspectorButton.style.display = hasSingleNode ? "block" : "none";
+  el.reviewNodeButton.style.display = hasSingleNode ? "block" : "none";
   el.regenerateNodeButton.style.display = hasSingleNode ? "block" : "none";
   el.regeneratePlatformButton.style.display = selectedNode?.type === "Social Media Posting" ? "block" : "none";
   el.addToPostingCalendarButton.style.display = selectedNode?.type === "Social Media Posting" ? "block" : "none";
@@ -4943,6 +4946,8 @@ function updateInspectorActionVisibility() {
   el.generateNextStepInspectorButton.title = hasSingleNode
     ? (inspectorNextStepType ? (isBoardReadOnly() ? "Read-only board" : `Generate ${inspectorNextStepType}`) : "No next step available")
     : "Select a node";
+  el.reviewNodeButton.disabled = !hasSingleNode || isBoardReadOnly();
+  el.reviewNodeButton.title = hasSingleNode ? (isBoardReadOnly() ? "Read-only board" : "Review selected node") : "Select a node";
   el.regenerateNodeButton.disabled = !hasSingleNode;
   el.regeneratePlatformButton.disabled = !(selectedNode?.type === "Social Media Posting");
   el.addToPostingCalendarButton.disabled = !(selectedNode?.type === "Social Media Posting");
@@ -6557,6 +6562,120 @@ function buildNextStepNodeContext(node) {
   };
 }
 
+function buildReviewNodeContext(node) {
+  return {
+    nodeType: node.type,
+    title: node.title || "",
+    content: node.content || "",
+    social: node.social || {},
+    landingPage: node.landingPage || {},
+    imagePrompt: node.imagePrompt || "",
+    goal: node.goal || "",
+    audience: node.audience || "",
+    channel: node.channel || node.social?.platform || "",
+    funnelStage: node.funnelStage || "",
+    tone: node.tone || "",
+    tags: Array.isArray(node.tags) ? node.tags : [],
+    campaignContext: getCampaignContextSummary() || "",
+    connectedNodeContext: getConnectedNodeContext(node.id),
+    brandBrainData: state.brandCore
+  };
+}
+
+async function fetchNodeReview(node) {
+  const response = await fetch("/api/review-node", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(buildReviewNodeContext(node))
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data?.error || "Failed to review node");
+  return data;
+}
+
+function formatAiReviewComment(review = {}) {
+  const score = Number.isFinite(Number(review.score)) ? Number(review.score).toFixed(1).replace(/\.0$/, "") : "0";
+  const strengths = (Array.isArray(review.strengths) ? review.strengths : []).filter(Boolean).slice(0, 4);
+  const improvements = (Array.isArray(review.improvements) ? review.improvements : []).filter(Boolean).slice(0, 4);
+  return [
+    `AI Review: ${score}/10`,
+    "",
+    "Summary:",
+    review.summary || "No summary returned.",
+    "",
+    "Strengths:",
+    ...(strengths.length ? strengths.map((item) => `- ${item}`) : ["- No clear strengths identified."]),
+    "",
+    "Improve:",
+    ...(improvements.length ? improvements.map((item) => `- ${item}`) : ["- No major improvements identified."]),
+    review.suggestedRewrite ? "" : null,
+    review.suggestedRewrite ? "Suggested rewrite:" : null,
+    review.suggestedRewrite || null
+  ].filter((line) => line !== null).join("\n").trim();
+}
+
+function addAiReviewPostitToNode(node, review) {
+  if (!node) return null;
+  if (!Array.isArray(node.postits)) node.postits = [];
+  const createdAt = new Date().toISOString();
+  const existingCount = node.postits.length;
+  const note = {
+    id: `postit-${state.postitCounter++}`,
+    authorName: "AI Review",
+    authorEmail: "ai@funklix.local",
+    authorAvatar: "",
+    user: "AI Review",
+    time: nowString(),
+    createdAt,
+    updatedAt: createdAt,
+    text: formatAiReviewComment(review),
+    color: "#e9f1ff",
+    resolved: false,
+    replies: [],
+    x: 16 + (existingCount % 3) * 18,
+    y: 56 + (existingCount % 3) * 18
+  };
+  node.postits.push(note);
+  markNodeCommentsSeen(node.id);
+  updateNodeCard(node);
+  const entry = appendActivity("ai_reviewed_node", { node, userName: "AI" });
+  if (entry) {
+    entry.user = { name: "AI", email: "ai@funklix.local", avatar: "" };
+    renderActivityFeed();
+  }
+  saveCampaignCanvasState();
+  return note;
+}
+
+async function reviewNodeWithAI(node, triggerBtn = null) {
+  if (!node) return null;
+  if (isBoardReadOnly()) {
+    setSaveStatus("Read-only board");
+    return null;
+  }
+  const originalText = triggerBtn?.textContent || "";
+  if (triggerBtn) {
+    triggerBtn.disabled = true;
+    triggerBtn.textContent = "Reviewing...";
+  }
+  setSaveStatus("Reviewing node...");
+  try {
+    const review = await fetchNodeReview(node);
+    const note = addAiReviewPostitToNode(node, review);
+    setSaveStatus("AI review added");
+    return note;
+  } catch (error) {
+    console.error("[Funklix AI] Review node failed", error);
+    setSaveStatus("Could not review node.");
+    return null;
+  } finally {
+    if (triggerBtn) {
+      triggerBtn.disabled = false;
+      triggerBtn.textContent = originalText;
+    }
+  }
+}
+
 async function fetchGeneratedNextStep(node) {
   const response = await fetch("/api/generate-next-step", {
     method: "POST",
@@ -8064,6 +8183,12 @@ el.generateNextStepInspectorButton?.addEventListener("click", async () => {
   const node = getNode(state.selectedPrimary);
   if (!node) return;
   await generateNextStepFromNode(node, el.generateNextStepInspectorButton);
+  updateInspectorActionVisibility();
+});
+el.reviewNodeButton?.addEventListener("click", async () => {
+  const node = getNode(state.selectedPrimary);
+  if (!node) return;
+  await reviewNodeWithAI(node, el.reviewNodeButton);
   updateInspectorActionVisibility();
 });
 el.regenerateNodeButton.addEventListener("click", async () => {
