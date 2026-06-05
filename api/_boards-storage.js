@@ -38,6 +38,8 @@ async function ensureBoardsTable() {
           CHECK (role IN ('editor'))
         );
       `);
+      await pool.query('ALTER TABLE board_editors ADD COLUMN IF NOT EXISTS name TEXT;');
+      await pool.query('ALTER TABLE board_editors ADD COLUMN IF NOT EXISTS avatar TEXT;');
       await pool.query('CREATE UNIQUE INDEX IF NOT EXISTS board_editors_board_email_uidx ON board_editors (board_id, email);');
       await pool.query('CREATE INDEX IF NOT EXISTS board_editors_email_idx ON board_editors (email);');
       await pool.query('CREATE INDEX IF NOT EXISTS board_editors_board_id_idx ON board_editors (board_id);');
