@@ -2997,8 +2997,8 @@ function clampNodePosition(rawX, rawY) {
   const y = Number.isFinite(rawY) ? rawY : 180;
 
   return {
-    x: Math.max(40, Math.min(1600, x)),
-    y: Math.max(40, Math.min(1200, y))
+    x: Math.max(40, Math.min(12000, x)),
+    y: Math.max(40, Math.min(8000, y))
   };
 }
 
@@ -4757,26 +4757,73 @@ function applyGeneratedCampaignNodePayload(node, payload = {}, previousNode = nu
       trust: cleanCampaignField(landing.trust || landing.buildingTrust),
       cta: cleanCampaignField(landing.cta || landing.conversionCta)
     };
-    node.content = node.content || node.landingPage.headerClaim || node.title;
+    node.content = description || node.landingPage.headerClaim || "";
   }
 }
 
-function campaignNodePosition(index) {
+const CAMPAIGN_CHAIN_X_STEP = 420;
+const CAMPAIGN_CHAIN_PADDING = 420;
+
+function campaignNodePosition(index, origin = { x: 220, y: 150 }) {
   return {
-    x: 220 + index * (NODE_WIDTH + 95),
-    y: 150 + (index % 2) * 90
+    x: origin.x + index * CAMPAIGN_CHAIN_X_STEP,
+    y: origin.y
   };
+}
+
+function campaignChainRect(origin) {
+  return {
+    minX: origin.x,
+    minY: origin.y,
+    maxX: origin.x + NODE_WIDTH + (CAMPAIGN_CHAIN_TYPES.length - 1) * CAMPAIGN_CHAIN_X_STEP,
+    maxY: origin.y + NODE_HEIGHT + 180
+  };
+}
+
+function campaignRectOverlapsExisting(rect, padding = 80) {
+  return state.nodes.some((node) => {
+    const nodeEl = el.zoomLayer?.querySelector(`[data-id='${node.id}']`);
+    const x = Number.isFinite(node?.position?.x) ? node.position.x : 0;
+    const y = Number.isFinite(node?.position?.y) ? node.position.y : 0;
+    const width = nodeEl?.offsetWidth || NODE_WIDTH;
+    const height = nodeEl?.offsetHeight || NODE_HEIGHT;
+    return !(
+      rect.maxX + padding < x
+      || rect.minX - padding > x + width
+      || rect.maxY + padding < y
+      || rect.minY - padding > y + height
+    );
+  });
+}
+
+function calculateCampaignChainOrigin() {
+  const visible = visibleBoardBounds();
+  const chainWidth = NODE_WIDTH + (CAMPAIGN_CHAIN_TYPES.length - 1) * CAMPAIGN_CHAIN_X_STEP;
+  const chainHeight = NODE_HEIGHT + 180;
+  const visibleOrigin = clampNodePosition(
+    visible.left + Math.max(80, (visible.width - chainWidth) / 2),
+    visible.top + Math.max(80, (visible.height - chainHeight) / 2)
+  );
+  if (!state.nodes.length) return visibleOrigin;
+
+  const visibleRect = campaignChainRect(visibleOrigin);
+  const viewportHasRoom = visible.width >= chainWidth + 160 && visible.height >= chainHeight + 120;
+  if (viewportHasRoom && !campaignRectOverlapsExisting(visibleRect, 120)) return visibleOrigin;
+
+  const bounds = getBoardContentBounds({ includeMargin: 0 });
+  if (!bounds) return visibleOrigin;
+
+  const rightOrigin = clampNodePosition(bounds.maxX + CAMPAIGN_CHAIN_PADDING, Math.max(120, bounds.minY));
+  if (!campaignRectOverlapsExisting(campaignChainRect(rightOrigin), 120)) return rightOrigin;
+
+  return clampNodePosition(Math.max(120, bounds.minX), bounds.maxY + CAMPAIGN_CHAIN_PADDING);
 }
 
 async function generateCampaignChainProgressively(plan, { onStatus = null } = {}) {
   const validated = validateGeneratedCampaignPlan(plan);
-  if (state.nodes.length > 0) {
-    const clear = window.confirm("Canvas already has nodes. Clear board before generating?");
-    if (!clear) return [];
-    resetCampaignCanvasState();
-  }
   setActiveView("board");
   toggleListMode(false);
+  const chainOrigin = calculateCampaignChainOrigin();
   const createdNodes = [];
   try {
     for (let index = 0; index < validated.nodes.length; index += 1) {
@@ -4784,7 +4831,7 @@ async function generateCampaignChainProgressively(plan, { onStatus = null } = {}
       const status = CAMPAIGN_WORKER_STATUS[payload.type] || "✨ AI teammate is building the campaign...";
       if (onStatus) onStatus(status);
       setSaveStatus(status);
-      const node = createNode({ type: payload.type, parentId: null, position: campaignNodePosition(index) });
+      const node = createNode({ type: payload.type, parentId: null, position: campaignNodePosition(index, chainOrigin) });
       if (!node) throw new Error(`Could not create ${payload.type}.`);
       applyGeneratedCampaignNodePayload(node, payload, createdNodes[index - 1] || null);
       updateNodeCard(node);

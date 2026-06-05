@@ -77,15 +77,17 @@ Content:
 Social Media Posting:
 - Adapt Content into one platform-ready social post.
 - Use channel/platform from context when available; otherwise default to LinkedIn.
-- LinkedIn: professional, insight-led, credibility-focused.
-- Instagram: concise, visual, emotionally clear.
-- TikTok: hook-first, punchy, creator-native.
-- X/Twitter: compressed, sharp, direct.
-- Include opening hook, caption/body, CTA, and hashtags only if appropriate.
+- If channel/platform is ambiguous, choose LinkedIn and write with LinkedIn-quality depth.
+- LinkedIn: write a real post, not a one-line caption. Include a strong opening hook, 2-4 short body paragraphs with useful context/insight, a clear CTA, and 2-3 relevant hashtags if appropriate.
+- Instagram: concise, visual, emotionally clear caption with a simple CTA.
+- TikTok: hook-first, punchy, creator-native script/caption.
+- X/Twitter: shorter, sharper, compressed post with direct CTA.
+- Put the final platform-ready post in social.caption, not only in content.
 
 Landing Page:
 - Transform the Social Media Posting into landing page copy.
 - Fill structured landingPage fields instead of dumping everything into content.
+- Keep content empty or only a one-sentence summary.
 - headerVisualPrompt: production-ready visual direction for a 16:9 hero image.
 - headerClaim: short main headline claim.
 - problem: concise ICP problem paragraph.
