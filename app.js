@@ -74,6 +74,7 @@ const state = {
   ,conflictModalOpen: false
   ,autosavePausedUntilChange: false
   ,isBoardLoading: true
+  ,isBoardHydrating: false
   ,lastSavedSnapshot: ""
   ,canvasMetadata: { createdAt: null, updatedAt: null }
   ,history: []
@@ -3150,6 +3151,8 @@ function refreshLastSavedSnapshot() {
 
 function detectDirtyFromSnapshot() {
   if (state.isBoardLoading) { return; }
+  if (state.isBoardHydrating) { return; }
+  if (state.initialServerLoadInFlight) { return; }
   if (state.isSaving) { return; }
   if (state.conflictModalOpen) { return; }
 
@@ -3173,6 +3176,9 @@ function clearAutosaveTimer() {
 }
 
 function scheduleAutosave() {
+  if (state.isBoardLoading) { return; }
+  if (state.isBoardHydrating) { return; }
+  if (state.initialServerLoadInFlight) { return; }
   if (state.conflictModalOpen) { return; }
   if (state.autosavePausedUntilChange) { return; }
   if (state.boardAccess?.canEdit === false) { return; }
@@ -3193,6 +3199,9 @@ function scheduleAutosave() {
       currentBoardId: state.currentBoardId || getBoardIdFromPath()
     });
     if (!state.isDirty) { return; }
+    if (state.isBoardLoading) { return; }
+    if (state.isBoardHydrating) { return; }
+    if (state.initialServerLoadInFlight) { return; }
     if (state.isSaving) { return; }
     if (state.conflictModalOpen) { return; }
     if (state.autosavePausedUntilChange) { return; }
@@ -3710,6 +3719,16 @@ function applyCampaignState(campaignState, statusText = "Restored") {
 }
 
 async function saveBoardToServer(trigger = "manual") {
+  if (state.isBoardLoading || state.isBoardHydrating || state.initialServerLoadInFlight) {
+    console.warn("[Funklix Save Guard] Save blocked while board is loading or hydrating", {
+      trigger,
+      currentBoardId: state.currentBoardId || getBoardIdFromPath(),
+      isBoardLoading: state.isBoardLoading,
+      isBoardHydrating: state.isBoardHydrating,
+      initialServerLoadInFlight: state.initialServerLoadInFlight
+    });
+    return false;
+  }
   if (state.isSaving) {
     console.warn('[Funklix Save Guard] Save already in progress, skipping overlapping save', {
       trigger,
@@ -3842,20 +3861,27 @@ async function loadBoardFromUrlIfPresent() {
   if (!boardId) return false;
   state.initialServerLoadInFlight = true;
   state.isBoardLoading = true;
+  state.isBoardHydrating = true;
   state.currentBoardId = boardId;
+  clearAutosaveTimer();
+  resetBrandBrainForBoardHydration();
+  renderBrandCoreTiles();
+  renderBrandCoreEditor();
+  debugBrandBrainScope("board-load-start", { boardId, storageKey: brandBrainStorageKey(boardId) });
   try {
     const response = await fetch(`/api/boards/${boardId}`);
     const data = await response.json();
     if (!response.ok) throw new Error(data?.error || 'Failed to load board');
+    const snapshot = data?.brand_core_snapshot && typeof data.brand_core_snapshot === "object" ? data.brand_core_snapshot : null;
+    debugBrandBrainScope("board-snapshot-received", { boardId, hasSnapshot: Boolean(snapshot), ...brandDnaScopeSummary(snapshot || {}) });
     state.currentBoardId = data?.id || boardId;
     state.currentBoardName = data?.name || "";
     state.lastKnownUpdatedAt = data?.updated_at || null;
-    state.brandCore = data?.brand_core_snapshot && typeof data.brand_core_snapshot === "object"
-      ? normalizeBrandCoreState(data.brand_core_snapshot)
-      : normalizeBrandCoreState(defaultBrandCoreState());
+    state.brandCore = snapshot ? normalizeBrandCoreState(snapshot) : normalizeBrandCoreState(defaultBrandCoreState());
     renderBrandCoreTiles();
     renderBrandCoreEditor();
     saveBrandBrainState({ markDirty: false });
+    debugBrandBrainScope("board-brand-brain-hydrated", { boardId: state.currentBoardId, storageKey: brandBrainStorageKey(), ...brandDnaScopeSummary(state.brandCore) });
     setSharePanelState(state.currentBoardId, data?.updated_at ? new Date(data.updated_at) : null, data?.owner_email || null, data?.owner_name || null, data?.owner_avatar || null);
     if (!applyBoardAccessFromServer(data?.access, "loadBoardFromUrlIfPresent")) {
       updateBoardAccessState();
@@ -3879,6 +3905,7 @@ async function loadBoardFromUrlIfPresent() {
   } finally {
     state.initialServerLoadInFlight = false;
     state.isBoardLoading = false;
+    state.isBoardHydrating = false;
   }
 }
 
@@ -3964,6 +3991,27 @@ function loadBrandBrainState() {
   state.brandDnaDraft = null;
   state.brandDnaLoading = false;
   state.brandAvatarLoading = false;
+}
+
+function resetBrandBrainForBoardHydration() {
+  state.brandCore = normalizeBrandCoreState(defaultBrandCoreState());
+  state.brandDnaDraft = null;
+  state.brandDnaLoading = false;
+  state.brandAvatarLoading = false;
+}
+
+function debugBrandBrainScope(event, details = {}) {
+  if (typeof window === "undefined" || !window.DEBUG_BRAND_BRAIN_SCOPE) return;
+  console.debug("[BrandBrainScope]", event, details);
+}
+
+function brandDnaScopeSummary(brandCore = {}) {
+  const brandDNA = brandCore?.brandDNA && typeof brandCore.brandDNA === "object" ? brandCore.brandDNA : null;
+  return {
+    hasBrandDNA: Boolean(brandDNA?.primaryArchetype),
+    primaryArchetype: brandDNA?.primaryArchetype || "",
+    hasAvatar: Boolean(brandDNA?.avatar?.imageUrl)
+  };
 }
 
 function resetBrandBrainState() {
@@ -9405,8 +9453,10 @@ async function bootApp() {
   loadBrandBrainState();
   setSharePanelState(state.currentBoardId);
   if (boardIdFromPath) {
-    loadBoardFromUrlIfPresent();
+    resetBrandBrainForBoardHydration();
+    await loadBoardFromUrlIfPresent();
   } else {
+    loadBrandBrainState();
     loadCampaignCanvasState();
   }
   centerBoardStartPosition();
