@@ -1,3 +1,5 @@
+const { getArchetypeGuidance } = require("./_archetype-guidance");
+
 const MAX_TEXT_LENGTH = 900;
 const MAX_LIST_ITEMS = 8;
 
@@ -51,6 +53,7 @@ function normalizeBrandBrainData(brandBrainData = {}) {
   const brandAssets = data.brandAssets && typeof data.brandAssets === "object" ? data.brandAssets : {};
   const dosAndDonts = data.dosAndDonts && typeof data.dosAndDonts === "object" ? data.dosAndDonts : {};
   const voiceExamples = data.brandVoiceExamples && typeof data.brandVoiceExamples === "object" ? data.brandVoiceExamples : {};
+  const brandDNA = data.brandDNA && typeof data.brandDNA === "object" ? data.brandDNA : {};
 
   const icp = Array.isArray(data.personas)
     ? data.personas.map(formatPersona).filter(Boolean).slice(0, 6)
@@ -68,7 +71,15 @@ function normalizeBrandBrainData(brandBrainData = {}) {
     usp: valueProposition,
     offer: cleanText(data.offer || data.coreOffer || valueProposition || brandCore, 700),
     tone,
-    archetype: cleanText(data.archetype || data.brandArchetype || (tone.length ? tone.join(", ") : ""), 300),
+    archetype: cleanText(data.archetype || data.brandArchetype || brandDNA.primaryArchetype || (tone.length ? tone.join(", ") : ""), 300),
+    brandDNA: {
+      primaryArchetype: cleanText(brandDNA.primaryArchetype, 80),
+      primaryConfidence: cleanText(brandDNA.primaryConfidence, 20),
+      secondaryArchetype: cleanText(brandDNA.secondaryArchetype, 80),
+      secondaryConfidence: cleanText(brandDNA.secondaryConfidence, 20),
+      reasoning: cleanText(brandDNA.reasoning, 700),
+      signals: brandDNA.signals && typeof brandDNA.signals === "object" ? brandDNA.signals : {}
+    },
     messagingPillars,
     ctaGuidance: {
       contentGuidelines,
@@ -91,6 +102,89 @@ function normalizeBrandBrainData(brandBrainData = {}) {
       ? data.customTiles.map(formatCustomTile).filter(Boolean).slice(0, 8)
       : []
   };
+}
+
+function uniqueValues(values = [], maxItems = 12) {
+  const seen = new Set();
+  return values
+    .map((value) => cleanText(value, 180))
+    .filter(Boolean)
+    .filter((value) => {
+      const key = value.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .slice(0, maxItems);
+}
+
+function appendBulletSection(lines, label, items = [], maxItems = 12) {
+  const cleanItems = uniqueValues(items, maxItems);
+  if (!cleanItems.length) return;
+  lines.push(`${label}:`);
+  cleanItems.forEach((item) => lines.push(`- ${item}`));
+}
+
+function formatArchetypeLabel(archetype = "", confidence = "") {
+  const name = cleanText(archetype, 80);
+  if (!name) return "";
+  const confidenceText = cleanText(confidence, 20);
+  return confidenceText ? `${name} (${confidenceText}%)` : name;
+}
+
+function buildArchetypeGuidance(brandBrainDataOrNormalized = {}) {
+  const source = brandBrainDataOrNormalized && typeof brandBrainDataOrNormalized === "object" ? brandBrainDataOrNormalized : {};
+  const brandDNA = source.brandDNA && typeof source.brandDNA === "object" ? source.brandDNA : {};
+  const primaryArchetype = cleanText(brandDNA.primaryArchetype || source.primaryArchetype, 80);
+  const secondaryArchetype = cleanText(brandDNA.secondaryArchetype || source.secondaryArchetype, 80);
+  const primaryGuidance = getArchetypeGuidance(primaryArchetype);
+  const secondaryGuidance = getArchetypeGuidance(secondaryArchetype);
+  const entries = [
+    { label: "Primary Archetype", archetype: primaryArchetype, confidence: brandDNA.primaryConfidence || source.primaryConfidence, guidance: primaryGuidance },
+    { label: "Secondary Archetype", archetype: secondaryArchetype, confidence: brandDNA.secondaryConfidence || source.secondaryConfidence, guidance: secondaryGuidance }
+  ].filter((entry) => entry.archetype && entry.guidance);
+
+  if (!entries.length) return "";
+
+  const combined = entries.reduce((memo, entry) => {
+    memo.motivations.push(...entry.guidance.motivations);
+    memo.communicationStyle.push(...entry.guidance.communicationStyle);
+    memo.preferredThemes.push(...entry.guidance.preferredThemes);
+    memo.preferredEmotions.push(...entry.guidance.preferredEmotions);
+    memo.preferredStorytellingPatterns.push(...entry.guidance.preferredStorytellingPatterns);
+    memo.avoid.push(...entry.guidance.avoid);
+    return memo;
+  }, {
+    motivations: [],
+    communicationStyle: [],
+    preferredThemes: [],
+    preferredEmotions: [],
+    preferredStorytellingPatterns: [],
+    avoid: []
+  });
+
+  const lines = [
+    "Archetype Guidance:",
+    "Use this as behavioral guidance for wording, framing, storytelling, emotional direction, campaign concepts, visual concepts, and image prompts.",
+    "Do not let archetype guidance override Brand Positioning, ICP, Value Proposition, Messaging Pillars, or explicit campaign constraints.",
+    "Priority order: Brand Positioning > ICP > Value Proposition > Messaging Pillars > Archetype Guidance > Tone."
+  ];
+
+  entries.forEach((entry) => {
+    lines.push(`${entry.label}: ${formatArchetypeLabel(entry.archetype, entry.confidence)}`);
+  });
+
+  lines.push("Communication Guidance:");
+  appendBulletSection(lines, "Favor", [
+    ...combined.preferredThemes,
+    ...combined.motivations,
+    ...combined.communicationStyle,
+    ...combined.preferredEmotions
+  ], 18);
+  appendBulletSection(lines, "Avoid", combined.avoid);
+  appendBulletSection(lines, "Storytelling", combined.preferredStorytellingPatterns);
+
+  return lines.join("\n");
 }
 
 function appendLine(lines, label, value) {
@@ -124,12 +218,19 @@ function brandBrainContextToText(normalized, hasBrandBrain) {
   appendLine(lines, "Offer", normalized.offer);
   appendLine(lines, "Tone", normalized.tone);
   appendLine(lines, "Archetype", normalized.archetype);
+  appendLine(lines, "Brand DNA", {
+    primary: formatArchetypeLabel(normalized.brandDNA.primaryArchetype, normalized.brandDNA.primaryConfidence),
+    secondary: formatArchetypeLabel(normalized.brandDNA.secondaryArchetype, normalized.brandDNA.secondaryConfidence),
+    reasoning: normalized.brandDNA.reasoning
+  });
   appendLine(lines, "Messaging pillars", normalized.messagingPillars);
   appendLine(lines, "CTA guidance", normalized.ctaGuidance);
   appendLine(lines, "Visual style", normalized.visualStyle);
   appendLine(lines, "Brand voice examples", normalized.brandVoiceExamples);
   appendLine(lines, "Keywords", normalized.keywords);
   appendLine(lines, "Custom Brand Brain context", normalized.customContext);
+  const archetypeGuidance = buildArchetypeGuidance(normalized);
+  if (archetypeGuidance) lines.push(archetypeGuidance);
   lines.push("Use the Brand Brain when relevant, but never fabricate unavailable proof, metrics, testimonials, logos, or brand facts.");
   return lines.join("\n");
 }
@@ -147,5 +248,6 @@ function buildBrandBrainContext(boardId = "", brandBrainData = {}) {
 
 module.exports = {
   buildBrandBrainContext,
+  buildArchetypeGuidance,
   normalizeBrandBrainData
 };
