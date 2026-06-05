@@ -4902,6 +4902,7 @@ function openCreateCampaignModal() {
     if (thinkingTimer) clearInterval(thinkingTimer);
     thinkingTimer = null;
     dotsEl.textContent = "";
+    subtextEl.textContent = message;
   };
   const setWorkerStatus = (message) => {
     loader.classList.remove("hidden");
@@ -4933,13 +4934,10 @@ function openCreateCampaignModal() {
     startThinking();
     try {
       const apiPlan = await fetchGeneratedCampaignPlan(ideaText || "Campaign Idea", contextText);
-      setWorkerStatus("✨ Campaign plan ready. AI teammate is entering the board...");
-      const createdNodes = await generateCampaignFromIdea(ideaText || "Campaign Idea", contextText, apiPlan, { onStatus: setWorkerStatus });
-      if (createdNodes.length) overlay.remove();
-      else {
-        stopThinking();
-        restoreControls();
-      }
+      validateGeneratedCampaignPlan(apiPlan);
+      stopThinking();
+      overlay.remove();
+      await generateCampaignFromIdea(ideaText || "Campaign Idea", contextText, apiPlan);
     } catch (error) {
       console.error("[Funklix AI] Generate Campaign failed", error);
       alert(error?.partialCampaign
