@@ -89,9 +89,12 @@ const state = {
     brandVoiceExamples: { good: "", avoid: "" },
     keywords: [],
     brandAssets: { domain: "", logo: "", colors: [], typography: "", references: [] },
+    brandDNA: null,
     customTiles: []
   },
   brandCoreSelectedKey: "brandCore"
+  ,brandDnaDraft: null
+  ,brandDnaLoading: false
   ,appMode: "canvas"
   ,boardsLibrary: []
   ,contentPackLoadingById: {}
@@ -3897,9 +3900,12 @@ function loadBrandBrainState() {
   const raw = localStorage.getItem(BRAND_CORE_STORAGE_KEY);
   if (raw) { state.brandCore = JSON.parse(raw); console.log("Loaded brandBrainState", state.brandCore); }
   else {
-    state.brandCore = { brandCore: "", toneOfVoice: [], messagingPillars: [], valueProposition: "", personas: [], contentGuidelines: [], dosAndDonts: { dos: [], donts: [] }, brandVoiceExamples: { good: "", avoid: "" }, keywords: [], brandAssets: { domain: "", logo: "", colors: [], typography: "", references: [] }, customTiles: [] };
+    state.brandCore = { brandCore: "", toneOfVoice: [], messagingPillars: [], valueProposition: "", personas: [], contentGuidelines: [], dosAndDonts: { dos: [], donts: [] }, brandVoiceExamples: { good: "", avoid: "" }, keywords: [], brandAssets: { domain: "", logo: "", colors: [], typography: "", references: [] }, brandDNA: null, customTiles: [] };
   }
   if (!Array.isArray(state.brandCore.customTiles)) state.brandCore.customTiles = [];
+  if (state.brandCore.brandDNA && typeof state.brandCore.brandDNA !== "object") state.brandCore.brandDNA = null;
+  state.brandDnaDraft = null;
+  state.brandDnaLoading = false;
 }
 
 function resetBrandBrainState() {
@@ -4010,6 +4016,188 @@ async function analyzeBrandDomainFromEditor() {
   }
 }
 
+
+const BRAND_DNA_ARCHETYPES = new Set([
+  "Explorer",
+  "Sage",
+  "Hero",
+  "Ruler",
+  "Magician",
+  "Caregiver",
+  "Creator",
+  "Everyman",
+  "Jester",
+  "Innocent",
+  "Rebel",
+  "Lover"
+]);
+
+function clampBrandDnaConfidence(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return 0;
+  return Math.max(0, Math.min(100, Math.round(number)));
+}
+
+function normalizeBrandDnaSignals(signals = {}) {
+  const keys = ["toneSignals", "missionSignals", "audienceSignals", "messagingSignals", "visualSignals"];
+  return keys.reduce((clean, key) => {
+    clean[key] = (Array.isArray(signals?.[key]) ? signals[key] : [])
+      .map((item) => String(item || "").trim())
+      .filter(Boolean)
+      .slice(0, 5);
+    return clean;
+  }, {});
+}
+
+function normalizeBrandDnaResult(result = {}, approved = false) {
+  const primaryArchetype = BRAND_DNA_ARCHETYPES.has(result.primaryArchetype) ? result.primaryArchetype : "";
+  const secondaryArchetype = BRAND_DNA_ARCHETYPES.has(result.secondaryArchetype) ? result.secondaryArchetype : "";
+  return {
+    primaryArchetype,
+    secondaryArchetype,
+    primaryConfidence: clampBrandDnaConfidence(result.primaryConfidence),
+    secondaryConfidence: clampBrandDnaConfidence(result.secondaryConfidence),
+    reasoning: String(result.reasoning || "").trim(),
+    alternatives: (Array.isArray(result.alternatives) ? result.alternatives : [])
+      .map((item) => ({
+        archetype: BRAND_DNA_ARCHETYPES.has(item?.archetype) ? item.archetype : "",
+        confidence: clampBrandDnaConfidence(item?.confidence),
+        why: String(item?.why || "").trim()
+      }))
+      .filter((item) => item.archetype)
+      .slice(0, 3),
+    signals: normalizeBrandDnaSignals(result.signals),
+    recommendedVoice: String(result.recommendedVoice || "").trim(),
+    recommendedVisualDirection: String(result.recommendedVisualDirection || "").trim(),
+    generatedAt: result.generatedAt || new Date().toISOString(),
+    userApproved: Boolean(approved || result.userApproved)
+  };
+}
+
+function brandDnaResultHtml(result) {
+  if (!result?.primaryArchetype) return "";
+  const signals = result.signals || {};
+  const signalGroups = [
+    ["Tone", signals.toneSignals],
+    ["Mission", signals.missionSignals],
+    ["Audience", signals.audienceSignals],
+    ["Messaging", signals.messagingSignals],
+    ["Visual", signals.visualSignals]
+  ];
+  const alternatives = (result.alternatives || [])
+    .map((item) => `<li><strong>${escapeHtml(item.archetype)}</strong>${item.confidence ? ` · ${escapeHtml(item.confidence)}%` : ""}${item.why ? `<span>${escapeHtml(item.why)}</span>` : ""}</li>`)
+    .join("");
+  return `
+    <div class="brand-dna-result">
+      <div class="brand-dna-score-grid">
+        <div class="brand-dna-score primary">
+          <span>Primary Archetype</span>
+          <strong>${escapeHtml(result.primaryArchetype)}</strong>
+          <em>${escapeHtml(result.primaryConfidence)}%</em>
+        </div>
+        <div class="brand-dna-score">
+          <span>Secondary Archetype</span>
+          <strong>${escapeHtml(result.secondaryArchetype)}</strong>
+          <em>${escapeHtml(result.secondaryConfidence)}%</em>
+        </div>
+      </div>
+      ${result.reasoning ? `<div class="brand-dna-block"><h4>Why we think this</h4><p>${escapeHtml(result.reasoning)}</p></div>` : ""}
+      <div class="brand-dna-signals">
+        ${signalGroups.map(([label, items]) => `
+          <div>
+            <h5>${escapeHtml(label)} signals</h5>
+            ${(items || []).length ? `<ul>${items.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>` : `<p>No strong ${escapeHtml(label.toLowerCase())} signal yet.</p>`}
+          </div>`).join("")}
+      </div>
+      ${alternatives ? `<div class="brand-dna-block"><h4>Alternatives</h4><ul class="brand-dna-alternatives">${alternatives}</ul></div>` : ""}
+      ${result.recommendedVoice ? `<div class="brand-dna-block"><h4>Recommended voice</h4><p>${escapeHtml(result.recommendedVoice)}</p></div>` : ""}
+      ${result.recommendedVisualDirection ? `<div class="brand-dna-block"><h4>Recommended visual direction</h4><p>${escapeHtml(result.recommendedVisualDirection)}</p></div>` : ""}
+    </div>`;
+}
+
+function renderBrandDnaCard() {
+  if (!el.brandCoreCanvas) return;
+  let card = el.brandCoreCanvas.querySelector("#brand-dna-card");
+  if (!card) {
+    card = document.createElement("section");
+    card.id = "brand-dna-card";
+    card.className = "brand-dna-card";
+    el.brandCoreCanvas.prepend(card);
+  }
+  const accepted = state.brandCore?.brandDNA || null;
+  const draft = state.brandDnaDraft || null;
+  const result = draft || accepted;
+  const hasAcceptedResult = Boolean(accepted?.primaryArchetype && accepted.userApproved && !draft);
+  const hasDraft = Boolean(draft?.primaryArchetype);
+  const loading = Boolean(state.brandDnaLoading);
+  const statusLabel = hasAcceptedResult ? "Accepted Brand DNA" : hasDraft ? "Review generated Brand DNA" : "Phase 1";
+  card.innerHTML = `
+    <div class="brand-dna-header">
+      <div>
+        <span class="brand-dna-eyebrow">${escapeHtml(statusLabel)}</span>
+        <h2>Discover Brand DNA</h2>
+        <p>Understand the personality behind your brand and unlock more consistent AI-generated marketing.</p>
+      </div>
+      <div class="brand-dna-actions">
+        ${hasDraft ? `<button type="button" class="primary-add" id="brand-dna-accept">✓ Accept</button>` : ""}
+        <button type="button" id="brand-dna-refine" ${loading || !result ? "disabled" : ""}>✏ Refine</button>
+        <button type="button" id="brand-dna-regenerate" ${loading ? "disabled" : ""}>🔄 ${result ? "Regenerate" : "Generate Brand DNA"}</button>
+      </div>
+    </div>
+    ${loading ? `<div class="brand-dna-loading">Analyzing your Brand Brain, founder signals, voice, ICP, and visual assets…</div>` : ""}
+    ${result ? brandDnaResultHtml(result) : `<div class="brand-dna-empty"><strong>Ready when your Brand Brain has enough context.</strong><span>We will look at your founder story, mission, value proposition, messaging pillars, ICP, tone, website/domain, and visual assets.</span></div>`}
+  `;
+  card.querySelector("#brand-dna-regenerate")?.addEventListener("click", () => discoverBrandDna());
+  card.querySelector("#brand-dna-refine")?.addEventListener("click", () => refineBrandDna());
+  card.querySelector("#brand-dna-accept")?.addEventListener("click", () => acceptBrandDna());
+}
+
+async function discoverBrandDna(refineGuidance = "") {
+  if (state.brandDnaLoading) return;
+  state.brandDnaLoading = true;
+  renderBrandDnaCard();
+  try {
+    const response = await fetch("/api/discover-brand-dna", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        boardId: state.currentBoardId || getBoardIdFromPath() || "",
+        brandBrainData: state.brandCore,
+        refineGuidance
+      })
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload?.error || "Could not discover Brand DNA");
+    const draft = normalizeBrandDnaResult(payload, false);
+    if (!draft.primaryArchetype || !draft.secondaryArchetype) throw new Error("Brand DNA response was incomplete.");
+    state.brandDnaDraft = draft;
+  } catch (error) {
+    alert(error?.message || "Could not discover Brand DNA right now.");
+  } finally {
+    state.brandDnaLoading = false;
+    renderBrandDnaCard();
+  }
+}
+
+function refineBrandDna() {
+  const guidance = window.prompt(
+    "How should AI refine this Brand DNA?",
+    "More premium, more playful, more authoritative, more visionary, or more rebellious"
+  );
+  if (!guidance || !guidance.trim()) return;
+  discoverBrandDna(guidance.trim());
+}
+
+function acceptBrandDna() {
+  const result = state.brandDnaDraft || state.brandCore?.brandDNA;
+  if (!result?.primaryArchetype) return;
+  state.brandCore.brandDNA = normalizeBrandDnaResult(result, true);
+  state.brandDnaDraft = null;
+  saveBrandBrainState();
+  renderBrandCoreTiles();
+  renderBrandCoreEditor();
+}
+
 function renderBrandCoreEditor() {
   const selectedKey = state.brandCoreSelectedKey;
   if (selectedKey === "custom:add") {
@@ -4109,6 +4297,7 @@ function renderBrandCoreTiles() {
   console.log("BrandBrain data:", state.brandCore);
   if (!el.brandCoreCanvas.querySelector(".bc-node")) {
     el.brandCoreCanvas.innerHTML = `
+      <section class="brand-dna-card" id="brand-dna-card"></section>
       <article class="bc-node bc-main selected" data-bc-key="brandCore"></article>
       <div class="bc-row">
         <article class="bc-node" data-bc-key="toneOfVoice"></article>
@@ -4124,6 +4313,7 @@ function renderBrandCoreTiles() {
       </div>
       <article class="bc-node bc-assets" data-bc-key="brandAssets"></article>`;
   }
+  renderBrandDnaCard();
   el.brandCoreCanvas.querySelectorAll(".bc-custom-row").forEach((n) => n.remove());
   const titleMap = { brandCore: "BRAND CORE", toneOfVoice: "TONE OF VOICE", messagingPillars: "MESSAGING PILLARS", valueProposition: "VALUE PROPOSITION", personas: "PERSONAS", contentGuidelines: "CONTENT GUIDELINES", dosAndDonts: "DO'S & DON'TS", brandVoiceExamples: "BRAND VOICE EXAMPLES", keywords: "KEYWORDS", brandAssets: "BRAND ASSETS" };
   document.querySelectorAll(".bc-node[data-bc-key]").forEach((tile) => {
@@ -4158,6 +4348,7 @@ function renderBrandCoreTiles() {
   });
   const customRow = document.createElement("div");
   customRow.className = "bc-row bc-custom-row";
+  if (!Array.isArray(state.brandCore.customTiles)) state.brandCore.customTiles = [];
   state.brandCore.customTiles.forEach((tile, idx) => {
     const card = document.createElement("article");
     card.className = "bc-node";
@@ -8873,7 +9064,7 @@ window.resetBrandBrainState = resetBrandBrainState;
 
 
 function defaultBrandCoreState() {
-  return { brandCore: "", toneOfVoice: [], messagingPillars: [], valueProposition: "", personas: [], contentGuidelines: [], dosAndDonts: { dos: [], donts: [] }, brandVoiceExamples: { good: "", avoid: "" }, keywords: [], brandAssets: { domain: "", logo: "", colors: [], typography: "", references: [] }, customTiles: [] };
+  return { brandCore: "", toneOfVoice: [], messagingPillars: [], valueProposition: "", personas: [], contentGuidelines: [], dosAndDonts: { dos: [], donts: [] }, brandVoiceExamples: { good: "", avoid: "" }, keywords: [], brandAssets: { domain: "", logo: "", colors: [], typography: "", references: [] }, brandDNA: null, customTiles: [] };
 }
 
 function blankCanvasState() {
