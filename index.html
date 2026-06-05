@@ -296,6 +296,11 @@
             <label for="node-title">Titel</label>
             <input id="node-title" name="title" placeholder="Node Titel" />
 
+            <label for="node-owner">Owner</label>
+            <select id="node-owner" name="owner">
+              <option value="">Unassigned</option>
+            </select>
+
             <label for="node-content">Inhalt</label>
             <textarea id="node-content" name="content" rows="3" placeholder="Beschreibung, Prompt, Task ..."></textarea>
             <div id="content-image-prompt-field" class="hidden">
@@ -387,6 +392,8 @@
             <label for="node-variants">A/B Varianten (Komma getrennt)</label>
             <input id="node-variants" name="variants" placeholder="A: Hook 1, B: Hook 2" />
             <button id="improve-node-btn" type="button" class="primary-add">✨ Improve with AI</button>
+            <button id="generate-next-step-inspector-btn" type="button">🧠 Generate Next Step</button>
+            <button id="review-node-btn" type="button">🔍 Review Node</button>
             <button id="regenerate-node-btn" type="button">🔄 Regenerate</button>
             <button id="regenerate-platform-btn" type="button">Regenerate for platform</button>
             <button id="add-to-posting-calendar-btn" type="button">Add to Posting Calendar</button>
@@ -416,7 +423,13 @@
 
     <template id="node-template">
       <article class="node" tabindex="0">
-        <span class="type"></span>
+        <div class="node-header">
+          <div class="node-header-meta">
+            <span class="type"></span>
+            <span class="node-owner-chip hidden"></span>
+          </div>
+          <div class="node-header-actions"></div>
+        </div>
         <h3 class="title" contenteditable="true" data-placeholder="Node Titel"></h3>
         <p class="content" contenteditable="true" data-placeholder="Node Inhalt"></p>
         <p class="content-pack-status hidden"></p>
