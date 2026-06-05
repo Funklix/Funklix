@@ -1,4 +1,16 @@
 const { uploadGeneratedImage } = require("./_image-storage");
+const { buildBrandBrainContext } = require("./_brand-brain-context");
+
+const IMAGE_SIZE_BY_FORMAT = {
+  "1:1": "1024x1024",
+  "16:9": "1536x1024",
+  "9:16": "1024x1536"
+};
+
+function normalizeContentFormat(value = "1:1") {
+  const normalized = String(value || "1:1").trim();
+  return IMAGE_SIZE_BY_FORMAT[normalized] ? normalized : "1:1";
+}
 
 const IMAGE_SIZE_BY_FORMAT = {
   "1:1": "1024x1024",
@@ -18,7 +30,8 @@ module.exports = async function handler(req, res) {
   if (!apiKey) return res.status(500).json({ error: "Server is missing OPENAI_API_KEY" });
 
   try {
-    const { nodeTitle = "", nodeContent = "", brandBrainData = {}, campaignContext = "", contentFormat = "1:1" } = req.body || {};
+    const { nodeTitle = "", nodeContent = "", brandBrainData = {}, boardId = "", campaignContext = "", contentFormat = "1:1" } = req.body || {};
+    const brandBrainContext = buildBrandBrainContext(boardId, brandBrainData);
     const normalizedFormat = normalizeContentFormat(contentFormat);
     const imageSize = IMAGE_SIZE_BY_FORMAT[normalizedFormat];
     const formatGuidance = normalizedFormat === "16:9"
@@ -31,13 +44,13 @@ module.exports = async function handler(req, res) {
 Structured context:
 - nodeTitle: ${nodeTitle}
 - nodeContent: ${nodeContent}
-- brandBrainData (tone/style/assets): ${JSON.stringify(brandBrainData)}
+${brandBrainContext.text}
 - campaignContext: ${campaignContext || "none"}
 - contentFormat: ${normalizedFormat}
 
 Creative direction:
 - Create a visual metaphor or scene that represents the idea.
-- Use brand tone/style cues from brandBrainData where relevant.
+- Use brand tone/style/visual cues from the normalized Brand Brain context where relevant.
 - ${formatGuidance}
 - Make it modern, minimal, premium, and high-quality.
 - Use cinematic lighting and strong composition.

@@ -1,3 +1,5 @@
+const { buildBrandBrainContext } = require("./_brand-brain-context");
+
 module.exports = async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
@@ -9,10 +11,12 @@ module.exports = async function handler(req, res) {
   }
 
   try {
-    const { campaignIdea = "", additionalContext = "", brandBrainData = {} } = req.body || {};
+    const { campaignIdea = "", additionalContext = "", brandBrainData = {}, boardId = "" } = req.body || {};
     if (!campaignIdea.trim()) {
       return res.status(400).json({ error: "campaignIdea is required" });
     }
+
+    const brandBrainContext = buildBrandBrainContext(boardId, brandBrainData);
 
     const prompt = `You are a senior marketing strategist specializing in high-performing campaign concepts. You think in hooks, angles, emotional triggers and conversion logic.
 
@@ -20,10 +24,10 @@ Create a campaign plan in strict JSON only.
 
 Input idea: ${campaignIdea}
 Additional context: ${additionalContext}
-Brand brain data: ${JSON.stringify(brandBrainData)}
+${brandBrainContext.text}
 
 Quality requirements:
-- Use tone of voice from Brand Brain to shape wording.
+- Use tone of voice from the normalized Brand Brain context to shape wording.
 - Use messaging pillars to define campaign angles.
 - Include keywords naturally (not stuffed).
 - Reflect value proposition directly in message and promise.

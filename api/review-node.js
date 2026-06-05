@@ -1,3 +1,5 @@
+const { buildBrandBrainContext } = require("./_brand-brain-context");
+
 function cleanGeneratedText(value = "") {
   return String(value || "")
     .replace(/```[\s\S]*?```/g, "")
@@ -46,8 +48,11 @@ module.exports = async function handler(req, res) {
       tags = [],
       campaignContext = "",
       connectedNodeContext = {},
-      brandBrainData = {}
+      brandBrainData = {},
+      boardId = ""
     } = req.body || {};
+
+    const brandBrainContext = buildBrandBrainContext(boardId, brandBrainData);
 
     const prompt = `Review this Campaign Canvas node and return concise, practical feedback.
 
@@ -60,8 +65,7 @@ ${JSON.stringify(connectedNodeContext || {})}
 Campaign summary:
 ${campaignContext || "none"}
 
-Brand Brain data:
-${JSON.stringify(brandBrainData || {})}
+${brandBrainContext.text}
 
 Review focus:
 For any node, evaluate clarity, audience fit, goal alignment, CTA strength, completeness, and next-step readiness.

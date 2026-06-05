@@ -3622,6 +3622,10 @@ function getBoardIdFromPath() {
   return null;
 }
 
+function getCurrentBrandBrainBoardId() {
+  return state.currentBoardId || getBoardIdFromPath() || "";
+}
+
 function loadCampaignCanvasState() {
   const raw = localStorage.getItem(STORAGE_KEY); if (!raw) return false;
   const campaignState = JSON.parse(raw); console.log("Loaded campaignCanvasState", campaignState);
@@ -4637,6 +4641,7 @@ async function fetchGeneratedCampaignPlan(ideaText, contextText) {
     body: JSON.stringify({
       campaignIdea: ideaText,
       additionalContext: contextText,
+      boardId: getCurrentBrandBrainBoardId(),
       brandBrainData: state.brandCore
     })
   });
@@ -6393,6 +6398,7 @@ async function refineNodeWithAI(node, instruction) {
         caption: node.social?.caption || ""
       },
       instruction,
+      boardId: getCurrentBrandBrainBoardId(),
       brandBrainData: state.brandCore,
       parentNode: parentNode
         ? { title: parentNode.title || "", content: parentNode.content || "", type: parentNode.type || "" }
@@ -6558,6 +6564,7 @@ function buildNextStepNodeContext(node) {
       : null,
     connectedParentContext: getConnectedNodeContext(node.id).parentNodes,
     campaignContext: getCampaignContextSummary() || undefined,
+    boardId: getCurrentBrandBrainBoardId(),
     brandBrainData: state.brandCore
   };
 }
@@ -6578,6 +6585,7 @@ function buildReviewNodeContext(node) {
     tags: Array.isArray(node.tags) ? node.tags : [],
     campaignContext: getCampaignContextSummary() || "",
     connectedNodeContext: getConnectedNodeContext(node.id),
+    boardId: getCurrentBrandBrainBoardId(),
     brandBrainData: state.brandCore
   };
 }
@@ -6785,6 +6793,7 @@ async function generateImageForNode(node) {
       body: JSON.stringify({
         nodeTitle: node.title || "",
         nodeContent: [node.imagePrompt || node.content || "", nodeStrategyContext(node)].filter(Boolean).join(" | "),
+        boardId: getCurrentBrandBrainBoardId(),
         brandBrainData: state.brandCore,
         campaignContext: getCampaignContextSummary(),
         contentFormat: node.contentFormat || "1:1",
@@ -6874,6 +6883,7 @@ async function generatePostingVisualForNode(node) {
         sourceImage: sourceImage.url,
         overlayText,
         format: node.contentFormat || "1:1",
+        boardId: getCurrentBrandBrainBoardId(),
         brandBrainData: state.brandCore,
         campaignContext: getCampaignContextSummary()
       })
@@ -8239,6 +8249,7 @@ el.generateHeaderVisualButton.addEventListener("click", async () => {
       body: JSON.stringify({
         nodeTitle: node.title || "",
         nodeContent: node.landingPage.headerVisualPrompt,
+        boardId: getCurrentBrandBrainBoardId(),
         brandBrainData: state.brandCore,
         campaignContext: getCampaignContextSummary(),
         contentFormat: "16:9",

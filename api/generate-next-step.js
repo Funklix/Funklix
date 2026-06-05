@@ -1,3 +1,5 @@
+const { buildBrandBrainContext } = require('./_brand-brain-context');
+
 const NEXT_NODE_BY_TYPE = {
   Idea: 'Campaign Variation',
   'Campaign Variation': 'Content',
@@ -164,9 +166,11 @@ module.exports = async function handler(req, res) {
       parentContext = null,
       connectedParentContext = null,
       campaignContext = '',
-      brandBrainData = {}
+      brandBrainData = {},
+      boardId = ''
     } = req.body || {};
 
+    const brandBrainContext = buildBrandBrainContext(boardId, brandBrainData);
     const nextNodeType = NEXT_NODE_BY_TYPE[nodeType];
     if (!nextNodeType) return res.status(400).json({ error: 'No next step available.' });
 
@@ -182,8 +186,7 @@ ${JSON.stringify(parentContext || connectedParentContext || null)}
 Campaign context:
 ${campaignContext || 'none'}
 
-Brand Brain data:
-${JSON.stringify(brandBrainData || {})}
+${brandBrainContext.text}
 
 Shared constraints:
 - Generate exactly ONE next node.
