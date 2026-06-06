@@ -6479,11 +6479,13 @@ function renderPostits(node, nodeEl) {
 
   node.postits.forEach((note) => {
     ensureCommentIdentity(note);
+    const isAiReviewNote = note.source === "ai_review" || note.authorEmail === "ai@funklix.local" || note.authorName === "AI Review";
     const postit = el.postitTemplate.content.firstElementChild.cloneNode(true);
     postit.style.left = `${note.x}px`;
     postit.style.top = `${note.y}px`;
     postit.style.background = note.color;
     postit.classList.toggle("is-resolved", !!note.resolved);
+    postit.classList.toggle("ai-review-postit", isAiReviewNote);
 
     const header = postit.querySelector("header");
     const avatar = document.createElement("span");
@@ -6546,6 +6548,7 @@ function renderPostits(node, nodeEl) {
     const area = postit.querySelector(".postit-text");
     area.value = note.text;
     area.disabled = !!note.resolved;
+    area.readOnly = isAiReviewNote;
     area.style.fontSize = note.text.length > 220 ? "0.7rem" : note.text.length > 120 ? "0.82rem" : "0.96rem";
     area.addEventListener("input", () => {
       if (isBoardReadOnly()) {
@@ -7231,6 +7234,7 @@ function addAiReviewPostitToNode(node, review) {
     time: nowString(),
     createdAt,
     updatedAt: createdAt,
+    source: "ai_review",
     text: formatAiReviewComment(review),
     color: "#e9f1ff",
     resolved: false,
@@ -8521,6 +8525,9 @@ el.zoomOutButton.addEventListener("click", () => {
 el.canvas.addEventListener(
   "wheel",
   (event) => {
+    if (event.target.closest?.(".postit-text, .postit-scroll-body")) {
+      return;
+    }
     if (event.ctrlKey) {
       event.preventDefault();
       stopFollowForManualNavigation();
