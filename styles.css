@@ -1885,6 +1885,18 @@ button:active {
   line-height: 1.25;
 }
 
+.ai-review-postit {
+  width: 320px;
+  min-height: 260px;
+}
+
+.ai-review-postit .postit-text {
+  min-height: 190px;
+  max-height: 260px;
+  overflow-y: auto;
+  resize: none;
+}
+
 .postit-replies {
   margin-top: 6px;
   border-top: 1px dashed rgba(0, 0, 0, 0.2);
