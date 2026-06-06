@@ -6473,17 +6473,180 @@ function syncPopoverActiveStates(popoverEl) {
   });
 }
 
+
+function normalizeAiReviewSectionText(lines = []) {
+  return lines.join("\n").trim();
+}
+
+function parseAiReviewList(text = "") {
+  return text
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => line.replace(/^(?:[-*•]|\d+[.)])\s*/, "").trim())
+    .filter(Boolean);
+}
+
+function parseAiReviewText(rawText = "") {
+  const text = String(rawText || "").trim();
+  if (!text) return null;
+
+  const sections = { summary: [], strengths: [], improvements: [], suggestedRewrite: [] };
+  let score = "";
+  let currentSection = null;
+
+  text.split(/\r?\n/).forEach((line) => {
+    const trimmed = line.trim();
+    const scoreMatch = trimmed.match(/^AI Review:\s*(.+)$/i);
+    if (scoreMatch) {
+      score = scoreMatch[1].trim();
+      currentSection = null;
+      return;
+    }
+
+    const sectionMatch = trimmed.match(/^(Summary|Strengths|Improvements|Improve|Suggested Rewrite):\s*(.*)$/i);
+    if (sectionMatch) {
+      const label = sectionMatch[1].toLowerCase();
+      if (label === "improve") currentSection = "improvements";
+      else if (label === "suggested rewrite") currentSection = "suggestedRewrite";
+      else currentSection = label;
+      if (sectionMatch[2]) sections[currentSection].push(sectionMatch[2]);
+      return;
+    }
+
+    if (currentSection) sections[currentSection].push(line);
+  });
+
+  const summary = normalizeAiReviewSectionText(sections.summary);
+  const strengths = parseAiReviewList(normalizeAiReviewSectionText(sections.strengths));
+  const improvements = parseAiReviewList(normalizeAiReviewSectionText(sections.improvements));
+  const suggestedRewrite = normalizeAiReviewSectionText(sections.suggestedRewrite);
+
+  if (!score && !summary && !strengths.length && !improvements.length && !suggestedRewrite) return null;
+
+  return {
+    score: score || "—",
+    summary,
+    strengths,
+    improvements,
+    suggestedRewrite
+  };
+}
+
+function appendAiReviewText(parent, text = "") {
+  const paragraph = document.createElement("p");
+  paragraph.textContent = text || "No details provided.";
+  parent.appendChild(paragraph);
+}
+
+function createAiReviewAccordionSection({ title, tone, count = null, open = false, emptyText = "No details provided.", renderContent }) {
+  const details = document.createElement("details");
+  details.className = `ai-review-section ai-review-section-${tone}`;
+  details.open = !!open;
+
+  const summary = document.createElement("summary");
+  const label = document.createElement("span");
+  label.textContent = count === null ? title : `${title} (${count})`;
+  summary.appendChild(label);
+
+  const body = document.createElement("div");
+  body.className = "ai-review-section-body";
+  renderContent?.(body);
+  if (!body.childNodes.length) appendAiReviewText(body, emptyText);
+
+  details.append(summary, body);
+  return details;
+}
+
+function renderAiReviewCard(review) {
+  const card = document.createElement("section");
+  card.className = "ai-review-card";
+
+  const heading = document.createElement("div");
+  heading.className = "ai-review-card-heading";
+  const title = document.createElement("strong");
+  title.textContent = "🤖 AI Review";
+  const score = document.createElement("span");
+  score.className = "ai-review-score";
+  score.textContent = review.score;
+  heading.append(title, score);
+
+  const summary = createAiReviewAccordionSection({
+    title: "Summary",
+    tone: "summary",
+    open: true,
+    renderContent: (body) => appendAiReviewText(body, review.summary)
+  });
+
+  const strengths = createAiReviewAccordionSection({
+    title: "Strengths",
+    tone: "strengths",
+    count: review.strengths.length,
+    emptyText: "No clear strengths identified.",
+    renderContent: (body) => {
+      if (!review.strengths.length) return;
+      const list = document.createElement("ul");
+      review.strengths.forEach((item) => {
+        const li = document.createElement("li");
+        li.textContent = item;
+        list.appendChild(li);
+      });
+      body.appendChild(list);
+    }
+  });
+
+  const improvements = createAiReviewAccordionSection({
+    title: "Improvements",
+    tone: "improvements",
+    count: review.improvements.length,
+    emptyText: "No major improvements identified.",
+    renderContent: (body) => {
+      review.improvements.forEach((item, index) => {
+        const row = document.createElement("div");
+        row.className = "ai-review-improvement-row";
+        const rowTitle = document.createElement("strong");
+        rowTitle.textContent = `Improvement ${index + 1}`;
+        const rowText = document.createElement("p");
+        rowText.textContent = item;
+        row.append(rowTitle, rowText);
+        body.appendChild(row);
+      });
+    }
+  });
+
+  card.append(heading, summary, strengths, improvements);
+
+  if (review.suggestedRewrite) {
+    const rewrite = createAiReviewAccordionSection({
+      title: "Suggested Rewrite",
+      tone: "rewrite",
+      renderContent: (body) => {
+        const block = document.createElement("pre");
+        block.className = "ai-review-rewrite";
+        block.textContent = review.suggestedRewrite;
+        body.appendChild(block);
+      }
+    });
+    card.appendChild(rewrite);
+  }
+
+  return card;
+}
+
 function renderPostits(node, nodeEl) {
   nodeEl.querySelectorAll(".postit").forEach((p) => p.remove());
   if (!Array.isArray(node.postits)) node.postits = [];
 
   node.postits.forEach((note) => {
     ensureCommentIdentity(note);
+    const isAiReviewNote = note.source === "ai_review" || note.authorEmail === "ai@funklix.local" || note.authorName === "AI Review";
+    const parsedAiReview = isAiReviewNote ? parseAiReviewText(note.text) : null;
     const postit = el.postitTemplate.content.firstElementChild.cloneNode(true);
     postit.style.left = `${note.x}px`;
     postit.style.top = `${note.y}px`;
     postit.style.background = note.color;
     postit.classList.toggle("is-resolved", !!note.resolved);
+    postit.classList.toggle("ai-review-postit", isAiReviewNote);
 
     const header = postit.querySelector("header");
     const avatar = document.createElement("span");
@@ -6544,9 +6707,10 @@ function renderPostits(node, nodeEl) {
     header.insertBefore(resolveBtn, postit.querySelector(".postit-delete"));
 
     const area = postit.querySelector(".postit-text");
-    area.value = note.text;
+    area.value = note.text || "";
     area.disabled = !!note.resolved;
-    area.style.fontSize = note.text.length > 220 ? "0.7rem" : note.text.length > 120 ? "0.82rem" : "0.96rem";
+    area.readOnly = isAiReviewNote;
+    area.style.fontSize = (note.text || "").length > 220 ? "0.7rem" : (note.text || "").length > 120 ? "0.82rem" : "0.96rem";
     area.addEventListener("input", () => {
       if (isBoardReadOnly()) {
         setSaveStatus("Read-only board");
@@ -6556,6 +6720,9 @@ function renderPostits(node, nodeEl) {
       area.style.fontSize = note.text.length > 220 ? "0.7rem" : note.text.length > 120 ? "0.82rem" : "0.96rem";
       saveCampaignCanvasState();
     });
+    if (parsedAiReview && !note.resolved) {
+      area.replaceWith(renderAiReviewCard(parsedAiReview));
+    }
 
     postit.querySelector(".postit-delete").addEventListener("click", () => {
       if (isBoardReadOnly()) {
@@ -7231,6 +7398,7 @@ function addAiReviewPostitToNode(node, review) {
     time: nowString(),
     createdAt,
     updatedAt: createdAt,
+    source: "ai_review",
     text: formatAiReviewComment(review),
     color: "#e9f1ff",
     resolved: false,
