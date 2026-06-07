@@ -45,7 +45,7 @@ module.exports = async function handler(req, res) {
     const brandBrainContext = buildBrandBrainContext(boardId, brandBrainData);
     const nodesPerVariation = 2 + postsPerVariation + (shouldIncludeLandingPage ? 1 : 0) + (shouldIncludeEmailCampaign ? 1 : 0);
     const expectedNodeCount = 1 + variationCount * nodesPerVariation;
-    const expectedEdgeCount = variationCount + variationCount * (1 + postsPerVariation + (shouldIncludeLandingPage ? 1 : 0) + (shouldIncludeEmailCampaign ? 1 : 0));
+    const expectedEdgeCount = variationCount * (2 + postsPerVariation + (shouldIncludeLandingPage ? postsPerVariation : 0) + (shouldIncludeEmailCampaign ? (shouldIncludeLandingPage ? 1 : postsPerVariation) : 0));
     const angleGuidance = Array.from({ length: variationCount }, (_, index) => `${index + 1}. ${ANGLE_FAMILIES[index % ANGLE_FAMILIES.length]}`).join("\n");
     const purposeGuidance = Array.from({ length: postsPerVariation }, (_, index) => `${index + 1}. ${SOCIAL_PURPOSES[index % SOCIAL_PURPOSES.length]}`).join("\n");
 
@@ -74,9 +74,11 @@ Structure requirements:
   Idea -> Campaign Variation
   Campaign Variation -> Content
   Content -> each Social Media Posting
-  Campaign Variation -> Landing Page if enabled
-  Campaign Variation -> Email Campaign if enabled
+  each Social Media Posting -> Landing Page if enabled
+  Landing Page -> Email Campaign if both are enabled
+  if Landing Page is disabled but Email Campaign is enabled, each Social Media Posting -> Email Campaign
 - Do not create extra node types.
+- Avoid direct Content -> Email Campaign or Campaign Variation -> Email Campaign connectors.
 
 Variation quality:
 - Variations must not be simple rewordings.
