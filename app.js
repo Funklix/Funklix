@@ -8846,6 +8846,9 @@ el.zoomOutButton.addEventListener("click", () => {
 el.canvas.addEventListener(
   "wheel",
   (event) => {
+    if (event.target.closest?.(".postit-text, .postit-scroll-body")) {
+      return;
+    }
     if (event.ctrlKey) {
       event.preventDefault();
       stopFollowForManualNavigation();
