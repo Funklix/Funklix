@@ -5024,34 +5024,29 @@ function addEdge(fromId, toId) {
   drawLinks();
 }
 
-function buildGeneratedCampaignPlan(ideaText, contextText) {
-  const brand = state.brandCore || {};
-  const tone = Array.isArray(brand.toneOfVoice) ? brand.toneOfVoice.slice(0, 2).join(", ") : "";
-  const pillar = Array.isArray(brand.messagingPillars) ? brand.messagingPillars[0] || "" : "";
-  const context = [contextText, brand.valueProposition, pillar].filter(Boolean).join(" · ");
-  const baseTitle = ideaText || "Campaign Idea";
+function normalizeCampaignSetupOptions(options = {}) {
+  const clamp = (value, fallback, min, max) => {
+    const number = Number.parseInt(value, 10);
+    if (!Number.isFinite(number)) return fallback;
+    return Math.max(min, Math.min(max, number));
+  };
+  const channel = ["LinkedIn", "X", "Instagram", "TikTok", "Mixed"].includes(options.channel) ? options.channel : "LinkedIn";
   return {
-    idea: { title: baseTitle, content: context || "Core campaign direction." },
-    varA: { title: `${baseTitle} – Variation A`, content: `Angle: ${tone || "Direct and clear"} narrative` },
-    varB: { title: `${baseTitle} – Variation B`, content: `Angle: ${pillar || "Benefit-led"} storytelling` },
-    contentA: { title: "Hero Content A", content: `Main message: ${baseTitle}` },
-    contentB: { title: "Hero Content B", content: `Alternative hook for ${baseTitle}` },
-    socialA: { title: "Social Post A", content: `CTA focused on ${baseTitle}` },
-    socialB: { title: "Social Post B", content: `Community engagement for ${baseTitle}` },
-    landing: { title: "Landing Page", content: `Conversion destination for ${baseTitle}` },
-    landingPageStructured: {
-      headerVisualPrompt: `16:9 hero visual for ${baseTitle}, modern clean style, confident and trustworthy mood`,
-      headerClaim: `${baseTitle}: clearer campaigns, stronger results`,
-      problemOfIcp: "Teams struggle to ship consistent, high-performing campaign assets quickly.",
-      solutionForIcp: `Use ${baseTitle} messaging and assets to launch with clarity and speed.`,
-      buildingTrust: "Trusted by teams looking for clearer, more effective campaign execution.",
-      conversionCta: "Get started"
-    },
-    email: { title: "Email Campaign", content: `Nurture sequence for ${baseTitle}` }
+    variationCount: clamp(options.variationCount, 3, 1, 10),
+    postsPerVariation: clamp(options.postsPerVariation, 5, 1, 20),
+    includeLandingPage: options.includeLandingPage !== false,
+    includeEmailCampaign: options.includeEmailCampaign !== false,
+    channel
   };
 }
 
-async function fetchGeneratedCampaignPlan(ideaText, contextText) {
+function expectedCampaignNodeCount(setup = {}) {
+  const normalized = normalizeCampaignSetupOptions(setup);
+  return 1 + normalized.variationCount * (2 + normalized.postsPerVariation + (normalized.includeLandingPage ? 1 : 0) + (normalized.includeEmailCampaign ? 1 : 0));
+}
+
+async function fetchGeneratedCampaignPlan(ideaText, contextText, setupOptions = {}) {
+  const setup = normalizeCampaignSetupOptions(setupOptions);
   const response = await fetch("/api/generate-campaign", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -5059,7 +5054,8 @@ async function fetchGeneratedCampaignPlan(ideaText, contextText) {
       campaignIdea: ideaText,
       additionalContext: contextText,
       boardId: getCurrentBrandBrainBoardId(),
-      brandBrainData: state.brandCore
+      brandBrainData: state.brandCore,
+      ...setup
     })
   });
   if (!response.ok) throw new Error("Generation request failed");
@@ -5075,24 +5071,16 @@ const CAMPAIGN_CHAIN_TYPES = [
   "Email Campaign"
 ];
 
-const CAMPAIGN_CHAIN_EDGES = [
-  { fromIndex: 0, toIndex: 1 },
-  { fromIndex: 1, toIndex: 2 },
-  { fromIndex: 2, toIndex: 3 },
-  { fromIndex: 3, toIndex: 4 },
-  { fromIndex: 4, toIndex: 5 }
-];
-
 const CAMPAIGN_WORKER_STATUS = {
   "Idea": "🧠 Strategist is shaping the idea...",
-  "Campaign Variation": "🎯 Strategist is finding the strongest angle...",
-  "Content": "✍️ Copywriter is drafting the content...",
-  "Social Media Posting": "📱 Social editor is adapting it for the feed...",
+  "Campaign Variation": "🎯 Strategist is finding a distinct angle...",
+  "Content": "✍️ Copywriter is drafting the hero content...",
+  "Social Media Posting": "📱 Social editor is creating diverse post ideas...",
   "Landing Page": "🧱 Funnel builder is creating the landing page...",
   "Email Campaign": "📧 CRM writer is preparing the follow-up email..."
 };
 
-function waitForCampaignWorker(ms = 650) {
+function waitForCampaignWorker(ms = 420) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
@@ -5106,20 +5094,22 @@ function cleanCampaignField(value = "") {
     .trim();
 }
 
-function validateGeneratedCampaignPlan(plan = {}) {
+function validateGeneratedCampaignPlan(plan = {}, setupOptions = {}) {
+  const setup = normalizeCampaignSetupOptions(plan.setup || setupOptions);
   const nodes = Array.isArray(plan.nodes) ? plan.nodes : [];
   const edges = Array.isArray(plan.edges) ? plan.edges : [];
-  if (nodes.length !== CAMPAIGN_CHAIN_TYPES.length) {
-    throw new Error("Campaign plan must include exactly six nodes.");
+  const expectedNodes = expectedCampaignNodeCount(setup);
+  if (nodes.length !== expectedNodes) {
+    throw new Error(`Campaign plan must include exactly ${expectedNodes} nodes.`);
   }
   const normalizedNodes = nodes.map((node, index) => {
-    const expectedType = CAMPAIGN_CHAIN_TYPES[index];
-    if (node?.type !== expectedType) {
-      throw new Error(`Campaign node ${index + 1} must be ${expectedType}.`);
+    const type = cleanCampaignField(node?.type);
+    if (!CAMPAIGN_CHAIN_TYPES.includes(type)) {
+      throw new Error(`Campaign node ${index + 1} has unsupported type ${type || "(empty)"}.`);
     }
     return {
-      type: expectedType,
-      title: cleanCampaignField(node.title) || expectedType,
+      type,
+      title: cleanCampaignField(node.title) || type,
       description: cleanCampaignField(node.description),
       content: cleanCampaignField(node.content),
       metadata: node.metadata && typeof node.metadata === "object" ? node.metadata : {},
@@ -5128,12 +5118,14 @@ function validateGeneratedCampaignPlan(plan = {}) {
       landingPage: node.landingPage && typeof node.landingPage === "object" ? node.landingPage : {}
     };
   });
-  const expectedEdgeKey = CAMPAIGN_CHAIN_EDGES.map((edge) => `${edge.fromIndex}->${edge.toIndex}`).join("|");
-  const edgeKey = edges.map((edge) => `${edge?.fromIndex}->${edge?.toIndex}`).join("|");
-  if (edgeKey !== expectedEdgeKey) {
-    throw new Error("Campaign plan must include the standard linear chain edges.");
-  }
-  return { nodes: normalizedNodes, edges: CAMPAIGN_CHAIN_EDGES };
+  if (normalizedNodes[0]?.type !== "Idea") throw new Error("Campaign plan must start with an Idea node.");
+  edges.forEach((edge) => {
+    if (!Number.isInteger(edge?.fromIndex) || !Number.isInteger(edge?.toIndex)) throw new Error("Campaign edges must use numeric indexes.");
+    if (edge.fromIndex < 0 || edge.fromIndex >= normalizedNodes.length || edge.toIndex < 0 || edge.toIndex >= normalizedNodes.length) {
+      throw new Error("Campaign edge index is out of range.");
+    }
+  });
+  return { nodes: normalizedNodes, edges, setup };
 }
 
 function applyGeneratedCampaignNodePayload(node, payload = {}, previousNode = null) {
@@ -5177,22 +5169,31 @@ function applyGeneratedCampaignNodePayload(node, payload = {}, previousNode = nu
   }
 }
 
-const CAMPAIGN_CHAIN_X_STEP = 420;
-const CAMPAIGN_CHAIN_PADDING = 420;
+const CAMPAIGN_V2_X = {
+  idea: 0,
+  variation: 360,
+  content: 720,
+  social: 1080,
+  funnel: 1440
+};
+const CAMPAIGN_V2_ROW_GAP = 250;
+const CAMPAIGN_V2_ITEM_GAP = 180;
+const CAMPAIGN_V2_PADDING = 420;
 
-function campaignNodePosition(index, origin = { x: 220, y: 150 }) {
-  return {
-    x: origin.x + index * CAMPAIGN_CHAIN_X_STEP,
-    y: origin.y
-  };
+function campaignPlanRowHeight(setup = {}) {
+  const normalized = normalizeCampaignSetupOptions(setup);
+  const maxItems = Math.max(normalized.postsPerVariation, (normalized.includeLandingPage ? 1 : 0) + (normalized.includeEmailCampaign ? 1 : 0), 1);
+  return Math.max(CAMPAIGN_V2_ROW_GAP, maxItems * CAMPAIGN_V2_ITEM_GAP + 80);
 }
 
-function campaignChainRect(origin) {
+function campaignPlanRect(origin, setup = {}) {
+  const normalized = normalizeCampaignSetupOptions(setup);
+  const rowHeight = campaignPlanRowHeight(normalized);
   return {
     minX: origin.x,
     minY: origin.y,
-    maxX: origin.x + NODE_WIDTH + (CAMPAIGN_CHAIN_TYPES.length - 1) * CAMPAIGN_CHAIN_X_STEP,
-    maxY: origin.y + NODE_HEIGHT + 180
+    maxX: origin.x + CAMPAIGN_V2_X.funnel + NODE_WIDTH + 220,
+    maxY: origin.y + Math.max(NODE_HEIGHT + 200, normalized.variationCount * rowHeight + 220)
   };
 }
 
@@ -5212,42 +5213,74 @@ function campaignRectOverlapsExisting(rect, padding = 80) {
   });
 }
 
-function calculateCampaignChainOrigin() {
+function calculateCampaignPlanOrigin(setup = {}) {
   const visible = visibleBoardBounds();
-  const chainWidth = NODE_WIDTH + (CAMPAIGN_CHAIN_TYPES.length - 1) * CAMPAIGN_CHAIN_X_STEP;
-  const chainHeight = NODE_HEIGHT + 180;
+  const rectAt = (origin) => campaignPlanRect(origin, setup);
+  const sampleRect = rectAt({ x: 0, y: 0 });
+  const planWidth = sampleRect.maxX - sampleRect.minX;
+  const planHeight = sampleRect.maxY - sampleRect.minY;
   const visibleOrigin = clampNodePosition(
-    visible.left + Math.max(80, (visible.width - chainWidth) / 2),
-    visible.top + Math.max(80, (visible.height - chainHeight) / 2)
+    visible.left + Math.max(80, (visible.width - planWidth) / 2),
+    visible.top + Math.max(80, (visible.height - Math.min(planHeight, visible.height)) / 2)
   );
   if (!state.nodes.length) return visibleOrigin;
 
-  const visibleRect = campaignChainRect(visibleOrigin);
-  const viewportHasRoom = visible.width >= chainWidth + 160 && visible.height >= chainHeight + 120;
-  if (viewportHasRoom && !campaignRectOverlapsExisting(visibleRect, 120)) return visibleOrigin;
+  const viewportHasRoom = visible.width >= Math.min(planWidth, visible.width) * 0.75 && visible.height >= Math.min(planHeight, visible.height) * 0.45;
+  if (viewportHasRoom && !campaignRectOverlapsExisting(rectAt(visibleOrigin), 120)) return visibleOrigin;
 
   const bounds = getBoardContentBounds({ includeMargin: 0 });
   if (!bounds) return visibleOrigin;
 
-  const rightOrigin = clampNodePosition(bounds.maxX + CAMPAIGN_CHAIN_PADDING, Math.max(120, bounds.minY));
-  if (!campaignRectOverlapsExisting(campaignChainRect(rightOrigin), 120)) return rightOrigin;
+  const rightOrigin = clampNodePosition(bounds.maxX + CAMPAIGN_V2_PADDING, Math.max(120, bounds.minY));
+  if (!campaignRectOverlapsExisting(rectAt(rightOrigin), 120)) return rightOrigin;
 
-  return clampNodePosition(Math.max(120, bounds.minX), bounds.maxY + CAMPAIGN_CHAIN_PADDING);
+  return clampNodePosition(Math.max(120, bounds.minX), bounds.maxY + CAMPAIGN_V2_PADDING);
 }
 
-async function generateCampaignChainProgressively(plan, { onStatus = null } = {}) {
-  const validated = validateGeneratedCampaignPlan(plan);
+function campaignNodePositionForPayload(index, payload, counters, origin, setup = {}) {
+  const normalized = normalizeCampaignSetupOptions(setup);
+  const rowHeight = campaignPlanRowHeight(normalized);
+  if (payload.type === "Idea") {
+    return {
+      x: origin.x + CAMPAIGN_V2_X.idea,
+      y: origin.y + Math.max(0, ((normalized.variationCount - 1) * rowHeight) / 2)
+    };
+  }
+  if (payload.type === "Campaign Variation") {
+    const row = counters.variation++;
+    counters.currentVariationRow = row;
+    counters.socialInRow[row] = 0;
+    counters.funnelInRow[row] = 0;
+    return { x: origin.x + CAMPAIGN_V2_X.variation, y: origin.y + row * rowHeight };
+  }
+  const row = counters.currentVariationRow || 0;
+  if (payload.type === "Content") {
+    return { x: origin.x + CAMPAIGN_V2_X.content, y: origin.y + row * rowHeight };
+  }
+  if (payload.type === "Social Media Posting") {
+    const item = counters.socialInRow[row] || 0;
+    counters.socialInRow[row] = item + 1;
+    return { x: origin.x + CAMPAIGN_V2_X.social, y: origin.y + row * rowHeight + item * CAMPAIGN_V2_ITEM_GAP };
+  }
+  const funnelItem = counters.funnelInRow[row] || 0;
+  counters.funnelInRow[row] = funnelItem + 1;
+  return { x: origin.x + CAMPAIGN_V2_X.funnel, y: origin.y + row * rowHeight + funnelItem * CAMPAIGN_V2_ITEM_GAP };
+}
+
+async function generateCampaignChainProgressively(plan, { onStatus = null, setupOptions = {} } = {}) {
+  const validated = validateGeneratedCampaignPlan(plan, setupOptions);
   setActiveView("board");
   toggleListMode(false);
-  const chainOrigin = calculateCampaignChainOrigin();
+  const chainOrigin = calculateCampaignPlanOrigin(validated.setup);
   const createdNodes = [];
+  const counters = { variation: 0, currentVariationRow: 0, socialInRow: {}, funnelInRow: {} };
   try {
     for (let index = 0; index < validated.nodes.length; index += 1) {
       const payload = validated.nodes[index];
       const status = CAMPAIGN_WORKER_STATUS[payload.type] || "✨ AI teammate is building the campaign...";
-      if (onStatus) onStatus(status);
-      setSaveStatus(status);
-      const node = createNode({ type: payload.type, parentId: null, position: campaignNodePosition(index, chainOrigin) });
+      if (onStatus) onStatus(`${status} (${index + 1}/${validated.nodes.length})`);
+      setSaveStatus(`${status} (${index + 1}/${validated.nodes.length})`);
+      const node = createNode({ type: payload.type, parentId: null, position: campaignNodePositionForPayload(index, payload, counters, chainOrigin, validated.setup) });
       if (!node) throw new Error(`Could not create ${payload.type}.`);
       applyGeneratedCampaignNodePayload(node, payload, createdNodes[index - 1] || null);
       updateNodeCard(node);
@@ -5257,20 +5290,27 @@ async function generateCampaignChainProgressively(plan, { onStatus = null } = {}
       nodeEl?.classList.add("ai-updated");
       setTimeout(() => nodeEl?.classList.remove("ai-updated"), 1000);
       createdNodes.push(node);
-      if (index > 0) {
-        addEdge(createdNodes[index - 1].id, node.id);
-        drawLinks();
-      }
+      const outgoingEdges = validated.edges.filter((edge) => edge.toIndex === index);
+      outgoingEdges.forEach((edge) => {
+        const source = createdNodes[edge.fromIndex];
+        if (source) addEdge(source.id, node.id);
+      });
+      drawLinks();
       markUnsaved();
-      await waitForCampaignWorker(650);
+      await waitForCampaignWorker(index === 0 ? 520 : 320);
     }
+    validated.edges.forEach((edge) => {
+      const source = createdNodes[edge.fromIndex];
+      const target = createdNodes[edge.toIndex];
+      if (source && target && !state.edges.some(([a, b]) => a === source.id && b === target.id)) addEdge(source.id, target.id);
+    });
     updateEmptyState();
     drawLinks();
     updateListView();
     const ideaNode = createdNodes[0];
     appendActivity("generated_campaign_chain", { node: ideaNode, nodeTitle: activityNodeTitle(ideaNode) });
     markUnsaved();
-    setSaveStatus("Campaign chain generated");
+    setSaveStatus("Campaign generated");
     return createdNodes;
   } catch (error) {
     console.error("[Funklix AI] Progressive campaign generation stopped", error);
@@ -5281,101 +5321,54 @@ async function generateCampaignChainProgressively(plan, { onStatus = null } = {}
 }
 
 async function generateCampaignFromIdea(ideaText, contextText, providedPlan = null, options = {}) {
-  const plan = providedPlan || await fetchGeneratedCampaignPlan(ideaText, contextText);
-  return generateCampaignChainProgressively(plan, options);
+  const setupOptions = normalizeCampaignSetupOptions(options.setupOptions || providedPlan?.setup || {});
+  const plan = providedPlan || await fetchGeneratedCampaignPlan(ideaText, contextText, setupOptions);
+  return generateCampaignChainProgressively(plan, { ...options, setupOptions });
 }
 
 function openCreateCampaignModal() {
   const overlay = document.createElement("div");
   overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px";
-  overlay.innerHTML = `<div style="width:min(560px,95vw);background:#fff;border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:10px">
+  overlay.innerHTML = `<div style="width:min(620px,95vw);max-height:92vh;overflow:auto;background:#fff;border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:12px">
     <h3 style="margin:0">Create Campaign</h3>
-    <label>What is the campaign idea?<textarea id="campaign-idea-input" rows="4" style="width:100%"></textarea></label>
-    <label>Additional context<input id="campaign-context-input" type="text" style="width:100%"/></label>
-    <div id="campaign-ai-loader" class="hidden" style="border:1px solid #ececf4;border-radius:10px;padding:10px;background:#fafaff">
-      <strong>✨ Improving content<span id="campaign-ai-dots"></span></strong>
-      <p id="campaign-ai-subtext" style="margin:6px 0 0;color:#5f6174">Analyzing brand voice...</p>
+    <label>Campaign Idea<textarea id="campaign-idea-input" rows="5" style="width:100%;margin-top:4px" placeholder="Describe the campaign goal, offer, ICP, or launch idea..."></textarea></label>
+    <label>Additional context<input id="campaign-context-input" type="text" style="width:100%;margin-top:4px" placeholder="Optional constraints, timing, product details..."/></label>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <label>Campaign Variations<input id="campaign-variation-count" type="number" min="1" max="10" value="3" style="width:100%;margin-top:4px"/></label>
+      <label>Social Posts Per Variation<input id="campaign-post-count" type="number" min="1" max="20" value="5" style="width:100%;margin-top:4px"/></label>
     </div>
+    <label>Channel<select id="campaign-channel" style="width:100%;margin-top:4px"><option>LinkedIn</option><option>X</option><option>Instagram</option><option>TikTok</option><option>Mixed</option></select></label>
+    <label style="display:flex;align-items:center;gap:8px"><input id="campaign-include-landing" type="checkbox" checked /> Generate Landing Page</label>
+    <label style="display:flex;align-items:center;gap:8px"><input id="campaign-include-email" type="checkbox" checked /> Generate Email Campaign</label>
+    <p class="meta" style="margin:0;color:#5f6174">The modal closes after Generate so you can watch nodes appear on the canvas.</p>
     <div style="display:flex;gap:8px;justify-content:flex-end"><button type="button" id="campaign-modal-cancel">Cancel</button><button type="button" id="campaign-modal-generate">Generate Campaign</button></div>
   </div>`;
   document.body.appendChild(overlay);
-  const loader = overlay.querySelector("#campaign-ai-loader");
-  const dotsEl = overlay.querySelector("#campaign-ai-dots");
-  const subtextEl = overlay.querySelector("#campaign-ai-subtext");
-  let thinkingTimer = null;
-  let thinkingTick = 0;
-  const startThinking = () => {
-    loader.classList.remove("hidden");
-    const steps = ["Analyzing brand voice...", "Refining tone...", "Optimizing structure..."];
-    thinkingTimer = setInterval(() => {
-      thinkingTick += 1;
-      dotsEl.textContent = ".".repeat((thinkingTick % 3) + 1);
-      subtextEl.textContent = steps[thinkingTick % steps.length];
-    }, 450);
-  };
-  const stopThinking = ({ hide = true } = {}) => {
-    if (hide) loader.classList.add("hidden");
-    if (thinkingTimer) clearInterval(thinkingTimer);
-    thinkingTimer = null;
-    dotsEl.textContent = "";
-  };
-  const setWorkerStatus = (message) => {
-    loader.classList.remove("hidden");
-    if (thinkingTimer) clearInterval(thinkingTimer);
-    thinkingTimer = null;
-    dotsEl.textContent = "";
-    subtextEl.textContent = message;
-  };
   overlay.querySelector("#campaign-modal-cancel").addEventListener("click", () => overlay.remove());
   overlay.querySelector("#campaign-modal-generate").addEventListener("click", async () => {
-    const ideaText = overlay.querySelector("#campaign-idea-input").value.trim();
+    const ideaText = overlay.querySelector("#campaign-idea-input").value.trim() || "Campaign Idea";
     const contextText = overlay.querySelector("#campaign-context-input").value.trim();
-    const generateBtn = overlay.querySelector("#campaign-modal-generate");
-    const cancelBtn = overlay.querySelector("#campaign-modal-cancel");
-    const ideaInput = overlay.querySelector("#campaign-idea-input");
-    const contextInput = overlay.querySelector("#campaign-context-input");
-    const restoreControls = () => {
-      generateBtn.disabled = false;
-      generateBtn.textContent = "Generate Campaign";
-      cancelBtn.disabled = false;
-      ideaInput.disabled = false;
-      contextInput.disabled = false;
-    };
-    generateBtn.disabled = true;
-    generateBtn.textContent = "Generating...";
-    cancelBtn.disabled = true;
-    ideaInput.disabled = true;
-    contextInput.disabled = true;
-    let modalHiddenForBuild = false;
-    const hideModalForProgressiveBuild = () => {
-      modalHiddenForBuild = true;
-      overlay.style.opacity = "0";
-      overlay.style.pointerEvents = "none";
-      overlay.setAttribute("aria-hidden", "true");
-    };
-    startThinking();
+    const setupOptions = normalizeCampaignSetupOptions({
+      variationCount: overlay.querySelector("#campaign-variation-count").value,
+      postsPerVariation: overlay.querySelector("#campaign-post-count").value,
+      includeLandingPage: overlay.querySelector("#campaign-include-landing").checked,
+      includeEmailCampaign: overlay.querySelector("#campaign-include-email").checked,
+      channel: overlay.querySelector("#campaign-channel").value
+    });
+    overlay.remove();
+    setActiveView("board");
+    toggleListMode(false);
+    setSaveStatus(`Planning campaign: ${setupOptions.variationCount} variations, ${setupOptions.postsPerVariation} posts each...`);
+    const setWorkerStatus = (message) => setSaveStatus(message);
     try {
-      const apiPlan = await fetchGeneratedCampaignPlan(ideaText || "Campaign Idea", contextText);
+      const apiPlan = await fetchGeneratedCampaignPlan(ideaText, contextText, setupOptions);
       setWorkerStatus("✨ Campaign plan ready. AI teammate is entering the board...");
-      hideModalForProgressiveBuild();
-      const createdNodes = await generateCampaignFromIdea(ideaText || "Campaign Idea", contextText, apiPlan, { onStatus: setWorkerStatus });
-      if (createdNodes.length) overlay.remove();
-      else {
-        overlay.style.opacity = "";
-        overlay.style.pointerEvents = "";
-        overlay.removeAttribute("aria-hidden");
-        modalHiddenForBuild = false;
-        stopThinking();
-        restoreControls();
-      }
+      await generateCampaignFromIdea(ideaText, contextText, apiPlan, { onStatus: setWorkerStatus, setupOptions });
     } catch (error) {
       console.error("[Funklix AI] Generate Campaign failed", error);
       alert(error?.partialCampaign
         ? "Campaign generation stopped early. You can continue manually or use Generate Next Step."
         : "Could not generate campaign right now. No nodes were created.");
-      stopThinking();
-      if (modalHiddenForBuild) overlay.remove();
-      else restoreControls();
     }
   });
 }
