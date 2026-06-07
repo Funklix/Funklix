@@ -1994,6 +1994,85 @@ button:active {
   font-size: 0.68rem;
 }
 
+
+.ai-workspace-section {
+  border-color: rgba(81, 103, 216, 0.24);
+  background: #f7f9ff;
+}
+
+.ai-workspace-body {
+  display: grid;
+  gap: 8px;
+}
+
+.ai-workspace-heading {
+  color: #3140a0;
+  font-size: 0.82rem;
+}
+
+.ai-workspace-meta,
+.ai-workspace-improvement,
+.ai-workspace-explanation {
+  display: grid;
+  gap: 3px;
+  color: #3a456c;
+  font-size: 0.74rem;
+}
+
+.ai-workspace-improvement p,
+.ai-workspace-explanation p,
+.ai-workspace-status,
+.ai-workspace-error {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.ai-workspace-error {
+  color: #a34242;
+  font-weight: 700;
+}
+
+.ai-workspace-text-wrap {
+  display: grid;
+  gap: 4px;
+  margin-top: 4px;
+  color: #6a7190;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.ai-workspace-text {
+  width: 100%;
+  min-height: 94px;
+  max-height: 170px;
+  resize: vertical;
+  overflow-y: auto;
+  border: 1px solid #dfe5f7;
+  border-radius: 8px;
+  background: #fff;
+  color: #26304f;
+  padding: 7px 8px;
+  font-size: 0.76rem;
+  line-height: 1.35;
+  font-weight: 500;
+}
+
+.ai-workspace-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.ai-workspace-field-updated {
+  animation: ai-workspace-field-pulse 1.3s ease-out;
+}
+
+@keyframes ai-workspace-field-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(81, 103, 216, 0.34); border-color: rgba(81, 103, 216, 0.5); }
+  55% { box-shadow: 0 0 0 5px rgba(81, 103, 216, 0.13); border-color: rgba(81, 103, 216, 0.44); }
+  100% { box-shadow: 0 0 0 0 rgba(81, 103, 216, 0); }
+}
+
 .postit-replies {
   margin-top: 6px;
   border-top: 1px dashed rgba(0, 0, 0, 0.2);

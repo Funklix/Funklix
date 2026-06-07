@@ -196,6 +196,8 @@ const el = {
   picker: document.getElementById("node-type-picker"),
   pickerOptions: document.getElementById("node-type-options"),
   inspectorMeta: document.getElementById("inspector-meta"),
+  aiWorkspaceSection: document.getElementById("ai-workspace-section"),
+  aiWorkspaceBody: document.getElementById("ai-workspace-body"),
   nodeForm: document.getElementById("node-form"),
   socialFields: document.getElementById("social-fields"),
   contentUploadFields: document.getElementById("content-upload-fields"),
@@ -6560,18 +6562,30 @@ function createAiReviewAccordionSection({ title, tone, count = null, open = fals
 }
 
 
-function aiReviewFixKey(noteId, improvementIndex) {
-  return `${noteId || "ai-review"}:${improvementIndex}`;
+function setAiReviewFixPreview(nodeId, previewState = null) {
+  if (!nodeId) return;
+  if (!previewState) delete state.aiReviewFixPreviews[nodeId];
+  else state.aiReviewFixPreviews[nodeId] = previewState;
 }
 
-function setAiReviewFixPreview(noteId, improvementIndex, previewState = null) {
-  const key = aiReviewFixKey(noteId, improvementIndex);
-  if (!previewState) delete state.aiReviewFixPreviews[key];
-  else state.aiReviewFixPreviews[key] = previewState;
+function getAiReviewFixPreview(nodeId) {
+  return nodeId ? state.aiReviewFixPreviews[nodeId] || null : null;
 }
 
-function getAiReviewFixPreview(noteId, improvementIndex) {
-  return state.aiReviewFixPreviews[aiReviewFixKey(noteId, improvementIndex)] || null;
+function selectNodeForAiWorkspace(node) {
+  if (!node?.id) return;
+  if (state.appMode === "brand") setAppMode("canvas");
+  state.selectedIds.clear();
+  state.selectedIds.add(node.id);
+  state.selectedPrimary = node.id;
+  updateSelectionClasses();
+  fillInspector(node);
+}
+
+function focusAiWorkspace() {
+  requestAnimationFrame(() => {
+    el.aiWorkspaceSection?.scrollIntoView?.({ block: "nearest", behavior: "smooth" });
+  });
 }
 
 async function fetchAiReviewFix(node, improvementText) {
@@ -6592,126 +6606,199 @@ async function fetchAiReviewFix(node, improvementText) {
   return data;
 }
 
-function applyAiReviewFixToNode(node, suggestedContent = "", noteId = "", improvementIndex = 0, nodeEl = null) {
-  const nextContent = String(suggestedContent || "").trim();
+function pulseAiUpdatedNode(nodeId) {
+  const updatedEl = el.zoomLayer.querySelector(`[data-id='${nodeId}']`);
+  if (!updatedEl) return;
+  updatedEl.classList.add("ai-updated");
+  setTimeout(() => updatedEl.classList.remove("ai-updated"), 1300);
+}
+
+function pulseInspectorContentField() {
+  const field = el.inputs?.content;
+  if (!field) return;
+  field.classList.add("ai-workspace-field-updated");
+  setTimeout(() => field.classList.remove("ai-workspace-field-updated"), 1300);
+}
+
+function applyAiReviewFixToNode(node, preview = null) {
+  const nextContent = String(preview?.suggestedContent || "").trim();
   if (!node || !nextContent) return;
   node.content = nextContent;
   if (state.selectedPrimary === node.id && el.inputs?.content) el.inputs.content.value = node.content;
   updateNodeCard(node);
   updateListView();
-  if (state.selectedPrimary === node.id) fillInspector(node);
   recordNodeUpdatedActivity(node);
-  setAiReviewFixPreview(noteId, improvementIndex, null);
-  if (nodeEl) renderPostits(node, nodeEl);
+  setAiReviewFixPreview(node.id, null);
+  fillInspector(node);
+  pulseAiUpdatedNode(node.id);
+  pulseInspectorContentField();
   saveCampaignCanvasState();
 }
 
-function renderAiReviewFixPreview({ node, note, nodeEl, improvementIndex, preview }) {
-  const wrap = document.createElement("div");
-  wrap.className = "ai-review-fix-preview";
-  wrap.style.marginTop = "7px";
-  wrap.style.padding = "8px";
-  wrap.style.borderRadius = "8px";
-  wrap.style.background = "rgba(255, 255, 255, 0.56)";
-  wrap.style.border = "1px solid rgba(49, 64, 160, 0.12)";
-  wrap.style.display = "grid";
-  wrap.style.gap = "5px";
+function dismissAiReviewFix(node) {
+  if (!node?.id) return;
+  setAiReviewFixPreview(node.id, null);
+  fillInspector(node);
+}
+
+function createAiWorkspaceReadonlyText(labelText, value = "") {
+  const wrap = document.createElement("label");
+  wrap.className = "ai-workspace-text-wrap";
+  const label = document.createElement("span");
+  label.textContent = labelText;
+  const textarea = document.createElement("textarea");
+  textarea.className = "ai-workspace-text";
+  textarea.readOnly = true;
+  textarea.rows = 5;
+  textarea.value = value || "";
+  wrap.append(label, textarea);
+  return wrap;
+}
+
+function renderInspectorAiWorkspace(node) {
+  if (!el.aiWorkspaceSection || !el.aiWorkspaceBody) return;
+  const preview = getAiReviewFixPreview(node?.id);
+  el.aiWorkspaceSection.classList.toggle("hidden", !node || !preview);
+  el.aiWorkspaceBody.innerHTML = "";
+  if (!node || !preview) return;
+
+  const title = document.createElement("strong");
+  title.className = "ai-workspace-heading";
+  title.textContent = "Suggested Fix";
+
+  const meta = document.createElement("div");
+  meta.className = "ai-workspace-meta";
+  meta.innerHTML = `<span><strong>Target Field:</strong> ${preview.targetLabel || "Content"}</span>`;
+
+  const improvement = document.createElement("div");
+  improvement.className = "ai-workspace-improvement";
+  const improvementLabel = document.createElement("strong");
+  improvementLabel.textContent = "Improvement:";
+  const improvementText = document.createElement("p");
+  improvementText.textContent = preview.improvementText || "";
+  improvement.append(improvementLabel, improvementText);
+
+  el.aiWorkspaceBody.append(title, meta, improvement);
 
   if (preview.status === "loading") {
-    wrap.textContent = "Generating suggested fix...";
-    return wrap;
+    const loading = document.createElement("p");
+    loading.className = "ai-workspace-status";
+    loading.textContent = "Generating suggested fix...";
+    el.aiWorkspaceBody.appendChild(loading);
+    return;
   }
 
   if (preview.status === "error") {
-    const message = document.createElement("p");
-    message.textContent = preview.error || "Could not generate a suggested fix.";
+    const error = document.createElement("p");
+    error.className = "ai-workspace-error";
+    error.textContent = preview.error || "Could not generate a suggested fix.";
     const dismiss = document.createElement("button");
     dismiss.type = "button";
-    dismiss.className = "postit-reply-button";
     dismiss.textContent = "Dismiss";
-    dismiss.addEventListener("click", (event) => {
-      event.stopPropagation();
-      setAiReviewFixPreview(note.id, improvementIndex, null);
-      renderPostits(node, nodeEl);
-    });
-    wrap.append(message, dismiss);
-    return wrap;
+    dismiss.addEventListener("click", () => dismissAiReviewFix(node));
+    el.aiWorkspaceBody.append(error, dismiss);
+    return;
   }
 
-  const heading = document.createElement("strong");
-  heading.textContent = "Suggested Fix";
+  const explanation = document.createElement("div");
+  explanation.className = "ai-workspace-explanation";
   const explanationLabel = document.createElement("strong");
   explanationLabel.textContent = "Explanation:";
-  const explanation = document.createElement("p");
-  explanation.textContent = preview.explanation || "No explanation provided.";
-  const previewLabel = document.createElement("strong");
-  previewLabel.textContent = "Preview:";
-  const suggested = document.createElement("p");
-  suggested.textContent = preview.suggestedContent || "";
+  const explanationText = document.createElement("p");
+  explanationText.textContent = preview.explanation || "No explanation provided.";
+  explanation.append(explanationLabel, explanationText);
 
   const actions = document.createElement("div");
-  actions.className = "ai-review-fix-actions";
-  actions.style.display = "flex";
-  actions.style.justifyContent = "flex-end";
-  actions.style.gap = "6px";
+  actions.className = "ai-workspace-actions";
   const apply = document.createElement("button");
   apply.type = "button";
-  apply.className = "postit-reply-button";
+  apply.className = "primary-add";
   apply.textContent = "Apply";
   apply.disabled = !preview.suggestedContent || isBoardReadOnly();
-  apply.addEventListener("click", (event) => {
-    event.stopPropagation();
+  apply.addEventListener("click", () => {
     if (isBoardReadOnly()) {
       setSaveStatus("Read-only board");
       return;
     }
-    applyAiReviewFixToNode(node, preview.suggestedContent, note.id, improvementIndex, nodeEl);
+    applyAiReviewFixToNode(node, preview);
   });
   const dismiss = document.createElement("button");
   dismiss.type = "button";
-  dismiss.className = "postit-reply-button";
   dismiss.textContent = "Dismiss";
-  dismiss.addEventListener("click", (event) => {
-    event.stopPropagation();
-    setAiReviewFixPreview(note.id, improvementIndex, null);
-    renderPostits(node, nodeEl);
-  });
+  dismiss.addEventListener("click", () => dismissAiReviewFix(node));
   actions.append(apply, dismiss);
-  wrap.append(heading, explanationLabel, explanation, previewLabel, suggested, actions);
-  return wrap;
+
+  el.aiWorkspaceBody.append(
+    explanation,
+    createAiWorkspaceReadonlyText("Current Text", preview.currentText || ""),
+    createAiWorkspaceReadonlyText("Suggested Text", preview.suggestedContent || ""),
+    actions
+  );
 }
 
-function renderAiReviewImprovementAction({ row, node, note, nodeEl, item, index }) {
+async function startAiReviewFixFromPostit({ node, note, item, index, button = null }) {
+  if (!node || !note) return;
+  if (isBoardReadOnly()) {
+    setSaveStatus("Read-only board");
+    return;
+  }
+  selectNodeForAiWorkspace(node);
+  const loadingPreview = {
+    noteId: note.id,
+    improvementIndex: index,
+    improvementText: item,
+    status: "loading",
+    targetField: "content",
+    targetLabel: "Content",
+    currentText: node.content || "",
+    suggestedContent: "",
+    explanation: "",
+    error: ""
+  };
+  setAiReviewFixPreview(node.id, loadingPreview);
+  fillInspector(node);
+  focusAiWorkspace();
+  if (button) {
+    button.disabled = true;
+    button.textContent = "Generating...";
+  }
+  try {
+    const fix = await fetchAiReviewFix(node, item);
+    setAiReviewFixPreview(node.id, {
+      ...loadingPreview,
+      status: "ready",
+      explanation: fix.explanation || "",
+      suggestedContent: fix.suggestedContent || ""
+    });
+  } catch (error) {
+    setAiReviewFixPreview(node.id, {
+      ...loadingPreview,
+      status: "error",
+      error: error?.message || "Could not generate a suggested fix."
+    });
+  } finally {
+    if (button?.isConnected) {
+      button.disabled = isBoardReadOnly();
+      button.textContent = "Apply Fix";
+    }
+    fillInspector(node);
+    focusAiWorkspace();
+  }
+}
+
+function renderAiReviewImprovementAction({ row, node, note, item, index }) {
   if (!node || !note) return;
   const button = document.createElement("button");
   button.type = "button";
   button.className = "postit-reply-button ai-review-apply-fix";
   button.textContent = "Apply Fix";
-  const existingPreview = getAiReviewFixPreview(note.id, index);
-  button.disabled = isBoardReadOnly() || existingPreview?.status === "loading";
+  const activePreview = getAiReviewFixPreview(node.id);
+  button.disabled = isBoardReadOnly() || (activePreview?.noteId === note.id && activePreview?.improvementIndex === index && activePreview?.status === "loading");
   button.addEventListener("click", async (event) => {
     event.stopPropagation();
-    if (isBoardReadOnly()) {
-      setSaveStatus("Read-only board");
-      return;
-    }
-    setAiReviewFixPreview(note.id, index, { status: "loading" });
-    renderPostits(node, nodeEl);
-    try {
-      const fix = await fetchAiReviewFix(node, item);
-      setAiReviewFixPreview(note.id, index, {
-        status: "ready",
-        explanation: fix.explanation || "",
-        suggestedContent: fix.suggestedContent || ""
-      });
-    } catch (error) {
-      setAiReviewFixPreview(note.id, index, { status: "error", error: error?.message || "Could not generate a suggested fix." });
-    }
-    renderPostits(node, nodeEl);
+    await startAiReviewFixFromPostit({ node, note, item, index, button });
   });
   row.appendChild(button);
-  const preview = getAiReviewFixPreview(note.id, index);
-  if (preview) row.appendChild(renderAiReviewFixPreview({ node, note, nodeEl, improvementIndex: index, preview }));
 }
 
 function renderAiReviewCard(review, context = {}) {
@@ -6765,7 +6852,7 @@ function renderAiReviewCard(review, context = {}) {
         const rowText = document.createElement("p");
         rowText.textContent = item;
         row.append(rowTitle, rowText);
-        renderAiReviewImprovementAction({ row, node: context.node, note: context.note, nodeEl: context.nodeEl, item, index });
+        renderAiReviewImprovementAction({ row, node: context.node, note: context.note, item, index });
         body.appendChild(row);
       });
     }
@@ -7093,6 +7180,7 @@ function fillInspector(node) {
     }
     if (el.connectedContextSummary) el.connectedContextSummary.textContent = "Parents: 0 · Children: 0";
     if (el.connectedContextBody) el.connectedContextBody.textContent = "";
+    renderInspectorAiWorkspace(null);
     updateInspectorActionVisibility();
     return;
   }
@@ -7155,6 +7243,7 @@ function fillInspector(node) {
     const children = connected.childNodes.slice(0, 3).map((n) => n.title || n.type).join(", ") || "—";
     el.connectedContextBody.innerHTML = `<div><strong>Parent:</strong> ${parents}</div><div><strong>Child:</strong> ${children}</div>`;
   }
+  renderInspectorAiWorkspace(node);
   updateInspectorActionVisibility();
   renderNodePresenceBadges();
 }
