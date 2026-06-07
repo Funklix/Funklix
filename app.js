@@ -148,6 +148,7 @@ const state = {
   ,activityCollapsed: false
   ,lastSeenActivityAt: 0
   ,commentThreadsOpenedByNode: new Set()
+  ,aiReviewFixPreviews: {}
 };
 
 const el = {
@@ -6473,17 +6474,336 @@ function syncPopoverActiveStates(popoverEl) {
   });
 }
 
+
+function normalizeAiReviewSectionText(lines = []) {
+  return lines.join("\n").trim();
+}
+
+function parseAiReviewList(text = "") {
+  return text
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => line.replace(/^(?:[-*•]|\d+[.)])\s*/, "").trim())
+    .filter(Boolean);
+}
+
+function parseAiReviewText(rawText = "") {
+  const text = String(rawText || "").trim();
+  if (!text) return null;
+
+  const sections = { summary: [], strengths: [], improvements: [], suggestedRewrite: [] };
+  let score = "";
+  let currentSection = null;
+
+  text.split(/\r?\n/).forEach((line) => {
+    const trimmed = line.trim();
+    const scoreMatch = trimmed.match(/^AI Review:\s*(.+)$/i);
+    if (scoreMatch) {
+      score = scoreMatch[1].trim();
+      currentSection = null;
+      return;
+    }
+
+    const sectionMatch = trimmed.match(/^(Summary|Strengths|Improvements|Improve|Suggested Rewrite):\s*(.*)$/i);
+    if (sectionMatch) {
+      const label = sectionMatch[1].toLowerCase();
+      if (label === "improve") currentSection = "improvements";
+      else if (label === "suggested rewrite") currentSection = "suggestedRewrite";
+      else currentSection = label;
+      if (sectionMatch[2]) sections[currentSection].push(sectionMatch[2]);
+      return;
+    }
+
+    if (currentSection) sections[currentSection].push(line);
+  });
+
+  const summary = normalizeAiReviewSectionText(sections.summary);
+  const strengths = parseAiReviewList(normalizeAiReviewSectionText(sections.strengths));
+  const improvements = parseAiReviewList(normalizeAiReviewSectionText(sections.improvements));
+  const suggestedRewrite = normalizeAiReviewSectionText(sections.suggestedRewrite);
+
+  if (!score && !summary && !strengths.length && !improvements.length && !suggestedRewrite) return null;
+
+  return {
+    score: score || "—",
+    summary,
+    strengths,
+    improvements,
+    suggestedRewrite
+  };
+}
+
+function appendAiReviewText(parent, text = "") {
+  const paragraph = document.createElement("p");
+  paragraph.textContent = text || "No details provided.";
+  parent.appendChild(paragraph);
+}
+
+function createAiReviewAccordionSection({ title, tone, count = null, open = false, emptyText = "No details provided.", renderContent }) {
+  const details = document.createElement("details");
+  details.className = `ai-review-section ai-review-section-${tone}`;
+  details.open = !!open;
+
+  const summary = document.createElement("summary");
+  const label = document.createElement("span");
+  label.textContent = count === null ? title : `${title} (${count})`;
+  summary.appendChild(label);
+
+  const body = document.createElement("div");
+  body.className = "ai-review-section-body";
+  renderContent?.(body);
+  if (!body.childNodes.length) appendAiReviewText(body, emptyText);
+
+  details.append(summary, body);
+  return details;
+}
+
+
+function aiReviewFixKey(noteId, improvementIndex) {
+  return `${noteId || "ai-review"}:${improvementIndex}`;
+}
+
+function setAiReviewFixPreview(noteId, improvementIndex, previewState = null) {
+  const key = aiReviewFixKey(noteId, improvementIndex);
+  if (!previewState) delete state.aiReviewFixPreviews[key];
+  else state.aiReviewFixPreviews[key] = previewState;
+}
+
+function getAiReviewFixPreview(noteId, improvementIndex) {
+  return state.aiReviewFixPreviews[aiReviewFixKey(noteId, improvementIndex)] || null;
+}
+
+async function fetchAiReviewFix(node, improvementText) {
+  const response = await fetch("/api/apply-review-fix", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      boardId: getCurrentBrandBrainBoardId(),
+      nodeId: node.id,
+      improvementText,
+      currentNodeContent: node.content || "",
+      nodeType: node.type || "",
+      brandBrainData: state.brandCore
+    })
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data?.error || "Failed to apply review fix");
+  return data;
+}
+
+function applyAiReviewFixToNode(node, suggestedContent = "", noteId = "", improvementIndex = 0, nodeEl = null) {
+  const nextContent = String(suggestedContent || "").trim();
+  if (!node || !nextContent) return;
+  node.content = nextContent;
+  if (state.selectedPrimary === node.id && el.inputs?.content) el.inputs.content.value = node.content;
+  updateNodeCard(node);
+  updateListView();
+  if (state.selectedPrimary === node.id) fillInspector(node);
+  recordNodeUpdatedActivity(node);
+  setAiReviewFixPreview(noteId, improvementIndex, null);
+  if (nodeEl) renderPostits(node, nodeEl);
+  saveCampaignCanvasState();
+}
+
+function renderAiReviewFixPreview({ node, note, nodeEl, improvementIndex, preview }) {
+  const wrap = document.createElement("div");
+  wrap.className = "ai-review-fix-preview";
+  wrap.style.marginTop = "7px";
+  wrap.style.padding = "8px";
+  wrap.style.borderRadius = "8px";
+  wrap.style.background = "rgba(255, 255, 255, 0.56)";
+  wrap.style.border = "1px solid rgba(49, 64, 160, 0.12)";
+  wrap.style.display = "grid";
+  wrap.style.gap = "5px";
+
+  if (preview.status === "loading") {
+    wrap.textContent = "Generating suggested fix...";
+    return wrap;
+  }
+
+  if (preview.status === "error") {
+    const message = document.createElement("p");
+    message.textContent = preview.error || "Could not generate a suggested fix.";
+    const dismiss = document.createElement("button");
+    dismiss.type = "button";
+    dismiss.className = "postit-reply-button";
+    dismiss.textContent = "Dismiss";
+    dismiss.addEventListener("click", (event) => {
+      event.stopPropagation();
+      setAiReviewFixPreview(note.id, improvementIndex, null);
+      renderPostits(node, nodeEl);
+    });
+    wrap.append(message, dismiss);
+    return wrap;
+  }
+
+  const heading = document.createElement("strong");
+  heading.textContent = "Suggested Fix";
+  const explanationLabel = document.createElement("strong");
+  explanationLabel.textContent = "Explanation:";
+  const explanation = document.createElement("p");
+  explanation.textContent = preview.explanation || "No explanation provided.";
+  const previewLabel = document.createElement("strong");
+  previewLabel.textContent = "Preview:";
+  const suggested = document.createElement("p");
+  suggested.textContent = preview.suggestedContent || "";
+
+  const actions = document.createElement("div");
+  actions.className = "ai-review-fix-actions";
+  actions.style.display = "flex";
+  actions.style.justifyContent = "flex-end";
+  actions.style.gap = "6px";
+  const apply = document.createElement("button");
+  apply.type = "button";
+  apply.className = "postit-reply-button";
+  apply.textContent = "Apply";
+  apply.disabled = !preview.suggestedContent || isBoardReadOnly();
+  apply.addEventListener("click", (event) => {
+    event.stopPropagation();
+    if (isBoardReadOnly()) {
+      setSaveStatus("Read-only board");
+      return;
+    }
+    applyAiReviewFixToNode(node, preview.suggestedContent, note.id, improvementIndex, nodeEl);
+  });
+  const dismiss = document.createElement("button");
+  dismiss.type = "button";
+  dismiss.className = "postit-reply-button";
+  dismiss.textContent = "Dismiss";
+  dismiss.addEventListener("click", (event) => {
+    event.stopPropagation();
+    setAiReviewFixPreview(note.id, improvementIndex, null);
+    renderPostits(node, nodeEl);
+  });
+  actions.append(apply, dismiss);
+  wrap.append(heading, explanationLabel, explanation, previewLabel, suggested, actions);
+  return wrap;
+}
+
+function renderAiReviewImprovementAction({ row, node, note, nodeEl, item, index }) {
+  if (!node || !note) return;
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "postit-reply-button ai-review-apply-fix";
+  button.textContent = "Apply Fix";
+  const existingPreview = getAiReviewFixPreview(note.id, index);
+  button.disabled = isBoardReadOnly() || existingPreview?.status === "loading";
+  button.addEventListener("click", async (event) => {
+    event.stopPropagation();
+    if (isBoardReadOnly()) {
+      setSaveStatus("Read-only board");
+      return;
+    }
+    setAiReviewFixPreview(note.id, index, { status: "loading" });
+    renderPostits(node, nodeEl);
+    try {
+      const fix = await fetchAiReviewFix(node, item);
+      setAiReviewFixPreview(note.id, index, {
+        status: "ready",
+        explanation: fix.explanation || "",
+        suggestedContent: fix.suggestedContent || ""
+      });
+    } catch (error) {
+      setAiReviewFixPreview(note.id, index, { status: "error", error: error?.message || "Could not generate a suggested fix." });
+    }
+    renderPostits(node, nodeEl);
+  });
+  row.appendChild(button);
+  const preview = getAiReviewFixPreview(note.id, index);
+  if (preview) row.appendChild(renderAiReviewFixPreview({ node, note, nodeEl, improvementIndex: index, preview }));
+}
+
+function renderAiReviewCard(review, context = {}) {
+  const card = document.createElement("section");
+  card.className = "ai-review-card";
+
+  const heading = document.createElement("div");
+  heading.className = "ai-review-card-heading";
+  const title = document.createElement("strong");
+  title.textContent = "🤖 AI Review";
+  const score = document.createElement("span");
+  score.className = "ai-review-score";
+  score.textContent = review.score;
+  heading.append(title, score);
+
+  const summary = createAiReviewAccordionSection({
+    title: "Summary",
+    tone: "summary",
+    open: true,
+    renderContent: (body) => appendAiReviewText(body, review.summary)
+  });
+
+  const strengths = createAiReviewAccordionSection({
+    title: "Strengths",
+    tone: "strengths",
+    count: review.strengths.length,
+    emptyText: "No clear strengths identified.",
+    renderContent: (body) => {
+      if (!review.strengths.length) return;
+      const list = document.createElement("ul");
+      review.strengths.forEach((item) => {
+        const li = document.createElement("li");
+        li.textContent = item;
+        list.appendChild(li);
+      });
+      body.appendChild(list);
+    }
+  });
+
+  const improvements = createAiReviewAccordionSection({
+    title: "Improvements",
+    tone: "improvements",
+    count: review.improvements.length,
+    emptyText: "No major improvements identified.",
+    renderContent: (body) => {
+      review.improvements.forEach((item, index) => {
+        const row = document.createElement("div");
+        row.className = "ai-review-improvement-row";
+        const rowTitle = document.createElement("strong");
+        rowTitle.textContent = `Improvement ${index + 1}`;
+        const rowText = document.createElement("p");
+        rowText.textContent = item;
+        row.append(rowTitle, rowText);
+        renderAiReviewImprovementAction({ row, node: context.node, note: context.note, nodeEl: context.nodeEl, item, index });
+        body.appendChild(row);
+      });
+    }
+  });
+
+  card.append(heading, summary, strengths, improvements);
+
+  if (review.suggestedRewrite) {
+    const rewrite = createAiReviewAccordionSection({
+      title: "Suggested Rewrite",
+      tone: "rewrite",
+      renderContent: (body) => {
+        const block = document.createElement("pre");
+        block.className = "ai-review-rewrite";
+        block.textContent = review.suggestedRewrite;
+        body.appendChild(block);
+      }
+    });
+    card.appendChild(rewrite);
+  }
+
+  return card;
+}
+
 function renderPostits(node, nodeEl) {
   nodeEl.querySelectorAll(".postit").forEach((p) => p.remove());
   if (!Array.isArray(node.postits)) node.postits = [];
 
   node.postits.forEach((note) => {
     ensureCommentIdentity(note);
+    const isAiReviewNote = note.source === "ai_review" || note.authorEmail === "ai@funklix.local" || note.authorName === "AI Review";
+    const parsedAiReview = isAiReviewNote ? parseAiReviewText(note.text) : null;
     const postit = el.postitTemplate.content.firstElementChild.cloneNode(true);
     postit.style.left = `${note.x}px`;
     postit.style.top = `${note.y}px`;
     postit.style.background = note.color;
     postit.classList.toggle("is-resolved", !!note.resolved);
+    postit.classList.toggle("ai-review-postit", isAiReviewNote);
 
     const header = postit.querySelector("header");
     const avatar = document.createElement("span");
@@ -6544,9 +6864,10 @@ function renderPostits(node, nodeEl) {
     header.insertBefore(resolveBtn, postit.querySelector(".postit-delete"));
 
     const area = postit.querySelector(".postit-text");
-    area.value = note.text;
+    area.value = note.text || "";
     area.disabled = !!note.resolved;
-    area.style.fontSize = note.text.length > 220 ? "0.7rem" : note.text.length > 120 ? "0.82rem" : "0.96rem";
+    area.readOnly = isAiReviewNote;
+    area.style.fontSize = (note.text || "").length > 220 ? "0.7rem" : (note.text || "").length > 120 ? "0.82rem" : "0.96rem";
     area.addEventListener("input", () => {
       if (isBoardReadOnly()) {
         setSaveStatus("Read-only board");
@@ -6556,6 +6877,9 @@ function renderPostits(node, nodeEl) {
       area.style.fontSize = note.text.length > 220 ? "0.7rem" : note.text.length > 120 ? "0.82rem" : "0.96rem";
       saveCampaignCanvasState();
     });
+    if (parsedAiReview && !note.resolved) {
+      area.replaceWith(renderAiReviewCard(parsedAiReview, { node, note, nodeEl }));
+    }
 
     postit.querySelector(".postit-delete").addEventListener("click", () => {
       if (isBoardReadOnly()) {
@@ -7231,6 +7555,7 @@ function addAiReviewPostitToNode(node, review) {
     time: nowString(),
     createdAt,
     updatedAt: createdAt,
+    source: "ai_review",
     text: formatAiReviewComment(review),
     color: "#e9f1ff",
     resolved: false,

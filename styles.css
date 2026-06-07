@@ -1885,6 +1885,115 @@ button:active {
   line-height: 1.25;
 }
 
+.ai-review-postit {
+  width: 320px;
+  min-height: 180px;
+}
+
+.ai-review-postit .postit-text {
+  resize: none;
+}
+
+.ai-review-card {
+  display: grid;
+  gap: 7px;
+  color: #26304f;
+  font-size: 0.74rem;
+  line-height: 1.35;
+  user-select: text;
+}
+
+.ai-review-card-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.ai-review-card-heading strong {
+  font-size: 0.82rem;
+}
+
+.ai-review-score {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: rgba(81, 103, 216, 0.13);
+  color: #3140a0;
+  font-weight: 900;
+  padding: 3px 8px;
+}
+
+.ai-review-section {
+  border: 1px solid rgba(49, 64, 160, 0.09);
+  border-radius: 9px;
+  padding: 0;
+  overflow: hidden;
+}
+
+.ai-review-section summary {
+  cursor: pointer;
+  font-weight: 800;
+  padding: 6px 8px;
+}
+
+.ai-review-section-body {
+  padding: 0 8px 8px;
+}
+
+.ai-review-section-body p {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.ai-review-section-body ul {
+  margin: 0;
+  padding-left: 17px;
+}
+
+.ai-review-section-summary {
+  background: #eef5ff;
+}
+
+.ai-review-section-strengths {
+  background: #edf9f2;
+}
+
+.ai-review-section-improvements {
+  background: #fff6df;
+}
+
+.ai-review-section-rewrite {
+  background: #f3edff;
+}
+
+.ai-review-improvement-row {
+  display: grid;
+  gap: 3px;
+  border-top: 1px solid rgba(125, 82, 16, 0.12);
+  padding-top: 7px;
+  margin-top: 7px;
+}
+
+.ai-review-improvement-row:first-child {
+  border-top: 0;
+  padding-top: 0;
+  margin-top: 0;
+}
+
+.ai-review-improvement-row strong {
+  color: #7d5210;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.ai-review-rewrite {
+  margin: 0;
+  white-space: pre-wrap;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 0.68rem;
+}
+
 .postit-replies {
   margin-top: 6px;
   border-top: 1px dashed rgba(0, 0, 0, 0.2);
