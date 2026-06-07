@@ -3821,3 +3821,239 @@ button:active {
     grid-template-columns: 1fr;
   }
 }
+
+.campaign-worker {
+  position: fixed;
+  top: 24px;
+  left: 50%;
+  z-index: 9998;
+  transform: translateX(-50%);
+  width: min(440px, calc(100vw - 32px));
+  pointer-events: none;
+  transition: opacity 300ms ease, transform 300ms ease;
+}
+
+.campaign-worker.is-exiting {
+  opacity: 0;
+  transform: translateX(-50%) translateY(-10px) scale(0.98);
+}
+
+.campaign-worker-card {
+  border: 1px solid rgba(107, 124, 180, 0.2);
+  border-radius: 22px;
+  padding: 18px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 22px 60px rgba(28, 37, 75, 0.24);
+  backdrop-filter: blur(14px);
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  text-align: center;
+}
+
+.campaign-worker-avatar {
+  width: 78px;
+  height: 78px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(135deg, #eef2ff, #eaf9ff);
+  border: 1px solid #dfe6ff;
+  box-shadow: 0 12px 28px rgba(81, 103, 216, 0.2);
+  overflow: hidden;
+  position: relative;
+}
+
+.campaign-worker-avatar::after {
+  content: "";
+  position: absolute;
+  inset: -30%;
+  background: conic-gradient(from 120deg, transparent 0 58%, rgba(255, 255, 255, 0.65) 66%, transparent 74%);
+  opacity: 0;
+}
+
+.campaign-worker-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.campaign-worker-avatar span {
+  font-size: 2.1rem;
+}
+
+.campaign-worker.is-thinking .campaign-worker-avatar {
+  animation: campaignWorkerThinking 1.8s ease-in-out infinite;
+}
+
+.campaign-worker.is-writing .campaign-worker-avatar {
+  animation: campaignWorkerWriting 1.15s ease-in-out infinite;
+}
+
+.campaign-worker.is-building .campaign-worker-avatar {
+  animation: campaignWorkerBuilding 1.35s ease-in-out infinite;
+}
+
+.campaign-worker.is-connecting .campaign-worker-avatar::after {
+  opacity: 1;
+  animation: campaignWorkerConnect 1.25s linear infinite;
+}
+
+.campaign-worker.is-done .campaign-worker-avatar {
+  animation: campaignWorkerDone 700ms ease-out both;
+}
+
+.campaign-worker-copy strong {
+  color: #232b4d;
+  font-size: 1.05rem;
+}
+
+.campaign-worker-copy p {
+  margin: 5px 0 0;
+  color: #697292;
+  font-size: 0.84rem;
+}
+
+.campaign-worker-steps {
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+  text-align: left;
+}
+
+.campaign-worker-steps li {
+  border-radius: 12px;
+  padding: 8px 9px;
+  color: #7a829f;
+  background: #f7f9ff;
+  border: 1px solid #edf0fa;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.campaign-worker-steps li span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  margin-right: 5px;
+  color: #7b86aa;
+}
+
+.campaign-worker-steps li.is-active {
+  color: #3140a0;
+  border-color: rgba(81, 103, 216, 0.26);
+  background: #eef3ff;
+}
+
+.campaign-worker-steps li.is-active span {
+  animation: campaignStepBlink 900ms ease-in-out infinite;
+}
+
+.campaign-worker-steps li.is-done {
+  color: #247357;
+  background: #effaf4;
+  border-color: rgba(54, 192, 139, 0.22);
+}
+
+.campaign-worker-steps li.is-done span {
+  color: #28a66f;
+}
+
+.campaign-worker-progress {
+  width: 100%;
+  height: 9px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: #edf1fb;
+  border: 1px solid #e2e7f6;
+}
+
+.campaign-worker-progress span {
+  display: block;
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #5167d8, #36c08b);
+  transition: width 360ms ease;
+}
+
+.campaign-worker-progress-label {
+  margin: -4px 0 0;
+  color: #697292;
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+
+.campaign-worker-summary {
+  width: 100%;
+  text-align: left;
+  border-radius: 14px;
+  padding: 10px 12px;
+  background: #f7fbff;
+  border: 1px solid #e5edf8;
+  color: #4b5577;
+  font-size: 0.82rem;
+}
+
+.campaign-worker-summary ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+
+.campaign-node-reveal {
+  animation: campaignNodeReveal 680ms cubic-bezier(0.18, 0.9, 0.22, 1) both;
+}
+
+.campaign-link-reveal {
+  stroke-dasharray: 9 7;
+  animation: campaignLinkReveal 850ms ease-out both;
+}
+
+@keyframes campaignWorkerThinking {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-4px) scale(1.02); }
+}
+
+@keyframes campaignWorkerWriting {
+  0%, 100% { transform: rotate(-1deg) translateX(0); }
+  50% { transform: rotate(1deg) translateX(2px); }
+}
+
+@keyframes campaignWorkerBuilding {
+  0%, 100% { transform: scale(1); box-shadow: 0 12px 28px rgba(81, 103, 216, 0.2); }
+  50% { transform: scale(1.06); box-shadow: 0 18px 38px rgba(54, 192, 139, 0.24); }
+}
+
+@keyframes campaignWorkerConnect {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes campaignWorkerDone {
+  0% { transform: scale(1); }
+  45% { transform: scale(1.12); }
+  100% { transform: scale(1.03); }
+}
+
+@keyframes campaignNodeReveal {
+  0% { opacity: 0; transform: scale(0.95) translateY(10px); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+@keyframes campaignLinkReveal {
+  0% { opacity: 0; stroke-dashoffset: 40; }
+  100% { opacity: 1; stroke-dashoffset: 0; }
+}
+
+@media (max-width: 720px) {
+  .campaign-worker {
+    top: 12px;
+  }
+  .campaign-worker-steps {
+    grid-template-columns: 1fr;
+  }
+}
