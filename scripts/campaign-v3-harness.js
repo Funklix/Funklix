@@ -28,11 +28,18 @@ function assertValidPlan(caseDef, result) {
     assert.ok(lane.variation, `${caseDef.name} lane ${laneIndex + 1} variation`);
     assert.ok(lane.content, `${caseDef.name} lane ${laneIndex + 1} content`);
     assert.strictEqual(lane.socials.length, caseDef.setup.postsPerVariation, `${caseDef.name} lane ${laneIndex + 1} social count`);
-    assert.strictEqual(Boolean(lane.landing), caseDef.setup.includeLandingPage, `${caseDef.name} lane ${laneIndex + 1} landing toggle`);
-    assert.strictEqual(Boolean(lane.email), caseDef.setup.includeEmailCampaign, `${caseDef.name} lane ${laneIndex + 1} email toggle`);
+    assert.strictEqual(lane.landing, undefined, `${caseDef.name} lane ${laneIndex + 1} should not own a landing page`);
+    assert.strictEqual(lane.email, undefined, `${caseDef.name} lane ${laneIndex + 1} should not own an email campaign`);
   });
+  assert.strictEqual(Boolean(result.plan.landing), caseDef.setup.includeLandingPage, `${caseDef.name} campaign-level landing toggle`);
+  assert.strictEqual(Boolean(result.plan.email), caseDef.setup.includeEmailCampaign, `${caseDef.name} campaign-level email toggle`);
 
   const planNodes = campaignV3PlanNodes(result.plan);
+  assert.strictEqual(planNodes.filter((node) => node.type === "Campaign Variation").length, caseDef.setup.variationCount, `${caseDef.name} variation count`);
+  assert.strictEqual(planNodes.filter((node) => node.type === "Content").length, caseDef.setup.variationCount, `${caseDef.name} content count`);
+  assert.strictEqual(planNodes.filter((node) => node.type === "Social Media Posting").length, caseDef.setup.variationCount * caseDef.setup.postsPerVariation, `${caseDef.name} social count`);
+  assert.strictEqual(planNodes.filter((node) => node.type === "Landing Page").length, caseDef.setup.includeLandingPage ? 1 : 0, `${caseDef.name} campaign landing count`);
+  assert.strictEqual(planNodes.filter((node) => node.type === "Email Campaign").length, caseDef.setup.includeEmailCampaign ? 1 : 0, `${caseDef.name} campaign email count`);
   const ids = planNodes.map((node) => node.tempId);
   assert.strictEqual(new Set(ids).size, ids.length, `${caseDef.name} should not duplicate tempIds`);
 
@@ -49,11 +56,11 @@ function assertValidPlan(caseDef, result) {
 
   result.plan.lanes.forEach((lane) => {
     lane.socials.forEach((social) => {
-      if (lane.landing) assert.ok(edgeIds.has(`${social.tempId}->${lane.landing.tempId}`), `${caseDef.name} social connects to same-lane landing`);
-      else if (lane.email) assert.ok(edgeIds.has(`${social.tempId}->${lane.email.tempId}`), `${caseDef.name} social connects to same-lane email`);
+      if (result.plan.landing) assert.ok(edgeIds.has(`${social.tempId}->${result.plan.landing.tempId}`), `${caseDef.name} social connects to campaign landing`);
+      else if (result.plan.email) assert.ok(edgeIds.has(`${social.tempId}->${result.plan.email.tempId}`), `${caseDef.name} social connects to campaign email`);
     });
-    if (lane.landing && lane.email) assert.ok(edgeIds.has(`${lane.landing.tempId}->${lane.email.tempId}`), `${caseDef.name} landing connects to same-lane email`);
   });
+  if (result.plan.landing && result.plan.email) assert.ok(edgeIds.has(`${result.plan.landing.tempId}->${result.plan.email.tempId}`), `${caseDef.name} landing connects to campaign email`);
 
   const layout = layoutCampaignV3Plan(result.plan, caseDef.setup, { x: 100, y: 200 });
   assert.strictEqual(layout.ok, true, `${caseDef.name} layout should succeed`);
@@ -71,6 +78,11 @@ function assertValidPlan(caseDef, result) {
     const previous = caseDef.setup.includeLandingPage ? columnX.get("landing") : columnX.get("social");
     assert.ok(columnX.get("email") > previous, `${caseDef.name} email after previous funnel column`);
   }
+  const ideaNode = layout.positionedNodes.find((node) => node.column === "idea");
+  const landingNode = layout.positionedNodes.find((node) => node.column === "landing");
+  const emailNode = layout.positionedNodes.find((node) => node.column === "email");
+  if (landingNode) assert.strictEqual(landingNode.y, ideaNode.y, `${caseDef.name} landing centered with idea`);
+  if (emailNode) assert.strictEqual(emailNode.y, ideaNode.y, `${caseDef.name} email centered with idea`);
 
   const adapter = createCampaignV3FakeCanvasAdapter();
   const commit = commitCampaignV3PlanToCanvas(layout, adapter);

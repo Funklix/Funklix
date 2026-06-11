@@ -90,8 +90,8 @@
       "Campaign Variation": setup.variationCount,
       "Content": setup.variationCount,
       "Social Media Posting": setup.variationCount * setup.postsPerVariation,
-      "Landing Page": setup.includeLandingPage ? setup.variationCount : 0,
-      "Email Campaign": setup.includeEmailCampaign ? setup.variationCount : 0
+      "Landing Page": setup.includeLandingPage ? 1 : 0,
+      "Email Campaign": setup.includeEmailCampaign ? 1 : 0
     };
   }
 
@@ -146,6 +146,8 @@
     if (diagnostics.length > 0) return { ok: false, plan: null, diagnostics, setup: normalizedSetup };
 
     const idea = groups.Idea[0];
+    const landing = normalizedSetup.includeLandingPage ? groups["Landing Page"][0] : null;
+    const email = normalizedSetup.includeEmailCampaign ? groups["Email Campaign"][0] : null;
     const lanes = [];
     for (let laneIndex = 0; laneIndex < normalizedSetup.variationCount; laneIndex += 1) {
       const socialStart = laneIndex * normalizedSetup.postsPerVariation;
@@ -153,15 +155,13 @@
         laneId: `campaign-v3-lane-${laneIndex + 1}`,
         variation: groups["Campaign Variation"][laneIndex],
         content: groups.Content[laneIndex],
-        socials: groups["Social Media Posting"].slice(socialStart, socialStart + normalizedSetup.postsPerVariation),
-        landing: normalizedSetup.includeLandingPage ? groups["Landing Page"][laneIndex] : null,
-        email: normalizedSetup.includeEmailCampaign ? groups["Email Campaign"][laneIndex] : null
+        socials: groups["Social Media Posting"].slice(socialStart, socialStart + normalizedSetup.postsPerVariation)
       });
     }
 
     return {
       ok: true,
-      plan: { idea, lanes },
+      plan: { idea, lanes, landing, email },
       diagnostics: [campaignV3Diagnostic(CAMPAIGN_V3_DIAGNOSTICS.OK, "Campaign V3 plan built successfully.")],
       setup: normalizedSetup
     };
@@ -175,11 +175,11 @@
       edges.push({ fromTempId: lane.variation.tempId, toTempId: lane.content.tempId, type: "variation_to_content", laneId: lane.laneId });
       lane.socials.forEach((social) => {
         edges.push({ fromTempId: lane.content.tempId, toTempId: social.tempId, type: "content_to_social", laneId: lane.laneId });
-        if (lane.landing) edges.push({ fromTempId: social.tempId, toTempId: lane.landing.tempId, type: "social_to_landing", laneId: lane.laneId });
-        else if (lane.email) edges.push({ fromTempId: social.tempId, toTempId: lane.email.tempId, type: "social_to_email", laneId: lane.laneId });
+        if (plan.landing) edges.push({ fromTempId: social.tempId, toTempId: plan.landing.tempId, type: "social_to_landing", laneId: lane.laneId });
+        else if (plan.email) edges.push({ fromTempId: social.tempId, toTempId: plan.email.tempId, type: "social_to_email", laneId: lane.laneId });
       });
-      if (lane.landing && lane.email) edges.push({ fromTempId: lane.landing.tempId, toTempId: lane.email.tempId, type: "landing_to_email", laneId: lane.laneId });
     });
+    if (plan.landing && plan.email) edges.push({ fromTempId: plan.landing.tempId, toTempId: plan.email.tempId, type: "landing_to_email", laneId: "campaign-v3-funnel" });
     return edges;
   }
 
@@ -190,10 +190,10 @@
       ...plan.lanes.flatMap((lane) => [
         lane.variation,
         lane.content,
-        ...lane.socials,
-        ...(lane.landing ? [lane.landing] : []),
-        ...(lane.email ? [lane.email] : [])
-      ])
+        ...lane.socials
+      ]),
+      ...(plan.landing ? [plan.landing] : []),
+      ...(plan.email ? [plan.email] : [])
     ];
   }
 
@@ -226,19 +226,21 @@
       return { ok: false, positionedNodes, edges, diagnostics };
     }
 
-    positionedNodes.push({ ...plan.idea, laneId: "idea", column: "idea", x: originX + CAMPAIGN_V3_COLUMNS.idea, y: originY + Math.max(0, ((plan.lanes.length - 1) * rowHeight) / 2) });
+    const socialClusterHeight = Math.max(0, (normalizedSetup.postsPerVariation - 1) * CAMPAIGN_V3_ITEM_GAP);
+    const funnelCenterY = originY + Math.max(0, ((plan.lanes.length - 1) * rowHeight + socialClusterHeight) / 2);
+    positionedNodes.push({ ...plan.idea, laneId: "idea", column: "idea", x: originX + CAMPAIGN_V3_COLUMNS.idea, y: funnelCenterY });
 
     plan.lanes.forEach((lane, laneIndex) => {
       const rowY = originY + laneIndex * rowHeight;
-      const socialMiddleY = rowY + Math.max(0, ((lane.socials.length - 1) * CAMPAIGN_V3_ITEM_GAP) / 2);
       positionedNodes.push({ ...lane.variation, laneId: lane.laneId, column: "variation", x: originX + CAMPAIGN_V3_COLUMNS.variation, y: rowY });
       positionedNodes.push({ ...lane.content, laneId: lane.laneId, column: "content", x: originX + CAMPAIGN_V3_COLUMNS.content, y: rowY });
       lane.socials.forEach((social, socialIndex) => {
         positionedNodes.push({ ...social, laneId: lane.laneId, column: "social", x: originX + CAMPAIGN_V3_COLUMNS.social, y: rowY + socialIndex * CAMPAIGN_V3_ITEM_GAP });
       });
-      if (lane.landing) positionedNodes.push({ ...lane.landing, laneId: lane.laneId, column: "landing", x: originX + CAMPAIGN_V3_COLUMNS.landing, y: socialMiddleY });
-      if (lane.email) positionedNodes.push({ ...lane.email, laneId: lane.laneId, column: "email", x: originX + CAMPAIGN_V3_COLUMNS.email, y: socialMiddleY });
     });
+
+    if (plan.landing) positionedNodes.push({ ...plan.landing, laneId: "campaign-v3-funnel", column: "landing", x: originX + CAMPAIGN_V3_COLUMNS.landing, y: funnelCenterY });
+    if (plan.email) positionedNodes.push({ ...plan.email, laneId: "campaign-v3-funnel", column: "email", x: originX + CAMPAIGN_V3_COLUMNS.email, y: funnelCenterY });
 
     const invalidPosition = positionedNodes.find((node) => !Number.isFinite(node.x) || !Number.isFinite(node.y));
     if (invalidPosition) {
@@ -384,10 +386,10 @@
     const lanes = Array.from({ length: normalizedSetup.variationCount }, (_, laneIndex) => ({
       variation: createCampaignV3MockNode("Campaign Variation", laneIndex),
       content: createCampaignV3MockNode("Content", laneIndex),
-      socials: Array.from({ length: normalizedSetup.postsPerVariation }, (_, socialIndex) => createCampaignV3MockNode("Social Media Posting", laneIndex, socialIndex)),
-      landing: normalizedSetup.includeLandingPage ? createCampaignV3MockNode("Landing Page", laneIndex) : null,
-      email: normalizedSetup.includeEmailCampaign ? createCampaignV3MockNode("Email Campaign", laneIndex) : null
+      socials: Array.from({ length: normalizedSetup.postsPerVariation }, (_, socialIndex) => createCampaignV3MockNode("Social Media Posting", laneIndex, socialIndex))
     }));
+    const landing = normalizedSetup.includeLandingPage ? createCampaignV3MockNode("Landing Page", 0, 0, { tempId: "mock-landing-page-campaign", title: "Landing Page Campaign" }) : null;
+    const email = normalizedSetup.includeEmailCampaign ? createCampaignV3MockNode("Email Campaign", 0, 0, { tempId: "mock-email-campaign-campaign", title: "Email Campaign Campaign" }) : null;
 
     if (order === "grouped") {
       return [
@@ -395,14 +397,16 @@
         ...lanes.map((lane) => lane.variation),
         ...lanes.map((lane) => lane.content),
         ...lanes.flatMap((lane) => lane.socials),
-        ...lanes.map((lane) => lane.landing).filter(Boolean),
-        ...lanes.map((lane) => lane.email).filter(Boolean)
+        ...(landing ? [landing] : []),
+        ...(email ? [email] : [])
       ];
     }
 
     const perfect = [
       idea,
-      ...lanes.flatMap((lane) => [lane.variation, lane.content, ...lane.socials, ...(lane.landing ? [lane.landing] : []), ...(lane.email ? [lane.email] : [])])
+      ...lanes.flatMap((lane) => [lane.variation, lane.content, ...lane.socials]),
+      ...(landing ? [landing] : []),
+      ...(email ? [email] : [])
     ];
 
     if (order === "shuffled") {
@@ -420,13 +424,13 @@
   }
 
   function campaignV3MockCases() {
-    const defaultSetup = { variationCount: 3, postsPerVariation: 5, includeLandingPage: true, includeEmailCampaign: true, channel: "LinkedIn" };
+    const defaultSetup = { variationCount: 3, postsPerVariation: 3, includeLandingPage: true, includeEmailCampaign: true, channel: "LinkedIn" };
     return [
       createCampaignV3MockCase("perfect-order", defaultSetup, "perfect"),
       createCampaignV3MockCase("grouped-by-type", defaultSetup, "grouped"),
       createCampaignV3MockCase("shuffled-order", defaultSetup, "shuffled"),
       createCampaignV3MockCase("one-variation-one-post", { ...defaultSetup, variationCount: 1, postsPerVariation: 1 }, "perfect"),
-      createCampaignV3MockCase("three-variations-five-posts", defaultSetup, "perfect"),
+      createCampaignV3MockCase("three-variations-three-posts", defaultSetup, "perfect"),
       createCampaignV3MockCase("ten-variations-twenty-posts", { ...defaultSetup, variationCount: 10, postsPerVariation: 20 }, "grouped"),
       createCampaignV3MockCase("landing-disabled", { ...defaultSetup, includeLandingPage: false }, "grouped"),
       createCampaignV3MockCase("email-disabled", { ...defaultSetup, includeEmailCampaign: false }, "grouped"),
