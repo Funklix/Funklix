@@ -5449,6 +5449,71 @@ function getCampaignV3Api() {
   return typeof window !== "undefined" ? window.CampaignGeneratorV3 : null;
 }
 
+function defaultCampaignV3AISetup(overrides = {}) {
+  const normalized = normalizeCampaignSetupOptions({
+    variationCount: overrides.variationCount ?? 3,
+    postsPerVariation: overrides.postsPerVariation ?? 3,
+    channel: overrides.channel || "LinkedIn",
+    includeLandingPage: overrides.includeLandingPage !== false,
+    includeEmailCampaign: overrides.includeEmailCampaign !== false
+  });
+  return {
+    campaignIdea: cleanCampaignField(overrides.campaignIdea) || "Promote a premium networking experience for C-level executives.",
+    additionalContext: cleanCampaignField(overrides.additionalContext) || "Focus on trust, exclusivity, meaningful business relationships, and high-quality leads.",
+    ...normalized
+  };
+}
+
+function campaignV3NodeCounts(nodes = []) {
+  const counts = CAMPAIGN_CHAIN_TYPES.reduce((nextCounts, type) => {
+    nextCounts[type] = 0;
+    return nextCounts;
+  }, {});
+  (Array.isArray(nodes) ? nodes : []).forEach((node) => {
+    const type = cleanCampaignField(node?.type);
+    if (Object.prototype.hasOwnProperty.call(counts, type)) counts[type] += 1;
+  });
+  return counts;
+}
+
+function expectedCampaignV3NodeCounts(setup = {}) {
+  const normalized = normalizeCampaignSetupOptions(setup);
+  return {
+    Idea: 1,
+    "Campaign Variation": normalized.variationCount,
+    Content: normalized.variationCount,
+    "Social Media Posting": normalized.variationCount * normalized.postsPerVariation,
+    "Landing Page": normalized.includeLandingPage ? 1 : 0,
+    "Email Campaign": normalized.includeEmailCampaign ? 1 : 0
+  };
+}
+
+function adaptCampaignV3AINodes(rawNodes = [], setup = {}) {
+  const normalized = normalizeCampaignSetupOptions(setup);
+  const grouped = CAMPAIGN_CHAIN_TYPES.reduce((groups, type) => {
+    groups[type] = [];
+    return groups;
+  }, {});
+
+  (Array.isArray(rawNodes) ? rawNodes : []).forEach((node) => {
+    const type = cleanCampaignField(node?.type);
+    if (grouped[type]) grouped[type].push({ ...node, type });
+  });
+
+  return [
+    ...grouped.Idea.slice(0, 1),
+    ...grouped["Campaign Variation"].slice(0, normalized.variationCount),
+    ...grouped.Content.slice(0, normalized.variationCount),
+    ...grouped["Social Media Posting"].slice(0, normalized.variationCount * normalized.postsPerVariation),
+    ...(normalized.includeLandingPage ? grouped["Landing Page"].slice(0, 1) : []),
+    ...(normalized.includeEmailCampaign ? grouped["Email Campaign"].slice(0, 1) : [])
+  ];
+}
+
+function logCampaignV3AIDiagnostics(label, details = {}) {
+  console.info(`[Funklix Campaign Generator V3 AI] ${label}`, details);
+}
+
 function createCampaignV3RealCanvasAdapter() {
   const committedNodes = [];
   const committedEdges = [];
@@ -5523,8 +5588,88 @@ function debugRunCampaignV3Mock() {
   return { planResult, layoutResult, commitResult, adapter };
 }
 
+async function debugRunCampaignV3AI(setupOverride = {}) {
+  const campaignV3 = getCampaignV3Api();
+  if (!campaignV3) {
+    console.error("[Funklix Campaign Generator V3 AI] campaign-v3.js is not loaded.");
+    return null;
+  }
+  if (state.boardAccess?.canEdit === false) {
+    setSaveStatus("Read-only board");
+    console.warn("[Funklix Campaign Generator V3 AI] Board is read-only; AI compatibility commit skipped.");
+    return null;
+  }
+
+  const setup = defaultCampaignV3AISetup(setupOverride);
+  logCampaignV3AIDiagnostics("Starting dev-only AI compatibility flow. V3 remains feature-flagged off by default.", {
+    setup,
+    featureFlagEnabled: isCampaignV3Enabled()
+  });
+
+  try {
+    const apiPlan = await fetchGeneratedCampaignPlan(setup.campaignIdea, setup.additionalContext, setup);
+    const rawNodes = Array.isArray(apiPlan?.nodes) ? apiPlan.nodes : [];
+    const adaptedNodes = adaptCampaignV3AINodes(rawNodes, setup);
+    const diagnosticBase = {
+      setup,
+      expectedCounts: expectedCampaignV3NodeCounts(setup),
+      actualCounts: campaignV3NodeCounts(rawNodes),
+      adaptedCounts: campaignV3NodeCounts(adaptedNodes),
+      firstNodes: rawNodes.slice(0, 8).map((node) => ({ type: cleanCampaignField(node?.type), title: cleanCampaignField(node?.title) }))
+    };
+
+    const planResult = campaignV3.buildCampaignV3PlanFromNodes(adaptedNodes, setup);
+    if (!planResult.ok) {
+      const diagnostics = {
+        ...diagnosticBase,
+        codes: planResult.diagnostics.map((diagnostic) => diagnostic.code),
+        diagnostics: planResult.diagnostics
+      };
+      console.error("[Funklix Campaign Generator V3 AI] AI response is not compatible with V3. No nodes were created.", diagnostics);
+      return { ok: false, apiPlan, planResult, diagnostics };
+    }
+
+    const edges = campaignV3.buildCampaignV3Edges(planResult.plan);
+    const origin = calculateCampaignPlanOrigin(setup);
+    const layoutResult = campaignV3.layoutCampaignV3Plan(planResult.plan, setup, origin);
+    if (!layoutResult.ok) {
+      const diagnostics = {
+        ...diagnosticBase,
+        codes: layoutResult.diagnostics.map((diagnostic) => diagnostic.code),
+        diagnostics: layoutResult.diagnostics
+      };
+      console.error("[Funklix Campaign Generator V3 AI] V3 layout failed. No nodes were created.", diagnostics);
+      return { ok: false, apiPlan, planResult, edges, layoutResult, diagnostics };
+    }
+
+    const adapter = createCampaignV3RealCanvasAdapter();
+    const commitResult = campaignV3.commitCampaignV3PlanToCanvas(layoutResult, adapter);
+    const diagnostics = {
+      ...diagnosticBase,
+      codes: commitResult.diagnostics.map((diagnostic) => diagnostic.code),
+      diagnostics: commitResult.diagnostics
+    };
+    if (!commitResult.ok) {
+      console.error("[Funklix Campaign Generator V3 AI] Real-canvas commit had diagnostics.", diagnostics);
+    } else {
+      logCampaignV3AIDiagnostics("AI compatibility campaign committed to canvas.", diagnostics);
+    }
+    updateEmptyState();
+    drawLinks();
+    updateListView();
+    return { ok: commitResult.ok, apiPlan, planResult, edges, layoutResult, commitResult, adapter, diagnostics };
+  } catch (error) {
+    console.error("[Funklix Campaign Generator V3 AI] AI compatibility flow failed before commit. No nodes were created.", {
+      setup,
+      error
+    });
+    return { ok: false, error, setup };
+  }
+}
+
 if (typeof window !== "undefined") {
   window.debugRunCampaignV3Mock = debugRunCampaignV3Mock;
+  window.debugRunCampaignV3AI = debugRunCampaignV3AI;
 }
 
 function campaignEstimate(setup = {}) {
