@@ -22,7 +22,13 @@
     INVALID_NODE_TYPE: "CAMPAIGN_V3_INVALID_NODE_TYPE",
     DUPLICATE_NODE: "CAMPAIGN_V3_DUPLICATE_NODE",
     INVALID_EDGE_REFERENCE: "CAMPAIGN_V3_INVALID_EDGE_REFERENCE",
-    LAYOUT_FAILED: "CAMPAIGN_V3_LAYOUT_FAILED"
+    LAYOUT_FAILED: "CAMPAIGN_V3_LAYOUT_FAILED",
+    COMMIT_OK: "CAMPAIGN_V3_COMMIT_OK",
+    COMMIT_MISSING_NODE: "CAMPAIGN_V3_COMMIT_MISSING_NODE",
+    COMMIT_DUPLICATE_NODE: "CAMPAIGN_V3_COMMIT_DUPLICATE_NODE",
+    COMMIT_EDGE_MISSING_SOURCE: "CAMPAIGN_V3_COMMIT_EDGE_MISSING_SOURCE",
+    COMMIT_EDGE_MISSING_TARGET: "CAMPAIGN_V3_COMMIT_EDGE_MISSING_TARGET",
+    COMMIT_ADAPTER_ERROR: "CAMPAIGN_V3_COMMIT_ADAPTER_ERROR"
   };
 
   const CAMPAIGN_V3_COLUMNS = {
@@ -242,6 +248,119 @@
     return { ok: diagnostics.length === 0, positionedNodes, edges, diagnostics: diagnostics.length ? diagnostics : [campaignV3Diagnostic(CAMPAIGN_V3_DIAGNOSTICS.OK, "Campaign V3 layout completed successfully.")] };
   }
 
+  function createCampaignV3FakeCanvasAdapter() {
+    let nodeCounter = 1;
+    let edgeCounter = 1;
+    const adapter = {
+      committedNodes: [],
+      committedEdges: [],
+      unsavedCallCount: 0,
+      activityLog: [],
+      createNode(payload = {}, position = {}) {
+        const node = {
+          id: `fake-node-${nodeCounter++}`,
+          tempId: payload.tempId,
+          type: payload.type,
+          title: payload.title || payload.type || "Campaign Node",
+          x: position.x,
+          y: position.y,
+          payload: { ...payload }
+        };
+        adapter.committedNodes.push(node);
+        adapter.activityLog.push({ action: "createNode", tempId: node.tempId, nodeId: node.id });
+        return node;
+      },
+      createEdge(sourceNodeId, targetNodeId, edge = {}) {
+        const committedEdge = {
+          id: `fake-edge-${edgeCounter++}`,
+          sourceNodeId,
+          targetNodeId,
+          sourceTempId: edge.fromTempId,
+          targetTempId: edge.toTempId,
+          type: edge.type,
+          laneId: edge.laneId
+        };
+        adapter.committedEdges.push(committedEdge);
+        adapter.activityLog.push({ action: "createEdge", sourceNodeId, targetNodeId, sourceTempId: edge.fromTempId, targetTempId: edge.toTempId });
+        return committedEdge;
+      },
+      markUnsaved() {
+        adapter.unsavedCallCount += 1;
+        adapter.activityLog.push({ action: "markUnsaved" });
+      }
+    };
+    return adapter;
+  }
+
+  function commitCampaignV3PlanToCanvas(layoutResult = {}, adapter = null) {
+    const diagnostics = [];
+    const createdNodes = [];
+    const createdEdges = [];
+    const tempIdToNodeId = new Map();
+    const positionedNodes = Array.isArray(layoutResult.positionedNodes) ? layoutResult.positionedNodes : [];
+    const edges = Array.isArray(layoutResult.edges) ? layoutResult.edges : [];
+
+    if (!adapter || typeof adapter.createNode !== "function" || typeof adapter.createEdge !== "function" || typeof adapter.markUnsaved !== "function") {
+      diagnostics.push(campaignV3Diagnostic(CAMPAIGN_V3_DIAGNOSTICS.COMMIT_ADAPTER_ERROR, "Campaign V3 commit requires createNode, createEdge, and markUnsaved adapter methods."));
+      return { ok: false, createdNodes, createdEdges, tempIdToNodeId: {}, diagnostics };
+    }
+
+    positionedNodes.forEach((node) => {
+      if (!node?.tempId) {
+        diagnostics.push(campaignV3Diagnostic(CAMPAIGN_V3_DIAGNOSTICS.COMMIT_MISSING_NODE, "Positioned node is missing a tempId.", { node }));
+        return;
+      }
+      if (tempIdToNodeId.has(node.tempId)) {
+        diagnostics.push(campaignV3Diagnostic(CAMPAIGN_V3_DIAGNOSTICS.COMMIT_DUPLICATE_NODE, `Duplicate positioned node tempId ${node.tempId}.`, { tempId: node.tempId }));
+        return;
+      }
+      try {
+        const created = adapter.createNode(node, { x: node.x, y: node.y });
+        if (!created?.id) {
+          diagnostics.push(campaignV3Diagnostic(CAMPAIGN_V3_DIAGNOSTICS.COMMIT_ADAPTER_ERROR, "Adapter createNode did not return a node id.", { tempId: node.tempId }));
+          return;
+        }
+        tempIdToNodeId.set(node.tempId, created.id);
+        createdNodes.push(created);
+      } catch (error) {
+        diagnostics.push(campaignV3Diagnostic(CAMPAIGN_V3_DIAGNOSTICS.COMMIT_ADAPTER_ERROR, error?.message || "Adapter createNode failed.", { tempId: node.tempId }));
+      }
+    });
+
+    edges.forEach((edge) => {
+      const sourceNodeId = tempIdToNodeId.get(edge.fromTempId);
+      const targetNodeId = tempIdToNodeId.get(edge.toTempId);
+      if (!sourceNodeId) {
+        diagnostics.push(campaignV3Diagnostic(CAMPAIGN_V3_DIAGNOSTICS.COMMIT_EDGE_MISSING_SOURCE, "Campaign V3 edge source was not committed before edge creation.", { edge }));
+        return;
+      }
+      if (!targetNodeId) {
+        diagnostics.push(campaignV3Diagnostic(CAMPAIGN_V3_DIAGNOSTICS.COMMIT_EDGE_MISSING_TARGET, "Campaign V3 edge target was not committed before edge creation.", { edge }));
+        return;
+      }
+      try {
+        const createdEdge = adapter.createEdge(sourceNodeId, targetNodeId, edge);
+        createdEdges.push(createdEdge);
+      } catch (error) {
+        diagnostics.push(campaignV3Diagnostic(CAMPAIGN_V3_DIAGNOSTICS.COMMIT_ADAPTER_ERROR, error?.message || "Adapter createEdge failed.", { edge }));
+      }
+    });
+
+    try {
+      adapter.markUnsaved();
+    } catch (error) {
+      diagnostics.push(campaignV3Diagnostic(CAMPAIGN_V3_DIAGNOSTICS.COMMIT_ADAPTER_ERROR, error?.message || "Adapter markUnsaved failed."));
+    }
+
+    return {
+      ok: diagnostics.length === 0,
+      createdNodes,
+      createdEdges,
+      tempIdToNodeId: Object.fromEntries(tempIdToNodeId),
+      diagnostics: diagnostics.length ? diagnostics : [campaignV3Diagnostic(CAMPAIGN_V3_DIAGNOSTICS.COMMIT_OK, "Campaign V3 fake canvas commit completed successfully.")]
+    };
+  }
+
   function createCampaignV3MockNode(type, laneIndex = 0, itemIndex = 0, overrides = {}) {
     const slug = type.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
     const suffix = type === "Idea" ? "root" : `${laneIndex + 1}-${itemIndex + 1}`;
@@ -335,6 +454,8 @@
     layoutCampaignV3Plan,
     campaignV3PlanNodes,
     validateCampaignV3EdgeReferences,
+    createCampaignV3FakeCanvasAdapter,
+    commitCampaignV3PlanToCanvas,
     createCampaignV3MockNode,
     createCampaignV3MockNodes,
     campaignV3MockCases

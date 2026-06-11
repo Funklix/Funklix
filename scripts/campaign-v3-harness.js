@@ -7,6 +7,8 @@ const {
   buildCampaignV3Edges,
   layoutCampaignV3Plan,
   campaignV3PlanNodes,
+  createCampaignV3FakeCanvasAdapter,
+  commitCampaignV3PlanToCanvas,
   campaignV3MockCases
 } = require("../campaign-v3");
 
@@ -69,6 +71,36 @@ function assertValidPlan(caseDef, result) {
     const previous = caseDef.setup.includeLandingPage ? columnX.get("landing") : columnX.get("social");
     assert.ok(columnX.get("email") > previous, `${caseDef.name} email after previous funnel column`);
   }
+
+  const adapter = createCampaignV3FakeCanvasAdapter();
+  const commit = commitCampaignV3PlanToCanvas(layout, adapter);
+  assert.strictEqual(commit.ok, true, `${caseDef.name} fake commit should succeed`);
+  assert.ok(commit.diagnostics.some((diagnostic) => diagnostic.code === CAMPAIGN_V3_DIAGNOSTICS.COMMIT_OK), `${caseDef.name} commit diagnostics should include OK`);
+  assert.strictEqual(adapter.committedNodes.length, layout.positionedNodes.length, `${caseDef.name} committed node count`);
+  assert.strictEqual(adapter.committedEdges.length, layout.edges.length, `${caseDef.name} committed edge count`);
+  assert.strictEqual(commit.createdNodes.length, layout.positionedNodes.length, `${caseDef.name} returned created node count`);
+  assert.strictEqual(commit.createdEdges.length, layout.edges.length, `${caseDef.name} returned created edge count`);
+  assert.strictEqual(Object.keys(commit.tempIdToNodeId).length, layout.positionedNodes.length, `${caseDef.name} tempId mapping count`);
+  assert.strictEqual(new Set(Object.keys(commit.tempIdToNodeId)).size, layout.positionedNodes.length, `${caseDef.name} unique tempId mappings`);
+  assert.ok(adapter.unsavedCallCount >= 1, `${caseDef.name} markUnsaved called`);
+
+  const createdNodeIds = new Set(adapter.committedNodes.map((node) => node.id));
+  adapter.committedEdges.forEach((edge) => {
+    assert.ok(createdNodeIds.has(edge.sourceNodeId), `${caseDef.name} committed edge source id exists`);
+    assert.ok(createdNodeIds.has(edge.targetNodeId), `${caseDef.name} committed edge target id exists`);
+  });
+
+  const creationOrder = new Map();
+  adapter.activityLog.forEach((entry, index) => {
+    if (entry.action === "createNode") creationOrder.set(entry.nodeId, index);
+  });
+  adapter.activityLog
+    .filter((entry) => entry.action === "createEdge")
+    .forEach((entry) => {
+      const edgeOrder = adapter.activityLog.indexOf(entry);
+      assert.ok(creationOrder.get(entry.sourceNodeId) < edgeOrder, `${caseDef.name} edge source created first`);
+      assert.ok(creationOrder.get(entry.targetNodeId) < edgeOrder, `${caseDef.name} edge target created first`);
+    });
 }
 
 function assertInvalidPlan(caseDef, result) {
@@ -85,7 +117,10 @@ function runCampaignV3Harness() {
   cases.forEach((caseDef) => {
     const result = buildCampaignV3PlanFromNodes(caseDef.nodes, caseDef.setup);
     if (caseDef.expectedOk) assertValidPlan(caseDef, result);
-    else assertInvalidPlan(caseDef, result);
+    else {
+      assertInvalidPlan(caseDef, result);
+      assert.strictEqual(result.plan, null, `${caseDef.name} should not produce a committable plan`);
+    }
     results.push({ name: caseDef.name, ok: result.ok, diagnostics: result.diagnostics.map((diagnostic) => diagnostic.code) });
   });
   return results;
