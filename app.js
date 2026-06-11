@@ -5081,28 +5081,6 @@ const CAMPAIGN_WORKER_STATUS = {
   "Email Campaign": "📧 CRM writer is preparing the follow-up email..."
 };
 
-const CAMPAIGN_WORKER_STEPS = [
-  { key: "strategy", label: "Understanding Strategy" },
-  { key: "angles", label: "Creating Angles" },
-  { key: "content", label: "Writing Content" },
-  { key: "posts", label: "Preparing Posts" },
-  { key: "funnel", label: "Building Funnel" },
-  { key: "finalizing", label: "Finalizing" }
-];
-
-const CAMPAIGN_WORKER_ROTATING_STATES = [
-  { message: "Understanding campaign goal", step: "strategy", workerState: "thinking" },
-  { message: "Analyzing audience", step: "strategy", workerState: "thinking" },
-  { message: "Reviewing Brand DNA", step: "strategy", workerState: "thinking" },
-  { message: "Creating campaign angles", step: "angles", workerState: "thinking" },
-  { message: "Writing content assets", step: "content", workerState: "writing" },
-  { message: "Preparing social posts", step: "posts", workerState: "writing" },
-  { message: "Building landing page", step: "funnel", workerState: "building" },
-  { message: "Preparing email campaign", step: "funnel", workerState: "writing" },
-  { message: "Connecting funnel", step: "finalizing", workerState: "connecting" },
-  { message: "Final review", step: "finalizing", workerState: "thinking" }
-];
-
 function waitForCampaignWorker(ms = 420) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -5115,46 +5093,6 @@ function cleanCampaignField(value = "") {
     .replace(/^\s{0,3}#{1,6}\s+/gm, "")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
-}
-
-function canonicalizeCampaignPlanNodes(nodes = [], setup = {}) {
-  const normalized = normalizeCampaignSetupOptions(setup);
-  const byType = CAMPAIGN_CHAIN_TYPES.reduce((groups, type) => {
-    groups[type] = [];
-    return groups;
-  }, {});
-
-  nodes.forEach((node) => {
-    if (byType[node.type]) byType[node.type].push(node);
-  });
-
-  const expectedCounts = {
-    Idea: 1,
-    "Campaign Variation": normalized.variationCount,
-    Content: normalized.variationCount,
-    "Social Media Posting": normalized.variationCount * normalized.postsPerVariation,
-    "Landing Page": normalized.includeLandingPage ? normalized.variationCount : 0,
-    "Email Campaign": normalized.includeEmailCampaign ? normalized.variationCount : 0
-  };
-
-  Object.entries(expectedCounts).forEach(([type, expected]) => {
-    const actual = byType[type]?.length || 0;
-    if (actual !== expected) {
-      throw new Error(`Campaign plan must include exactly ${expected} ${type} node${expected === 1 ? "" : "s"}; received ${actual}.`);
-    }
-  });
-
-  const canonicalNodes = [byType.Idea[0]];
-  for (let variationIndex = 0; variationIndex < normalized.variationCount; variationIndex += 1) {
-    canonicalNodes.push(byType["Campaign Variation"][variationIndex]);
-    canonicalNodes.push(byType.Content[variationIndex]);
-    const socialStart = variationIndex * normalized.postsPerVariation;
-    canonicalNodes.push(...byType["Social Media Posting"].slice(socialStart, socialStart + normalized.postsPerVariation));
-    if (normalized.includeLandingPage) canonicalNodes.push(byType["Landing Page"][variationIndex]);
-    if (normalized.includeEmailCampaign) canonicalNodes.push(byType["Email Campaign"][variationIndex]);
-  }
-
-  return canonicalNodes;
 }
 
 function validateGeneratedCampaignPlan(plan = {}, setupOptions = {}) {
@@ -5181,14 +5119,14 @@ function validateGeneratedCampaignPlan(plan = {}, setupOptions = {}) {
       landingPage: node.landingPage && typeof node.landingPage === "object" ? node.landingPage : {}
     };
   });
-  const canonicalNodes = canonicalizeCampaignPlanNodes(normalizedNodes, setup);
+  if (normalizedNodes[0]?.type !== "Idea") throw new Error("Campaign plan must start with an Idea node.");
   edges.forEach((edge) => {
     if (!Number.isInteger(edge?.fromIndex) || !Number.isInteger(edge?.toIndex)) throw new Error("Campaign edges must use numeric indexes.");
     if (edge.fromIndex < 0 || edge.fromIndex >= normalizedNodes.length || edge.toIndex < 0 || edge.toIndex >= normalizedNodes.length) {
       throw new Error("Campaign edge index is out of range.");
     }
   });
-  return { nodes: canonicalNodes, edges: deriveCampaignFunnelEdges(canonicalNodes, setup), setup };
+  return { nodes: normalizedNodes, edges: deriveCampaignFunnelEdges(normalizedNodes, setup), setup };
 }
 
 function applyGeneratedCampaignNodePayload(node, payload = {}, previousNode = null) {
@@ -5303,36 +5241,23 @@ function calculateCampaignPlanOrigin(setup = {}) {
 
 function deriveCampaignStructure(nodes = [], setup = {}) {
   const normalized = normalizeCampaignSetupOptions(setup);
-  const indexesByType = CAMPAIGN_CHAIN_TYPES.reduce((groups, type) => {
-    groups[type] = [];
-    return groups;
-  }, {});
-  nodes.forEach((node, index) => {
-    if (indexesByType[node?.type]) indexesByType[node.type].push(index);
-  });
-
-  const ideaIndex = indexesByType.Idea[0];
-  if (!Number.isInteger(ideaIndex)) return [];
   const variations = [];
+  let cursor = 1;
   for (let row = 0; row < normalized.variationCount; row += 1) {
-    const variationIndex = indexesByType["Campaign Variation"][row];
-    const contentIndex = indexesByType.Content[row];
-    const socialStart = row * normalized.postsPerVariation;
-    const socialIndexes = indexesByType["Social Media Posting"].slice(socialStart, socialStart + normalized.postsPerVariation);
-    const landingIndex = normalized.includeLandingPage ? indexesByType["Landing Page"][row] : null;
-    const emailIndex = normalized.includeEmailCampaign ? indexesByType["Email Campaign"][row] : null;
-    if (!Number.isInteger(variationIndex) || !Number.isInteger(contentIndex) || socialIndexes.length !== normalized.postsPerVariation) continue;
-    if (normalized.includeLandingPage && !Number.isInteger(landingIndex)) continue;
-    if (normalized.includeEmailCampaign && !Number.isInteger(emailIndex)) continue;
-    variations.push({ row, ideaIndex, variationIndex, contentIndex, socialIndexes, landingIndex, emailIndex });
+    const variationIndex = cursor++;
+    const contentIndex = cursor++;
+    const socialIndexes = [];
+    for (let post = 0; post < normalized.postsPerVariation; post += 1) socialIndexes.push(cursor++);
+    const landingIndex = normalized.includeLandingPage ? cursor++ : null;
+    const emailIndex = normalized.includeEmailCampaign ? cursor++ : null;
+    variations.push({ row, variationIndex, contentIndex, socialIndexes, landingIndex, emailIndex });
   }
-  return variations;
+  return variations.filter((variation) => nodes[variation.variationIndex] && nodes[variation.contentIndex]);
 }
-
 function deriveCampaignFunnelEdges(nodes = [], setup = {}) {
   const edges = [];
   deriveCampaignStructure(nodes, setup).forEach((variation) => {
-    edges.push({ fromIndex: variation.ideaIndex, toIndex: variation.variationIndex });
+    edges.push({ fromIndex: 0, toIndex: variation.variationIndex });
     edges.push({ fromIndex: variation.variationIndex, toIndex: variation.contentIndex });
     variation.socialIndexes.forEach((socialIndex) => {
       if (!nodes[socialIndex]) return;
@@ -5351,13 +5276,11 @@ function calculateCampaignNodePositions(nodes = [], origin, setup = {}) {
   const normalized = normalizeCampaignSetupOptions(setup);
   const rowHeight = campaignPlanRowHeight(normalized);
   const positions = new Map();
-  const structure = deriveCampaignStructure(nodes, normalized);
-  const ideaIndex = structure[0]?.ideaIndex ?? 0;
-  positions.set(ideaIndex, {
+  positions.set(0, {
     x: origin.x + CAMPAIGN_V2_X.idea,
     y: origin.y + Math.max(0, ((normalized.variationCount - 1) * rowHeight) / 2)
   });
-  structure.forEach((variation) => {
+  deriveCampaignStructure(nodes, normalized).forEach((variation) => {
     const rowY = origin.y + variation.row * rowHeight;
     positions.set(variation.variationIndex, { x: origin.x + CAMPAIGN_V2_X.variation, y: rowY });
     positions.set(variation.contentIndex, { x: origin.x + CAMPAIGN_V2_X.content, y: rowY });
@@ -5374,7 +5297,7 @@ function calculateCampaignNodePositions(nodes = [], origin, setup = {}) {
 function campaignGenerationOrder(nodes = [], setup = {}) {
   const variations = deriveCampaignStructure(nodes, setup);
   return [
-    variations[0]?.ideaIndex ?? 0,
+    0,
     ...variations.map((variation) => variation.variationIndex),
     ...variations.map((variation) => variation.contentIndex),
     ...variations.flatMap((variation) => variation.socialIndexes),
@@ -5383,7 +5306,7 @@ function campaignGenerationOrder(nodes = [], setup = {}) {
   ].filter((index) => nodes[index]);
 }
 
-async function generateCampaignChainProgressively(plan, { onStatus = null, setupOptions = {}, onNodeCreated = null } = {}) {
+async function generateCampaignChainProgressively(plan, { onStatus = null, setupOptions = {}, onFirstNode = null } = {}) {
   const validated = validateGeneratedCampaignPlan(plan, setupOptions);
   setActiveView("board");
   toggleListMode(false);
@@ -5392,12 +5315,13 @@ async function generateCampaignChainProgressively(plan, { onStatus = null, setup
   const creationOrder = campaignGenerationOrder(validated.nodes, validated.setup);
   const createdNodes = [];
   const createdByIndex = new Map();
+  let firstNodeAnnounced = false;
   try {
     for (let orderIndex = 0; orderIndex < creationOrder.length; orderIndex += 1) {
       const index = creationOrder[orderIndex];
       const payload = validated.nodes[index];
       const status = CAMPAIGN_WORKER_STATUS[payload.type] || "✨ AI teammate is building the campaign...";
-      if (onStatus) onStatus(status, { payload, createdCount: orderIndex, totalCount: validated.nodes.length });
+      if (onStatus) onStatus(`${status} (${orderIndex + 1}/${validated.nodes.length})`);
       setSaveStatus(`${status} (${orderIndex + 1}/${validated.nodes.length})`);
       const node = createNode({ type: payload.type, parentId: null, position: positions.get(index) || chainOrigin });
       if (!node) throw new Error(`Could not create ${payload.type}.`);
@@ -5413,7 +5337,10 @@ async function generateCampaignChainProgressively(plan, { onStatus = null, setup
       setTimeout(() => nodeEl?.classList.remove("ai-updated"), 1000);
       createdNodes.push(node);
       createdByIndex.set(index, node);
-      onNodeCreated?.(node, { payload, createdCount: createdNodes.length, totalCount: validated.nodes.length });
+      if (!firstNodeAnnounced) {
+        firstNodeAnnounced = true;
+        onFirstNode?.(node);
+      }
       validated.edges
         .filter((edge) => edge.toIndex === index && createdByIndex.has(edge.fromIndex))
         .forEach((edge) => addEdge(createdByIndex.get(edge.fromIndex).id, node.id));
@@ -5422,7 +5349,7 @@ async function generateCampaignChainProgressively(plan, { onStatus = null, setup
         .forEach((edge) => addEdge(node.id, createdByIndex.get(edge.toIndex).id));
       drawLinks();
       markUnsaved();
-      await waitForCampaignWorker(orderIndex === 0 ? 360 : 310);
+      await waitForCampaignWorker(orderIndex === 0 ? 520 : 320);
     }
     validated.edges.forEach((edge) => {
       const source = createdByIndex.get(edge.fromIndex);
@@ -5444,286 +5371,10 @@ async function generateCampaignChainProgressively(plan, { onStatus = null, setup
     throw error;
   }
 }
-
 async function generateCampaignFromIdea(ideaText, contextText, providedPlan = null, options = {}) {
   const setupOptions = normalizeCampaignSetupOptions(options.setupOptions || providedPlan?.setup || {});
   const plan = providedPlan || await fetchGeneratedCampaignPlan(ideaText, contextText, setupOptions);
   return generateCampaignChainProgressively(plan, { ...options, setupOptions });
-}
-
-function campaignEstimate(setup = {}) {
-  const normalized = normalizeCampaignSetupOptions(setup);
-  return {
-    variations: normalized.variationCount,
-    contentAssets: normalized.variationCount,
-    socialPosts: normalized.variationCount * normalized.postsPerVariation,
-    landingPages: normalized.includeLandingPage ? normalized.variationCount : 0,
-    emails: normalized.includeEmailCampaign ? normalized.variationCount : 0,
-    totalAssets: expectedCampaignNodeCount(normalized)
-  };
-}
-
-function updateCampaignEstimate(overlay) {
-  const setup = normalizeCampaignSetupOptions({
-    variationCount: overlay.querySelector("#campaign-variation-count")?.value,
-    postsPerVariation: overlay.querySelector("#campaign-post-count")?.value,
-    includeLandingPage: overlay.querySelector("#campaign-include-landing")?.checked,
-    includeEmailCampaign: overlay.querySelector("#campaign-include-email")?.checked,
-    channel: overlay.querySelector("#campaign-channel")?.value
-  });
-  const estimate = campaignEstimate(setup);
-  const target = overlay.querySelector("#campaign-estimate-output");
-  if (!target) return;
-  target.innerHTML = `
-    <div><strong>${estimate.variations}</strong><span>Variations</span></div>
-    <div><strong>${estimate.socialPosts}</strong><span>Social Posts</span></div>
-    <div><strong>${estimate.landingPages}</strong><span>Landing Pages</span></div>
-    <div><strong>${estimate.emails}</strong><span>Emails</span></div>
-    <p><strong>${estimate.totalAssets}</strong> Assets Total</p>`;
-}
-
-function campaignWorkerStepForNodeType(type = "") {
-  if (type === "Campaign Variation") return "angles";
-  if (type === "Content") return "content";
-  if (type === "Social Media Posting") return "posts";
-  if (type === "Landing Page" || type === "Email Campaign") return "funnel";
-  return "strategy";
-}
-
-function campaignWorkerStateForStep(step = "strategy") {
-  if (step === "content" || step === "posts") return "writing";
-  if (step === "funnel") return "building";
-  if (step === "finalizing") return "connecting";
-  return "thinking";
-}
-
-function campaignLoadingStepForStatus(message = "") {
-  if (/final|ready|complete|connect|asset/i.test(message)) return "finalizing";
-  if (/landing|email|funnel/i.test(message)) return "funnel";
-  if (/social|post/i.test(message)) return "posts";
-  if (/content|copy|hero/i.test(message)) return "content";
-  if (/angle|variation/i.test(message)) return "angles";
-  return "strategy";
-}
-
-function createCampaignLoadingOverlay(setup = {}) {
-  const sessionId = `campaign-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-  const normalized = normalizeCampaignSetupOptions(setup);
-  const estimate = campaignEstimate(normalized);
-  const worker = document.createElement("div");
-  worker.className = "campaign-worker is-thinking";
-  worker.dataset.sessionId = sessionId;
-  const avatarUrl = getApprovedBrandAvatarUrl();
-  worker.innerHTML = `
-    <div class="campaign-worker-card">
-      <div class="campaign-worker-avatar">${avatarUrl ? `<img src="${avatarUrl}" alt="Brand Avatar" />` : `<span>🤖</span>`}</div>
-      <div class="campaign-worker-copy">
-        <strong data-worker-title>Building Campaign...</strong>
-        <p data-worker-message>Understanding campaign goal</p>
-      </div>
-      <ol class="campaign-worker-steps">
-        ${CAMPAIGN_WORKER_STEPS.map((step) => `<li data-step="${step.key}"><span>○</span> ${step.label}</li>`).join("")}
-      </ol>
-      <div class="campaign-worker-progress" aria-label="Campaign generation progress"><span data-worker-progress-bar></span></div>
-      <p class="campaign-worker-progress-label"><span data-worker-progress-label>0%</span> · ${estimate.variations} angles · ${estimate.socialPosts} posts</p>
-      <div class="campaign-worker-summary" data-worker-summary hidden></div>
-    </div>`;
-  document.body.appendChild(worker);
-
-  const session = {
-    sessionId,
-    status: "planning",
-    progress: 0,
-    workerState: "thinking",
-    createdNodes: [],
-    setup: normalized,
-    estimate,
-    workerEl: worker,
-    workerStateIndex: 0,
-    workerStateTimer: null
-  };
-  state.activeCampaignGeneration = session;
-  updateCampaignWorker(session, { step: "strategy", message: "Understanding campaign goal", progress: 0, workerState: "thinking" });
-  session.workerStateTimer = setInterval(() => rotateCampaignWorkerState(sessionId), 2400);
-  return worker;
-}
-
-function getActiveCampaignGenerationSession(worker = null) {
-  if (!state.activeCampaignGeneration) return null;
-  if (worker && worker.dataset.sessionId !== state.activeCampaignGeneration.sessionId) return null;
-  return state.activeCampaignGeneration;
-}
-
-function rotateCampaignWorkerState(sessionId) {
-  const session = state.activeCampaignGeneration;
-  if (!session || session.sessionId !== sessionId || session.status !== "planning") return;
-  session.workerStateIndex = (session.workerStateIndex + 1) % CAMPAIGN_WORKER_ROTATING_STATES.length;
-  const next = CAMPAIGN_WORKER_ROTATING_STATES[session.workerStateIndex];
-  updateCampaignWorker(session, {
-    step: next.step,
-    message: next.message,
-    workerState: next.workerState,
-    progress: Math.min(28, session.progress + 3)
-  });
-}
-
-function updateCampaignWorker(session, { title = null, message = null, step = null, progress = null, workerState = null } = {}) {
-  const worker = session?.workerEl;
-  if (!worker) return;
-  if (title) worker.querySelector("[data-worker-title]").textContent = title;
-  if (message) worker.querySelector("[data-worker-message]").textContent = message;
-  if (Number.isFinite(progress)) session.progress = Math.max(0, Math.min(100, progress));
-  const activeStep = step || campaignLoadingStepForStatus(message || "");
-  const stateName = workerState || campaignWorkerStateForStep(activeStep);
-  session.workerState = stateName;
-  worker.classList.remove("is-thinking", "is-writing", "is-building", "is-connecting", "is-done");
-  worker.classList.add(`is-${stateName}`);
-  const activeIndex = Math.max(0, CAMPAIGN_WORKER_STEPS.findIndex((item) => item.key === activeStep));
-  worker.querySelectorAll("[data-step]").forEach((item) => {
-    const index = CAMPAIGN_WORKER_STEPS.findIndex((stepItem) => stepItem.key === item.dataset.step);
-    const done = index < activeIndex || session.progress >= 100;
-    item.classList.toggle("is-done", done);
-    item.classList.toggle("is-active", !done && index === activeIndex);
-    item.querySelector("span").textContent = done ? "✓" : index === activeIndex ? "•" : "○";
-  });
-  const bar = worker.querySelector("[data-worker-progress-bar]");
-  if (bar) bar.style.width = `${session.progress}%`;
-  const label = worker.querySelector("[data-worker-progress-label]");
-  if (label) label.textContent = `${Math.round(session.progress)}%`;
-}
-
-function setCampaignLoadingStep(worker, activeStep = "strategy") {
-  const session = getActiveCampaignGenerationSession(worker);
-  if (!session) return;
-  updateCampaignWorker(session, { step: activeStep, workerState: campaignWorkerStateForStep(activeStep) });
-}
-
-function updateCampaignWorkerNodeProgress(worker, payload, createdCount, totalCount) {
-  const session = getActiveCampaignGenerationSession(worker);
-  if (!session) return;
-  session.status = "building";
-  const step = campaignWorkerStepForNodeType(payload?.type);
-  updateCampaignWorker(session, {
-    title: "Building Campaign...",
-    message: CAMPAIGN_WORKER_STATUS[payload?.type] || "Assembling campaign assets...",
-    step,
-    workerState: campaignWorkerStateForStep(step),
-    progress: totalCount > 0 ? Math.max(30, Math.round((createdCount / totalCount) * 92)) : session.progress
-  });
-}
-
-function completeCampaignGenerationSession(worker, createdNodes = []) {
-  const session = getActiveCampaignGenerationSession(worker);
-  if (!session) return;
-  session.status = "done";
-  if (session.workerStateTimer) clearInterval(session.workerStateTimer);
-  const counts = createdNodes.reduce((acc, node) => {
-    if (node.type === "Campaign Variation") acc.variations += 1;
-    if (node.type === "Content") acc.contentAssets += 1;
-    if (node.type === "Social Media Posting") acc.socialPosts += 1;
-    if (node.type === "Landing Page") acc.landingPages += 1;
-    if (node.type === "Email Campaign") acc.emails += 1;
-    return acc;
-  }, { variations: 0, contentAssets: 0, socialPosts: 0, landingPages: 0, emails: 0 });
-  updateCampaignWorker(session, {
-    title: "✓ Campaign Ready",
-    message: "Generated a complete campaign funnel.",
-    step: "finalizing",
-    workerState: "done",
-    progress: 100
-  });
-  const summary = session.workerEl.querySelector("[data-worker-summary]");
-  if (summary) {
-    summary.hidden = false;
-    summary.innerHTML = `<strong>Generated:</strong>
-      <ul>
-        <li>${counts.variations} Variations</li>
-        <li>${counts.contentAssets} Content Assets</li>
-        <li>${counts.socialPosts} Social Posts</li>
-        <li>${counts.landingPages} Landing Pages</li>
-        <li>${counts.emails} Emails</li>
-      </ul>`;
-  }
-  setTimeout(() => dismissCampaignLoadingOverlay(session.workerEl), 3200);
-}
-
-function dismissCampaignLoadingOverlay(worker) {
-  const session = getActiveCampaignGenerationSession(worker);
-  if (session?.workerStateTimer) clearInterval(session.workerStateTimer);
-  if (worker) {
-    worker.classList.add("is-exiting");
-    setTimeout(() => worker.remove(), 300);
-  }
-  if (!worker || session?.workerEl === worker) state.activeCampaignGeneration = null;
-}
-
-function setupCampaignStepper(overlay, inputId, min, max) {
-  const input = overlay.querySelector(`#${inputId}`);
-  overlay.querySelectorAll(`[data-stepper="${inputId}"]`).forEach((button) => {
-    button.addEventListener("click", () => {
-      const delta = Number(button.dataset.delta || 0);
-      const next = Math.max(min, Math.min(max, Number(input.value || 0) + delta));
-      input.value = String(next);
-      updateCampaignEstimate(overlay);
-    });
-  });
-}
-
-function completeCampaignGenerationSession(worker, createdNodes = []) {
-  const session = getActiveCampaignGenerationSession(worker);
-  if (!session) return;
-  session.status = "done";
-  if (session.workerStateTimer) clearInterval(session.workerStateTimer);
-  const counts = createdNodes.reduce((acc, node) => {
-    if (node.type === "Campaign Variation") acc.variations += 1;
-    if (node.type === "Content") acc.contentAssets += 1;
-    if (node.type === "Social Media Posting") acc.socialPosts += 1;
-    if (node.type === "Landing Page") acc.landingPages += 1;
-    if (node.type === "Email Campaign") acc.emails += 1;
-    return acc;
-  }, { variations: 0, contentAssets: 0, socialPosts: 0, landingPages: 0, emails: 0 });
-  updateCampaignWorker(session, {
-    title: "✓ Campaign Ready",
-    message: "Generated a complete campaign funnel.",
-    step: "finalizing",
-    workerState: "done",
-    progress: 100
-  });
-  const summary = session.workerEl.querySelector("[data-worker-summary]");
-  if (summary) {
-    summary.hidden = false;
-    summary.innerHTML = `<strong>Generated:</strong>
-      <ul>
-        <li>${counts.variations} Variations</li>
-        <li>${counts.contentAssets} Content Assets</li>
-        <li>${counts.socialPosts} Social Posts</li>
-        <li>${counts.landingPages} Landing Pages</li>
-        <li>${counts.emails} Emails</li>
-      </ul>`;
-  }
-  setTimeout(() => dismissCampaignLoadingOverlay(session.workerEl), 3200);
-}
-
-function dismissCampaignLoadingOverlay(worker) {
-  const session = getActiveCampaignGenerationSession(worker);
-  if (session?.workerStateTimer) clearInterval(session.workerStateTimer);
-  if (worker) {
-    worker.classList.add("is-exiting");
-    setTimeout(() => worker.remove(), 300);
-  }
-  if (!worker || session?.workerEl === worker) state.activeCampaignGeneration = null;
-}
-
-function setupCampaignStepper(overlay, inputId, min, max) {
-  const input = overlay.querySelector(`#${inputId}`);
-  overlay.querySelectorAll(`[data-stepper="${inputId}"]`).forEach((button) => {
-    button.addEventListener("click", () => {
-      const delta = Number(button.dataset.delta || 0);
-      const next = Math.max(min, Math.min(max, Number(input.value || 0) + delta));
-      input.value = String(next);
-      updateCampaignEstimate(overlay);
-    });
-  });
 }
 
 function campaignEstimate(setup = {}) {
@@ -5815,10 +5466,7 @@ function setupCampaignStepper(overlay, inputId, min, max) {
       updateCampaignEstimate(overlay);
     });
   });
-  input?.addEventListener("input", () => updateCampaignEstimate(overlay));
 }
-
-
 function openCreateCampaignModal() {
   const overlay = document.createElement("div");
   overlay.className = "campaign-builder-overlay";
@@ -5891,30 +5539,18 @@ function openCreateCampaignModal() {
     const loadingOverlay = createCampaignLoadingOverlay(setupOptions);
     setCampaignLoadingStep(loadingOverlay, "strategy");
     setSaveStatus(`Planning campaign: ${setupOptions.variationCount} variations, ${setupOptions.postsPerVariation} posts each...`);
-    const setWorkerStatus = (message, details = {}) => {
+    const setWorkerStatus = (message) => {
       setSaveStatus(message);
-      const session = getActiveCampaignGenerationSession(loadingOverlay);
-      if (!session) return;
-      if (details.payload) {
-        updateCampaignWorkerNodeProgress(loadingOverlay, details.payload, details.createdCount || 0, details.totalCount || expectedCampaignNodeCount(setupOptions));
-      } else {
-        const step = campaignLoadingStepForStatus(message);
-        updateCampaignWorker(session, { message, step, workerState: campaignWorkerStateForStep(step) });
-      }
+      setCampaignLoadingStep(loadingOverlay, campaignLoadingStepForStatus(message));
     };
     try {
       const apiPlan = await fetchGeneratedCampaignPlan(ideaText, contextText, setupOptions);
       setWorkerStatus("✨ Campaign plan ready. AI teammate is entering the board...");
-      const createdNodes = await generateCampaignFromIdea(ideaText, contextText, apiPlan, {
+      await generateCampaignFromIdea(ideaText, contextText, apiPlan, {
         onStatus: setWorkerStatus,
         setupOptions,
-        onNodeCreated: (node, details = {}) => {
-          const session = getActiveCampaignGenerationSession(loadingOverlay);
-          if (session) session.createdNodes.push(node.id);
-          updateCampaignWorkerNodeProgress(loadingOverlay, details.payload, details.createdCount, details.totalCount);
-        }
+        onFirstNode: () => dismissCampaignLoadingOverlay(loadingOverlay)
       });
-      completeCampaignGenerationSession(loadingOverlay, createdNodes);
     } catch (error) {
       dismissCampaignLoadingOverlay(loadingOverlay);
       console.error("[Funklix AI] Generate Campaign failed", error);
