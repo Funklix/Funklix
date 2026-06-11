@@ -20,6 +20,10 @@ function nodeTypeById(plan) {
   return new Map(campaignV3PlanNodes(plan).map((node) => [node.tempId, node.type]));
 }
 
+function assertApproximatelyEqual(actual, expected, message, tolerance = 0.001) {
+  assert.ok(Math.abs(actual - expected) <= tolerance, `${message}: expected ${expected}, received ${actual}`);
+}
+
 function assertValidPlan(caseDef, result) {
   assert.strictEqual(result.ok, true, `${caseDef.name} should build successfully`);
   assert.ok(result.plan, `${caseDef.name} should return a plan`);
@@ -81,8 +85,32 @@ function assertValidPlan(caseDef, result) {
   const ideaNode = layout.positionedNodes.find((node) => node.column === "idea");
   const landingNode = layout.positionedNodes.find((node) => node.column === "landing");
   const emailNode = layout.positionedNodes.find((node) => node.column === "email");
-  if (landingNode) assert.strictEqual(landingNode.y, ideaNode.y, `${caseDef.name} landing centered with idea`);
-  if (emailNode) assert.strictEqual(emailNode.y, ideaNode.y, `${caseDef.name} email centered with idea`);
+  const socialNodes = layout.positionedNodes.filter((node) => node.column === "social");
+  const socialYs = socialNodes.map((node) => node.y);
+  const campaignCenterY = (Math.min(...socialYs) + Math.max(...socialYs)) / 2;
+  assertApproximatelyEqual(ideaNode.y, campaignCenterY, `${caseDef.name} idea centered against social cluster`);
+  if (landingNode) assertApproximatelyEqual(landingNode.y, campaignCenterY, `${caseDef.name} landing centered against social cluster`);
+  if (emailNode) assertApproximatelyEqual(emailNode.y, landingNode ? landingNode.y : campaignCenterY, `${caseDef.name} email aligned with landing/campaign center`);
+
+  result.plan.lanes.forEach((lane, laneIndex) => {
+    const laneSocialNodes = lane.socials.map((social) => layout.positionedNodes.find((node) => node.tempId === social.tempId));
+    laneSocialNodes.forEach((socialNode, socialIndex) => {
+      assert.ok(socialNode, `${caseDef.name} lane ${laneIndex + 1} social ${socialIndex + 1} positioned`);
+      if (socialIndex > 0) assert.ok(socialNode.y > laneSocialNodes[socialIndex - 1].y, `${caseDef.name} lane ${laneIndex + 1} socials preserve vertical order`);
+    });
+    const laneCenterY = (laneSocialNodes[0].y + laneSocialNodes[laneSocialNodes.length - 1].y) / 2;
+    const variationNode = layout.positionedNodes.find((node) => node.tempId === lane.variation.tempId);
+    const contentNode = layout.positionedNodes.find((node) => node.tempId === lane.content.tempId);
+    assertApproximatelyEqual(variationNode.y, laneCenterY, `${caseDef.name} lane ${laneIndex + 1} variation centered on social stack`);
+    assertApproximatelyEqual(contentNode.y, laneCenterY, `${caseDef.name} lane ${laneIndex + 1} content centered on social stack`);
+    if (laneIndex > 0) {
+      const previousLane = result.plan.lanes[laneIndex - 1];
+      const previousSocialNodes = previousLane.socials.map((social) => layout.positionedNodes.find((node) => node.tempId === social.tempId));
+      const previousMaxY = Math.max(...previousSocialNodes.map((node) => node.y));
+      const currentMinY = Math.min(...laneSocialNodes.map((node) => node.y));
+      assert.ok(currentMinY > previousMaxY, `${caseDef.name} lane ${laneIndex + 1} social group separated from previous lane`);
+    }
+  });
 
   const adapter = createCampaignV3FakeCanvasAdapter();
   const commit = commitCampaignV3PlanToCanvas(layout, adapter);

@@ -226,21 +226,24 @@
       return { ok: false, positionedNodes, edges, diagnostics };
     }
 
-    const socialClusterHeight = Math.max(0, (normalizedSetup.postsPerVariation - 1) * CAMPAIGN_V3_ITEM_GAP);
-    const funnelCenterY = originY + Math.max(0, ((plan.lanes.length - 1) * rowHeight + socialClusterHeight) / 2);
-    positionedNodes.push({ ...plan.idea, laneId: "idea", column: "idea", x: originX + CAMPAIGN_V3_COLUMNS.idea, y: funnelCenterY });
+    const socialStackHeight = Math.max(0, (normalizedSetup.postsPerVariation - 1) * CAMPAIGN_V3_ITEM_GAP);
+    const laneHeight = socialStackHeight + CAMPAIGN_V3_ROW_GAP;
+    const campaignHeight = Math.max(0, (plan.lanes.length - 1) * laneHeight + socialStackHeight);
+    const campaignCenterY = originY + campaignHeight / 2;
+    positionedNodes.push({ ...plan.idea, laneId: "idea", column: "idea", x: originX + CAMPAIGN_V3_COLUMNS.idea, y: campaignCenterY });
 
     plan.lanes.forEach((lane, laneIndex) => {
-      const rowY = originY + laneIndex * rowHeight;
-      positionedNodes.push({ ...lane.variation, laneId: lane.laneId, column: "variation", x: originX + CAMPAIGN_V3_COLUMNS.variation, y: rowY });
-      positionedNodes.push({ ...lane.content, laneId: lane.laneId, column: "content", x: originX + CAMPAIGN_V3_COLUMNS.content, y: rowY });
+      const laneCenterY = originY + laneIndex * laneHeight + socialStackHeight / 2;
+      const socialStartY = laneCenterY - socialStackHeight / 2;
+      positionedNodes.push({ ...lane.variation, laneId: lane.laneId, column: "variation", x: originX + CAMPAIGN_V3_COLUMNS.variation, y: laneCenterY });
+      positionedNodes.push({ ...lane.content, laneId: lane.laneId, column: "content", x: originX + CAMPAIGN_V3_COLUMNS.content, y: laneCenterY });
       lane.socials.forEach((social, socialIndex) => {
-        positionedNodes.push({ ...social, laneId: lane.laneId, column: "social", x: originX + CAMPAIGN_V3_COLUMNS.social, y: rowY + socialIndex * CAMPAIGN_V3_ITEM_GAP });
+        positionedNodes.push({ ...social, laneId: lane.laneId, column: "social", x: originX + CAMPAIGN_V3_COLUMNS.social, y: socialStartY + socialIndex * CAMPAIGN_V3_ITEM_GAP });
       });
     });
 
-    if (plan.landing) positionedNodes.push({ ...plan.landing, laneId: "campaign-v3-funnel", column: "landing", x: originX + CAMPAIGN_V3_COLUMNS.landing, y: funnelCenterY });
-    if (plan.email) positionedNodes.push({ ...plan.email, laneId: "campaign-v3-funnel", column: "email", x: originX + CAMPAIGN_V3_COLUMNS.email, y: funnelCenterY });
+    if (plan.landing) positionedNodes.push({ ...plan.landing, laneId: "campaign-v3-funnel", column: "landing", x: originX + CAMPAIGN_V3_COLUMNS.landing, y: campaignCenterY });
+    if (plan.email) positionedNodes.push({ ...plan.email, laneId: "campaign-v3-funnel", column: "email", x: originX + CAMPAIGN_V3_COLUMNS.email, y: campaignCenterY });
 
     const invalidPosition = positionedNodes.find((node) => !Number.isFinite(node.x) || !Number.isFinite(node.y));
     if (invalidPosition) {
