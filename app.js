@@ -5669,6 +5669,156 @@ function setupCampaignStepper(overlay, inputId, min, max) {
   });
 }
 
+function completeCampaignGenerationSession(worker, createdNodes = []) {
+  const session = getActiveCampaignGenerationSession(worker);
+  if (!session) return;
+  session.status = "done";
+  if (session.workerStateTimer) clearInterval(session.workerStateTimer);
+  const counts = createdNodes.reduce((acc, node) => {
+    if (node.type === "Campaign Variation") acc.variations += 1;
+    if (node.type === "Content") acc.contentAssets += 1;
+    if (node.type === "Social Media Posting") acc.socialPosts += 1;
+    if (node.type === "Landing Page") acc.landingPages += 1;
+    if (node.type === "Email Campaign") acc.emails += 1;
+    return acc;
+  }, { variations: 0, contentAssets: 0, socialPosts: 0, landingPages: 0, emails: 0 });
+  updateCampaignWorker(session, {
+    title: "✓ Campaign Ready",
+    message: "Generated a complete campaign funnel.",
+    step: "finalizing",
+    workerState: "done",
+    progress: 100
+  });
+  const summary = session.workerEl.querySelector("[data-worker-summary]");
+  if (summary) {
+    summary.hidden = false;
+    summary.innerHTML = `<strong>Generated:</strong>
+      <ul>
+        <li>${counts.variations} Variations</li>
+        <li>${counts.contentAssets} Content Assets</li>
+        <li>${counts.socialPosts} Social Posts</li>
+        <li>${counts.landingPages} Landing Pages</li>
+        <li>${counts.emails} Emails</li>
+      </ul>`;
+  }
+  setTimeout(() => dismissCampaignLoadingOverlay(session.workerEl), 3200);
+}
+
+function dismissCampaignLoadingOverlay(worker) {
+  const session = getActiveCampaignGenerationSession(worker);
+  if (session?.workerStateTimer) clearInterval(session.workerStateTimer);
+  if (worker) {
+    worker.classList.add("is-exiting");
+    setTimeout(() => worker.remove(), 300);
+  }
+  if (!worker || session?.workerEl === worker) state.activeCampaignGeneration = null;
+}
+
+function setupCampaignStepper(overlay, inputId, min, max) {
+  const input = overlay.querySelector(`#${inputId}`);
+  overlay.querySelectorAll(`[data-stepper="${inputId}"]`).forEach((button) => {
+    button.addEventListener("click", () => {
+      const delta = Number(button.dataset.delta || 0);
+      const next = Math.max(min, Math.min(max, Number(input.value || 0) + delta));
+      input.value = String(next);
+      updateCampaignEstimate(overlay);
+    });
+  });
+}
+
+function campaignEstimate(setup = {}) {
+  const normalized = normalizeCampaignSetupOptions(setup);
+  return {
+    variations: normalized.variationCount,
+    socialPosts: normalized.variationCount * normalized.postsPerVariation,
+    landingPages: normalized.includeLandingPage ? normalized.variationCount : 0,
+    emails: normalized.includeEmailCampaign ? normalized.variationCount : 0,
+    totalAssets: expectedCampaignNodeCount(normalized)
+  };
+}
+
+function updateCampaignEstimate(overlay) {
+  const setup = normalizeCampaignSetupOptions({
+    variationCount: overlay.querySelector("#campaign-variation-count")?.value,
+    postsPerVariation: overlay.querySelector("#campaign-post-count")?.value,
+    includeLandingPage: overlay.querySelector("#campaign-include-landing")?.checked,
+    includeEmailCampaign: overlay.querySelector("#campaign-include-email")?.checked,
+    channel: overlay.querySelector("#campaign-channel")?.value
+  });
+  const estimate = campaignEstimate(setup);
+  const target = overlay.querySelector("#campaign-estimate-output");
+  if (!target) return;
+  target.innerHTML = `
+    <div><strong>${estimate.variations}</strong><span>Variations</span></div>
+    <div><strong>${estimate.socialPosts}</strong><span>Social Posts</span></div>
+    <div><strong>${estimate.landingPages}</strong><span>Landing Pages</span></div>
+    <div><strong>${estimate.emails}</strong><span>Emails</span></div>
+    <p><strong>${estimate.totalAssets}</strong> Assets Total</p>`;
+}
+
+function createCampaignLoadingOverlay(setup = {}) {
+  const overlay = document.createElement("div");
+  overlay.className = "campaign-loading-overlay";
+  const avatarUrl = getApprovedBrandAvatarUrl();
+  overlay.innerHTML = `
+    <div class="campaign-loading-card">
+      <div class="campaign-loading-avatar">${avatarUrl ? `<img src="${avatarUrl}" alt="Brand Avatar" />` : `<span>🤖</span>`}</div>
+      <div class="campaign-loading-copy">
+        <strong>Creating Campaign...</strong>
+        <p>${normalizeCampaignSetupOptions(setup).variationCount} angles · ${normalizeCampaignSetupOptions(setup).postsPerVariation} posts each · ${normalizeCampaignSetupOptions(setup).channel}</p>
+      </div>
+      <ol class="campaign-loading-steps">
+        <li data-step="strategy"><span>•</span> Analyzing Brand Strategy</li>
+        <li data-step="angles"><span>•</span> Creating Campaign Angles</li>
+        <li data-step="content"><span>•</span> Writing Content</li>
+        <li data-step="funnel"><span>•</span> Building Funnel</li>
+        <li data-step="connect"><span>•</span> Connecting Assets</li>
+      </ol>
+    </div>`;
+  document.body.appendChild(overlay);
+  return overlay;
+}
+
+function setCampaignLoadingStep(overlay, activeStep = "strategy") {
+  if (!overlay) return;
+  const steps = ["strategy", "angles", "content", "funnel", "connect"];
+  const activeIndex = Math.max(0, steps.indexOf(activeStep));
+  overlay.querySelectorAll("[data-step]").forEach((item) => {
+    const index = steps.indexOf(item.dataset.step);
+    item.classList.toggle("is-done", index < activeIndex);
+    item.classList.toggle("is-active", index === activeIndex);
+    item.querySelector("span").textContent = index < activeIndex ? "✓" : index === activeIndex ? "•" : "•";
+  });
+}
+
+function campaignLoadingStepForStatus(message = "") {
+  if (/angle|variation/i.test(message)) return "angles";
+  if (/content|social|post/i.test(message)) return "content";
+  if (/landing|email|funnel/i.test(message)) return "funnel";
+  if (/connect|asset|ready/i.test(message)) return "connect";
+  return "strategy";
+}
+
+function dismissCampaignLoadingOverlay(overlay) {
+  if (!overlay) return;
+  overlay.classList.add("is-exiting");
+  setTimeout(() => overlay.remove(), 280);
+}
+
+function setupCampaignStepper(overlay, inputId, min, max) {
+  const input = overlay.querySelector(`#${inputId}`);
+  overlay.querySelectorAll(`[data-stepper="${inputId}"]`).forEach((button) => {
+    button.addEventListener("click", () => {
+      const delta = Number(button.dataset.delta || 0);
+      const next = Math.max(min, Math.min(max, Number(input.value || 0) + delta));
+      input.value = String(next);
+      updateCampaignEstimate(overlay);
+    });
+  });
+  input?.addEventListener("input", () => updateCampaignEstimate(overlay));
+}
+
+
 function openCreateCampaignModal() {
   const overlay = document.createElement("div");
   overlay.className = "campaign-builder-overlay";
@@ -9335,6 +9485,9 @@ el.zoomOutButton.addEventListener("click", () => {
 el.canvas.addEventListener(
   "wheel",
   (event) => {
+    if (event.target.closest?.(".postit-text, .postit-scroll-body")) {
+      return;
+    }
     if (event.ctrlKey) {
       event.preventDefault();
       stopFollowForManualNavigation();
