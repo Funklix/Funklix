@@ -5117,6 +5117,46 @@ function cleanCampaignField(value = "") {
     .trim();
 }
 
+function canonicalizeCampaignPlanNodes(nodes = [], setup = {}) {
+  const normalized = normalizeCampaignSetupOptions(setup);
+  const byType = CAMPAIGN_CHAIN_TYPES.reduce((groups, type) => {
+    groups[type] = [];
+    return groups;
+  }, {});
+
+  nodes.forEach((node) => {
+    if (byType[node.type]) byType[node.type].push(node);
+  });
+
+  const expectedCounts = {
+    Idea: 1,
+    "Campaign Variation": normalized.variationCount,
+    Content: normalized.variationCount,
+    "Social Media Posting": normalized.variationCount * normalized.postsPerVariation,
+    "Landing Page": normalized.includeLandingPage ? normalized.variationCount : 0,
+    "Email Campaign": normalized.includeEmailCampaign ? normalized.variationCount : 0
+  };
+
+  Object.entries(expectedCounts).forEach(([type, expected]) => {
+    const actual = byType[type]?.length || 0;
+    if (actual !== expected) {
+      throw new Error(`Campaign plan must include exactly ${expected} ${type} node${expected === 1 ? "" : "s"}; received ${actual}.`);
+    }
+  });
+
+  const canonicalNodes = [byType.Idea[0]];
+  for (let variationIndex = 0; variationIndex < normalized.variationCount; variationIndex += 1) {
+    canonicalNodes.push(byType["Campaign Variation"][variationIndex]);
+    canonicalNodes.push(byType.Content[variationIndex]);
+    const socialStart = variationIndex * normalized.postsPerVariation;
+    canonicalNodes.push(...byType["Social Media Posting"].slice(socialStart, socialStart + normalized.postsPerVariation));
+    if (normalized.includeLandingPage) canonicalNodes.push(byType["Landing Page"][variationIndex]);
+    if (normalized.includeEmailCampaign) canonicalNodes.push(byType["Email Campaign"][variationIndex]);
+  }
+
+  return canonicalNodes;
+}
+
 function validateGeneratedCampaignPlan(plan = {}, setupOptions = {}) {
   const setup = normalizeCampaignSetupOptions(plan.setup || setupOptions);
   const nodes = Array.isArray(plan.nodes) ? plan.nodes : [];
@@ -5141,14 +5181,14 @@ function validateGeneratedCampaignPlan(plan = {}, setupOptions = {}) {
       landingPage: node.landingPage && typeof node.landingPage === "object" ? node.landingPage : {}
     };
   });
-  if (normalizedNodes[0]?.type !== "Idea") throw new Error("Campaign plan must start with an Idea node.");
+  const canonicalNodes = canonicalizeCampaignPlanNodes(normalizedNodes, setup);
   edges.forEach((edge) => {
     if (!Number.isInteger(edge?.fromIndex) || !Number.isInteger(edge?.toIndex)) throw new Error("Campaign edges must use numeric indexes.");
     if (edge.fromIndex < 0 || edge.fromIndex >= normalizedNodes.length || edge.toIndex < 0 || edge.toIndex >= normalizedNodes.length) {
       throw new Error("Campaign edge index is out of range.");
     }
   });
-  return { nodes: normalizedNodes, edges: deriveCampaignFunnelEdges(normalizedNodes, setup), setup };
+  return { nodes: canonicalNodes, edges: deriveCampaignFunnelEdges(canonicalNodes, setup), setup };
 }
 
 function applyGeneratedCampaignNodePayload(node, payload = {}, previousNode = null) {
@@ -5263,24 +5303,36 @@ function calculateCampaignPlanOrigin(setup = {}) {
 
 function deriveCampaignStructure(nodes = [], setup = {}) {
   const normalized = normalizeCampaignSetupOptions(setup);
+  const indexesByType = CAMPAIGN_CHAIN_TYPES.reduce((groups, type) => {
+    groups[type] = [];
+    return groups;
+  }, {});
+  nodes.forEach((node, index) => {
+    if (indexesByType[node?.type]) indexesByType[node.type].push(index);
+  });
+
+  const ideaIndex = indexesByType.Idea[0];
+  if (!Number.isInteger(ideaIndex)) return [];
   const variations = [];
-  let cursor = 1;
   for (let row = 0; row < normalized.variationCount; row += 1) {
-    const variationIndex = cursor++;
-    const contentIndex = cursor++;
-    const socialIndexes = [];
-    for (let post = 0; post < normalized.postsPerVariation; post += 1) socialIndexes.push(cursor++);
-    const landingIndex = normalized.includeLandingPage ? cursor++ : null;
-    const emailIndex = normalized.includeEmailCampaign ? cursor++ : null;
-    variations.push({ row, variationIndex, contentIndex, socialIndexes, landingIndex, emailIndex });
+    const variationIndex = indexesByType["Campaign Variation"][row];
+    const contentIndex = indexesByType.Content[row];
+    const socialStart = row * normalized.postsPerVariation;
+    const socialIndexes = indexesByType["Social Media Posting"].slice(socialStart, socialStart + normalized.postsPerVariation);
+    const landingIndex = normalized.includeLandingPage ? indexesByType["Landing Page"][row] : null;
+    const emailIndex = normalized.includeEmailCampaign ? indexesByType["Email Campaign"][row] : null;
+    if (!Number.isInteger(variationIndex) || !Number.isInteger(contentIndex) || socialIndexes.length !== normalized.postsPerVariation) continue;
+    if (normalized.includeLandingPage && !Number.isInteger(landingIndex)) continue;
+    if (normalized.includeEmailCampaign && !Number.isInteger(emailIndex)) continue;
+    variations.push({ row, ideaIndex, variationIndex, contentIndex, socialIndexes, landingIndex, emailIndex });
   }
-  return variations.filter((variation) => nodes[variation.variationIndex] && nodes[variation.contentIndex]);
+  return variations;
 }
 
 function deriveCampaignFunnelEdges(nodes = [], setup = {}) {
   const edges = [];
   deriveCampaignStructure(nodes, setup).forEach((variation) => {
-    edges.push({ fromIndex: 0, toIndex: variation.variationIndex });
+    edges.push({ fromIndex: variation.ideaIndex, toIndex: variation.variationIndex });
     edges.push({ fromIndex: variation.variationIndex, toIndex: variation.contentIndex });
     variation.socialIndexes.forEach((socialIndex) => {
       if (!nodes[socialIndex]) return;
@@ -5299,11 +5351,13 @@ function calculateCampaignNodePositions(nodes = [], origin, setup = {}) {
   const normalized = normalizeCampaignSetupOptions(setup);
   const rowHeight = campaignPlanRowHeight(normalized);
   const positions = new Map();
-  positions.set(0, {
+  const structure = deriveCampaignStructure(nodes, normalized);
+  const ideaIndex = structure[0]?.ideaIndex ?? 0;
+  positions.set(ideaIndex, {
     x: origin.x + CAMPAIGN_V2_X.idea,
     y: origin.y + Math.max(0, ((normalized.variationCount - 1) * rowHeight) / 2)
   });
-  deriveCampaignStructure(nodes, normalized).forEach((variation) => {
+  structure.forEach((variation) => {
     const rowY = origin.y + variation.row * rowHeight;
     positions.set(variation.variationIndex, { x: origin.x + CAMPAIGN_V2_X.variation, y: rowY });
     positions.set(variation.contentIndex, { x: origin.x + CAMPAIGN_V2_X.content, y: rowY });
@@ -5320,7 +5374,7 @@ function calculateCampaignNodePositions(nodes = [], origin, setup = {}) {
 function campaignGenerationOrder(nodes = [], setup = {}) {
   const variations = deriveCampaignStructure(nodes, setup);
   return [
-    0,
+    variations[0]?.ideaIndex ?? 0,
     ...variations.map((variation) => variation.variationIndex),
     ...variations.map((variation) => variation.contentIndex),
     ...variations.flatMap((variation) => variation.socialIndexes),
@@ -5555,6 +5609,63 @@ function updateCampaignWorkerNodeProgress(worker, payload, createdCount, totalCo
     step,
     workerState: campaignWorkerStateForStep(step),
     progress: totalCount > 0 ? Math.max(30, Math.round((createdCount / totalCount) * 92)) : session.progress
+  });
+}
+
+function completeCampaignGenerationSession(worker, createdNodes = []) {
+  const session = getActiveCampaignGenerationSession(worker);
+  if (!session) return;
+  session.status = "done";
+  if (session.workerStateTimer) clearInterval(session.workerStateTimer);
+  const counts = createdNodes.reduce((acc, node) => {
+    if (node.type === "Campaign Variation") acc.variations += 1;
+    if (node.type === "Content") acc.contentAssets += 1;
+    if (node.type === "Social Media Posting") acc.socialPosts += 1;
+    if (node.type === "Landing Page") acc.landingPages += 1;
+    if (node.type === "Email Campaign") acc.emails += 1;
+    return acc;
+  }, { variations: 0, contentAssets: 0, socialPosts: 0, landingPages: 0, emails: 0 });
+  updateCampaignWorker(session, {
+    title: "✓ Campaign Ready",
+    message: "Generated a complete campaign funnel.",
+    step: "finalizing",
+    workerState: "done",
+    progress: 100
+  });
+  const summary = session.workerEl.querySelector("[data-worker-summary]");
+  if (summary) {
+    summary.hidden = false;
+    summary.innerHTML = `<strong>Generated:</strong>
+      <ul>
+        <li>${counts.variations} Variations</li>
+        <li>${counts.contentAssets} Content Assets</li>
+        <li>${counts.socialPosts} Social Posts</li>
+        <li>${counts.landingPages} Landing Pages</li>
+        <li>${counts.emails} Emails</li>
+      </ul>`;
+  }
+  setTimeout(() => dismissCampaignLoadingOverlay(session.workerEl), 3200);
+}
+
+function dismissCampaignLoadingOverlay(worker) {
+  const session = getActiveCampaignGenerationSession(worker);
+  if (session?.workerStateTimer) clearInterval(session.workerStateTimer);
+  if (worker) {
+    worker.classList.add("is-exiting");
+    setTimeout(() => worker.remove(), 300);
+  }
+  if (!worker || session?.workerEl === worker) state.activeCampaignGeneration = null;
+}
+
+function setupCampaignStepper(overlay, inputId, min, max) {
+  const input = overlay.querySelector(`#${inputId}`);
+  overlay.querySelectorAll(`[data-stepper="${inputId}"]`).forEach((button) => {
+    button.addEventListener("click", () => {
+      const delta = Number(button.dataset.delta || 0);
+      const next = Math.max(min, Math.min(max, Number(input.value || 0) + delta));
+      input.value = String(next);
+      updateCampaignEstimate(overlay);
+    });
   });
 }
 
