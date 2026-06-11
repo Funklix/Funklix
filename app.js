@@ -5080,7 +5080,7 @@ function isCampaignV3Enabled() {
 
 function openCampaignGeneratorEntry() {
   if (isCampaignV3Enabled()) {
-    console.info("[Funklix Campaign Generator V3] Feature flag enabled, but V3 UI is not wired yet.");
+    return debugRunCampaignV3Mock();
   }
   return openCreateCampaignModal();
 }
@@ -5443,6 +5443,88 @@ async function generateCampaignFromIdea(ideaText, contextText, providedPlan = nu
   const setupOptions = normalizeCampaignSetupOptions(options.setupOptions || providedPlan?.setup || {});
   const plan = providedPlan || await fetchGeneratedCampaignPlan(ideaText, contextText, setupOptions);
   return generateCampaignChainProgressively(plan, { ...options, setupOptions });
+}
+
+function getCampaignV3Api() {
+  return typeof window !== "undefined" ? window.CampaignGeneratorV3 : null;
+}
+
+function createCampaignV3RealCanvasAdapter() {
+  const committedNodes = [];
+  const committedEdges = [];
+  const activityLog = [];
+  return {
+    committedNodes,
+    committedEdges,
+    activityLog,
+    unsavedCallCount: 0,
+    createNode(payload = {}, position = {}) {
+      const node = createNode({ type: payload.type || "Idea", position });
+      if (!node) throw new Error("Campaign V3 real adapter could not create node.");
+      applyGeneratedCampaignNodePayload(node, payload);
+      updateNodeCard(node);
+      updateListView();
+      committedNodes.push({ id: node.id, tempId: payload.tempId, type: node.type, title: node.title, x: node.position.x, y: node.position.y, node });
+      activityLog.push({ action: "createNode", tempId: payload.tempId, nodeId: node.id });
+      return node;
+    },
+    createEdge(sourceNodeId, targetNodeId, edge = {}) {
+      addEdge(sourceNodeId, targetNodeId);
+      const committedEdge = { sourceNodeId, targetNodeId, sourceTempId: edge.fromTempId, targetTempId: edge.toTempId, type: edge.type, laneId: edge.laneId };
+      committedEdges.push(committedEdge);
+      activityLog.push({ action: "createEdge", sourceNodeId, targetNodeId, sourceTempId: edge.fromTempId, targetTempId: edge.toTempId });
+      return committedEdge;
+    },
+    markUnsaved() {
+      this.unsavedCallCount += 1;
+      activityLog.push({ action: "markUnsaved" });
+      markUnsaved();
+    }
+  };
+}
+
+function debugRunCampaignV3Mock() {
+  const campaignV3 = getCampaignV3Api();
+  if (!campaignV3) {
+    console.error("[Funklix Campaign Generator V3] campaign-v3.js is not loaded.");
+    return null;
+  }
+  if (state.boardAccess?.canEdit === false) {
+    setSaveStatus("Read-only board");
+    console.warn("[Funklix Campaign Generator V3] Board is read-only; mock commit skipped.");
+    return null;
+  }
+
+  const setup = { variationCount: 3, postsPerVariation: 3, includeLandingPage: true, includeEmailCampaign: true, channel: "LinkedIn" };
+  const rawNodes = campaignV3.createCampaignV3MockNodes(setup, "grouped");
+  const planResult = campaignV3.buildCampaignV3PlanFromNodes(rawNodes, setup);
+  if (!planResult.ok) {
+    console.error("[Funklix Campaign Generator V3] Mock plan failed validation", planResult.diagnostics);
+    return planResult;
+  }
+
+  const origin = calculateCampaignPlanOrigin(setup);
+  const layoutResult = campaignV3.layoutCampaignV3Plan(planResult.plan, setup, origin);
+  if (!layoutResult.ok) {
+    console.error("[Funklix Campaign Generator V3] Mock layout failed", layoutResult.diagnostics);
+    return { ...planResult, layoutResult };
+  }
+
+  const adapter = createCampaignV3RealCanvasAdapter();
+  const commitResult = campaignV3.commitCampaignV3PlanToCanvas(layoutResult, adapter);
+  if (!commitResult.ok) {
+    console.error("[Funklix Campaign Generator V3] Mock real-canvas commit had diagnostics", commitResult.diagnostics);
+  } else {
+    console.info("[Funklix Campaign Generator V3] Mock campaign committed", commitResult);
+  }
+  updateEmptyState();
+  drawLinks();
+  updateListView();
+  return { planResult, layoutResult, commitResult, adapter };
+}
+
+if (typeof window !== "undefined") {
+  window.debugRunCampaignV3Mock = debugRunCampaignV3Mock;
 }
 
 function campaignEstimate(setup = {}) {
@@ -9087,7 +9169,7 @@ if (el.addNodeButton) {
 
 if (el.createCampaignButton) {
   el.createCampaignButton.addEventListener("click", () => {
-    openCreateCampaignModal();
+    openCampaignGeneratorEntry();
   });
 } else {
   console.warn("[Funklix DOM Hardening] Missing listener target: #create-campaign-btn");
