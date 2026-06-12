@@ -113,9 +113,20 @@ Campaign Variation:
 - Description/content must explicitly include "Angle:".
 
 Content:
-- Exactly one strategic hero/content asset for that Campaign Variation.
-- Content nodes are NOT social posts and must not be titled Hook Post, Problem Post, Story Post, Authority Post, Objection Post, or CTA Post.
-- Include a strong message, key points, and CTA.
+- Exactly one strategic pillar asset for that Campaign Variation.
+- Content nodes must be strategic assets, not social posts and not campaign variation summaries.
+- Content nodes must not read like a social caption, hook post, thread, or short promotional post.
+- Content nodes must not simply restate the Campaign Variation angle; they must translate the angle into a reusable campaign asset.
+- Content nodes must not be titled Hook Post, Problem Post, Story Post, Authority Post, Objection Post, CTA Post, or any other social post purpose.
+- In description/content, include these clearly labeled sections:
+  - Format:
+  - Core Thesis:
+  - Audience Pain:
+  - Key Message Points:
+  - Proof / Credibility Approach:
+  - CTA:
+  - Repurposing Guidance for Social Posts:
+- Repurposing Guidance for Social Posts must explain how the child Social Media Posting nodes should draw from this pillar asset without duplicating each other.
 - Include imagePrompt shaped by Brand Brain visual style and archetype guidance.
 
 Social Media Posting:
