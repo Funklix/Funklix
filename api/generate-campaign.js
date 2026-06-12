@@ -109,9 +109,62 @@ Content:
 - Include imagePrompt shaped by Brand Brain visual style and archetype guidance.
 
 Social Media Posting:
-- Platform-specific caption and CTA.
+- social.caption must contain the FULL publish-ready post copy.
+- content must contain only a short one-sentence summary of the post purpose.
+- Do not put the full post in content; put the full post in social.caption.
 - Hashtags should be clean campaign hashtags, not full sentences.
 - Keep purpose distinct from sibling posts.
+
+For LinkedIn posts:
+- Write complete, publish-ready LinkedIn posts.
+- Use short paragraphs with line breaks.
+- Avoid generic slogans.
+- Each post should feel specific to the campaign variation angle, audience, and Brand Brain context.
+
+LinkedIn Hook Post:
+- 120-220 words.
+- Strong attention-grabbing opening.
+- 2-4 short paragraphs.
+- Include a clear insight.
+- End with a CTA.
+
+LinkedIn Problem Post:
+- 120-220 words.
+- Describe a real audience pain point.
+- Explain the consequences of ignoring it.
+- Introduce the campaign solution.
+- End with a CTA.
+
+LinkedIn Story Post:
+- 120-220 words.
+- Use a narrative structure.
+- Include situation, transformation, lesson, and CTA.
+
+LinkedIn Authority Post:
+- 120-220 words.
+- Lead with expert insight.
+- Include a contrarian observation.
+- Give a practical takeaway.
+- End with a CTA.
+
+LinkedIn Objection Post:
+- 120-220 words.
+- Address skepticism directly.
+- Reframe the concern.
+- Include evidence, reasoning, or a concrete rationale.
+- End with a CTA.
+
+LinkedIn CTA Post:
+- 80-150 words.
+- Direct action-focused post.
+- Make the desired action clear.
+- Use a strong CTA.
+
+For non-LinkedIn channels:
+- Keep posts platform-native and complete.
+- X/Twitter must remain 280-character aware.
+- Instagram and TikTok captions should include hook, context, and CTA.
+- Do not return only 1-2 sentence summaries for LinkedIn posts.
 
 Landing Page:
 - headerVisualPrompt, headerClaim, problem, solution, trust, cta.
