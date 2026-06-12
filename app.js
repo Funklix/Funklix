@@ -5488,26 +5488,25 @@ function expectedCampaignV3NodeCounts(setup = {}) {
   };
 }
 
-function adaptCampaignV3AINodes(rawNodes = [], setup = {}) {
-  const normalized = normalizeCampaignSetupOptions(setup);
-  const grouped = CAMPAIGN_CHAIN_TYPES.reduce((groups, type) => {
-    groups[type] = [];
-    return groups;
+function campaignV3NodeSubtype(node = {}) {
+  return cleanCampaignField(node.subtype || node.subType || node.metadata?.subtype || node.metadata?.subType || node.metadata?.purpose || node.metadata?.angle || "(none)");
+}
+
+function campaignV3NodeSubtypeCounts(nodes = []) {
+  return (Array.isArray(nodes) ? nodes : []).reduce((counts, node) => {
+    const subtype = campaignV3NodeSubtype(node);
+    counts[subtype] = (counts[subtype] || 0) + 1;
+    return counts;
   }, {});
+}
 
-  (Array.isArray(rawNodes) ? rawNodes : []).forEach((node) => {
-    const type = cleanCampaignField(node?.type);
-    if (grouped[type]) grouped[type].push({ ...node, type });
-  });
-
-  return [
-    ...grouped.Idea.slice(0, 1),
-    ...grouped["Campaign Variation"].slice(0, normalized.variationCount),
-    ...grouped.Content.slice(0, normalized.variationCount),
-    ...grouped["Social Media Posting"].slice(0, normalized.variationCount * normalized.postsPerVariation),
-    ...(normalized.includeLandingPage ? grouped["Landing Page"].slice(0, 1) : []),
-    ...(normalized.includeEmailCampaign ? grouped["Email Campaign"].slice(0, 1) : [])
-  ];
+function campaignV3NodeReport(nodes = [], limit = Number.POSITIVE_INFINITY) {
+  return (Array.isArray(nodes) ? nodes : []).slice(0, limit).map((node, index) => ({
+    index,
+    title: cleanCampaignField(node?.title),
+    type: cleanCampaignField(node?.type),
+    subtype: campaignV3NodeSubtype(node)
+  }));
 }
 
 function logCampaignV3AIDiagnostics(label, details = {}) {
@@ -5594,14 +5593,9 @@ async function debugRunCampaignV3AI(setupOverride = {}) {
     console.error("[Funklix Campaign Generator V3 AI] campaign-v3.js is not loaded.");
     return null;
   }
-  if (state.boardAccess?.canEdit === false) {
-    setSaveStatus("Read-only board");
-    console.warn("[Funklix Campaign Generator V3 AI] Board is read-only; AI compatibility commit skipped.");
-    return null;
-  }
 
   const setup = defaultCampaignV3AISetup(setupOverride);
-  logCampaignV3AIDiagnostics("Starting dev-only AI compatibility flow. V3 remains feature-flagged off by default.", {
+  logCampaignV3AIDiagnostics("Starting diagnostics-only AI compatibility report. No nodes will be created.", {
     setup,
     featureFlagEnabled: isCampaignV3Enabled()
   });
@@ -5609,57 +5603,41 @@ async function debugRunCampaignV3AI(setupOverride = {}) {
   try {
     const apiPlan = await fetchGeneratedCampaignPlan(setup.campaignIdea, setup.additionalContext, setup);
     const rawNodes = Array.isArray(apiPlan?.nodes) ? apiPlan.nodes : [];
-    const adaptedNodes = adaptCampaignV3AINodes(rawNodes, setup);
+    const nodeReport = campaignV3NodeReport(rawNodes);
+    const firstTwentyNodes = campaignV3NodeReport(rawNodes, 20);
     const diagnosticBase = {
       setup,
       expectedCounts: expectedCampaignV3NodeCounts(setup),
-      actualCounts: campaignV3NodeCounts(rawNodes),
-      adaptedCounts: campaignV3NodeCounts(adaptedNodes),
-      firstNodes: rawNodes.slice(0, 8).map((node) => ({ type: cleanCampaignField(node?.type), title: cleanCampaignField(node?.title) }))
+      actualCountsByType: campaignV3NodeCounts(rawNodes),
+      actualCountsBySubtype: campaignV3NodeSubtypeCounts(rawNodes),
+      nodeCount: rawNodes.length,
+      firstTwentyNodes
     };
 
-    const planResult = campaignV3.buildCampaignV3PlanFromNodes(adaptedNodes, setup);
+    console.info("[Funklix Campaign Generator V3 AI] Raw AI response", apiPlan);
+    console.table(nodeReport);
+    logCampaignV3AIDiagnostics("Expected V3 counts", diagnosticBase.expectedCounts);
+    logCampaignV3AIDiagnostics("Actual AI counts grouped by type", diagnosticBase.actualCountsByType);
+    logCampaignV3AIDiagnostics("Actual AI counts grouped by subtype", diagnosticBase.actualCountsBySubtype);
+    logCampaignV3AIDiagnostics("First 20 returned nodes", firstTwentyNodes);
+
+    const planResult = campaignV3.buildCampaignV3PlanFromNodes(rawNodes, setup);
+    const failedRules = planResult.ok ? [] : planResult.diagnostics.map((diagnostic) => diagnostic.code);
+    const diagnostics = {
+      ...diagnosticBase,
+      failedRules,
+      diagnostics: planResult.diagnostics
+    };
+
     if (!planResult.ok) {
-      const diagnostics = {
-        ...diagnosticBase,
-        codes: planResult.diagnostics.map((diagnostic) => diagnostic.code),
-        diagnostics: planResult.diagnostics
-      };
-      console.error("[Funklix Campaign Generator V3 AI] AI response is not compatible with V3. No nodes were created.", diagnostics);
+      console.error("[Funklix Campaign Generator V3 AI] FAILED V3 compatibility validation. No nodes were created.", diagnostics);
       return { ok: false, apiPlan, planResult, diagnostics };
     }
 
-    const edges = campaignV3.buildCampaignV3Edges(planResult.plan);
-    const origin = calculateCampaignPlanOrigin(setup);
-    const layoutResult = campaignV3.layoutCampaignV3Plan(planResult.plan, setup, origin);
-    if (!layoutResult.ok) {
-      const diagnostics = {
-        ...diagnosticBase,
-        codes: layoutResult.diagnostics.map((diagnostic) => diagnostic.code),
-        diagnostics: layoutResult.diagnostics
-      };
-      console.error("[Funklix Campaign Generator V3 AI] V3 layout failed. No nodes were created.", diagnostics);
-      return { ok: false, apiPlan, planResult, edges, layoutResult, diagnostics };
-    }
-
-    const adapter = createCampaignV3RealCanvasAdapter();
-    const commitResult = campaignV3.commitCampaignV3PlanToCanvas(layoutResult, adapter);
-    const diagnostics = {
-      ...diagnosticBase,
-      codes: commitResult.diagnostics.map((diagnostic) => diagnostic.code),
-      diagnostics: commitResult.diagnostics
-    };
-    if (!commitResult.ok) {
-      console.error("[Funklix Campaign Generator V3 AI] Real-canvas commit had diagnostics.", diagnostics);
-    } else {
-      logCampaignV3AIDiagnostics("AI compatibility campaign committed to canvas.", diagnostics);
-    }
-    updateEmptyState();
-    drawLinks();
-    updateListView();
-    return { ok: commitResult.ok, apiPlan, planResult, edges, layoutResult, commitResult, adapter, diagnostics };
+    logCampaignV3AIDiagnostics("AI response passed V3 compatibility validation. Diagnostics-only mode did not create nodes.", diagnostics);
+    return { ok: true, apiPlan, planResult, diagnostics };
   } catch (error) {
-    console.error("[Funklix Campaign Generator V3 AI] AI compatibility flow failed before commit. No nodes were created.", {
+    console.error("[Funklix Campaign Generator V3 AI] Diagnostics failed before validation. No nodes were created.", {
       setup,
       error
     });
