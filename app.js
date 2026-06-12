@@ -5549,6 +5549,77 @@ function normalizeCampaignV3AIEmailNodes(nodes = []) {
   };
 }
 
+function buildCampaignV3FallbackLandingNode(nodes = [], setup = {}) {
+  const ideaNode = (Array.isArray(nodes) ? nodes : []).find((node) => cleanCampaignField(node?.type) === "Idea") || {};
+  const variationTitles = (Array.isArray(nodes) ? nodes : [])
+    .filter((node) => cleanCampaignField(node?.type) === "Campaign Variation")
+    .map((node) => cleanCampaignField(node?.title))
+    .filter(Boolean);
+  const emailNode = (Array.isArray(nodes) ? nodes : []).find((node) => cleanCampaignField(node?.type) === "Email Campaign") || {};
+  const campaignIdea = cleanCampaignField(setup.campaignIdea || ideaNode.title || ideaNode.content) || "the campaign offer";
+  const context = cleanCampaignField(setup.additionalContext || ideaNode.description || ideaNode.content);
+  const variationsSummary = variationTitles.slice(0, 3).join(", ");
+  const emailTitle = cleanCampaignField(emailNode.title);
+  const description = `Landing page for ${campaignIdea}${context ? `. ${context}` : ""}`;
+  const content = [
+    `Position ${campaignIdea} as a focused campaign destination.`,
+    variationsSummary ? `Support campaign angles: ${variationsSummary}.` : "Reinforce the strongest campaign angle and primary value proposition.",
+    emailTitle ? `Align follow-up with ${emailTitle}.` : "Guide qualified visitors toward the next step."
+  ].join("\n");
+
+  return {
+    tempId: "campaign-v3-ai-fallback-landing",
+    type: "Landing Page",
+    title: "Campaign Landing Page",
+    description,
+    content,
+    metadata: {
+      goal: cleanCampaignField(ideaNode.metadata?.goal) || "Convert qualified campaign interest",
+      audience: cleanCampaignField(ideaNode.metadata?.audience) || "Campaign audience",
+      channel: setup.channel || "LinkedIn",
+      funnelStage: "Landing Page",
+      tone: cleanCampaignField(ideaNode.metadata?.tone) || "Trusted and exclusive"
+    },
+    imagePrompt: `Premium landing page hero visual for ${campaignIdea}`,
+    social: { platform: "", caption: "", hashtags: "" },
+    landingPage: {
+      headerVisualPrompt: `Premium landing page hero visual for ${campaignIdea}`,
+      headerClaim: campaignIdea,
+      problem: context || "Busy decision-makers need a trusted reason to engage.",
+      solution: `A focused campaign experience for ${campaignIdea}.`,
+      trust: "Built around trust, exclusivity, and meaningful business relationships.",
+      cta: "Request an invitation"
+    }
+  };
+}
+
+function normalizeCampaignV3AILandingFallback(nodes = [], setup = {}) {
+  const sourceNodes = Array.isArray(nodes) ? nodes : [];
+  const landingCount = sourceNodes.filter((node) => cleanCampaignField(node?.type) === "Landing Page").length;
+  if (!setup.includeLandingPage || landingCount > 0) {
+    return {
+      nodes: sourceNodes,
+      diagnostics: {
+        landingFallbackCreated: false,
+        fallbackLandingTitle: "",
+        reason: landingCount > 0 ? "landing page already present" : "landing page disabled",
+        originalLandingCount: landingCount
+      }
+    };
+  }
+
+  const fallbackLanding = buildCampaignV3FallbackLandingNode(sourceNodes, setup);
+  return {
+    nodes: [...sourceNodes, fallbackLanding],
+    diagnostics: {
+      landingFallbackCreated: true,
+      fallbackLandingTitle: fallbackLanding.title,
+      reason: "missing landing page from AI response",
+      originalLandingCount: landingCount
+    }
+  };
+}
+
 function logCampaignV3AIDiagnostics(label, details = {}) {
   console.info(`[Funklix Campaign Generator V3 AI] ${label}`, details);
 }
@@ -5640,7 +5711,7 @@ async function debugRunCampaignV3AI(setupOverride = {}) {
   }
 
   const setup = defaultCampaignV3AISetup(setupOverride);
-  logCampaignV3AIDiagnostics("Starting AI compatibility flow with Email Campaign-only normalization.", {
+  logCampaignV3AIDiagnostics("Starting AI compatibility flow with Email Campaign normalization and missing Landing Page fallback.", {
     setup,
     featureFlagEnabled: isCampaignV3Enabled()
   });
@@ -5649,7 +5720,8 @@ async function debugRunCampaignV3AI(setupOverride = {}) {
     const apiPlan = await fetchGeneratedCampaignPlan(setup.campaignIdea, setup.additionalContext, setup);
     const rawNodes = Array.isArray(apiPlan?.nodes) ? apiPlan.nodes : [];
     const emailNormalization = normalizeCampaignV3AIEmailNodes(rawNodes);
-    const normalizedNodes = emailNormalization.nodes;
+    const landingNormalization = normalizeCampaignV3AILandingFallback(emailNormalization.nodes, setup);
+    const normalizedNodes = landingNormalization.nodes;
     const nodeReport = campaignV3NodeReport(rawNodes);
     const firstTwentyNodes = campaignV3NodeReport(rawNodes, 20);
     const diagnosticBase = {
@@ -5661,6 +5733,7 @@ async function debugRunCampaignV3AI(setupOverride = {}) {
       nodeCount: rawNodes.length,
       normalizedNodeCount: normalizedNodes.length,
       emailNormalization: emailNormalization.diagnostics,
+      landingFallback: landingNormalization.diagnostics,
       firstTwentyNodes
     };
 
@@ -5669,6 +5742,7 @@ async function debugRunCampaignV3AI(setupOverride = {}) {
     logCampaignV3AIDiagnostics("Expected V3 counts", diagnosticBase.expectedCounts);
     logCampaignV3AIDiagnostics("Actual AI counts grouped by type", diagnosticBase.actualCountsByType);
     logCampaignV3AIDiagnostics("Email Campaign normalization", diagnosticBase.emailNormalization);
+    logCampaignV3AIDiagnostics("Landing Page fallback normalization", diagnosticBase.landingFallback);
     logCampaignV3AIDiagnostics("Normalized counts grouped by type", diagnosticBase.normalizedCountsByType);
     logCampaignV3AIDiagnostics("Actual AI counts grouped by subtype", diagnosticBase.actualCountsBySubtype);
     logCampaignV3AIDiagnostics("First 20 returned nodes", firstTwentyNodes);
