@@ -5072,7 +5072,7 @@ const CAMPAIGN_CHAIN_TYPES = [
   "Email Campaign"
 ];
 
-const CAMPAIGN_V3_ENABLED = false;
+const CAMPAIGN_V3_ENABLED = true;
 
 function isCampaignV3Enabled() {
   return CAMPAIGN_V3_ENABLED === true;
@@ -5953,7 +5953,7 @@ function openCampaignV3Modal() {
     </div>
     <p data-campaign-v3-status style="min-height: 1.4em; margin: 4px 0 0; color: #6b5dd3; font-weight: 700;"></p>
     <p data-campaign-v3-error style="min-height: 1.4em; margin: 0; color: #d64545; font-weight: 700;"></p>
-    <div class="campaign-builder-actions"><button type="button" id="campaign-v3-cancel">Cancel</button><button type="button" id="campaign-v3-generate" class="primary-add">Generate Campaign</button></div>
+    <div class="campaign-builder-actions"><button type="button" id="campaign-v3-legacy">Use legacy generator</button><button type="button" id="campaign-v3-cancel">Cancel</button><button type="button" id="campaign-v3-generate" class="primary-add">Generate Campaign</button></div>
   </div>`;
   document.body.appendChild(overlay);
 
@@ -5963,6 +5963,10 @@ function openCampaignV3Modal() {
     if (!force && overlay.dataset.campaignV3Busy === "true") return;
     overlay.remove();
   };
+  overlay.querySelector("#campaign-v3-legacy")?.addEventListener("click", () => {
+    closeModal(true);
+    openCreateCampaignModal();
+  });
   overlay.querySelector("#campaign-v3-cancel")?.addEventListener("click", () => closeModal());
   overlay.addEventListener("click", (event) => { if (event.target === overlay) closeModal(); });
 
@@ -6008,6 +6012,7 @@ if (typeof window !== "undefined") {
   window.debugRunCampaignV3Mock = debugRunCampaignV3Mock;
   window.debugRunCampaignV3AI = debugRunCampaignV3AI;
   window.debugOpenCampaignV3Modal = openCampaignV3Modal;
+  window.debugOpenLegacyCampaignModal = openCreateCampaignModal;
 }
 
 function campaignEstimate(setup = {}) {
