@@ -5080,7 +5080,7 @@ function isCampaignV3Enabled() {
 
 function openCampaignGeneratorEntry() {
   if (isCampaignV3Enabled()) {
-    return debugRunCampaignV3Mock();
+    return openCampaignV3Modal();
   }
   return openCreateCampaignModal();
 }
@@ -5765,7 +5765,7 @@ function debugRunCampaignV3Mock() {
   return { planResult, layoutResult, commitResult, adapter };
 }
 
-async function debugRunCampaignV3AI(setupOverride = {}) {
+async function runCampaignV3AICompatibility(setupOverride = {}, options = {}) {
   const campaignV3 = getCampaignV3Api();
   if (!campaignV3) {
     console.error("[Funklix Campaign Generator V3 AI] campaign-v3.js is not loaded.");
@@ -5778,12 +5778,15 @@ async function debugRunCampaignV3AI(setupOverride = {}) {
   }
 
   const setup = defaultCampaignV3AISetup(setupOverride);
+  const reportStatus = typeof options.onStatus === "function" ? options.onStatus : () => {};
+  reportStatus("Analyzing Strategy...");
   logCampaignV3AIDiagnostics("Starting AI compatibility flow with Email, primary/social over-count, and Landing Page fallback normalization.", {
     setup,
     featureFlagEnabled: isCampaignV3Enabled()
   });
 
   try {
+    reportStatus("Generating Campaign...");
     const apiPlan = await fetchGeneratedCampaignPlan(setup.campaignIdea, setup.additionalContext, setup);
     const rawNodes = Array.isArray(apiPlan?.nodes) ? apiPlan.nodes : [];
     const emailNormalization = normalizeCampaignV3AIEmailNodes(rawNodes);
@@ -5820,6 +5823,7 @@ async function debugRunCampaignV3AI(setupOverride = {}) {
     logCampaignV3AIDiagnostics("Actual AI counts grouped by subtype", diagnosticBase.actualCountsBySubtype);
     logCampaignV3AIDiagnostics("First 20 returned nodes", firstTwentyNodes);
 
+    reportStatus("Building Canvas...");
     const planResult = campaignV3.buildCampaignV3PlanFromNodes(normalizedNodes, setup);
     const failedRules = planResult.ok ? [] : planResult.diagnostics.map((diagnostic) => diagnostic.code);
     const planDiagnostics = {
@@ -5871,9 +5875,139 @@ async function debugRunCampaignV3AI(setupOverride = {}) {
   }
 }
 
+
+function centerViewportOnCampaignV3Result(result = {}) {
+  const createdEntries = result?.commitResult?.createdNodes || result?.adapter?.committedNodes || [];
+  const createdNodes = createdEntries
+    .map((entry) => entry?.node || entry)
+    .filter((node) => node && node.position && Number.isFinite(node.position.x) && Number.isFinite(node.position.y));
+  if (!createdNodes.length || !el.canvas) return;
+
+  const bounds = createdNodes.reduce((nextBounds, node) => ({
+    minX: Math.min(nextBounds.minX, node.position.x),
+    minY: Math.min(nextBounds.minY, node.position.y),
+    maxX: Math.max(nextBounds.maxX, node.position.x + NODE_WIDTH),
+    maxY: Math.max(nextBounds.maxY, node.position.y + NODE_HEIGHT)
+  }), { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity });
+
+  if (!Number.isFinite(bounds.minX) || !Number.isFinite(bounds.minY) || !Number.isFinite(bounds.maxX) || !Number.isFinite(bounds.maxY)) return;
+  const centerX = (bounds.minX + bounds.maxX) / 2;
+  const centerY = (bounds.minY + bounds.maxY) / 2;
+  el.canvas.scrollLeft = Math.max(0, centerX * state.zoom - el.canvas.clientWidth / 2);
+  el.canvas.scrollTop = Math.max(0, centerY * state.zoom - el.canvas.clientHeight / 2);
+}
+
+function setCampaignV3ModalBusy(overlay, busy) {
+  overlay.dataset.campaignV3Busy = busy ? "true" : "false";
+  overlay.querySelectorAll("input, textarea, select, button").forEach((control) => {
+    control.disabled = busy;
+  });
+}
+
+function campaignV3ModalSetupFromInputs(overlay) {
+  return defaultCampaignV3AISetup({
+    campaignIdea: overlay.querySelector("#campaign-v3-idea")?.value,
+    additionalContext: overlay.querySelector("#campaign-v3-context")?.value,
+    variationCount: overlay.querySelector("#campaign-v3-variations")?.value,
+    postsPerVariation: overlay.querySelector("#campaign-v3-posts")?.value,
+    channel: overlay.querySelector("#campaign-v3-channel")?.value,
+    includeLandingPage: overlay.querySelector("#campaign-v3-include-landing")?.checked,
+    includeEmailCampaign: overlay.querySelector("#campaign-v3-include-email")?.checked
+  });
+}
+
+function openCampaignV3Modal() {
+  const overlay = document.createElement("div");
+  overlay.className = "campaign-builder-overlay";
+  overlay.innerHTML = `<div class="campaign-builder-modal">
+    <div class="campaign-builder-hero">
+      <span class="campaign-builder-kicker">Campaign Generator V3</span>
+      <h3>Generate Campaign (V3)</h3>
+      <p>Use the feature-flagged V3 AI compatibility flow to build a deterministic campaign funnel on the canvas.</p>
+    </div>
+    <label class="campaign-builder-field campaign-builder-field-full">
+      <span>Campaign Idea</span>
+      <textarea id="campaign-v3-idea" rows="5" placeholder="Describe the campaign goal, offer, ICP, launch, or product story...">Promote a premium networking experience for C-level executives.</textarea>
+    </label>
+    <label class="campaign-builder-field campaign-builder-field-full">
+      <span>Additional Context</span>
+      <textarea id="campaign-v3-context" rows="3" placeholder="Optional constraints, audience details, positioning, timing...">Focus on trust, exclusivity, meaningful business relationships, and high-quality leads.</textarea>
+    </label>
+    <label class="campaign-builder-field campaign-builder-field-full">
+      <span>Channel</span>
+      <select id="campaign-v3-channel"><option>LinkedIn</option><option>X</option><option>Instagram</option><option>TikTok</option><option>Mixed</option></select>
+    </label>
+    <div class="campaign-builder-grid">
+      <label class="campaign-builder-field">
+        <span>Variations</span>
+        <input id="campaign-v3-variations" type="number" min="1" max="10" value="3" />
+      </label>
+      <label class="campaign-builder-field">
+        <span>Posts per Variation</span>
+        <input id="campaign-v3-posts" type="number" min="1" max="20" value="3" />
+      </label>
+    </div>
+    <div class="campaign-builder-grid">
+      <label class="campaign-builder-toggle"><input id="campaign-v3-include-landing" type="checkbox" checked /><span><strong>Landing Page</strong><small>Include Landing Page</small></span></label>
+      <label class="campaign-builder-toggle"><input id="campaign-v3-include-email" type="checkbox" checked /><span><strong>Email Campaign</strong><small>Include Email Campaign</small></span></label>
+    </div>
+    <p data-campaign-v3-status style="min-height: 1.4em; margin: 4px 0 0; color: #6b5dd3; font-weight: 700;"></p>
+    <p data-campaign-v3-error style="min-height: 1.4em; margin: 0; color: #d64545; font-weight: 700;"></p>
+    <div class="campaign-builder-actions"><button type="button" id="campaign-v3-cancel">Cancel</button><button type="button" id="campaign-v3-generate" class="primary-add">Generate Campaign</button></div>
+  </div>`;
+  document.body.appendChild(overlay);
+
+  const statusEl = overlay.querySelector("[data-campaign-v3-status]");
+  const errorEl = overlay.querySelector("[data-campaign-v3-error]");
+  const closeModal = (force = false) => {
+    if (!force && overlay.dataset.campaignV3Busy === "true") return;
+    overlay.remove();
+  };
+  overlay.querySelector("#campaign-v3-cancel")?.addEventListener("click", () => closeModal());
+  overlay.addEventListener("click", (event) => { if (event.target === overlay) closeModal(); });
+
+  overlay.querySelector("#campaign-v3-generate")?.addEventListener("click", async () => {
+    const setup = campaignV3ModalSetupFromInputs(overlay);
+    if (!setup.campaignIdea) {
+      errorEl.textContent = "Campaign generation failed. Please try again.";
+      return;
+    }
+
+    errorEl.textContent = "";
+    statusEl.textContent = "Analyzing Strategy...";
+    setCampaignV3ModalBusy(overlay, true);
+    setActiveView("board");
+    toggleListMode(false);
+
+    const result = await runCampaignV3AICompatibility(setup, {
+      onStatus: (message) => {
+        statusEl.textContent = message;
+      }
+    });
+
+    if (result?.ok) {
+      closeModal(true);
+      centerViewportOnCampaignV3Result(result);
+      setSaveStatus("Campaign generated successfully.");
+      return;
+    }
+
+    setCampaignV3ModalBusy(overlay, false);
+    statusEl.textContent = "";
+    errorEl.textContent = "Campaign generation failed. Please try again.";
+  });
+
+  return overlay;
+}
+
+async function debugRunCampaignV3AI(setupOverride = {}) {
+  return runCampaignV3AICompatibility(setupOverride);
+}
+
 if (typeof window !== "undefined") {
   window.debugRunCampaignV3Mock = debugRunCampaignV3Mock;
   window.debugRunCampaignV3AI = debugRunCampaignV3AI;
+  window.debugOpenCampaignV3Modal = openCampaignV3Modal;
 }
 
 function campaignEstimate(setup = {}) {
