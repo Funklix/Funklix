@@ -5586,6 +5586,36 @@ function normalizeCampaignV3AIPrimaryOvercounts(nodes = [], setup = {}) {
   };
 }
 
+function normalizeCampaignV3AISocialOvercounts(nodes = [], setup = {}) {
+  const sourceNodes = Array.isArray(nodes) ? nodes : [];
+  const normalized = normalizeCampaignSetupOptions(setup);
+  const expectedSocialCount = normalized.variationCount * normalized.postsPerVariation;
+  const keptSocials = [];
+  const discardedSocialTitles = [];
+
+  const normalizedNodes = sourceNodes.filter((node) => {
+    const type = cleanCampaignField(node?.type);
+    if (type !== "Social Media Posting") return true;
+    if (keptSocials.length < expectedSocialCount) {
+      keptSocials.push(node);
+      return true;
+    }
+    discardedSocialTitles.push(cleanCampaignField(node?.title) || `Social Media Posting ${keptSocials.length + discardedSocialTitles.length + 1}`);
+    return false;
+  });
+
+  return {
+    nodes: normalizedNodes,
+    diagnostics: {
+      originalSocialCount: sourceNodes.filter((node) => cleanCampaignField(node?.type) === "Social Media Posting").length,
+      expectedSocialCount,
+      keptSocialTitles: keptSocials.map((node) => cleanCampaignField(node.title)),
+      discardedSocialTitles,
+      normalizedCounts: campaignV3NodeCounts(normalizedNodes)
+    }
+  };
+}
+
 function buildCampaignV3FallbackLandingNode(nodes = [], setup = {}) {
   const ideaNode = (Array.isArray(nodes) ? nodes : []).find((node) => cleanCampaignField(node?.type) === "Idea") || {};
   const variationTitles = (Array.isArray(nodes) ? nodes : [])
@@ -5748,7 +5778,7 @@ async function debugRunCampaignV3AI(setupOverride = {}) {
   }
 
   const setup = defaultCampaignV3AISetup(setupOverride);
-  logCampaignV3AIDiagnostics("Starting AI compatibility flow with Email, primary over-count, and Landing Page fallback normalization.", {
+  logCampaignV3AIDiagnostics("Starting AI compatibility flow with Email, primary/social over-count, and Landing Page fallback normalization.", {
     setup,
     featureFlagEnabled: isCampaignV3Enabled()
   });
@@ -5758,7 +5788,8 @@ async function debugRunCampaignV3AI(setupOverride = {}) {
     const rawNodes = Array.isArray(apiPlan?.nodes) ? apiPlan.nodes : [];
     const emailNormalization = normalizeCampaignV3AIEmailNodes(rawNodes);
     const primaryNormalization = normalizeCampaignV3AIPrimaryOvercounts(emailNormalization.nodes, setup);
-    const landingNormalization = normalizeCampaignV3AILandingFallback(primaryNormalization.nodes, setup);
+    const socialNormalization = normalizeCampaignV3AISocialOvercounts(primaryNormalization.nodes, setup);
+    const landingNormalization = normalizeCampaignV3AILandingFallback(socialNormalization.nodes, setup);
     const normalizedNodes = landingNormalization.nodes;
     const nodeReport = campaignV3NodeReport(rawNodes);
     const firstTwentyNodes = campaignV3NodeReport(rawNodes, 20);
@@ -5772,6 +5803,7 @@ async function debugRunCampaignV3AI(setupOverride = {}) {
       normalizedNodeCount: normalizedNodes.length,
       emailNormalization: emailNormalization.diagnostics,
       primaryNormalization: primaryNormalization.diagnostics,
+      socialNormalization: socialNormalization.diagnostics,
       landingFallback: landingNormalization.diagnostics,
       firstTwentyNodes
     };
@@ -5782,6 +5814,7 @@ async function debugRunCampaignV3AI(setupOverride = {}) {
     logCampaignV3AIDiagnostics("Actual AI counts grouped by type", diagnosticBase.actualCountsByType);
     logCampaignV3AIDiagnostics("Email Campaign normalization", diagnosticBase.emailNormalization);
     logCampaignV3AIDiagnostics("Idea / Campaign Variation / Content over-count normalization", diagnosticBase.primaryNormalization);
+    logCampaignV3AIDiagnostics("Social Media Posting over-count normalization", diagnosticBase.socialNormalization);
     logCampaignV3AIDiagnostics("Landing Page fallback normalization", diagnosticBase.landingFallback);
     logCampaignV3AIDiagnostics("Normalized counts grouped by type", diagnosticBase.normalizedCountsByType);
     logCampaignV3AIDiagnostics("Actual AI counts grouped by subtype", diagnosticBase.actualCountsBySubtype);
