@@ -118,19 +118,43 @@ Content:
 - Content nodes must not read like a social caption, hook post, thread, or short promotional post.
 - Content nodes must not simply restate the Campaign Variation angle; they must translate the angle into a reusable campaign asset.
 - Content nodes must not be titled Hook Post, Problem Post, Story Post, Authority Post, Objection Post, CTA Post, or any other social post purpose.
-- In description/content, include these clearly labeled sections:
-  - Format:
-  - Core Thesis:
-  - Audience Pain:
-  - Key Message Points:
-  - Proof / Credibility Approach:
-  - CTA:
-  - Repurposing Guidance for Social Posts:
+- In content, use this exact plain-text structure with line breaks so it is readable in a textarea:
+  Format:
+  ...
+
+  Core Thesis:
+  ...
+
+  Audience Pain:
+  ...
+
+  Key Message Points:
+  - ...
+  - ...
+  - ...
+
+  Proof / Credibility Approach:
+  ...
+
+  CTA:
+  ...
+
+  Repurposing Guidance for Social Posts:
+  - Hook Post: ...
+  - Problem Post: ...
+  - Story Post: ...
+- Use simple plain-text labels and bullet points only.
+- No markdown bold, no double asterisks, and no markdown tables.
 - Repurposing Guidance for Social Posts must explain how the child Social Media Posting nodes should draw from this pillar asset without duplicating each other.
 - Include imagePrompt shaped by Brand Brain visual style and archetype guidance.
 
 Social Media Posting:
 - social.caption must contain the FULL publish-ready post copy.
+- social.caption must begin with the post hook or opening line, not hashtags.
+- Do not place hashtags at the beginning of social.caption.
+- Prefer no hashtags inside social.caption.
+- If hashtags appear in social.caption, they must be at the very end after the CTA, never before the body.
+- social.hashtags should contain clean comma-separated campaign hashtags.
 - content must contain only a short one-sentence summary of the post purpose.
 - Do not put the full post in content; put the full post in social.caption.
 - Hashtags should be clean campaign hashtags, not full sentences.
