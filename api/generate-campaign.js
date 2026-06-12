@@ -212,7 +212,15 @@ For non-LinkedIn channels:
 - Do not return only 1-2 sentence summaries for LinkedIn posts.
 
 Landing Page:
-- headerVisualPrompt, headerClaim, problem, solution, trust, cta.
+- Landing pages should read like real conversion pages, not campaign summaries.
+- headerVisualPrompt: concrete hero visual direction aligned with the offer, audience, Brand Brain visual style, and campaign angle.
+- headerClaim: a real landing page headline, 5-15 words, benefit-oriented, and not a summary of the campaign idea.
+- Bad headerClaim example: "Promote a premium networking experience for C-level executives".
+- Good headerClaim example: "Exclusive Networking for Growth-Focused Executives".
+- problem: describe the audience pain point in 1-3 sentences.
+- solution: describe the offer in 1-3 sentences.
+- trust: credibility-focused copy using social proof, expertise, exclusivity, authority, results, or experience when provided by Brand Brain/context. Do not repeat the problem or solution.
+- cta: action-oriented button-style language, 2-6 words.
 - Do not fabricate proof, metrics, testimonials, or brand facts.
 
 Email Campaign:
