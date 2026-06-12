@@ -148,6 +148,7 @@ const state = {
   ,activityCollapsed: false
   ,lastSeenActivityAt: 0
   ,commentThreadsOpenedByNode: new Set()
+  ,aiReviewFixPreviews: {}
 };
 
 const el = {
@@ -195,6 +196,8 @@ const el = {
   picker: document.getElementById("node-type-picker"),
   pickerOptions: document.getElementById("node-type-options"),
   inspectorMeta: document.getElementById("inspector-meta"),
+  aiWorkspaceSection: document.getElementById("ai-workspace-section"),
+  aiWorkspaceBody: document.getElementById("ai-workspace-body"),
   nodeForm: document.getElementById("node-form"),
   socialFields: document.getElementById("social-fields"),
   contentUploadFields: document.getElementById("content-upload-fields"),
@@ -5021,34 +5024,29 @@ function addEdge(fromId, toId) {
   drawLinks();
 }
 
-function buildGeneratedCampaignPlan(ideaText, contextText) {
-  const brand = state.brandCore || {};
-  const tone = Array.isArray(brand.toneOfVoice) ? brand.toneOfVoice.slice(0, 2).join(", ") : "";
-  const pillar = Array.isArray(brand.messagingPillars) ? brand.messagingPillars[0] || "" : "";
-  const context = [contextText, brand.valueProposition, pillar].filter(Boolean).join(" · ");
-  const baseTitle = ideaText || "Campaign Idea";
+function normalizeCampaignSetupOptions(options = {}) {
+  const clamp = (value, fallback, min, max) => {
+    const number = Number.parseInt(value, 10);
+    if (!Number.isFinite(number)) return fallback;
+    return Math.max(min, Math.min(max, number));
+  };
+  const channel = ["LinkedIn", "X", "Instagram", "TikTok", "Mixed"].includes(options.channel) ? options.channel : "LinkedIn";
   return {
-    idea: { title: baseTitle, content: context || "Core campaign direction." },
-    varA: { title: `${baseTitle} – Variation A`, content: `Angle: ${tone || "Direct and clear"} narrative` },
-    varB: { title: `${baseTitle} – Variation B`, content: `Angle: ${pillar || "Benefit-led"} storytelling` },
-    contentA: { title: "Hero Content A", content: `Main message: ${baseTitle}` },
-    contentB: { title: "Hero Content B", content: `Alternative hook for ${baseTitle}` },
-    socialA: { title: "Social Post A", content: `CTA focused on ${baseTitle}` },
-    socialB: { title: "Social Post B", content: `Community engagement for ${baseTitle}` },
-    landing: { title: "Landing Page", content: `Conversion destination for ${baseTitle}` },
-    landingPageStructured: {
-      headerVisualPrompt: `16:9 hero visual for ${baseTitle}, modern clean style, confident and trustworthy mood`,
-      headerClaim: `${baseTitle}: clearer campaigns, stronger results`,
-      problemOfIcp: "Teams struggle to ship consistent, high-performing campaign assets quickly.",
-      solutionForIcp: `Use ${baseTitle} messaging and assets to launch with clarity and speed.`,
-      buildingTrust: "Trusted by teams looking for clearer, more effective campaign execution.",
-      conversionCta: "Get started"
-    },
-    email: { title: "Email Campaign", content: `Nurture sequence for ${baseTitle}` }
+    variationCount: clamp(options.variationCount, 3, 1, 10),
+    postsPerVariation: clamp(options.postsPerVariation, 5, 1, 20),
+    includeLandingPage: options.includeLandingPage !== false,
+    includeEmailCampaign: options.includeEmailCampaign !== false,
+    channel
   };
 }
 
-async function fetchGeneratedCampaignPlan(ideaText, contextText) {
+function expectedCampaignNodeCount(setup = {}) {
+  const normalized = normalizeCampaignSetupOptions(setup);
+  return 1 + normalized.variationCount * (2 + normalized.postsPerVariation + (normalized.includeLandingPage ? 1 : 0) + (normalized.includeEmailCampaign ? 1 : 0));
+}
+
+async function fetchGeneratedCampaignPlan(ideaText, contextText, setupOptions = {}) {
+  const setup = normalizeCampaignSetupOptions(setupOptions);
   const response = await fetch("/api/generate-campaign", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -5056,7 +5054,8 @@ async function fetchGeneratedCampaignPlan(ideaText, contextText) {
       campaignIdea: ideaText,
       additionalContext: contextText,
       boardId: getCurrentBrandBrainBoardId(),
-      brandBrainData: state.brandCore
+      brandBrainData: state.brandCore,
+      ...setup
     })
   });
   if (!response.ok) throw new Error("Generation request failed");
@@ -5072,24 +5071,29 @@ const CAMPAIGN_CHAIN_TYPES = [
   "Email Campaign"
 ];
 
-const CAMPAIGN_CHAIN_EDGES = [
-  { fromIndex: 0, toIndex: 1 },
-  { fromIndex: 1, toIndex: 2 },
-  { fromIndex: 2, toIndex: 3 },
-  { fromIndex: 3, toIndex: 4 },
-  { fromIndex: 4, toIndex: 5 }
-];
+const CAMPAIGN_V3_ENABLED = false;
+
+function isCampaignV3Enabled() {
+  return CAMPAIGN_V3_ENABLED === true;
+}
+
+function openCampaignGeneratorEntry() {
+  if (isCampaignV3Enabled()) {
+    return debugRunCampaignV3Mock();
+  }
+  return openCreateCampaignModal();
+}
 
 const CAMPAIGN_WORKER_STATUS = {
   "Idea": "🧠 Strategist is shaping the idea...",
-  "Campaign Variation": "🎯 Strategist is finding the strongest angle...",
-  "Content": "✍️ Copywriter is drafting the content...",
-  "Social Media Posting": "📱 Social editor is adapting it for the feed...",
+  "Campaign Variation": "🎯 Strategist is finding a distinct angle...",
+  "Content": "✍️ Copywriter is drafting the hero content...",
+  "Social Media Posting": "📱 Social editor is creating diverse post ideas...",
   "Landing Page": "🧱 Funnel builder is creating the landing page...",
   "Email Campaign": "📧 CRM writer is preparing the follow-up email..."
 };
 
-function waitForCampaignWorker(ms = 650) {
+function waitForCampaignWorker(ms = 420) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
@@ -5103,20 +5107,62 @@ function cleanCampaignField(value = "") {
     .trim();
 }
 
-function validateGeneratedCampaignPlan(plan = {}) {
+function canonicalizeCampaignPlanNodes(nodes = [], setup = {}) {
+  const normalized = normalizeCampaignSetupOptions(setup);
+  const grouped = CAMPAIGN_CHAIN_TYPES.reduce((groups, type) => {
+    groups[type] = [];
+    return groups;
+  }, {});
+
+  nodes.forEach((node) => {
+    if (grouped[node?.type]) grouped[node.type].push(node);
+  });
+
+  const expectedCounts = {
+    Idea: 1,
+    "Campaign Variation": normalized.variationCount,
+    Content: normalized.variationCount,
+    "Social Media Posting": normalized.variationCount * normalized.postsPerVariation,
+    "Landing Page": normalized.includeLandingPage ? normalized.variationCount : 0,
+    "Email Campaign": normalized.includeEmailCampaign ? normalized.variationCount : 0
+  };
+
+  Object.entries(expectedCounts).forEach(([type, expected]) => {
+    const actual = grouped[type]?.length || 0;
+    if (actual !== expected) {
+      throw new Error(`Campaign plan must include exactly ${expected} ${type} node${expected === 1 ? "" : "s"}; received ${actual}.`);
+    }
+  });
+
+  const canonicalNodes = [grouped.Idea[0]];
+  for (let lane = 0; lane < normalized.variationCount; lane += 1) {
+    const socialStart = lane * normalized.postsPerVariation;
+    canonicalNodes.push(grouped["Campaign Variation"][lane]);
+    canonicalNodes.push(grouped.Content[lane]);
+    canonicalNodes.push(...grouped["Social Media Posting"].slice(socialStart, socialStart + normalized.postsPerVariation));
+    if (normalized.includeLandingPage) canonicalNodes.push(grouped["Landing Page"][lane]);
+    if (normalized.includeEmailCampaign) canonicalNodes.push(grouped["Email Campaign"][lane]);
+  }
+
+  return canonicalNodes;
+}
+
+function validateGeneratedCampaignPlan(plan = {}, setupOptions = {}) {
+  const setup = normalizeCampaignSetupOptions(plan.setup || setupOptions);
   const nodes = Array.isArray(plan.nodes) ? plan.nodes : [];
   const edges = Array.isArray(plan.edges) ? plan.edges : [];
-  if (nodes.length !== CAMPAIGN_CHAIN_TYPES.length) {
-    throw new Error("Campaign plan must include exactly six nodes.");
+  const expectedNodes = expectedCampaignNodeCount(setup);
+  if (nodes.length !== expectedNodes) {
+    throw new Error(`Campaign plan must include exactly ${expectedNodes} nodes.`);
   }
   const normalizedNodes = nodes.map((node, index) => {
-    const expectedType = CAMPAIGN_CHAIN_TYPES[index];
-    if (node?.type !== expectedType) {
-      throw new Error(`Campaign node ${index + 1} must be ${expectedType}.`);
+    const type = cleanCampaignField(node?.type);
+    if (!CAMPAIGN_CHAIN_TYPES.includes(type)) {
+      throw new Error(`Campaign node ${index + 1} has unsupported type ${type || "(empty)"}.`);
     }
     return {
-      type: expectedType,
-      title: cleanCampaignField(node.title) || expectedType,
+      type,
+      title: cleanCampaignField(node.title) || type,
       description: cleanCampaignField(node.description),
       content: cleanCampaignField(node.content),
       metadata: node.metadata && typeof node.metadata === "object" ? node.metadata : {},
@@ -5125,12 +5171,14 @@ function validateGeneratedCampaignPlan(plan = {}) {
       landingPage: node.landingPage && typeof node.landingPage === "object" ? node.landingPage : {}
     };
   });
-  const expectedEdgeKey = CAMPAIGN_CHAIN_EDGES.map((edge) => `${edge.fromIndex}->${edge.toIndex}`).join("|");
-  const edgeKey = edges.map((edge) => `${edge?.fromIndex}->${edge?.toIndex}`).join("|");
-  if (edgeKey !== expectedEdgeKey) {
-    throw new Error("Campaign plan must include the standard linear chain edges.");
-  }
-  return { nodes: normalizedNodes, edges: CAMPAIGN_CHAIN_EDGES };
+  const canonicalNodes = canonicalizeCampaignPlanNodes(normalizedNodes, setup);
+  edges.forEach((edge) => {
+    if (!Number.isInteger(edge?.fromIndex) || !Number.isInteger(edge?.toIndex)) throw new Error("Campaign edges must use numeric indexes.");
+    if (edge.fromIndex < 0 || edge.fromIndex >= normalizedNodes.length || edge.toIndex < 0 || edge.toIndex >= normalizedNodes.length) {
+      throw new Error("Campaign edge index is out of range.");
+    }
+  });
+  return { nodes: canonicalNodes, edges: deriveCampaignFunnelEdges(canonicalNodes, setup), setup };
 }
 
 function applyGeneratedCampaignNodePayload(node, payload = {}, previousNode = null) {
@@ -5174,22 +5222,32 @@ function applyGeneratedCampaignNodePayload(node, payload = {}, previousNode = nu
   }
 }
 
-const CAMPAIGN_CHAIN_X_STEP = 420;
-const CAMPAIGN_CHAIN_PADDING = 420;
+const CAMPAIGN_V2_X = {
+  idea: 0,
+  variation: 360,
+  content: 720,
+  social: 1080,
+  landing: 1440,
+  email: 1800
+};
+const CAMPAIGN_V2_ROW_GAP = 260;
+const CAMPAIGN_V2_ITEM_GAP = 176;
+const CAMPAIGN_V2_PADDING = 420;
 
-function campaignNodePosition(index, origin = { x: 220, y: 150 }) {
-  return {
-    x: origin.x + index * CAMPAIGN_CHAIN_X_STEP,
-    y: origin.y
-  };
+function campaignPlanRowHeight(setup = {}) {
+  const normalized = normalizeCampaignSetupOptions(setup);
+  return Math.max(CAMPAIGN_V2_ROW_GAP, normalized.postsPerVariation * CAMPAIGN_V2_ITEM_GAP + 80);
 }
 
-function campaignChainRect(origin) {
+function campaignPlanRect(origin, setup = {}) {
+  const normalized = normalizeCampaignSetupOptions(setup);
+  const rowHeight = campaignPlanRowHeight(normalized);
+  const maxX = normalized.includeEmailCampaign ? CAMPAIGN_V2_X.email : normalized.includeLandingPage ? CAMPAIGN_V2_X.landing : CAMPAIGN_V2_X.social;
   return {
     minX: origin.x,
     minY: origin.y,
-    maxX: origin.x + NODE_WIDTH + (CAMPAIGN_CHAIN_TYPES.length - 1) * CAMPAIGN_CHAIN_X_STEP,
-    maxY: origin.y + NODE_HEIGHT + 180
+    maxX: origin.x + maxX + NODE_WIDTH + 220,
+    maxY: origin.y + Math.max(NODE_HEIGHT + 200, normalized.variationCount * rowHeight + 220)
   };
 }
 
@@ -5209,44 +5267,134 @@ function campaignRectOverlapsExisting(rect, padding = 80) {
   });
 }
 
-function calculateCampaignChainOrigin() {
+function calculateCampaignPlanOrigin(setup = {}) {
   const visible = visibleBoardBounds();
-  const chainWidth = NODE_WIDTH + (CAMPAIGN_CHAIN_TYPES.length - 1) * CAMPAIGN_CHAIN_X_STEP;
-  const chainHeight = NODE_HEIGHT + 180;
+  const rectAt = (origin) => campaignPlanRect(origin, setup);
+  const sampleRect = rectAt({ x: 0, y: 0 });
+  const planWidth = sampleRect.maxX - sampleRect.minX;
+  const planHeight = sampleRect.maxY - sampleRect.minY;
   const visibleOrigin = clampNodePosition(
-    visible.left + Math.max(80, (visible.width - chainWidth) / 2),
-    visible.top + Math.max(80, (visible.height - chainHeight) / 2)
+    visible.left + Math.max(80, (visible.width - planWidth) / 2),
+    visible.top + Math.max(80, (visible.height - Math.min(planHeight, visible.height)) / 2)
   );
   if (!state.nodes.length) return visibleOrigin;
 
-  const visibleRect = campaignChainRect(visibleOrigin);
-  const viewportHasRoom = visible.width >= chainWidth + 160 && visible.height >= chainHeight + 120;
-  if (viewportHasRoom && !campaignRectOverlapsExisting(visibleRect, 120)) return visibleOrigin;
+  const viewportHasRoom = visible.width >= Math.min(planWidth, visible.width) * 0.75 && visible.height >= Math.min(planHeight, visible.height) * 0.45;
+  if (viewportHasRoom && !campaignRectOverlapsExisting(rectAt(visibleOrigin), 120)) return visibleOrigin;
 
   const bounds = getBoardContentBounds({ includeMargin: 0 });
   if (!bounds) return visibleOrigin;
 
-  const rightOrigin = clampNodePosition(bounds.maxX + CAMPAIGN_CHAIN_PADDING, Math.max(120, bounds.minY));
-  if (!campaignRectOverlapsExisting(campaignChainRect(rightOrigin), 120)) return rightOrigin;
+  const rightOrigin = clampNodePosition(bounds.maxX + CAMPAIGN_V2_PADDING, Math.max(120, bounds.minY));
+  if (!campaignRectOverlapsExisting(rectAt(rightOrigin), 120)) return rightOrigin;
 
-  return clampNodePosition(Math.max(120, bounds.minX), bounds.maxY + CAMPAIGN_CHAIN_PADDING);
+  return clampNodePosition(Math.max(120, bounds.minX), bounds.maxY + CAMPAIGN_V2_PADDING);
 }
 
-async function generateCampaignChainProgressively(plan, { onStatus = null } = {}) {
-  const validated = validateGeneratedCampaignPlan(plan);
+function deriveCampaignStructure(nodes = [], setup = {}) {
+  const normalized = normalizeCampaignSetupOptions(setup);
+  const indexesByType = CAMPAIGN_CHAIN_TYPES.reduce((groups, type) => {
+    groups[type] = [];
+    return groups;
+  }, {});
+  nodes.forEach((node, index) => {
+    if (indexesByType[node?.type]) indexesByType[node.type].push(index);
+  });
+
+  const ideaIndex = indexesByType.Idea[0];
+  if (!Number.isInteger(ideaIndex)) return [];
+
+  const variations = [];
+  for (let row = 0; row < normalized.variationCount; row += 1) {
+    const variationIndex = indexesByType["Campaign Variation"][row];
+    const contentIndex = indexesByType.Content[row];
+    const socialStart = row * normalized.postsPerVariation;
+    const socialIndexes = indexesByType["Social Media Posting"].slice(socialStart, socialStart + normalized.postsPerVariation);
+    const landingIndex = normalized.includeLandingPage ? indexesByType["Landing Page"][row] : null;
+    const emailIndex = normalized.includeEmailCampaign ? indexesByType["Email Campaign"][row] : null;
+    if (!Number.isInteger(variationIndex) || !Number.isInteger(contentIndex) || socialIndexes.length !== normalized.postsPerVariation) continue;
+    if (normalized.includeLandingPage && !Number.isInteger(landingIndex)) continue;
+    if (normalized.includeEmailCampaign && !Number.isInteger(emailIndex)) continue;
+    variations.push({ row, ideaIndex, variationIndex, contentIndex, socialIndexes, landingIndex, emailIndex });
+  }
+  return variations;
+}
+function deriveCampaignFunnelEdges(nodes = [], setup = {}) {
+  const edges = [];
+  deriveCampaignStructure(nodes, setup).forEach((variation) => {
+    edges.push({ fromIndex: variation.ideaIndex, toIndex: variation.variationIndex });
+    edges.push({ fromIndex: variation.variationIndex, toIndex: variation.contentIndex });
+    variation.socialIndexes.forEach((socialIndex) => {
+      if (!nodes[socialIndex]) return;
+      edges.push({ fromIndex: variation.contentIndex, toIndex: socialIndex });
+      if (variation.landingIndex !== null && nodes[variation.landingIndex]) edges.push({ fromIndex: socialIndex, toIndex: variation.landingIndex });
+      else if (variation.emailIndex !== null && nodes[variation.emailIndex]) edges.push({ fromIndex: socialIndex, toIndex: variation.emailIndex });
+    });
+    if (variation.landingIndex !== null && variation.emailIndex !== null && nodes[variation.landingIndex] && nodes[variation.emailIndex]) {
+      edges.push({ fromIndex: variation.landingIndex, toIndex: variation.emailIndex });
+    }
+  });
+  return edges;
+}
+
+function calculateCampaignNodePositions(nodes = [], origin, setup = {}) {
+  const normalized = normalizeCampaignSetupOptions(setup);
+  const rowHeight = campaignPlanRowHeight(normalized);
+  const positions = new Map();
+  const structure = deriveCampaignStructure(nodes, normalized);
+  const ideaIndex = structure[0]?.ideaIndex ?? 0;
+  positions.set(ideaIndex, {
+    x: origin.x + CAMPAIGN_V2_X.idea,
+    y: origin.y + Math.max(0, ((normalized.variationCount - 1) * rowHeight) / 2)
+  });
+  structure.forEach((variation) => {
+    const rowY = origin.y + variation.row * rowHeight;
+    positions.set(variation.variationIndex, { x: origin.x + CAMPAIGN_V2_X.variation, y: rowY });
+    positions.set(variation.contentIndex, { x: origin.x + CAMPAIGN_V2_X.content, y: rowY });
+    variation.socialIndexes.forEach((socialIndex, index) => {
+      positions.set(socialIndex, { x: origin.x + CAMPAIGN_V2_X.social, y: rowY + index * CAMPAIGN_V2_ITEM_GAP });
+    });
+    const middleY = rowY + Math.max(0, ((variation.socialIndexes.length - 1) * CAMPAIGN_V2_ITEM_GAP) / 2);
+    if (variation.landingIndex !== null) positions.set(variation.landingIndex, { x: origin.x + CAMPAIGN_V2_X.landing, y: middleY });
+    if (variation.emailIndex !== null) positions.set(variation.emailIndex, { x: origin.x + CAMPAIGN_V2_X.email, y: middleY });
+  });
+  return positions;
+}
+
+function campaignGenerationOrder(nodes = [], setup = {}) {
+  const variations = deriveCampaignStructure(nodes, setup);
+  return [
+    variations[0]?.ideaIndex ?? 0,
+    ...variations.map((variation) => variation.variationIndex),
+    ...variations.map((variation) => variation.contentIndex),
+    ...variations.flatMap((variation) => variation.socialIndexes),
+    ...variations.map((variation) => variation.landingIndex).filter((index) => index !== null),
+    ...variations.map((variation) => variation.emailIndex).filter((index) => index !== null)
+  ].filter((index) => nodes[index]);
+}
+
+async function generateCampaignChainProgressively(plan, { onStatus = null, setupOptions = {}, onFirstNode = null } = {}) {
+  const validated = validateGeneratedCampaignPlan(plan, setupOptions);
   setActiveView("board");
   toggleListMode(false);
-  const chainOrigin = calculateCampaignChainOrigin();
+  const chainOrigin = calculateCampaignPlanOrigin(validated.setup);
+  const positions = calculateCampaignNodePositions(validated.nodes, chainOrigin, validated.setup);
+  const creationOrder = campaignGenerationOrder(validated.nodes, validated.setup);
   const createdNodes = [];
+  const createdByIndex = new Map();
+  let firstNodeAnnounced = false;
   try {
-    for (let index = 0; index < validated.nodes.length; index += 1) {
+    for (let orderIndex = 0; orderIndex < creationOrder.length; orderIndex += 1) {
+      const index = creationOrder[orderIndex];
       const payload = validated.nodes[index];
       const status = CAMPAIGN_WORKER_STATUS[payload.type] || "✨ AI teammate is building the campaign...";
-      if (onStatus) onStatus(status);
-      setSaveStatus(status);
-      const node = createNode({ type: payload.type, parentId: null, position: campaignNodePosition(index, chainOrigin) });
+      if (onStatus) onStatus(`${status} (${orderIndex + 1}/${validated.nodes.length})`);
+      setSaveStatus(`${status} (${orderIndex + 1}/${validated.nodes.length})`);
+      const node = createNode({ type: payload.type, parentId: null, position: positions.get(index) || chainOrigin });
       if (!node) throw new Error(`Could not create ${payload.type}.`);
-      applyGeneratedCampaignNodePayload(node, payload, createdNodes[index - 1] || null);
+      const incomingEdge = validated.edges.find((edge) => edge.toIndex === index && createdByIndex.has(edge.fromIndex));
+      const previousNode = incomingEdge ? createdByIndex.get(incomingEdge.fromIndex) : createdNodes[createdNodes.length - 1] || null;
+      applyGeneratedCampaignNodePayload(node, payload, previousNode);
       updateNodeCard(node);
       fillInspector(node);
       updateListView();
@@ -5254,20 +5402,33 @@ async function generateCampaignChainProgressively(plan, { onStatus = null } = {}
       nodeEl?.classList.add("ai-updated");
       setTimeout(() => nodeEl?.classList.remove("ai-updated"), 1000);
       createdNodes.push(node);
-      if (index > 0) {
-        addEdge(createdNodes[index - 1].id, node.id);
-        drawLinks();
+      createdByIndex.set(index, node);
+      if (!firstNodeAnnounced) {
+        firstNodeAnnounced = true;
+        onFirstNode?.(node);
       }
+      validated.edges
+        .filter((edge) => edge.toIndex === index && createdByIndex.has(edge.fromIndex))
+        .forEach((edge) => addEdge(createdByIndex.get(edge.fromIndex).id, node.id));
+      validated.edges
+        .filter((edge) => edge.fromIndex === index && createdByIndex.has(edge.toIndex))
+        .forEach((edge) => addEdge(node.id, createdByIndex.get(edge.toIndex).id));
+      drawLinks();
       markUnsaved();
-      await waitForCampaignWorker(650);
+      await waitForCampaignWorker(orderIndex === 0 ? 520 : 320);
     }
+    validated.edges.forEach((edge) => {
+      const source = createdByIndex.get(edge.fromIndex);
+      const target = createdByIndex.get(edge.toIndex);
+      if (source && target && !state.edges.some(([a, b]) => a === source.id && b === target.id)) addEdge(source.id, target.id);
+    });
     updateEmptyState();
     drawLinks();
     updateListView();
-    const ideaNode = createdNodes[0];
+    const ideaNode = createdByIndex.get(0) || createdNodes[0];
     appendActivity("generated_campaign_chain", { node: ideaNode, nodeTitle: activityNodeTitle(ideaNode) });
     markUnsaved();
-    setSaveStatus("Campaign chain generated");
+    setSaveStatus("Campaign generated");
     return createdNodes;
   } catch (error) {
     console.error("[Funklix AI] Progressive campaign generation stopped", error);
@@ -5276,103 +5437,476 @@ async function generateCampaignChainProgressively(plan, { onStatus = null } = {}
     throw error;
   }
 }
-
 async function generateCampaignFromIdea(ideaText, contextText, providedPlan = null, options = {}) {
-  const plan = providedPlan || await fetchGeneratedCampaignPlan(ideaText, contextText);
-  return generateCampaignChainProgressively(plan, options);
+  const setupOptions = normalizeCampaignSetupOptions(options.setupOptions || providedPlan?.setup || {});
+  const plan = providedPlan || await fetchGeneratedCampaignPlan(ideaText, contextText, setupOptions);
+  return generateCampaignChainProgressively(plan, { ...options, setupOptions });
 }
 
+function getCampaignV3Api() {
+  return typeof window !== "undefined" ? window.CampaignGeneratorV3 : null;
+}
+
+function defaultCampaignV3AISetup(overrides = {}) {
+  const normalized = normalizeCampaignSetupOptions({
+    variationCount: overrides.variationCount ?? 3,
+    postsPerVariation: overrides.postsPerVariation ?? 3,
+    channel: overrides.channel || "LinkedIn",
+    includeLandingPage: overrides.includeLandingPage !== false,
+    includeEmailCampaign: overrides.includeEmailCampaign !== false
+  });
+  return {
+    campaignIdea: cleanCampaignField(overrides.campaignIdea) || "Promote a premium networking experience for C-level executives.",
+    additionalContext: cleanCampaignField(overrides.additionalContext) || "Focus on trust, exclusivity, meaningful business relationships, and high-quality leads.",
+    ...normalized
+  };
+}
+
+function campaignV3NodeCounts(nodes = []) {
+  const counts = CAMPAIGN_CHAIN_TYPES.reduce((nextCounts, type) => {
+    nextCounts[type] = 0;
+    return nextCounts;
+  }, {});
+  (Array.isArray(nodes) ? nodes : []).forEach((node) => {
+    const type = cleanCampaignField(node?.type);
+    if (Object.prototype.hasOwnProperty.call(counts, type)) counts[type] += 1;
+  });
+  return counts;
+}
+
+function expectedCampaignV3NodeCounts(setup = {}) {
+  const normalized = normalizeCampaignSetupOptions(setup);
+  return {
+    Idea: 1,
+    "Campaign Variation": normalized.variationCount,
+    Content: normalized.variationCount,
+    "Social Media Posting": normalized.variationCount * normalized.postsPerVariation,
+    "Landing Page": normalized.includeLandingPage ? 1 : 0,
+    "Email Campaign": normalized.includeEmailCampaign ? 1 : 0
+  };
+}
+
+function campaignV3NodeSubtype(node = {}) {
+  return cleanCampaignField(node.subtype || node.subType || node.metadata?.subtype || node.metadata?.subType || node.metadata?.purpose || node.metadata?.angle || "(none)");
+}
+
+function campaignV3NodeSubtypeCounts(nodes = []) {
+  return (Array.isArray(nodes) ? nodes : []).reduce((counts, node) => {
+    const subtype = campaignV3NodeSubtype(node);
+    counts[subtype] = (counts[subtype] || 0) + 1;
+    return counts;
+  }, {});
+}
+
+function campaignV3NodeReport(nodes = [], limit = Number.POSITIVE_INFINITY) {
+  return (Array.isArray(nodes) ? nodes : []).slice(0, limit).map((node, index) => ({
+    index,
+    title: cleanCampaignField(node?.title),
+    type: cleanCampaignField(node?.type),
+    subtype: campaignV3NodeSubtype(node)
+  }));
+}
+
+function campaignV3EmailBodyText(node = {}) {
+  return cleanCampaignField(node.content || node.body || node.email?.body || node.metadata?.body || "");
+}
+
+function normalizeCampaignV3AIEmailNodes(nodes = []) {
+  const sourceNodes = Array.isArray(nodes) ? nodes : [];
+  const emailEntries = sourceNodes
+    .map((node, index) => ({ node, index, type: cleanCampaignField(node?.type) }))
+    .filter((entry) => entry.type === "Email Campaign");
+
+  if (emailEntries.length <= 1) {
+    return {
+      nodes: sourceNodes,
+      diagnostics: {
+        originalEmailCount: emailEntries.length,
+        selectedCanonicalEmailTitle: emailEntries[0] ? cleanCampaignField(emailEntries[0].node?.title) : "",
+        discardedEmailTitles: []
+      }
+    };
+  }
+
+  const canonicalEntry = emailEntries.reduce((best, entry) => {
+    const bestLength = campaignV3EmailBodyText(best.node).length;
+    const entryLength = campaignV3EmailBodyText(entry.node).length;
+    return entryLength > bestLength ? entry : best;
+  }, emailEntries[0]);
+  const discardedEmailTitles = emailEntries
+    .filter((entry) => entry.index !== canonicalEntry.index)
+    .map((entry) => cleanCampaignField(entry.node?.title) || `Email Campaign ${entry.index + 1}`);
+
+  return {
+    nodes: sourceNodes.filter((node, index) => cleanCampaignField(node?.type) !== "Email Campaign" || index === canonicalEntry.index),
+    diagnostics: {
+      originalEmailCount: emailEntries.length,
+      selectedCanonicalEmailTitle: cleanCampaignField(canonicalEntry.node?.title) || `Email Campaign ${canonicalEntry.index + 1}`,
+      discardedEmailTitles
+    }
+  };
+}
+
+function logCampaignV3AIDiagnostics(label, details = {}) {
+  console.info(`[Funklix Campaign Generator V3 AI] ${label}`, details);
+}
+
+function createCampaignV3RealCanvasAdapter() {
+  const committedNodes = [];
+  const committedEdges = [];
+  const activityLog = [];
+  return {
+    committedNodes,
+    committedEdges,
+    activityLog,
+    unsavedCallCount: 0,
+    createNode(payload = {}, position = {}) {
+      const node = createNode({ type: payload.type || "Idea", position });
+      if (!node) throw new Error("Campaign V3 real adapter could not create node.");
+      applyGeneratedCampaignNodePayload(node, payload);
+      updateNodeCard(node);
+      updateListView();
+      committedNodes.push({ id: node.id, tempId: payload.tempId, type: node.type, title: node.title, x: node.position.x, y: node.position.y, node });
+      activityLog.push({ action: "createNode", tempId: payload.tempId, nodeId: node.id });
+      return node;
+    },
+    createEdge(sourceNodeId, targetNodeId, edge = {}) {
+      addEdge(sourceNodeId, targetNodeId);
+      const committedEdge = { sourceNodeId, targetNodeId, sourceTempId: edge.fromTempId, targetTempId: edge.toTempId, type: edge.type, laneId: edge.laneId };
+      committedEdges.push(committedEdge);
+      activityLog.push({ action: "createEdge", sourceNodeId, targetNodeId, sourceTempId: edge.fromTempId, targetTempId: edge.toTempId });
+      return committedEdge;
+    },
+    markUnsaved() {
+      this.unsavedCallCount += 1;
+      activityLog.push({ action: "markUnsaved" });
+      markUnsaved();
+    }
+  };
+}
+
+function debugRunCampaignV3Mock() {
+  const campaignV3 = getCampaignV3Api();
+  if (!campaignV3) {
+    console.error("[Funklix Campaign Generator V3] campaign-v3.js is not loaded.");
+    return null;
+  }
+  if (state.boardAccess?.canEdit === false) {
+    setSaveStatus("Read-only board");
+    console.warn("[Funklix Campaign Generator V3] Board is read-only; mock commit skipped.");
+    return null;
+  }
+
+  const setup = { variationCount: 3, postsPerVariation: 3, includeLandingPage: true, includeEmailCampaign: true, channel: "LinkedIn" };
+  const rawNodes = campaignV3.createCampaignV3MockNodes(setup, "grouped");
+  const planResult = campaignV3.buildCampaignV3PlanFromNodes(rawNodes, setup);
+  if (!planResult.ok) {
+    console.error("[Funklix Campaign Generator V3] Mock plan failed validation", planResult.diagnostics);
+    return planResult;
+  }
+
+  const origin = calculateCampaignPlanOrigin(setup);
+  const layoutResult = campaignV3.layoutCampaignV3Plan(planResult.plan, setup, origin);
+  if (!layoutResult.ok) {
+    console.error("[Funklix Campaign Generator V3] Mock layout failed", layoutResult.diagnostics);
+    return { ...planResult, layoutResult };
+  }
+
+  const adapter = createCampaignV3RealCanvasAdapter();
+  const commitResult = campaignV3.commitCampaignV3PlanToCanvas(layoutResult, adapter);
+  if (!commitResult.ok) {
+    console.error("[Funklix Campaign Generator V3] Mock real-canvas commit had diagnostics", commitResult.diagnostics);
+  } else {
+    console.info("[Funklix Campaign Generator V3] Mock campaign committed", commitResult);
+  }
+  updateEmptyState();
+  drawLinks();
+  updateListView();
+  return { planResult, layoutResult, commitResult, adapter };
+}
+
+async function debugRunCampaignV3AI(setupOverride = {}) {
+  const campaignV3 = getCampaignV3Api();
+  if (!campaignV3) {
+    console.error("[Funklix Campaign Generator V3 AI] campaign-v3.js is not loaded.");
+    return null;
+  }
+  if (state.boardAccess?.canEdit === false) {
+    setSaveStatus("Read-only board");
+    console.warn("[Funklix Campaign Generator V3 AI] Board is read-only; AI compatibility commit skipped.");
+    return null;
+  }
+
+  const setup = defaultCampaignV3AISetup(setupOverride);
+  logCampaignV3AIDiagnostics("Starting AI compatibility flow with Email Campaign-only normalization.", {
+    setup,
+    featureFlagEnabled: isCampaignV3Enabled()
+  });
+
+  try {
+    const apiPlan = await fetchGeneratedCampaignPlan(setup.campaignIdea, setup.additionalContext, setup);
+    const rawNodes = Array.isArray(apiPlan?.nodes) ? apiPlan.nodes : [];
+    const emailNormalization = normalizeCampaignV3AIEmailNodes(rawNodes);
+    const normalizedNodes = emailNormalization.nodes;
+    const nodeReport = campaignV3NodeReport(rawNodes);
+    const firstTwentyNodes = campaignV3NodeReport(rawNodes, 20);
+    const diagnosticBase = {
+      setup,
+      expectedCounts: expectedCampaignV3NodeCounts(setup),
+      actualCountsByType: campaignV3NodeCounts(rawNodes),
+      normalizedCountsByType: campaignV3NodeCounts(normalizedNodes),
+      actualCountsBySubtype: campaignV3NodeSubtypeCounts(rawNodes),
+      nodeCount: rawNodes.length,
+      normalizedNodeCount: normalizedNodes.length,
+      emailNormalization: emailNormalization.diagnostics,
+      firstTwentyNodes
+    };
+
+    console.info("[Funklix Campaign Generator V3 AI] Raw AI response", apiPlan);
+    console.table(nodeReport);
+    logCampaignV3AIDiagnostics("Expected V3 counts", diagnosticBase.expectedCounts);
+    logCampaignV3AIDiagnostics("Actual AI counts grouped by type", diagnosticBase.actualCountsByType);
+    logCampaignV3AIDiagnostics("Email Campaign normalization", diagnosticBase.emailNormalization);
+    logCampaignV3AIDiagnostics("Normalized counts grouped by type", diagnosticBase.normalizedCountsByType);
+    logCampaignV3AIDiagnostics("Actual AI counts grouped by subtype", diagnosticBase.actualCountsBySubtype);
+    logCampaignV3AIDiagnostics("First 20 returned nodes", firstTwentyNodes);
+
+    const planResult = campaignV3.buildCampaignV3PlanFromNodes(normalizedNodes, setup);
+    const failedRules = planResult.ok ? [] : planResult.diagnostics.map((diagnostic) => diagnostic.code);
+    const planDiagnostics = {
+      ...diagnosticBase,
+      failedRules,
+      diagnostics: planResult.diagnostics
+    };
+
+    if (!planResult.ok) {
+      console.error("[Funklix Campaign Generator V3 AI] FAILED V3 compatibility validation. No nodes were created.", planDiagnostics);
+      return { ok: false, apiPlan, planResult, diagnostics: planDiagnostics };
+    }
+
+    const edges = campaignV3.buildCampaignV3Edges(planResult.plan);
+    const origin = calculateCampaignPlanOrigin(setup);
+    const layoutResult = campaignV3.layoutCampaignV3Plan(planResult.plan, setup, origin);
+    if (!layoutResult.ok) {
+      const layoutDiagnostics = {
+        ...diagnosticBase,
+        failedRules: layoutResult.diagnostics.map((diagnostic) => diagnostic.code),
+        diagnostics: layoutResult.diagnostics
+      };
+      console.error("[Funklix Campaign Generator V3 AI] V3 layout failed. No nodes were created.", layoutDiagnostics);
+      return { ok: false, apiPlan, planResult, edges, layoutResult, diagnostics: layoutDiagnostics };
+    }
+
+    const adapter = createCampaignV3RealCanvasAdapter();
+    const commitResult = campaignV3.commitCampaignV3PlanToCanvas(layoutResult, adapter);
+    const commitDiagnostics = {
+      ...diagnosticBase,
+      failedRules: commitResult.ok ? [] : commitResult.diagnostics.map((diagnostic) => diagnostic.code),
+      diagnostics: commitResult.diagnostics
+    };
+    if (!commitResult.ok) {
+      console.error("[Funklix Campaign Generator V3 AI] Real-canvas commit had diagnostics.", commitDiagnostics);
+    } else {
+      logCampaignV3AIDiagnostics("AI compatibility campaign committed to canvas.", commitDiagnostics);
+    }
+    updateEmptyState();
+    drawLinks();
+    updateListView();
+    return { ok: commitResult.ok, apiPlan, planResult, edges, layoutResult, commitResult, adapter, diagnostics: commitDiagnostics };
+  } catch (error) {
+    console.error("[Funklix Campaign Generator V3 AI] AI compatibility flow failed before commit. No nodes were created.", {
+      setup,
+      error
+    });
+    return { ok: false, error, setup };
+  }
+}
+
+if (typeof window !== "undefined") {
+  window.debugRunCampaignV3Mock = debugRunCampaignV3Mock;
+  window.debugRunCampaignV3AI = debugRunCampaignV3AI;
+}
+
+function campaignEstimate(setup = {}) {
+  const normalized = normalizeCampaignSetupOptions(setup);
+  return {
+    variations: normalized.variationCount,
+    socialPosts: normalized.variationCount * normalized.postsPerVariation,
+    landingPages: normalized.includeLandingPage ? normalized.variationCount : 0,
+    emails: normalized.includeEmailCampaign ? normalized.variationCount : 0,
+    totalAssets: expectedCampaignNodeCount(normalized)
+  };
+}
+
+function updateCampaignEstimate(overlay) {
+  const setup = normalizeCampaignSetupOptions({
+    variationCount: overlay.querySelector("#campaign-variation-count")?.value,
+    postsPerVariation: overlay.querySelector("#campaign-post-count")?.value,
+    includeLandingPage: overlay.querySelector("#campaign-include-landing")?.checked,
+    includeEmailCampaign: overlay.querySelector("#campaign-include-email")?.checked,
+    channel: overlay.querySelector("#campaign-channel")?.value
+  });
+  const estimate = campaignEstimate(setup);
+  const target = overlay.querySelector("#campaign-estimate-output");
+  if (!target) return;
+  target.innerHTML = `
+    <div><strong>${estimate.variations}</strong><span>Variations</span></div>
+    <div><strong>${estimate.socialPosts}</strong><span>Social Posts</span></div>
+    <div><strong>${estimate.landingPages}</strong><span>Landing Pages</span></div>
+    <div><strong>${estimate.emails}</strong><span>Emails</span></div>
+    <p><strong>${estimate.totalAssets}</strong> Assets Total</p>`;
+}
+
+function createCampaignLoadingOverlay(setup = {}) {
+  const overlay = document.createElement("div");
+  overlay.className = "campaign-loading-overlay";
+  const avatarUrl = getApprovedBrandAvatarUrl();
+  overlay.innerHTML = `
+    <div class="campaign-loading-card">
+      <div class="campaign-loading-avatar">${avatarUrl ? `<img src="${avatarUrl}" alt="Brand Avatar" />` : `<span>🤖</span>`}</div>
+      <div class="campaign-loading-copy">
+        <strong>Creating Campaign...</strong>
+        <p>${normalizeCampaignSetupOptions(setup).variationCount} angles · ${normalizeCampaignSetupOptions(setup).postsPerVariation} posts each · ${normalizeCampaignSetupOptions(setup).channel}</p>
+      </div>
+      <ol class="campaign-loading-steps">
+        <li data-step="strategy"><span>•</span> Analyzing Brand Strategy</li>
+        <li data-step="angles"><span>•</span> Creating Campaign Angles</li>
+        <li data-step="content"><span>•</span> Writing Content</li>
+        <li data-step="funnel"><span>•</span> Building Funnel</li>
+        <li data-step="connect"><span>•</span> Connecting Assets</li>
+      </ol>
+    </div>`;
+  document.body.appendChild(overlay);
+  return overlay;
+}
+
+function setCampaignLoadingStep(overlay, activeStep = "strategy") {
+  if (!overlay) return;
+  const steps = ["strategy", "angles", "content", "funnel", "connect"];
+  const activeIndex = Math.max(0, steps.indexOf(activeStep));
+  overlay.querySelectorAll("[data-step]").forEach((item) => {
+    const index = steps.indexOf(item.dataset.step);
+    item.classList.toggle("is-done", index < activeIndex);
+    item.classList.toggle("is-active", index === activeIndex);
+    item.querySelector("span").textContent = index < activeIndex ? "✓" : index === activeIndex ? "•" : "•";
+  });
+}
+
+function campaignLoadingStepForStatus(message = "") {
+  if (/angle|variation/i.test(message)) return "angles";
+  if (/content|social|post/i.test(message)) return "content";
+  if (/landing|email|funnel/i.test(message)) return "funnel";
+  if (/connect|asset|ready/i.test(message)) return "connect";
+  return "strategy";
+}
+
+function dismissCampaignLoadingOverlay(overlay) {
+  if (!overlay) return;
+  overlay.classList.add("is-exiting");
+  setTimeout(() => overlay.remove(), 280);
+}
+
+function setupCampaignStepper(overlay, inputId, min, max) {
+  const input = overlay.querySelector(`#${inputId}`);
+  overlay.querySelectorAll(`[data-stepper="${inputId}"]`).forEach((button) => {
+    button.addEventListener("click", () => {
+      const delta = Number(button.dataset.delta || 0);
+      const next = Math.max(min, Math.min(max, Number(input.value || 0) + delta));
+      input.value = String(next);
+      updateCampaignEstimate(overlay);
+    });
+  });
+}
 function openCreateCampaignModal() {
   const overlay = document.createElement("div");
-  overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px";
-  overlay.innerHTML = `<div style="width:min(560px,95vw);background:#fff;border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:10px">
-    <h3 style="margin:0">Create Campaign</h3>
-    <label>What is the campaign idea?<textarea id="campaign-idea-input" rows="4" style="width:100%"></textarea></label>
-    <label>Additional context<input id="campaign-context-input" type="text" style="width:100%"/></label>
-    <div id="campaign-ai-loader" class="hidden" style="border:1px solid #ececf4;border-radius:10px;padding:10px;background:#fafaff">
-      <strong>✨ Improving content<span id="campaign-ai-dots"></span></strong>
-      <p id="campaign-ai-subtext" style="margin:6px 0 0;color:#5f6174">Analyzing brand voice...</p>
+  overlay.className = "campaign-builder-overlay";
+  overlay.innerHTML = `<div class="campaign-builder-modal">
+    <div class="campaign-builder-hero">
+      <span class="campaign-builder-kicker">AI Campaign Builder</span>
+      <h3>Create Campaign</h3>
+      <p>Brief your AI marketing teammate. Funklix will build a multi-angle funnel directly on the canvas.</p>
     </div>
-    <div style="display:flex;gap:8px;justify-content:flex-end"><button type="button" id="campaign-modal-cancel">Cancel</button><button type="button" id="campaign-modal-generate">Generate Campaign</button></div>
+    <label class="campaign-builder-field campaign-builder-field-full">
+      <span>Campaign Idea</span>
+      <textarea id="campaign-idea-input" rows="5" placeholder="Describe the campaign goal, offer, ICP, launch, or product story..."></textarea>
+    </label>
+    <label class="campaign-builder-field campaign-builder-field-full">
+      <span>Additional Context</span>
+      <input id="campaign-context-input" type="text" placeholder="Optional constraints, timing, product details..." />
+    </label>
+    <div class="campaign-builder-grid">
+      <div class="campaign-builder-card">
+        <span>Campaign Variations</span>
+        <div class="campaign-stepper">
+          <button type="button" data-stepper="campaign-variation-count" data-delta="-1">−</button>
+          <input id="campaign-variation-count" type="number" min="1" max="10" value="3" />
+          <button type="button" data-stepper="campaign-variation-count" data-delta="1">+</button>
+        </div>
+      </div>
+      <div class="campaign-builder-card">
+        <span>Social Posts Per Variation</span>
+        <div class="campaign-stepper">
+          <button type="button" data-stepper="campaign-post-count" data-delta="-1">−</button>
+          <input id="campaign-post-count" type="number" min="1" max="20" value="5" />
+          <button type="button" data-stepper="campaign-post-count" data-delta="1">+</button>
+        </div>
+      </div>
+    </div>
+    <label class="campaign-builder-field campaign-builder-field-full">
+      <span>Channel</span>
+      <select id="campaign-channel"><option>LinkedIn</option><option>X</option><option>Instagram</option><option>TikTok</option><option>Mixed</option></select>
+    </label>
+    <div class="campaign-builder-grid">
+      <label class="campaign-builder-toggle"><input id="campaign-include-landing" type="checkbox" checked /><span><strong>Landing Page</strong><small>Generate Landing Page</small></span></label>
+      <label class="campaign-builder-toggle"><input id="campaign-include-email" type="checkbox" checked /><span><strong>Email Campaign</strong><small>Generate Email Campaign</small></span></label>
+    </div>
+    <div class="campaign-estimate-card">
+      <span class="campaign-builder-kicker">Estimated Output</span>
+      <div id="campaign-estimate-output" class="campaign-estimate-output"></div>
+    </div>
+    <div class="campaign-builder-actions"><button type="button" id="campaign-modal-cancel">Cancel</button><button type="button" id="campaign-modal-generate" class="primary-add">Generate Campaign</button></div>
   </div>`;
   document.body.appendChild(overlay);
-  const loader = overlay.querySelector("#campaign-ai-loader");
-  const dotsEl = overlay.querySelector("#campaign-ai-dots");
-  const subtextEl = overlay.querySelector("#campaign-ai-subtext");
-  let thinkingTimer = null;
-  let thinkingTick = 0;
-  const startThinking = () => {
-    loader.classList.remove("hidden");
-    const steps = ["Analyzing brand voice...", "Refining tone...", "Optimizing structure..."];
-    thinkingTimer = setInterval(() => {
-      thinkingTick += 1;
-      dotsEl.textContent = ".".repeat((thinkingTick % 3) + 1);
-      subtextEl.textContent = steps[thinkingTick % steps.length];
-    }, 450);
-  };
-  const stopThinking = ({ hide = true } = {}) => {
-    if (hide) loader.classList.add("hidden");
-    if (thinkingTimer) clearInterval(thinkingTimer);
-    thinkingTimer = null;
-    dotsEl.textContent = "";
-  };
-  const setWorkerStatus = (message) => {
-    loader.classList.remove("hidden");
-    if (thinkingTimer) clearInterval(thinkingTimer);
-    thinkingTimer = null;
-    dotsEl.textContent = "";
-    subtextEl.textContent = message;
-  };
+  setupCampaignStepper(overlay, "campaign-variation-count", 1, 10);
+  setupCampaignStepper(overlay, "campaign-post-count", 1, 20);
+  ["campaign-include-landing", "campaign-include-email", "campaign-channel"].forEach((id) => overlay.querySelector(`#${id}`)?.addEventListener("change", () => updateCampaignEstimate(overlay)));
+  updateCampaignEstimate(overlay);
   overlay.querySelector("#campaign-modal-cancel").addEventListener("click", () => overlay.remove());
+  overlay.addEventListener("click", (event) => { if (event.target === overlay) overlay.remove(); });
   overlay.querySelector("#campaign-modal-generate").addEventListener("click", async () => {
-    const ideaText = overlay.querySelector("#campaign-idea-input").value.trim();
+    const ideaText = overlay.querySelector("#campaign-idea-input").value.trim() || "Campaign Idea";
     const contextText = overlay.querySelector("#campaign-context-input").value.trim();
-    const generateBtn = overlay.querySelector("#campaign-modal-generate");
-    const cancelBtn = overlay.querySelector("#campaign-modal-cancel");
-    const ideaInput = overlay.querySelector("#campaign-idea-input");
-    const contextInput = overlay.querySelector("#campaign-context-input");
-    const restoreControls = () => {
-      generateBtn.disabled = false;
-      generateBtn.textContent = "Generate Campaign";
-      cancelBtn.disabled = false;
-      ideaInput.disabled = false;
-      contextInput.disabled = false;
+    const setupOptions = normalizeCampaignSetupOptions({
+      variationCount: overlay.querySelector("#campaign-variation-count").value,
+      postsPerVariation: overlay.querySelector("#campaign-post-count").value,
+      includeLandingPage: overlay.querySelector("#campaign-include-landing").checked,
+      includeEmailCampaign: overlay.querySelector("#campaign-include-email").checked,
+      channel: overlay.querySelector("#campaign-channel").value
+    });
+    overlay.remove();
+    setActiveView("board");
+    toggleListMode(false);
+    const loadingOverlay = createCampaignLoadingOverlay(setupOptions);
+    setCampaignLoadingStep(loadingOverlay, "strategy");
+    setSaveStatus(`Planning campaign: ${setupOptions.variationCount} variations, ${setupOptions.postsPerVariation} posts each...`);
+    const setWorkerStatus = (message) => {
+      setSaveStatus(message);
+      setCampaignLoadingStep(loadingOverlay, campaignLoadingStepForStatus(message));
     };
-    generateBtn.disabled = true;
-    generateBtn.textContent = "Generating...";
-    cancelBtn.disabled = true;
-    ideaInput.disabled = true;
-    contextInput.disabled = true;
-    let modalHiddenForBuild = false;
-    const hideModalForProgressiveBuild = () => {
-      modalHiddenForBuild = true;
-      overlay.style.opacity = "0";
-      overlay.style.pointerEvents = "none";
-      overlay.setAttribute("aria-hidden", "true");
-    };
-    startThinking();
     try {
-      const apiPlan = await fetchGeneratedCampaignPlan(ideaText || "Campaign Idea", contextText);
+      const apiPlan = await fetchGeneratedCampaignPlan(ideaText, contextText, setupOptions);
       setWorkerStatus("✨ Campaign plan ready. AI teammate is entering the board...");
-      hideModalForProgressiveBuild();
-      const createdNodes = await generateCampaignFromIdea(ideaText || "Campaign Idea", contextText, apiPlan, { onStatus: setWorkerStatus });
-      if (createdNodes.length) overlay.remove();
-      else {
-        overlay.style.opacity = "";
-        overlay.style.pointerEvents = "";
-        overlay.removeAttribute("aria-hidden");
-        modalHiddenForBuild = false;
-        stopThinking();
-        restoreControls();
-      }
+      await generateCampaignFromIdea(ideaText, contextText, apiPlan, {
+        onStatus: setWorkerStatus,
+        setupOptions,
+        onFirstNode: () => dismissCampaignLoadingOverlay(loadingOverlay)
+      });
     } catch (error) {
+      dismissCampaignLoadingOverlay(loadingOverlay);
       console.error("[Funklix AI] Generate Campaign failed", error);
       alert(error?.partialCampaign
         ? "Campaign generation stopped early. You can continue manually or use Generate Next Step."
         : "Could not generate campaign right now. No nodes were created.");
-      stopThinking();
-      if (modalHiddenForBuild) overlay.remove();
-      else restoreControls();
     }
   });
 }
@@ -6473,17 +7007,421 @@ function syncPopoverActiveStates(popoverEl) {
   });
 }
 
+
+function normalizeAiReviewSectionText(lines = []) {
+  return lines.join("\n").trim();
+}
+
+function parseAiReviewList(text = "") {
+  return text
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => line.replace(/^(?:[-*•]|\d+[.)])\s*/, "").trim())
+    .filter(Boolean);
+}
+
+function parseAiReviewText(rawText = "") {
+  const text = String(rawText || "").trim();
+  if (!text) return null;
+
+  const sections = { summary: [], strengths: [], improvements: [], suggestedRewrite: [] };
+  let score = "";
+  let currentSection = null;
+
+  text.split(/\r?\n/).forEach((line) => {
+    const trimmed = line.trim();
+    const scoreMatch = trimmed.match(/^AI Review:\s*(.+)$/i);
+    if (scoreMatch) {
+      score = scoreMatch[1].trim();
+      currentSection = null;
+      return;
+    }
+
+    const sectionMatch = trimmed.match(/^(Summary|Strengths|Improvements|Improve|Suggested Rewrite):\s*(.*)$/i);
+    if (sectionMatch) {
+      const label = sectionMatch[1].toLowerCase();
+      if (label === "improve") currentSection = "improvements";
+      else if (label === "suggested rewrite") currentSection = "suggestedRewrite";
+      else currentSection = label;
+      if (sectionMatch[2]) sections[currentSection].push(sectionMatch[2]);
+      return;
+    }
+
+    if (currentSection) sections[currentSection].push(line);
+  });
+
+  const summary = normalizeAiReviewSectionText(sections.summary);
+  const strengths = parseAiReviewList(normalizeAiReviewSectionText(sections.strengths));
+  const improvements = parseAiReviewList(normalizeAiReviewSectionText(sections.improvements));
+  const suggestedRewrite = normalizeAiReviewSectionText(sections.suggestedRewrite);
+
+  if (!score && !summary && !strengths.length && !improvements.length && !suggestedRewrite) return null;
+
+  return {
+    score: score || "—",
+    summary,
+    strengths,
+    improvements,
+    suggestedRewrite
+  };
+}
+
+function appendAiReviewText(parent, text = "") {
+  const paragraph = document.createElement("p");
+  paragraph.textContent = text || "No details provided.";
+  parent.appendChild(paragraph);
+}
+
+function createAiReviewAccordionSection({ title, tone, count = null, open = false, emptyText = "No details provided.", renderContent }) {
+  const details = document.createElement("details");
+  details.className = `ai-review-section ai-review-section-${tone}`;
+  details.open = !!open;
+
+  const summary = document.createElement("summary");
+  const label = document.createElement("span");
+  label.textContent = count === null ? title : `${title} (${count})`;
+  summary.appendChild(label);
+
+  const body = document.createElement("div");
+  body.className = "ai-review-section-body";
+  renderContent?.(body);
+  if (!body.childNodes.length) appendAiReviewText(body, emptyText);
+
+  details.append(summary, body);
+  return details;
+}
+
+
+function setAiReviewFixPreview(nodeId, previewState = null) {
+  if (!nodeId) return;
+  if (!previewState) delete state.aiReviewFixPreviews[nodeId];
+  else state.aiReviewFixPreviews[nodeId] = previewState;
+}
+
+function getAiReviewFixPreview(nodeId) {
+  return nodeId ? state.aiReviewFixPreviews[nodeId] || null : null;
+}
+
+function selectNodeForAiWorkspace(node) {
+  if (!node?.id) return;
+  if (state.appMode === "brand") setAppMode("canvas");
+  state.selectedIds.clear();
+  state.selectedIds.add(node.id);
+  state.selectedPrimary = node.id;
+  updateSelectionClasses();
+  fillInspector(node);
+}
+
+function focusAiWorkspace() {
+  requestAnimationFrame(() => {
+    el.aiWorkspaceSection?.scrollIntoView?.({ block: "nearest", behavior: "smooth" });
+  });
+}
+
+async function fetchAiReviewFix(node, improvementText) {
+  const response = await fetch("/api/apply-review-fix", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      boardId: getCurrentBrandBrainBoardId(),
+      nodeId: node.id,
+      improvementText,
+      currentNodeContent: node.content || "",
+      nodeType: node.type || "",
+      brandBrainData: state.brandCore
+    })
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data?.error || "Failed to apply review fix");
+  return data;
+}
+
+function pulseAiUpdatedNode(nodeId) {
+  const updatedEl = el.zoomLayer.querySelector(`[data-id='${nodeId}']`);
+  if (!updatedEl) return;
+  updatedEl.classList.add("ai-updated");
+  setTimeout(() => updatedEl.classList.remove("ai-updated"), 1300);
+}
+
+function pulseInspectorContentField() {
+  const field = el.inputs?.content;
+  if (!field) return;
+  field.classList.add("ai-workspace-field-updated");
+  setTimeout(() => field.classList.remove("ai-workspace-field-updated"), 1300);
+}
+
+function applyAiReviewFixToNode(node, preview = null) {
+  const nextContent = String(preview?.suggestedContent || "").trim();
+  if (!node || !nextContent) return;
+  node.content = nextContent;
+  if (state.selectedPrimary === node.id && el.inputs?.content) el.inputs.content.value = node.content;
+  updateNodeCard(node);
+  updateListView();
+  recordNodeUpdatedActivity(node);
+  setAiReviewFixPreview(node.id, null);
+  fillInspector(node);
+  pulseAiUpdatedNode(node.id);
+  pulseInspectorContentField();
+  saveCampaignCanvasState();
+}
+
+function dismissAiReviewFix(node) {
+  if (!node?.id) return;
+  setAiReviewFixPreview(node.id, null);
+  fillInspector(node);
+}
+
+function createAiWorkspaceReadonlyText(labelText, value = "") {
+  const wrap = document.createElement("label");
+  wrap.className = "ai-workspace-text-wrap";
+  const label = document.createElement("span");
+  label.textContent = labelText;
+  const textarea = document.createElement("textarea");
+  textarea.className = "ai-workspace-text";
+  textarea.readOnly = true;
+  textarea.rows = 5;
+  textarea.value = value || "";
+  wrap.append(label, textarea);
+  return wrap;
+}
+
+function renderInspectorAiWorkspace(node) {
+  if (!el.aiWorkspaceSection || !el.aiWorkspaceBody) return;
+  const preview = getAiReviewFixPreview(node?.id);
+  el.aiWorkspaceSection.classList.toggle("hidden", !node || !preview);
+  el.aiWorkspaceBody.innerHTML = "";
+  if (!node || !preview) return;
+
+  const title = document.createElement("strong");
+  title.className = "ai-workspace-heading";
+  title.textContent = "Suggested Fix";
+
+  const meta = document.createElement("div");
+  meta.className = "ai-workspace-meta";
+  meta.innerHTML = `<span><strong>Target Field:</strong> ${preview.targetLabel || "Content"}</span>`;
+
+  const improvement = document.createElement("div");
+  improvement.className = "ai-workspace-improvement";
+  const improvementLabel = document.createElement("strong");
+  improvementLabel.textContent = "Improvement:";
+  const improvementText = document.createElement("p");
+  improvementText.textContent = preview.improvementText || "";
+  improvement.append(improvementLabel, improvementText);
+
+  el.aiWorkspaceBody.append(title, meta, improvement);
+
+  if (preview.status === "loading") {
+    const loading = document.createElement("p");
+    loading.className = "ai-workspace-status";
+    loading.textContent = "Generating suggested fix...";
+    el.aiWorkspaceBody.appendChild(loading);
+    return;
+  }
+
+  if (preview.status === "error") {
+    const error = document.createElement("p");
+    error.className = "ai-workspace-error";
+    error.textContent = preview.error || "Could not generate a suggested fix.";
+    const dismiss = document.createElement("button");
+    dismiss.type = "button";
+    dismiss.textContent = "Dismiss";
+    dismiss.addEventListener("click", () => dismissAiReviewFix(node));
+    el.aiWorkspaceBody.append(error, dismiss);
+    return;
+  }
+
+  const explanation = document.createElement("div");
+  explanation.className = "ai-workspace-explanation";
+  const explanationLabel = document.createElement("strong");
+  explanationLabel.textContent = "Explanation:";
+  const explanationText = document.createElement("p");
+  explanationText.textContent = preview.explanation || "No explanation provided.";
+  explanation.append(explanationLabel, explanationText);
+
+  const actions = document.createElement("div");
+  actions.className = "ai-workspace-actions";
+  const apply = document.createElement("button");
+  apply.type = "button";
+  apply.className = "primary-add";
+  apply.textContent = "Apply";
+  apply.disabled = !preview.suggestedContent || isBoardReadOnly();
+  apply.addEventListener("click", () => {
+    if (isBoardReadOnly()) {
+      setSaveStatus("Read-only board");
+      return;
+    }
+    applyAiReviewFixToNode(node, preview);
+  });
+  const dismiss = document.createElement("button");
+  dismiss.type = "button";
+  dismiss.textContent = "Dismiss";
+  dismiss.addEventListener("click", () => dismissAiReviewFix(node));
+  actions.append(apply, dismiss);
+
+  el.aiWorkspaceBody.append(
+    explanation,
+    createAiWorkspaceReadonlyText("Current Text", preview.currentText || ""),
+    createAiWorkspaceReadonlyText("Suggested Text", preview.suggestedContent || ""),
+    actions
+  );
+}
+
+async function startAiReviewFixFromPostit({ node, note, item, index, button = null }) {
+  if (!node || !note) return;
+  if (isBoardReadOnly()) {
+    setSaveStatus("Read-only board");
+    return;
+  }
+  selectNodeForAiWorkspace(node);
+  const loadingPreview = {
+    noteId: note.id,
+    improvementIndex: index,
+    improvementText: item,
+    status: "loading",
+    targetField: "content",
+    targetLabel: "Content",
+    currentText: node.content || "",
+    suggestedContent: "",
+    explanation: "",
+    error: ""
+  };
+  setAiReviewFixPreview(node.id, loadingPreview);
+  fillInspector(node);
+  focusAiWorkspace();
+  if (button) {
+    button.disabled = true;
+    button.textContent = "Generating...";
+  }
+  try {
+    const fix = await fetchAiReviewFix(node, item);
+    setAiReviewFixPreview(node.id, {
+      ...loadingPreview,
+      status: "ready",
+      explanation: fix.explanation || "",
+      suggestedContent: fix.suggestedContent || ""
+    });
+  } catch (error) {
+    setAiReviewFixPreview(node.id, {
+      ...loadingPreview,
+      status: "error",
+      error: error?.message || "Could not generate a suggested fix."
+    });
+  } finally {
+    if (button?.isConnected) {
+      button.disabled = isBoardReadOnly();
+      button.textContent = "Apply Fix";
+    }
+    fillInspector(node);
+    focusAiWorkspace();
+  }
+}
+
+function renderAiReviewImprovementAction({ row, node, note, item, index }) {
+  if (!node || !note) return;
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "postit-reply-button ai-review-apply-fix";
+  button.textContent = "Apply Fix";
+  const activePreview = getAiReviewFixPreview(node.id);
+  button.disabled = isBoardReadOnly() || (activePreview?.noteId === note.id && activePreview?.improvementIndex === index && activePreview?.status === "loading");
+  button.addEventListener("click", async (event) => {
+    event.stopPropagation();
+    await startAiReviewFixFromPostit({ node, note, item, index, button });
+  });
+  row.appendChild(button);
+}
+
+function renderAiReviewCard(review, context = {}) {
+  const card = document.createElement("section");
+  card.className = "ai-review-card";
+
+  const heading = document.createElement("div");
+  heading.className = "ai-review-card-heading";
+  const title = document.createElement("strong");
+  title.textContent = "🤖 AI Review";
+  const score = document.createElement("span");
+  score.className = "ai-review-score";
+  score.textContent = review.score;
+  heading.append(title, score);
+
+  const summary = createAiReviewAccordionSection({
+    title: "Summary",
+    tone: "summary",
+    open: true,
+    renderContent: (body) => appendAiReviewText(body, review.summary)
+  });
+
+  const strengths = createAiReviewAccordionSection({
+    title: "Strengths",
+    tone: "strengths",
+    count: review.strengths.length,
+    emptyText: "No clear strengths identified.",
+    renderContent: (body) => {
+      if (!review.strengths.length) return;
+      const list = document.createElement("ul");
+      review.strengths.forEach((item) => {
+        const li = document.createElement("li");
+        li.textContent = item;
+        list.appendChild(li);
+      });
+      body.appendChild(list);
+    }
+  });
+
+  const improvements = createAiReviewAccordionSection({
+    title: "Improvements",
+    tone: "improvements",
+    count: review.improvements.length,
+    emptyText: "No major improvements identified.",
+    renderContent: (body) => {
+      review.improvements.forEach((item, index) => {
+        const row = document.createElement("div");
+        row.className = "ai-review-improvement-row";
+        const rowTitle = document.createElement("strong");
+        rowTitle.textContent = `Improvement ${index + 1}`;
+        const rowText = document.createElement("p");
+        rowText.textContent = item;
+        row.append(rowTitle, rowText);
+        renderAiReviewImprovementAction({ row, node: context.node, note: context.note, item, index });
+        body.appendChild(row);
+      });
+    }
+  });
+
+  card.append(heading, summary, strengths, improvements);
+
+  if (review.suggestedRewrite) {
+    const rewrite = createAiReviewAccordionSection({
+      title: "Suggested Rewrite",
+      tone: "rewrite",
+      renderContent: (body) => {
+        const block = document.createElement("pre");
+        block.className = "ai-review-rewrite";
+        block.textContent = review.suggestedRewrite;
+        body.appendChild(block);
+      }
+    });
+    card.appendChild(rewrite);
+  }
+
+  return card;
+}
+
 function renderPostits(node, nodeEl) {
   nodeEl.querySelectorAll(".postit").forEach((p) => p.remove());
   if (!Array.isArray(node.postits)) node.postits = [];
 
   node.postits.forEach((note) => {
     ensureCommentIdentity(note);
+    const isAiReviewNote = note.source === "ai_review" || note.authorEmail === "ai@funklix.local" || note.authorName === "AI Review";
+    const parsedAiReview = isAiReviewNote ? parseAiReviewText(note.text) : null;
     const postit = el.postitTemplate.content.firstElementChild.cloneNode(true);
     postit.style.left = `${note.x}px`;
     postit.style.top = `${note.y}px`;
     postit.style.background = note.color;
     postit.classList.toggle("is-resolved", !!note.resolved);
+    postit.classList.toggle("ai-review-postit", isAiReviewNote);
 
     const header = postit.querySelector("header");
     const avatar = document.createElement("span");
@@ -6544,9 +7482,10 @@ function renderPostits(node, nodeEl) {
     header.insertBefore(resolveBtn, postit.querySelector(".postit-delete"));
 
     const area = postit.querySelector(".postit-text");
-    area.value = note.text;
+    area.value = note.text || "";
     area.disabled = !!note.resolved;
-    area.style.fontSize = note.text.length > 220 ? "0.7rem" : note.text.length > 120 ? "0.82rem" : "0.96rem";
+    area.readOnly = isAiReviewNote;
+    area.style.fontSize = (note.text || "").length > 220 ? "0.7rem" : (note.text || "").length > 120 ? "0.82rem" : "0.96rem";
     area.addEventListener("input", () => {
       if (isBoardReadOnly()) {
         setSaveStatus("Read-only board");
@@ -6556,6 +7495,9 @@ function renderPostits(node, nodeEl) {
       area.style.fontSize = note.text.length > 220 ? "0.7rem" : note.text.length > 120 ? "0.82rem" : "0.96rem";
       saveCampaignCanvasState();
     });
+    if (parsedAiReview && !note.resolved) {
+      area.replaceWith(renderAiReviewCard(parsedAiReview, { node, note, nodeEl }));
+    }
 
     postit.querySelector(".postit-delete").addEventListener("click", () => {
       if (isBoardReadOnly()) {
@@ -6769,6 +7711,7 @@ function fillInspector(node) {
     }
     if (el.connectedContextSummary) el.connectedContextSummary.textContent = "Parents: 0 · Children: 0";
     if (el.connectedContextBody) el.connectedContextBody.textContent = "";
+    renderInspectorAiWorkspace(null);
     updateInspectorActionVisibility();
     return;
   }
@@ -6831,6 +7774,7 @@ function fillInspector(node) {
     const children = connected.childNodes.slice(0, 3).map((n) => n.title || n.type).join(", ") || "—";
     el.connectedContextBody.innerHTML = `<div><strong>Parent:</strong> ${parents}</div><div><strong>Child:</strong> ${children}</div>`;
   }
+  renderInspectorAiWorkspace(node);
   updateInspectorActionVisibility();
   renderNodePresenceBadges();
 }
@@ -7231,6 +8175,7 @@ function addAiReviewPostitToNode(node, review) {
     time: nowString(),
     createdAt,
     updatedAt: createdAt,
+    source: "ai_review",
     text: formatAiReviewComment(review),
     color: "#e9f1ff",
     resolved: false,
@@ -8419,7 +9364,7 @@ if (el.addNodeButton) {
 
 if (el.createCampaignButton) {
   el.createCampaignButton.addEventListener("click", () => {
-    openCreateCampaignModal();
+    openCampaignGeneratorEntry();
   });
 } else {
   console.warn("[Funklix DOM Hardening] Missing listener target: #create-campaign-btn");
