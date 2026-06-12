@@ -93,6 +93,15 @@ ${purposeGuidance}
 - Social titles should include the purpose, e.g. "Hook Post", "Problem Post", "Story Post".
 - For channel Mixed, distribute posts across LinkedIn, X, Instagram, and TikTok. Otherwise use ${channel}.
 
+Node type hard rules:
+- Nodes titled or purposed as Hook Post, Problem Post, Story Post, Authority Post, Objection Post, or CTA Post MUST have type "Social Media Posting".
+- Do NOT use type "Content" for individual social posts.
+- Content nodes are only one strategic content asset per Campaign Variation.
+- For each Campaign Variation, generate exactly 1 Content node.
+- For each Campaign Variation, generate exactly ${postsPerVariation} Social Media Posting nodes.
+- Social Media Posting nodes must contain the full publish-ready post in social.caption.
+- Social Media Posting nodes should still have content as a short summary, but their type must be "Social Media Posting".
+
 Node requirements:
 Idea:
 - Core campaign idea only.
@@ -104,7 +113,8 @@ Campaign Variation:
 - Description/content must explicitly include "Angle:".
 
 Content:
-- Hero/content asset for that variation.
+- Exactly one strategic hero/content asset for that Campaign Variation.
+- Content nodes are NOT social posts and must not be titled Hook Post, Problem Post, Story Post, Authority Post, Objection Post, or CTA Post.
 - Include a strong message, key points, and CTA.
 - Include imagePrompt shaped by Brand Brain visual style and archetype guidance.
 
@@ -121,40 +131,40 @@ For LinkedIn posts:
 - Avoid generic slogans.
 - Each post should feel specific to the campaign variation angle, audience, and Brand Brain context.
 
-LinkedIn Hook Post:
+LinkedIn Hook Post (title/purpose only; node type must be "Social Media Posting"):
 - 120-220 words.
 - Strong attention-grabbing opening.
 - 2-4 short paragraphs.
 - Include a clear insight.
 - End with a CTA.
 
-LinkedIn Problem Post:
+LinkedIn Problem Post (title/purpose only; node type must be "Social Media Posting"):
 - 120-220 words.
 - Describe a real audience pain point.
 - Explain the consequences of ignoring it.
 - Introduce the campaign solution.
 - End with a CTA.
 
-LinkedIn Story Post:
+LinkedIn Story Post (title/purpose only; node type must be "Social Media Posting"):
 - 120-220 words.
 - Use a narrative structure.
 - Include situation, transformation, lesson, and CTA.
 
-LinkedIn Authority Post:
+LinkedIn Authority Post (title/purpose only; node type must be "Social Media Posting"):
 - 120-220 words.
 - Lead with expert insight.
 - Include a contrarian observation.
 - Give a practical takeaway.
 - End with a CTA.
 
-LinkedIn Objection Post:
+LinkedIn Objection Post (title/purpose only; node type must be "Social Media Posting"):
 - 120-220 words.
 - Address skepticism directly.
 - Reframe the concern.
 - Include evidence, reasoning, or a concrete rationale.
 - End with a CTA.
 
-LinkedIn CTA Post:
+LinkedIn CTA Post (title/purpose only; node type must be "Social Media Posting"):
 - 80-150 words.
 - Direct action-focused post.
 - Make the desired action clear.
