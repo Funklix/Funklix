@@ -5549,6 +5549,43 @@ function normalizeCampaignV3AIEmailNodes(nodes = []) {
   };
 }
 
+function normalizeCampaignV3AIPrimaryOvercounts(nodes = [], setup = {}) {
+  const sourceNodes = Array.isArray(nodes) ? nodes : [];
+  const normalized = normalizeCampaignSetupOptions(setup);
+  const limits = {
+    Idea: 1,
+    "Campaign Variation": normalized.variationCount,
+    Content: normalized.variationCount
+  };
+  const keptByType = { Idea: [], "Campaign Variation": [], Content: [] };
+  const discardedByType = { Idea: [], "Campaign Variation": [], Content: [] };
+
+  const normalizedNodes = sourceNodes.filter((node) => {
+    const type = cleanCampaignField(node?.type);
+    if (!Object.prototype.hasOwnProperty.call(limits, type)) return true;
+    if (keptByType[type].length < limits[type]) {
+      keptByType[type].push(node);
+      return true;
+    }
+    discardedByType[type].push(cleanCampaignField(node?.title) || `${type} ${keptByType[type].length + discardedByType[type].length + 1}`);
+    return false;
+  });
+
+  return {
+    nodes: normalizedNodes,
+    diagnostics: {
+      originalCounts: campaignV3NodeCounts(sourceNodes),
+      normalizedCounts: campaignV3NodeCounts(normalizedNodes),
+      selectedIdeaTitle: keptByType.Idea[0] ? cleanCampaignField(keptByType.Idea[0].title) : "",
+      selectedVariationTitles: keptByType["Campaign Variation"].map((node) => cleanCampaignField(node.title)),
+      selectedContentTitles: keptByType.Content.map((node) => cleanCampaignField(node.title)),
+      discardedIdeaTitles: discardedByType.Idea,
+      discardedVariationTitles: discardedByType["Campaign Variation"],
+      discardedContentTitles: discardedByType.Content
+    }
+  };
+}
+
 function buildCampaignV3FallbackLandingNode(nodes = [], setup = {}) {
   const ideaNode = (Array.isArray(nodes) ? nodes : []).find((node) => cleanCampaignField(node?.type) === "Idea") || {};
   const variationTitles = (Array.isArray(nodes) ? nodes : [])
@@ -5711,7 +5748,7 @@ async function debugRunCampaignV3AI(setupOverride = {}) {
   }
 
   const setup = defaultCampaignV3AISetup(setupOverride);
-  logCampaignV3AIDiagnostics("Starting AI compatibility flow with Email Campaign normalization and missing Landing Page fallback.", {
+  logCampaignV3AIDiagnostics("Starting AI compatibility flow with Email, primary over-count, and Landing Page fallback normalization.", {
     setup,
     featureFlagEnabled: isCampaignV3Enabled()
   });
@@ -5720,7 +5757,8 @@ async function debugRunCampaignV3AI(setupOverride = {}) {
     const apiPlan = await fetchGeneratedCampaignPlan(setup.campaignIdea, setup.additionalContext, setup);
     const rawNodes = Array.isArray(apiPlan?.nodes) ? apiPlan.nodes : [];
     const emailNormalization = normalizeCampaignV3AIEmailNodes(rawNodes);
-    const landingNormalization = normalizeCampaignV3AILandingFallback(emailNormalization.nodes, setup);
+    const primaryNormalization = normalizeCampaignV3AIPrimaryOvercounts(emailNormalization.nodes, setup);
+    const landingNormalization = normalizeCampaignV3AILandingFallback(primaryNormalization.nodes, setup);
     const normalizedNodes = landingNormalization.nodes;
     const nodeReport = campaignV3NodeReport(rawNodes);
     const firstTwentyNodes = campaignV3NodeReport(rawNodes, 20);
@@ -5733,6 +5771,7 @@ async function debugRunCampaignV3AI(setupOverride = {}) {
       nodeCount: rawNodes.length,
       normalizedNodeCount: normalizedNodes.length,
       emailNormalization: emailNormalization.diagnostics,
+      primaryNormalization: primaryNormalization.diagnostics,
       landingFallback: landingNormalization.diagnostics,
       firstTwentyNodes
     };
@@ -5742,6 +5781,7 @@ async function debugRunCampaignV3AI(setupOverride = {}) {
     logCampaignV3AIDiagnostics("Expected V3 counts", diagnosticBase.expectedCounts);
     logCampaignV3AIDiagnostics("Actual AI counts grouped by type", diagnosticBase.actualCountsByType);
     logCampaignV3AIDiagnostics("Email Campaign normalization", diagnosticBase.emailNormalization);
+    logCampaignV3AIDiagnostics("Idea / Campaign Variation / Content over-count normalization", diagnosticBase.primaryNormalization);
     logCampaignV3AIDiagnostics("Landing Page fallback normalization", diagnosticBase.landingFallback);
     logCampaignV3AIDiagnostics("Normalized counts grouped by type", diagnosticBase.normalizedCountsByType);
     logCampaignV3AIDiagnostics("Actual AI counts grouped by subtype", diagnosticBase.actualCountsBySubtype);
