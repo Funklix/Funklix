@@ -1,41 +1,55 @@
 const { buildBrandBrainContext } = require("./_brand-brain-context");
 
-const CAMPAIGN_CHAIN_TYPES = [
-  "Idea",
-  "Campaign Variation",
-  "Content",
-  "Social Media Posting",
-  "Landing Page",
-  "Email Campaign"
-];
+const CAMPAIGN_CHAIN_TYPES = ["Idea", "Campaign Variation", "Content", "Social Media Posting", "Landing Page", "Email Campaign"];
+const ANGLE_FAMILIES = ["Emotional", "Rational", "Authority", "Community", "Transformation", "Opportunity", "Trust", "Contrarian"];
+const SOCIAL_PURPOSES = ["Hook", "Problem", "Story", "Objection", "CTA", "Proof", "Behind the scenes", "Educational", "Contrarian", "Community"];
+
+function clampInteger(value, fallback, min, max) {
+  const number = Number.parseInt(value, 10);
+  if (!Number.isFinite(number)) return fallback;
+  return Math.max(min, Math.min(max, number));
+}
+
+function normalizeChannel(channel = "LinkedIn") {
+  const allowed = new Set(["LinkedIn", "X", "Instagram", "TikTok", "Mixed"]);
+  return allowed.has(channel) ? channel : "LinkedIn";
+}
 
 module.exports = async function handler(req, res) {
-  if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
-  }
+  if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
   const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) {
-    return res.status(500).json({ error: "Server is missing OPENAI_API_KEY" });
-  }
+  if (!apiKey) return res.status(500).json({ error: "Server is missing OPENAI_API_KEY" });
 
   try {
-    const { campaignIdea = "", additionalContext = "", brandBrainData = {}, boardId = "" } = req.body || {};
+    const {
+      campaignIdea = "",
+      additionalContext = "",
+      brandBrainData = {},
+      boardId = "",
+      variationCount: rawVariationCount = 3,
+      postsPerVariation: rawPostsPerVariation = 5,
+      includeLandingPage = true,
+      includeEmailCampaign = true,
+      channel: rawChannel = "LinkedIn"
+    } = req.body || {};
     if (!campaignIdea.trim()) {
       return res.status(400).json({ error: "campaignIdea is required" });
     }
 
+    const variationCount = clampInteger(rawVariationCount, 3, 1, 10);
+    const postsPerVariation = clampInteger(rawPostsPerVariation, 5, 1, 20);
+    const channel = normalizeChannel(rawChannel);
+    const shouldIncludeLandingPage = includeLandingPage !== false;
+    const shouldIncludeEmailCampaign = includeEmailCampaign !== false;
     const brandBrainContext = buildBrandBrainContext(boardId, brandBrainData);
+    const nodesPerVariation = 2 + postsPerVariation + (shouldIncludeLandingPage ? 1 : 0) + (shouldIncludeEmailCampaign ? 1 : 0);
+    const expectedNodeCount = 1 + variationCount * nodesPerVariation;
+    const expectedEdgeCount = variationCount * (2 + postsPerVariation + (shouldIncludeLandingPage ? postsPerVariation : 0) + (shouldIncludeEmailCampaign ? (shouldIncludeLandingPage ? 1 : postsPerVariation) : 0));
+    const angleGuidance = Array.from({ length: variationCount }, (_, index) => `${index + 1}. ${ANGLE_FAMILIES[index % ANGLE_FAMILIES.length]}`).join("\n");
+    const purposeGuidance = Array.from({ length: postsPerVariation }, (_, index) => `${index + 1}. ${SOCIAL_PURPOSES[index % SOCIAL_PURPOSES.length]}`).join("\n");
 
-    const prompt = `You are a senior campaign team creating one complete Campaign Canvas chain.
-
-Create exactly this linear chain, in this exact order:
-1. Idea
-2. Campaign Variation
-3. Content
-4. Social Media Posting
-5. Landing Page
-6. Email Campaign
+    const prompt = `You are a senior campaign team creating a Campaign Canvas plan that feels like an AI marketing employee building a real multi-angle campaign.
 
 Input campaign idea:
 ${campaignIdea}
@@ -43,62 +57,122 @@ ${campaignIdea}
 Additional context:
 ${additionalContext || "none"}
 
+Setup:
+- Campaign variations: ${variationCount}
+- Social posts per variation: ${postsPerVariation}
+- Include landing page per variation: ${shouldIncludeLandingPage ? "yes" : "no"}
+- Include email campaign per variation: ${shouldIncludeEmailCampaign ? "yes" : "no"}
+- Primary channel: ${channel}
+
 ${brandBrainContext.text}
 
-Shared requirements:
-- Generate the complete chain once; do not branch.
-- Do not create multiple variations.
-- Do not include Visual Concept or Image Brief.
-- Every stage must have a distinct strategic purpose and must not repeat the same copy in different words.
-- Use ICP, positioning, USP/value proposition, offer, messaging pillars, archetype guidance, tone, CTA guidance, and visual style from Brand Brain when available.
-- Plain text only: no markdown bold, no markdown headings, no code fences, no JSON inside fields.
-- Keep fields UI-ready: concise, practical, and specific.
-- Do not fabricate unavailable metrics, testimonials, logos, customers, or proof.
+Structure requirements:
+- Return exactly ${expectedNodeCount} nodes and ${expectedEdgeCount} edges.
+- Node 0 must be the single Idea node.
+- Node order must be: Idea, then for each variation in sequence: Campaign Variation, Content, all Social Media Posting nodes for that variation, optional Landing Page, optional Email Campaign.
+- For each variation, create this structure:
+  Idea -> Campaign Variation
+  Campaign Variation -> Content
+  Content -> each Social Media Posting
+  each Social Media Posting -> Landing Page if enabled
+  Landing Page -> Email Campaign if both are enabled
+  if Landing Page is disabled but Email Campaign is enabled, each Social Media Posting -> Email Campaign
+- Do not create extra node types.
+- Avoid direct Content -> Email Campaign or Campaign Variation -> Email Campaign connectors.
 
-Stage instructions:
+Variation quality:
+- Variations must not be simple rewordings.
+- Each variation must intentionally choose a distinct angle family and explicitly state the angle in the Campaign Variation description/content.
+- Use these angle families in order, adapting to Brand Brain and Brand DNA:
+${angleGuidance}
 
+Social post diversity:
+- Within each variation, social posts must be distinct, not duplicates.
+- Use these content purposes in order, adapting to the variation angle:
+${purposeGuidance}
+- Social titles should include the purpose, e.g. "Hook Post", "Problem Post", "Story Post".
+- For channel Mixed, distribute posts across LinkedIn, X, Instagram, and TikTok. Otherwise use ${channel}.
+
+Node requirements:
 Idea:
 - Core campaign idea only.
-- Clear promise and strategic direction.
-- Keep it broad enough to drive the next stages.
+- Clear goal, ICP/audience, and strategic context.
 
 Campaign Variation:
-- Create one distinct campaign angle from the Idea.
-- Choose one angle type: Emotional, Rational, Authority, Community, Transformation, or Contrarian.
-- Include the angle type, core promise, why this matters to the audience, and how it differs from the source idea.
+- A distinct campaign angle.
+- Title should name the angle.
+- Description/content must explicitly include "Angle:".
 
 Content:
-- Expand the Campaign Variation into structured marketing content.
-- Do not create another angle.
-- Do not create a social post yet.
-- Include clean sections: Hook, Narrative, Supporting points, CTA.
-- Include a production-ready imagePrompt for visual generation that reflects Brand Brain visual style and archetype-aligned emotional/symbolic direction.
+- Hero/content asset for that variation.
+- Include a strong message, key points, and CTA.
+- Include imagePrompt shaped by Brand Brain visual style and archetype guidance.
 
 Social Media Posting:
-- Adapt Content into one platform-ready social post.
-- Use channel/platform from context when available; otherwise default to LinkedIn.
-- If channel/platform is ambiguous, choose LinkedIn and write with LinkedIn-quality depth.
-- LinkedIn: write a real post, not a one-line caption. Include a strong opening hook, 2-4 short body paragraphs with useful context/insight, a clear CTA, and 2-3 relevant hashtags if appropriate.
-- Instagram: concise, visual, emotionally clear caption with a simple CTA.
-- TikTok: hook-first, punchy, creator-native script/caption.
-- X/Twitter: shorter, sharper, compressed post with direct CTA.
-- Put the final platform-ready post in social.caption, not only in content.
+- social.caption must contain the FULL publish-ready post copy.
+- content must contain only a short one-sentence summary of the post purpose.
+- Do not put the full post in content; put the full post in social.caption.
+- Hashtags should be clean campaign hashtags, not full sentences.
+- Keep purpose distinct from sibling posts.
+
+For LinkedIn posts:
+- Write complete, publish-ready LinkedIn posts.
+- Use short paragraphs with line breaks.
+- Avoid generic slogans.
+- Each post should feel specific to the campaign variation angle, audience, and Brand Brain context.
+
+LinkedIn Hook Post:
+- 120-220 words.
+- Strong attention-grabbing opening.
+- 2-4 short paragraphs.
+- Include a clear insight.
+- End with a CTA.
+
+LinkedIn Problem Post:
+- 120-220 words.
+- Describe a real audience pain point.
+- Explain the consequences of ignoring it.
+- Introduce the campaign solution.
+- End with a CTA.
+
+LinkedIn Story Post:
+- 120-220 words.
+- Use a narrative structure.
+- Include situation, transformation, lesson, and CTA.
+
+LinkedIn Authority Post:
+- 120-220 words.
+- Lead with expert insight.
+- Include a contrarian observation.
+- Give a practical takeaway.
+- End with a CTA.
+
+LinkedIn Objection Post:
+- 120-220 words.
+- Address skepticism directly.
+- Reframe the concern.
+- Include evidence, reasoning, or a concrete rationale.
+- End with a CTA.
+
+LinkedIn CTA Post:
+- 80-150 words.
+- Direct action-focused post.
+- Make the desired action clear.
+- Use a strong CTA.
+
+For non-LinkedIn channels:
+- Keep posts platform-native and complete.
+- X/Twitter must remain 280-character aware.
+- Instagram and TikTok captions should include hook, context, and CTA.
+- Do not return only 1-2 sentence summaries for LinkedIn posts.
 
 Landing Page:
-- Transform the Social Media Posting into landing page copy.
-- Fill structured landingPage fields instead of dumping everything into content.
-- Keep content empty or only a one-sentence summary.
-- headerVisualPrompt: production-ready visual direction for a 16:9 hero image that respects Brand Brain visual style and archetype guidance.
-- headerClaim: short main headline claim.
-- problem: concise ICP problem paragraph.
-- solution: concise solution paragraph.
-- trust: concise trust/credibility section without fabricated proof.
-- cta: short CTA button text.
+- headerVisualPrompt, headerClaim, problem, solution, trust, cta.
+- Do not fabricate proof, metrics, testimonials, or brand facts.
 
 Email Campaign:
-- Transform the Landing Page into an email campaign.
 - Include clean sections in content: Subject line, Preview text, Email body, CTA.
-- Keep it motivation-driven and concise.
+- Tie back to the variation angle.
 
 Return ONLY strict JSON with this shape:
 {
@@ -115,11 +189,7 @@ Return ONLY strict JSON with this shape:
     }
   ],
   "edges": [
-    { "fromIndex": 0, "toIndex": 1 },
-    { "fromIndex": 1, "toIndex": 2 },
-    { "fromIndex": 2, "toIndex": 3 },
-    { "fromIndex": 3, "toIndex": 4 },
-    { "fromIndex": 4, "toIndex": 5 }
+    { "fromIndex": 0, "toIndex": 1 }
   ]
 }`;
 
@@ -134,7 +204,7 @@ Return ONLY strict JSON with this shape:
         input: [
           {
             role: "system",
-            content: "You are a senior campaign strategist creating a single linear Campaign Canvas chain. Return only strict JSON matching the schema."
+            content: "You are a senior campaign strategist creating a multi-variation Campaign Canvas plan. Return only strict JSON matching the schema."
           },
           {
             role: "user",
@@ -144,7 +214,7 @@ Return ONLY strict JSON with this shape:
         text: {
           format: {
             type: "json_schema",
-            name: "campaign_chain_plan",
+            name: "campaign_canvas_plan_v2",
             strict: true,
             schema: {
               type: "object",
@@ -153,8 +223,8 @@ Return ONLY strict JSON with this shape:
               properties: {
                 nodes: {
                   type: "array",
-                  minItems: 6,
-                  maxItems: 6,
+                  minItems: expectedNodeCount,
+                  maxItems: expectedNodeCount,
                   items: {
                     type: "object",
                     additionalProperties: false,
@@ -205,15 +275,15 @@ Return ONLY strict JSON with this shape:
                 },
                 edges: {
                   type: "array",
-                  minItems: 5,
-                  maxItems: 5,
+                  minItems: expectedEdgeCount,
+                  maxItems: expectedEdgeCount,
                   items: {
                     type: "object",
                     additionalProperties: false,
                     required: ["fromIndex", "toIndex"],
                     properties: {
-                      fromIndex: { type: "integer", minimum: 0, maximum: 5 },
-                      toIndex: { type: "integer", minimum: 0, maximum: 5 }
+                      fromIndex: { type: "integer", minimum: 0, maximum: expectedNodeCount - 1 },
+                      toIndex: { type: "integer", minimum: 0, maximum: expectedNodeCount - 1 }
                     }
                   }
                 }
@@ -239,7 +309,18 @@ Return ONLY strict JSON with this shape:
     }
     try {
       const parsed = JSON.parse(rawText);
-      return res.status(200).json(parsed);
+      return res.status(200).json({
+        ...parsed,
+        setup: {
+          variationCount,
+          postsPerVariation,
+          includeLandingPage: shouldIncludeLandingPage,
+          includeEmailCampaign: shouldIncludeEmailCampaign,
+          channel,
+          expectedNodeCount,
+          expectedEdgeCount
+        }
+      });
     } catch (parseError) {
       return res.status(500).json({ error: "Failed to parse OpenAI JSON", rawText });
     }
