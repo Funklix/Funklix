@@ -5108,6 +5108,137 @@ function cleanCampaignField(value = "") {
     .trim();
 }
 
+function normalizeLandingPreviewSectionLabel(label = "") {
+  const normalized = cleanCampaignField(label).toLowerCase().replace(/\s+/g, " ");
+  if (normalized === "hero headline") return "heroHeadline";
+  if (normalized === "subheadline") return "subheadline";
+  if (normalized === "benefits") return "benefits";
+  if (normalized === "trust elements") return "trustElements";
+  if (normalized === "faq") return "faq";
+  if (normalized === "cta" || normalized === "primary cta" || normalized === "final cta") return "cta";
+  return "";
+}
+
+function parseLandingPreviewListItems(value = "", limit = 4) {
+  return cleanCampaignField(value)
+    .split(/\n+/)
+    .map((line) => line.replace(/^\s*(?:[-*•]|\d+[.)])\s*/, "").trim())
+    .filter(Boolean)
+    .slice(0, limit);
+}
+
+function parseStructuredLandingPagePreview(content = "") {
+  const cleaned = cleanCampaignField(content);
+  if (!cleaned) return null;
+
+  const sectionPattern = /(?:^|\n)\s*(Hero Headline|Subheadline|Benefits|Trust Elements|FAQ|CTA|Primary CTA|Final CTA)\s*:\s*/gi;
+  const matches = [...cleaned.matchAll(sectionPattern)];
+  if (matches.length < 2) return null;
+
+  const sections = {};
+  matches.forEach((match, index) => {
+    const key = normalizeLandingPreviewSectionLabel(match[1]);
+    if (!key) return;
+    const start = match.index + match[0].length;
+    const end = index + 1 < matches.length ? matches[index + 1].index : cleaned.length;
+    const value = cleanCampaignField(cleaned.slice(start, end));
+    if (value && !sections[key]) sections[key] = value;
+  });
+
+  const recognizedCount = ["heroHeadline", "subheadline", "benefits", "trustElements", "faq", "cta"]
+    .filter((key) => sections[key]).length;
+  return recognizedCount >= 2 ? sections : null;
+}
+
+function appendLandingPreviewText(parent, className, text, style = {}) {
+  if (!text) return null;
+  const element = document.createElement("p");
+  element.className = className;
+  Object.entries(style).forEach(([property, value]) => {
+    element.style[property] = value;
+  });
+  element.textContent = text;
+  parent.appendChild(element);
+  return element;
+}
+
+function appendLandingPreviewSectionTitle(parent, label) {
+  const title = document.createElement("p");
+  title.className = "landing-preview-line";
+  title.style.fontWeight = "700";
+  title.style.color = "#30407d";
+  title.style.marginTop = "2px";
+  title.textContent = label;
+  parent.appendChild(title);
+}
+
+function appendLandingPreviewList(parent, items = []) {
+  if (!items.length) return;
+  const list = document.createElement("ul");
+  list.className = "landing-preview-line";
+  list.style.margin = "0";
+  list.style.paddingLeft = "16px";
+  items.forEach((item) => {
+    const listItem = document.createElement("li");
+    listItem.textContent = item;
+    list.appendChild(listItem);
+  });
+  parent.appendChild(list);
+}
+
+function appendStructuredLandingPagePreview(parent, sections) {
+  if (!sections) return false;
+
+  const preview = document.createElement("div");
+  preview.className = "landing-preview-structured";
+  preview.style.display = "grid";
+  preview.style.gap = "4px";
+  preview.style.maxHeight = "13.5em";
+  preview.style.overflow = "hidden";
+  preview.style.paddingBottom = "4px";
+
+  appendLandingPreviewText(preview, "landing-preview-line", sections.heroHeadline, {
+    color: "#1f2a5c",
+    fontSize: "0.82rem",
+    fontWeight: "800",
+    lineHeight: "1.2"
+  });
+  appendLandingPreviewText(preview, "landing-preview-line", sections.subheadline, {
+    color: "#4a537b"
+  });
+
+  const benefitItems = parseLandingPreviewListItems(sections.benefits, 4);
+  if (benefitItems.length) {
+    appendLandingPreviewSectionTitle(preview, "Benefits");
+    appendLandingPreviewList(preview, benefitItems);
+  }
+
+  const trustItems = parseLandingPreviewListItems(sections.trustElements, 3);
+  if (trustItems.length) {
+    appendLandingPreviewSectionTitle(preview, "Trust Elements");
+    appendLandingPreviewList(preview, trustItems);
+  }
+
+  const faqItems = parseLandingPreviewListItems(sections.faq, 2);
+  if (faqItems.length) {
+    appendLandingPreviewSectionTitle(preview, "FAQ");
+    appendLandingPreviewList(preview, faqItems);
+  }
+
+  appendLandingPreviewText(preview, "landing-preview-line is-cta", sections.cta, {
+    background: "#eef3ff",
+    border: "1px solid #dce6ff",
+    borderRadius: "8px",
+    color: "#30407d",
+    fontWeight: "800",
+    padding: "5px 7px",
+    textAlign: "center"
+  });
+
+  parent.appendChild(preview);
+  return true;
+}
+
 function canonicalizeCampaignPlanNodes(nodes = [], setup = {}) {
   const normalized = normalizeCampaignSetupOptions(setup);
   const grouped = CAMPAIGN_CHAIN_TYPES.reduce((groups, type) => {
@@ -7109,21 +7240,27 @@ function updateNodeCard(node) {
       && !duplicatesStructuredField
       && landingContent.length > Math.max(140, structuredLandingText.length * 0.75);
     if (hasMeaningfulLandingContent) {
-      const contentPreview = document.createElement("p");
-      contentPreview.className = "landing-preview-line";
-      contentPreview.style.whiteSpace = "pre-line";
-      contentPreview.style.maxHeight = "9.5em";
-      contentPreview.style.overflow = "hidden";
-      contentPreview.style.paddingBottom = "4px";
-      contentPreview.textContent = landingContent.length > 520 ? `${landingContent.slice(0, 520).trim()}…` : landingContent;
-      card.appendChild(contentPreview);
+      const structuredPreview = parseStructuredLandingPagePreview(landingContent);
+      const didRenderStructuredPreview = appendStructuredLandingPagePreview(card, structuredPreview);
+      if (!didRenderStructuredPreview) {
+        const contentPreview = document.createElement("p");
+        contentPreview.className = "landing-preview-line";
+        contentPreview.style.whiteSpace = "pre-line";
+        contentPreview.style.maxHeight = "9.5em";
+        contentPreview.style.overflow = "hidden";
+        contentPreview.style.paddingBottom = "4px";
+        contentPreview.textContent = landingContent.length > 520 ? `${landingContent.slice(0, 520).trim()}…` : landingContent;
+        card.appendChild(contentPreview);
+      }
     }
     [["Claim", lp.headerClaim], ["Problem", lp.problem], ["Solution", lp.solution], ["Trust", lp.trust], ["CTA", lp.cta]]
       .forEach(([label, value]) => {
         if (!value) return;
         const p = document.createElement("p");
         p.className = `landing-preview-line${label === "CTA" ? " is-cta" : ""}`;
-        p.innerHTML = `<strong>${label}:</strong> ${value}`;
+        const strong = document.createElement("strong");
+        strong.textContent = `${label}:`;
+        p.append(strong, ` ${value}`);
         card.appendChild(p);
       });
     social.appendChild(card);
