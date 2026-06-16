@@ -5549,6 +5549,54 @@ function normalizeCampaignV3AIEmailNodes(nodes = []) {
   };
 }
 
+function campaignV3LandingBodyText(node = {}) {
+  const landingPage = node.landingPage && typeof node.landingPage === "object" ? node.landingPage : {};
+  return [
+    node.content,
+    landingPage.headerClaim,
+    landingPage.problem,
+    landingPage.solution,
+    landingPage.trust,
+    landingPage.cta
+  ].map((value) => cleanCampaignField(value)).filter(Boolean).join("\n");
+}
+
+function normalizeCampaignV3AILandingNodes(nodes = []) {
+  const sourceNodes = Array.isArray(nodes) ? nodes : [];
+  const landingEntries = sourceNodes
+    .map((node, index) => ({ node, index, type: cleanCampaignField(node?.type) }))
+    .filter((entry) => entry.type === "Landing Page");
+
+  if (landingEntries.length <= 1) {
+    return {
+      nodes: sourceNodes,
+      diagnostics: {
+        originalLandingCount: landingEntries.length,
+        selectedCanonicalLandingTitle: landingEntries[0] ? cleanCampaignField(landingEntries[0].node?.title) : "",
+        discardedLandingTitles: []
+      }
+    };
+  }
+
+  const canonicalEntry = landingEntries.reduce((best, entry) => {
+    const bestLength = campaignV3LandingBodyText(best.node).length;
+    const entryLength = campaignV3LandingBodyText(entry.node).length;
+    return entryLength > bestLength ? entry : best;
+  }, landingEntries[0]);
+  const discardedLandingTitles = landingEntries
+    .filter((entry) => entry.index !== canonicalEntry.index)
+    .map((entry) => cleanCampaignField(entry.node?.title) || `Landing Page ${entry.index + 1}`);
+
+  return {
+    nodes: sourceNodes.filter((node, index) => cleanCampaignField(node?.type) !== "Landing Page" || index === canonicalEntry.index),
+    diagnostics: {
+      originalLandingCount: landingEntries.length,
+      selectedCanonicalLandingTitle: cleanCampaignField(canonicalEntry.node?.title) || `Landing Page ${canonicalEntry.index + 1}`,
+      discardedLandingTitles
+    }
+  };
+}
+
 function normalizeCampaignV3AIPrimaryOvercounts(nodes = [], setup = {}) {
   const sourceNodes = Array.isArray(nodes) ? nodes : [];
   const normalized = normalizeCampaignSetupOptions(setup);
@@ -5790,10 +5838,11 @@ async function runCampaignV3AICompatibility(setupOverride = {}, options = {}) {
     const apiPlan = await fetchGeneratedCampaignPlan(setup.campaignIdea, setup.additionalContext, setup);
     const rawNodes = Array.isArray(apiPlan?.nodes) ? apiPlan.nodes : [];
     const emailNormalization = normalizeCampaignV3AIEmailNodes(rawNodes);
-    const primaryNormalization = normalizeCampaignV3AIPrimaryOvercounts(emailNormalization.nodes, setup);
+    const landingNormalization = normalizeCampaignV3AILandingNodes(emailNormalization.nodes);
+    const primaryNormalization = normalizeCampaignV3AIPrimaryOvercounts(landingNormalization.nodes, setup);
     const socialNormalization = normalizeCampaignV3AISocialOvercounts(primaryNormalization.nodes, setup);
-    const landingNormalization = normalizeCampaignV3AILandingFallback(socialNormalization.nodes, setup);
-    const normalizedNodes = landingNormalization.nodes;
+    const landingFallback = normalizeCampaignV3AILandingFallback(socialNormalization.nodes, setup);
+    const normalizedNodes = landingFallback.nodes;
     const nodeReport = campaignV3NodeReport(rawNodes);
     const firstTwentyNodes = campaignV3NodeReport(rawNodes, 20);
     const diagnosticBase = {
@@ -5805,9 +5854,10 @@ async function runCampaignV3AICompatibility(setupOverride = {}, options = {}) {
       nodeCount: rawNodes.length,
       normalizedNodeCount: normalizedNodes.length,
       emailNormalization: emailNormalization.diagnostics,
+      landingNormalization: landingNormalization.diagnostics,
       primaryNormalization: primaryNormalization.diagnostics,
       socialNormalization: socialNormalization.diagnostics,
-      landingFallback: landingNormalization.diagnostics,
+      landingFallback: landingFallback.diagnostics,
       firstTwentyNodes
     };
 
@@ -5816,6 +5866,7 @@ async function runCampaignV3AICompatibility(setupOverride = {}, options = {}) {
     logCampaignV3AIDiagnostics("Expected V3 counts", diagnosticBase.expectedCounts);
     logCampaignV3AIDiagnostics("Actual AI counts grouped by type", diagnosticBase.actualCountsByType);
     logCampaignV3AIDiagnostics("Email Campaign normalization", diagnosticBase.emailNormalization);
+    logCampaignV3AIDiagnostics("Landing Page over-count normalization", diagnosticBase.landingNormalization);
     logCampaignV3AIDiagnostics("Idea / Campaign Variation / Content over-count normalization", diagnosticBase.primaryNormalization);
     logCampaignV3AIDiagnostics("Social Media Posting over-count normalization", diagnosticBase.socialNormalization);
     logCampaignV3AIDiagnostics("Landing Page fallback normalization", diagnosticBase.landingFallback);
@@ -5927,11 +5978,11 @@ function openCampaignV3Modal() {
     </div>
     <label class="campaign-builder-field campaign-builder-field-full">
       <span>Campaign Idea</span>
-      <textarea id="campaign-v3-idea" rows="5" placeholder="Describe the campaign goal, offer, ICP, launch, or product story...">Promote a premium networking experience for C-level executives.</textarea>
+      <textarea id="campaign-v3-idea" rows="5" placeholder="Launch a new service, promote a seasonal offer, or increase demo bookings..."></textarea>
     </label>
     <label class="campaign-builder-field campaign-builder-field-full">
       <span>Additional Context</span>
-      <textarea id="campaign-v3-context" rows="3" placeholder="Optional constraints, audience details, positioning, timing...">Focus on trust, exclusivity, meaningful business relationships, and high-quality leads.</textarea>
+      <textarea id="campaign-v3-context" rows="3" placeholder="Optional audience, timing, channel, or campaign notes..."></textarea>
     </label>
     <label class="campaign-builder-field campaign-builder-field-full">
       <span>Channel</span>

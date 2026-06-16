@@ -52,13 +52,14 @@ module.exports = async function handler(req, res) {
     const prompt = `You are a senior campaign team creating a Campaign Canvas plan that feels like an AI marketing employee building a real multi-angle campaign.
 
 Context priority:
-1. Brand Brain / Brand DNA / Archetype guidance is the source of truth for brand, ICP, positioning, offer, tone, messaging, CTA style, and visual style.
-2. Campaign Idea defines the requested campaign task.
+1. Brand Brain / Brand DNA / Archetype guidance is the source of truth for the product, offer, ICP, positioning, value proposition, messaging, tone, CTA style, and visual style.
+2. Campaign Idea defines the campaign objective, theme, angle, activation, or marketing goal.
 3. Additional Context provides optional campaign-specific details.
-4. If Campaign Idea or Additional Context conflicts with Brand Brain, preserve Brand Brain and reinterpret the campaign idea in a brand-aligned way.
-5. Do not target audiences outside the Brand Brain ICP unless the user explicitly frames it as a new market expansion.
-6. Do not invent offers, proof, metrics, audience segments, or brand facts that are not supported by Brand Brain or explicit campaign input.
-7. Every node must visibly reflect Brand Brain positioning, ICP, tone, messaging pillars, and Brand DNA/archetype when available.
+4. If Campaign Idea or Additional Context conflicts with Brand Brain, preserve Brand Brain and reinterpret the campaign idea as a brand-aligned marketing angle.
+5. Do not replace the Brand Brain product, offer, ICP, positioning, value proposition, or messaging unless the user explicitly states this is a new product, new offer, market expansion, or new business line.
+6. Do not target audiences outside the Brand Brain ICP unless the user explicitly frames it as a new market expansion.
+7. Do not invent offers, proof, metrics, audience segments, or brand facts that are not supported by Brand Brain or explicit campaign input.
+8. Every node must visibly reflect Brand Brain positioning, ICP, tone, messaging pillars, and Brand DNA/archetype when available.
 
 Input campaign idea:
 ${campaignIdea}
@@ -69,9 +70,9 @@ ${additionalContext || "none"}
 Before generating nodes, silently check:
 - Does the campaign idea align with Brand Brain ICP?
 - Does the campaign idea align with Brand Brain positioning?
-- Does it use the correct offer/value proposition?
+- Does it preserve the Brand Brain offer/value proposition as the thing being marketed?
 - Does it match tone and archetype guidance?
-If not, adapt the campaign into the closest brand-aligned version.
+If not, adapt the campaign into the closest brand-aligned version and treat the campaign idea as an angle rather than a replacement offer.
 
 Do not ask the user for clarification in this generation flow.
 
@@ -231,14 +232,14 @@ For non-LinkedIn channels:
 
 Landing Page:
 - Landing pages should read like real conversion pages, not campaign summaries.
+- Build the page around the Brand Brain offer/value proposition as the product being marketed; use Campaign Idea as the angle or activation unless it explicitly says new product, new offer, market expansion, or new business line.
 - headerVisualPrompt: concrete hero visual direction aligned with the offer, audience, Brand Brain visual style, and campaign angle.
-- headerClaim: a real landing page headline, 5-15 words, benefit-oriented, and not a summary of the campaign idea.
-- Bad headerClaim example: "Promote a premium networking experience for C-level executives".
-- Good headerClaim example: "Exclusive Networking for Growth-Focused Executives".
-- problem: describe the audience pain point in 1-3 sentences.
-- solution: describe the offer in 1-3 sentences.
-- trust: credibility-focused copy using social proof, expertise, exclusivity, authority, results, or experience when provided by Brand Brain/context. Do not repeat the problem or solution.
-- cta: action-oriented button-style language, 2-6 words.
+- headerClaim: the Hero Headline. It must be a real landing page headline, 5-15 words, benefit-oriented, and grounded in the Brand Brain offer rather than a summary of the campaign idea.
+- description/content: include a readable landing page outline using plain-text labels for Hero Headline, Subheadline, Primary CTA, Problem Section, Benefits, Trust Elements, Offer, FAQ, and Final CTA.
+- problem: write the Subheadline and Problem Section in 2-4 concise sentences that name the audience pain, stakes, and desired outcome.
+- solution: write the Offer and Benefits section in 2-4 concise sentences or simple bullets that explain the Brand Brain offer and why it matters.
+- trust: write Trust Elements and FAQ content using social proof, expertise, exclusivity, authority, safety, professionalism, results, or experience when provided by Brand Brain/context. Do not repeat the problem or solution.
+- cta: action-oriented button-style Primary CTA language, 2-6 words; the Final CTA in content should reinforce the same action.
 - Do not fabricate proof, metrics, testimonials, or brand facts.
 
 Email Campaign:
