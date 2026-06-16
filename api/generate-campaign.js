@@ -51,11 +51,29 @@ module.exports = async function handler(req, res) {
 
     const prompt = `You are a senior campaign team creating a Campaign Canvas plan that feels like an AI marketing employee building a real multi-angle campaign.
 
+Context priority:
+1. Brand Brain / Brand DNA / Archetype guidance is the source of truth for brand, ICP, positioning, offer, tone, messaging, CTA style, and visual style.
+2. Campaign Idea defines the requested campaign task.
+3. Additional Context provides optional campaign-specific details.
+4. If Campaign Idea or Additional Context conflicts with Brand Brain, preserve Brand Brain and reinterpret the campaign idea in a brand-aligned way.
+5. Do not target audiences outside the Brand Brain ICP unless the user explicitly frames it as a new market expansion.
+6. Do not invent offers, proof, metrics, audience segments, or brand facts that are not supported by Brand Brain or explicit campaign input.
+7. Every node must visibly reflect Brand Brain positioning, ICP, tone, messaging pillars, and Brand DNA/archetype when available.
+
 Input campaign idea:
 ${campaignIdea}
 
 Additional context:
 ${additionalContext || "none"}
+
+Before generating nodes, silently check:
+- Does the campaign idea align with Brand Brain ICP?
+- Does the campaign idea align with Brand Brain positioning?
+- Does it use the correct offer/value proposition?
+- Does it match tone and archetype guidance?
+If not, adapt the campaign into the closest brand-aligned version.
+
+Do not ask the user for clarification in this generation flow.
 
 Setup:
 - Campaign variations: ${variationCount}
