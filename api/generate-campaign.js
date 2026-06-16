@@ -234,15 +234,20 @@ Landing Page:
 - Landing pages should read like real conversion pages, not campaign summaries.
 - The Landing Page is the central conversion asset for the whole campaign, not a child of one Campaign Variation.
 - Landing Page strategy hierarchy: 1. Campaign Objective, 2. Brand Brain Offer, 3. ICP / Persona, 4. Brand Positioning, 5. Value Proposition, 6. Messaging Pillars.
-- Build the page around the Brand Brain offer/value proposition as the product being marketed; use Campaign Idea as the objective, angle, or activation unless it explicitly says new product, new offer, market expansion, or new business line.
-- The Landing Page should synthesize the strongest elements from all campaign variations while remaining anchored in the campaign objective and Brand Brain offer.
-- If campaign variations contain emotional, rational, authority, or other angles, use them as supporting proof points and persuasion mechanisms. Do not allow a single variation to define the Landing Page.
-- The Landing Page headline should focus on the offer itself, not on a specific campaign angle.
+- Build the page around the Brand Brain offer/value proposition as the product, service, event, offer, or experience being promoted; use Campaign Idea as the objective, angle, or activation unless it explicitly says new product, new offer, market expansion, or new business line.
+- Use Campaign Variations only as internal planning inputs. Customer-facing Landing Page copy must describe the offer itself, not the campaign structure.
+- If variations contain emotional, rational, authority, or other angles, translate those angles into customer-facing benefits, proof points, and persuasion elements without naming or describing the angles.
+- Never describe the Landing Page as a campaign, campaign angle, variation, strategy, synthesis, combination of angles, marketing asset, emotional angle, rational angle, or authority angle.
+- Never use titles like "Combined Campaign Landing Page" or copy like "A synthesis of emotional and rational angles." Instead write offer-first conversion copy.
+- The Landing Page headline should focus on the product, service, event, offer, or experience itself, not on a specific campaign angle.
 - Good example for campaign "Increase honeymoon helicopter bookings in Bali": "Private Honeymoon Helicopter Experiences in Bali".
+- Bad example for that campaign: "Combined Campaign Landing Page".
 - Bad example for that campaign: "Why Safety Matters in Aerial Tourism".
+- Good supporting copy: "Experience Bali from above with a private helicopter tour designed for unforgettable honeymoon memories.".
+- Bad supporting copy: "A synthesis of emotional and rational angles.".
 - Good example for campaign "Promote exclusive networking events for executives": "Exclusive Networking Events for C-Level Executives".
 - Bad example for that campaign: "The Emotional Power of Leadership Relationships".
-- headerVisualPrompt: concrete hero visual direction aligned with the offer, audience, Brand Brain visual style, and campaign angle.
+- headerVisualPrompt: concrete hero visual direction aligned with the offer, audience, Brand Brain visual style, and campaign objective.
 - headerClaim: the Hero Headline. It must be a real landing page headline, 5-15 words, benefit-oriented, focused on the offer itself, and grounded in the Brand Brain offer rather than a single campaign variation.
 - description/content: include a readable landing page outline using plain-text labels for Hero Headline, Subheadline, Primary CTA, Problem Section, Benefits, Trust Elements, Offer, FAQ, and Final CTA.
 - problem: write the Subheadline and Problem Section in 2-4 concise sentences that name the audience pain, stakes, and desired outcome.
