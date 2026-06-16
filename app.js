@@ -5219,7 +5219,7 @@ function applyGeneratedCampaignNodePayload(node, payload = {}, previousNode = nu
       trust: cleanCampaignField(landing.trust || landing.buildingTrust),
       cta: cleanCampaignField(landing.cta || landing.conversionCta)
     };
-    node.content = description || node.landingPage.headerClaim || "";
+    node.content = [description, content].filter(Boolean).join("\n\n") || node.landingPage.headerClaim || "";
   }
 }
 
@@ -5513,11 +5513,25 @@ function campaignV3EmailBodyText(node = {}) {
   return cleanCampaignField(node.content || node.body || node.email?.body || node.metadata?.body || "");
 }
 
-function normalizeCampaignV3AIEmailNodes(nodes = []) {
+function normalizeCampaignV3AIEmailNodes(nodes = [], setup = {}) {
   const sourceNodes = Array.isArray(nodes) ? nodes : [];
   const emailEntries = sourceNodes
     .map((node, index) => ({ node, index, type: cleanCampaignField(node?.type) }))
     .filter((entry) => entry.type === "Email Campaign");
+
+  if (setup.includeEmailCampaign === false) {
+    const discardedEmailTitles = emailEntries
+      .map((entry) => cleanCampaignField(entry.node?.title) || `Email Campaign ${entry.index + 1}`);
+    return {
+      nodes: sourceNodes.filter((node) => cleanCampaignField(node?.type) !== "Email Campaign"),
+      diagnostics: {
+        originalEmailCount: emailEntries.length,
+        selectedCanonicalEmailTitle: "",
+        discardedEmailTitles,
+        emailDisabled: true
+      }
+    };
+  }
 
   if (emailEntries.length <= 1) {
     return {
@@ -5525,7 +5539,8 @@ function normalizeCampaignV3AIEmailNodes(nodes = []) {
       diagnostics: {
         originalEmailCount: emailEntries.length,
         selectedCanonicalEmailTitle: emailEntries[0] ? cleanCampaignField(emailEntries[0].node?.title) : "",
-        discardedEmailTitles: []
+        discardedEmailTitles: [],
+        emailDisabled: false
       }
     };
   }
@@ -5544,7 +5559,8 @@ function normalizeCampaignV3AIEmailNodes(nodes = []) {
     diagnostics: {
       originalEmailCount: emailEntries.length,
       selectedCanonicalEmailTitle: cleanCampaignField(canonicalEntry.node?.title) || `Email Campaign ${canonicalEntry.index + 1}`,
-      discardedEmailTitles
+      discardedEmailTitles,
+      emailDisabled: false
     }
   };
 }
@@ -5837,7 +5853,7 @@ async function runCampaignV3AICompatibility(setupOverride = {}, options = {}) {
     reportStatus("Generating Campaign...");
     const apiPlan = await fetchGeneratedCampaignPlan(setup.campaignIdea, setup.additionalContext, setup);
     const rawNodes = Array.isArray(apiPlan?.nodes) ? apiPlan.nodes : [];
-    const emailNormalization = normalizeCampaignV3AIEmailNodes(rawNodes);
+    const emailNormalization = normalizeCampaignV3AIEmailNodes(rawNodes, setup);
     const landingNormalization = normalizeCampaignV3AILandingNodes(emailNormalization.nodes);
     const primaryNormalization = normalizeCampaignV3AIPrimaryOvercounts(landingNormalization.nodes, setup);
     const socialNormalization = normalizeCampaignV3AISocialOvercounts(primaryNormalization.nodes, setup);
@@ -5956,15 +5972,18 @@ function setCampaignV3ModalBusy(overlay, busy) {
 }
 
 function campaignV3ModalSetupFromInputs(overlay) {
-  return defaultCampaignV3AISetup({
-    campaignIdea: overlay.querySelector("#campaign-v3-idea")?.value,
-    additionalContext: overlay.querySelector("#campaign-v3-context")?.value,
+  const normalized = normalizeCampaignSetupOptions({
     variationCount: overlay.querySelector("#campaign-v3-variations")?.value,
     postsPerVariation: overlay.querySelector("#campaign-v3-posts")?.value,
     channel: overlay.querySelector("#campaign-v3-channel")?.value,
     includeLandingPage: overlay.querySelector("#campaign-v3-include-landing")?.checked,
     includeEmailCampaign: overlay.querySelector("#campaign-v3-include-email")?.checked
   });
+  return {
+    campaignIdea: cleanCampaignField(overlay.querySelector("#campaign-v3-idea")?.value),
+    additionalContext: cleanCampaignField(overlay.querySelector("#campaign-v3-context")?.value),
+    ...normalized
+  };
 }
 
 function openCampaignV3Modal() {
@@ -6024,7 +6043,7 @@ function openCampaignV3Modal() {
   overlay.querySelector("#campaign-v3-generate")?.addEventListener("click", async () => {
     const setup = campaignV3ModalSetupFromInputs(overlay);
     if (!setup.campaignIdea) {
-      errorEl.textContent = "Campaign generation failed. Please try again.";
+      errorEl.textContent = "Please enter a campaign idea.";
       return;
     }
 
