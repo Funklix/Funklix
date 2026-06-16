@@ -7095,6 +7095,29 @@ function updateNodeCard(node) {
       img.addEventListener("click", (event) => { event.stopPropagation(); openLightbox(latestImage.url, "Landing header visual"); });
       card.appendChild(img);
     }
+    const structuredLandingText = [lp.headerClaim, lp.problem, lp.solution, lp.trust, lp.cta]
+      .map((value) => cleanCampaignField(value))
+      .filter(Boolean)
+      .join(" ");
+    const landingContent = cleanCampaignField(node.content);
+    const normalizedLandingContent = landingContent.toLowerCase();
+    const duplicatesStructuredField = [lp.headerClaim, lp.problem, lp.solution, lp.trust, lp.cta]
+      .map((value) => cleanCampaignField(value).toLowerCase())
+      .filter(Boolean)
+      .some((value) => normalizedLandingContent === value);
+    const hasMeaningfulLandingContent = landingContent
+      && !duplicatesStructuredField
+      && landingContent.length > Math.max(140, structuredLandingText.length * 0.75);
+    if (hasMeaningfulLandingContent) {
+      const contentPreview = document.createElement("p");
+      contentPreview.className = "landing-preview-line";
+      contentPreview.style.whiteSpace = "pre-line";
+      contentPreview.style.maxHeight = "9.5em";
+      contentPreview.style.overflow = "hidden";
+      contentPreview.style.paddingBottom = "4px";
+      contentPreview.textContent = landingContent.length > 520 ? `${landingContent.slice(0, 520).trim()}…` : landingContent;
+      card.appendChild(contentPreview);
+    }
     [["Claim", lp.headerClaim], ["Problem", lp.problem], ["Solution", lp.solution], ["Trust", lp.trust], ["CTA", lp.cta]]
       .forEach(([label, value]) => {
         if (!value) return;
