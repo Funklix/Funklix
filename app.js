@@ -5132,7 +5132,12 @@ function parseStructuredLandingPagePreview(content = "") {
   if (!cleaned) return null;
 
   const sectionPattern = /(?:^|\n)\s*(Hero Headline|Subheadline|Benefits|Trust Elements|FAQ|CTA|Primary CTA|Final CTA)\s*:\s*/gi;
-  const matches = [...cleaned.matchAll(sectionPattern)];
+  const matches = [];
+  let match = sectionPattern.exec(cleaned);
+  while (match) {
+    matches.push(match);
+    match = sectionPattern.exec(cleaned);
+  }
   if (matches.length < 2) return null;
 
   const sections = {};
@@ -7240,8 +7245,13 @@ function updateNodeCard(node) {
       && !duplicatesStructuredField
       && landingContent.length > Math.max(140, structuredLandingText.length * 0.75);
     if (hasMeaningfulLandingContent) {
-      const structuredPreview = parseStructuredLandingPagePreview(landingContent);
-      const didRenderStructuredPreview = appendStructuredLandingPagePreview(card, structuredPreview);
+      let didRenderStructuredPreview = false;
+      try {
+        const structuredPreview = parseStructuredLandingPagePreview(landingContent);
+        didRenderStructuredPreview = appendStructuredLandingPagePreview(card, structuredPreview);
+      } catch (error) {
+        console.warn("[Funklix] Landing Page structured preview failed; falling back to plain preview.", error);
+      }
       if (!didRenderStructuredPreview) {
         const contentPreview = document.createElement("p");
         contentPreview.className = "landing-preview-line";
