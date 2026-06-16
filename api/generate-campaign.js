@@ -232,9 +232,18 @@ For non-LinkedIn channels:
 
 Landing Page:
 - Landing pages should read like real conversion pages, not campaign summaries.
-- Build the page around the Brand Brain offer/value proposition as the product being marketed; use Campaign Idea as the angle or activation unless it explicitly says new product, new offer, market expansion, or new business line.
+- The Landing Page is the central conversion asset for the whole campaign, not a child of one Campaign Variation.
+- Landing Page strategy hierarchy: 1. Campaign Objective, 2. Brand Brain Offer, 3. ICP / Persona, 4. Brand Positioning, 5. Value Proposition, 6. Messaging Pillars.
+- Build the page around the Brand Brain offer/value proposition as the product being marketed; use Campaign Idea as the objective, angle, or activation unless it explicitly says new product, new offer, market expansion, or new business line.
+- The Landing Page should synthesize the strongest elements from all campaign variations while remaining anchored in the campaign objective and Brand Brain offer.
+- If campaign variations contain emotional, rational, authority, or other angles, use them as supporting proof points and persuasion mechanisms. Do not allow a single variation to define the Landing Page.
+- The Landing Page headline should focus on the offer itself, not on a specific campaign angle.
+- Good example for campaign "Increase honeymoon helicopter bookings in Bali": "Private Honeymoon Helicopter Experiences in Bali".
+- Bad example for that campaign: "Why Safety Matters in Aerial Tourism".
+- Good example for campaign "Promote exclusive networking events for executives": "Exclusive Networking Events for C-Level Executives".
+- Bad example for that campaign: "The Emotional Power of Leadership Relationships".
 - headerVisualPrompt: concrete hero visual direction aligned with the offer, audience, Brand Brain visual style, and campaign angle.
-- headerClaim: the Hero Headline. It must be a real landing page headline, 5-15 words, benefit-oriented, and grounded in the Brand Brain offer rather than a summary of the campaign idea.
+- headerClaim: the Hero Headline. It must be a real landing page headline, 5-15 words, benefit-oriented, focused on the offer itself, and grounded in the Brand Brain offer rather than a single campaign variation.
 - description/content: include a readable landing page outline using plain-text labels for Hero Headline, Subheadline, Primary CTA, Problem Section, Benefits, Trust Elements, Offer, FAQ, and Final CTA.
 - problem: write the Subheadline and Problem Section in 2-4 concise sentences that name the audience pain, stakes, and desired outcome.
 - solution: write the Offer and Benefits section in 2-4 concise sentences or simple bullets that explain the Brand Brain offer and why it matters.
