@@ -69,7 +69,7 @@ function normalizeBrandBrainData(brandBrainData = {}) {
     icp,
     positioning: brandCore,
     usp: valueProposition,
-    offer: cleanText(data.offer || data.coreOffer || valueProposition || brandCore, 700),
+    offer: cleanText(data.offer || data.coreOffer || brandCore || valueProposition, 700),
     tone,
     archetype: cleanText(data.archetype || data.brandArchetype || brandDNA.primaryArchetype || (tone.length ? tone.join(", ") : ""), 300),
     brandDNA: {
