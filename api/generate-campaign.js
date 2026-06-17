@@ -232,7 +232,10 @@ For non-LinkedIn channels:
 
 Landing Page:
 - Landing pages should read like real conversion pages, not campaign summaries.
-- Landing Page fields must be customer-facing conversion copy, not internal campaign summaries.
+- landingPage.headerClaim, landingPage.problem, landingPage.solution, landingPage.trust, and landingPage.cta are the primary source of truth for the dedicated Landing Page fields shown in the editor.
+- These landingPage fields are not metadata, not summaries, and not secondary notes; they are the actual Landing Page building blocks and must contain the strongest customer-facing conversion copy.
+- Fill the landingPage fields first with the best concise copy. Only after creating strong landingPage fields, use description/content to expand those same ideas into a richer landing page outline.
+- Never place the strongest Landing Page copy only in description/content. The strongest conversion copy must always live inside headerClaim, problem, solution, trust, and cta.
 - Do not copy or lightly rephrase Campaign Idea, Additional Context, Goal, Audience, or Campaign Variation titles. Convert internal planning inputs into customer-facing language.
 - Avoid internal verbs in Landing Page copy: promote, increase, launch, drive, generate, campaign, objective, audience, goal.
 - Landing Page copy must never mention campaign angle, variation, emotional angle, rational angle, authority angle, synthesis, marketing strategy, targeting, audience as a metadata label, or goal as a metadata label.
@@ -252,13 +255,13 @@ Landing Page:
 - Good example for campaign "Promote exclusive networking events for executives": "Exclusive Networking Events for C-Level Executives".
 - Bad example for that campaign: "The Emotional Power of Leadership Relationships".
 - headerVisualPrompt: concrete hero visual direction aligned with the offer, audience, Brand Brain visual style, and campaign objective.
-- headerClaim: the Hero Headline. It must be a real customer-facing landing page headline, 5-15 words, benefit-oriented, focused on the offer itself, and grounded in the Brand Brain offer rather than a single campaign variation. It must name the offer or experience, speak to the customer outcome, avoid internal campaign verbs, and never simply restate the Campaign Idea.
+- headerClaim: the Hero Headline that would appear above the fold. It must be a real customer-facing landing page headline, 5-15 words, benefit-oriented, focused on the offer itself, and grounded in the Brand Brain offer rather than a single campaign variation. It must name the offer or experience, speak to the customer outcome, avoid internal campaign verbs, and never simply restate the Campaign Idea.
 - Never use these words in headerClaim: promote, increase, launch, drive, generate, campaign, objective, audience, targeting, angle, variation, strategy.
 - Bad headerClaim: "promote honeymoon helicopter flights in Bali".
 - Bad headerClaim: "increase bookings for helicopter tours".
 - Good headerClaim: "Private Honeymoon Helicopter Tours Over Bali".
 - Good headerClaim: "See Bali From Above On Your Honeymoon".
-- description/content: include a readable landing page outline using plain-text labels for Hero Headline, Subheadline, Primary CTA, Problem Section, Benefits, Trust Elements, Offer, FAQ, and Final CTA. Problem Section must be customer pain; Benefits/Offer must be offer positioning; Trust Elements must be credibility proof.
+- description/content: after landingPage fields are strong, include a readable landing page outline using plain-text labels for Hero Headline, Subheadline, Primary CTA, Problem Section, Benefits, Trust Elements, Offer, FAQ, and Final CTA. This outline must expand the same source-of-truth copy from landingPage fields; Problem Section must be customer pain; Benefits/Offer must be offer positioning; Trust Elements must be credibility proof.
 - problem: write the Subheadline and Problem Section in 2-4 concise sentences that describe the customer's pain, friction, unmet desire, risk, doubt, fear, missed opportunity, or current frustration plus the stakes and desired outcome.
 - Problem must never be an audience description, location description, campaign objective, product category, marketing goal, internal strategy, campaign angle, or targeting statement.
 - Bad problem: "romantic events for wedding couples on vacation in Bali".
