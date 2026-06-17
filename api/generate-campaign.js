@@ -52,20 +52,34 @@ module.exports = async function handler(req, res) {
     const prompt = `You are a senior campaign team creating a Campaign Canvas plan that feels like an AI marketing employee building a real multi-angle campaign.
 
 Context priority:
-1. Brand Brain / Brand DNA / Archetype guidance is the source of truth for the product, offer, ICP, positioning, value proposition, messaging, tone, CTA style, and visual style.
-2. Campaign Idea defines the campaign objective, theme, angle, activation, or marketing goal.
+1. Brand Brain / Brand DNA / Archetype guidance is the source of truth for the product, offer, service, experience, ICP, positioning, value proposition, messaging, tone, CTA style, and visual style.
+2. Campaign Idea defines the marketing objective, campaign theme, activation, or business goal.
 3. Additional Context provides optional campaign-specific details.
 4. If Campaign Idea or Additional Context conflicts with Brand Brain, preserve Brand Brain and reinterpret the campaign idea as a brand-aligned marketing angle.
-5. Do not replace the Brand Brain product, offer, ICP, positioning, value proposition, or messaging unless the user explicitly states this is a new product, new offer, market expansion, or new business line.
+5. Do not replace the Brand Brain product, offer, service, experience, ICP, positioning, value proposition, or messaging unless the user explicitly states this is a new product, new offer, market expansion, or new business line.
 6. Do not target audiences outside the Brand Brain ICP unless the user explicitly frames it as a new market expansion.
 7. Do not invent offers, proof, metrics, audience segments, or brand facts that are not supported by Brand Brain or explicit campaign input.
 8. Every node must visibly reflect Brand Brain positioning, ICP, tone, messaging pillars, and Brand DNA/archetype when available.
+
+${brandBrainContext.text}
+
+Campaign Idea definition:
+- Campaign Idea is a marketing objective, campaign theme, activation, or business goal.
+- Campaign Idea is NOT the product, offer, service, ICP, positioning, or value proposition unless explicitly described as a new product, new offer, business line, or market expansion.
+- Never use Campaign Idea text directly as Landing Page offer copy.
 
 Input campaign idea:
 ${campaignIdea}
 
 Additional context:
 ${additionalContext || "none"}
+
+Setup:
+- Campaign variations: ${variationCount}
+- Social posts per variation: ${postsPerVariation}
+- Include landing page per variation: ${shouldIncludeLandingPage ? "yes" : "no"}
+- Include email campaign per variation: ${shouldIncludeEmailCampaign ? "yes" : "no"}
+- Primary channel: ${channel}
 
 Before generating nodes, silently check:
 - Does the campaign idea align with Brand Brain ICP?
@@ -75,15 +89,6 @@ Before generating nodes, silently check:
 If not, adapt the campaign into the closest brand-aligned version and treat the campaign idea as an angle rather than a replacement offer.
 
 Do not ask the user for clarification in this generation flow.
-
-Setup:
-- Campaign variations: ${variationCount}
-- Social posts per variation: ${postsPerVariation}
-- Include landing page per variation: ${shouldIncludeLandingPage ? "yes" : "no"}
-- Include email campaign per variation: ${shouldIncludeEmailCampaign ? "yes" : "no"}
-- Primary channel: ${channel}
-
-${brandBrainContext.text}
 
 Structure requirements:
 - Return exactly ${expectedNodeCount} nodes and ${expectedEdgeCount} edges.
@@ -240,8 +245,11 @@ Landing Page:
 - Avoid internal verbs in Landing Page copy: promote, increase, launch, drive, generate, campaign, objective, audience, goal.
 - Landing Page copy must never mention campaign angle, variation, emotional angle, rational angle, authority angle, synthesis, marketing strategy, targeting, audience as a metadata label, or goal as a metadata label.
 - The Landing Page is the central conversion asset for the whole campaign, not a child of one Campaign Variation.
-- Landing Page strategy hierarchy: 1. Campaign Objective, 2. Brand Brain Offer, 3. ICP / Persona, 4. Brand Positioning, 5. Value Proposition, 6. Messaging Pillars.
+- Landing Page source hierarchy: 1. Brand Brain Offer, 2. Brand Positioning, 3. Value Proposition, 4. ICP / Persona, 5. Messaging Pillars, 6. Campaign Objective, 7. Additional Context.
+- For Landing Page nodes, Brand Brain Offer is the mandatory source of truth for the promoted product, service, experience, event, or offer.
+- Campaign Objective may influence urgency, conversion angle, promotion angle, and audience moment. Campaign Objective must never replace the product or offer.
 - Build the page around the Brand Brain offer/value proposition as the product, service, event, offer, or experience being promoted; use Campaign Idea as the objective, angle, or activation unless it explicitly says new product, new offer, market expansion, or new business line.
+- Example: Offer: Private helicopter tours in Bali. Campaign Objective: Increase honeymoon bookings. Good headline: Private Honeymoon Helicopter Tours Over Bali. Bad headline: Increase Honeymoon Bookings In Bali.
 - Use Campaign Variations only as internal planning inputs. Customer-facing Landing Page copy must describe the offer itself, not the campaign structure.
 - If variations contain emotional, rational, authority, or other angles, translate those angles into customer-facing benefits, proof points, and persuasion elements without naming or describing the angles.
 - Never describe the Landing Page as a campaign, campaign angle, variation, strategy, synthesis, combination of angles, marketing asset, emotional angle, rational angle, or authority angle.
