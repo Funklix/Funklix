@@ -235,6 +235,7 @@ Landing Page:
 - Landing Page fields must be customer-facing conversion copy, not internal campaign summaries.
 - Do not copy or lightly rephrase Campaign Idea, Additional Context, Goal, Audience, or Campaign Variation titles. Convert internal planning inputs into customer-facing language.
 - Avoid internal verbs in Landing Page copy: promote, increase, launch, drive, generate, campaign, objective, audience, goal.
+- Landing Page copy must never mention campaign angle, variation, emotional angle, rational angle, authority angle, synthesis, marketing strategy, targeting, audience as a metadata label, or goal as a metadata label.
 - The Landing Page is the central conversion asset for the whole campaign, not a child of one Campaign Variation.
 - Landing Page strategy hierarchy: 1. Campaign Objective, 2. Brand Brain Offer, 3. ICP / Persona, 4. Brand Positioning, 5. Value Proposition, 6. Messaging Pillars.
 - Build the page around the Brand Brain offer/value proposition as the product, service, event, offer, or experience being promoted; use Campaign Idea as the objective, angle, or activation unless it explicitly says new product, new offer, market expansion, or new business line.
@@ -251,18 +252,29 @@ Landing Page:
 - Good example for campaign "Promote exclusive networking events for executives": "Exclusive Networking Events for C-Level Executives".
 - Bad example for that campaign: "The Emotional Power of Leadership Relationships".
 - headerVisualPrompt: concrete hero visual direction aligned with the offer, audience, Brand Brain visual style, and campaign objective.
-- headerClaim: the Hero Headline. It must be a real landing page headline, 5-15 words, benefit-oriented, focused on the offer itself, and grounded in the Brand Brain offer rather than a single campaign variation. It must not use internal campaign verbs or simply restate the Campaign Idea.
+- headerClaim: the Hero Headline. It must be a real customer-facing landing page headline, 5-15 words, benefit-oriented, focused on the offer itself, and grounded in the Brand Brain offer rather than a single campaign variation. It must name the offer or experience, speak to the customer outcome, avoid internal campaign verbs, and never simply restate the Campaign Idea.
+- Never use these words in headerClaim: promote, increase, launch, drive, generate, campaign, objective, audience, targeting, angle, variation, strategy.
 - Bad headerClaim: "promote honeymoon helicopter flights in Bali".
 - Bad headerClaim: "increase bookings for helicopter tours".
 - Good headerClaim: "Private Honeymoon Helicopter Tours Over Bali".
 - Good headerClaim: "See Bali From Above On Your Honeymoon".
-- description/content: include a readable landing page outline using plain-text labels for Hero Headline, Subheadline, Primary CTA, Problem Section, Benefits, Trust Elements, Offer, FAQ, and Final CTA.
-- problem: write the Subheadline and Problem Section in 2-4 concise sentences that name a real customer frustration, unmet desire, risk, or missed opportunity plus the stakes and desired outcome. Do not write audience descriptions.
+- description/content: include a readable landing page outline using plain-text labels for Hero Headline, Subheadline, Primary CTA, Problem Section, Benefits, Trust Elements, Offer, FAQ, and Final CTA. Problem Section must be customer pain; Benefits/Offer must be offer positioning; Trust Elements must be credibility proof.
+- problem: write the Subheadline and Problem Section in 2-4 concise sentences that describe the customer's pain, friction, unmet desire, risk, doubt, fear, missed opportunity, or current frustration plus the stakes and desired outcome.
+- Problem must never be an audience description, location description, campaign objective, product category, marketing goal, internal strategy, campaign angle, or targeting statement.
 - Bad problem: "romantic events for wedding couples on vacation in Bali".
-- Good problem: "Many honeymoon activities feel crowded and predictable when couples want a once-in-a-lifetime memory.".
-- solution: write the Offer and Benefits section in 2-4 concise sentences or simple bullets that position the Brand Brain offer as the answer. Explain what the customer gets, why it is different, and the desired outcome. Do not write campaign descriptions.
-- trust: write Trust Elements and FAQ content using only supported credibility elements from Brand Brain/context: social proof, expertise, exclusivity, authority, safety, professionalism, results, experience, process, or operational credibility. Avoid generic filler and do not repeat the solution.
-- cta: action-oriented button-style Primary CTA language, 2-6 words, using imperative action verbs. Examples: "Book Your Flight", "Reserve Your Tour", "Request An Invitation", "Schedule A Consultation". The Final CTA in content should reinforce the same action.
+- Bad problem: "married couples on vacation in Bali".
+- Good problem: "Many honeymoon activities feel crowded, predictable, or impersonal when couples want a once-in-a-lifetime memory they can share forever.".
+- solution: write the Offer and Benefits section in 2-4 concise sentences or simple bullets that position the Brand Brain offer as the answer to the customer pain. Explain what the customer gets, how the offer works, why it solves the problem, why it is different, and what outcome it creates. Never write a campaign summary, marketing plan, generic phrase like "focused campaign experience", or restatement of the Campaign Idea.
+- Bad solution: "A focused campaign experience for romantic honeymoon helicopter flights in Bali.".
+- Good solution: "Private helicopter tours give couples a breathtaking way to experience Bali from above, combining unforgettable views, privacy, and a premium guided flight experience.".
+- trust: write Trust Elements and FAQ content using only supported credibility elements from Brand Brain/context: safety, professionalism, experience, pilots/team, process, exclusivity, operational quality, reviews/testimonials only if explicitly provided, guarantees only if explicitly provided, and authority only if explicitly provided. Trust must explain why the customer should believe and feel safe choosing the offer. Never use generic buzzwords, unrelated context, invented metrics, invented testimonials, vague phrases like "built around trust", or repetition of the solution.
+- Bad trust: "Built around trust, exclusivity, and meaningful business relationships.".
+- Good trust: "Professional pilots, clear safety procedures, and a premium private-flight experience help couples enjoy the journey with confidence from takeoff to landing.".
+- cta: action-oriented button-style Primary CTA language, 2-6 words, using an imperative action verb that matches the offer. Examples: "Book Your Flight", "Reserve Your Tour", "Request Your Invitation", "Schedule A Consultation", "Start Your Journey". Avoid vague CTA copy like "Learn More" or "Discover More" unless appropriate. The Final CTA in content should reinforce the same action.
+- Before finalizing a Landing Page node, silently check each field: Problem must describe a real customer pain or unmet desire; if it only describes an audience, location, campaign, or product category, rewrite it. Solution must describe the Brand Brain offer as the answer; if it describes the campaign or marketing strategy, rewrite it. Trust must provide credibility or reassurance; if it uses generic buzzwords or unrelated context, rewrite it. Header Claim must sound like a customer-facing landing page headline; if it sounds like a campaign objective, rewrite it.
+- Fly Bali guidance example — Campaign Idea: Increase honeymoon helicopter bookings in Bali. Brand Brain Offer: Private helicopter tours over Bali, Bajo, and Sumba.
+- Bad Landing Page: Header Claim: promote honeymoon helicopter flights in Bali | Problem: married couples on vacation in Bali | Solution: A focused campaign experience for romantic honeymoon helicopter flights in Bali | Trust: Built around trust, exclusivity, and meaningful business relationships. | CTA: Request an invitation
+- Good Landing Page: Header Claim: Private Honeymoon Helicopter Tours Over Bali | Problem: Many honeymoon activities feel crowded, predictable, or impersonal when couples want a once-in-a-lifetime memory they can share forever. | Solution: Private helicopter tours give couples a breathtaking way to experience Bali from above, combining unforgettable views, privacy, and a premium guided flight experience. | Trust: Professional pilots, clear safety procedures, and a premium private-flight experience help couples enjoy the journey with confidence from takeoff to landing. | CTA: Book Your Flight
 - Do not fabricate proof, metrics, testimonials, or brand facts.
 
 Email Campaign:
