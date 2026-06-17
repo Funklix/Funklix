@@ -237,10 +237,18 @@ For non-LinkedIn channels:
 
 Landing Page:
 - Landing pages should read like real conversion pages, not campaign summaries.
+- The dedicated landingPage object is the canonical source of truth for the editor fields.
 - landingPage.headerClaim, landingPage.problem, landingPage.solution, landingPage.trust, and landingPage.cta are the primary source of truth for the dedicated Landing Page fields shown in the editor.
 - These landingPage fields are not metadata, not summaries, and not secondary notes; they are the actual Landing Page building blocks and must contain the strongest customer-facing conversion copy.
+- You MUST fill landingPage.headerClaim with the best Hero Headline.
+- You MUST fill landingPage.problem with Customer Pain / Audience Pain.
+- You MUST fill landingPage.solution with Offer Positioning / Key Message Points.
+- You MUST fill landingPage.trust with Proof / Credibility Approach.
+- You MUST fill landingPage.cta with the primary CTA.
+- Use this semantic mapping: Audience Pain -> landingPage.problem; Key Message Points / Offer / Benefits -> landingPage.solution; Proof / Credibility Approach / Trust Elements -> landingPage.trust; Primary CTA / Final CTA -> landingPage.cta; Hero Headline -> landingPage.headerClaim.
 - Fill the landingPage fields first with the best concise copy. Only after creating strong landingPage fields, use description/content to expand those same ideas into a richer landing page outline.
 - Never place the strongest Landing Page copy only in description/content. The strongest conversion copy must always live inside headerClaim, problem, solution, trust, and cta.
+- If a Landing Page node has strong copy in content but weak or empty landingPage fields, the response is invalid.
 - Do not copy or lightly rephrase Campaign Idea, Additional Context, Goal, Audience, or Campaign Variation titles. Convert internal planning inputs into customer-facing language.
 - Avoid internal verbs in Landing Page copy: promote, increase, launch, drive, generate, campaign, objective, audience, goal.
 - Landing Page copy must never mention campaign angle, variation, emotional angle, rational angle, authority angle, synthesis, marketing strategy, targeting, audience as a metadata label, or goal as a metadata label.
