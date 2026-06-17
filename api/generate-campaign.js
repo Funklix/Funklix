@@ -232,6 +232,9 @@ For non-LinkedIn channels:
 
 Landing Page:
 - Landing pages should read like real conversion pages, not campaign summaries.
+- Landing Page fields must be customer-facing conversion copy, not internal campaign summaries.
+- Do not copy or lightly rephrase Campaign Idea, Additional Context, Goal, Audience, or Campaign Variation titles. Convert internal planning inputs into customer-facing language.
+- Avoid internal verbs in Landing Page copy: promote, increase, launch, drive, generate, campaign, objective, audience, goal.
 - The Landing Page is the central conversion asset for the whole campaign, not a child of one Campaign Variation.
 - Landing Page strategy hierarchy: 1. Campaign Objective, 2. Brand Brain Offer, 3. ICP / Persona, 4. Brand Positioning, 5. Value Proposition, 6. Messaging Pillars.
 - Build the page around the Brand Brain offer/value proposition as the product, service, event, offer, or experience being promoted; use Campaign Idea as the objective, angle, or activation unless it explicitly says new product, new offer, market expansion, or new business line.
@@ -248,12 +251,18 @@ Landing Page:
 - Good example for campaign "Promote exclusive networking events for executives": "Exclusive Networking Events for C-Level Executives".
 - Bad example for that campaign: "The Emotional Power of Leadership Relationships".
 - headerVisualPrompt: concrete hero visual direction aligned with the offer, audience, Brand Brain visual style, and campaign objective.
-- headerClaim: the Hero Headline. It must be a real landing page headline, 5-15 words, benefit-oriented, focused on the offer itself, and grounded in the Brand Brain offer rather than a single campaign variation.
+- headerClaim: the Hero Headline. It must be a real landing page headline, 5-15 words, benefit-oriented, focused on the offer itself, and grounded in the Brand Brain offer rather than a single campaign variation. It must not use internal campaign verbs or simply restate the Campaign Idea.
+- Bad headerClaim: "promote honeymoon helicopter flights in Bali".
+- Bad headerClaim: "increase bookings for helicopter tours".
+- Good headerClaim: "Private Honeymoon Helicopter Tours Over Bali".
+- Good headerClaim: "See Bali From Above On Your Honeymoon".
 - description/content: include a readable landing page outline using plain-text labels for Hero Headline, Subheadline, Primary CTA, Problem Section, Benefits, Trust Elements, Offer, FAQ, and Final CTA.
-- problem: write the Subheadline and Problem Section in 2-4 concise sentences that name the audience pain, stakes, and desired outcome.
-- solution: write the Offer and Benefits section in 2-4 concise sentences or simple bullets that explain the Brand Brain offer and why it matters.
-- trust: write Trust Elements and FAQ content using social proof, expertise, exclusivity, authority, safety, professionalism, results, or experience when provided by Brand Brain/context. Do not repeat the problem or solution.
-- cta: action-oriented button-style Primary CTA language, 2-6 words; the Final CTA in content should reinforce the same action.
+- problem: write the Subheadline and Problem Section in 2-4 concise sentences that name a real customer frustration, unmet desire, risk, or missed opportunity plus the stakes and desired outcome. Do not write audience descriptions.
+- Bad problem: "romantic events for wedding couples on vacation in Bali".
+- Good problem: "Many honeymoon activities feel crowded and predictable when couples want a once-in-a-lifetime memory.".
+- solution: write the Offer and Benefits section in 2-4 concise sentences or simple bullets that position the Brand Brain offer as the answer. Explain what the customer gets, why it is different, and the desired outcome. Do not write campaign descriptions.
+- trust: write Trust Elements and FAQ content using only supported credibility elements from Brand Brain/context: social proof, expertise, exclusivity, authority, safety, professionalism, results, experience, process, or operational credibility. Avoid generic filler and do not repeat the solution.
+- cta: action-oriented button-style Primary CTA language, 2-6 words, using imperative action verbs. Examples: "Book Your Flight", "Reserve Your Tour", "Request An Invitation", "Schedule A Consultation". The Final CTA in content should reinforce the same action.
 - Do not fabricate proof, metrics, testimonials, or brand facts.
 
 Email Campaign:
