@@ -5112,11 +5112,35 @@ function normalizeLandingPreviewSectionLabel(label = "") {
   const normalized = cleanCampaignField(label).toLowerCase().replace(/\s+/g, " ");
   if (normalized === "hero headline") return "heroHeadline";
   if (normalized === "subheadline") return "subheadline";
+  if (normalized === "problem section") return "problemSection";
   if (normalized === "benefits") return "benefits";
   if (normalized === "trust elements") return "trustElements";
+  if (normalized === "offer") return "offer";
   if (normalized === "faq") return "faq";
-  if (normalized === "cta" || normalized === "primary cta" || normalized === "final cta") return "cta";
+  if (normalized === "primary cta") return "primaryCta";
+  if (normalized === "final cta") return "finalCta";
+  if (normalized === "cta") return "cta";
   return "";
+}
+
+function firstCleanLandingSectionValue(...values) {
+  return values.map((value) => cleanCampaignField(value)).find(Boolean) || "";
+}
+
+function combineLandingSectionValues(...values) {
+  return values
+    .map((value) => cleanCampaignField(value))
+    .filter(Boolean)
+    .filter((value, index, list) => list.findIndex((item) => item.toLowerCase() === value.toLowerCase()) === index)
+    .join("\n\n");
+}
+
+function isWeakLandingPageField(value = "") {
+  const cleaned = cleanCampaignField(value);
+  if (!cleaned || cleaned.length < 12) return true;
+  const normalized = cleaned.toLowerCase();
+  if (/^(landing page for|position|a focused campaign)/i.test(cleaned)) return true;
+  return /\b(campaign|targeting|objective|audience|angle|variation)\b/.test(normalized);
 }
 
 function parseLandingPreviewListItems(value = "", limit = 4) {
@@ -5131,7 +5155,7 @@ function parseStructuredLandingPagePreview(content = "") {
   const cleaned = cleanCampaignField(content);
   if (!cleaned) return null;
 
-  const sectionPattern = /(?:^|\n)\s*(Hero Headline|Subheadline|Benefits|Trust Elements|FAQ|CTA|Primary CTA|Final CTA)\s*:\s*/gi;
+  const sectionPattern = /(?:^|\n)\s*(Hero Headline|Subheadline|Primary CTA|Problem Section|Benefits|Trust Elements|Offer|FAQ|Final CTA|CTA)\s*:\s*/gi;
   const matches = [];
   let match = sectionPattern.exec(cleaned);
   while (match) {
@@ -5150,7 +5174,7 @@ function parseStructuredLandingPagePreview(content = "") {
     if (value && !sections[key]) sections[key] = value;
   });
 
-  const recognizedCount = ["heroHeadline", "subheadline", "benefits", "trustElements", "faq", "cta"]
+  const recognizedCount = ["heroHeadline", "subheadline", "primaryCta", "problemSection", "benefits", "trustElements", "offer", "faq", "finalCta", "cta"]
     .filter((key) => sections[key]).length;
   return recognizedCount >= 2 ? sections : null;
 }
@@ -5230,7 +5254,7 @@ function appendStructuredLandingPagePreview(parent, sections) {
     appendLandingPreviewList(preview, faqItems);
   }
 
-  appendLandingPreviewText(preview, "landing-preview-line is-cta", sections.cta, {
+  appendLandingPreviewText(preview, "landing-preview-line is-cta", firstCleanLandingSectionValue(sections.primaryCta, sections.finalCta, sections.cta), {
     background: "#eef3ff",
     border: "1px solid #dce6ff",
     borderRadius: "8px",
@@ -5356,6 +5380,17 @@ function applyGeneratedCampaignNodePayload(node, payload = {}, previousNode = nu
       cta: cleanCampaignField(landing.cta || landing.conversionCta)
     };
     node.content = [description, content].filter(Boolean).join("\n\n") || node.landingPage.headerClaim || "";
+    const landingSections = parseStructuredLandingPagePreview(node.content) || {};
+    const sectionHeaderClaim = firstCleanLandingSectionValue(landingSections.heroHeadline);
+    const sectionProblem = combineLandingSectionValues(landingSections.subheadline, landingSections.problemSection);
+    const sectionSolution = combineLandingSectionValues(landingSections.offer, landingSections.benefits);
+    const sectionTrust = combineLandingSectionValues(landingSections.trustElements, landingSections.faq);
+    const sectionCta = firstCleanLandingSectionValue(landingSections.primaryCta, landingSections.finalCta, landingSections.cta);
+    if (sectionHeaderClaim && isWeakLandingPageField(node.landingPage.headerClaim)) node.landingPage.headerClaim = sectionHeaderClaim;
+    if (sectionProblem && isWeakLandingPageField(node.landingPage.problem)) node.landingPage.problem = sectionProblem;
+    if (sectionSolution && isWeakLandingPageField(node.landingPage.solution)) node.landingPage.solution = sectionSolution;
+    if (sectionTrust && isWeakLandingPageField(node.landingPage.trust)) node.landingPage.trust = sectionTrust;
+    if (sectionCta && isWeakLandingPageField(node.landingPage.cta)) node.landingPage.cta = sectionCta;
   }
 }
 
