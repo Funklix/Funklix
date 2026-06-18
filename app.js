@@ -6061,7 +6061,6 @@ async function runCampaignV3AICompatibility(setupOverride = {}, options = {}) {
     logCampaignV3AIDiagnostics("Actual AI counts grouped by subtype", diagnosticBase.actualCountsBySubtype);
     logCampaignV3AIDiagnostics("First 20 returned nodes", firstTwentyNodes);
 
-    reportStatus("Building Canvas...");
     const planResult = campaignV3.buildCampaignV3PlanFromNodes(normalizedNodes, setup);
     const failedRules = planResult.ok ? [] : planResult.diagnostics.map((diagnostic) => diagnostic.code);
     const planDiagnostics = {
@@ -6088,6 +6087,7 @@ async function runCampaignV3AICompatibility(setupOverride = {}, options = {}) {
       return { ok: false, apiPlan, planResult, edges, layoutResult, diagnostics: layoutDiagnostics };
     }
 
+    reportStatus("Building Canvas...");
     const adapter = createCampaignV3RealCanvasAdapter();
     const commitResult = campaignV3.commitCampaignV3PlanToCanvas(layoutResult, adapter);
     const commitDiagnostics = {
