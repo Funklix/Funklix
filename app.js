@@ -5926,6 +5926,53 @@ function logCampaignV3AIDiagnostics(label, details = {}) {
   console.info(`[Funklix Campaign Generator V3 AI] ${label}`, details);
 }
 
+function summarizeCampaignV3LandingNode(node = null, index = -1) {
+  if (!node) return null;
+  return {
+    index,
+    type: cleanCampaignField(node.type),
+    title: cleanCampaignField(node.title),
+    description: cleanCampaignField(node.description),
+    content: cleanCampaignField(node.content),
+    tempId: cleanCampaignField(node.tempId),
+    id: cleanCampaignField(node.id),
+    landingPage: {
+      headerVisualPrompt: cleanCampaignField(node.landingPage?.headerVisualPrompt),
+      headerClaim: cleanCampaignField(node.landingPage?.headerClaim),
+      problem: cleanCampaignField(node.landingPage?.problem),
+      solution: cleanCampaignField(node.landingPage?.solution),
+      trust: cleanCampaignField(node.landingPage?.trust),
+      cta: cleanCampaignField(node.landingPage?.cta)
+    }
+  };
+}
+
+function campaignV3LandingAuditSnapshot(nodes = []) {
+  const sourceNodes = Array.isArray(nodes) ? nodes : [];
+  const typeValues = [...new Set(sourceNodes.map((node) => cleanCampaignField(node?.type)))];
+  const exactLandingNodes = sourceNodes
+    .map((node, index) => ({ node, index, type: cleanCampaignField(node?.type) }))
+    .filter((entry) => entry.type === "Landing Page")
+    .map((entry) => summarizeCampaignV3LandingNode(entry.node, entry.index));
+  const landingLikeNodes = sourceNodes
+    .map((node, index) => ({ node, index, type: cleanCampaignField(node?.type), title: cleanCampaignField(node?.title) }))
+    .filter((entry) => /landing/i.test(`${entry.type} ${entry.title}`))
+    .map((entry) => summarizeCampaignV3LandingNode(entry.node, entry.index));
+  return {
+    nodeCount: sourceNodes.length,
+    countsByType: campaignV3NodeCounts(sourceNodes),
+    typeValues,
+    exactLandingCount: exactLandingNodes.length,
+    exactLandingNodes,
+    landingLikeNodes
+  };
+}
+
+function logCampaignV3LandingAudit(stage, details = {}) {
+  if (typeof window === "undefined" || window.DEBUG_CAMPAIGN_V3_LANDING_AUDIT !== true) return;
+  console.info("[Campaign V3 Landing Audit]", stage, details);
+}
+
 function createCampaignV3RealCanvasAdapter() {
   const committedNodes = [];
   const committedEdges = [];
@@ -6024,11 +6071,25 @@ async function runCampaignV3AICompatibility(setupOverride = {}, options = {}) {
     reportStatus("Generating Campaign...");
     const apiPlan = await fetchGeneratedCampaignPlan(setup.campaignIdea, setup.additionalContext, setup);
     const rawNodes = Array.isArray(apiPlan?.nodes) ? apiPlan.nodes : [];
+    logCampaignV3LandingAudit("Raw API response", campaignV3LandingAuditSnapshot(rawNodes));
     const emailNormalization = normalizeCampaignV3AIEmailNodes(rawNodes, setup);
     const landingNormalization = normalizeCampaignV3AILandingNodes(emailNormalization.nodes);
     const primaryNormalization = normalizeCampaignV3AIPrimaryOvercounts(landingNormalization.nodes, setup);
     const socialNormalization = normalizeCampaignV3AISocialOvercounts(primaryNormalization.nodes, setup);
     const landingFallback = normalizeCampaignV3AILandingFallback(socialNormalization.nodes, setup);
+    logCampaignV3LandingAudit("Landing fallback checkpoint", {
+      landingFallbackCreated: landingFallback.diagnostics?.landingFallbackCreated === true,
+      originalLandingCount: landingFallback.diagnostics?.originalLandingCount ?? 0,
+      landingFallbackDiagnostics: landingFallback.diagnostics,
+      stages: {
+        raw: campaignV3LandingAuditSnapshot(rawNodes),
+        afterEmailNormalization: campaignV3LandingAuditSnapshot(emailNormalization.nodes),
+        afterLandingNormalization: campaignV3LandingAuditSnapshot(landingNormalization.nodes),
+        afterPrimaryNormalization: campaignV3LandingAuditSnapshot(primaryNormalization.nodes),
+        afterSocialNormalization: campaignV3LandingAuditSnapshot(socialNormalization.nodes),
+        afterLandingFallback: campaignV3LandingAuditSnapshot(landingFallback.nodes)
+      }
+    });
     const normalizedNodes = landingFallback.nodes;
     const nodeReport = campaignV3NodeReport(rawNodes);
     const firstTwentyNodes = campaignV3NodeReport(rawNodes, 20);
