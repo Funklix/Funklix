@@ -5960,109 +5960,6 @@ function createCampaignV3RealCanvasAdapter() {
   };
 }
 
-const CAMPAIGN_V3_PROGRESS_STEPS = [
-  { key: "reading", label: "Reading Brand Brain" },
-  { key: "strategy", label: "Creating Campaign Strategy" },
-  { key: "assets", label: "Building Content Assets" },
-  { key: "social", label: "Writing Social Posts" },
-  { key: "landing", label: "Creating Landing Page" },
-  { key: "email", label: "Preparing Email Campaign" },
-  { key: "canvas", label: "Building Canvas" }
-];
-
-const CAMPAIGN_V3_PROGRESS_MESSAGES = CAMPAIGN_V3_PROGRESS_STEPS.reduce((messages, step) => {
-  messages[step.key] = `${step.label}...`;
-  return messages;
-}, {});
-
-function getCampaignV3BrandAvatar() {
-  const brandCore = state.brandCore || {};
-  const candidates = [
-    brandCore.brandDNA?.avatar,
-    brandCore.avatar,
-    brandCore.brandAvatar,
-    brandCore.brandDNA?.brandAvatar
-  ];
-  for (const candidate of candidates) {
-    if (typeof candidate === "string" && candidate.trim()) return { imageUrl: candidate.trim(), fallback: "✦" };
-    const normalized = normalizeBrandAvatar(candidate);
-    if (normalized?.imageUrl) return { imageUrl: normalized.imageUrl, fallback: "✦" };
-  }
-  const sourceText = cleanCampaignField(brandCore.brandName || brandCore.name || brandCore.brandCore || brandCore.valueProposition || "");
-  const initials = sourceText
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((word) => word.charAt(0).toUpperCase())
-    .join("");
-  return { imageUrl: "", fallback: initials || "✦" };
-}
-
-function campaignV3SetupSubtitle(setup = {}) {
-  const normalized = normalizeCampaignSetupOptions(setup);
-  const angleLabel = normalized.variationCount === 1 ? "angle" : "angles";
-  const postLabel = normalized.postsPerVariation === 1 ? "post" : "posts";
-  return `${normalized.variationCount} ${angleLabel} · ${normalized.postsPerVariation} ${postLabel} each · ${normalized.channel}`;
-}
-
-function renderCampaignV3ProgressPanel(overlay, setup = {}) {
-  if (!overlay) return;
-  let panel = overlay.querySelector?.("[data-campaign-v3-progress]");
-  if (!panel) {
-    panel = document.createElement("div");
-    panel.className = "campaign-loading-card";
-    panel.dataset.campaignV3Progress = "true";
-    const statusEl = overlay.querySelector?.("[data-campaign-v3-status]");
-    statusEl?.parentNode?.insertBefore(panel, statusEl);
-  }
-  const avatar = getCampaignV3BrandAvatar();
-  const avatarMarkup = avatar.imageUrl
-    ? `<img src="${escapeHtml(avatar.imageUrl)}" alt="Brand Avatar" />`
-    : `<span>${escapeHtml(avatar.fallback)}</span>`;
-  panel.hidden = false;
-  panel.innerHTML = `
-    <div class="campaign-loading-avatar">${avatarMarkup}</div>
-    <div class="campaign-loading-copy">
-      <strong>Creating Campaign…</strong>
-      <p>${escapeHtml(campaignV3SetupSubtitle(setup))}</p>
-    </div>
-    <ol class="campaign-loading-steps">
-      ${CAMPAIGN_V3_PROGRESS_STEPS.map((step) => `<li data-campaign-v3-step="${step.key}"><span>○</span>${escapeHtml(step.label)}</li>`).join("")}
-    </ol>`;
-}
-
-function setCampaignV3ProgressStep(overlay, stepKey) {
-  const items = Array.from(overlay?.querySelectorAll?.("[data-campaign-v3-step]") || []);
-  const activeIndex = CAMPAIGN_V3_PROGRESS_STEPS.findIndex((step) => step.key === stepKey);
-  if (!items.length || activeIndex < 0) return;
-  items.forEach((item, index) => {
-    item.classList.toggle("is-done", index < activeIndex);
-    item.classList.toggle("is-active", index === activeIndex);
-    const marker = item.querySelector("span");
-    if (marker) marker.textContent = index < activeIndex ? "✓" : index === activeIndex ? "●" : "○";
-  });
-  logCampaignV3AIDiagnostics("Progress step changed", { step: stepKey });
-}
-
-function completeCampaignV3Progress(overlay) {
-  const items = Array.from(overlay?.querySelectorAll?.("[data-campaign-v3-step]") || []);
-  items.forEach((item) => {
-    item.classList.add("is-done");
-    item.classList.remove("is-active");
-    const marker = item.querySelector("span");
-    if (marker) marker.textContent = "✓";
-  });
-}
-
-function resetCampaignV3Progress(overlay) {
-  const items = Array.from(overlay?.querySelectorAll?.("[data-campaign-v3-step]") || []);
-  items.forEach((item) => {
-    item.classList.remove("is-done", "is-active");
-    const marker = item.querySelector("span");
-    if (marker) marker.textContent = "○";
-  });
-}
-
 function debugRunCampaignV3Mock() {
   const campaignV3 = getCampaignV3Api();
   if (!campaignV3) {
@@ -6117,22 +6014,15 @@ async function runCampaignV3AICompatibility(setupOverride = {}, options = {}) {
 
   const setup = defaultCampaignV3AISetup(setupOverride);
   const reportStatus = typeof options.onStatus === "function" ? options.onStatus : () => {};
-  const reportProgress = typeof options.onProgress === "function" ? options.onProgress : () => {};
-  const emitProgress = (stepKey, fallbackMessage = "") => {
-    const message = fallbackMessage || CAMPAIGN_V3_PROGRESS_MESSAGES[stepKey] || "Creating Campaign...";
-    reportStatus(message);
-    reportProgress(stepKey, message);
-  };
-  emitProgress("reading", "Reading Brand Brain...");
+  reportStatus("Analyzing Strategy...");
   logCampaignV3AIDiagnostics("Starting AI compatibility flow with Email, primary/social over-count, and Landing Page fallback normalization.", {
     setup,
     featureFlagEnabled: isCampaignV3Enabled()
   });
 
   try {
-    emitProgress("strategy", "Creating Campaign Strategy...");
+    reportStatus("Generating Campaign...");
     const apiPlan = await fetchGeneratedCampaignPlan(setup.campaignIdea, setup.additionalContext, setup);
-    emitProgress("assets", "Building Content Assets...");
     const rawNodes = Array.isArray(apiPlan?.nodes) ? apiPlan.nodes : [];
     const emailNormalization = normalizeCampaignV3AIEmailNodes(rawNodes, setup);
     const landingNormalization = normalizeCampaignV3AILandingNodes(emailNormalization.nodes);
@@ -6171,6 +6061,7 @@ async function runCampaignV3AICompatibility(setupOverride = {}, options = {}) {
     logCampaignV3AIDiagnostics("Actual AI counts grouped by subtype", diagnosticBase.actualCountsBySubtype);
     logCampaignV3AIDiagnostics("First 20 returned nodes", firstTwentyNodes);
 
+    reportStatus("Building Canvas...");
     const planResult = campaignV3.buildCampaignV3PlanFromNodes(normalizedNodes, setup);
     const failedRules = planResult.ok ? [] : planResult.diagnostics.map((diagnostic) => diagnostic.code);
     const planDiagnostics = {
@@ -6198,7 +6089,6 @@ async function runCampaignV3AICompatibility(setupOverride = {}, options = {}) {
     }
 
     const adapter = createCampaignV3RealCanvasAdapter();
-    emitProgress("canvas", "Building Canvas...");
     const commitResult = campaignV3.commitCampaignV3PlanToCanvas(layoutResult, adapter);
     const commitDiagnostics = {
       ...diagnosticBase,
@@ -6329,9 +6219,7 @@ function openCampaignV3Modal() {
     }
 
     errorEl.textContent = "";
-    statusEl.textContent = "Reading Brand Brain...";
-    renderCampaignV3ProgressPanel(overlay, setup);
-    setCampaignV3ProgressStep(overlay, "reading");
+    statusEl.textContent = "Analyzing Strategy...";
     setCampaignV3ModalBusy(overlay, true);
     setActiveView("board");
     toggleListMode(false);
@@ -6339,23 +6227,16 @@ function openCampaignV3Modal() {
     const result = await runCampaignV3AICompatibility(setup, {
       onStatus: (message) => {
         statusEl.textContent = message;
-      },
-      onProgress: (stepKey) => {
-        setCampaignV3ProgressStep(overlay, stepKey);
       }
     });
 
     if (result?.ok) {
-      completeCampaignV3Progress(overlay);
-      statusEl.textContent = "Campaign generated successfully.";
-      await waitForCampaignWorker(450);
       closeModal(true);
       centerViewportOnCampaignV3Result(result);
       setSaveStatus("Campaign generated successfully.");
       return;
     }
 
-    resetCampaignV3Progress(overlay);
     setCampaignV3ModalBusy(overlay, false);
     statusEl.textContent = "";
     errorEl.textContent = "Campaign generation failed. Please try again.";
