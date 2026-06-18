@@ -5571,7 +5571,8 @@ async function generateCampaignChainProgressively(plan, { onStatus = null, setup
       fillInspector(node);
       updateListView();
       const nodeEl = el.zoomLayer.querySelector(`[data-id='${node.id}']`);
-      nodeEl?.classList.add("ai-updated");
+      nodeEl?.classList.add("campaign-node-reveal", "ai-updated");
+      setTimeout(() => nodeEl?.classList.remove("campaign-node-reveal"), 760);
       setTimeout(() => nodeEl?.classList.remove("ai-updated"), 1000);
       createdNodes.push(node);
       createdByIndex.set(index, node);
@@ -5959,207 +5960,6 @@ function createCampaignV3RealCanvasAdapter() {
   };
 }
 
-const CAMPAIGN_V3_PROGRESS_STEPS = [
-  { key: "reading", label: "Reading Brand Brain" },
-  { key: "strategy", label: "Creating Campaign Strategy" },
-  { key: "assets", label: "Building Content Assets" },
-  { key: "social", label: "Writing Social Posts" },
-  { key: "landing", label: "Creating Landing Page" },
-  { key: "email", label: "Preparing Email Campaign" },
-  { key: "canvas", label: "Building Canvas" }
-];
-
-const CAMPAIGN_V3_PROGRESS_MESSAGES = CAMPAIGN_V3_PROGRESS_STEPS.reduce((messages, step) => {
-  messages[step.key] = `${step.label}...`;
-  return messages;
-}, {});
-
-const CAMPAIGN_V3_STAGE_PROGRESS = {
-  idea: "strategy",
-  variation: "strategy",
-  content: "assets",
-  social: "social",
-  landing: "landing",
-  email: "email",
-  canvas: "canvas"
-};
-
-function getCampaignV3BrandAvatar() {
-  const brandCore = state.brandCore || {};
-  const candidates = [
-    brandCore.brandDNA?.avatar,
-    brandCore.avatar,
-    brandCore.brandAvatar,
-    brandCore.brandDNA?.brandAvatar
-  ];
-  for (const candidate of candidates) {
-    if (typeof candidate === "string" && candidate.trim()) return { imageUrl: candidate.trim(), fallback: "✦" };
-    const normalized = normalizeBrandAvatar(candidate);
-    if (normalized?.imageUrl) return { imageUrl: normalized.imageUrl, fallback: "✦" };
-  }
-  const sourceText = cleanCampaignField(brandCore.brandName || brandCore.name || brandCore.brandCore || brandCore.valueProposition || "");
-  const initials = sourceText
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((word) => word.charAt(0).toUpperCase())
-    .join("");
-  return { imageUrl: "", fallback: initials || "✦" };
-}
-
-function campaignV3SetupSubtitle(setup = {}) {
-  const normalized = normalizeCampaignSetupOptions(setup);
-  const angleLabel = normalized.variationCount === 1 ? "angle" : "angles";
-  const postLabel = normalized.postsPerVariation === 1 ? "post" : "posts";
-  return `${normalized.variationCount} ${angleLabel} · ${normalized.postsPerVariation} ${postLabel} each · ${normalized.channel}`;
-}
-
-function renderCampaignV3ProgressPanel(overlay, setup = {}) {
-  const panel = overlay?.querySelector?.("[data-campaign-v3-progress]");
-  if (!panel) return;
-  const avatar = getCampaignV3BrandAvatar();
-  const avatarMarkup = avatar.imageUrl
-    ? `<img src="${escapeHtml(avatar.imageUrl)}" alt="Brand Avatar" />`
-    : `<span>${escapeHtml(avatar.fallback)}</span>`;
-  panel.hidden = false;
-  panel.innerHTML = `
-    <div class="campaign-loading-avatar">${avatarMarkup}</div>
-    <div class="campaign-loading-copy">
-      <strong>Creating Campaign…</strong>
-      <p>${escapeHtml(campaignV3SetupSubtitle(setup))}</p>
-    </div>
-    <ol class="campaign-loading-steps">
-      ${CAMPAIGN_V3_PROGRESS_STEPS.map((step) => `<li data-campaign-v3-step="${step.key}"><span>○</span>${escapeHtml(step.label)}</li>`).join("")}
-    </ol>`;
-}
-
-function setCampaignV3ProgressStep(overlay, stepKey) {
-  const items = Array.from(overlay?.querySelectorAll?.("[data-campaign-v3-step]") || []);
-  const activeIndex = CAMPAIGN_V3_PROGRESS_STEPS.findIndex((step) => step.key === stepKey);
-  if (!items.length || activeIndex < 0) return;
-  items.forEach((item, index) => {
-    item.classList.toggle("is-done", index < activeIndex);
-    item.classList.toggle("is-active", index === activeIndex);
-    const marker = item.querySelector("span");
-    if (marker) marker.textContent = index < activeIndex ? "✓" : index === activeIndex ? "●" : "○";
-  });
-  logCampaignV3AIDiagnostics("Progress step changed", { step: stepKey });
-}
-
-function completeCampaignV3Progress(overlay) {
-  const items = Array.from(overlay?.querySelectorAll?.("[data-campaign-v3-step]") || []);
-  items.forEach((item) => {
-    item.classList.add("is-done");
-    item.classList.remove("is-active");
-    const marker = item.querySelector("span");
-    if (marker) marker.textContent = "✓";
-  });
-}
-
-function resetCampaignV3Progress(overlay) {
-  const items = Array.from(overlay?.querySelectorAll?.("[data-campaign-v3-step]") || []);
-  items.forEach((item) => {
-    item.classList.remove("is-done", "is-active");
-    const marker = item.querySelector("span");
-    if (marker) marker.textContent = "○";
-  });
-}
-
-function campaignV3StageForNode(node = {}) {
-  const type = cleanCampaignField(node.type);
-  if (type === "Idea") return "idea";
-  if (type === "Campaign Variation") return "variation";
-  if (type === "Content") return "content";
-  if (type === "Social Media Posting") return "social";
-  if (type === "Landing Page") return "landing";
-  if (type === "Email Campaign") return "email";
-  return "content";
-}
-
-function campaignV3AnimationDelay(ms = 320) {
-  if (typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches) return 0;
-  return Math.max(0, Number(ms) || 0);
-}
-
-async function waitForCampaignV3Animation(ms = 320) {
-  const delay = campaignV3AnimationDelay(ms);
-  if (!delay) return;
-  await waitForCampaignWorker(delay);
-}
-
-async function commitCampaignV3PlanToCanvasAnimated(layoutResult = {}, adapter = null, options = {}) {
-  const diagnostics = [];
-  const createdNodes = [];
-  const createdEdges = [];
-  const tempIdToNodeId = new Map();
-  const positionedNodes = Array.isArray(layoutResult.positionedNodes) ? layoutResult.positionedNodes : [];
-  const edges = Array.isArray(layoutResult.edges) ? layoutResult.edges : [];
-  const stages = ["idea", "variation", "content", "social", "landing", "email"];
-  const committedEdgeKeys = new Set();
-  const onStage = typeof options.onStage === "function" ? options.onStage : () => {};
-  const stageDelayMs = options.delayMs ?? 320;
-
-  if (!adapter || typeof adapter.createNode !== "function" || typeof adapter.createEdge !== "function") {
-    return {
-      ok: false,
-      createdNodes,
-      createdEdges,
-      tempIdToNodeId,
-      diagnostics: [{ code: "CAMPAIGN_V3_COMMIT_ADAPTER_MISSING", message: "Animated Campaign V3 commit adapter is missing createNode/createEdge." }]
-    };
-  }
-
-  const commitReadyEdges = () => {
-    edges.forEach((edge, index) => {
-      const edgeKey = `${edge.fromTempId || ""}->${edge.toTempId || ""}:${index}`;
-      if (committedEdgeKeys.has(edgeKey)) return;
-      const sourceNodeId = tempIdToNodeId.get(edge.fromTempId);
-      const targetNodeId = tempIdToNodeId.get(edge.toTempId);
-      if (!sourceNodeId || !targetNodeId) return;
-      const committedEdge = adapter.createEdge(sourceNodeId, targetNodeId, edge);
-      createdEdges.push(committedEdge || { sourceNodeId, targetNodeId, edge });
-      committedEdgeKeys.add(edgeKey);
-    });
-  };
-
-  for (const stage of stages) {
-    const stageNodes = positionedNodes.filter((node) => campaignV3StageForNode(node) === stage);
-    if (!stageNodes.length) continue;
-    onStage({ stage, status: "start", nodeCount: stageNodes.length });
-    logCampaignV3AIDiagnostics("Animated commit stage start", { stage, nodeCount: stageNodes.length });
-
-    for (const node of stageNodes) {
-      if (!node.tempId) {
-        diagnostics.push({ code: "CAMPAIGN_V3_COMMIT_NODE_TEMP_ID_MISSING", message: `Animated commit node "${node.title || node.type || "Untitled"}" is missing tempId.` });
-        continue;
-      }
-      if (tempIdToNodeId.has(node.tempId)) {
-        diagnostics.push({ code: "CAMPAIGN_V3_COMMIT_NODE_TEMP_ID_DUPLICATE", message: `Animated commit duplicate tempId "${node.tempId}".` });
-        continue;
-      }
-      const createdNode = adapter.createNode(node, node.position || { x: 0, y: 0 });
-      if (!createdNode?.id) {
-        diagnostics.push({ code: "CAMPAIGN_V3_COMMIT_NODE_ID_MISSING", message: `Animated commit adapter did not return an id for "${node.tempId}".` });
-        continue;
-      }
-      tempIdToNodeId.set(node.tempId, createdNode.id);
-      createdNodes.push({ tempId: node.tempId, id: createdNode.id, type: node.type, title: node.title, node: createdNode });
-    }
-
-    commitReadyEdges();
-    onStage({ stage, status: "end", nodeCount: stageNodes.length });
-    logCampaignV3AIDiagnostics("Animated commit stage end", { stage, createdNodeCount: createdNodes.length, createdEdgeCount: createdEdges.length });
-    await waitForCampaignV3Animation(stageDelayMs);
-  }
-
-  onStage({ stage: "canvas", status: "start", nodeCount: 0 });
-  commitReadyEdges();
-  if (typeof adapter.markUnsaved === "function") adapter.markUnsaved();
-  onStage({ stage: "canvas", status: "end", nodeCount: 0 });
-
-  return { ok: diagnostics.length === 0, createdNodes, createdEdges, tempIdToNodeId, diagnostics };
-}
-
 function debugRunCampaignV3Mock() {
   const campaignV3 = getCampaignV3Api();
   if (!campaignV3) {
@@ -6214,22 +6014,15 @@ async function runCampaignV3AICompatibility(setupOverride = {}, options = {}) {
 
   const setup = defaultCampaignV3AISetup(setupOverride);
   const reportStatus = typeof options.onStatus === "function" ? options.onStatus : () => {};
-  const reportProgress = typeof options.onProgress === "function" ? options.onProgress : () => {};
-  const emitProgress = (stepKey, fallbackMessage = "") => {
-    const message = fallbackMessage || CAMPAIGN_V3_PROGRESS_MESSAGES[stepKey] || "Creating Campaign...";
-    reportStatus(message);
-    reportProgress(stepKey, message);
-  };
-  emitProgress("reading", "Reading Brand Brain...");
+  reportStatus("Analyzing Strategy...");
   logCampaignV3AIDiagnostics("Starting AI compatibility flow with Email, primary/social over-count, and Landing Page fallback normalization.", {
     setup,
     featureFlagEnabled: isCampaignV3Enabled()
   });
 
   try {
-    emitProgress("strategy", "Creating Campaign Strategy...");
+    reportStatus("Generating Campaign...");
     const apiPlan = await fetchGeneratedCampaignPlan(setup.campaignIdea, setup.additionalContext, setup);
-    emitProgress("assets", "Building Content Assets...");
     const rawNodes = Array.isArray(apiPlan?.nodes) ? apiPlan.nodes : [];
     const emailNormalization = normalizeCampaignV3AIEmailNodes(rawNodes, setup);
     const landingNormalization = normalizeCampaignV3AILandingNodes(emailNormalization.nodes);
@@ -6268,6 +6061,7 @@ async function runCampaignV3AICompatibility(setupOverride = {}, options = {}) {
     logCampaignV3AIDiagnostics("Actual AI counts grouped by subtype", diagnosticBase.actualCountsBySubtype);
     logCampaignV3AIDiagnostics("First 20 returned nodes", firstTwentyNodes);
 
+    reportStatus("Building Canvas...");
     const planResult = campaignV3.buildCampaignV3PlanFromNodes(normalizedNodes, setup);
     const failedRules = planResult.ok ? [] : planResult.diagnostics.map((diagnostic) => diagnostic.code);
     const planDiagnostics = {
@@ -6295,37 +6089,7 @@ async function runCampaignV3AICompatibility(setupOverride = {}, options = {}) {
     }
 
     const adapter = createCampaignV3RealCanvasAdapter();
-    let commitResult;
-    if (options.animated === true) {
-      try {
-        commitResult = await commitCampaignV3PlanToCanvasAnimated(layoutResult, adapter, {
-          delayMs: options.stageDelayMs ?? 320,
-          onStage: ({ stage, status }) => {
-            if (status !== "start") return;
-            const progressStep = CAMPAIGN_V3_STAGE_PROGRESS[stage];
-            if (progressStep) emitProgress(progressStep, CAMPAIGN_V3_PROGRESS_MESSAGES[progressStep]);
-          }
-        });
-      } catch (commitError) {
-        console.warn("[Funklix Campaign Generator V3 AI] Animated commit failed.", commitError);
-        emitProgress("canvas", "Building Canvas...");
-        if (!adapter.committedNodes.length && !adapter.committedEdges.length) {
-          console.warn("[Funklix Campaign Generator V3 AI] Falling back to immediate commit after animated commit failed before creating nodes.");
-          commitResult = campaignV3.commitCampaignV3PlanToCanvas(layoutResult, adapter);
-        } else {
-          commitResult = {
-            ok: false,
-            createdNodes: adapter.committedNodes,
-            createdEdges: adapter.committedEdges,
-            tempIdToNodeId: new Map(),
-            diagnostics: [{ code: "CAMPAIGN_V3_ANIMATED_COMMIT_FAILED", message: commitError?.message || "Animated Campaign V3 commit failed after partial canvas changes." }]
-          };
-        }
-      }
-    } else {
-      emitProgress("canvas", "Building Canvas...");
-      commitResult = campaignV3.commitCampaignV3PlanToCanvas(layoutResult, adapter);
-    }
+    const commitResult = campaignV3.commitCampaignV3PlanToCanvas(layoutResult, adapter);
     const commitDiagnostics = {
       ...diagnosticBase,
       failedRules: commitResult.ok ? [] : commitResult.diagnostics.map((diagnostic) => diagnostic.code),
@@ -6428,7 +6192,6 @@ function openCampaignV3Modal() {
       <label class="campaign-builder-toggle"><input id="campaign-v3-include-landing" type="checkbox" checked /><span><strong>Landing Page</strong><small>Include Landing Page</small></span></label>
       <label class="campaign-builder-toggle"><input id="campaign-v3-include-email" type="checkbox" checked /><span><strong>Email Campaign</strong><small>Include Email Campaign</small></span></label>
     </div>
-    <div class="campaign-loading-card" data-campaign-v3-progress hidden></div>
     <p data-campaign-v3-status style="min-height: 1.4em; margin: 4px 0 0; color: #6b5dd3; font-weight: 700;"></p>
     <p data-campaign-v3-error style="min-height: 1.4em; margin: 0; color: #d64545; font-weight: 700;"></p>
     <div class="campaign-builder-actions"><button type="button" id="campaign-v3-legacy">Use legacy generator</button><button type="button" id="campaign-v3-cancel">Cancel</button><button type="button" id="campaign-v3-generate" class="primary-add">Generate Campaign</button></div>
@@ -6456,34 +6219,24 @@ function openCampaignV3Modal() {
     }
 
     errorEl.textContent = "";
-    statusEl.textContent = "Reading Brand Brain...";
-    renderCampaignV3ProgressPanel(overlay, setup);
-    setCampaignV3ProgressStep(overlay, "reading");
+    statusEl.textContent = "Analyzing Strategy...";
     setCampaignV3ModalBusy(overlay, true);
     setActiveView("board");
     toggleListMode(false);
 
     const result = await runCampaignV3AICompatibility(setup, {
-      animated: true,
       onStatus: (message) => {
         statusEl.textContent = message;
-      },
-      onProgress: (stepKey) => {
-        setCampaignV3ProgressStep(overlay, stepKey);
       }
     });
 
     if (result?.ok) {
-      completeCampaignV3Progress(overlay);
-      statusEl.textContent = "Campaign generated successfully.";
-      await waitForCampaignWorker(450);
       closeModal(true);
       centerViewportOnCampaignV3Result(result);
       setSaveStatus("Campaign generated successfully.");
       return;
     }
 
-    resetCampaignV3Progress(overlay);
     setCampaignV3ModalBusy(overlay, false);
     statusEl.textContent = "";
     errorEl.textContent = "Campaign generation failed. Please try again.";
