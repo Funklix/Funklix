@@ -133,6 +133,7 @@ const state = {
   ,presenceEditingNodeId: null
   ,presenceEditingField: null
   ,presenceEditingClearTimer: null
+  ,activeCampaignGeneration: null
   ,presenceViewers: []
   ,presenceNodeSignature: ""
   ,presenceCursorX: null
@@ -6713,6 +6714,11 @@ function drawLinks() {
     path.setAttribute("fill", "none");
     path.setAttribute("stroke", "#8f80ff");
     path.setAttribute("stroke-width", "2");
+    const sourceNode = getNode(from);
+    const targetNode = getNode(to);
+    if (Date.now() - Math.max(sourceNode?.justConnectedAt || 0, targetNode?.justConnectedAt || 0) < 1300) {
+      path.classList.add("campaign-link-reveal");
+    }
     path.style.cursor = "pointer";
     path.style.pointerEvents = "stroke";
     path.addEventListener("click", (event) => {
@@ -10275,6 +10281,9 @@ el.zoomOutButton.addEventListener("click", () => {
 el.canvas.addEventListener(
   "wheel",
   (event) => {
+    if (event.target.closest?.(".postit-text, .postit-scroll-body")) {
+      return;
+    }
     if (event.ctrlKey) {
       event.preventDefault();
       stopFollowForManualNavigation();
