@@ -5922,6 +5922,73 @@ function normalizeCampaignV3AILandingFallback(nodes = [], setup = {}) {
   };
 }
 
+function buildCampaignV3FallbackEmailNode(nodes = [], setup = {}) {
+  const sourceNodes = Array.isArray(nodes) ? nodes : [];
+  const ideaNode = sourceNodes.find((node) => cleanCampaignField(node?.type) === "Idea") || {};
+  const landingNode = sourceNodes.find((node) => cleanCampaignField(node?.type) === "Landing Page") || {};
+  const variationTitles = sourceNodes
+    .filter((node) => cleanCampaignField(node?.type) === "Campaign Variation")
+    .map((node) => cleanCampaignField(node?.title))
+    .filter(Boolean);
+  const campaignIdea = cleanCampaignField(setup.campaignIdea || ideaNode.title || ideaNode.content || landingNode.title) || "the campaign offer";
+  const context = cleanCampaignField(setup.additionalContext || ideaNode.description || landingNode.description || ideaNode.content);
+  const audience = cleanCampaignField(ideaNode.metadata?.audience || landingNode.metadata?.audience) || "Campaign audience";
+  const goal = "Follow up with interested prospects and guide them toward conversion";
+  const subject = `Next steps for ${campaignIdea}`;
+  const variationSummary = variationTitles.slice(0, 2).join(" and ");
+  const bodyOutline = [
+    `Open with a concise reminder of ${campaignIdea}.`,
+    context ? `Connect the message to this audience need: ${context}.` : `Highlight the most relevant benefit for ${audience}.`,
+    variationSummary ? `Reference the strongest campaign angles: ${variationSummary}.` : "Reinforce the primary value proposition with a practical next step.",
+    "Close with a clear reply or booking action."
+  ].join("\n");
+
+  return {
+    tempId: "campaign-v3-ai-fallback-email",
+    type: "Email Campaign",
+    title: `Follow-up email for ${campaignIdea}`,
+    description: `Nurture email campaign for ${audience} after they engage with ${campaignIdea}.`,
+    content: `Subject: ${subject}\n\n${bodyOutline}`,
+    metadata: {
+      goal,
+      audience,
+      channel: "Email",
+      funnelStage: "Email Campaign",
+      tone: cleanCampaignField(ideaNode.metadata?.tone || landingNode.metadata?.tone) || "Helpful and direct"
+    },
+    imagePrompt: "",
+    social: { platform: "", caption: "", hashtags: "" },
+    landingPage: {}
+  };
+}
+
+function normalizeCampaignV3AIEmailFallback(nodes = [], setup = {}) {
+  const sourceNodes = Array.isArray(nodes) ? nodes : [];
+  const emailCount = sourceNodes.filter((node) => cleanCampaignField(node?.type) === "Email Campaign").length;
+  if (setup.includeEmailCampaign === false || emailCount > 0) {
+    return {
+      nodes: sourceNodes,
+      diagnostics: {
+        emailFallbackCreated: false,
+        fallbackEmailTitle: "",
+        reason: emailCount > 0 ? "email campaign already present" : "email campaign disabled",
+        originalEmailCount: emailCount
+      }
+    };
+  }
+
+  const fallbackEmail = buildCampaignV3FallbackEmailNode(sourceNodes, setup);
+  return {
+    nodes: [...sourceNodes, fallbackEmail],
+    diagnostics: {
+      emailFallbackCreated: true,
+      fallbackEmailTitle: fallbackEmail.title,
+      reason: "missing email campaign from AI response",
+      originalEmailCount: emailCount
+    }
+  };
+}
+
 function logCampaignV3AIDiagnostics(label, details = {}) {
   console.info(`[Funklix Campaign Generator V3 AI] ${label}`, details);
 }
@@ -6077,6 +6144,7 @@ async function runCampaignV3AICompatibility(setupOverride = {}, options = {}) {
     const primaryNormalization = normalizeCampaignV3AIPrimaryOvercounts(landingNormalization.nodes, setup);
     const socialNormalization = normalizeCampaignV3AISocialOvercounts(primaryNormalization.nodes, setup);
     const landingFallback = normalizeCampaignV3AILandingFallback(socialNormalization.nodes, setup);
+    const emailFallback = normalizeCampaignV3AIEmailFallback(landingFallback.nodes, setup);
     logCampaignV3LandingAudit("Landing fallback checkpoint", {
       landingFallbackCreated: landingFallback.diagnostics?.landingFallbackCreated === true,
       originalLandingCount: landingFallback.diagnostics?.originalLandingCount ?? 0,
@@ -6087,10 +6155,11 @@ async function runCampaignV3AICompatibility(setupOverride = {}, options = {}) {
         afterLandingNormalization: campaignV3LandingAuditSnapshot(landingNormalization.nodes),
         afterPrimaryNormalization: campaignV3LandingAuditSnapshot(primaryNormalization.nodes),
         afterSocialNormalization: campaignV3LandingAuditSnapshot(socialNormalization.nodes),
-        afterLandingFallback: campaignV3LandingAuditSnapshot(landingFallback.nodes)
+        afterLandingFallback: campaignV3LandingAuditSnapshot(landingFallback.nodes),
+        afterEmailFallback: campaignV3LandingAuditSnapshot(emailFallback.nodes)
       }
     });
-    const normalizedNodes = landingFallback.nodes;
+    const normalizedNodes = emailFallback.nodes;
     const nodeReport = campaignV3NodeReport(rawNodes);
     const firstTwentyNodes = campaignV3NodeReport(rawNodes, 20);
     const diagnosticBase = {
@@ -6106,6 +6175,7 @@ async function runCampaignV3AICompatibility(setupOverride = {}, options = {}) {
       primaryNormalization: primaryNormalization.diagnostics,
       socialNormalization: socialNormalization.diagnostics,
       landingFallback: landingFallback.diagnostics,
+      emailFallback: emailFallback.diagnostics,
       firstTwentyNodes
     };
 
@@ -6118,6 +6188,7 @@ async function runCampaignV3AICompatibility(setupOverride = {}, options = {}) {
     logCampaignV3AIDiagnostics("Idea / Campaign Variation / Content over-count normalization", diagnosticBase.primaryNormalization);
     logCampaignV3AIDiagnostics("Social Media Posting over-count normalization", diagnosticBase.socialNormalization);
     logCampaignV3AIDiagnostics("Landing Page fallback normalization", diagnosticBase.landingFallback);
+    logCampaignV3AIDiagnostics("Email Campaign fallback normalization", diagnosticBase.emailFallback);
     logCampaignV3AIDiagnostics("Normalized counts grouped by type", diagnosticBase.normalizedCountsByType);
     logCampaignV3AIDiagnostics("Actual AI counts grouped by subtype", diagnosticBase.actualCountsBySubtype);
     logCampaignV3AIDiagnostics("First 20 returned nodes", firstTwentyNodes);
