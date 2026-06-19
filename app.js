@@ -5993,6 +5993,27 @@ function logCampaignV3AIDiagnostics(label, details = {}) {
   console.info(`[Funklix Campaign Generator V3 AI] ${label}`, details);
 }
 
+function campaignV3AdapterAuditDetails(payload = {}, node = null) {
+  return {
+    tempId: cleanCampaignField(payload.tempId || node?.tempId),
+    type: cleanCampaignField(payload.type || node?.type),
+    title: cleanCampaignField(payload.title || node?.title),
+    nodeId: cleanCampaignField(node?.id)
+  };
+}
+
+function logCampaignV3AdapterAudit(status, details = {}) {
+  console.info("[V3 Adapter Audit]", status, details);
+}
+
+function logCampaignV3AdapterAuditFailure(step, details = {}, error = null) {
+  console.error("[V3 Adapter Audit]", `FAILED ${step}`, {
+    ...details,
+    errorMessage: error?.message || String(error || ""),
+    errorStack: error?.stack || ""
+  });
+}
+
 function createCampaignV3RealCanvasAdapter() {
   const committedNodes = [];
   const committedEdges = [];
@@ -6003,19 +6024,66 @@ function createCampaignV3RealCanvasAdapter() {
     activityLog,
     unsavedCallCount: 0,
     createNode(payload = {}, position = {}) {
-      if (cleanCampaignField(payload.type) === "Landing Page") {
-        logCampaignV3LandingAudit("Landing Page payload passed into real canvas createNode", campaignV3LandingFieldAudit(payload));
+      const startDetails = campaignV3AdapterAuditDetails(payload);
+      logCampaignV3AdapterAudit("START createNode", startDetails);
+
+      let node = null;
+      logCampaignV3AdapterAudit("BEFORE createNode", startDetails);
+      try {
+        node = createNode({ type: payload.type || "Idea", position });
+        if (!node) throw new Error("Campaign V3 real adapter could not create node.");
+        logCampaignV3AdapterAudit("PASSED createNode", campaignV3AdapterAuditDetails(payload, node));
+      } catch (error) {
+        logCampaignV3AdapterAuditFailure("createNode", startDetails, error);
+        throw error;
       }
-      const node = createNode({ type: payload.type || "Idea", position });
-      if (!node) throw new Error("Campaign V3 real adapter could not create node.");
-      applyGeneratedCampaignNodePayload(node, payload);
-      updateNodeCard(node);
-      updateListView();
-      if (node.type === "Landing Page") {
-        logCampaignV3LandingAudit("Landing Page stored on canvas after adapter mapping", campaignV3LandingFieldAudit(node));
+
+      logCampaignV3AdapterAudit("BEFORE applyGeneratedCampaignNodePayload", campaignV3AdapterAuditDetails(payload, node));
+      try {
+        applyGeneratedCampaignNodePayload(node, payload);
+        logCampaignV3AdapterAudit("PASSED applyGeneratedCampaignNodePayload", campaignV3AdapterAuditDetails(payload, node));
+      } catch (error) {
+        logCampaignV3AdapterAuditFailure("applyGeneratedCampaignNodePayload", campaignV3AdapterAuditDetails(payload, node), error);
+        throw error;
       }
-      committedNodes.push({ id: node.id, tempId: payload.tempId, type: node.type, title: node.title, x: node.position.x, y: node.position.y, node });
-      activityLog.push({ action: "createNode", tempId: payload.tempId, nodeId: node.id });
+
+      logCampaignV3AdapterAudit("BEFORE updateNodeCard", campaignV3AdapterAuditDetails(payload, node));
+      try {
+        updateNodeCard(node);
+        logCampaignV3AdapterAudit("PASSED updateNodeCard", campaignV3AdapterAuditDetails(payload, node));
+      } catch (error) {
+        logCampaignV3AdapterAuditFailure("updateNodeCard", campaignV3AdapterAuditDetails(payload, node), error);
+        throw error;
+      }
+
+      logCampaignV3AdapterAudit("BEFORE updateListView", campaignV3AdapterAuditDetails(payload, node));
+      try {
+        updateListView();
+        logCampaignV3AdapterAudit("PASSED updateListView", campaignV3AdapterAuditDetails(payload, node));
+      } catch (error) {
+        logCampaignV3AdapterAuditFailure("updateListView", campaignV3AdapterAuditDetails(payload, node), error);
+        throw error;
+      }
+
+      logCampaignV3AdapterAudit("BEFORE committedNodes.push", campaignV3AdapterAuditDetails(payload, node));
+      try {
+        committedNodes.push({ id: node.id, tempId: payload.tempId, type: node.type, title: node.title, x: node.position.x, y: node.position.y, node });
+        logCampaignV3AdapterAudit("PASSED committedNodes.push", campaignV3AdapterAuditDetails(payload, node));
+      } catch (error) {
+        logCampaignV3AdapterAuditFailure("committedNodes.push", campaignV3AdapterAuditDetails(payload, node), error);
+        throw error;
+      }
+
+      logCampaignV3AdapterAudit("BEFORE activityLog.push", campaignV3AdapterAuditDetails(payload, node));
+      try {
+        activityLog.push({ action: "createNode", tempId: payload.tempId, nodeId: node.id });
+        logCampaignV3AdapterAudit("PASSED activityLog.push", campaignV3AdapterAuditDetails(payload, node));
+      } catch (error) {
+        logCampaignV3AdapterAuditFailure("activityLog.push", campaignV3AdapterAuditDetails(payload, node), error);
+        throw error;
+      }
+
+      logCampaignV3AdapterAudit("FINISHED createNode", campaignV3AdapterAuditDetails(payload, node));
       return node;
     },
     createEdge(sourceNodeId, targetNodeId, edge = {}) {
