@@ -6003,11 +6003,17 @@ function createCampaignV3RealCanvasAdapter() {
     activityLog,
     unsavedCallCount: 0,
     createNode(payload = {}, position = {}) {
+      if (cleanCampaignField(payload.type) === "Landing Page") {
+        logCampaignV3LandingAudit("Landing Page payload passed into real canvas createNode", campaignV3LandingFieldAudit(payload));
+      }
       const node = createNode({ type: payload.type || "Idea", position });
       if (!node) throw new Error("Campaign V3 real adapter could not create node.");
       applyGeneratedCampaignNodePayload(node, payload);
       updateNodeCard(node);
       updateListView();
+      if (node.type === "Landing Page") {
+        logCampaignV3LandingAudit("Landing Page stored on canvas after adapter mapping", campaignV3LandingFieldAudit(node));
+      }
       committedNodes.push({ id: node.id, tempId: payload.tempId, type: node.type, title: node.title, x: node.position.x, y: node.position.y, node });
       activityLog.push({ action: "createNode", tempId: payload.tempId, nodeId: node.id });
       return node;
@@ -7324,6 +7330,7 @@ function updateNodeCard(node) {
     social.appendChild(wrapper);
   } else if (isLandingPage) {
     const lp = node.landingPage || {};
+    logCampaignV3LandingAudit("Landing Page fields read by updateNodeCard", campaignV3LandingFieldAudit(node));
     social.innerHTML = "";
     const card = document.createElement("div");
     card.className = "landing-preview-card";
