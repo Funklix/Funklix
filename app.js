@@ -5989,6 +5989,235 @@ function normalizeCampaignV3AIEmailFallback(nodes = [], setup = {}) {
   };
 }
 
+function campaignV3QualityNormalized(value = "") {
+  return cleanCampaignField(value).toLowerCase();
+}
+
+function campaignV3QualityHasInviteContext(setup = {}) {
+  const combined = [
+    setup.campaignIdea,
+    setup.additionalContext,
+    setup.offer,
+    setup.valueProposition
+  ].map((value) => campaignV3QualityNormalized(value)).join(" ");
+  return /\b(invite|invitation|access|exclusive|private|waitlist|application)\b/.test(combined);
+}
+
+function campaignV3QualityLooksLikeSocialPost(value = "") {
+  const cleaned = cleanCampaignField(value);
+  if (!cleaned) return false;
+  return /^#\w+/.test(cleaned) || /(?:^|\s)#\w+/.test(cleaned) || /\b(?:caption|hashtags?|post copy)\s*:/i.test(cleaned);
+}
+
+function campaignV3QualityHasMeaningfulTextBeforeHashtag(value = "") {
+  const cleaned = cleanCampaignField(value);
+  if (!cleaned.includes("#")) return true;
+  const firstHashIndex = cleaned.indexOf("#");
+  return cleaned.slice(0, firstHashIndex).replace(/[^\w]+/g, " ").trim().length >= 20;
+}
+
+function campaignV3QualityHasSubjectLine(value = "") {
+  return /\bsubject(?: line)?\s*:/i.test(cleanCampaignField(value));
+}
+
+function campaignV3QualityHasCta(value = "") {
+  return /\b(?:cta|call to action|book|reserve|request|schedule|start|get|try|join|apply|download|reply|contact)\b/i.test(cleanCampaignField(value));
+}
+
+function evaluateCampaignV3Quality(normalizedNodes = [], setup = {}, context = {}) {
+  const issues = [];
+  const sourceNodes = Array.isArray(normalizedNodes) ? normalizedNodes : [];
+  const normalizedSetup = setup || {};
+  const addIssue = (node = {}, field = "", code = "", severity = "error", message = "", valueOverride) => {
+    issues.push({
+      code,
+      severity,
+      type: cleanCampaignField(node?.type),
+      tempId: cleanCampaignField(node?.tempId || node?.id),
+      title: cleanCampaignField(node?.title),
+      field,
+      value: cleanCampaignField(valueOverride === undefined ? node?.[field] : valueOverride),
+      message
+    });
+  };
+  const requireText = (node, field, value, code, message) => {
+    if (!cleanCampaignField(value)) addIssue(node, field, code, "error", message, value);
+  };
+  const grouped = sourceNodes.reduce((groups, node) => {
+    const type = cleanCampaignField(node?.type);
+    if (!groups[type]) groups[type] = [];
+    groups[type].push(node);
+    return groups;
+  }, {});
+  const duplicateValueMap = (nodes, selector) => nodes.reduce((map, node) => {
+    const value = campaignV3QualityNormalized(selector(node));
+    if (!value) return map;
+    map[value] = (map[value] || 0) + 1;
+    return map;
+  }, {});
+  const fallbackContext = {
+    nodeCount: sourceNodes.length,
+    countsByType: campaignV3NodeCounts(sourceNodes),
+    ...context
+  };
+
+  sourceNodes.forEach((node) => {
+    const type = cleanCampaignField(node?.type);
+    const title = cleanCampaignField(node?.title);
+    const description = cleanCampaignField(node?.description);
+    const content = cleanCampaignField(node?.content);
+    const body = [description, content].filter(Boolean).join("\n\n");
+
+    if (type === "Idea") {
+      requireText(node, "title", title, "CAMPAIGN_V3_QUALITY_IDEA_MISSING_TITLE", "Idea is missing a title.");
+      if (!body) addIssue(node, "description", "CAMPAIGN_V3_QUALITY_IDEA_MISSING_BODY", "error", "Idea is missing description/content.", body);
+      return;
+    }
+
+    if (type === "Campaign Variation") {
+      requireText(node, "title", title, "CAMPAIGN_V3_QUALITY_VARIATION_MISSING_TITLE", "Campaign Variation is missing a title.");
+      if (!body) addIssue(node, "description", "CAMPAIGN_V3_QUALITY_VARIATION_MISSING_BODY", "error", "Campaign Variation is missing description/content.", body);
+      return;
+    }
+
+    if (type === "Content") {
+      requireText(node, "title", title, "CAMPAIGN_V3_QUALITY_CONTENT_MISSING_TITLE", "Content is missing a title.");
+      if (!body) addIssue(node, "content", "CAMPAIGN_V3_QUALITY_CONTENT_MISSING_BODY", "error", "Content is missing description/content.", body);
+      if (campaignV3QualityLooksLikeSocialPost(body)) {
+        addIssue(node, "content", "CAMPAIGN_V3_QUALITY_CONTENT_LOOKS_LIKE_SOCIAL_POST", "warning", "Content looks like a social post rather than a strategic content asset.", body);
+      }
+      return;
+    }
+
+    if (type === "Social Media Posting") {
+      const caption = cleanCampaignField(node?.social?.caption || content || description);
+      if (!caption) addIssue(node, "social.caption", "CAMPAIGN_V3_QUALITY_SOCIAL_MISSING_CAPTION", "error", "Social Media Posting is missing caption/body.", caption);
+      if (caption && !campaignV3QualityHasMeaningfulTextBeforeHashtag(caption)) {
+        addIssue(node, "social.caption", "CAMPAIGN_V3_QUALITY_SOCIAL_HASHTAGS_BEFORE_TEXT", "warning", "Social caption starts with hashtags before meaningful text.", caption);
+      }
+      return;
+    }
+
+    if (type === "Email Campaign") {
+      requireText(node, "title", title, "CAMPAIGN_V3_QUALITY_EMAIL_MISSING_TITLE", "Email Campaign is missing a title.");
+      if (!body) addIssue(node, "content", "CAMPAIGN_V3_QUALITY_EMAIL_MISSING_BODY", "error", "Email Campaign is missing description/content.", body);
+      if (body && !campaignV3QualityHasSubjectLine(body)) {
+        addIssue(node, "content", "CAMPAIGN_V3_QUALITY_EMAIL_MISSING_SUBJECT", "warning", "Email Campaign does not include a detectable subject line.", body);
+      }
+      if (body && !campaignV3QualityHasCta(body)) {
+        addIssue(node, "content", "CAMPAIGN_V3_QUALITY_EMAIL_MISSING_CTA", "warning", "Email Campaign does not include a detectable CTA.", body);
+      }
+      if (/follow-up email for the campaign offer/i.test(title) || /nurture email campaign for campaign audience/i.test(description)) {
+        addIssue(node, "title", "CAMPAIGN_V3_QUALITY_EMAIL_GENERIC_FALLBACK", "warning", "Email Campaign appears to use generic fallback language.", title || description);
+      }
+      return;
+    }
+
+    if (type !== "Landing Page") return;
+
+    const landing = node?.landingPage || {};
+    const landingFields = {
+      headerClaim: cleanCampaignField(landing.headerClaim),
+      problem: cleanCampaignField(landing.problem),
+      solution: cleanCampaignField(landing.solution),
+      trust: cleanCampaignField(landing.trust),
+      cta: cleanCampaignField(landing.cta)
+    };
+    const normalizedDescription = campaignV3QualityNormalized(description);
+    const normalizedContent = campaignV3QualityNormalized(content);
+
+    requireText(node, "title", title, "CAMPAIGN_V3_QUALITY_LANDING_MISSING_TITLE", "Landing Page is missing a title.");
+    if (/^(campaign landing page|combined campaign landing page)$/i.test(title) || /^landing page for\b/i.test(title)) {
+      addIssue(node, "title", "CAMPAIGN_V3_QUALITY_LANDING_GENERIC_TITLE", "error", "Landing Page title is generic/internal instead of customer-facing.", title);
+    }
+    if (!description && !content) {
+      addIssue(node, "description", "CAMPAIGN_V3_QUALITY_LANDING_MISSING_BODY", "error", "Landing Page is missing description/content.", body);
+    }
+    if (/^landing page for\b/i.test(description)) {
+      addIssue(node, "description", "CAMPAIGN_V3_QUALITY_LANDING_GENERIC_DESCRIPTION", "error", "Landing Page description starts with generic fallback copy.", description);
+    }
+    if (/position\b[\s\S]{0,120}\bas a focused campaign destination/i.test(content)) {
+      addIssue(node, "content", "CAMPAIGN_V3_QUALITY_LANDING_FOCUSED_CAMPAIGN_DESTINATION", "error", "Landing Page content contains generic focused-campaign destination copy.", content);
+    }
+    if (/\b(campaign summary|campaign asset|campaign objective|campaign angle|variation)\b/i.test([normalizedDescription, normalizedContent].join(" "))) {
+      addIssue(node, "content", "CAMPAIGN_V3_QUALITY_LANDING_INTERNAL_SUMMARY", "warning", "Landing Page description/content appears to describe internal campaign structure.", body);
+    }
+
+    requireText(node, "landingPage.headerClaim", landingFields.headerClaim, "CAMPAIGN_V3_QUALITY_LANDING_HEADER_MISSING", "Landing Page headerClaim is missing.");
+    if (/^(promote|increase|generate|drive|launch)\b/i.test(landingFields.headerClaim)) {
+      addIssue(node, "landingPage.headerClaim", "CAMPAIGN_V3_QUALITY_LANDING_HEADER_INTERNAL_VERB", "error", "Landing Page headerClaim starts with an internal campaign verb.", landingFields.headerClaim);
+    }
+    if (/\bcampaign\b/i.test(landingFields.headerClaim)) {
+      addIssue(node, "landingPage.headerClaim", "CAMPAIGN_V3_QUALITY_LANDING_HEADER_MENTIONS_CAMPAIGN", "error", "Landing Page headerClaim mentions campaign instead of the customer-facing offer.", landingFields.headerClaim);
+    }
+
+    requireText(node, "landingPage.problem", landingFields.problem, "CAMPAIGN_V3_QUALITY_LANDING_PROBLEM_MISSING", "Landing Page problem is missing.");
+    if (landingFields.problem && (landingFields.problem.length < 24 || /\b(focus on|targeting|audience|campaign objective)\b/i.test(landingFields.problem))) {
+      addIssue(node, "landingPage.problem", "CAMPAIGN_V3_QUALITY_LANDING_PROBLEM_GENERIC", "error", "Landing Page problem is too generic or describes targeting/audience instead of pain.", landingFields.problem);
+    }
+
+    requireText(node, "landingPage.solution", landingFields.solution, "CAMPAIGN_V3_QUALITY_LANDING_SOLUTION_MISSING", "Landing Page solution is missing.");
+    if (/a focused campaign experience/i.test(landingFields.solution)) {
+      addIssue(node, "landingPage.solution", "CAMPAIGN_V3_QUALITY_LANDING_SOLUTION_FOCUSED_CAMPAIGN", "error", "Landing Page solution uses generic focused-campaign language.", landingFields.solution);
+    }
+    if (landingFields.solution && /\bcampaign\b/i.test(landingFields.solution)) {
+      addIssue(node, "landingPage.solution", "CAMPAIGN_V3_QUALITY_LANDING_SOLUTION_DESCRIBES_CAMPAIGN", "warning", "Landing Page solution appears to describe the campaign instead of the product/offer/service.", landingFields.solution);
+    }
+    const offerHint = cleanCampaignField(normalizedSetup.offer || normalizedSetup.valueProposition || normalizedSetup.campaignIdea);
+    const offerWords = offerHint.toLowerCase().split(/\W+/).filter((word) => word.length >= 5);
+    if (landingFields.solution && offerWords.length > 0 && !offerWords.some((word) => landingFields.solution.toLowerCase().includes(word))) {
+      addIssue(node, "landingPage.solution", "CAMPAIGN_V3_QUALITY_LANDING_SOLUTION_OFFER_MISMATCH", "warning", "Landing Page solution may not mention or imply the available product/offer context.", landingFields.solution);
+    }
+
+    requireText(node, "landingPage.trust", landingFields.trust, "CAMPAIGN_V3_QUALITY_LANDING_TRUST_MISSING", "Landing Page trust is missing.");
+    if (/built around trust,?\s+exclusivity/i.test(landingFields.trust) || /meaningful business relationships/i.test(landingFields.trust)) {
+      addIssue(node, "landingPage.trust", "CAMPAIGN_V3_QUALITY_LANDING_TRUST_GENERIC", "error", "Landing Page trust uses generic trust language.", landingFields.trust);
+    }
+    if (landingFields.trust && landingFields.trust.length < 24) {
+      addIssue(node, "landingPage.trust", "CAMPAIGN_V3_QUALITY_LANDING_TRUST_TOO_SHORT", "warning", "Landing Page trust is too short to establish credibility.", landingFields.trust);
+    }
+
+    requireText(node, "landingPage.cta", landingFields.cta, "CAMPAIGN_V3_QUALITY_LANDING_CTA_MISSING", "Landing Page CTA is missing.");
+    if (/^request an invitation$/i.test(landingFields.cta) && !campaignV3QualityHasInviteContext(normalizedSetup)) {
+      addIssue(node, "landingPage.cta", "CAMPAIGN_V3_QUALITY_LANDING_CTA_GENERIC_INVITATION", "error", "Landing Page CTA requests an invitation without invitation/access context.", landingFields.cta);
+    }
+    if (/^learn more$/i.test(landingFields.cta)) {
+      addIssue(node, "landingPage.cta", "CAMPAIGN_V3_QUALITY_LANDING_CTA_LEARN_MORE", "warning", "Landing Page CTA is generic learn-more copy.", landingFields.cta);
+    }
+  });
+
+  const duplicateVariationTitles = duplicateValueMap(grouped["Campaign Variation"] || [], (node) => node?.title);
+  (grouped["Campaign Variation"] || []).forEach((node) => {
+    if (duplicateVariationTitles[campaignV3QualityNormalized(node?.title)] > 1) {
+      addIssue(node, "title", "CAMPAIGN_V3_QUALITY_VARIATION_DUPLICATE_TITLE", "warning", "Campaign Variation title is duplicated.", node?.title);
+    }
+  });
+
+  const duplicateSocialCaptions = duplicateValueMap(grouped["Social Media Posting"] || [], (node) => node?.social?.caption || node?.content || node?.description);
+  (grouped["Social Media Posting"] || []).forEach((node) => {
+    const caption = node?.social?.caption || node?.content || node?.description;
+    if (duplicateSocialCaptions[campaignV3QualityNormalized(caption)] > 1) {
+      addIssue(node, "social.caption", "CAMPAIGN_V3_QUALITY_SOCIAL_DUPLICATE_CAPTION", "warning", "Social Media Posting caption/body is duplicated.", caption);
+    }
+  });
+
+  const counts = issues.reduce((summary, issue) => {
+    if (issue.severity === "error") summary.errors += 1;
+    if (issue.severity === "warning") summary.warnings += 1;
+    return summary;
+  }, { errors: 0, warnings: 0 });
+  const totalChecks = Math.max(sourceNodes.length * 3, issues.length, 1);
+  const score = Math.max(0, Math.round(((totalChecks - counts.errors * 2 - counts.warnings) / totalChecks) * 100));
+
+  return {
+    ok: counts.errors === 0,
+    score,
+    issues,
+    counts,
+    context: fallbackContext
+  };
+}
+
 function logCampaignV3AIDiagnostics(label, details = {}) {
   console.info(`[Funklix Campaign Generator V3 AI] ${label}`, details);
 }
@@ -6172,6 +6401,23 @@ async function runCampaignV3AICompatibility(setupOverride = {}, options = {}) {
     const landingFallback = normalizeCampaignV3AILandingFallback(socialNormalization.nodes, setup);
     const emailFallback = normalizeCampaignV3AIEmailFallback(landingFallback.nodes, setup);
     const normalizedNodes = emailFallback.nodes;
+    let qualityDiagnostics = null;
+    try {
+      qualityDiagnostics = evaluateCampaignV3Quality(normalizedNodes, setup, {
+        stage: "afterEmailFallbackBeforePlan",
+        expectedCounts: expectedCampaignV3NodeCounts(setup)
+      });
+      console.info("[Campaign V3 Quality Gate]", qualityDiagnostics);
+    } catch (qualityError) {
+      qualityDiagnostics = {
+        ok: true,
+        score: 100,
+        issues: [],
+        counts: { errors: 0, warnings: 0 },
+        error: qualityError?.message || String(qualityError || "")
+      };
+      console.warn("[Campaign V3 Quality Gate] diagnostics failed; continuing without behavior changes.", qualityDiagnostics);
+    }
     const nodeReport = campaignV3NodeReport(rawNodes);
     const firstTwentyNodes = campaignV3NodeReport(rawNodes, 20);
     const diagnosticBase = {
@@ -6188,6 +6434,7 @@ async function runCampaignV3AICompatibility(setupOverride = {}, options = {}) {
       socialNormalization: socialNormalization.diagnostics,
       landingFallback: landingFallback.diagnostics,
       emailFallback: emailFallback.diagnostics,
+      qualityDiagnostics,
       firstTwentyNodes
     };
 
