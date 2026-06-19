@@ -5922,55 +5922,96 @@ function normalizeCampaignV3AILandingFallback(nodes = [], setup = {}) {
   };
 }
 
-function logCampaignV3AIDiagnostics(label, details = {}) {
-  console.info(`[Funklix Campaign Generator V3 AI] ${label}`, details);
+function buildCampaignV3FallbackEmailNode(nodes = [], setup = {}) {
+  const sourceNodes = Array.isArray(nodes) ? nodes : [];
+  const ideaNode = sourceNodes.find((node) => cleanCampaignField(node?.type) === "Idea") || {};
+  const landingNode = sourceNodes.find((node) => cleanCampaignField(node?.type) === "Landing Page") || {};
+  const variationTitles = sourceNodes
+    .filter((node) => cleanCampaignField(node?.type) === "Campaign Variation")
+    .map((node) => cleanCampaignField(node?.title))
+    .filter(Boolean);
+  const campaignIdea = cleanCampaignField(setup.campaignIdea || ideaNode.title || ideaNode.content || landingNode.title) || "the campaign offer";
+  const context = cleanCampaignField(setup.additionalContext || ideaNode.description || landingNode.description || ideaNode.content);
+  const audience = cleanCampaignField(ideaNode.metadata?.audience || landingNode.metadata?.audience) || "Campaign audience";
+  const goal = "Follow up with interested prospects and guide them toward conversion";
+  const subject = `Next steps for ${campaignIdea}`;
+  const variationSummary = variationTitles.slice(0, 2).join(" and ");
+  const bodyOutline = [
+    `Open with a concise reminder of ${campaignIdea}.`,
+    context ? `Connect the message to this audience need: ${context}.` : `Highlight the most relevant benefit for ${audience}.`,
+    variationSummary ? `Reference the strongest campaign angles: ${variationSummary}.` : "Reinforce the primary value proposition with a practical next step.",
+    "Close with a clear reply or booking action."
+  ].join("\n");
+
+  return {
+    tempId: "campaign-v3-ai-fallback-email",
+    type: "Email Campaign",
+    title: `Follow-up email for ${campaignIdea}`,
+    description: `Nurture email campaign for ${audience} after they engage with ${campaignIdea}.`,
+    content: `Subject: ${subject}\n\n${bodyOutline}`,
+    metadata: {
+      goal,
+      audience,
+      channel: "Email",
+      funnelStage: "Email Campaign",
+      tone: cleanCampaignField(ideaNode.metadata?.tone || landingNode.metadata?.tone) || "Helpful and direct"
+    },
+    imagePrompt: "",
+    social: { platform: "", caption: "", hashtags: "" },
+    landingPage: {}
+  };
 }
 
-function summarizeCampaignV3LandingNode(node = null, index = -1) {
-  if (!node) return null;
+function normalizeCampaignV3AIEmailFallback(nodes = [], setup = {}) {
+  const sourceNodes = Array.isArray(nodes) ? nodes : [];
+  const emailCount = sourceNodes.filter((node) => cleanCampaignField(node?.type) === "Email Campaign").length;
+  if (setup.includeEmailCampaign === false || emailCount > 0) {
+    return {
+      nodes: sourceNodes,
+      diagnostics: {
+        emailFallbackCreated: false,
+        fallbackEmailTitle: "",
+        reason: emailCount > 0 ? "email campaign already present" : "email campaign disabled",
+        originalEmailCount: emailCount
+      }
+    };
+  }
+
+  const fallbackEmail = buildCampaignV3FallbackEmailNode(sourceNodes, setup);
   return {
-    index,
-    type: cleanCampaignField(node.type),
-    title: cleanCampaignField(node.title),
-    description: cleanCampaignField(node.description),
-    content: cleanCampaignField(node.content),
-    tempId: cleanCampaignField(node.tempId),
-    id: cleanCampaignField(node.id),
-    landingPage: {
-      headerVisualPrompt: cleanCampaignField(node.landingPage?.headerVisualPrompt),
-      headerClaim: cleanCampaignField(node.landingPage?.headerClaim),
-      problem: cleanCampaignField(node.landingPage?.problem),
-      solution: cleanCampaignField(node.landingPage?.solution),
-      trust: cleanCampaignField(node.landingPage?.trust),
-      cta: cleanCampaignField(node.landingPage?.cta)
+    nodes: [...sourceNodes, fallbackEmail],
+    diagnostics: {
+      emailFallbackCreated: true,
+      fallbackEmailTitle: fallbackEmail.title,
+      reason: "missing email campaign from AI response",
+      originalEmailCount: emailCount
     }
   };
 }
 
-function campaignV3LandingAuditSnapshot(nodes = []) {
-  const sourceNodes = Array.isArray(nodes) ? nodes : [];
-  const typeValues = [...new Set(sourceNodes.map((node) => cleanCampaignField(node?.type)))];
-  const exactLandingNodes = sourceNodes
-    .map((node, index) => ({ node, index, type: cleanCampaignField(node?.type) }))
-    .filter((entry) => entry.type === "Landing Page")
-    .map((entry) => summarizeCampaignV3LandingNode(entry.node, entry.index));
-  const landingLikeNodes = sourceNodes
-    .map((node, index) => ({ node, index, type: cleanCampaignField(node?.type), title: cleanCampaignField(node?.title) }))
-    .filter((entry) => /landing/i.test(`${entry.type} ${entry.title}`))
-    .map((entry) => summarizeCampaignV3LandingNode(entry.node, entry.index));
+function logCampaignV3AIDiagnostics(label, details = {}) {
+  console.info(`[Funklix Campaign Generator V3 AI] ${label}`, details);
+}
+
+function campaignV3AdapterAuditDetails(payload = {}, node = null) {
   return {
-    nodeCount: sourceNodes.length,
-    countsByType: campaignV3NodeCounts(sourceNodes),
-    typeValues,
-    exactLandingCount: exactLandingNodes.length,
-    exactLandingNodes,
-    landingLikeNodes
+    tempId: cleanCampaignField(payload.tempId || node?.tempId),
+    type: cleanCampaignField(payload.type || node?.type),
+    title: cleanCampaignField(payload.title || node?.title),
+    nodeId: cleanCampaignField(node?.id)
   };
 }
 
-function logCampaignV3LandingAudit(stage, details = {}) {
-  if (typeof window === "undefined" || window.DEBUG_CAMPAIGN_V3_LANDING_AUDIT !== true) return;
-  console.info("[Campaign V3 Landing Audit]", stage, details);
+function logCampaignV3AdapterAudit(status, details = {}) {
+  console.info("[V3 Adapter Audit]", status, details);
+}
+
+function logCampaignV3AdapterAuditFailure(step, details = {}, error = null) {
+  console.error("[V3 Adapter Audit]", `FAILED ${step}`, {
+    ...details,
+    errorMessage: error?.message || String(error || ""),
+    errorStack: error?.stack || ""
+  });
 }
 
 function createCampaignV3RealCanvasAdapter() {
@@ -5983,13 +6024,66 @@ function createCampaignV3RealCanvasAdapter() {
     activityLog,
     unsavedCallCount: 0,
     createNode(payload = {}, position = {}) {
-      const node = createNode({ type: payload.type || "Idea", position });
-      if (!node) throw new Error("Campaign V3 real adapter could not create node.");
-      applyGeneratedCampaignNodePayload(node, payload);
-      updateNodeCard(node);
-      updateListView();
-      committedNodes.push({ id: node.id, tempId: payload.tempId, type: node.type, title: node.title, x: node.position.x, y: node.position.y, node });
-      activityLog.push({ action: "createNode", tempId: payload.tempId, nodeId: node.id });
+      const startDetails = campaignV3AdapterAuditDetails(payload);
+      logCampaignV3AdapterAudit("START createNode", startDetails);
+
+      let node = null;
+      logCampaignV3AdapterAudit("BEFORE createNode", startDetails);
+      try {
+        node = createNode({ type: payload.type || "Idea", position });
+        if (!node) throw new Error("Campaign V3 real adapter could not create node.");
+        logCampaignV3AdapterAudit("PASSED createNode", campaignV3AdapterAuditDetails(payload, node));
+      } catch (error) {
+        logCampaignV3AdapterAuditFailure("createNode", startDetails, error);
+        throw error;
+      }
+
+      logCampaignV3AdapterAudit("BEFORE applyGeneratedCampaignNodePayload", campaignV3AdapterAuditDetails(payload, node));
+      try {
+        applyGeneratedCampaignNodePayload(node, payload);
+        logCampaignV3AdapterAudit("PASSED applyGeneratedCampaignNodePayload", campaignV3AdapterAuditDetails(payload, node));
+      } catch (error) {
+        logCampaignV3AdapterAuditFailure("applyGeneratedCampaignNodePayload", campaignV3AdapterAuditDetails(payload, node), error);
+        throw error;
+      }
+
+      logCampaignV3AdapterAudit("BEFORE updateNodeCard", campaignV3AdapterAuditDetails(payload, node));
+      try {
+        updateNodeCard(node);
+        logCampaignV3AdapterAudit("PASSED updateNodeCard", campaignV3AdapterAuditDetails(payload, node));
+      } catch (error) {
+        logCampaignV3AdapterAuditFailure("updateNodeCard", campaignV3AdapterAuditDetails(payload, node), error);
+        throw error;
+      }
+
+      logCampaignV3AdapterAudit("BEFORE updateListView", campaignV3AdapterAuditDetails(payload, node));
+      try {
+        updateListView();
+        logCampaignV3AdapterAudit("PASSED updateListView", campaignV3AdapterAuditDetails(payload, node));
+      } catch (error) {
+        logCampaignV3AdapterAuditFailure("updateListView", campaignV3AdapterAuditDetails(payload, node), error);
+        throw error;
+      }
+
+      logCampaignV3AdapterAudit("BEFORE committedNodes.push", campaignV3AdapterAuditDetails(payload, node));
+      try {
+        committedNodes.push({ id: node.id, tempId: payload.tempId, type: node.type, title: node.title, x: node.position.x, y: node.position.y, node });
+        logCampaignV3AdapterAudit("PASSED committedNodes.push", campaignV3AdapterAuditDetails(payload, node));
+      } catch (error) {
+        logCampaignV3AdapterAuditFailure("committedNodes.push", campaignV3AdapterAuditDetails(payload, node), error);
+        throw error;
+      }
+
+      logCampaignV3AdapterAudit("BEFORE activityLog.push", campaignV3AdapterAuditDetails(payload, node));
+      try {
+        activityLog.push({ action: "createNode", tempId: payload.tempId, nodeId: node.id });
+        logCampaignV3AdapterAudit("PASSED activityLog.push", campaignV3AdapterAuditDetails(payload, node));
+      } catch (error) {
+        logCampaignV3AdapterAuditFailure("activityLog.push", campaignV3AdapterAuditDetails(payload, node), error);
+        throw error;
+      }
+
+      logCampaignV3AdapterAudit("FINISHED createNode", campaignV3AdapterAuditDetails(payload, node));
       return node;
     },
     createEdge(sourceNodeId, targetNodeId, edge = {}) {
@@ -6071,26 +6165,13 @@ async function runCampaignV3AICompatibility(setupOverride = {}, options = {}) {
     reportStatus("Generating Campaign...");
     const apiPlan = await fetchGeneratedCampaignPlan(setup.campaignIdea, setup.additionalContext, setup);
     const rawNodes = Array.isArray(apiPlan?.nodes) ? apiPlan.nodes : [];
-    logCampaignV3LandingAudit("Raw API response", campaignV3LandingAuditSnapshot(rawNodes));
     const emailNormalization = normalizeCampaignV3AIEmailNodes(rawNodes, setup);
     const landingNormalization = normalizeCampaignV3AILandingNodes(emailNormalization.nodes);
     const primaryNormalization = normalizeCampaignV3AIPrimaryOvercounts(landingNormalization.nodes, setup);
     const socialNormalization = normalizeCampaignV3AISocialOvercounts(primaryNormalization.nodes, setup);
     const landingFallback = normalizeCampaignV3AILandingFallback(socialNormalization.nodes, setup);
-    logCampaignV3LandingAudit("Landing fallback checkpoint", {
-      landingFallbackCreated: landingFallback.diagnostics?.landingFallbackCreated === true,
-      originalLandingCount: landingFallback.diagnostics?.originalLandingCount ?? 0,
-      landingFallbackDiagnostics: landingFallback.diagnostics,
-      stages: {
-        raw: campaignV3LandingAuditSnapshot(rawNodes),
-        afterEmailNormalization: campaignV3LandingAuditSnapshot(emailNormalization.nodes),
-        afterLandingNormalization: campaignV3LandingAuditSnapshot(landingNormalization.nodes),
-        afterPrimaryNormalization: campaignV3LandingAuditSnapshot(primaryNormalization.nodes),
-        afterSocialNormalization: campaignV3LandingAuditSnapshot(socialNormalization.nodes),
-        afterLandingFallback: campaignV3LandingAuditSnapshot(landingFallback.nodes)
-      }
-    });
-    const normalizedNodes = landingFallback.nodes;
+    const emailFallback = normalizeCampaignV3AIEmailFallback(landingFallback.nodes, setup);
+    const normalizedNodes = emailFallback.nodes;
     const nodeReport = campaignV3NodeReport(rawNodes);
     const firstTwentyNodes = campaignV3NodeReport(rawNodes, 20);
     const diagnosticBase = {
@@ -6106,6 +6187,7 @@ async function runCampaignV3AICompatibility(setupOverride = {}, options = {}) {
       primaryNormalization: primaryNormalization.diagnostics,
       socialNormalization: socialNormalization.diagnostics,
       landingFallback: landingFallback.diagnostics,
+      emailFallback: emailFallback.diagnostics,
       firstTwentyNodes
     };
 
@@ -6118,6 +6200,7 @@ async function runCampaignV3AICompatibility(setupOverride = {}, options = {}) {
     logCampaignV3AIDiagnostics("Idea / Campaign Variation / Content over-count normalization", diagnosticBase.primaryNormalization);
     logCampaignV3AIDiagnostics("Social Media Posting over-count normalization", diagnosticBase.socialNormalization);
     logCampaignV3AIDiagnostics("Landing Page fallback normalization", diagnosticBase.landingFallback);
+    logCampaignV3AIDiagnostics("Email Campaign fallback normalization", diagnosticBase.emailFallback);
     logCampaignV3AIDiagnostics("Normalized counts grouped by type", diagnosticBase.normalizedCountsByType);
     logCampaignV3AIDiagnostics("Actual AI counts grouped by subtype", diagnosticBase.actualCountsBySubtype);
     logCampaignV3AIDiagnostics("First 20 returned nodes", firstTwentyNodes);
