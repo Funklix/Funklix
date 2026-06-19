@@ -6130,8 +6130,10 @@ function evaluateCampaignV3Quality(normalizedNodes = [], setup = {}, context = {
     if (/^(campaign landing page|combined campaign landing page)$/i.test(title) || /^landing page for\b/i.test(title)) {
       addIssue(node, "title", "CAMPAIGN_V3_QUALITY_LANDING_GENERIC_TITLE", "error", "Landing Page title is generic/internal instead of customer-facing.", title);
     }
-    if (!description && !content) {
-      addIssue(node, "description", "CAMPAIGN_V3_QUALITY_LANDING_MISSING_BODY", "error", "Landing Page is missing description/content.", body);
+    const landingBodySources = [description, content, landingFields.headerClaim, landingFields.problem, landingFields.solution, landingFields.trust, landingFields.cta];
+    const hasLandingBodySource = landingBodySources.some((value) => cleanCampaignField(value));
+    if (!hasLandingBodySource) {
+      addIssue(node, "description", "CAMPAIGN_V3_QUALITY_LANDING_MISSING_BODY", "error", "Landing Page is missing description/content and structured landingPage fields.", body);
     }
     if (/^landing page for\b/i.test(description)) {
       addIssue(node, "description", "CAMPAIGN_V3_QUALITY_LANDING_GENERIC_DESCRIPTION", "error", "Landing Page description starts with generic fallback copy.", description);
