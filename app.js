@@ -6014,6 +6014,44 @@ function summarizeCampaignV3LandingNode(node = null, index = -1) {
   };
 }
 
+function campaignV3LandingFieldAudit(node = null, index = -1) {
+  if (!node) return null;
+  const landingPage = node.landingPage && typeof node.landingPage === "object" ? node.landingPage : {};
+  return {
+    index,
+    id: cleanCampaignField(node.id),
+    tempId: cleanCampaignField(node.tempId),
+    type: cleanCampaignField(node.type),
+    title: cleanCampaignField(node.title),
+    description: cleanCampaignField(node.description),
+    content: cleanCampaignField(node.content),
+    landingPage: {
+      claim: cleanCampaignField(landingPage.claim),
+      problem: cleanCampaignField(landingPage.problem),
+      solution: cleanCampaignField(landingPage.solution),
+      trust: cleanCampaignField(landingPage.trust),
+      cta: cleanCampaignField(landingPage.cta),
+      headerClaim: cleanCampaignField(landingPage.headerClaim),
+      problemOfIcp: cleanCampaignField(landingPage.problemOfIcp),
+      solutionForIcp: cleanCampaignField(landingPage.solutionForIcp),
+      buildingTrust: cleanCampaignField(landingPage.buildingTrust),
+      conversionCta: cleanCampaignField(landingPage.conversionCta)
+    },
+    headerClaim: cleanCampaignField(node.headerClaim),
+    problemStatement: cleanCampaignField(node.problemStatement),
+    solutionStatement: cleanCampaignField(node.solutionStatement),
+    trustStatement: cleanCampaignField(node.trustStatement),
+    callToAction: cleanCampaignField(node.callToAction)
+  };
+}
+
+function campaignV3LandingFieldAuditReport(nodes = []) {
+  return (Array.isArray(nodes) ? nodes : [])
+    .map((node, index) => ({ node, index, type: cleanCampaignField(node?.type) }))
+    .filter((entry) => entry.type === "Landing Page")
+    .map((entry) => campaignV3LandingFieldAudit(entry.node, entry.index));
+}
+
 function campaignV3LandingAuditSnapshot(nodes = []) {
   const sourceNodes = Array.isArray(nodes) ? nodes : [];
   const typeValues = [...new Set(sourceNodes.map((node) => cleanCampaignField(node?.type)))];
@@ -6050,11 +6088,17 @@ function createCampaignV3RealCanvasAdapter() {
     activityLog,
     unsavedCallCount: 0,
     createNode(payload = {}, position = {}) {
+      if (cleanCampaignField(payload.type) === "Landing Page") {
+        logCampaignV3LandingAudit("Landing Page payload passed into real canvas createNode", campaignV3LandingFieldAudit(payload));
+      }
       const node = createNode({ type: payload.type || "Idea", position });
       if (!node) throw new Error("Campaign V3 real adapter could not create node.");
       applyGeneratedCampaignNodePayload(node, payload);
       updateNodeCard(node);
       updateListView();
+      if (node.type === "Landing Page") {
+        logCampaignV3LandingAudit("Landing Page stored on canvas after adapter mapping", campaignV3LandingFieldAudit(node));
+      }
       committedNodes.push({ id: node.id, tempId: payload.tempId, type: node.type, title: node.title, x: node.position.x, y: node.position.y, node });
       activityLog.push({ action: "createNode", tempId: payload.tempId, nodeId: node.id });
       return node;
@@ -6139,6 +6183,7 @@ async function runCampaignV3AICompatibility(setupOverride = {}, options = {}) {
     const apiPlan = await fetchGeneratedCampaignPlan(setup.campaignIdea, setup.additionalContext, setup);
     const rawNodes = Array.isArray(apiPlan?.nodes) ? apiPlan.nodes : [];
     logCampaignV3LandingAudit("Raw API response", campaignV3LandingAuditSnapshot(rawNodes));
+    logCampaignV3LandingAudit("Raw AI response Landing Page field audit", campaignV3LandingFieldAuditReport(rawNodes));
     const emailNormalization = normalizeCampaignV3AIEmailNodes(rawNodes, setup);
     const landingNormalization = normalizeCampaignV3AILandingNodes(emailNormalization.nodes);
     const primaryNormalization = normalizeCampaignV3AIPrimaryOvercounts(landingNormalization.nodes, setup);
@@ -6160,6 +6205,7 @@ async function runCampaignV3AICompatibility(setupOverride = {}, options = {}) {
       }
     });
     const normalizedNodes = emailFallback.nodes;
+    logCampaignV3LandingAudit("Normalized Landing Page field audit", campaignV3LandingFieldAuditReport(normalizedNodes));
     const nodeReport = campaignV3NodeReport(rawNodes);
     const firstTwentyNodes = campaignV3NodeReport(rawNodes, 20);
     const diagnosticBase = {
@@ -7386,6 +7432,7 @@ function updateNodeCard(node) {
     social.appendChild(wrapper);
   } else if (isLandingPage) {
     const lp = node.landingPage || {};
+    logCampaignV3LandingAudit("Landing Page fields read by updateNodeCard", campaignV3LandingFieldAudit(node));
     social.innerHTML = "";
     const card = document.createElement("div");
     card.className = "landing-preview-card";
