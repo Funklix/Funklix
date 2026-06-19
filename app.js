@@ -7398,7 +7398,6 @@ function updateNodeCard(node) {
     social.appendChild(wrapper);
   } else if (isLandingPage) {
     const lp = node.landingPage || {};
-    logCampaignV3LandingAudit("Landing Page fields read by updateNodeCard", campaignV3LandingFieldAudit(node));
     social.innerHTML = "";
     const card = document.createElement("div");
     card.className = "landing-preview-card";
