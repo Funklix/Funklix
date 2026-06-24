@@ -6034,6 +6034,7 @@ function evaluateCampaignV3Quality(normalizedNodes = [], setup = {}, context = {
       severity,
       type: cleanCampaignField(node?.type),
       tempId: cleanCampaignField(node?.tempId || node?.id),
+      nodeIndex: sourceNodes.indexOf(node),
       title: cleanCampaignField(node?.title),
       field,
       value: cleanCampaignField(valueOverride === undefined ? node?.[field] : valueOverride),
@@ -6220,6 +6221,285 @@ function evaluateCampaignV3Quality(normalizedNodes = [], setup = {}, context = {
   };
 }
 
+const CAMPAIGN_V3_REPAIRABLE_ISSUE_CODES = new Set([
+  "CAMPAIGN_V3_QUALITY_IDEA_MISSING_TITLE",
+  "CAMPAIGN_V3_QUALITY_IDEA_MISSING_BODY",
+  "CAMPAIGN_V3_QUALITY_VARIATION_MISSING_TITLE",
+  "CAMPAIGN_V3_QUALITY_VARIATION_MISSING_BODY",
+  "CAMPAIGN_V3_QUALITY_VARIATION_DUPLICATE_TITLE",
+  "CAMPAIGN_V3_QUALITY_CONTENT_MISSING_TITLE",
+  "CAMPAIGN_V3_QUALITY_CONTENT_MISSING_BODY",
+  "CAMPAIGN_V3_QUALITY_CONTENT_LOOKS_LIKE_SOCIAL_POST",
+  "CAMPAIGN_V3_QUALITY_SOCIAL_MISSING_CAPTION",
+  "CAMPAIGN_V3_QUALITY_SOCIAL_HASHTAGS_BEFORE_TEXT",
+  "CAMPAIGN_V3_QUALITY_SOCIAL_DUPLICATE_CAPTION",
+  "CAMPAIGN_V3_QUALITY_LANDING_MISSING_TITLE",
+  "CAMPAIGN_V3_QUALITY_LANDING_GENERIC_TITLE",
+  "CAMPAIGN_V3_QUALITY_LANDING_MISSING_BODY",
+  "CAMPAIGN_V3_QUALITY_LANDING_GENERIC_DESCRIPTION",
+  "CAMPAIGN_V3_QUALITY_LANDING_FOCUSED_CAMPAIGN_DESTINATION",
+  "CAMPAIGN_V3_QUALITY_LANDING_INTERNAL_SUMMARY",
+  "CAMPAIGN_V3_QUALITY_LANDING_HEADER_MISSING",
+  "CAMPAIGN_V3_QUALITY_LANDING_HEADER_INTERNAL_VERB",
+  "CAMPAIGN_V3_QUALITY_LANDING_HEADER_MENTIONS_CAMPAIGN",
+  "CAMPAIGN_V3_QUALITY_LANDING_PROBLEM_MISSING",
+  "CAMPAIGN_V3_QUALITY_LANDING_PROBLEM_GENERIC",
+  "CAMPAIGN_V3_QUALITY_LANDING_SOLUTION_MISSING",
+  "CAMPAIGN_V3_QUALITY_LANDING_SOLUTION_FOCUSED_CAMPAIGN",
+  "CAMPAIGN_V3_QUALITY_LANDING_SOLUTION_DESCRIBES_CAMPAIGN",
+  "CAMPAIGN_V3_QUALITY_LANDING_SOLUTION_OFFER_MISMATCH",
+  "CAMPAIGN_V3_QUALITY_LANDING_TRUST_MISSING",
+  "CAMPAIGN_V3_QUALITY_LANDING_TRUST_GENERIC",
+  "CAMPAIGN_V3_QUALITY_LANDING_TRUST_TOO_SHORT",
+  "CAMPAIGN_V3_QUALITY_LANDING_CTA_MISSING",
+  "CAMPAIGN_V3_QUALITY_LANDING_CTA_GENERIC_INVITATION",
+  "CAMPAIGN_V3_QUALITY_LANDING_CTA_LEARN_MORE",
+  "CAMPAIGN_V3_QUALITY_EMAIL_MISSING_TITLE",
+  "CAMPAIGN_V3_QUALITY_EMAIL_MISSING_BODY",
+  "CAMPAIGN_V3_QUALITY_EMAIL_MISSING_SUBJECT",
+  "CAMPAIGN_V3_QUALITY_EMAIL_MISSING_CTA",
+  "CAMPAIGN_V3_QUALITY_EMAIL_GENERIC_FALLBACK"
+]);
+
+function logCampaignV3RepairLoop(label, details = {}) {
+  console.info(`[Campaign V3 Repair Loop] ${label}`, details);
+}
+
+function isCampaignV3IssueRepairable(issue = {}) {
+  return CAMPAIGN_V3_REPAIRABLE_ISSUE_CODES.has(cleanCampaignField(issue.code));
+}
+
+function campaignV3RepairNodeKeyFromIssue(issue = {}) {
+  if (Number.isInteger(issue.nodeIndex) && issue.nodeIndex >= 0) return `index:${issue.nodeIndex}`;
+  const tempId = cleanCampaignField(issue.tempId);
+  if (tempId) return `tempId:${tempId}`;
+  return `type-title:${cleanCampaignField(issue.type)}:${cleanCampaignField(issue.title)}`;
+}
+
+function groupCampaignV3IssuesByNode(qualityResult = {}) {
+  const grouped = new Map();
+  (Array.isArray(qualityResult?.issues) ? qualityResult.issues : [])
+    .filter(isCampaignV3IssueRepairable)
+    .forEach((issue) => {
+      const key = campaignV3RepairNodeKeyFromIssue(issue);
+      if (!grouped.has(key)) grouped.set(key, []);
+      grouped.get(key).push(issue);
+    });
+  return grouped;
+}
+
+function getCampaignV3RepairTargets(qualityResult = {}, normalizedCampaign = []) {
+  const nodes = Array.isArray(normalizedCampaign) ? normalizedCampaign : [];
+  return Array.from(groupCampaignV3IssuesByNode(qualityResult).entries())
+    .map(([key, issues]) => {
+      const firstIssue = issues[0] || {};
+      const nodeIndex = Number.isInteger(firstIssue.nodeIndex) && firstIssue.nodeIndex >= 0
+        ? firstIssue.nodeIndex
+        : nodes.findIndex((node) => {
+          const tempId = cleanCampaignField(node?.tempId || node?.id);
+          if (firstIssue.tempId && tempId === cleanCampaignField(firstIssue.tempId)) return true;
+          return cleanCampaignField(node?.type) === cleanCampaignField(firstIssue.type)
+            && cleanCampaignField(node?.title) === cleanCampaignField(firstIssue.title);
+        });
+      return {
+        key,
+        nodeIndex,
+        node: nodeIndex >= 0 ? nodes[nodeIndex] : null,
+        nodeType: cleanCampaignField(firstIssue.type),
+        issues
+      };
+    })
+    .filter((target) => target.node && target.nodeIndex >= 0);
+}
+
+function campaignV3RepairNodeSummary(node = {}) {
+  return {
+    id: cleanCampaignField(node.id),
+    tempId: cleanCampaignField(node.tempId),
+    type: cleanCampaignField(node.type),
+    title: cleanCampaignField(node.title),
+    description: cleanCampaignField(node.description),
+    content: cleanCampaignField(node.content),
+    metadata: node.metadata || {},
+    social: node.social || {},
+    landingPage: node.landingPage || {}
+  };
+}
+
+function buildCampaignV3RepairContext(normalizedCampaign = [], setup = {}) {
+  const nodes = Array.isArray(normalizedCampaign) ? normalizedCampaign : [];
+  return {
+    setup,
+    countsByType: campaignV3NodeCounts(nodes),
+    idea: nodes.find((node) => cleanCampaignField(node?.type) === "Idea") ? campaignV3RepairNodeSummary(nodes.find((node) => cleanCampaignField(node?.type) === "Idea")) : null,
+    variations: nodes.filter((node) => cleanCampaignField(node?.type) === "Campaign Variation").map(campaignV3RepairNodeSummary),
+    content: nodes.filter((node) => cleanCampaignField(node?.type) === "Content").map(campaignV3RepairNodeSummary),
+    socialPosts: nodes.filter((node) => cleanCampaignField(node?.type) === "Social Media Posting").map(campaignV3RepairNodeSummary),
+    landingPage: nodes.find((node) => cleanCampaignField(node?.type) === "Landing Page") ? campaignV3RepairNodeSummary(nodes.find((node) => cleanCampaignField(node?.type) === "Landing Page")) : null,
+    emailCampaign: nodes.find((node) => cleanCampaignField(node?.type) === "Email Campaign") ? campaignV3RepairNodeSummary(nodes.find((node) => cleanCampaignField(node?.type) === "Email Campaign")) : null
+  };
+}
+
+function buildCampaignV3NodeRepairPrompt({ node, nodeType, issues, campaignContext }) {
+  const issueCodes = (Array.isArray(issues) ? issues : []).map((issue) => issue.code).filter(Boolean);
+  const platform = cleanCampaignField(node?.social?.platform || node?.channel || campaignContext?.setup?.channel || "LinkedIn");
+  const landingGuidance = nodeType === "Landing Page"
+    ? "For Landing Page repairs, include labeled sections in content: Hero Headline, Problem Section, Offer, Trust Elements, Primary CTA. Avoid internal words like campaign, landing page, and AI-generated."
+    : "";
+  const socialGuidance = nodeType === "Social Media Posting"
+    ? `For Social Media Posting repairs, write a platform-aware ${platform} caption. Put meaningful text before hashtags.`
+    : "";
+  const emailGuidance = nodeType === "Email Campaign"
+    ? "For Email Campaign repairs, content must include Subject, Preview text, Email body, and CTA."
+    : "";
+  return [
+    "Repair exactly one Campaign V3 node. Do not regenerate the full campaign.",
+    `Node type: ${nodeType}`,
+    `Quality issue codes: ${issueCodes.join(", ")}`,
+    `Current problematic node: ${JSON.stringify(campaignV3RepairNodeSummary(node))}`,
+    `Campaign context: ${JSON.stringify(campaignContext)}`,
+    "Preserve the same node type and intent. Preserve identity fields conceptually; only improve title/content/caption copy.",
+    "Return strong, specific, customer-facing content. Avoid generic filler and duplicate wording.",
+    landingGuidance,
+    socialGuidance,
+    emailGuidance,
+    "Return JSON accepted by the refine endpoint: title, content, caption. No markdown. No explanations."
+  ].filter(Boolean).join("\n");
+}
+
+async function repairCampaignV3Node({ node, nodeType, issues, campaignContext }) {
+  const instruction = buildCampaignV3NodeRepairPrompt({ node, nodeType, issues, campaignContext });
+  const response = await fetch("/api/refine-node", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      nodeType,
+      currentContent: campaignV3RepairNodeSummary(node),
+      instruction,
+      boardId: getCurrentBrandBrainBoardId(),
+      brandBrainData: state.brandCore,
+      campaignContext: JSON.stringify(campaignContext)
+    })
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data?.error || "Campaign V3 repair request failed");
+  return data;
+}
+
+function normalizeCampaignV3RepairedNodeFields(originalNode = {}, repaired = {}) {
+  const repairedTitle = cleanCampaignField(repaired.title);
+  const repairedContent = cleanCampaignField(repaired.content || repaired.body || repaired.description);
+  const repairedCaption = cleanCampaignField(repaired.caption);
+  const nextNode = {
+    ...originalNode,
+    metadata: { ...(originalNode.metadata || {}) },
+    social: { ...(originalNode.social || {}) },
+    landingPage: { ...(originalNode.landingPage || {}) }
+  };
+  if (repairedTitle) nextNode.title = repairedTitle;
+  if (repairedContent) {
+    nextNode.content = repairedContent;
+    nextNode.description = repairedContent.split("\n").find(Boolean) || repairedContent;
+  }
+  if (cleanCampaignField(nextNode.type) === "Social Media Posting") {
+    const caption = repairedCaption || repairedContent || repairedTitle;
+    if (caption) {
+      nextNode.social.caption = caption;
+      nextNode.content = caption;
+    }
+  }
+  if (cleanCampaignField(nextNode.type) === "Email Campaign" && repairedCaption && !cleanCampaignField(nextNode.content).includes(repairedCaption)) {
+    nextNode.content = [nextNode.content, `CTA: ${repairedCaption}`].filter(Boolean).join("\n\n");
+  }
+  if (cleanCampaignField(nextNode.type) === "Landing Page") {
+    const sections = parseStructuredLandingPagePreview(repairedContent) || {};
+    const headerClaim = firstCleanLandingSectionValue(sections.heroHeadline, repairedTitle);
+    const problem = combineLandingSectionValues(sections.subheadline, sections.problemSection);
+    const solution = combineLandingSectionValues(sections.offer, sections.benefits);
+    const trust = combineLandingSectionValues(sections.trustElements, sections.faq);
+    const cta = firstCleanLandingSectionValue(sections.primaryCta, sections.finalCta, sections.cta, repairedCaption);
+    if (headerClaim) nextNode.landingPage.headerClaim = headerClaim;
+    if (problem) nextNode.landingPage.problem = problem;
+    if (solution) nextNode.landingPage.solution = solution;
+    if (trust) nextNode.landingPage.trust = trust;
+    if (cta) nextNode.landingPage.cta = cta;
+    if (!nextNode.content) nextNode.content = repairedContent || nextNode.landingPage.headerClaim || "";
+  }
+  return nextNode;
+}
+
+function mergeRepairedCampaignV3Node(normalizedCampaign = [], nodeIndex = -1, repairedNode = null) {
+  if (!Array.isArray(normalizedCampaign) || nodeIndex < 0 || nodeIndex >= normalizedCampaign.length || !repairedNode) return normalizedCampaign;
+  return normalizedCampaign.map((node, index) => (index === nodeIndex ? repairedNode : node));
+}
+
+async function runCampaignV3QualityRepairLoop(normalizedCampaign = [], qualityResult = {}, campaignContext = {}) {
+  let nodes = Array.isArray(normalizedCampaign) ? normalizedCampaign : [];
+  const firstQualityResult = qualityResult;
+  const targets = firstQualityResult?.ok === false ? getCampaignV3RepairTargets(firstQualityResult, nodes) : [];
+  const diagnostics = {
+    attempted: targets.length > 0,
+    maxAttempts: 1,
+    repairableIssueCount: targets.reduce((total, target) => total + target.issues.length, 0),
+    targetCount: targets.length,
+    targets: targets.map((target) => ({
+      nodeIndex: target.nodeIndex,
+      nodeType: target.nodeType,
+      tempId: cleanCampaignField(target.node?.tempId || target.node?.id),
+      title: cleanCampaignField(target.node?.title),
+      issueCodes: target.issues.map((issue) => issue.code)
+    })),
+    repaired: [],
+    failed: [],
+    remainingIssues: []
+  };
+
+  logCampaignV3RepairLoop("First quality result:", firstQualityResult);
+  logCampaignV3RepairLoop("Repair targets:", diagnostics.targets);
+
+  for (const target of targets) {
+    logCampaignV3RepairLoop("Repairing node:", diagnostics.targets.find((item) => item.nodeIndex === target.nodeIndex));
+    try {
+      const repaired = await repairCampaignV3Node({
+        node: target.node,
+        nodeType: target.nodeType,
+        issues: target.issues,
+        campaignContext
+      });
+      const repairedNode = normalizeCampaignV3RepairedNodeFields(target.node, repaired);
+      nodes = mergeRepairedCampaignV3Node(nodes, target.nodeIndex, repairedNode);
+      diagnostics.repaired.push({
+        nodeIndex: target.nodeIndex,
+        nodeType: target.nodeType,
+        title: cleanCampaignField(repairedNode.title),
+        issueCodes: target.issues.map((issue) => issue.code)
+      });
+      logCampaignV3RepairLoop("Repaired node merged:", diagnostics.repaired[diagnostics.repaired.length - 1]);
+    } catch (error) {
+      diagnostics.failed.push({
+        nodeIndex: target.nodeIndex,
+        nodeType: target.nodeType,
+        title: cleanCampaignField(target.node?.title),
+        issueCodes: target.issues.map((issue) => issue.code),
+        error: error?.message || String(error || "")
+      });
+      console.warn("[Campaign V3 Repair Loop] Repair failed; continuing with original node.", diagnostics.failed[diagnostics.failed.length - 1]);
+    }
+  }
+
+  const secondQualityResult = targets.length
+    ? evaluateCampaignV3Quality(nodes, campaignContext.setup || {}, {
+      stage: "afterRepairBeforePlan",
+      expectedCounts: expectedCampaignV3NodeCounts(campaignContext.setup || {})
+    })
+    : firstQualityResult;
+  diagnostics.secondQualityResult = secondQualityResult;
+  diagnostics.remainingIssues = Array.isArray(secondQualityResult?.issues) ? secondQualityResult.issues : [];
+  logCampaignV3RepairLoop("Second quality result:", secondQualityResult);
+  logCampaignV3RepairLoop("Remaining issues:", diagnostics.remainingIssues);
+  return { nodes, qualityResult: secondQualityResult, diagnostics };
+}
+
 function logCampaignV3AIDiagnostics(label, details = {}) {
   console.info(`[Funklix Campaign Generator V3 AI] ${label}`, details);
 }
@@ -6402,13 +6682,16 @@ async function runCampaignV3AICompatibility(setupOverride = {}, options = {}) {
     const socialNormalization = normalizeCampaignV3AISocialOvercounts(primaryNormalization.nodes, setup);
     const landingFallback = normalizeCampaignV3AILandingFallback(socialNormalization.nodes, setup);
     const emailFallback = normalizeCampaignV3AIEmailFallback(landingFallback.nodes, setup);
-    const normalizedNodes = emailFallback.nodes;
+    let normalizedNodes = emailFallback.nodes;
     let qualityDiagnostics = null;
+    let initialQualityDiagnostics = null;
+    let repairDiagnostics = null;
     try {
       qualityDiagnostics = evaluateCampaignV3Quality(normalizedNodes, setup, {
         stage: "afterEmailFallbackBeforePlan",
         expectedCounts: expectedCampaignV3NodeCounts(setup)
       });
+      initialQualityDiagnostics = qualityDiagnostics;
       console.info("[Campaign V3 Quality Gate]", qualityDiagnostics);
     } catch (qualityError) {
       qualityDiagnostics = {
@@ -6418,7 +6701,26 @@ async function runCampaignV3AICompatibility(setupOverride = {}, options = {}) {
         counts: { errors: 0, warnings: 0 },
         error: qualityError?.message || String(qualityError || "")
       };
+      initialQualityDiagnostics = qualityDiagnostics;
       console.warn("[Campaign V3 Quality Gate] diagnostics failed; continuing without behavior changes.", qualityDiagnostics);
+    }
+    if (qualityDiagnostics?.ok === false) {
+      try {
+        const repairLoop = await runCampaignV3QualityRepairLoop(normalizedNodes, qualityDiagnostics, buildCampaignV3RepairContext(normalizedNodes, setup));
+        normalizedNodes = repairLoop.nodes;
+        qualityDiagnostics = repairLoop.qualityResult;
+        repairDiagnostics = repairLoop.diagnostics;
+      } catch (repairError) {
+        repairDiagnostics = {
+          attempted: true,
+          error: repairError?.message || String(repairError || ""),
+          remainingIssues: Array.isArray(qualityDiagnostics?.issues) ? qualityDiagnostics.issues : []
+        };
+        console.warn("[Campaign V3 Repair Loop] Repair loop failed; continuing with best available campaign.", repairDiagnostics);
+      }
+    } else {
+      logCampaignV3RepairLoop("First quality result:", qualityDiagnostics);
+      logCampaignV3RepairLoop("Repair targets:", []);
     }
     const nodeReport = campaignV3NodeReport(rawNodes);
     const firstTwentyNodes = campaignV3NodeReport(rawNodes, 20);
@@ -6436,7 +6738,9 @@ async function runCampaignV3AICompatibility(setupOverride = {}, options = {}) {
       socialNormalization: socialNormalization.diagnostics,
       landingFallback: landingFallback.diagnostics,
       emailFallback: emailFallback.diagnostics,
+      initialQualityDiagnostics,
       qualityDiagnostics,
+      repairDiagnostics,
       firstTwentyNodes
     };
 
