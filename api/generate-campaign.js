@@ -184,6 +184,27 @@ Social Media Posting:
 - Hashtags should be clean campaign hashtags, not full sentences.
 - Keep purpose distinct from sibling posts.
 
+Critical LinkedIn field mapping:
+- For LinkedIn Social Media Posting nodes, social.caption is the complete publish-ready LinkedIn post body, not a teaser, preview, or short caption.
+- The LinkedIn word-count rules apply to social.caption only; content remains a one-sentence internal summary.
+- Hook, Problem, Story, Authority, and Objection posts are invalid if social.caption is under 120 words or over 220 words.
+- CTA posts are invalid if social.caption is under 80 words or over 150 words.
+- LinkedIn social.caption must use 2-5 short paragraphs, include an insight, lesson, takeaway, framework, or recommendation, and end with a discussion CTA or action CTA.
+- Never output a single-paragraph short-form LinkedIn post.
+
+LinkedIn JSON example pattern:
+{
+  "type": "Social Media Posting",
+  "title": "Story Post",
+  "description": "LinkedIn story post for the variation angle.",
+  "content": "One-sentence internal summary of the LinkedIn post purpose.",
+  "social": {
+    "platform": "LinkedIn",
+    "caption": "Most teams do not lose momentum because the idea is weak.\n\nThey lose it because the handoff between attention and action is too thin. A post creates interest, but the next step often feels generic, disconnected, or too vague to earn a response.\n\nThe lesson: strong campaigns need a bridge from relevance to decision. Give the audience a clear reason to care, a practical takeaway they can use today, and a next step that feels connected to the problem they already recognize.\n\nWhat is one handoff in your current campaign that could be made clearer this week? Start there, then build the rest of the journey around that moment so every click, reply, and conversion step feels intentional.",
+    "hashtags": "#CampaignStrategy, #B2BMarketing, #DemandGeneration"
+  }
+}
+
 For LinkedIn posts:
 - Write complete, publish-ready LinkedIn-native posts, not short-form captions with a LinkedIn label.
 - Use 2-5 short paragraphs with line breaks.
