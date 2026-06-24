@@ -6245,6 +6245,113 @@ function createCampaignV3OptimizationIssue(node = {}, sourceNodes = [], override
   };
 }
 
+function campaignV3StrategicSocialPlatform(node = {}, setup = {}, context = {}) {
+  const platform = cleanCampaignField(node?.social?.platform || node?.channel || setup.channel || context.channel || "LinkedIn").toLowerCase();
+  if (/^(x|x\s*\/\s*twitter|twitter)$/.test(platform)) return "X";
+  if (platform === "tiktok" || platform === "tik tok") return "TikTok";
+  if (platform === "instagram") return "Instagram";
+  return "LinkedIn";
+}
+
+function campaignV3StrategicParagraphCount(text = "") {
+  return cleanCampaignField(text)
+    .split(/\n{2,}|\r?\n/)
+    .map((part) => cleanCampaignField(part))
+    .filter(Boolean).length;
+}
+
+function campaignV3StrategicHasLinkedInTakeaway(text = "") {
+  const normalized = campaignV3StrategicNormalize(text);
+  return /\b(lesson|takeaway|framework|principle|what this means|here'?s why|the key is|try this|remember|in practice|practical|insight|learned)\b/i.test(normalized);
+}
+
+function campaignV3StrategicHasTikTokHook(text = "") {
+  const firstLine = cleanCampaignField(text).split(/\n+/).map((line) => cleanCampaignField(line)).find(Boolean) || "";
+  if (!firstLine) return false;
+  if (firstLine.length <= 90 && /[?!]/.test(firstLine)) return true;
+  return /\b(stop|watch|wait|pov|here'?s|this is why|nobody tells you|you need|mistake|before you|if you|when you|how to|why|quick)\b/i.test(firstLine.slice(0, 140));
+}
+
+function campaignV3StrategicHasInstagramVisualContext(text = "") {
+  return /\b(see|look|watch|visual|image|photo|carousel|swipe|reel|video|clip|behind the scenes|before and after|save this|share this|comment|tap|show)\b/i.test(cleanCampaignField(text));
+}
+
+function addCampaignV3StrategicSocialDiagnostics(node = {}, sourceNodes = [], setup = {}, context = {}, optimizationIssues = []) {
+  if (cleanCampaignField(node?.type) !== "Social Media Posting") return;
+  const caption = campaignV3StrategicTextForNode(node);
+  if (!caption) return;
+  const platform = campaignV3StrategicSocialPlatform(node, setup, context);
+  const wordCount = cleanCampaignField(caption).split(/\s+/).filter(Boolean).length;
+  const paragraphCount = campaignV3StrategicParagraphCount(caption);
+  const addSocialIssue = (overrides = {}) => optimizationIssues.push(createCampaignV3OptimizationIssue(node, sourceNodes, {
+    field: "social.caption",
+    value: caption,
+    dimension: "audienceFit",
+    level: "opportunity",
+    confidence: "medium",
+    ...overrides
+  }));
+
+  if (platform === "LinkedIn") {
+    if (caption.length < 500 || wordCount < 90) {
+      addSocialIssue({
+        code: "CAMPAIGN_V3_STRATEGIC_SOCIAL_LINKEDIN_TOO_SHORT",
+        message: "LinkedIn caption is short for a professional insight-led post.",
+        weight: 5
+      });
+    }
+    if (paragraphCount < 2) {
+      addSocialIssue({
+        code: "CAMPAIGN_V3_STRATEGIC_SOCIAL_LINKEDIN_NO_PARAGRAPHS",
+        message: "LinkedIn caption does not use multiple short paragraphs.",
+        weight: 4
+      });
+    }
+    if (!campaignV3StrategicHasLinkedInTakeaway(caption)) {
+      addSocialIssue({
+        code: "CAMPAIGN_V3_STRATEGIC_SOCIAL_LINKEDIN_NO_TAKEAWAY",
+        message: "LinkedIn caption does not include an obvious lesson, insight, framework, or takeaway.",
+        weight: 4
+      });
+    }
+    if (caption.length <= 300 && paragraphCount < 2) {
+      addSocialIssue({
+        code: "CAMPAIGN_V3_STRATEGIC_SOCIAL_LINKEDIN_SHORT_FORM_STYLE",
+        message: "LinkedIn caption resembles short-form social copy more than a LinkedIn-native post.",
+        weight: 5
+      });
+    }
+    return;
+  }
+
+  if (platform === "X" && caption.length > 280) {
+    addSocialIssue({
+      code: "CAMPAIGN_V3_STRATEGIC_SOCIAL_X_TOO_LONG",
+      message: "X caption exceeds the 280-character platform constraint.",
+      weight: 8,
+      confidence: "high"
+    });
+    return;
+  }
+
+  if (platform === "TikTok" && !campaignV3StrategicHasTikTokHook(caption)) {
+    addSocialIssue({
+      code: "CAMPAIGN_V3_STRATEGIC_SOCIAL_TIKTOK_NO_HOOK",
+      message: "TikTok caption does not open with an obvious hook.",
+      weight: 4
+    });
+    return;
+  }
+
+  if (platform === "Instagram" && !campaignV3StrategicHasInstagramVisualContext(caption)) {
+    addSocialIssue({
+      code: "CAMPAIGN_V3_STRATEGIC_SOCIAL_INSTAGRAM_NO_VISUAL_CONTEXT",
+      message: "Instagram caption does not include obvious visual, save/share, or community context.",
+      weight: 4
+    });
+  }
+}
+
 function evaluateCampaignV3StrategicDiagnostics(nodes = [], setup = {}, context = {}) {
   const sourceNodes = Array.isArray(nodes) ? nodes : [];
   const optimizationIssues = [];
@@ -6298,6 +6405,7 @@ function evaluateCampaignV3StrategicDiagnostics(nodes = [], setup = {}, context 
         confidence: "medium"
       }));
     }
+    addCampaignV3StrategicSocialDiagnostics(node, sourceNodes, setup, context, optimizationIssues);
     if (type === "Landing Page") {
       const landingProblem = cleanCampaignField(node?.landingPage?.problem);
       if (landingProblem && (landingProblem.length < 24 || /\b(focus on|targeting|audience|campaign objective)\b/i.test(landingProblem))) {
@@ -6340,6 +6448,9 @@ function evaluateCampaignV3StrategicDiagnostics(nodes = [], setup = {}, context 
   const differentiationPenalty = optimizationIssues
     .filter((issue) => issue.dimension === "differentiation")
     .reduce((total, issue) => total + issue.weight, 0);
+  const audienceFitPenalty = optimizationIssues
+    .filter((issue) => issue.dimension === "audienceFit")
+    .reduce((total, issue) => total + issue.weight, 0);
   const totalOptimizationWeight = optimizationIssues.reduce((total, issue) => total + issue.weight, 0);
   const strategicScore = Math.max(0, 100 - Math.min(30, totalOptimizationWeight));
   return {
@@ -6355,7 +6466,7 @@ function evaluateCampaignV3StrategicDiagnostics(nodes = [], setup = {}, context 
       offerClarity: null,
       outcomeClarity: null,
       differentiation: Math.max(0, 100 - Math.min(30, differentiationPenalty)),
-      audienceFit: null,
+      audienceFit: Math.max(0, 100 - Math.min(30, audienceFitPenalty)),
       brandBrainAlignment: null
     },
     repairRecommendation: {
