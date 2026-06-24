@@ -7349,6 +7349,137 @@ function campaignV3ModalSetupFromInputs(overlay) {
   };
 }
 
+
+const CAMPAIGN_V3_CREATION_STEPS = [
+  { id: "understand", label: "Understanding your campaign", status: "Reading your campaign brief..." },
+  { id: "brand", label: "Learning your brand context", status: "Tuning the work to your Brand Brain..." },
+  { id: "angles", label: "Exploring campaign angles", status: "Finding the strongest angles..." },
+  { id: "strategy", label: "Creating content strategy", status: "Turning your strategy into content..." },
+  { id: "social", label: "Generating social content", status: "Drafting social posts and messaging paths..." },
+  { id: "landing", label: "Preparing landing page", status: "Preparing conversion assets..." },
+  { id: "quality", label: "Running quality checks", status: "Checking campaign quality..." },
+  { id: "optimize", label: "Optimizing campaign structure", status: "Optimizing campaign structure..." },
+  { id: "canvas", label: "Building campaign canvas", status: "Assembling your canvas..." }
+];
+
+function campaignV3StepIndexForStatus(message = "") {
+  if (/building\s+canvas|canvas/i.test(message)) return 5;
+  if (/generating\s+campaign|campaign/i.test(message)) return 3;
+  if (/analyzing\s+strategy|strategy/i.test(message)) return 1;
+  return 0;
+}
+
+function waitForCampaignV3ModalStep(ms = 900) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+function campaignV3ProgressSummary(setup = {}) {
+  const normalized = normalizeCampaignSetupOptions(setup);
+  const extras = [
+    normalized.includeLandingPage ? "landing page" : null,
+    normalized.includeEmailCampaign ? "email campaign" : null
+  ].filter(Boolean).join(" + ");
+  return `${normalized.variationCount} variations · ${normalized.postsPerVariation} posts each · ${normalized.channel}${extras ? ` · ${extras}` : ""}`;
+}
+
+function campaignV3AvatarMarkup({ complete = false } = {}) {
+  const avatarUrl = getApprovedBrandAvatarUrl();
+  return `
+    <div class="campaign-v3-avatar-wrap ${complete ? "is-complete" : ""}">
+      <div class="campaign-v3-avatar-orbit" aria-hidden="true"></div>
+      <div class="campaign-v3-avatar" aria-label="Brand AI creator">
+        ${avatarUrl ? `<img src="${avatarUrl}" alt="Brand Avatar" />` : `<span class="campaign-v3-avatar-fallback"><strong>F</strong><small>AI</small></span>`}
+      </div>
+      ${complete ? `<div class="campaign-v3-avatar-check" aria-hidden="true">✓</div>` : ""}
+    </div>`;
+}
+
+function renderCampaignV3CreationExperience(overlay, setup = {}) {
+  const modal = overlay.querySelector(".campaign-builder-modal");
+  if (!modal) return;
+  modal.classList.add("campaign-v3-creation-modal");
+  modal.innerHTML = `
+    <div class="campaign-v3-creation-shell" aria-live="polite">
+      ${campaignV3AvatarMarkup()}
+      <div class="campaign-v3-creation-copy">
+        <span class="campaign-builder-kicker">Brand AI Campaign Creator</span>
+        <h3>Your Brand AI is building your campaign</h3>
+        <p>Designing a campaign tailored to your audience, channel and goals.</p>
+        <div class="campaign-v3-live-status" data-campaign-v3-live-status>${CAMPAIGN_V3_CREATION_STEPS[0].status}</div>
+        <small>${campaignV3ProgressSummary(setup)}</small>
+      </div>
+      <ol class="campaign-v3-progress-steps">
+        ${CAMPAIGN_V3_CREATION_STEPS.map((step, index) => `<li data-campaign-v3-step="${step.id}" class="${index === 0 ? "is-active" : ""}"><span>•</span><strong>${step.label}</strong></li>`).join("")}
+      </ol>
+    </div>`;
+  updateCampaignV3CreationProgress(overlay, 0);
+}
+
+function updateCampaignV3CreationProgress(overlay, activeIndex = 0) {
+  const safeActiveIndex = Math.max(0, Math.min(CAMPAIGN_V3_CREATION_STEPS.length - 1, activeIndex));
+  overlay.querySelectorAll("[data-campaign-v3-step]").forEach((item, index) => {
+    const done = index < safeActiveIndex;
+    item.classList.toggle("is-done", done);
+    item.classList.toggle("is-active", index === safeActiveIndex);
+    item.classList.toggle("is-upcoming", index > safeActiveIndex);
+    const marker = item.querySelector("span");
+    if (marker) marker.textContent = done ? "✓" : "•";
+  });
+  const statusEl = overlay.querySelector("[data-campaign-v3-live-status]");
+  if (statusEl) statusEl.textContent = CAMPAIGN_V3_CREATION_STEPS[safeActiveIndex]?.status || "Almost ready...";
+}
+
+function renderCampaignV3ReadyState(overlay, result = null) {
+  const modal = overlay.querySelector(".campaign-builder-modal");
+  if (!modal) return;
+  overlay.dataset.campaignV3Busy = "true";
+  modal.classList.add("campaign-v3-creation-modal");
+  modal.innerHTML = `
+    <div class="campaign-v3-complete-shell" aria-live="polite">
+      ${campaignV3AvatarMarkup({ complete: true })}
+      <span class="campaign-builder-kicker">Campaign Creation Complete</span>
+      <h3>Campaign Ready</h3>
+      <p>Your Brand AI has created, checked and assembled your campaign.</p>
+      <ul class="campaign-v3-summary-chips" aria-label="Campaign completion summary">
+        <li>Strategy</li>
+        <li>Content</li>
+        <li>Landing Page</li>
+        <li>Quality Checked</li>
+        <li>Canvas Ready</li>
+      </ul>
+      <div class="campaign-builder-actions campaign-v3-complete-actions">
+        <button type="button" id="campaign-v3-reveal" class="campaign-v3-primary-button">Reveal Campaign</button>
+      </div>
+    </div>`;
+  modal.querySelector("#campaign-v3-reveal")?.addEventListener("click", () => {
+    overlay.remove();
+    centerViewportOnCampaignV3Result(result);
+    setSaveStatus("Campaign generated successfully.");
+  });
+}
+
+function renderCampaignV3ErrorState(overlay, setup = {}, onRetry = null) {
+  const modal = overlay.querySelector(".campaign-builder-modal");
+  if (!modal) return;
+  overlay.dataset.campaignV3Busy = "false";
+  modal.classList.add("campaign-v3-creation-modal");
+  modal.innerHTML = `
+    <div class="campaign-v3-error-shell" aria-live="assertive">
+      <div class="campaign-v3-error-mark">!</div>
+      <span class="campaign-builder-kicker">Campaign Creation Paused</span>
+      <h3>We couldn’t finish this campaign</h3>
+      <p>Something interrupted generation. You can retry with the same settings or close this window and try again later.</p>
+      <div class="campaign-builder-actions campaign-v3-error-actions">
+        <button type="button" id="campaign-v3-error-close" class="campaign-v3-secondary-button">Close</button>
+        <button type="button" id="campaign-v3-error-retry" class="campaign-v3-primary-button">Retry</button>
+      </div>
+    </div>`;
+  modal.querySelector("#campaign-v3-error-close")?.addEventListener("click", () => overlay.remove());
+  modal.querySelector("#campaign-v3-error-retry")?.addEventListener("click", () => {
+    if (typeof onRetry === "function") onRetry(setup);
+  });
+}
+
 function openCampaignV3Modal() {
   const overlay = document.createElement("div");
   overlay.className = "campaign-builder-overlay";
@@ -7390,7 +7521,6 @@ function openCampaignV3Modal() {
   </div>`;
   document.body.appendChild(overlay);
 
-  const statusEl = overlay.querySelector("[data-campaign-v3-status]");
   const errorEl = overlay.querySelector("[data-campaign-v3-error]");
   const closeModal = (force = false) => {
     if (!force && overlay.dataset.campaignV3Busy === "true") return;
@@ -7410,28 +7540,61 @@ function openCampaignV3Modal() {
       return;
     }
 
-    errorEl.textContent = "";
-    statusEl.textContent = "Analyzing Strategy...";
-    setCampaignV3ModalBusy(overlay, true);
-    setActiveView("board");
-    toggleListMode(false);
+    const runGeneration = async (activeSetup) => {
+      renderCampaignV3CreationExperience(overlay, activeSetup);
+      setCampaignV3ModalBusy(overlay, true);
+      updateCampaignV3CreationProgress(overlay, 0);
+      setActiveView("board");
+      toggleListMode(false);
 
-    const result = await runCampaignV3AICompatibility(setup, {
-      onStatus: (message) => {
-        statusEl.textContent = message;
+      let activeStepIndex = 0;
+      let maxWorkingStepIndex = 1;
+      const generationExperienceStartedAt = Date.now();
+      const simulatedProgress = window.setInterval(() => {
+        const cappedWorkingStep = Math.min(maxWorkingStepIndex, 5);
+        if (activeStepIndex < cappedWorkingStep) {
+          activeStepIndex += 1;
+          updateCampaignV3CreationProgress(overlay, activeStepIndex);
+        }
+      }, 1150);
+
+      const stopSimulatedProgress = () => window.clearInterval(simulatedProgress);
+      let result = null;
+
+      try {
+        result = await runCampaignV3AICompatibility(activeSetup, {
+          onStatus: (message) => {
+            maxWorkingStepIndex = Math.max(maxWorkingStepIndex, campaignV3StepIndexForStatus(message));
+            if (/building\s+canvas|canvas/i.test(message)) {
+              const statusEl = overlay.querySelector("[data-campaign-v3-live-status]");
+              if (statusEl) statusEl.textContent = "Almost ready...";
+            }
+          }
+        });
+        const minimumExperienceRemaining = Math.max(0, 3200 - (Date.now() - generationExperienceStartedAt));
+        if (minimumExperienceRemaining) await waitForCampaignV3ModalStep(minimumExperienceRemaining);
+      } finally {
+        stopSimulatedProgress();
       }
+
+      if (result?.ok) {
+        for (let index = activeStepIndex + 1; index < CAMPAIGN_V3_CREATION_STEPS.length; index += 1) {
+          await waitForCampaignV3ModalStep(index >= 6 ? 680 : 420);
+          updateCampaignV3CreationProgress(overlay, index);
+        }
+        await waitForCampaignV3ModalStep(360);
+        renderCampaignV3ReadyState(overlay, result);
+        return;
+      }
+
+      renderCampaignV3ErrorState(overlay, activeSetup, runGeneration);
+    };
+
+    errorEl.textContent = "";
+    runGeneration(setup).catch((error) => {
+      console.error("[Funklix Campaign Generator V3] Modal generation experience failed", error);
+      renderCampaignV3ErrorState(overlay, setup, runGeneration);
     });
-
-    if (result?.ok) {
-      closeModal(true);
-      centerViewportOnCampaignV3Result(result);
-      setSaveStatus("Campaign generated successfully.");
-      return;
-    }
-
-    setCampaignV3ModalBusy(overlay, false);
-    statusEl.textContent = "";
-    errorEl.textContent = "Campaign generation failed. Please try again.";
   });
 
   return overlay;
