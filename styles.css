@@ -4248,3 +4248,47 @@ button:active {
   50% { content: ".."; }
   75%, 100% { content: "..."; }
 }
+
+/* Campaign V3 generation-only spacing and pacing polish. */
+.campaign-v3-creation-modal {
+  padding: 32px 26px 26px;
+  overflow: auto;
+}
+
+.campaign-v3-creation-modal .campaign-v3-creation-shell {
+  gap: 14px;
+  padding-top: 8px;
+}
+
+.campaign-v3-creation-modal .campaign-v3-creation-shell .campaign-v3-avatar-wrap:not(.is-complete) {
+  width: 98px;
+  height: 98px;
+  margin-top: 6px;
+}
+
+.campaign-v3-creation-modal .campaign-v3-creation-shell .campaign-v3-avatar-wrap:not(.is-complete) .campaign-v3-avatar {
+  width: 72px;
+  height: 72px;
+  font-size: 1.8rem;
+  box-shadow: 0 14px 34px rgba(81, 103, 216, 0.24), 0 0 26px rgba(54, 192, 139, 0.18);
+}
+
+.campaign-v3-creation-modal .campaign-v3-creation-shell .campaign-v3-avatar-wrap:not(.is-complete)::before {
+  inset: -8px;
+}
+
+.campaign-v3-creation-modal .campaign-v3-creation-shell .campaign-v3-avatar-wrap:not(.is-complete)::after {
+  inset: 18px;
+}
+
+.campaign-v3-creation-modal .campaign-v3-creation-copy h3 {
+  margin-top: 2px;
+}
+
+.campaign-v3-creation-modal .campaign-v3-progress-steps {
+  margin-top: 12px;
+}
+
+.campaign-v3-creation-modal .campaign-v3-complete-shell {
+  padding-top: 4px;
+}

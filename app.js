@@ -7364,8 +7364,8 @@ const CAMPAIGN_V3_CREATION_STEPS = [
 
 function campaignV3StepIndexForStatus(message = "") {
   if (/building\s+canvas|canvas/i.test(message)) return 5;
-  if (/generating\s+campaign|campaign/i.test(message)) return 3;
-  if (/analyzing\s+strategy|strategy/i.test(message)) return 1;
+  if (/generating\s+campaign|campaign/i.test(message)) return 5;
+  if (/analyzing\s+strategy|strategy/i.test(message)) return 2;
   return 0;
 }
 
@@ -7548,7 +7548,7 @@ function openCampaignV3Modal() {
       toggleListMode(false);
 
       let activeStepIndex = 0;
-      let maxWorkingStepIndex = 1;
+      let maxWorkingStepIndex = 2;
       const generationExperienceStartedAt = Date.now();
       const simulatedProgress = window.setInterval(() => {
         const cappedWorkingStep = Math.min(maxWorkingStepIndex, 5);
@@ -7556,7 +7556,7 @@ function openCampaignV3Modal() {
           activeStepIndex += 1;
           updateCampaignV3CreationProgress(overlay, activeStepIndex);
         }
-      }, 1150);
+      }, 1050);
 
       const stopSimulatedProgress = () => window.clearInterval(simulatedProgress);
       let result = null;
@@ -7571,7 +7571,7 @@ function openCampaignV3Modal() {
             }
           }
         });
-        const minimumExperienceRemaining = Math.max(0, 3200 - (Date.now() - generationExperienceStartedAt));
+        const minimumExperienceRemaining = Math.max(0, 4600 - (Date.now() - generationExperienceStartedAt));
         if (minimumExperienceRemaining) await waitForCampaignV3ModalStep(minimumExperienceRemaining);
       } finally {
         stopSimulatedProgress();
@@ -7579,7 +7579,7 @@ function openCampaignV3Modal() {
 
       if (result?.ok) {
         for (let index = activeStepIndex + 1; index < CAMPAIGN_V3_CREATION_STEPS.length; index += 1) {
-          await waitForCampaignV3ModalStep(index >= 6 ? 680 : 420);
+          await waitForCampaignV3ModalStep(420);
           updateCampaignV3CreationProgress(overlay, index);
         }
         await waitForCampaignV3ModalStep(360);
