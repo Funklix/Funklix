@@ -5179,6 +5179,91 @@ function parseStructuredLandingPagePreview(content = "") {
   return recognizedCount >= 2 ? sections : null;
 }
 
+function campaignV3LandingAliasValue(node = {}, landing = {}, aliases = []) {
+  return aliases.map((alias) => cleanCampaignField(landing?.[alias] || node?.[alias])).find(Boolean) || "";
+}
+
+function campaignV3LandingCanonicalFields(landing = {}) {
+  return {
+    headerClaim: cleanCampaignField(landing.headerClaim),
+    problem: cleanCampaignField(landing.problem),
+    solution: cleanCampaignField(landing.solution),
+    trust: cleanCampaignField(landing.trust),
+    cta: cleanCampaignField(landing.cta)
+  };
+}
+
+function campaignV3LandingCanonicalizationSections(node = {}) {
+  const sourceText = [node.description, node.content].map((value) => cleanCampaignField(value)).filter(Boolean).join("\n\n");
+  try {
+    return parseStructuredLandingPagePreview(sourceText) || {};
+  } catch (error) {
+    console.warn("[Campaign V3 Landing Canonicalization] Landing Page content parsing failed; continuing with aliases only.", error);
+    return {};
+  }
+}
+
+function logCampaignV3LandingCanonicalization(details = {}) {
+  console.info("[Campaign V3 Landing Canonicalization]", details);
+}
+
+function canonicalizeCampaignV3LandingPageFields(node = {}) {
+  if (cleanCampaignField(node?.type) !== "Landing Page") return node;
+
+  const landing = node.landingPage && typeof node.landingPage === "object" ? node.landingPage : {};
+  const nextNode = {
+    ...node,
+    metadata: node.metadata && typeof node.metadata === "object" ? { ...node.metadata } : node.metadata,
+    social: node.social && typeof node.social === "object" ? { ...node.social } : node.social,
+    landingPage: { ...landing }
+  };
+  const before = campaignV3LandingCanonicalFields(nextNode.landingPage);
+  const sections = campaignV3LandingCanonicalizationSections(nextNode);
+  const aliasSources = {
+    headerClaim: campaignV3LandingAliasValue(nextNode, landing, ["heroHeadline", "headline", "claim"]),
+    problem: campaignV3LandingAliasValue(nextNode, landing, ["problemOfIcp", "problemSection", "customerPain", "audiencePain"]),
+    solution: campaignV3LandingAliasValue(nextNode, landing, ["solutionForIcp", "solutionSection", "offer", "benefits"]),
+    trust: campaignV3LandingAliasValue(nextNode, landing, ["buildingTrust", "trustElements", "proof", "credibility"]),
+    cta: campaignV3LandingAliasValue(nextNode, landing, ["conversionCta", "ctaText", "callToAction", "primaryCta", "finalCta"])
+  };
+  const parsedSources = {
+    headerClaim: firstCleanLandingSectionValue(sections.heroHeadline),
+    problem: combineLandingSectionValues(sections.subheadline, sections.problemSection),
+    solution: combineLandingSectionValues(sections.offer, sections.benefits),
+    trust: combineLandingSectionValues(sections.trustElements, sections.faq),
+    cta: firstCleanLandingSectionValue(sections.primaryCta, sections.finalCta, sections.cta)
+  };
+  const fieldsPopulated = [];
+  ["headerClaim", "problem", "solution", "trust", "cta"].forEach((field) => {
+    if (cleanCampaignField(nextNode.landingPage[field])) return;
+    const value = cleanCampaignField(aliasSources[field] || parsedSources[field]);
+    if (!value) return;
+    nextNode.landingPage[field] = value;
+    fieldsPopulated.push(field);
+  });
+  const aliasesDetected = Object.entries(aliasSources).reduce((detected, [field, value]) => {
+    if (value) detected[field] = value;
+    return detected;
+  }, {});
+  const parsedSectionsDetected = Object.entries(parsedSources).reduce((detected, [field, value]) => {
+    if (value) detected[field] = value;
+    return detected;
+  }, {});
+  const finalFields = campaignV3LandingCanonicalFields(nextNode.landingPage);
+
+  logCampaignV3LandingCanonicalization({
+    tempId: cleanCampaignField(nextNode.tempId || nextNode.id),
+    title: cleanCampaignField(nextNode.title),
+    before,
+    aliasesDetected,
+    parsedSectionsDetected,
+    fieldsPopulated,
+    final: finalFields
+  });
+
+  return nextNode;
+}
+
 function appendLandingPreviewText(parent, className, text, style = {}) {
   if (!text) return null;
   const element = document.createElement("p");
@@ -6681,6 +6766,7 @@ function normalizeCampaignV3RepairedNodeFields(originalNode = {}, repaired = {})
     if (trust) nextNode.landingPage.trust = trust;
     if (cta) nextNode.landingPage.cta = cta;
     if (!nextNode.content) nextNode.content = repairedContent || nextNode.landingPage.headerClaim || "";
+    return canonicalizeCampaignV3LandingPageFields(nextNode);
   }
   return nextNode;
 }
@@ -6939,7 +7025,7 @@ async function runCampaignV3AICompatibility(setupOverride = {}, options = {}) {
     const socialNormalization = normalizeCampaignV3AISocialOvercounts(primaryNormalization.nodes, setup);
     const landingFallback = normalizeCampaignV3AILandingFallback(socialNormalization.nodes, setup);
     const emailFallback = normalizeCampaignV3AIEmailFallback(landingFallback.nodes, setup);
-    let normalizedNodes = emailFallback.nodes;
+    let normalizedNodes = emailFallback.nodes.map((node) => canonicalizeCampaignV3LandingPageFields(node));
     let qualityDiagnostics = null;
     let initialQualityDiagnostics = null;
     let repairDiagnostics = null;
