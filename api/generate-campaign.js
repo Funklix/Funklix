@@ -185,54 +185,65 @@ Social Media Posting:
 - Keep purpose distinct from sibling posts.
 
 For LinkedIn posts:
-- Write complete, publish-ready LinkedIn posts.
-- Use short paragraphs with line breaks.
+- Write complete, publish-ready LinkedIn-native posts, not short-form captions with a LinkedIn label.
+- Use 2-5 short paragraphs with line breaks.
+- Hook, Problem, Story, Authority, and Objection posts must be 120-220 words.
+- CTA posts must be 80-150 words.
+- Every LinkedIn post must include a professional insight, lesson, takeaway, or framework.
+- End every LinkedIn post with a discussion prompt or action CTA.
+- Avoid one-liner short-form captions.
+- Do not write LinkedIn posts like X, Instagram, or TikTok captions.
 - Avoid generic slogans.
 - Each post should feel specific to the campaign variation angle, audience, and Brand Brain context.
 
 LinkedIn Hook Post (title/purpose only; node type must be "Social Media Posting"):
 - 120-220 words.
 - Strong attention-grabbing opening.
-- 2-4 short paragraphs.
-- Include a clear insight.
-- End with a CTA.
+- 2-5 short paragraphs.
+- Include a clear professional insight.
+- End with a discussion prompt or action CTA.
 
 LinkedIn Problem Post (title/purpose only; node type must be "Social Media Posting"):
 - 120-220 words.
 - Describe a real audience pain point.
 - Explain the consequences of ignoring it.
 - Introduce the campaign solution.
-- End with a CTA.
+- Include a lesson or practical takeaway.
+- End with a discussion prompt or action CTA.
 
 LinkedIn Story Post (title/purpose only; node type must be "Social Media Posting"):
 - 120-220 words.
 - Use a narrative structure.
 - Include situation, transformation, lesson, and CTA.
+- End with a discussion prompt or action CTA.
 
 LinkedIn Authority Post (title/purpose only; node type must be "Social Media Posting"):
 - 120-220 words.
 - Lead with expert insight.
 - Include a contrarian observation.
-- Give a practical takeaway.
-- End with a CTA.
+- Give a practical takeaway or framework.
+- End with a discussion prompt or action CTA.
 
 LinkedIn Objection Post (title/purpose only; node type must be "Social Media Posting"):
 - 120-220 words.
 - Address skepticism directly.
 - Reframe the concern.
 - Include evidence, reasoning, or a concrete rationale.
-- End with a CTA.
+- Give a practical takeaway.
+- End with a discussion prompt or action CTA.
 
 LinkedIn CTA Post (title/purpose only; node type must be "Social Media Posting"):
 - 80-150 words.
 - Direct action-focused post.
 - Make the desired action clear.
-- Use a strong CTA.
+- Include a professional reason to act now.
+- Use a strong action CTA.
 
 For non-LinkedIn channels:
 - Keep posts platform-native and complete.
-- X/Twitter must remain 280-character aware.
-- Instagram and TikTok captions should include hook, context, and CTA.
+- X/Twitter must be concise, hook-first, and 280 characters max.
+- Instagram captions should be visual/emotional and include a save, share, or comment CTA.
+- TikTok captions should be short, hook-first, and video-native.
 - Do not return only 1-2 sentence summaries for LinkedIn posts.
 
 Landing Page:
