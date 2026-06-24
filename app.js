@@ -6298,6 +6298,20 @@ function evaluateCampaignV3StrategicDiagnostics(nodes = [], setup = {}, context 
         confidence: "medium"
       }));
     }
+    if (type === "Landing Page") {
+      const landingProblem = cleanCampaignField(node?.landingPage?.problem);
+      if (landingProblem && (landingProblem.length < 24 || /\b(focus on|targeting|audience|campaign objective)\b/i.test(landingProblem))) {
+        optimizationIssues.push(createCampaignV3OptimizationIssue(node, sourceNodes, {
+          code: "CAMPAIGN_V3_STRATEGIC_LANDING_PROBLEM_GENERIC",
+          field: "landingPage.problem",
+          value: landingProblem,
+          message: "Landing Page problem is too generic or describes targeting/audience instead of pain.",
+          dimension: "specificity",
+          weight: 5,
+          confidence: "medium"
+        }));
+      }
+    }
   });
 
   const variations = sourceNodes.filter((node) => cleanCampaignField(node?.type) === "Campaign Variation");
@@ -6486,7 +6500,7 @@ function evaluateCampaignV3Quality(normalizedNodes = [], setup = {}, context = {
 
     requireText(node, "landingPage.problem", landingFields.problem, "CAMPAIGN_V3_QUALITY_LANDING_PROBLEM_MISSING", "Landing Page problem is missing.");
     if (landingFields.problem && (landingFields.problem.length < 24 || /\b(focus on|targeting|audience|campaign objective)\b/i.test(landingFields.problem))) {
-      addIssue(node, "landingPage.problem", "CAMPAIGN_V3_QUALITY_LANDING_PROBLEM_GENERIC", "error", "Landing Page problem is too generic or describes targeting/audience instead of pain.", landingFields.problem);
+      addIssue(node, "landingPage.problem", "CAMPAIGN_V3_QUALITY_LANDING_PROBLEM_GENERIC", "warning", "Landing Page problem is too generic or describes targeting/audience instead of pain.", landingFields.problem);
     }
 
     requireText(node, "landingPage.solution", landingFields.solution, "CAMPAIGN_V3_QUALITY_LANDING_SOLUTION_MISSING", "Landing Page solution is missing.");
