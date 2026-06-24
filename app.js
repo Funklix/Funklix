@@ -6211,12 +6211,40 @@ function evaluateCampaignV3Quality(normalizedNodes = [], setup = {}, context = {
   }, { errors: 0, warnings: 0 });
   const totalChecks = Math.max(sourceNodes.length * 3, issues.length, 1);
   const score = Math.max(0, Math.round(((totalChecks - counts.errors * 2 - counts.warnings) / totalChecks) * 100));
+  const ok = counts.errors === 0;
 
   return {
-    ok: counts.errors === 0,
+    ok,
     score,
     issues,
     counts,
+    structuralOk: ok,
+    structuralScore: score,
+    strategicScore: 100,
+    overallScore: score,
+    validationIssues: issues,
+    optimizationIssues: [],
+    validationCounts: counts,
+    optimizationCounts: {
+      total: 0,
+      warnings: 0,
+      opportunities: 0
+    },
+    strategicDimensions: {
+      specificity: null,
+      offerClarity: null,
+      outcomeClarity: null,
+      differentiation: null,
+      audienceFit: null,
+      brandBrainAlignment: null
+    },
+    repairRecommendation: {
+      shouldRepair: false,
+      reason: null,
+      targetCount: 0,
+      maxTargets: 0,
+      targets: []
+    },
     context: fallbackContext
   };
 }
@@ -6699,6 +6727,33 @@ async function runCampaignV3AICompatibility(setupOverride = {}, options = {}) {
         score: 100,
         issues: [],
         counts: { errors: 0, warnings: 0 },
+        structuralOk: true,
+        structuralScore: 100,
+        strategicScore: 100,
+        overallScore: 100,
+        validationIssues: [],
+        optimizationIssues: [],
+        validationCounts: { errors: 0, warnings: 0 },
+        optimizationCounts: {
+          total: 0,
+          warnings: 0,
+          opportunities: 0
+        },
+        strategicDimensions: {
+          specificity: null,
+          offerClarity: null,
+          outcomeClarity: null,
+          differentiation: null,
+          audienceFit: null,
+          brandBrainAlignment: null
+        },
+        repairRecommendation: {
+          shouldRepair: false,
+          reason: null,
+          targetCount: 0,
+          maxTargets: 0,
+          targets: []
+        },
         error: qualityError?.message || String(qualityError || "")
       };
       initialQualityDiagnostics = qualityDiagnostics;
