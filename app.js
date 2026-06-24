@@ -6024,6 +6024,251 @@ function campaignV3QualityHasCta(value = "") {
   return /\b(?:cta|call to action|book|reserve|request|schedule|start|get|try|join|apply|download|reply|contact)\b/i.test(cleanCampaignField(value));
 }
 
+function campaignV3StrategicNormalize(value = "") {
+  return cleanCampaignField(value)
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function campaignV3StrategicTextForNode(node = {}) {
+  const type = cleanCampaignField(node?.type);
+  const description = cleanCampaignField(node?.description);
+  const content = cleanCampaignField(node?.content);
+  if (type === "Social Media Posting") return cleanCampaignField(node?.social?.caption || content || description);
+  if (type === "Landing Page") {
+    const landing = node?.landingPage || {};
+    return [
+      description,
+      content,
+      landing.headerClaim,
+      landing.problem,
+      landing.solution,
+      landing.trust,
+      landing.cta
+    ].map((value) => cleanCampaignField(value)).filter(Boolean).join("\n\n");
+  }
+  return [description, content].filter(Boolean).join("\n\n");
+}
+
+function campaignV3StrategicTokens(value = "") {
+  const stopWords = new Set([
+    "a", "an", "and", "are", "as", "at", "be", "by", "for", "from", "in", "into", "is", "it", "of", "on", "or", "that", "the", "this", "to", "with",
+    "campaign", "variation", "angle", "audience", "offer", "content", "post", "social", "media", "email", "landing", "page", "business", "marketing"
+  ]);
+  return campaignV3StrategicNormalize(value)
+    .split(/\s+/)
+    .filter((token) => token.length >= 3 && !stopWords.has(token));
+}
+
+function campaignV3StrategicJaccardSimilarity(a = "", b = "") {
+  const first = new Set(campaignV3StrategicTokens(a));
+  const second = new Set(campaignV3StrategicTokens(b));
+  if (!first.size || !second.size) return 0;
+  const intersection = [...first].filter((token) => second.has(token)).length;
+  const union = new Set([...first, ...second]).size;
+  return union ? intersection / union : 0;
+}
+
+function campaignV3StrategicLooksLikeGenericTitle(title = "", type = "") {
+  const normalizedTitle = campaignV3StrategicNormalize(title);
+  if (!normalizedTitle) return null;
+  const normalizedType = campaignV3StrategicNormalize(type);
+  const exactGenericTitles = new Set([
+    "campaign landing page",
+    "landing page",
+    "campaign variation",
+    "social media post",
+    "social media posting",
+    "email campaign",
+    "campaign idea",
+    "content",
+    "generated campaign",
+    "untitled"
+  ]);
+  if (exactGenericTitles.has(normalizedTitle) || normalizedTitle === normalizedType) {
+    return { weight: 10, message: "Title is an exact generic placeholder.", confidence: "high", level: "strong" };
+  }
+  if (/^(?:post|variation|content|email|idea)\s+\d+$/i.test(normalizedTitle) || /^landing\s+page\s+\d+$/i.test(normalizedTitle)) {
+    return { weight: 8, message: "Title is a numbered placeholder.", confidence: "high", level: "warning" };
+  }
+  return null;
+}
+
+function campaignV3StrategicKnownFallbackMatches(text = "") {
+  const normalized = campaignV3StrategicNormalize(text);
+  const phrases = [
+    "a focused campaign experience",
+    "focused campaign destination",
+    "built around trust",
+    "meaningful business relationships",
+    "guide qualified visitors toward the next step",
+    "reinforce the primary value proposition",
+    "highlight the most relevant benefit",
+    "close with a clear reply or booking action"
+  ];
+  return phrases.filter((phrase) => normalized.includes(phrase));
+}
+
+function campaignV3StrategicLooksLabelOnly(text = "") {
+  const cleaned = cleanCampaignField(text);
+  if (!cleaned) return false;
+  const labelMatches = cleaned.match(/\b(?:Subject|CTA|Benefits|Problem|Solution|Trust|Header|Claim)\s*:/gi) || [];
+  if (labelMatches.length < 2) return false;
+  const meaningfulText = cleanCampaignField(cleaned.replace(/\b(?:Subject|CTA|Benefits|Problem|Solution|Trust|Header|Claim)\s*:/gi, " "));
+  const meaningfulWords = campaignV3StrategicTokens(meaningfulText);
+  return meaningfulWords.length <= 5 && meaningfulText.length < 48;
+}
+
+function campaignV3StrategicBodyTooShort(node = {}, setup = {}, context = {}) {
+  const type = cleanCampaignField(node?.type);
+  const body = campaignV3StrategicTextForNode(node);
+  if (!body) return false;
+  const platform = cleanCampaignField(node?.social?.platform || node?.channel || setup.channel || context.channel || "LinkedIn").toLowerCase();
+  const thresholds = {
+    Idea: 40,
+    "Campaign Variation": 50,
+    Content: 80,
+    "Landing Page": 120,
+    "Email Campaign": 100
+  };
+  let threshold = thresholds[type] || 50;
+  if (type === "Social Media Posting") threshold = /\b(x|twitter)\b/.test(platform) ? 35 : 80;
+  if (body.length >= threshold) return false;
+  const wordCount = campaignV3StrategicTokens(body).length;
+  if (type === "Social Media Posting" && /\b(x|twitter)\b/.test(platform)) return wordCount <= 5;
+  if (type === "Social Media Posting") return wordCount <= 11;
+  return true;
+}
+
+function createCampaignV3OptimizationIssue(node = {}, sourceNodes = [], overrides = {}) {
+  return {
+    code: overrides.code,
+    severity: "optimization",
+    level: overrides.level || "warning",
+    confidence: overrides.confidence || "high",
+    type: cleanCampaignField(node?.type),
+    tempId: cleanCampaignField(node?.tempId || node?.id),
+    nodeIndex: sourceNodes.indexOf(node),
+    title: cleanCampaignField(node?.title),
+    field: overrides.field || "",
+    value: cleanCampaignField(overrides.value),
+    message: overrides.message || "",
+    dimension: overrides.dimension || "specificity",
+    weight: overrides.weight || 0
+  };
+}
+
+function evaluateCampaignV3StrategicDiagnostics(nodes = [], setup = {}, context = {}) {
+  const sourceNodes = Array.isArray(nodes) ? nodes : [];
+  const optimizationIssues = [];
+  sourceNodes.forEach((node) => {
+    const type = cleanCampaignField(node?.type);
+    const title = cleanCampaignField(node?.title);
+    const body = campaignV3StrategicTextForNode(node);
+    const genericTitle = campaignV3StrategicLooksLikeGenericTitle(title, type);
+    if (genericTitle) {
+      optimizationIssues.push(createCampaignV3OptimizationIssue(node, sourceNodes, {
+        code: "CAMPAIGN_V3_STRATEGIC_GENERIC_TITLE",
+        field: "title",
+        value: title,
+        message: genericTitle.message,
+        dimension: "specificity",
+        weight: genericTitle.weight,
+        confidence: genericTitle.confidence,
+        level: genericTitle.level
+      }));
+    }
+    const fallbackMatches = campaignV3StrategicKnownFallbackMatches(body);
+    if (fallbackMatches.length) {
+      optimizationIssues.push(createCampaignV3OptimizationIssue(node, sourceNodes, {
+        code: "CAMPAIGN_V3_STRATEGIC_GENERIC_BODY_FALLBACK",
+        field: "content",
+        value: fallbackMatches.join(", "),
+        message: "Body contains known generic fallback language.",
+        dimension: "specificity",
+        weight: 10,
+        level: "strong"
+      }));
+    }
+    if (campaignV3StrategicLooksLabelOnly(body)) {
+      optimizationIssues.push(createCampaignV3OptimizationIssue(node, sourceNodes, {
+        code: "CAMPAIGN_V3_STRATEGIC_GENERIC_BODY_LABEL_ONLY",
+        field: "content",
+        value: body,
+        message: "Body is mostly section labels with very little substantive copy.",
+        dimension: "specificity",
+        weight: 8
+      }));
+    }
+    if (campaignV3StrategicBodyTooShort(node, setup, context)) {
+      optimizationIssues.push(createCampaignV3OptimizationIssue(node, sourceNodes, {
+        code: "CAMPAIGN_V3_STRATEGIC_GENERIC_BODY_TOO_SHORT",
+        field: type === "Social Media Posting" ? "social.caption" : "content",
+        value: body,
+        message: "Body is extremely short for this node type.",
+        dimension: "specificity",
+        weight: 5,
+        confidence: "medium"
+      }));
+    }
+  });
+
+  const variations = sourceNodes.filter((node) => cleanCampaignField(node?.type) === "Campaign Variation");
+  variations.forEach((variation, index) => {
+    const variationText = [variation.title, variation.description, variation.content].map((value) => cleanCampaignField(value)).filter(Boolean).join(" ");
+    variations.slice(index + 1).forEach((otherVariation) => {
+      const otherText = [otherVariation.title, otherVariation.description, otherVariation.content].map((value) => cleanCampaignField(value)).filter(Boolean).join(" ");
+      const similarity = campaignV3StrategicJaccardSimilarity(variationText, otherText);
+      if (similarity >= 0.92) {
+        optimizationIssues.push(createCampaignV3OptimizationIssue(otherVariation, sourceNodes, {
+          code: "CAMPAIGN_V3_STRATEGIC_VARIATION_TOO_SIMILAR",
+          field: "title/description/content",
+          value: `Similarity ${similarity.toFixed(2)} with "${cleanCampaignField(variation.title)}"`,
+          message: "Campaign Variation is too similar to another variation.",
+          dimension: "differentiation",
+          weight: 10,
+          level: "strong"
+        }));
+      }
+    });
+  });
+
+  const specificityPenalty = optimizationIssues
+    .filter((issue) => issue.dimension === "specificity")
+    .reduce((total, issue) => total + issue.weight, 0);
+  const differentiationPenalty = optimizationIssues
+    .filter((issue) => issue.dimension === "differentiation")
+    .reduce((total, issue) => total + issue.weight, 0);
+  const totalOptimizationWeight = optimizationIssues.reduce((total, issue) => total + issue.weight, 0);
+  const strategicScore = Math.max(0, 100 - Math.min(30, totalOptimizationWeight));
+  return {
+    strategicScore,
+    optimizationIssues,
+    optimizationCounts: {
+      total: optimizationIssues.length,
+      warnings: optimizationIssues.filter((issue) => issue.level === "warning" || issue.level === "strong").length,
+      opportunities: optimizationIssues.length
+    },
+    strategicDimensions: {
+      specificity: Math.max(0, 100 - Math.min(30, specificityPenalty)),
+      offerClarity: null,
+      outcomeClarity: null,
+      differentiation: Math.max(0, 100 - Math.min(30, differentiationPenalty)),
+      audienceFit: null,
+      brandBrainAlignment: null
+    },
+    repairRecommendation: {
+      shouldRepair: false,
+      reason: null,
+      targetCount: 0,
+      maxTargets: 0,
+      targets: []
+    }
+  };
+}
+
 function evaluateCampaignV3Quality(normalizedNodes = [], setup = {}, context = {}) {
   const issues = [];
   const sourceNodes = Array.isArray(normalizedNodes) ? normalizedNodes : [];
@@ -6212,6 +6457,7 @@ function evaluateCampaignV3Quality(normalizedNodes = [], setup = {}, context = {
   const totalChecks = Math.max(sourceNodes.length * 3, issues.length, 1);
   const score = Math.max(0, Math.round(((totalChecks - counts.errors * 2 - counts.warnings) / totalChecks) * 100));
   const ok = counts.errors === 0;
+  const strategicDiagnostics = evaluateCampaignV3StrategicDiagnostics(sourceNodes, normalizedSetup, fallbackContext);
 
   return {
     ok,
@@ -6220,31 +6466,14 @@ function evaluateCampaignV3Quality(normalizedNodes = [], setup = {}, context = {
     counts,
     structuralOk: ok,
     structuralScore: score,
-    strategicScore: 100,
-    overallScore: score,
+    strategicScore: strategicDiagnostics.strategicScore,
+    overallScore: Math.round((score * 0.7) + (strategicDiagnostics.strategicScore * 0.3)),
     validationIssues: issues,
-    optimizationIssues: [],
+    optimizationIssues: strategicDiagnostics.optimizationIssues,
     validationCounts: counts,
-    optimizationCounts: {
-      total: 0,
-      warnings: 0,
-      opportunities: 0
-    },
-    strategicDimensions: {
-      specificity: null,
-      offerClarity: null,
-      outcomeClarity: null,
-      differentiation: null,
-      audienceFit: null,
-      brandBrainAlignment: null
-    },
-    repairRecommendation: {
-      shouldRepair: false,
-      reason: null,
-      targetCount: 0,
-      maxTargets: 0,
-      targets: []
-    },
+    optimizationCounts: strategicDiagnostics.optimizationCounts,
+    strategicDimensions: strategicDiagnostics.strategicDimensions,
+    repairRecommendation: strategicDiagnostics.repairRecommendation,
     context: fallbackContext
   };
 }
