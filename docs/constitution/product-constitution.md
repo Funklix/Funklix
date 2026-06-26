@@ -1,10 +1,11 @@
 # Funklix Product Constitution
 
-**Version:** 1.0
-**Status:** Approved
-**Owner:** Product
-**Last Updated:** 2026-06-26
-
+| Field | Value |
+|------|------|
+| Version | 1.0 |
+| Status | Approved |
+| Owner | Product |
+| Last Updated | 2026-06-26 |
 ------------------------------------------------------------------------
 
 # Why This Document Exists
