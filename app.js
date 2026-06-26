@@ -7394,6 +7394,58 @@ function campaignV3AvatarMarkup({ complete = false } = {}) {
     </div>`;
 }
 
+function campaignV3ModalScrollContainer(overlay) {
+  return overlay?.querySelector?.(".campaign-builder-modal") || null;
+}
+
+function markCampaignV3AutoScrolling(container, duration = 420) {
+  if (!container) return;
+  container.dataset.campaignV3AutoScrolling = "true";
+  window.setTimeout(() => {
+    if (container) container.dataset.campaignV3AutoScrolling = "false";
+  }, duration);
+}
+
+function prepareCampaignV3ModalScrolling(overlay) {
+  const container = campaignV3ModalScrollContainer(overlay);
+  if (!container) return;
+  container.dataset.campaignV3LastUserScrollAt = "0";
+  container.dataset.campaignV3AutoScrolling = "true";
+  if (!container.dataset.campaignV3ScrollListenerAttached) {
+    container.addEventListener("scroll", () => {
+      if (container.dataset.campaignV3AutoScrolling === "true") return;
+      container.dataset.campaignV3LastUserScrollAt = String(Date.now());
+    }, { passive: true });
+    container.dataset.campaignV3ScrollListenerAttached = "true";
+  }
+  container.scrollTop = 0;
+  window.requestAnimationFrame(() => {
+    container.scrollTop = 0;
+    markCampaignV3AutoScrolling(container, 160);
+  });
+}
+
+function scrollCampaignV3ActiveStepIntoView(overlay, activeItem) {
+  const container = campaignV3ModalScrollContainer(overlay);
+  if (!container || !activeItem) return;
+  const lastUserScrollAt = Number(container.dataset.campaignV3LastUserScrollAt || 0);
+  if (lastUserScrollAt && Date.now() - lastUserScrollAt < 1800) return;
+
+  const containerRect = container.getBoundingClientRect();
+  const itemRect = activeItem.getBoundingClientRect();
+  const topPadding = 26;
+  const bottomPadding = 26;
+  const itemAbove = itemRect.top < containerRect.top + topPadding;
+  const itemBelow = itemRect.bottom > containerRect.bottom - bottomPadding;
+  if (!itemAbove && !itemBelow) return;
+
+  const targetTop = itemAbove
+    ? container.scrollTop + itemRect.top - containerRect.top - topPadding
+    : container.scrollTop + itemRect.bottom - containerRect.bottom + bottomPadding;
+  markCampaignV3AutoScrolling(container, 520);
+  container.scrollTo({ top: Math.max(0, targetTop), behavior: "smooth" });
+}
+
 function renderCampaignV3CreationExperience(overlay, setup = {}) {
   const modal = overlay.querySelector(".campaign-builder-modal");
   if (!modal) return;
@@ -7412,21 +7464,26 @@ function renderCampaignV3CreationExperience(overlay, setup = {}) {
         ${CAMPAIGN_V3_CREATION_STEPS.map((step, index) => `<li data-campaign-v3-step="${step.id}" class="${index === 0 ? "is-active" : ""}"><span>•</span><strong>${step.label}</strong></li>`).join("")}
       </ol>
     </div>`;
+  prepareCampaignV3ModalScrolling(overlay);
   updateCampaignV3CreationProgress(overlay, 0);
 }
 
 function updateCampaignV3CreationProgress(overlay, activeIndex = 0) {
   const safeActiveIndex = Math.max(0, Math.min(CAMPAIGN_V3_CREATION_STEPS.length - 1, activeIndex));
+  let activeItem = null;
   overlay.querySelectorAll("[data-campaign-v3-step]").forEach((item, index) => {
     const done = index < safeActiveIndex;
+    const active = index === safeActiveIndex;
     item.classList.toggle("is-done", done);
-    item.classList.toggle("is-active", index === safeActiveIndex);
+    item.classList.toggle("is-active", active);
     item.classList.toggle("is-upcoming", index > safeActiveIndex);
+    if (active) activeItem = item;
     const marker = item.querySelector("span");
     if (marker) marker.textContent = done ? "✓" : "•";
   });
   const statusEl = overlay.querySelector("[data-campaign-v3-live-status]");
   if (statusEl) statusEl.textContent = CAMPAIGN_V3_CREATION_STEPS[safeActiveIndex]?.status || "Almost ready...";
+  scrollCampaignV3ActiveStepIntoView(overlay, activeItem);
 }
 
 function renderCampaignV3ReadyState(overlay, result = null) {
@@ -7451,6 +7508,7 @@ function renderCampaignV3ReadyState(overlay, result = null) {
         <button type="button" id="campaign-v3-reveal" class="campaign-v3-primary-button">Reveal Campaign</button>
       </div>
     </div>`;
+  prepareCampaignV3ModalScrolling(overlay);
   modal.querySelector("#campaign-v3-reveal")?.addEventListener("click", () => {
     overlay.remove();
     centerViewportOnCampaignV3Result(result);
