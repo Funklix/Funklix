@@ -109,6 +109,7 @@
           <button id="sidebar-toggle-btn" class="sidebar-toggle" type="button" aria-label="Collapse sidebar" title="Collapse sidebar">◀</button>
         </div>
         <nav>
+          <button id="home-nav-btn" class="nav-item" data-icon="🏠"><span class="nav-label">Home</span></button>
           <button id="campaign-canvas-nav-btn" class="nav-item active" data-icon="🧩"><span class="nav-label">Campaign Canvas</span></button>
           <button id="boards-nav-btn" class="nav-item" data-icon="📚"><span class="nav-label">↳ Boards</span></button>
           <button class="nav-item" data-icon="🗂"><span class="nav-label">Content Workspace</span></button>
@@ -209,6 +210,54 @@
             <span id="node-search-count"></span>
           </div>
         </header>
+
+        <section id="dashboard-view" class="dashboard-view hidden" aria-labelledby="dashboard-title">
+          <div class="dashboard-hero">
+            <div class="dashboard-hero-copy">
+              <span class="dashboard-kicker">Home</span>
+              <h1 id="dashboard-title">Welcome back to Funklix</h1>
+              <p>Your AI Marketing Operating System starts here. Jump into the workspace you need, or review placeholder surfaces that will become live dashboard intelligence later.</p>
+            </div>
+            <div class="dashboard-hero-actions dashboard-quick-actions">
+              <button type="button" data-dashboard-action="create-campaign">Create Campaign</button>
+              <button type="button" data-dashboard-action="open-boards">Open Boards</button>
+              <button type="button" data-dashboard-action="open-brand">Open Brand</button>
+              <button type="button" data-dashboard-action="open-ai-brain">Open AI Brain</button>
+            </div>
+          </div>
+
+          <div class="dashboard-grid">
+            <section class="dashboard-card">
+              <div class="dashboard-card-header">
+                <span class="dashboard-kicker">Brand</span>
+                <h2 class="dashboard-card-title">Brand Status</h2>
+              </div>
+              <div class="dashboard-card-body">
+                <p class="dashboard-placeholder">Brand status will appear here after Brand intelligence is connected.</p>
+              </div>
+            </section>
+
+            <section class="dashboard-card">
+              <div class="dashboard-card-header">
+                <span class="dashboard-kicker">Insights</span>
+                <h2 class="dashboard-card-title">Insight Highlights</h2>
+              </div>
+              <div class="dashboard-card-body">
+                <p class="dashboard-placeholder">Insight highlights will appear here after Insights wiring is defined.</p>
+              </div>
+            </section>
+
+            <section class="dashboard-card">
+              <div class="dashboard-card-header">
+                <span class="dashboard-kicker">AI Brain</span>
+                <h2 class="dashboard-card-title">AI Activity</h2>
+              </div>
+              <div class="dashboard-card-body">
+                <p class="dashboard-placeholder">AI activity will appear here after AI Brain activity surfaces are designed.</p>
+              </div>
+            </section>
+          </div>
+        </section>
 
         <section class="canvas" id="canvas">
           <div class="canvas-scroll-surface" id="canvas-scroll-surface">
