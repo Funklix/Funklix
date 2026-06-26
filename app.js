@@ -156,6 +156,7 @@ const el = {
   appShell: document.querySelector(".app-shell"),
   leftSidebar: document.getElementById("left-sidebar"),
   workspaceWrap: document.querySelector(".workspace-wrap"),
+  dashboardView: document.getElementById("dashboard-view"),
   canvas: document.getElementById("canvas"),
   canvasTopbar: document.getElementById("canvas-topbar"),
   inspectorPanel: document.getElementById("inspector-panel"),
@@ -262,6 +263,7 @@ const el = {
   activityFeed: document.getElementById("activity-feed"),
   activityCount: document.getElementById("activity-count"),
   authSignoutButton: document.getElementById("auth-signout-btn"),
+  homeNavButton: document.getElementById("home-nav-btn"),
   brandCoreButton: document.getElementById("brand-core-nav-btn"),
   campaignCanvasNavButton: document.getElementById("campaign-canvas-nav-btn"),
   boardsNavButton: document.getElementById("boards-nav-btn"),
@@ -11253,17 +11255,28 @@ function setSidebarCollapsed(collapsed) {
 
 function setActiveView(view) {
   state.activeView = view;
+  const isHome = view === "home";
+  const isBrandCore = view === "brand-core";
+  el.dashboardView?.classList.toggle("hidden", !isHome);
   el.canvas.classList.toggle("hidden", view !== "board");
   el.boardListView.classList.toggle("hidden", view !== "list");
   el.calendarView.classList.toggle("hidden", view !== "calendar");
   el.boardsLibraryView?.classList.toggle("hidden", view !== "boards_library");
   el.insightsView?.classList.toggle("hidden", view !== "insights");
   el.aiBrainView?.classList.toggle("hidden", view !== "ai_brain");
-  el.brandCoreWorkspace.classList.toggle("hidden", view !== "brand-core");
-  el.campaignCanvasNavButton.classList.toggle("active", view !== "brand-core");
-  el.brandCoreButton.classList.toggle("active", view === "brand-core");
+  el.brandCoreWorkspace.classList.toggle("hidden", !isBrandCore);
+  el.homeNavButton?.classList.toggle("active", isHome);
+  el.campaignCanvasNavButton.classList.toggle("active", view === "board" || view === "list" || view === "calendar");
+  el.boardsNavButton?.classList.toggle("active", view === "boards_library");
+  el.brandCoreButton.classList.toggle("active", isBrandCore);
+  el.aiBrainNavButton?.classList.toggle("active", view === "ai_brain");
+  el.insightsNavButton?.classList.toggle("active", view === "insights");
+  if (state.appMode !== "brand") {
+    el.canvasTopbar.classList.toggle("hidden", isHome);
+    el.inspectorPanel.classList.toggle("hidden", isHome);
+  }
   el.cycleViewButton.textContent =
-    view === "board" ? "Board View" : view === "list" ? "List View" : view === "calendar" ? "Calendar View" : view === "insights" ? "Insights" : view === "ai_brain" ? "AI Brain" : "Brand Core";
+    view === "home" ? "Home" : view === "board" ? "Board View" : view === "list" ? "List View" : view === "calendar" ? "Calendar View" : view === "boards_library" ? "Boards" : view === "insights" ? "Insights" : view === "ai_brain" ? "AI Brain" : "Brand Core";
   if (view === "list") updateListView();
   if (view === "calendar") renderCalendarView();
   if (view === "insights" || view === "ai_brain") renderCampaignIntelligence();
@@ -12089,6 +12102,10 @@ el.postingDoneButton.addEventListener("click", confirmSchedulePost);
 el.postingCancelButton.addEventListener("click", closePostingPlanner);
 setSidebarCollapsed(true);
 
+el.homeNavButton?.addEventListener("click", () => {
+  setAppMode("canvas");
+  setActiveView("home");
+});
 el.brandCoreButton.addEventListener("click", () => {
   setAppMode("brand");
 });
@@ -12109,6 +12126,32 @@ el.insightsNavButton?.addEventListener("click", () => {
 el.aiBrainNavButton?.addEventListener("click", () => {
   setAppMode("canvas");
   setActiveView("ai_brain");
+});
+el.dashboardView?.addEventListener("click", (event) => {
+  const actionButton = event.target.closest("[data-dashboard-action]");
+  if (!actionButton) return;
+
+  const action = actionButton.dataset.dashboardAction;
+  if (action === "create-campaign") {
+    setAppMode("canvas");
+    setActiveView("board");
+    el.createCampaignButton?.click();
+    return;
+  }
+
+  if (action === "open-boards") {
+    el.boardsNavButton?.click();
+    return;
+  }
+
+  if (action === "open-brand") {
+    el.brandCoreButton?.click();
+    return;
+  }
+
+  if (action === "open-ai-brain") {
+    el.aiBrainNavButton?.click();
+  }
 });
 el.brandCoreCanvas.addEventListener("click", (event) => {
   const n = event.target.closest(".bc-node[data-bc-key]");
@@ -12398,7 +12441,7 @@ async function bootApp() {
   updateListView();
   fillInspector(null);
   setAppMode("canvas");
-  setActiveView("board");
+  setActiveView(boardIdFromPath ? "board" : "home");
   drawLinks();
   // URL/server-loaded boards refresh snapshot after applyCampaignState(); avoid capturing pre-load snapshot while in-flight.
   if (!state.initialServerLoadInFlight) refreshLastSavedSnapshot();
