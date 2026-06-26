@@ -9,6 +9,51 @@
   --danger: #d24a4a;
   --sidebar-width: 240px;
   --sidebar-collapsed-width: 74px;
+
+  /* Funklix Design Foundation Tokens */
+  --fk-color-bg: #f6f7fb;
+  --fk-color-surface: #ffffff;
+  --fk-color-surface-muted: #fbfcff;
+  --fk-color-text: #22253a;
+  --fk-color-heading: #232b4d;
+  --fk-color-muted: #697292;
+  --fk-color-border: #dfe3f2;
+  --fk-color-primary: #5368ff;
+  --fk-color-primary-2: #7d5cff;
+  --fk-color-primary-hover: #4258e8;
+  --fk-color-primary-soft: #f0f3ff;
+  --fk-color-success: #2bb979;
+  --fk-color-success-soft: #f0fbf5;
+  --fk-color-warning: #eab308;
+  --fk-color-warning-soft: #fff8df;
+  --fk-color-danger: #d24a4a;
+  --fk-color-danger-soft: #fff2f2;
+
+  --fk-radius-sm: 8px;
+  --fk-radius-md: 10px;
+  --fk-radius-lg: 16px;
+  --fk-radius-xl: 22px;
+  --fk-radius-pill: 999px;
+
+  --fk-shadow-sm: 0 4px 10px rgba(46, 55, 93, 0.06);
+  --fk-shadow-md: 0 8px 20px rgba(76, 90, 160, 0.06);
+  --fk-shadow-lg: 0 24px 70px rgba(28, 37, 75, 0.28);
+
+  --fk-space-1: 4px;
+  --fk-space-2: 8px;
+  --fk-space-3: 12px;
+  --fk-space-4: 16px;
+  --fk-space-5: 20px;
+  --fk-space-6: 24px;
+  --fk-space-8: 32px;
+
+  --fk-font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  --fk-font-size-xs: 0.72rem;
+  --fk-font-size-sm: 0.82rem;
+  --fk-font-size-md: 0.92rem;
+  --fk-font-size-lg: 1.18rem;
+  --fk-font-weight-medium: 700;
+  --fk-font-weight-bold: 900;
 }
 
 * {
