@@ -12441,7 +12441,7 @@ async function bootApp() {
   updateListView();
   fillInspector(null);
   setAppMode("canvas");
-  setActiveView("board");
+  setActiveView(boardIdFromPath ? "board" : "home");
   drawLinks();
   // URL/server-loaded boards refresh snapshot after applyCampaignState(); avoid capturing pre-load snapshot while in-flight.
   if (!state.initialServerLoadInFlight) refreshLastSavedSnapshot();
