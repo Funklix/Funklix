@@ -156,6 +156,7 @@ const el = {
   appShell: document.querySelector(".app-shell"),
   leftSidebar: document.getElementById("left-sidebar"),
   workspaceWrap: document.querySelector(".workspace-wrap"),
+  dashboardView: document.getElementById("dashboard-view"),
   canvas: document.getElementById("canvas"),
   canvasTopbar: document.getElementById("canvas-topbar"),
   inspectorPanel: document.getElementById("inspector-panel"),
@@ -262,6 +263,7 @@ const el = {
   activityFeed: document.getElementById("activity-feed"),
   activityCount: document.getElementById("activity-count"),
   authSignoutButton: document.getElementById("auth-signout-btn"),
+  homeNavButton: document.getElementById("home-nav-btn"),
   brandCoreButton: document.getElementById("brand-core-nav-btn"),
   campaignCanvasNavButton: document.getElementById("campaign-canvas-nav-btn"),
   boardsNavButton: document.getElementById("boards-nav-btn"),
@@ -7541,41 +7543,41 @@ function renderCampaignV3ErrorState(overlay, setup = {}, onRetry = null) {
 function openCampaignV3Modal() {
   const overlay = document.createElement("div");
   overlay.className = "campaign-builder-overlay";
-  overlay.innerHTML = `<div class="campaign-builder-modal">
-    <div class="campaign-builder-hero">
-      <span class="campaign-builder-kicker">Campaign Generator V3</span>
+  overlay.innerHTML = `<div class="campaign-builder-modal fk-section">
+    <div class="campaign-builder-hero fk-card">
+      <span class="campaign-builder-kicker fk-badge">Campaign Generator V3</span>
       <h3>Generate Campaign (V3)</h3>
       <p>Use the feature-flagged V3 AI compatibility flow to build a deterministic campaign funnel on the canvas.</p>
     </div>
-    <label class="campaign-builder-field campaign-builder-field-full">
+    <label class="campaign-builder-field campaign-builder-field-full fk-card">
       <span>Campaign Idea</span>
-      <textarea id="campaign-v3-idea" rows="5" placeholder="Launch a new service, promote a seasonal offer, or increase demo bookings..."></textarea>
+      <textarea class="fk-textarea" id="campaign-v3-idea" rows="5" placeholder="Launch a new service, promote a seasonal offer, or increase demo bookings..."></textarea>
     </label>
-    <label class="campaign-builder-field campaign-builder-field-full">
+    <label class="campaign-builder-field campaign-builder-field-full fk-card">
       <span>Additional Context</span>
-      <textarea id="campaign-v3-context" rows="3" placeholder="Optional audience, timing, channel, or campaign notes..."></textarea>
+      <textarea class="fk-textarea" id="campaign-v3-context" rows="3" placeholder="Optional audience, timing, channel, or campaign notes..."></textarea>
     </label>
-    <label class="campaign-builder-field campaign-builder-field-full">
+    <label class="campaign-builder-field campaign-builder-field-full fk-card">
       <span>Channel</span>
-      <select id="campaign-v3-channel"><option>LinkedIn</option><option>X</option><option>Instagram</option><option>TikTok</option><option>Mixed</option></select>
+      <select class="fk-select" id="campaign-v3-channel"><option>LinkedIn</option><option>X</option><option>Instagram</option><option>TikTok</option><option>Mixed</option></select>
     </label>
     <div class="campaign-builder-grid">
-      <label class="campaign-builder-field">
+      <label class="campaign-builder-field fk-card">
         <span>Variations</span>
-        <input id="campaign-v3-variations" type="number" min="1" max="10" value="3" />
+        <input class="fk-input" id="campaign-v3-variations" type="number" min="1" max="10" value="3" />
       </label>
-      <label class="campaign-builder-field">
+      <label class="campaign-builder-field fk-card">
         <span>Posts per Variation</span>
-        <input id="campaign-v3-posts" type="number" min="1" max="20" value="3" />
+        <input class="fk-input" id="campaign-v3-posts" type="number" min="1" max="20" value="3" />
       </label>
     </div>
     <div class="campaign-builder-grid">
-      <label class="campaign-builder-toggle"><input id="campaign-v3-include-landing" type="checkbox" checked /><span><strong>Landing Page</strong><small>Include Landing Page</small></span></label>
-      <label class="campaign-builder-toggle"><input id="campaign-v3-include-email" type="checkbox" checked /><span><strong>Email Campaign</strong><small>Include Email Campaign</small></span></label>
+      <label class="campaign-builder-toggle fk-card"><input id="campaign-v3-include-landing" type="checkbox" checked /><span><strong>Landing Page</strong><small>Include Landing Page</small></span></label>
+      <label class="campaign-builder-toggle fk-card"><input id="campaign-v3-include-email" type="checkbox" checked /><span><strong>Email Campaign</strong><small>Include Email Campaign</small></span></label>
     </div>
-    <p data-campaign-v3-status style="min-height: 1.4em; margin: 4px 0 0; color: #6b5dd3; font-weight: 700;"></p>
-    <p data-campaign-v3-error style="min-height: 1.4em; margin: 0; color: #d64545; font-weight: 700;"></p>
-    <div class="campaign-builder-actions"><button type="button" id="campaign-v3-legacy">Use legacy generator</button><button type="button" id="campaign-v3-cancel">Cancel</button><button type="button" id="campaign-v3-generate" class="primary-add">Generate Campaign</button></div>
+    <p class="campaign-builder-status" data-campaign-v3-status></p>
+    <p class="campaign-builder-error" data-campaign-v3-error></p>
+    <div class="campaign-builder-actions"><button class="fk-btn fk-btn-ghost" type="button" id="campaign-v3-legacy">Use legacy generator</button><button class="fk-btn fk-btn-secondary" type="button" id="campaign-v3-cancel">Cancel</button><button class="fk-btn fk-btn-primary primary-add" type="button" id="campaign-v3-generate">Generate Campaign</button></div>
   </div>`;
   document.body.appendChild(overlay);
 
@@ -7762,51 +7764,51 @@ function setupCampaignStepper(overlay, inputId, min, max) {
 function openCreateCampaignModal() {
   const overlay = document.createElement("div");
   overlay.className = "campaign-builder-overlay";
-  overlay.innerHTML = `<div class="campaign-builder-modal">
-    <div class="campaign-builder-hero">
-      <span class="campaign-builder-kicker">AI Campaign Builder</span>
+  overlay.innerHTML = `<div class="campaign-builder-modal fk-section">
+    <div class="campaign-builder-hero fk-card">
+      <span class="campaign-builder-kicker fk-badge">AI Campaign Builder</span>
       <h3>Create Campaign</h3>
       <p>Brief your AI marketing teammate. Funklix will build a multi-angle funnel directly on the canvas.</p>
     </div>
-    <label class="campaign-builder-field campaign-builder-field-full">
+    <label class="campaign-builder-field campaign-builder-field-full fk-card">
       <span>Campaign Idea</span>
-      <textarea id="campaign-idea-input" rows="5" placeholder="Describe the campaign goal, offer, ICP, launch, or product story..."></textarea>
+      <textarea class="fk-textarea" id="campaign-idea-input" rows="5" placeholder="Describe the campaign goal, offer, ICP, launch, or product story..."></textarea>
     </label>
-    <label class="campaign-builder-field campaign-builder-field-full">
+    <label class="campaign-builder-field campaign-builder-field-full fk-card">
       <span>Additional Context</span>
-      <input id="campaign-context-input" type="text" placeholder="Optional constraints, timing, product details..." />
+      <input class="fk-input" id="campaign-context-input" type="text" placeholder="Optional constraints, timing, product details..." />
     </label>
     <div class="campaign-builder-grid">
-      <div class="campaign-builder-card">
+      <div class="campaign-builder-card fk-card">
         <span>Campaign Variations</span>
         <div class="campaign-stepper">
-          <button type="button" data-stepper="campaign-variation-count" data-delta="-1">−</button>
-          <input id="campaign-variation-count" type="number" min="1" max="10" value="3" />
-          <button type="button" data-stepper="campaign-variation-count" data-delta="1">+</button>
+          <button class="fk-btn fk-btn-secondary" type="button" data-stepper="campaign-variation-count" data-delta="-1">−</button>
+          <input class="fk-input" id="campaign-variation-count" type="number" min="1" max="10" value="3" />
+          <button class="fk-btn fk-btn-secondary" type="button" data-stepper="campaign-variation-count" data-delta="1">+</button>
         </div>
       </div>
-      <div class="campaign-builder-card">
+      <div class="campaign-builder-card fk-card">
         <span>Social Posts Per Variation</span>
         <div class="campaign-stepper">
-          <button type="button" data-stepper="campaign-post-count" data-delta="-1">−</button>
-          <input id="campaign-post-count" type="number" min="1" max="20" value="5" />
-          <button type="button" data-stepper="campaign-post-count" data-delta="1">+</button>
+          <button class="fk-btn fk-btn-secondary" type="button" data-stepper="campaign-post-count" data-delta="-1">−</button>
+          <input class="fk-input" id="campaign-post-count" type="number" min="1" max="20" value="5" />
+          <button class="fk-btn fk-btn-secondary" type="button" data-stepper="campaign-post-count" data-delta="1">+</button>
         </div>
       </div>
     </div>
-    <label class="campaign-builder-field campaign-builder-field-full">
+    <label class="campaign-builder-field campaign-builder-field-full fk-card">
       <span>Channel</span>
-      <select id="campaign-channel"><option>LinkedIn</option><option>X</option><option>Instagram</option><option>TikTok</option><option>Mixed</option></select>
+      <select class="fk-select" id="campaign-channel"><option>LinkedIn</option><option>X</option><option>Instagram</option><option>TikTok</option><option>Mixed</option></select>
     </label>
     <div class="campaign-builder-grid">
-      <label class="campaign-builder-toggle"><input id="campaign-include-landing" type="checkbox" checked /><span><strong>Landing Page</strong><small>Generate Landing Page</small></span></label>
-      <label class="campaign-builder-toggle"><input id="campaign-include-email" type="checkbox" checked /><span><strong>Email Campaign</strong><small>Generate Email Campaign</small></span></label>
+      <label class="campaign-builder-toggle fk-card"><input id="campaign-include-landing" type="checkbox" checked /><span><strong>Landing Page</strong><small>Generate Landing Page</small></span></label>
+      <label class="campaign-builder-toggle fk-card"><input id="campaign-include-email" type="checkbox" checked /><span><strong>Email Campaign</strong><small>Generate Email Campaign</small></span></label>
     </div>
-    <div class="campaign-estimate-card">
-      <span class="campaign-builder-kicker">Estimated Output</span>
+    <div class="campaign-estimate-card fk-card">
+      <span class="campaign-builder-kicker fk-badge">Estimated Output</span>
       <div id="campaign-estimate-output" class="campaign-estimate-output"></div>
     </div>
-    <div class="campaign-builder-actions"><button type="button" id="campaign-modal-cancel">Cancel</button><button type="button" id="campaign-modal-generate" class="primary-add">Generate Campaign</button></div>
+    <div class="campaign-builder-actions"><button class="fk-btn fk-btn-secondary" type="button" id="campaign-modal-cancel">Cancel</button><button class="fk-btn fk-btn-primary primary-add" type="button" id="campaign-modal-generate">Generate Campaign</button></div>
   </div>`;
   document.body.appendChild(overlay);
   setupCampaignStepper(overlay, "campaign-variation-count", 1, 10);
@@ -9818,7 +9820,7 @@ function renderInspectorImages(node) {
   el.inspectorImageList.innerHTML = "";
   if (!node.images.length) {
     const empty = document.createElement("p");
-    empty.className = "inspector-image-name";
+    empty.className = "inspector-image-name inspector-image-empty";
     empty.textContent = "Keine Bilder hochgeladen.";
     el.inspectorImageList.appendChild(empty);
     return;
@@ -9827,7 +9829,7 @@ function renderInspectorImages(node) {
   node.images.forEach((img) => {
     const card = document.createElement("div");
     const isFavorite = node.favoriteImageId === img.id;
-    card.className = `inspector-image-item${isFavorite ? " is-favorite" : ""}`;
+    card.className = `inspector-image-item fk-card${isFavorite ? " is-favorite" : ""}`;
     card.addEventListener("click", () => openLightbox(img.url, img.name || "Image preview"));
 
     const thumb = document.createElement("img");
@@ -9841,7 +9843,7 @@ function renderInspectorImages(node) {
     });
 
     const favoriteTag = document.createElement("span");
-    favoriteTag.className = "inspector-image-favorite-tag";
+    favoriteTag.className = "inspector-image-favorite-tag fk-pill";
     favoriteTag.textContent = "★";
 
     const actions = document.createElement("div");
@@ -9849,7 +9851,7 @@ function renderInspectorImages(node) {
 
     const favoriteBtn = document.createElement("button");
     favoriteBtn.type = "button";
-    favoriteBtn.className = "inspector-image-action";
+    favoriteBtn.className = "inspector-image-action fk-btn fk-btn-ghost";
     favoriteBtn.textContent = "⭐";
     favoriteBtn.title = "Set as favorite";
     favoriteBtn.addEventListener("click", (event) => {
@@ -9867,7 +9869,7 @@ function renderInspectorImages(node) {
 
     const downloadBtn = document.createElement("button");
     downloadBtn.type = "button";
-    downloadBtn.className = "inspector-image-action";
+    downloadBtn.className = "inspector-image-action fk-btn fk-btn-ghost";
     downloadBtn.textContent = "⬇️";
     downloadBtn.title = "Download";
     downloadBtn.addEventListener("click", (event) => {
@@ -9878,7 +9880,7 @@ function renderInspectorImages(node) {
 
     const deleteBtn = document.createElement("button");
     deleteBtn.type = "button";
-    deleteBtn.className = "inspector-image-action danger";
+    deleteBtn.className = "inspector-image-action danger fk-btn fk-btn-ghost";
     deleteBtn.textContent = "❌";
     deleteBtn.title = "Delete";
     deleteBtn.addEventListener("click", (event) => {
@@ -11253,17 +11255,28 @@ function setSidebarCollapsed(collapsed) {
 
 function setActiveView(view) {
   state.activeView = view;
+  const isHome = view === "home";
+  const isBrandCore = view === "brand-core";
+  el.dashboardView?.classList.toggle("hidden", !isHome);
   el.canvas.classList.toggle("hidden", view !== "board");
   el.boardListView.classList.toggle("hidden", view !== "list");
   el.calendarView.classList.toggle("hidden", view !== "calendar");
   el.boardsLibraryView?.classList.toggle("hidden", view !== "boards_library");
   el.insightsView?.classList.toggle("hidden", view !== "insights");
   el.aiBrainView?.classList.toggle("hidden", view !== "ai_brain");
-  el.brandCoreWorkspace.classList.toggle("hidden", view !== "brand-core");
-  el.campaignCanvasNavButton.classList.toggle("active", view !== "brand-core");
-  el.brandCoreButton.classList.toggle("active", view === "brand-core");
+  el.brandCoreWorkspace.classList.toggle("hidden", !isBrandCore);
+  el.homeNavButton?.classList.toggle("active", isHome);
+  el.campaignCanvasNavButton.classList.toggle("active", view === "board" || view === "list" || view === "calendar");
+  el.boardsNavButton?.classList.toggle("active", view === "boards_library");
+  el.brandCoreButton.classList.toggle("active", isBrandCore);
+  el.aiBrainNavButton?.classList.toggle("active", view === "ai_brain");
+  el.insightsNavButton?.classList.toggle("active", view === "insights");
+  if (state.appMode !== "brand") {
+    el.canvasTopbar.classList.toggle("hidden", isHome);
+    el.inspectorPanel.classList.toggle("hidden", isHome);
+  }
   el.cycleViewButton.textContent =
-    view === "board" ? "Board View" : view === "list" ? "List View" : view === "calendar" ? "Calendar View" : view === "insights" ? "Insights" : view === "ai_brain" ? "AI Brain" : "Brand Core";
+    view === "home" ? "Home" : view === "board" ? "Board View" : view === "list" ? "List View" : view === "calendar" ? "Calendar View" : view === "boards_library" ? "Boards" : view === "insights" ? "Insights" : view === "ai_brain" ? "AI Brain" : "Brand Core";
   if (view === "list") updateListView();
   if (view === "calendar") renderCalendarView();
   if (view === "insights" || view === "ai_brain") renderCampaignIntelligence();
@@ -12089,6 +12102,10 @@ el.postingDoneButton.addEventListener("click", confirmSchedulePost);
 el.postingCancelButton.addEventListener("click", closePostingPlanner);
 setSidebarCollapsed(true);
 
+el.homeNavButton?.addEventListener("click", () => {
+  setAppMode("canvas");
+  setActiveView("home");
+});
 el.brandCoreButton.addEventListener("click", () => {
   setAppMode("brand");
 });
@@ -12109,6 +12126,32 @@ el.insightsNavButton?.addEventListener("click", () => {
 el.aiBrainNavButton?.addEventListener("click", () => {
   setAppMode("canvas");
   setActiveView("ai_brain");
+});
+el.dashboardView?.addEventListener("click", (event) => {
+  const actionButton = event.target.closest("[data-dashboard-action]");
+  if (!actionButton) return;
+
+  const action = actionButton.dataset.dashboardAction;
+  if (action === "create-campaign") {
+    setAppMode("canvas");
+    setActiveView("board");
+    el.createCampaignButton?.click();
+    return;
+  }
+
+  if (action === "open-boards") {
+    el.boardsNavButton?.click();
+    return;
+  }
+
+  if (action === "open-brand") {
+    el.brandCoreButton?.click();
+    return;
+  }
+
+  if (action === "open-ai-brain") {
+    el.aiBrainNavButton?.click();
+  }
 });
 el.brandCoreCanvas.addEventListener("click", (event) => {
   const n = event.target.closest(".bc-node[data-bc-key]");
@@ -12398,7 +12441,7 @@ async function bootApp() {
   updateListView();
   fillInspector(null);
   setAppMode("canvas");
-  setActiveView("board");
+  setActiveView(boardIdFromPath ? "board" : "home");
   drawLinks();
   // URL/server-loaded boards refresh snapshot after applyCampaignState(); avoid capturing pre-load snapshot while in-flight.
   if (!state.initialServerLoadInFlight) refreshLastSavedSnapshot();
