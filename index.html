@@ -328,13 +328,13 @@
           <div class="meta" id="inspector-meta">Wähle oder erstelle einen Node.</div>
 
           <form id="node-form" class="node-form" autocomplete="off">
-          <section class="inspector-section">
+          <section class="inspector-section fk-card">
             <h3 class="inspector-section-title">Basic</h3>
             <label for="node-type">Typ</label>
-            <select id="node-type" name="type"></select>
+            <select id="node-type" class="fk-select" name="type"></select>
 
             <label for="node-status">Status</label>
-            <select id="node-status" name="status">
+            <select id="node-status" class="fk-select" name="status">
               <option value="Draft">Draft</option>
               <option value="In Review">In Review</option>
               <option value="Needs Changes">Needs Changes</option>
@@ -343,33 +343,33 @@
             </select>
 
             <label for="node-title">Titel</label>
-            <input id="node-title" name="title" placeholder="Node Titel" />
+            <input id="node-title" class="fk-input" name="title" placeholder="Node Titel" />
 
             <label for="node-owner">Owner</label>
-            <select id="node-owner" name="owner">
+            <select id="node-owner" class="fk-select" name="owner">
               <option value="">Unassigned</option>
             </select>
 
             <label for="node-content">Inhalt</label>
-            <textarea id="node-content" name="content" rows="3" placeholder="Beschreibung, Prompt, Task ..."></textarea>
+            <textarea id="node-content" class="fk-textarea" name="content" rows="3" placeholder="Beschreibung, Prompt, Task ..."></textarea>
             <div id="content-image-prompt-field" class="hidden">
               <label for="node-image-prompt">Image Prompt</label>
-              <textarea id="node-image-prompt" name="imagePrompt" rows="2" placeholder="Describe the visual style, scene, mood, and composition..."></textarea>
+              <textarea id="node-image-prompt" class="fk-textarea" name="imagePrompt" rows="2" placeholder="Describe the visual style, scene, mood, and composition..."></textarea>
             </div>
             <div id="landing-page-fields" class="hidden">
               <label for="lp-header-visual-prompt">Header visual prompt</label>
-              <textarea id="lp-header-visual-prompt" rows="2" placeholder="Describe the 16:9 hero visual..."></textarea>
+              <textarea id="lp-header-visual-prompt" class="fk-textarea" rows="2" placeholder="Describe the 16:9 hero visual..."></textarea>
               <button id="generate-header-visual-btn" type="button">Generate Header Visual</button>
               <label for="lp-header-claim">Header claim</label>
-              <input id="lp-header-claim" placeholder="Main headline claim" />
+              <input id="lp-header-claim" class="fk-input" placeholder="Main headline claim" />
               <label for="lp-problem">Problem of ICP clearly stated</label>
-              <textarea id="lp-problem" rows="2"></textarea>
+              <textarea id="lp-problem" class="fk-textarea" rows="2"></textarea>
               <label for="lp-solution">Solution for ICP presented</label>
-              <textarea id="lp-solution" rows="2"></textarea>
+              <textarea id="lp-solution" class="fk-textarea" rows="2"></textarea>
               <label for="lp-trust">Building Trust</label>
-              <textarea id="lp-trust" rows="2"></textarea>
+              <textarea id="lp-trust" class="fk-textarea" rows="2"></textarea>
               <label for="lp-cta">Call to action for conversion</label>
-              <input id="lp-cta" placeholder="Start free trial" />
+              <input id="lp-cta" class="fk-input" placeholder="Start free trial" />
             </div>
           </section>
 
@@ -378,10 +378,10 @@
             <div id="ai-workspace-body" class="ai-workspace-body"></div>
           </section>
 
-          <section id="social-fields" class="inspector-section social-fields hidden">
+          <section id="social-fields" class="inspector-section social-fields hidden fk-card">
             <h3 class="inspector-section-title">Social</h3>
             <label for="node-platform">Plattform Preview</label>
-            <select id="node-platform" name="platform">
+            <select id="node-platform" class="fk-select" name="platform">
               <option>Instagram</option>
               <option>TikTok</option>
               <option>YouTube</option>
@@ -390,10 +390,10 @@
             </select>
 
             <label for="node-caption">Caption</label>
-            <textarea id="node-caption" name="caption" rows="2" placeholder="Social Caption"></textarea>
+            <textarea id="node-caption" class="fk-textarea" name="caption" rows="2" placeholder="Social Caption"></textarea>
 
             <label for="node-hashtags">Hashtags (Komma getrennt)</label>
-            <input id="node-hashtags" name="hashtags" placeholder="#solar, #greenenergy" />
+            <input id="node-hashtags" class="fk-input" name="hashtags" placeholder="#solar, #greenenergy" />
 
           </section>
 
@@ -417,26 +417,26 @@
             <button id="generate-posting-visual-btn" type="button">🎨 Generate Posting Visual</button>
           </section>
 
-          <section class="inspector-section">
+          <section class="inspector-section fk-card">
             <h3 class="inspector-section-title">Strategy</h3>
             <label for="node-audience">Audience</label>
-            <input id="node-audience" name="audience" placeholder="z. B. Eco-conscious homeowners" />
+            <input id="node-audience" class="fk-input" name="audience" placeholder="z. B. Eco-conscious homeowners" />
 
             <label for="node-goal">Goal</label>
-            <select id="node-goal" name="goal">
+            <select id="node-goal" class="fk-select" name="goal">
               <option value=""></option><option>Awareness</option><option>Lead Gen</option><option>Conversion</option><option>Community</option><option>Education</option>
             </select>
 
             <label for="node-channel">Channel</label>
-            <select id="node-channel" name="channel">
+            <select id="node-channel" class="fk-select" name="channel">
               <option value=""></option><option>LinkedIn</option><option>X / Twitter</option><option>Instagram</option><option>TikTok</option><option>Email</option><option>Landing Page</option><option>Website</option><option>Blog</option><option>Campaign Strategy</option>
             </select>
             <label for="node-funnel-stage">Funnel stage</label>
-            <select id="node-funnel-stage" name="funnelStage">
+            <select id="node-funnel-stage" class="fk-select" name="funnelStage">
               <option value=""></option><option>Awareness</option><option>Interest</option><option>Consideration</option><option>Conversion</option><option>Retention</option>
             </select>
             <label for="node-tone">Tone</label>
-            <select id="node-tone" name="tone">
+            <select id="node-tone" class="fk-select" name="tone">
               <option value=""></option><option>Professional</option><option>Emotional</option><option>Direct</option><option>Premium</option><option>Playful</option>
             </select>
           </section>
