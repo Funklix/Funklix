@@ -136,21 +136,21 @@
           <div class="actions canvas-toolbar">
             <div class="canvas-toolbar-row primary">
               <div class="toolbar-group toolbar-group-left">
-                <button id="create-campaign-btn" class="create-campaign-btn">Create campaign</button>
-                <button id="add-node-btn" class="primary-add">+ Add node</button>
-                <button id="undo-btn" class="utility-muted" title="Rückgängig">↶</button>
+                <button id="create-campaign-btn" class="create-campaign-btn fk-btn fk-btn-primary">Create campaign</button>
+                <button id="add-node-btn" class="fk-btn fk-btn-secondary">+ Add node</button>
+                <button id="undo-btn" class="utility-muted fk-btn fk-btn-ghost" title="Rückgängig">↶</button>
               </div>
               <div class="toolbar-group toolbar-group-center">
-                <input id="node-search-input" type="search" placeholder="Search nodes..." />
+                <input id="node-search-input" class="fk-input toolbar-search-input" type="search" placeholder="Search nodes..." />
               </div>
               <div class="toolbar-group toolbar-group-right">
                 <div id="auth-panel" class="auth-panel" aria-live="polite">
-                  <button id="google-signin-btn" type="button" class="auth-signin-btn">Sign in with Google</button>
+                  <button id="google-signin-btn" type="button" class="auth-signin-btn fk-btn fk-btn-secondary">Sign in with Google</button>
                   <div id="auth-user" class="auth-user hidden">
                     <img id="auth-avatar" class="auth-avatar" alt="User avatar" />
                     <span id="auth-avatar-fallback" class="auth-avatar-fallback hidden"></span>
                     <div class="auth-meta"><strong id="auth-name"></strong><span id="auth-email"></span></div>
-                    <button id="auth-signout-btn" type="button" class="auth-signout-btn utility-muted">Sign out</button>
+                    <button id="auth-signout-btn" type="button" class="auth-signout-btn utility-muted fk-btn fk-btn-ghost">Sign out</button>
                   </div>
                 </div>
               </div>
@@ -158,23 +158,23 @@
             </div>
             <div class="canvas-toolbar-row secondary toolbar-secondary">
               <div class="toolbar-row2-left">
-                <button id="filters-toggle-btn" type="button" class="utility-muted">Filters</button>
-                <button id="utilities-toggle-btn" type="button" class="utility-muted">Utilities</button>
+                <button id="filters-toggle-btn" type="button" class="utility-muted fk-btn fk-btn-secondary">Filters</button>
+                <button id="utilities-toggle-btn" type="button" class="utility-muted fk-btn fk-btn-secondary">Utilities</button>
               </div>
               <div class="toolbar-row2-spacer"></div>
               <div class="toolbar-row2-right">
-                <span id="readonly-board-notice" class="readonly-board-notice" hidden>View-only board. Changes cannot be saved.</span>
-                <button id="duplicate-board-cta-btn" type="button" class="utility-muted hidden">Duplicate to Edit</button>
+                <span id="readonly-board-notice" class="readonly-board-notice fk-badge fk-badge-warning" hidden>View-only board. Changes cannot be saved.</span>
+                <button id="duplicate-board-cta-btn" type="button" class="utility-muted fk-btn fk-btn-secondary hidden">Duplicate to Edit</button>
                 <div id="board-access-cluster" class="board-access-cluster hidden" aria-live="polite">
-                  <span id="board-access-chip-kind" class="board-access-chip"></span>
-                  <span id="board-access-chip-mode" class="board-access-chip hidden"></span>
-                  <span id="board-access-chip-owner" class="board-access-chip board-access-chip-owner hidden"></span>
+                  <span id="board-access-chip-kind" class="board-access-chip fk-pill"></span>
+                  <span id="board-access-chip-mode" class="board-access-chip fk-pill hidden"></span>
+                  <span id="board-access-chip-owner" class="board-access-chip board-access-chip-owner fk-pill hidden"></span>
                 </div>
                 <div id="presence-lite" class="presence-lite hidden" title="Currently viewing">
                   <div id="presence-avatars" class="presence-avatars"></div>
                   <span id="presence-count" class="presence-count"></span>
                 </div>
-                <button id="copy-board-link-btn" type="button" class="utility-muted">Copy Link</button>
+                <button id="copy-board-link-btn" type="button" class="utility-muted fk-btn fk-btn-ghost">Copy Link</button>
               </div>
             </div>
           </div>
