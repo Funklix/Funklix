@@ -359,7 +359,7 @@
             <div id="landing-page-fields" class="hidden">
               <label for="lp-header-visual-prompt">Header visual prompt</label>
               <textarea id="lp-header-visual-prompt" class="fk-textarea" rows="2" placeholder="Describe the 16:9 hero visual..."></textarea>
-              <button id="generate-header-visual-btn" type="button">Generate Header Visual</button>
+              <button id="generate-header-visual-btn" class="fk-btn fk-btn-secondary" type="button">Generate Header Visual</button>
               <label for="lp-header-claim">Header claim</label>
               <input id="lp-header-claim" class="fk-input" placeholder="Main headline claim" />
               <label for="lp-problem">Problem of ICP clearly stated</label>
@@ -413,8 +413,8 @@
                 <option value="9:16">9:16</option>
               </select>
             </div>
-            <button id="generate-image-btn" type="button">🎨 Generate Image</button>
-            <button id="generate-posting-visual-btn" type="button">🎨 Generate Posting Visual</button>
+            <button id="generate-image-btn" class="fk-btn fk-btn-secondary" type="button">🎨 Generate Image</button>
+            <button id="generate-posting-visual-btn" class="fk-btn fk-btn-secondary" type="button">🎨 Generate Posting Visual</button>
           </section>
 
           <section class="inspector-section fk-card">
@@ -445,22 +445,22 @@
             <h3 class="inspector-section-title">AI Actions</h3>
             <label for="node-variants">A/B Varianten (Komma getrennt)</label>
             <input id="node-variants" name="variants" placeholder="A: Hook 1, B: Hook 2" />
-            <button id="improve-node-btn" type="button" class="primary-add">✨ Improve with AI</button>
-            <button id="generate-next-step-inspector-btn" type="button">🧠 Generate Next Step</button>
-            <button id="review-node-btn" type="button">🔍 Review Node</button>
-            <button id="regenerate-node-btn" type="button">🔄 Regenerate</button>
-            <button id="regenerate-platform-btn" type="button">Regenerate for platform</button>
-            <button id="add-to-posting-calendar-btn" type="button">Add to Posting Calendar</button>
+            <button id="improve-node-btn" type="button" class="primary-add fk-btn fk-btn-primary">✨ Improve with AI</button>
+            <button id="generate-next-step-inspector-btn" class="fk-btn fk-btn-secondary" type="button">🧠 Generate Next Step</button>
+            <button id="review-node-btn" class="fk-btn fk-btn-secondary" type="button">🔍 Review Node</button>
+            <button id="regenerate-node-btn" class="fk-btn fk-btn-ghost" type="button">🔄 Regenerate</button>
+            <button id="regenerate-platform-btn" class="fk-btn fk-btn-ghost" type="button">Regenerate for platform</button>
+            <button id="add-to-posting-calendar-btn" class="fk-btn fk-btn-secondary" type="button">Add to Posting Calendar</button>
             <small id="posting-schedule-meta" class="meta"></small>
-            <button id="generate-full-pack-btn" type="button">Generate Full Content Pack</button>
+            <button id="generate-full-pack-btn" class="fk-btn fk-btn-secondary" type="button">Generate Full Content Pack</button>
           </section>
 
           <section class="inspector-section">
             <h3 class="inspector-section-title">Node Actions</h3>
-            <button id="disconnect-selected-btn" type="button">Disconnect node</button>
-            <button id="propagate-descendants-btn" type="button">Propagate to descendants</button>
-            <button id="delete-node-btn" type="button" class="danger">Delete node</button>
-            <button id="delete-selected-btn" type="button" class="danger">Delete selected nodes</button>
+            <button id="disconnect-selected-btn" class="fk-btn fk-btn-secondary" type="button">Disconnect node</button>
+            <button id="propagate-descendants-btn" class="fk-btn fk-btn-secondary" type="button">Propagate to descendants</button>
+            <button id="delete-node-btn" type="button" class="danger fk-btn fk-btn-ghost inspector-danger-action">Delete node</button>
+            <button id="delete-selected-btn" type="button" class="danger fk-btn fk-btn-ghost inspector-danger-action">Delete selected nodes</button>
           </section>
           <section class="inspector-section">
             <h3 class="inspector-section-title">Connected Context</h3>
