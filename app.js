@@ -153,7 +153,12 @@ const state = {
   ,runtimeDiagnostics: {
     canvasSource: "empty/default state",
     startupBranch: "unknown",
-    pathBoardId: null
+    pathBoardId: null,
+    localDraft: {
+      exists: false,
+      restored: false,
+      reason: ""
+    }
   }
 };
 
@@ -3671,6 +3676,12 @@ function getRuntimeAutosaveDiagnostics() {
       wouldCreateBoard: false
     };
   }
+  if (state.nodes.length === 0 && state.edges.length === 0) {
+    return {
+      mode: "idle-no-editable-canvas",
+      wouldCreateBoard: false
+    };
+  }
   if (state.boardAccess?.canEdit === false) {
     return {
       mode: "blocked-read-only",
@@ -3728,6 +3739,11 @@ function buildRuntimeAlignmentDiagnostics() {
       branch: state.runtimeDiagnostics?.startupBranch || "unknown",
       pathBoardId: state.runtimeDiagnostics?.pathBoardId || pathBoardId || null
     },
+    localDraft: {
+      exists: Boolean(state.runtimeDiagnostics?.localDraft?.exists),
+      restored: Boolean(state.runtimeDiagnostics?.localDraft?.restored),
+      reason: state.runtimeDiagnostics?.localDraft?.reason || ""
+    },
     view: {
       activeView: state.activeView
     }
@@ -3757,6 +3773,7 @@ function loadCampaignCanvasState() {
   const raw = localStorage.getItem(STORAGE_KEY); if (!raw) return false;
   const campaignState = JSON.parse(raw); console.log("Loaded campaignCanvasState", campaignState);
   state.runtimeDiagnostics.canvasSource = "localStorage campaignCanvasState";
+  state.runtimeDiagnostics.localDraft = { exists: true, restored: true, reason: "loadCampaignCanvasState" };
   applyCampaignState(withBoardSchemaDefaults(campaignState), "Restored from local storage");
   return true;
 }
@@ -12518,13 +12535,19 @@ async function bootApp() {
   if (new URLSearchParams(window.location.search).get("auth_error") === "not_configured") setAuthMessage("Google Login is not configured yet.");
   bindGlobalResetDelegation();
   const boardIdFromPath = getBoardIdFromPath();
+  const hasLocalCanvasDraft = Boolean(localStorage.getItem(STORAGE_KEY));
   state.runtimeDiagnostics.pathBoardId = boardIdFromPath;
   state.runtimeDiagnostics.startupBranch = boardIdFromPath
     ? "/boards/:id"
-    : (localStorage.getItem(STORAGE_KEY) ? "root-localStorage" : "root-empty/default");
+    : (hasLocalCanvasDraft ? "root-localStorage-guarded" : "root-home");
   state.runtimeDiagnostics.canvasSource = boardIdFromPath
     ? "/boards/:id"
-    : (localStorage.getItem(STORAGE_KEY) ? "localStorage campaignCanvasState" : "empty/default state");
+    : "empty/default state";
+  state.runtimeDiagnostics.localDraft = {
+    exists: hasLocalCanvasDraft,
+    restored: false,
+    reason: hasLocalCanvasDraft ? "root-startup-guard" : "none"
+  };
   state.currentBoardId = boardIdFromPath;
   loadBrandBrainState();
   setSharePanelState(state.currentBoardId);
@@ -12533,7 +12556,6 @@ async function bootApp() {
     await loadBoardFromUrlIfPresent();
   } else {
     loadBrandBrainState();
-    loadCampaignCanvasState();
   }
   centerBoardStartPosition();
   applyCanvasZoom(state.zoom);
