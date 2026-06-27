@@ -106,19 +106,20 @@
       <aside class="sidebar" id="left-sidebar">
         <div class="sidebar-header">
           <div class="logo">CC</div>
-          <button id="sidebar-toggle-btn" class="sidebar-toggle" type="button" aria-label="Collapse sidebar" title="Collapse sidebar">◀</button>
+          <button id="sidebar-toggle-btn" class="sidebar-toggle fk-btn fk-btn-ghost" type="button" aria-label="Collapse sidebar" title="Collapse sidebar">◀</button>
         </div>
         <nav>
-          <button id="campaign-canvas-nav-btn" class="nav-item active" data-icon="🧩"><span class="nav-label">Campaign Canvas</span></button>
-          <button id="boards-nav-btn" class="nav-item" data-icon="📚"><span class="nav-label">↳ Boards</span></button>
-          <button class="nav-item" data-icon="🗂"><span class="nav-label">Content Workspace</span></button>
-          <button id="brand-core-nav-btn" class="nav-item" data-icon="🧠"><span class="nav-label">Brand Core</span></button>
-          <button id="ai-brain-nav-btn" class="nav-item" data-icon="✨"><span class="nav-label">AI Brain</span></button>
-          <button id="insights-nav-btn" class="nav-item" data-icon="📈"><span class="nav-label">Insights</span></button>
+          <button id="home-nav-btn" class="nav-item fk-btn" data-icon="🏠"><span class="nav-label">Home</span></button>
+          <button id="campaign-canvas-nav-btn" class="nav-item fk-btn active" data-icon="🧩"><span class="nav-label">Campaign Canvas</span></button>
+          <button id="boards-nav-btn" class="nav-item fk-btn" data-icon="📚"><span class="nav-label">↳ Boards</span></button>
+          <button class="nav-item fk-btn" data-icon="🗂"><span class="nav-label">Content Workspace</span></button>
+          <button id="brand-core-nav-btn" class="nav-item fk-btn" data-icon="🧠"><span class="nav-label">Brand Core</span></button>
+          <button id="ai-brain-nav-btn" class="nav-item fk-btn" data-icon="✨"><span class="nav-label">AI Brain</span></button>
+          <button id="insights-nav-btn" class="nav-item fk-btn" data-icon="📈"><span class="nav-label">Insights</span></button>
         </nav>
-        <section class="activity-panel" id="activity-panel" aria-label="Board activity">
-          <button class="activity-toggle" id="activity-toggle-btn" type="button" aria-expanded="true">
-            <span>Activity</span><span id="activity-count" class="activity-count"></span>
+        <section class="activity-panel fk-section" id="activity-panel" aria-label="Board activity">
+          <button class="activity-toggle fk-btn fk-btn-ghost" id="activity-toggle-btn" type="button" aria-expanded="true">
+            <span>Activity</span><span id="activity-count" class="activity-count fk-badge"></span>
           </button>
           <div class="activity-feed" id="activity-feed">
             <p class="activity-empty">Recent collaboration activity will appear here.</p>
@@ -135,21 +136,21 @@
           <div class="actions canvas-toolbar">
             <div class="canvas-toolbar-row primary">
               <div class="toolbar-group toolbar-group-left">
-                <button id="create-campaign-btn" class="create-campaign-btn">Create campaign</button>
-                <button id="add-node-btn" class="primary-add">+ Add node</button>
-                <button id="undo-btn" class="utility-muted" title="Rückgängig">↶</button>
+                <button id="create-campaign-btn" class="create-campaign-btn fk-btn fk-btn-primary">Create campaign</button>
+                <button id="add-node-btn" class="fk-btn fk-btn-secondary">+ Add node</button>
+                <button id="undo-btn" class="utility-muted fk-btn fk-btn-ghost" title="Rückgängig">↶</button>
               </div>
               <div class="toolbar-group toolbar-group-center">
-                <input id="node-search-input" type="search" placeholder="Search nodes..." />
+                <input id="node-search-input" class="fk-input toolbar-search-input" type="search" placeholder="Search nodes..." />
               </div>
               <div class="toolbar-group toolbar-group-right">
                 <div id="auth-panel" class="auth-panel" aria-live="polite">
-                  <button id="google-signin-btn" type="button" class="auth-signin-btn">Sign in with Google</button>
+                  <button id="google-signin-btn" type="button" class="auth-signin-btn fk-btn fk-btn-secondary">Sign in with Google</button>
                   <div id="auth-user" class="auth-user hidden">
                     <img id="auth-avatar" class="auth-avatar" alt="User avatar" />
                     <span id="auth-avatar-fallback" class="auth-avatar-fallback hidden"></span>
                     <div class="auth-meta"><strong id="auth-name"></strong><span id="auth-email"></span></div>
-                    <button id="auth-signout-btn" type="button" class="auth-signout-btn utility-muted">Sign out</button>
+                    <button id="auth-signout-btn" type="button" class="auth-signout-btn utility-muted fk-btn fk-btn-ghost">Sign out</button>
                   </div>
                 </div>
               </div>
@@ -157,23 +158,23 @@
             </div>
             <div class="canvas-toolbar-row secondary toolbar-secondary">
               <div class="toolbar-row2-left">
-                <button id="filters-toggle-btn" type="button" class="utility-muted">Filters</button>
-                <button id="utilities-toggle-btn" type="button" class="utility-muted">Utilities</button>
+                <button id="filters-toggle-btn" type="button" class="utility-muted fk-btn fk-btn-secondary">Filters</button>
+                <button id="utilities-toggle-btn" type="button" class="utility-muted fk-btn fk-btn-secondary">Utilities</button>
               </div>
               <div class="toolbar-row2-spacer"></div>
               <div class="toolbar-row2-right">
-                <span id="readonly-board-notice" class="readonly-board-notice" hidden>View-only board. Changes cannot be saved.</span>
-                <button id="duplicate-board-cta-btn" type="button" class="utility-muted hidden">Duplicate to Edit</button>
+                <span id="readonly-board-notice" class="readonly-board-notice fk-badge fk-badge-warning" hidden>View-only board. Changes cannot be saved.</span>
+                <button id="duplicate-board-cta-btn" type="button" class="utility-muted fk-btn fk-btn-secondary hidden">Duplicate to Edit</button>
                 <div id="board-access-cluster" class="board-access-cluster hidden" aria-live="polite">
-                  <span id="board-access-chip-kind" class="board-access-chip"></span>
-                  <span id="board-access-chip-mode" class="board-access-chip hidden"></span>
-                  <span id="board-access-chip-owner" class="board-access-chip board-access-chip-owner hidden"></span>
+                  <span id="board-access-chip-kind" class="board-access-chip fk-pill"></span>
+                  <span id="board-access-chip-mode" class="board-access-chip fk-pill hidden"></span>
+                  <span id="board-access-chip-owner" class="board-access-chip board-access-chip-owner fk-pill hidden"></span>
                 </div>
                 <div id="presence-lite" class="presence-lite hidden" title="Currently viewing">
                   <div id="presence-avatars" class="presence-avatars"></div>
                   <span id="presence-count" class="presence-count"></span>
                 </div>
-                <button id="copy-board-link-btn" type="button" class="utility-muted">Copy Link</button>
+                <button id="copy-board-link-btn" type="button" class="utility-muted fk-btn fk-btn-ghost">Copy Link</button>
               </div>
             </div>
           </div>
@@ -209,6 +210,54 @@
             <span id="node-search-count"></span>
           </div>
         </header>
+
+        <section id="dashboard-view" class="dashboard-view hidden" aria-labelledby="dashboard-title">
+          <div class="dashboard-hero fk-section">
+            <div class="dashboard-hero-copy">
+              <span class="dashboard-kicker fk-badge">Home</span>
+              <h1 id="dashboard-title">Welcome back to Funklix</h1>
+              <p>Your AI Marketing Operating System starts here. Jump into the workspace you need, or review placeholder surfaces that will become live dashboard intelligence later.</p>
+            </div>
+            <div class="dashboard-hero-actions dashboard-quick-actions">
+              <button class="fk-btn fk-btn-primary" type="button" data-dashboard-action="create-campaign">Create Campaign</button>
+              <button class="fk-btn fk-btn-secondary" type="button" data-dashboard-action="open-boards">Open Boards</button>
+              <button class="fk-btn fk-btn-secondary" type="button" data-dashboard-action="open-brand">Open Brand</button>
+              <button class="fk-btn fk-btn-ghost" type="button" data-dashboard-action="open-ai-brain">Open AI Brain</button>
+            </div>
+          </div>
+
+          <div class="dashboard-grid">
+            <section class="dashboard-card fk-card">
+              <div class="dashboard-card-header fk-card-header">
+                <span class="dashboard-kicker fk-badge">Brand</span>
+                <h2 class="dashboard-card-title">Brand Status</h2>
+              </div>
+              <div class="dashboard-card-body fk-card-body">
+                <p class="dashboard-placeholder">Brand status will appear here after Brand intelligence is connected.</p>
+              </div>
+            </section>
+
+            <section class="dashboard-card fk-card">
+              <div class="dashboard-card-header fk-card-header">
+                <span class="dashboard-kicker fk-badge">Insights</span>
+                <h2 class="dashboard-card-title">Insight Highlights</h2>
+              </div>
+              <div class="dashboard-card-body fk-card-body">
+                <p class="dashboard-placeholder">Insight highlights will appear here after Insights wiring is defined.</p>
+              </div>
+            </section>
+
+            <section class="dashboard-card fk-card">
+              <div class="dashboard-card-header fk-card-header">
+                <span class="dashboard-kicker fk-badge">AI Brain</span>
+                <h2 class="dashboard-card-title">AI Activity</h2>
+              </div>
+              <div class="dashboard-card-body fk-card-body">
+                <p class="dashboard-placeholder">AI activity will appear here after AI Brain activity surfaces are designed.</p>
+              </div>
+            </section>
+          </div>
+        </section>
 
         <section class="canvas" id="canvas">
           <div class="canvas-scroll-surface" id="canvas-scroll-surface">
@@ -279,13 +328,13 @@
           <div class="meta" id="inspector-meta">Wähle oder erstelle einen Node.</div>
 
           <form id="node-form" class="node-form" autocomplete="off">
-          <section class="inspector-section">
+          <section class="inspector-section fk-card">
             <h3 class="inspector-section-title">Basic</h3>
             <label for="node-type">Typ</label>
-            <select id="node-type" name="type"></select>
+            <select id="node-type" class="fk-select" name="type"></select>
 
             <label for="node-status">Status</label>
-            <select id="node-status" name="status">
+            <select id="node-status" class="fk-select" name="status">
               <option value="Draft">Draft</option>
               <option value="In Review">In Review</option>
               <option value="Needs Changes">Needs Changes</option>
@@ -294,33 +343,33 @@
             </select>
 
             <label for="node-title">Titel</label>
-            <input id="node-title" name="title" placeholder="Node Titel" />
+            <input id="node-title" class="fk-input" name="title" placeholder="Node Titel" />
 
             <label for="node-owner">Owner</label>
-            <select id="node-owner" name="owner">
+            <select id="node-owner" class="fk-select" name="owner">
               <option value="">Unassigned</option>
             </select>
 
             <label for="node-content">Inhalt</label>
-            <textarea id="node-content" name="content" rows="3" placeholder="Beschreibung, Prompt, Task ..."></textarea>
+            <textarea id="node-content" class="fk-textarea" name="content" rows="3" placeholder="Beschreibung, Prompt, Task ..."></textarea>
             <div id="content-image-prompt-field" class="hidden">
               <label for="node-image-prompt">Image Prompt</label>
-              <textarea id="node-image-prompt" name="imagePrompt" rows="2" placeholder="Describe the visual style, scene, mood, and composition..."></textarea>
+              <textarea id="node-image-prompt" class="fk-textarea" name="imagePrompt" rows="2" placeholder="Describe the visual style, scene, mood, and composition..."></textarea>
             </div>
             <div id="landing-page-fields" class="hidden">
               <label for="lp-header-visual-prompt">Header visual prompt</label>
-              <textarea id="lp-header-visual-prompt" rows="2" placeholder="Describe the 16:9 hero visual..."></textarea>
+              <textarea id="lp-header-visual-prompt" class="fk-textarea" rows="2" placeholder="Describe the 16:9 hero visual..."></textarea>
               <button id="generate-header-visual-btn" type="button">Generate Header Visual</button>
               <label for="lp-header-claim">Header claim</label>
-              <input id="lp-header-claim" placeholder="Main headline claim" />
+              <input id="lp-header-claim" class="fk-input" placeholder="Main headline claim" />
               <label for="lp-problem">Problem of ICP clearly stated</label>
-              <textarea id="lp-problem" rows="2"></textarea>
+              <textarea id="lp-problem" class="fk-textarea" rows="2"></textarea>
               <label for="lp-solution">Solution for ICP presented</label>
-              <textarea id="lp-solution" rows="2"></textarea>
+              <textarea id="lp-solution" class="fk-textarea" rows="2"></textarea>
               <label for="lp-trust">Building Trust</label>
-              <textarea id="lp-trust" rows="2"></textarea>
+              <textarea id="lp-trust" class="fk-textarea" rows="2"></textarea>
               <label for="lp-cta">Call to action for conversion</label>
-              <input id="lp-cta" placeholder="Start free trial" />
+              <input id="lp-cta" class="fk-input" placeholder="Start free trial" />
             </div>
           </section>
 
@@ -329,10 +378,10 @@
             <div id="ai-workspace-body" class="ai-workspace-body"></div>
           </section>
 
-          <section id="social-fields" class="inspector-section social-fields hidden">
+          <section id="social-fields" class="inspector-section social-fields hidden fk-card">
             <h3 class="inspector-section-title">Social</h3>
             <label for="node-platform">Plattform Preview</label>
-            <select id="node-platform" name="platform">
+            <select id="node-platform" class="fk-select" name="platform">
               <option>Instagram</option>
               <option>TikTok</option>
               <option>YouTube</option>
@@ -341,10 +390,10 @@
             </select>
 
             <label for="node-caption">Caption</label>
-            <textarea id="node-caption" name="caption" rows="2" placeholder="Social Caption"></textarea>
+            <textarea id="node-caption" class="fk-textarea" name="caption" rows="2" placeholder="Social Caption"></textarea>
 
             <label for="node-hashtags">Hashtags (Komma getrennt)</label>
-            <input id="node-hashtags" name="hashtags" placeholder="#solar, #greenenergy" />
+            <input id="node-hashtags" class="fk-input" name="hashtags" placeholder="#solar, #greenenergy" />
 
           </section>
 
@@ -368,26 +417,26 @@
             <button id="generate-posting-visual-btn" type="button">🎨 Generate Posting Visual</button>
           </section>
 
-          <section class="inspector-section">
+          <section class="inspector-section fk-card">
             <h3 class="inspector-section-title">Strategy</h3>
             <label for="node-audience">Audience</label>
-            <input id="node-audience" name="audience" placeholder="z. B. Eco-conscious homeowners" />
+            <input id="node-audience" class="fk-input" name="audience" placeholder="z. B. Eco-conscious homeowners" />
 
             <label for="node-goal">Goal</label>
-            <select id="node-goal" name="goal">
+            <select id="node-goal" class="fk-select" name="goal">
               <option value=""></option><option>Awareness</option><option>Lead Gen</option><option>Conversion</option><option>Community</option><option>Education</option>
             </select>
 
             <label for="node-channel">Channel</label>
-            <select id="node-channel" name="channel">
+            <select id="node-channel" class="fk-select" name="channel">
               <option value=""></option><option>LinkedIn</option><option>X / Twitter</option><option>Instagram</option><option>TikTok</option><option>Email</option><option>Landing Page</option><option>Website</option><option>Blog</option><option>Campaign Strategy</option>
             </select>
             <label for="node-funnel-stage">Funnel stage</label>
-            <select id="node-funnel-stage" name="funnelStage">
+            <select id="node-funnel-stage" class="fk-select" name="funnelStage">
               <option value=""></option><option>Awareness</option><option>Interest</option><option>Consideration</option><option>Conversion</option><option>Retention</option>
             </select>
             <label for="node-tone">Tone</label>
-            <select id="node-tone" name="tone">
+            <select id="node-tone" class="fk-select" name="tone">
               <option value=""></option><option>Professional</option><option>Emotional</option><option>Direct</option><option>Premium</option><option>Playful</option>
             </select>
           </section>
