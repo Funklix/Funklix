@@ -289,10 +289,8 @@ body {
   overflow-y: auto;
   overflow-x: hidden;
   justify-self: stretch;
-}
-
-.sidebar {
-  border-right: 1px solid var(--border);
+  border-right: 1px solid var(--fk-color-border);
+  background: linear-gradient(180deg, var(--fk-color-surface) 0%, var(--fk-color-surface-muted) 100%);
   transition: padding 180ms ease;
 }
 
@@ -300,16 +298,19 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 10px;
+  gap: var(--fk-space-3);
+  margin-bottom: var(--fk-space-5);
 }
 
 .sidebar-toggle {
-  border: 1px solid var(--border);
-  background: #fff;
-  border-radius: 8px;
-  width: 30px;
-  height: 30px;
-  cursor: pointer;
+  width: 34px;
+  min-width: 34px;
+  height: 34px;
+  min-height: 34px;
+  padding: 0;
+  border-radius: var(--fk-radius-md);
+  color: var(--fk-color-muted);
+  box-shadow: none;
 }
 
 .inspector {
@@ -350,33 +351,58 @@ body {
 }
 
 .logo {
-  width: 42px;
-  height: 42px;
-  border-radius: 12px;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--fk-radius-lg);
   display: grid;
   place-items: center;
-  color: #fff;
-  background: linear-gradient(150deg, #7f63ff, #4d7cff);
-  font-weight: 700;
+  color: var(--fk-color-surface);
+  background: linear-gradient(150deg, var(--fk-color-primary-2), var(--fk-color-primary));
+  box-shadow: var(--fk-shadow-md);
+  font-size: var(--fk-font-size-sm);
+  font-weight: var(--fk-font-weight-bold);
+  letter-spacing: 0.04em;
   margin-bottom: 0;
+}
+
+.sidebar nav {
+  display: grid;
+  gap: var(--fk-space-2);
 }
 
 .nav-item {
   width: 100%;
-  border: none;
+  justify-content: flex-start;
+  min-height: 42px;
+  border: 1px solid transparent;
   background: transparent;
+  box-shadow: none;
   text-align: left;
-  padding: 10px 12px;
-  border-radius: 10px;
-  margin-bottom: 6px;
-  color: var(--muted);
-  cursor: pointer;
+  padding: var(--fk-space-2) var(--fk-space-3);
+  border-radius: var(--fk-radius-lg);
+  margin-bottom: 0;
+  color: var(--fk-color-muted);
+  font-size: var(--fk-font-size-sm);
+  font-weight: var(--fk-font-weight-medium);
+  letter-spacing: -0.01em;
 }
-
-
 
 .app-shell.sidebar-collapsed .sidebar {
   padding: 14px 10px;
+}
+
+.app-shell.sidebar-collapsed .sidebar-header {
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--fk-space-2);
+  margin-bottom: var(--fk-space-4);
+}
+
+.app-shell.sidebar-collapsed .logo {
+  width: 38px;
+  height: 38px;
+  border-radius: var(--fk-radius-md);
+  font-size: var(--fk-font-size-xs);
 }
 
 .app-shell.sidebar-collapsed .sidebar-toggle {
@@ -386,18 +412,25 @@ body {
 .nav-item {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--fk-space-3);
 }
 
 .nav-item::before {
   content: attr(data-icon);
-  font-size: 1rem;
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  min-width: 22px;
+  height: 22px;
+  border-radius: var(--fk-radius-sm);
+  background: rgba(83, 104, 255, 0.08);
+  font-size: 0.95rem;
   line-height: 1;
 }
 
 .app-shell.sidebar-collapsed .nav-item {
   justify-content: center;
-  padding: 10px 8px;
+  padding: var(--fk-space-2);
 }
 
 .app-shell.sidebar-collapsed .nav-label {
@@ -577,10 +610,47 @@ body {
   font-size: 0.65rem;
 }
 
-.nav-item.active,
-.nav-item:hover {
-  background: var(--primary-soft);
-  color: var(--primary);
+.nav-item:hover:not(.active) {
+  border-color: rgba(83, 104, 255, 0.12);
+  background: var(--fk-color-primary-soft);
+  color: var(--fk-color-heading);
+  box-shadow: none;
+  transform: none;
+}
+
+.nav-item.active {
+  border-color: rgba(83, 104, 255, 0.22);
+  background: linear-gradient(135deg, var(--fk-color-primary-soft) 0%, var(--fk-color-surface) 100%);
+  box-shadow: inset 3px 0 0 var(--fk-color-primary), var(--fk-shadow-sm);
+  color: var(--fk-color-primary);
+  transform: none;
+}
+
+.nav-item.active::before {
+  background: var(--fk-color-primary);
+}
+
+.nav-item.active:focus-visible,
+.nav-item:focus-visible,
+.sidebar-toggle:focus-visible {
+  outline: var(--fk-space-1) solid rgba(83, 104, 255, 0.22);
+  outline-offset: var(--fk-space-1);
+  border-color: var(--fk-color-primary);
+}
+
+.nav-item.active::before {
+  color: var(--fk-color-surface);
+}
+
+.sidebar .fk-btn:hover {
+  transform: none;
+}
+
+.sidebar-toggle:hover {
+  border-color: rgba(83, 104, 255, 0.18);
+  background: var(--fk-color-primary-soft);
+  color: var(--fk-color-primary);
+  box-shadow: none;
 }
 
 .workspace-wrap {
