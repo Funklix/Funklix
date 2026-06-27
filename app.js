@@ -64,6 +64,13 @@ const state = {
   ,scheduleDate: ""
   ,scheduleTime: "09:00"
   ,currentBoardId: null
+  ,session: {
+    workspaceId: null,
+    brandId: null,
+    boardId: null,
+    source: "initial",
+    isInitialized: false
+  }
   ,currentBoardName: ""
   ,lastKnownUpdatedAt: null
   ,autosaveTimer: null
@@ -1207,6 +1214,7 @@ async function saveBoardAsNew(payload) {
   const newId = data?.id;
   if (newId) {
     state.currentBoardId = newId;
+    syncRuntimeSessionFromLegacy("save-as-new");
     saveBrandBrainState({ markDirty: false });
     state.currentBoardName = data?.name || payload?.name || "Campaign Canvas Copy";
     state.lastKnownUpdatedAt = data?.updated_at || null;
@@ -1261,6 +1269,7 @@ async function duplicateCurrentBoard() {
     const newId = data?.id;
     if (!newId) throw new Error('Duplicate board response missing id');
     state.currentBoardId = newId;
+    syncRuntimeSessionFromLegacy("duplicate-board");
     saveBrandBrainState({ markDirty: false });
     state.currentBoardName = data?.name || payload.name;
     state.lastKnownUpdatedAt = data?.updated_at || null;
@@ -3661,6 +3670,18 @@ function getBoardIdFromPath() {
   return null;
 }
 
+function syncRuntimeSessionFromLegacy(source = "legacy-runtime") {
+  const legacyBoardId = state.currentBoardId || getBoardIdFromPath() || null;
+  state.session = {
+    workspaceId: null,
+    brandId: null,
+    boardId: legacyBoardId,
+    source,
+    isInitialized: true
+  };
+  return state.session;
+}
+
 function getRuntimeCanvasSource() {
   if (state.runtimeDiagnostics?.canvasSource) return state.runtimeDiagnostics.canvasSource;
   if (state.currentBoardId || getBoardIdFromPath()) return "/boards/:id";
@@ -3703,14 +3724,37 @@ function getRuntimeAutosaveDiagnostics() {
 function buildRuntimeAlignmentDiagnostics() {
   const pathBoardId = getBoardIdFromPath();
   const currentBoardId = state.currentBoardId || pathBoardId || null;
+  const runtimeSession = (!state.session?.isInitialized || state.session.boardId !== currentBoardId)
+    ? syncRuntimeSessionFromLegacy("diagnostics-sync")
+    : state.session;
   const canvasSource = getRuntimeCanvasSource();
   const isBoardBacked = Boolean(currentBoardId);
   const hasCanvasContent = state.nodes.length > 0 || state.edges.length > 0;
   return {
-    session: {
+    currentUser: {
       exists: Boolean(state.user?.email),
       userEmail: state.user?.email || null,
       authConfigured: state.authConfigured !== false
+    },
+    session: {
+      workspaceId: runtimeSession.workspaceId,
+      brandId: runtimeSession.brandId,
+      boardId: runtimeSession.boardId,
+      source: runtimeSession.source,
+      isInitialized: runtimeSession.isInitialized
+    },
+    legacyRuntime: {
+      currentBoardId: state.currentBoardId || null,
+      pathBoardId,
+      activeView: state.activeView
+    },
+    sessionRuntime: {
+      workspaceId: runtimeSession.workspaceId,
+      brandId: runtimeSession.brandId,
+      boardId: runtimeSession.boardId,
+      source: runtimeSession.source,
+      isInitialized: runtimeSession.isInitialized,
+      mirrorsLegacyBoardId: runtimeSession.boardId === currentBoardId
     },
     workspace: {
       exists: false,
@@ -3940,6 +3984,7 @@ async function saveBoardToServer(trigger = "manual") {
     console.log('Saved board response id:', data?.id);
     const returnedId = data?.id || currentBoardId;
     if (returnedId) state.currentBoardId = returnedId;
+    syncRuntimeSessionFromLegacy(isUpdate ? "save-board-update" : "save-board-create");
     if (data?.name && typeof data.name === "string") state.currentBoardName = data.name;
     state.lastLocalSaveAt = saveTimestamp;
     state.lastKnownUpdatedAt = data?.updated_at || new Date().toISOString();
@@ -3980,6 +4025,7 @@ async function loadBoardFromUrlIfPresent() {
   state.isBoardLoading = true;
   state.isBoardHydrating = true;
   state.currentBoardId = boardId;
+  syncRuntimeSessionFromLegacy("board-load-start");
   clearAutosaveTimer();
   resetBrandBrainForBoardHydration();
   renderBrandCoreTiles();
@@ -3992,6 +4038,7 @@ async function loadBoardFromUrlIfPresent() {
     const snapshot = data?.brand_core_snapshot && typeof data.brand_core_snapshot === "object" ? data.brand_core_snapshot : null;
     debugBrandBrainScope("board-snapshot-received", { boardId, hasSnapshot: Boolean(snapshot), ...brandDnaScopeSummary(snapshot || {}) });
     state.currentBoardId = data?.id || boardId;
+    syncRuntimeSessionFromLegacy("board-load");
     state.currentBoardName = data?.name || "";
     state.lastKnownUpdatedAt = data?.updated_at || null;
     state.brandCore = snapshot ? normalizeBrandCoreState(snapshot) : normalizeBrandCoreState(defaultBrandCoreState());
@@ -12549,6 +12596,7 @@ async function bootApp() {
     reason: hasLocalCanvasDraft ? "root-startup-guard" : "none"
   };
   state.currentBoardId = boardIdFromPath;
+  syncRuntimeSessionFromLegacy(boardIdFromPath ? "boot-board-route" : "boot-root");
   loadBrandBrainState();
   setSharePanelState(state.currentBoardId);
   if (boardIdFromPath) {
