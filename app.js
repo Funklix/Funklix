@@ -66,6 +66,7 @@ const state = {
   ,currentBoardId: null
   ,session: {
     workspaceId: null,
+    // Active Brand runtime is intentionally not implemented yet; keep brandId null until a canonical Brand owner exists.
     brandId: null,
     boardId: null,
     source: "initial",
@@ -3682,6 +3683,26 @@ function syncRuntimeSessionFromLegacy(source = "legacy-runtime") {
   return state.session;
 }
 
+function getPassiveBrandSessionReadiness() {
+  let hasBrandBrainLocalStorage = false;
+  try {
+    hasBrandBrainLocalStorage = Boolean(localStorage.getItem(brandBrainStorageKey()));
+  } catch {
+    hasBrandBrainLocalStorage = false;
+  }
+  return {
+    exists: false,
+    brandId: null,
+    source: "not-implemented",
+    reason: "no-canonical-brand-runtime",
+    evidence: {
+      hasBrandCoreState: Boolean(state.brandCore && typeof state.brandCore === "object"),
+      hasBrandBrainLocalStorage,
+      note: "Brand Core / Brand Brain data exists, but it is not a canonical Active Brand identity."
+    }
+  };
+}
+
 function getRuntimeCanvasSource() {
   if (state.runtimeDiagnostics?.canvasSource) return state.runtimeDiagnostics.canvasSource;
   if (state.currentBoardId || getBoardIdFromPath()) return "/boards/:id";
@@ -3727,6 +3748,7 @@ function buildRuntimeAlignmentDiagnostics() {
   const runtimeSession = (!state.session?.isInitialized || state.session.boardId !== currentBoardId)
     ? syncRuntimeSessionFromLegacy("diagnostics-sync")
     : state.session;
+  const brandSession = getPassiveBrandSessionReadiness();
   const canvasSource = getRuntimeCanvasSource();
   const isBoardBacked = Boolean(currentBoardId);
   const hasCanvasContent = state.nodes.length > 0 || state.edges.length > 0;
@@ -3743,6 +3765,7 @@ function buildRuntimeAlignmentDiagnostics() {
       source: runtimeSession.source,
       isInitialized: runtimeSession.isInitialized
     },
+    brandSession,
     legacyRuntime: {
       currentBoardId: state.currentBoardId || null,
       pathBoardId,
@@ -3756,6 +3779,7 @@ function buildRuntimeAlignmentDiagnostics() {
       isInitialized: runtimeSession.isInitialized,
       mirrorsLegacyBoardId: runtimeSession.boardId === currentBoardId
     },
+    architectureWarnings: brandSession.exists ? [] : ["Active Brand runtime is not implemented; session.brandId intentionally remains null."],
     workspace: {
       exists: false,
       mode: "not-implemented"
