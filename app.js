@@ -64,6 +64,14 @@ const state = {
   ,scheduleDate: ""
   ,scheduleTime: "09:00"
   ,currentBoardId: null
+  ,session: {
+    workspaceId: null,
+    // Active Brand runtime is intentionally not implemented yet; keep brandId null until a canonical Brand owner exists.
+    brandId: null,
+    boardId: null,
+    source: "initial",
+    isInitialized: false
+  }
   ,currentBoardName: ""
   ,lastKnownUpdatedAt: null
   ,autosaveTimer: null
@@ -150,6 +158,16 @@ const state = {
   ,lastSeenActivityAt: 0
   ,commentThreadsOpenedByNode: new Set()
   ,aiReviewFixPreviews: {}
+  ,runtimeDiagnostics: {
+    canvasSource: "empty/default state",
+    startupBranch: "unknown",
+    pathBoardId: null,
+    localDraft: {
+      exists: false,
+      restored: false,
+      reason: ""
+    }
+  }
 };
 
 const el = {
@@ -1197,6 +1215,7 @@ async function saveBoardAsNew(payload) {
   const newId = data?.id;
   if (newId) {
     state.currentBoardId = newId;
+    syncRuntimeSessionFromLegacy("save-as-new");
     saveBrandBrainState({ markDirty: false });
     state.currentBoardName = data?.name || payload?.name || "Campaign Canvas Copy";
     state.lastKnownUpdatedAt = data?.updated_at || null;
@@ -1251,6 +1270,7 @@ async function duplicateCurrentBoard() {
     const newId = data?.id;
     if (!newId) throw new Error('Duplicate board response missing id');
     state.currentBoardId = newId;
+    syncRuntimeSessionFromLegacy("duplicate-board");
     saveBrandBrainState({ markDirty: false });
     state.currentBoardName = data?.name || payload.name;
     state.lastKnownUpdatedAt = data?.updated_at || null;
@@ -3651,6 +3671,163 @@ function getBoardIdFromPath() {
   return null;
 }
 
+function syncRuntimeSessionFromLegacy(source = "legacy-runtime") {
+  const legacyBoardId = state.currentBoardId || getBoardIdFromPath() || null;
+  state.session = {
+    workspaceId: null,
+    brandId: null,
+    boardId: legacyBoardId,
+    source,
+    isInitialized: true
+  };
+  return state.session;
+}
+
+function getPassiveBrandSessionReadiness() {
+  let hasBrandBrainLocalStorage = false;
+  try {
+    hasBrandBrainLocalStorage = Boolean(localStorage.getItem(brandBrainStorageKey()));
+  } catch {
+    hasBrandBrainLocalStorage = false;
+  }
+  return {
+    exists: false,
+    brandId: null,
+    source: "not-implemented",
+    reason: "no-canonical-brand-runtime",
+    evidence: {
+      hasBrandCoreState: Boolean(state.brandCore && typeof state.brandCore === "object"),
+      hasBrandBrainLocalStorage,
+      note: "Brand Core / Brand Brain data exists, but it is not a canonical Active Brand identity."
+    }
+  };
+}
+
+function getRuntimeCanvasSource() {
+  if (state.runtimeDiagnostics?.canvasSource) return state.runtimeDiagnostics.canvasSource;
+  if (state.currentBoardId || getBoardIdFromPath()) return "/boards/:id";
+  if (state.nodes.length || state.edges.length) return "unknown";
+  return "empty/default state";
+}
+
+function getRuntimeAutosaveDiagnostics() {
+  const currentBoardId = state.currentBoardId || getBoardIdFromPath();
+  if (currentBoardId) {
+    return {
+      mode: "update-existing-board",
+      wouldCreateBoard: false
+    };
+  }
+  if (state.nodes.length === 0 && state.edges.length === 0) {
+    return {
+      mode: "idle-no-editable-canvas",
+      wouldCreateBoard: false
+    };
+  }
+  if (state.boardAccess?.canEdit === false) {
+    return {
+      mode: "blocked-read-only",
+      wouldCreateBoard: false
+    };
+  }
+  if (!state.user?.email) {
+    return {
+      mode: "create-board-requires-auth",
+      wouldCreateBoard: true
+    };
+  }
+  return {
+    mode: "would-create-board",
+    wouldCreateBoard: true
+  };
+}
+
+function buildRuntimeAlignmentDiagnostics() {
+  const pathBoardId = getBoardIdFromPath();
+  const currentBoardId = state.currentBoardId || pathBoardId || null;
+  const runtimeSession = (!state.session?.isInitialized || state.session.boardId !== currentBoardId)
+    ? syncRuntimeSessionFromLegacy("diagnostics-sync")
+    : state.session;
+  const brandSession = getPassiveBrandSessionReadiness();
+  const canvasSource = getRuntimeCanvasSource();
+  const isBoardBacked = Boolean(currentBoardId);
+  const hasCanvasContent = state.nodes.length > 0 || state.edges.length > 0;
+  return {
+    currentUser: {
+      exists: Boolean(state.user?.email),
+      userEmail: state.user?.email || null,
+      authConfigured: state.authConfigured !== false
+    },
+    session: {
+      workspaceId: runtimeSession.workspaceId,
+      brandId: runtimeSession.brandId,
+      boardId: runtimeSession.boardId,
+      source: runtimeSession.source,
+      isInitialized: runtimeSession.isInitialized
+    },
+    brandSession,
+    legacyRuntime: {
+      currentBoardId: state.currentBoardId || null,
+      pathBoardId,
+      activeView: state.activeView
+    },
+    sessionRuntime: {
+      workspaceId: runtimeSession.workspaceId,
+      brandId: runtimeSession.brandId,
+      boardId: runtimeSession.boardId,
+      source: runtimeSession.source,
+      isInitialized: runtimeSession.isInitialized,
+      mirrorsLegacyBoardId: runtimeSession.boardId === currentBoardId
+    },
+    architectureWarnings: brandSession.exists ? [] : ["Active Brand runtime is not implemented; session.brandId intentionally remains null."],
+    workspace: {
+      exists: false,
+      mode: "not-implemented"
+    },
+    brand: {
+      exists: false,
+      mode: "not-implemented"
+    },
+    board: {
+      currentBoardId,
+      boardAccess: state.boardAccess || null,
+      isBoardBacked,
+      source: currentBoardId ? "/boards/:id" : "none"
+    },
+    canvas: {
+      hasNodes: state.nodes.length > 0,
+      nodeCount: state.nodes.length,
+      edgeCount: state.edges.length,
+      source: canvasSource,
+      isBoardBacked,
+      isAnonymousEditable: hasCanvasContent && !isBoardBacked
+    },
+    autosave: getRuntimeAutosaveDiagnostics(),
+    startup: {
+      branch: state.runtimeDiagnostics?.startupBranch || "unknown",
+      pathBoardId: state.runtimeDiagnostics?.pathBoardId || pathBoardId || null
+    },
+    localDraft: {
+      exists: Boolean(state.runtimeDiagnostics?.localDraft?.exists),
+      restored: Boolean(state.runtimeDiagnostics?.localDraft?.restored),
+      reason: state.runtimeDiagnostics?.localDraft?.reason || ""
+    },
+    view: {
+      activeView: state.activeView
+    }
+  };
+}
+
+function logRuntimeAlignmentDiagnostics(reason = "manual") {
+  const diagnostics = buildRuntimeAlignmentDiagnostics();
+  console.info("[Runtime Alignment Diagnostics]", { reason, ...diagnostics });
+  return diagnostics;
+}
+
+if (typeof window !== "undefined") {
+  window.debugRuntimeAlignmentDiagnostics = logRuntimeAlignmentDiagnostics;
+}
+
 function getCurrentBrandBrainBoardId() {
   return state.currentBoardId || getBoardIdFromPath() || "";
 }
@@ -3663,6 +3840,8 @@ function brandBrainStorageKey(boardId = getCurrentBrandBrainBoardId()) {
 function loadCampaignCanvasState() {
   const raw = localStorage.getItem(STORAGE_KEY); if (!raw) return false;
   const campaignState = JSON.parse(raw); console.log("Loaded campaignCanvasState", campaignState);
+  state.runtimeDiagnostics.canvasSource = "localStorage campaignCanvasState";
+  state.runtimeDiagnostics.localDraft = { exists: true, restored: true, reason: "loadCampaignCanvasState" };
   applyCampaignState(withBoardSchemaDefaults(campaignState), "Restored from local storage");
   return true;
 }
@@ -3829,6 +4008,7 @@ async function saveBoardToServer(trigger = "manual") {
     console.log('Saved board response id:', data?.id);
     const returnedId = data?.id || currentBoardId;
     if (returnedId) state.currentBoardId = returnedId;
+    syncRuntimeSessionFromLegacy(isUpdate ? "save-board-update" : "save-board-create");
     if (data?.name && typeof data.name === "string") state.currentBoardName = data.name;
     state.lastLocalSaveAt = saveTimestamp;
     state.lastKnownUpdatedAt = data?.updated_at || new Date().toISOString();
@@ -3869,6 +4049,7 @@ async function loadBoardFromUrlIfPresent() {
   state.isBoardLoading = true;
   state.isBoardHydrating = true;
   state.currentBoardId = boardId;
+  syncRuntimeSessionFromLegacy("board-load-start");
   clearAutosaveTimer();
   resetBrandBrainForBoardHydration();
   renderBrandCoreTiles();
@@ -3881,6 +4062,7 @@ async function loadBoardFromUrlIfPresent() {
     const snapshot = data?.brand_core_snapshot && typeof data.brand_core_snapshot === "object" ? data.brand_core_snapshot : null;
     debugBrandBrainScope("board-snapshot-received", { boardId, hasSnapshot: Boolean(snapshot), ...brandDnaScopeSummary(snapshot || {}) });
     state.currentBoardId = data?.id || boardId;
+    syncRuntimeSessionFromLegacy("board-load");
     state.currentBoardName = data?.name || "";
     state.lastKnownUpdatedAt = data?.updated_at || null;
     state.brandCore = snapshot ? normalizeBrandCoreState(snapshot) : normalizeBrandCoreState(defaultBrandCoreState());
@@ -3899,6 +4081,7 @@ async function loadBoardFromUrlIfPresent() {
       return false;
     }
     const normalizedCanvasState = withBoardSchemaDefaults(incomingCanvasState);
+    state.runtimeDiagnostics.canvasSource = "/boards/:id";
     applyCampaignState(normalizedCanvasState, `Loaded board ${boardId.slice(0, 8)}...`);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(normalizedCanvasState));
     startPresenceLite();
@@ -5687,6 +5870,8 @@ async function generateCampaignChainProgressively(plan, { onStatus = null, setup
     updateListView();
     const ideaNode = createdByIndex.get(0) || createdNodes[0];
     appendActivity("generated_campaign_chain", { node: ideaNode, nodeTitle: activityNodeTitle(ideaNode) });
+    state.runtimeDiagnostics.canvasSource = "generated campaign";
+    logRuntimeAlignmentDiagnostics("generated-campaign");
     markUnsaved();
     setSaveStatus("Campaign generated");
     return createdNodes;
@@ -12421,7 +12606,21 @@ async function bootApp() {
   if (new URLSearchParams(window.location.search).get("auth_error") === "not_configured") setAuthMessage("Google Login is not configured yet.");
   bindGlobalResetDelegation();
   const boardIdFromPath = getBoardIdFromPath();
+  const hasLocalCanvasDraft = Boolean(localStorage.getItem(STORAGE_KEY));
+  state.runtimeDiagnostics.pathBoardId = boardIdFromPath;
+  state.runtimeDiagnostics.startupBranch = boardIdFromPath
+    ? "/boards/:id"
+    : (hasLocalCanvasDraft ? "root-localStorage-guarded" : "root-home");
+  state.runtimeDiagnostics.canvasSource = boardIdFromPath
+    ? "/boards/:id"
+    : "empty/default state";
+  state.runtimeDiagnostics.localDraft = {
+    exists: hasLocalCanvasDraft,
+    restored: false,
+    reason: hasLocalCanvasDraft ? "root-startup-guard" : "none"
+  };
   state.currentBoardId = boardIdFromPath;
+  syncRuntimeSessionFromLegacy(boardIdFromPath ? "boot-board-route" : "boot-root");
   loadBrandBrainState();
   setSharePanelState(state.currentBoardId);
   if (boardIdFromPath) {
@@ -12429,7 +12628,6 @@ async function bootApp() {
     await loadBoardFromUrlIfPresent();
   } else {
     loadBrandBrainState();
-    loadCampaignCanvasState();
   }
   centerBoardStartPosition();
   applyCanvasZoom(state.zoom);
@@ -12450,6 +12648,7 @@ async function bootApp() {
   bindEditingPresenceTracking();
   startPresenceLite();
   startBoardRefreshPolling();
+  logRuntimeAlignmentDiagnostics("boot");
 }
 
 if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", () => { void bootApp(); });
