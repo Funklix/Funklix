@@ -12139,12 +12139,18 @@ el.dashboardView?.addEventListener("click", (event) => {
     return;
   }
 
+  if (action === "continue-campaign") {
+    setAppMode("canvas");
+    setActiveView("board");
+    return;
+  }
+
   if (action === "open-boards") {
     el.boardsNavButton?.click();
     return;
   }
 
-  if (action === "open-brand") {
+  if (action === "open-brand" || action === "talk-to-brand") {
     el.brandCoreButton?.click();
     return;
   }

@@ -212,78 +212,169 @@
         </header>
 
         <section id="dashboard-view" class="dashboard-view hidden" aria-labelledby="dashboard-title">
-          <div class="dashboard-hero fk-section">
-            <div class="dashboard-hero-copy">
-              <span class="dashboard-kicker fk-badge">Home</span>
-              <h1 id="dashboard-title">Welcome back to Funklix</h1>
-              <p>Your AI Marketing Operating System starts here. Jump into the workspace you need, or review placeholder surfaces that will become live dashboard intelligence later.</p>
-            </div>
-            <div class="dashboard-hero-actions dashboard-quick-actions">
-              <button class="fk-btn fk-btn-primary" type="button" data-dashboard-action="create-campaign">Create Campaign</button>
-              <button class="fk-btn fk-btn-secondary" type="button" data-dashboard-action="open-boards">Open Boards</button>
-              <button class="fk-btn fk-btn-secondary" type="button" data-dashboard-action="open-brand">Open Brand</button>
-              <button class="fk-btn fk-btn-ghost" type="button" data-dashboard-action="open-ai-brain">Open AI Brain</button>
-            </div>
-          </div>
-
-          <div class="dashboard-grid">
-            <section class="dashboard-card fk-card">
-              <div class="dashboard-card-header fk-card-header">
-                <span class="dashboard-kicker fk-badge">Brand</span>
-                <h2 class="dashboard-card-title">Brand Status</h2>
+          <div class="mission-control-shell">
+            <section class="mission-briefing fk-section" aria-labelledby="dashboard-title">
+              <div class="mission-avatar" aria-hidden="true">
+                <span>FK</span>
               </div>
-              <div class="dashboard-card-body fk-card-body">
-                <p class="dashboard-placeholder">Brand status will appear here after Brand intelligence is connected.</p>
+              <div class="mission-briefing-copy">
+                <span class="dashboard-kicker fk-badge">Daily Briefing</span>
+                <h1 id="dashboard-title">Good morning. I have your focus ready.</h1>
+                <p class="mission-briefing-lead">Our positioning is becoming clearer, and the Founder Story looks like the strongest trust signal to carry into the next campaign.</p>
+                <p class="mission-briefing-note">I found one calm opportunity for today: continue the campaign where strategic context is already warm.</p>
+                <div class="mission-actions">
+                  <button class="fk-btn fk-btn-primary" type="button" data-dashboard-action="continue-campaign">Continue Campaign</button>
+                  <button class="fk-btn fk-btn-secondary" type="button" data-dashboard-action="talk-to-brand">Talk to Brand</button>
+                </div>
               </div>
             </section>
 
-            <section class="dashboard-card fk-card">
-              <div class="dashboard-card-header fk-card-header">
-                <span class="dashboard-kicker fk-badge">Insights</span>
-                <h2 class="dashboard-card-title">Insight Highlights</h2>
+            <section class="mission-card mission-card-feature fk-card" aria-labelledby="continue-working-title">
+              <div class="mission-card-heading">
+                <span class="dashboard-kicker fk-badge">Continue Working</span>
+                <h2 id="continue-working-title">Founder-led Launch Campaign</h2>
               </div>
-              <div class="dashboard-card-body fk-card-body">
-                <p class="dashboard-placeholder">Insight highlights will appear here after Insights wiring is defined.</p>
+              <div class="mission-work-summary">
+                <div>
+                  <span class="mission-label">Status</span>
+                  <strong>Review-ready draft</strong>
+                </div>
+                <div>
+                  <span class="mission-label">Completeness</span>
+                  <strong>Nearly ready</strong>
+                </div>
+              </div>
+              <div class="mission-update-block">
+                <span class="mission-label">Last meaningful update</span>
+                <p>The landing-page story and first email sequence are aligned around founder credibility.</p>
+              </div>
+              <div class="mission-next-action">
+                <span class="mission-label">Next recommended action</span>
+                <p>Review the hero message and approve the campaign structure before expanding channel assets.</p>
+              </div>
+              <div class="mission-card-actions">
+                <button class="fk-btn fk-btn-primary" type="button" data-dashboard-action="open-boards">Open Board</button>
               </div>
             </section>
 
-            <section class="dashboard-card fk-card">
-              <div class="dashboard-card-header fk-card-header">
-                <span class="dashboard-kicker fk-badge">AI Brain</span>
-                <h2 class="dashboard-card-title">AI Activity</h2>
+            <div class="mission-two-column">
+              <section class="mission-card fk-card" aria-labelledby="brand-evolution-title">
+                <div class="mission-card-heading">
+                  <span class="dashboard-kicker fk-badge">Brand Evolution</span>
+                  <h2 id="brand-evolution-title">The Brand Brain is getting sharper.</h2>
+                </div>
+                <div class="mission-detail-list">
+                  <div>
+                    <span class="mission-label">Brand Brain Completeness</span>
+                    <p>Core positioning, audience, and voice foundations are in place.</p>
+                  </div>
+                  <div>
+                    <span class="mission-label">Newest Learning</span>
+                    <p>Founder-led trust signals fit the current campaign direction.</p>
+                  </div>
+                  <div>
+                    <span class="mission-label">Suggested Improvement</span>
+                    <p>Add more origin-story detail so campaign copy can feel more specific.</p>
+                  </div>
+                </div>
+                <div class="mission-knowledge-group" aria-label="Missing knowledge inputs">
+                  <span class="mission-label">Missing Knowledge</span>
+                  <div class="mission-pill-row">
+                    <span class="fk-pill">Founder Story</span>
+                    <span class="fk-pill">Market Research</span>
+                    <span class="fk-pill">Pitch Deck</span>
+                    <span class="fk-pill">Whitepaper</span>
+                    <span class="fk-pill">Business Plan</span>
+                  </div>
+                </div>
+              </section>
+
+              <section class="mission-card fk-card" aria-labelledby="suggested-opportunities-title">
+                <div class="mission-card-heading">
+                  <span class="dashboard-kicker fk-badge">Suggested Opportunities</span>
+                  <h2 id="suggested-opportunities-title">Prepared ideas worth exploring.</h2>
+                </div>
+                <div class="mission-opportunity-list">
+                  <article class="mission-opportunity-card">
+                    <span>01</span>
+                    <strong>Explore Founder-led storytelling</strong>
+                    <p>Use the origin story as a trust-building campaign thread.</p>
+                  </article>
+                  <article class="mission-opportunity-card">
+                    <span>02</span>
+                    <strong>Test new positioning angle</strong>
+                    <p>Frame the offer around clarity before campaign velocity.</p>
+                  </article>
+                  <article class="mission-opportunity-card">
+                    <span>03</span>
+                    <strong>Expand ICP research</strong>
+                    <p>Capture sharper audience language before scaling assets.</p>
+                  </article>
+                </div>
+              </section>
+            </div>
+
+            <section class="mission-card fk-card" aria-labelledby="todays-focus-title">
+              <div class="mission-card-heading mission-card-heading-row">
+                <div>
+                  <span class="dashboard-kicker fk-badge">Today's Focus</span>
+                  <h2 id="todays-focus-title">Three assigned nodes to move forward.</h2>
+                </div>
+                <span class="mission-subtle-note">Placeholder node focus only</span>
               </div>
-              <div class="dashboard-card-body fk-card-body">
-                <p class="dashboard-placeholder">AI activity will appear here after AI Brain activity surfaces are designed.</p>
+              <div class="mission-focus-list">
+                <article class="mission-focus-card">
+                  <span class="mission-node-dot" aria-hidden="true"></span>
+                  <div>
+                    <strong>Review landing-page hero node</strong>
+                    <p>Confirm the first message feels founder-led and specific.</p>
+                  </div>
+                </article>
+                <article class="mission-focus-card">
+                  <span class="mission-node-dot" aria-hidden="true"></span>
+                  <div>
+                    <strong>Approve launch email node</strong>
+                    <p>Check that the opening email reflects the same strategic promise.</p>
+                  </div>
+                </article>
+                <article class="mission-focus-card">
+                  <span class="mission-node-dot" aria-hidden="true"></span>
+                  <div>
+                    <strong>Complete audience objection node</strong>
+                    <p>Add one more customer objection before campaign review.</p>
+                  </div>
+                </article>
               </div>
             </section>
-          </div>
-        </section>
 
-        <section class="canvas" id="canvas">
-          <div class="canvas-scroll-surface" id="canvas-scroll-surface">
-            <div class="zoom-layer" id="zoom-layer">
-              <svg class="links" id="links" aria-hidden="true"></svg>
-              <div class="empty-state" id="empty-state">
-                Noch keine Nodes vorhanden. Klicke auf <strong>+ Add node</strong> oder auf das <strong>+</strong> in einer Node.
+            <section class="mission-card mission-empty-state fk-card" aria-labelledby="live-campaigns-title">
+              <div class="mission-card-heading">
+                <span class="dashboard-kicker fk-badge">Live Campaigns</span>
+                <h2 id="live-campaigns-title">Campaigns will appear here after deployment.</h2>
               </div>
-            </div>
-          </div>
-          <div id="context-menu" class="context-menu hidden">
-            <button id="add-context-node-btn" type="button">New Node</button>
-            <button id="add-postit-comment-btn" type="button">Add Post-It</button>
-            <button id="improve-context-node-btn" type="button" class="hidden">✨ Improve with AI</button>
-            <div class="emoji-shortcuts">
-              <button class="emoji-quick" data-emoji="🔥" type="button">🔥</button>
-              <button class="emoji-quick" data-emoji="👍" type="button">👍</button>
-              <button class="emoji-quick" data-emoji="👀" type="button">👀</button>
-              <button class="emoji-quick" data-emoji="✅" type="button">✅</button>
-              <button class="emoji-quick" data-emoji="💩" type="button">💩</button>
-            </div>
-          </div>
-          <div class="floating-zoom-control" aria-label="Canvas zoom controls">
-            <button id="zoom-out-btn" aria-label="Zoom out">-</button>
-            <span id="zoom-label">100%</span>
-            <button id="zoom-in-btn" aria-label="Zoom in">+</button>
+              <p>No live campaign data is shown yet. When deployment and analytics models are connected, this space will provide lightweight orientation only.</p>
+            </section>
+
+            <section class="mission-card fk-card" aria-labelledby="team-activity-title">
+              <div class="mission-card-heading">
+                <span class="dashboard-kicker fk-badge">Team Activity</span>
+                <h2 id="team-activity-title">Meaningful updates, not noise.</h2>
+              </div>
+              <div class="mission-activity-list">
+                <article>
+                  <span class="mission-activity-mark" aria-hidden="true"></span>
+                  <p><strong>AI suggestion accepted</strong> for the campaign positioning node.</p>
+                </article>
+                <article>
+                  <span class="mission-activity-mark" aria-hidden="true"></span>
+                  <p><strong>Asset approved</strong> for the launch email sequence.</p>
+                </article>
+                <article>
+                  <span class="mission-activity-mark" aria-hidden="true"></span>
+                  <p><strong>Team member updated node</strong> in the Founder Story board.</p>
+                </article>
+              </div>
+            </section>
           </div>
         </section>
 
