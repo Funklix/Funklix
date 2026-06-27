@@ -3710,6 +3710,25 @@ function getRuntimeCanvasSource() {
   return "empty/default state";
 }
 
+function getActiveContext() {
+  const pathBoardId = getBoardIdFromPath();
+  const boardId = state.session?.boardId || state.currentBoardId || pathBoardId || null;
+  const canvasSource = getRuntimeCanvasSource();
+  const canvasLoaded = canvasSource !== "empty/default state" || state.nodes.length > 0 || state.edges.length > 0;
+  const boardBacked = Boolean(boardId);
+  return {
+    workspaceId: state.session?.workspaceId || null,
+    brandId: state.session?.brandId || null,
+    boardId,
+    activeView: state.activeView,
+    startupSource: state.runtimeDiagnostics?.startupBranch || "unknown",
+    boardBacked,
+    sessionInitialized: Boolean(state.session?.isInitialized),
+    canvasLoaded,
+    anonymousCanvas: canvasLoaded && !boardBacked
+  };
+}
+
 function getRuntimeAutosaveDiagnostics() {
   const currentBoardId = state.currentBoardId || getBoardIdFromPath();
   if (currentBoardId) {
@@ -3744,15 +3763,13 @@ function getRuntimeAutosaveDiagnostics() {
 
 function buildRuntimeAlignmentDiagnostics() {
   const pathBoardId = getBoardIdFromPath();
-  const currentBoardId = state.currentBoardId || pathBoardId || null;
-  const runtimeSession = (!state.session?.isInitialized || state.session.boardId !== currentBoardId)
-    ? syncRuntimeSessionFromLegacy("diagnostics-sync")
-    : state.session;
+  const activeContext = getActiveContext();
+  const currentBoardId = activeContext.boardId;
+  const runtimeSession = state.session || {};
   const brandSession = getPassiveBrandSessionReadiness();
   const canvasSource = getRuntimeCanvasSource();
-  const isBoardBacked = Boolean(currentBoardId);
-  const hasCanvasContent = state.nodes.length > 0 || state.edges.length > 0;
   return {
+    activeContext,
     currentUser: {
       exists: Boolean(state.user?.email),
       userEmail: state.user?.email || null,
@@ -3769,7 +3786,7 @@ function buildRuntimeAlignmentDiagnostics() {
     legacyRuntime: {
       currentBoardId: state.currentBoardId || null,
       pathBoardId,
-      activeView: state.activeView
+      activeView: activeContext.activeView
     },
     sessionRuntime: {
       workspaceId: runtimeSession.workspaceId,
@@ -3791,7 +3808,7 @@ function buildRuntimeAlignmentDiagnostics() {
     board: {
       currentBoardId,
       boardAccess: state.boardAccess || null,
-      isBoardBacked,
+      isBoardBacked: activeContext.boardBacked,
       source: currentBoardId ? "/boards/:id" : "none"
     },
     canvas: {
@@ -3799,8 +3816,8 @@ function buildRuntimeAlignmentDiagnostics() {
       nodeCount: state.nodes.length,
       edgeCount: state.edges.length,
       source: canvasSource,
-      isBoardBacked,
-      isAnonymousEditable: hasCanvasContent && !isBoardBacked
+      isBoardBacked: activeContext.boardBacked,
+      isAnonymousEditable: activeContext.anonymousCanvas
     },
     autosave: getRuntimeAutosaveDiagnostics(),
     startup: {
