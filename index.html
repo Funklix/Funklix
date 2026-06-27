@@ -212,48 +212,171 @@
         </header>
 
         <section id="dashboard-view" class="dashboard-view hidden" aria-labelledby="dashboard-title">
-          <div class="dashboard-hero fk-section">
-            <div class="dashboard-hero-copy">
-              <span class="dashboard-kicker fk-badge">Home</span>
-              <h1 id="dashboard-title">Welcome back to Funklix</h1>
-              <p>Your AI Marketing Operating System starts here. Jump into the workspace you need, or review placeholder surfaces that will become live dashboard intelligence later.</p>
-            </div>
-            <div class="dashboard-hero-actions dashboard-quick-actions">
-              <button class="fk-btn fk-btn-primary" type="button" data-dashboard-action="create-campaign">Create Campaign</button>
-              <button class="fk-btn fk-btn-secondary" type="button" data-dashboard-action="open-boards">Open Boards</button>
-              <button class="fk-btn fk-btn-secondary" type="button" data-dashboard-action="open-brand">Open Brand</button>
-              <button class="fk-btn fk-btn-ghost" type="button" data-dashboard-action="open-ai-brain">Open AI Brain</button>
-            </div>
-          </div>
-
-          <div class="dashboard-grid">
-            <section class="dashboard-card fk-card">
-              <div class="dashboard-card-header fk-card-header">
-                <span class="dashboard-kicker fk-badge">Brand</span>
-                <h2 class="dashboard-card-title">Brand Status</h2>
-              </div>
-              <div class="dashboard-card-body fk-card-body">
-                <p class="dashboard-placeholder">Brand status will appear here after Brand intelligence is connected.</p>
+          <div class="mission-control">
+            <section class="mission-control__hero fk-section" aria-labelledby="dashboard-title">
+              <div class="mission-control__avatar" aria-hidden="true">FK</div>
+              <div class="mission-control__hero-copy">
+                <span class="dashboard-kicker fk-badge">Daily Briefing</span>
+                <h1 id="dashboard-title">Good morning. I have your focus ready.</h1>
+                <p class="mission-control__lead">Our positioning is becoming clearer, and the Founder Story looks like the strongest trust signal to bring into the next campaign.</p>
+                <p class="mission-control__insight">I found one calm opportunity for today: continue the campaign where strategic context is already warm.</p>
+                <div class="mission-control__actions" aria-label="Mission Control placeholder actions">
+                  <button class="fk-btn fk-btn-primary" type="button">Continue Campaign</button>
+                  <button class="fk-btn fk-btn-secondary" type="button">Talk to Brand</button>
+                </div>
               </div>
             </section>
 
-            <section class="dashboard-card fk-card">
-              <div class="dashboard-card-header fk-card-header">
-                <span class="dashboard-kicker fk-badge">Insights</span>
-                <h2 class="dashboard-card-title">Insight Highlights</h2>
+            <section class="mission-control__card mission-control__card--featured fk-card" aria-labelledby="mission-continue-title">
+              <div class="mission-control__section-heading">
+                <span class="dashboard-kicker fk-badge">Continue Working</span>
+                <h2 id="mission-continue-title">Founder-led Launch Campaign</h2>
               </div>
-              <div class="dashboard-card-body fk-card-body">
-                <p class="dashboard-placeholder">Insight highlights will appear here after Insights wiring is defined.</p>
+              <div class="mission-control__summary-row">
+                <div class="mission-control__summary-item">
+                  <span class="mission-control__label">Status</span>
+                  <strong>Review-ready draft</strong>
+                </div>
+                <div class="mission-control__summary-item">
+                  <span class="mission-control__label">Completeness</span>
+                  <strong>Nearly ready</strong>
+                </div>
+              </div>
+              <div class="mission-control__content-block">
+                <span class="mission-control__label">Last meaningful update</span>
+                <p>The landing-page story and first email sequence are aligned around founder credibility.</p>
+              </div>
+              <div class="mission-control__content-block">
+                <span class="mission-control__label">Next recommended action</span>
+                <p>Review the hero message and approve the campaign structure before expanding channel assets.</p>
+              </div>
+              <div class="mission-control__actions">
+                <button class="fk-btn fk-btn-primary" type="button">Open Board</button>
               </div>
             </section>
 
-            <section class="dashboard-card fk-card">
-              <div class="dashboard-card-header fk-card-header">
-                <span class="dashboard-kicker fk-badge">AI Brain</span>
-                <h2 class="dashboard-card-title">AI Activity</h2>
+            <div class="mission-control__paired-section">
+              <section class="mission-control__card fk-card" aria-labelledby="mission-brand-title">
+                <div class="mission-control__section-heading">
+                  <span class="dashboard-kicker fk-badge">Brand Evolution</span>
+                  <h2 id="mission-brand-title">The Brand Brain is getting sharper.</h2>
+                </div>
+                <div class="mission-control__stack">
+                  <div class="mission-control__content-block">
+                    <span class="mission-control__label">Brand Brain Completeness</span>
+                    <p>Core positioning, audience, and voice foundations are in place.</p>
+                  </div>
+                  <div class="mission-control__content-block">
+                    <span class="mission-control__label">Newest Learning</span>
+                    <p>Founder-led trust signals fit the current campaign direction.</p>
+                  </div>
+                  <div class="mission-control__content-block">
+                    <span class="mission-control__label">Suggested Improvement</span>
+                    <p>Add more origin-story detail so campaign copy can feel more specific.</p>
+                  </div>
+                </div>
+                <div class="mission-control__knowledge">
+                  <span class="mission-control__label">Missing Knowledge</span>
+                  <div class="mission-control__pill-row">
+                    <span class="fk-pill">Founder Story</span>
+                    <span class="fk-pill">Market Research</span>
+                    <span class="fk-pill">Pitch Deck</span>
+                    <span class="fk-pill">Whitepaper</span>
+                    <span class="fk-pill">Business Plan</span>
+                  </div>
+                </div>
+              </section>
+
+              <section class="mission-control__card fk-card" aria-labelledby="mission-opportunities-title">
+                <div class="mission-control__section-heading">
+                  <span class="dashboard-kicker fk-badge">Suggested Opportunities</span>
+                  <h2 id="mission-opportunities-title">Prepared ideas worth exploring.</h2>
+                </div>
+                <div class="mission-control__opportunities">
+                  <article class="mission-control__opportunity">
+                    <span>01</span>
+                    <div>
+                      <strong>Explore Founder-led storytelling</strong>
+                      <p>Use the origin story as a trust-building campaign thread.</p>
+                    </div>
+                  </article>
+                  <article class="mission-control__opportunity">
+                    <span>02</span>
+                    <div>
+                      <strong>Test new positioning angle</strong>
+                      <p>Frame the offer around clarity before campaign velocity.</p>
+                    </div>
+                  </article>
+                  <article class="mission-control__opportunity">
+                    <span>03</span>
+                    <div>
+                      <strong>Expand ICP research</strong>
+                      <p>Capture sharper audience language before scaling assets.</p>
+                    </div>
+                  </article>
+                </div>
+              </section>
+            </div>
+
+            <section class="mission-control__card fk-card" aria-labelledby="mission-focus-title">
+              <div class="mission-control__section-heading mission-control__section-heading--row">
+                <div>
+                  <span class="dashboard-kicker fk-badge">Today's Focus</span>
+                  <h2 id="mission-focus-title">Three assigned nodes to move forward.</h2>
+                </div>
+                <span class="mission-control__note">Static node placeholders</span>
               </div>
-              <div class="dashboard-card-body fk-card-body">
-                <p class="dashboard-placeholder">AI activity will appear here after AI Brain activity surfaces are designed.</p>
+              <div class="mission-control__focus-list">
+                <article class="mission-control__focus-item">
+                  <span class="mission-control__dot" aria-hidden="true"></span>
+                  <div>
+                    <strong>Review landing-page hero node</strong>
+                    <p>Confirm the first message feels founder-led and specific.</p>
+                  </div>
+                </article>
+                <article class="mission-control__focus-item">
+                  <span class="mission-control__dot" aria-hidden="true"></span>
+                  <div>
+                    <strong>Approve launch email node</strong>
+                    <p>Check that the opening email reflects the same strategic promise.</p>
+                  </div>
+                </article>
+                <article class="mission-control__focus-item">
+                  <span class="mission-control__dot" aria-hidden="true"></span>
+                  <div>
+                    <strong>Complete audience objection node</strong>
+                    <p>Add one more customer objection before campaign review.</p>
+                  </div>
+                </article>
+              </div>
+            </section>
+
+            <section class="mission-control__card mission-control__empty-state fk-card" aria-labelledby="mission-live-title">
+              <div class="mission-control__section-heading">
+                <span class="dashboard-kicker fk-badge">Live Campaigns</span>
+                <h2 id="mission-live-title">Campaigns will appear here after deployment.</h2>
+              </div>
+              <p>No live campaign data is shown yet. When deployment and analytics models are connected, this space will provide lightweight orientation only.</p>
+            </section>
+
+            <section class="mission-control__card fk-card" aria-labelledby="mission-activity-title">
+              <div class="mission-control__section-heading">
+                <span class="dashboard-kicker fk-badge">Team Activity</span>
+                <h2 id="mission-activity-title">Meaningful updates, not noise.</h2>
+              </div>
+              <div class="mission-control__activity-list">
+                <article>
+                  <span class="mission-control__dot" aria-hidden="true"></span>
+                  <p><strong>AI suggestion accepted</strong> for the campaign positioning node.</p>
+                </article>
+                <article>
+                  <span class="mission-control__dot" aria-hidden="true"></span>
+                  <p><strong>Asset approved</strong> for the launch email sequence.</p>
+                </article>
+                <article>
+                  <span class="mission-control__dot" aria-hidden="true"></span>
+                  <p><strong>Team member updated node</strong> in the Founder Story board.</p>
+                </article>
               </div>
             </section>
           </div>
