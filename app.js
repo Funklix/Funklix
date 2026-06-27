@@ -150,6 +150,16 @@ const state = {
   ,lastSeenActivityAt: 0
   ,commentThreadsOpenedByNode: new Set()
   ,aiReviewFixPreviews: {}
+  ,runtimeDiagnostics: {
+    canvasSource: "empty/default state",
+    startupBranch: "unknown",
+    pathBoardId: null,
+    localDraft: {
+      exists: false,
+      restored: false,
+      reason: ""
+    }
+  }
 };
 
 const el = {
@@ -3651,6 +3661,105 @@ function getBoardIdFromPath() {
   return null;
 }
 
+function getRuntimeCanvasSource() {
+  if (state.runtimeDiagnostics?.canvasSource) return state.runtimeDiagnostics.canvasSource;
+  if (state.currentBoardId || getBoardIdFromPath()) return "/boards/:id";
+  if (state.nodes.length || state.edges.length) return "unknown";
+  return "empty/default state";
+}
+
+function getRuntimeAutosaveDiagnostics() {
+  const currentBoardId = state.currentBoardId || getBoardIdFromPath();
+  if (currentBoardId) {
+    return {
+      mode: "update-existing-board",
+      wouldCreateBoard: false
+    };
+  }
+  if (state.nodes.length === 0 && state.edges.length === 0) {
+    return {
+      mode: "idle-no-editable-canvas",
+      wouldCreateBoard: false
+    };
+  }
+  if (state.boardAccess?.canEdit === false) {
+    return {
+      mode: "blocked-read-only",
+      wouldCreateBoard: false
+    };
+  }
+  if (!state.user?.email) {
+    return {
+      mode: "create-board-requires-auth",
+      wouldCreateBoard: true
+    };
+  }
+  return {
+    mode: "would-create-board",
+    wouldCreateBoard: true
+  };
+}
+
+function buildRuntimeAlignmentDiagnostics() {
+  const pathBoardId = getBoardIdFromPath();
+  const currentBoardId = state.currentBoardId || pathBoardId || null;
+  const canvasSource = getRuntimeCanvasSource();
+  const isBoardBacked = Boolean(currentBoardId);
+  const hasCanvasContent = state.nodes.length > 0 || state.edges.length > 0;
+  return {
+    session: {
+      exists: Boolean(state.user?.email),
+      userEmail: state.user?.email || null,
+      authConfigured: state.authConfigured !== false
+    },
+    workspace: {
+      exists: false,
+      mode: "not-implemented"
+    },
+    brand: {
+      exists: false,
+      mode: "not-implemented"
+    },
+    board: {
+      currentBoardId,
+      boardAccess: state.boardAccess || null,
+      isBoardBacked,
+      source: currentBoardId ? "/boards/:id" : "none"
+    },
+    canvas: {
+      hasNodes: state.nodes.length > 0,
+      nodeCount: state.nodes.length,
+      edgeCount: state.edges.length,
+      source: canvasSource,
+      isBoardBacked,
+      isAnonymousEditable: hasCanvasContent && !isBoardBacked
+    },
+    autosave: getRuntimeAutosaveDiagnostics(),
+    startup: {
+      branch: state.runtimeDiagnostics?.startupBranch || "unknown",
+      pathBoardId: state.runtimeDiagnostics?.pathBoardId || pathBoardId || null
+    },
+    localDraft: {
+      exists: Boolean(state.runtimeDiagnostics?.localDraft?.exists),
+      restored: Boolean(state.runtimeDiagnostics?.localDraft?.restored),
+      reason: state.runtimeDiagnostics?.localDraft?.reason || ""
+    },
+    view: {
+      activeView: state.activeView
+    }
+  };
+}
+
+function logRuntimeAlignmentDiagnostics(reason = "manual") {
+  const diagnostics = buildRuntimeAlignmentDiagnostics();
+  console.info("[Runtime Alignment Diagnostics]", { reason, ...diagnostics });
+  return diagnostics;
+}
+
+if (typeof window !== "undefined") {
+  window.debugRuntimeAlignmentDiagnostics = logRuntimeAlignmentDiagnostics;
+}
+
 function getCurrentBrandBrainBoardId() {
   return state.currentBoardId || getBoardIdFromPath() || "";
 }
@@ -3663,6 +3772,8 @@ function brandBrainStorageKey(boardId = getCurrentBrandBrainBoardId()) {
 function loadCampaignCanvasState() {
   const raw = localStorage.getItem(STORAGE_KEY); if (!raw) return false;
   const campaignState = JSON.parse(raw); console.log("Loaded campaignCanvasState", campaignState);
+  state.runtimeDiagnostics.canvasSource = "localStorage campaignCanvasState";
+  state.runtimeDiagnostics.localDraft = { exists: true, restored: true, reason: "loadCampaignCanvasState" };
   applyCampaignState(withBoardSchemaDefaults(campaignState), "Restored from local storage");
   return true;
 }
@@ -3899,6 +4010,7 @@ async function loadBoardFromUrlIfPresent() {
       return false;
     }
     const normalizedCanvasState = withBoardSchemaDefaults(incomingCanvasState);
+    state.runtimeDiagnostics.canvasSource = "/boards/:id";
     applyCampaignState(normalizedCanvasState, `Loaded board ${boardId.slice(0, 8)}...`);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(normalizedCanvasState));
     startPresenceLite();
@@ -5687,6 +5799,8 @@ async function generateCampaignChainProgressively(plan, { onStatus = null, setup
     updateListView();
     const ideaNode = createdByIndex.get(0) || createdNodes[0];
     appendActivity("generated_campaign_chain", { node: ideaNode, nodeTitle: activityNodeTitle(ideaNode) });
+    state.runtimeDiagnostics.canvasSource = "generated campaign";
+    logRuntimeAlignmentDiagnostics("generated-campaign");
     markUnsaved();
     setSaveStatus("Campaign generated");
     return createdNodes;
@@ -12421,6 +12535,19 @@ async function bootApp() {
   if (new URLSearchParams(window.location.search).get("auth_error") === "not_configured") setAuthMessage("Google Login is not configured yet.");
   bindGlobalResetDelegation();
   const boardIdFromPath = getBoardIdFromPath();
+  const hasLocalCanvasDraft = Boolean(localStorage.getItem(STORAGE_KEY));
+  state.runtimeDiagnostics.pathBoardId = boardIdFromPath;
+  state.runtimeDiagnostics.startupBranch = boardIdFromPath
+    ? "/boards/:id"
+    : (hasLocalCanvasDraft ? "root-localStorage-guarded" : "root-home");
+  state.runtimeDiagnostics.canvasSource = boardIdFromPath
+    ? "/boards/:id"
+    : "empty/default state";
+  state.runtimeDiagnostics.localDraft = {
+    exists: hasLocalCanvasDraft,
+    restored: false,
+    reason: hasLocalCanvasDraft ? "root-startup-guard" : "none"
+  };
   state.currentBoardId = boardIdFromPath;
   loadBrandBrainState();
   setSharePanelState(state.currentBoardId);
@@ -12429,7 +12556,6 @@ async function bootApp() {
     await loadBoardFromUrlIfPresent();
   } else {
     loadBrandBrainState();
-    loadCampaignCanvasState();
   }
   centerBoardStartPosition();
   applyCanvasZoom(state.zoom);
@@ -12450,6 +12576,7 @@ async function bootApp() {
   bindEditingPresenceTracking();
   startPresenceLite();
   startBoardRefreshPolling();
+  logRuntimeAlignmentDiagnostics("boot");
 }
 
 if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", () => { void bootApp(); });
