@@ -9820,7 +9820,7 @@ function renderInspectorImages(node) {
   el.inspectorImageList.innerHTML = "";
   if (!node.images.length) {
     const empty = document.createElement("p");
-    empty.className = "inspector-image-name";
+    empty.className = "inspector-image-name inspector-image-empty";
     empty.textContent = "Keine Bilder hochgeladen.";
     el.inspectorImageList.appendChild(empty);
     return;
@@ -9829,7 +9829,7 @@ function renderInspectorImages(node) {
   node.images.forEach((img) => {
     const card = document.createElement("div");
     const isFavorite = node.favoriteImageId === img.id;
-    card.className = `inspector-image-item${isFavorite ? " is-favorite" : ""}`;
+    card.className = `inspector-image-item fk-card${isFavorite ? " is-favorite" : ""}`;
     card.addEventListener("click", () => openLightbox(img.url, img.name || "Image preview"));
 
     const thumb = document.createElement("img");
@@ -9843,7 +9843,7 @@ function renderInspectorImages(node) {
     });
 
     const favoriteTag = document.createElement("span");
-    favoriteTag.className = "inspector-image-favorite-tag";
+    favoriteTag.className = "inspector-image-favorite-tag fk-pill";
     favoriteTag.textContent = "★";
 
     const actions = document.createElement("div");
@@ -9851,7 +9851,7 @@ function renderInspectorImages(node) {
 
     const favoriteBtn = document.createElement("button");
     favoriteBtn.type = "button";
-    favoriteBtn.className = "inspector-image-action";
+    favoriteBtn.className = "inspector-image-action fk-btn fk-btn-ghost";
     favoriteBtn.textContent = "⭐";
     favoriteBtn.title = "Set as favorite";
     favoriteBtn.addEventListener("click", (event) => {
@@ -9869,7 +9869,7 @@ function renderInspectorImages(node) {
 
     const downloadBtn = document.createElement("button");
     downloadBtn.type = "button";
-    downloadBtn.className = "inspector-image-action";
+    downloadBtn.className = "inspector-image-action fk-btn fk-btn-ghost";
     downloadBtn.textContent = "⬇️";
     downloadBtn.title = "Download";
     downloadBtn.addEventListener("click", (event) => {
@@ -9880,7 +9880,7 @@ function renderInspectorImages(node) {
 
     const deleteBtn = document.createElement("button");
     deleteBtn.type = "button";
-    deleteBtn.className = "inspector-image-action danger";
+    deleteBtn.className = "inspector-image-action danger fk-btn fk-btn-ghost";
     deleteBtn.textContent = "❌";
     deleteBtn.title = "Delete";
     deleteBtn.addEventListener("click", (event) => {
