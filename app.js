@@ -3845,6 +3845,92 @@ if (typeof window !== "undefined") {
   window.debugRuntimeAlignmentDiagnostics = logRuntimeAlignmentDiagnostics;
 }
 
+function formatDashboardTimestamp(value) {
+  if (!value) return "Not available yet";
+  const parsed = Date.parse(value);
+  if (Number.isNaN(parsed)) return "Not available yet";
+  return new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit"
+  }).format(new Date(parsed));
+}
+
+function getDashboardBoardStatus(activeContext) {
+  if (!activeContext.boardBacked) {
+    return activeContext.canvasLoaded ? "Local canvas only" : "Not available yet";
+  }
+  if (state.boardAccess?.canEdit === false) return "View-only board";
+  if (state.boardAccess?.reason === "owner") return "Owned board";
+  if (state.boardAccess?.reason === "editor") return "Editable board";
+  if (state.boardAccess?.reason === "unowned") return "Claim available";
+  return "Board-backed";
+}
+
+function getDashboardContinueWorkingModel() {
+  const activeContext = getActiveContext();
+  const boardId = activeContext.boardId;
+  const hasBoardName = typeof state.currentBoardName === "string" && state.currentBoardName.trim();
+  const hasNodes = state.nodes.length > 0;
+  const lastUpdated = state.lastKnownUpdatedAt || state.canvasMetadata?.updatedAt || null;
+  const isCurrentCanvas = activeContext.boardBacked || activeContext.canvasLoaded;
+  return {
+    activeContext,
+    title: hasBoardName ? state.currentBoardName.trim() : (boardId ? "Untitled board" : "No board selected"),
+    ownership: activeContext.boardBacked ? "Board-backed" : (activeContext.canvasLoaded ? "Not board-backed" : "No active board"),
+    nodeCount: state.nodes.length,
+    lastUpdated: formatDashboardTimestamp(lastUpdated),
+    boardStatus: getDashboardBoardStatus(activeContext),
+    progress: null,
+    nextAction: activeContext.boardBacked
+      ? "Continue editing this Campaign Canvas."
+      : hasNodes
+        ? "Open Campaign Canvas to review the current local work."
+        : "Select a board to continue your campaign work.",
+    contextLabel: activeContext.boardBacked
+      ? `Active Board ID: ${String(boardId).slice(0, 8)}…`
+      : "Dashboard reads current runtime state only.",
+    buttonLabel: isCurrentCanvas ? "Open Campaign Canvas" : "Open Boards",
+    opensCanvas: isCurrentCanvas
+  };
+}
+
+function renderDashboardContinueWorking() {
+  if (!el.dashboardView) return;
+  const card = document.getElementById("dashboard-continue-working");
+  if (!card) return;
+  const model = getDashboardContinueWorkingModel();
+  const title = card.querySelector("#dashboard-continue-title");
+  const action = card.querySelector("#dashboard-continue-action");
+  const backed = card.querySelector("#dashboard-continue-backed");
+  const nodes = card.querySelector("#dashboard-continue-nodes");
+  const updated = card.querySelector("#dashboard-continue-updated");
+  const status = card.querySelector("#dashboard-continue-status");
+  const progressRow = card.querySelector("#dashboard-continue-progress-row");
+  const progress = card.querySelector("#dashboard-continue-progress");
+  const context = card.querySelector("#dashboard-continue-context");
+  const openButton = card.querySelector("#dashboard-continue-open");
+
+  if (title) title.textContent = model.title;
+  if (action) action.textContent = model.nextAction;
+  if (backed) backed.textContent = model.ownership;
+  if (nodes) nodes.textContent = String(model.nodeCount);
+  if (updated) updated.textContent = model.lastUpdated;
+  if (status) status.textContent = model.boardStatus;
+  if (progressRow) progressRow.classList.toggle("hidden", !model.progress);
+  if (progress) progress.textContent = model.progress || "";
+  if (context) context.textContent = model.contextLabel;
+  if (openButton) {
+    openButton.textContent = model.buttonLabel;
+    openButton.dataset.dashboardTarget = model.opensCanvas ? "canvas" : "boards";
+  }
+}
+
+function refreshDashboardIfVisible() {
+  if (el.dashboardView && !el.dashboardView.classList.contains("hidden")) renderDashboardContinueWorking();
+}
+
 function getCurrentBrandBrainBoardId() {
   return state.currentBoardId || getBoardIdFromPath() || "";
 }
@@ -4041,6 +4127,7 @@ async function saveBoardToServer(trigger = "manual") {
     refreshLastSavedSnapshot();
     setSharePanelState(returnedId, new Date(), data?.owner_email || state.currentBoardOwnerEmail || null, data?.owner_name || state.currentBoardOwnerName || null, data?.owner_avatar || state.currentBoardOwnerAvatar || null);
     applyBoardAccessFromServer(data?.access, "saveBoardToServer");
+    refreshDashboardIfVisible();
 
     if (!isUpdate && returnedId) {
       const nextPath = `/boards/${returnedId}`;
@@ -4103,6 +4190,7 @@ async function loadBoardFromUrlIfPresent() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(normalizedCanvasState));
     startPresenceLite();
     startBoardRefreshPolling();
+    refreshDashboardIfVisible();
     return true;
   } catch (error) {
     console.error(error);
@@ -11479,6 +11567,7 @@ function setActiveView(view) {
   }
   el.cycleViewButton.textContent =
     view === "home" ? "Home" : view === "board" ? "Board View" : view === "list" ? "List View" : view === "calendar" ? "Calendar View" : view === "boards_library" ? "Boards" : view === "insights" ? "Insights" : view === "ai_brain" ? "AI Brain" : "Brand Core";
+  if (isHome) renderDashboardContinueWorking();
   if (view === "list") updateListView();
   if (view === "calendar") renderCalendarView();
   if (view === "insights" || view === "ai_brain") renderCampaignIntelligence();
@@ -12343,6 +12432,15 @@ el.dashboardView?.addEventListener("click", (event) => {
 
   if (action === "open-boards") {
     el.boardsNavButton?.click();
+    return;
+  }
+
+  if (action === "open-current-board") {
+    if (actionButton.dataset.dashboardTarget === "canvas") {
+      el.campaignCanvasNavButton?.click();
+    } else {
+      el.boardsNavButton?.click();
+    }
     return;
   }
 

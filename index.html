@@ -212,18 +212,64 @@
         </header>
 
         <section id="dashboard-view" class="dashboard-view hidden" aria-labelledby="dashboard-title">
-          <div class="mission-control">
-            <section class="mission-control__hero fk-section" aria-labelledby="dashboard-title">
-              <div class="mission-control__avatar" aria-hidden="true">FK</div>
-              <div class="mission-control__hero-copy">
-                <span class="dashboard-kicker fk-badge">Daily Briefing</span>
-                <h1 id="dashboard-title">Good morning. I have your focus ready.</h1>
-                <p class="mission-control__lead">Our positioning is becoming clearer, and the Founder Story looks like the strongest trust signal to bring into the next campaign.</p>
-                <p class="mission-control__insight">I found one calm opportunity for today: continue the campaign where strategic context is already warm.</p>
-                <div class="mission-control__actions" aria-label="Mission Control placeholder actions">
-                  <button class="fk-btn fk-btn-primary" type="button">Continue Campaign</button>
-                  <button class="fk-btn fk-btn-secondary" type="button">Talk to Brand</button>
-                </div>
+          <div class="dashboard-hero fk-section">
+            <div class="dashboard-hero-copy">
+              <span class="dashboard-kicker fk-badge">Home</span>
+              <h1 id="dashboard-title">Welcome back to Funklix</h1>
+              <p>Your AI Marketing Operating System starts here. Jump into the workspace you need, or review placeholder surfaces that will become live dashboard intelligence later.</p>
+            </div>
+            <div class="dashboard-hero-actions dashboard-quick-actions">
+              <button class="fk-btn fk-btn-primary" type="button" data-dashboard-action="create-campaign">Create Campaign</button>
+              <button class="fk-btn fk-btn-secondary" type="button" data-dashboard-action="open-boards">Open Boards</button>
+              <button class="fk-btn fk-btn-secondary" type="button" data-dashboard-action="open-brand">Open Brand</button>
+              <button class="fk-btn fk-btn-ghost" type="button" data-dashboard-action="open-ai-brain">Open AI Brain</button>
+            </div>
+          </div>
+
+          <section id="dashboard-continue-working" class="dashboard-continue-working fk-card" aria-labelledby="dashboard-continue-title">
+            <div class="dashboard-continue-copy">
+              <div class="dashboard-card-header fk-card-header">
+                <span class="dashboard-kicker fk-badge">Continue Working</span>
+                <h2 id="dashboard-continue-title" class="dashboard-card-title">No board selected</h2>
+              </div>
+              <p id="dashboard-continue-action" class="dashboard-continue-action">Select a board to continue your campaign work.</p>
+            </div>
+            <div class="dashboard-continue-meta" aria-label="Current board details">
+              <div class="dashboard-continue-stat">
+                <span>Ownership</span>
+                <strong id="dashboard-continue-backed">No active board</strong>
+              </div>
+              <div class="dashboard-continue-stat">
+                <span>Nodes</span>
+                <strong id="dashboard-continue-nodes">0</strong>
+              </div>
+              <div class="dashboard-continue-stat">
+                <span>Last Updated</span>
+                <strong id="dashboard-continue-updated">Not available yet</strong>
+              </div>
+              <div class="dashboard-continue-stat">
+                <span>Board Status</span>
+                <strong id="dashboard-continue-status">Not available yet</strong>
+              </div>
+              <div id="dashboard-continue-progress-row" class="dashboard-continue-stat hidden">
+                <span>Progress</span>
+                <strong id="dashboard-continue-progress"></strong>
+              </div>
+            </div>
+            <div class="dashboard-continue-footer">
+              <span id="dashboard-continue-context" class="dashboard-continue-context">Dashboard reads current runtime state only.</span>
+              <button id="dashboard-continue-open" class="fk-btn fk-btn-primary" type="button" data-dashboard-action="open-current-board">Open Boards</button>
+            </div>
+          </section>
+
+          <div class="dashboard-grid">
+            <section class="dashboard-card fk-card">
+              <div class="dashboard-card-header fk-card-header">
+                <span class="dashboard-kicker fk-badge">Brand</span>
+                <h2 class="dashboard-card-title">Brand Status</h2>
+              </div>
+              <div class="dashboard-card-body fk-card-body">
+                <p class="dashboard-placeholder">Brand status will appear here after Brand intelligence is connected.</p>
               </div>
             </section>
 
