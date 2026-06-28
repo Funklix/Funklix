@@ -4996,6 +4996,14 @@ button:active {
   gap: var(--fk-space-3);
 }
 
+#dashboard-view .mission-card-body,
+#dashboard-view .mission-opportunities,
+#dashboard-view .mission-focus-list,
+#dashboard-view .mission-activity-list {
+  display: grid;
+  gap: var(--fk-space-3);
+}
+
 #dashboard-view .mission-callout,
 #dashboard-view .mission-opportunities article,
 #dashboard-view .mission-focus-list article,
@@ -5118,6 +5126,23 @@ button:active {
   border-color: var(--fk-color-border);
   background: var(--fk-color-surface-muted);
   color: var(--fk-color-heading);
+  cursor: pointer;
+}
+
+#dashboard-view .dashboard-brand-pill:hover,
+#dashboard-view .dashboard-focus-action:hover {
+  border-color: var(--fk-color-primary-soft);
+  background: rgba(102, 82, 255, 0.08);
+}
+
+#dashboard-view .dashboard-focus-action {
+  cursor: pointer;
+}
+
+#dashboard-view .dashboard-focus-action:focus-visible,
+#dashboard-view .dashboard-brand-pill:focus-visible {
+  outline: 2px solid var(--fk-color-primary);
+  outline-offset: 2px;
 }
 
 @media (max-width: 980px) {

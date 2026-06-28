@@ -3923,10 +3923,10 @@ function renderDashboardContinueWorking() {
   if (progressRow) progressRow.classList.toggle("hidden", !model.progress);
   if (progress) progress.textContent = model.progress || "";
   if (context) context.textContent = model.contextLabel;
-  if (openButton) {
-    openButton.textContent = model.buttonLabel;
-    openButton.dataset.dashboardTarget = model.opensCanvas ? "canvas" : "boards";
-  }
+  if (openButton) openButton.textContent = model.buttonLabel;
+  el.dashboardView?.querySelectorAll('[data-dashboard-action="open-current-board"]').forEach((button) => {
+    button.dataset.dashboardTarget = model.opensCanvas ? "canvas" : "boards";
+  });
 }
 
 function refreshDashboardIfVisible() {
@@ -4054,8 +4054,10 @@ function renderDashboardBrandEvolution() {
     missingPills.innerHTML = "";
     const pills = model.missingKnowledge.length ? model.missingKnowledge : [{ label: "No required knowledge gaps detected" }];
     pills.forEach((input) => {
-      const pill = document.createElement("span");
+      const pill = document.createElement("button");
+      pill.type = "button";
       pill.className = "fk-pill dashboard-brand-pill";
+      pill.dataset.dashboardAction = "open-brand";
       pill.textContent = input.label;
       missingPills.appendChild(pill);
     });
@@ -4198,6 +4200,9 @@ function renderDashboardTodaysFocus() {
   actions.forEach((action) => {
     const card = document.createElement("article");
     card.className = "dashboard-focus-action";
+    card.tabIndex = 0;
+    card.setAttribute("role", "button");
+    card.dataset.dashboardFocusNode = action.id;
     const title = document.createElement("strong");
     title.textContent = action.title;
     const meta = document.createElement("span");
@@ -12700,6 +12705,16 @@ el.aiBrainNavButton?.addEventListener("click", () => {
   setActiveView("ai_brain");
 });
 el.dashboardView?.addEventListener("click", (event) => {
+  const focusNodeCard = event.target.closest("[data-dashboard-focus-node]");
+  if (focusNodeCard) {
+    const nodeId = focusNodeCard.dataset.dashboardFocusNode;
+    if (nodeId && getNode(nodeId)) {
+      setAppMode("canvas");
+      requestAnimationFrame(() => focusNodeInCanvas(nodeId, { behavior: "smooth", select: true, pulse: true }));
+    }
+    return;
+  }
+
   const actionButton = event.target.closest("[data-dashboard-action]");
   if (!actionButton) return;
 
