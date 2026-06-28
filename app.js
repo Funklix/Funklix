@@ -64,6 +64,14 @@ const state = {
   ,scheduleDate: ""
   ,scheduleTime: "09:00"
   ,currentBoardId: null
+  ,session: {
+    workspaceId: null,
+    // Active Brand runtime is intentionally not implemented yet; keep brandId null until a canonical Brand owner exists.
+    brandId: null,
+    boardId: null,
+    source: "initial",
+    isInitialized: false
+  }
   ,currentBoardName: ""
   ,lastKnownUpdatedAt: null
   ,autosaveTimer: null
@@ -150,6 +158,16 @@ const state = {
   ,lastSeenActivityAt: 0
   ,commentThreadsOpenedByNode: new Set()
   ,aiReviewFixPreviews: {}
+  ,runtimeDiagnostics: {
+    canvasSource: "empty/default state",
+    startupBranch: "unknown",
+    pathBoardId: null,
+    localDraft: {
+      exists: false,
+      restored: false,
+      reason: ""
+    }
+  }
 };
 
 const el = {
@@ -1197,6 +1215,7 @@ async function saveBoardAsNew(payload) {
   const newId = data?.id;
   if (newId) {
     state.currentBoardId = newId;
+    syncRuntimeSessionFromLegacy("save-as-new");
     saveBrandBrainState({ markDirty: false });
     state.currentBoardName = data?.name || payload?.name || "Campaign Canvas Copy";
     state.lastKnownUpdatedAt = data?.updated_at || null;
@@ -1251,6 +1270,7 @@ async function duplicateCurrentBoard() {
     const newId = data?.id;
     if (!newId) throw new Error('Duplicate board response missing id');
     state.currentBoardId = newId;
+    syncRuntimeSessionFromLegacy("duplicate-board");
     saveBrandBrainState({ markDirty: false });
     state.currentBoardName = data?.name || payload.name;
     state.lastKnownUpdatedAt = data?.updated_at || null;
@@ -3194,7 +3214,7 @@ function scheduleAutosave() {
     isDirty: state.isDirty,
     isSaving: state.isSaving,
     lastKnownUpdatedAt: state.lastKnownUpdatedAt,
-    currentBoardId: state.currentBoardId || getBoardIdFromPath()
+    currentBoardId: resolveExistingBoardId()
   });
   state.autosaveTimer = setTimeout(() => {
     state.autosaveTimer = null;
@@ -3202,7 +3222,7 @@ function scheduleAutosave() {
       isDirty: state.isDirty,
       isSaving: state.isSaving,
       lastKnownUpdatedAt: state.lastKnownUpdatedAt,
-      currentBoardId: state.currentBoardId || getBoardIdFromPath()
+      currentBoardId: resolveExistingBoardId()
     });
     if (!state.isDirty) { return; }
     if (state.isBoardLoading) { return; }
@@ -3651,6 +3671,558 @@ function getBoardIdFromPath() {
   return null;
 }
 
+function resolveExistingBoardId() {
+  return state.currentBoardId || getBoardIdFromPath();
+}
+
+function resolveBoardPersistenceTarget() {
+  const pathname = window.location.pathname || '';
+  const pathBoardId = pathname.startsWith('/boards/')
+    ? decodeURIComponent(pathname.replace(/^\/boards\//, '').split('/')[0]).trim()
+    : null;
+  const boardId = state.currentBoardId || pathBoardId || getBoardIdFromPath();
+  const isUpdate = Boolean(boardId);
+  return {
+    boardId,
+    isUpdate,
+    endpoint: isUpdate ? `/api/boards/${boardId}` : '/api/boards',
+    method: isUpdate ? 'PUT' : 'POST'
+  };
+}
+
+function syncRuntimeSessionFromLegacy(source = "legacy-runtime") {
+  const legacyBoardId = resolveExistingBoardId() || null;
+  state.session = {
+    workspaceId: null,
+    brandId: null,
+    boardId: legacyBoardId,
+    source,
+    isInitialized: true
+  };
+  return state.session;
+}
+
+function getPassiveBrandSessionReadiness() {
+  let hasBrandBrainLocalStorage = false;
+  try {
+    hasBrandBrainLocalStorage = Boolean(localStorage.getItem(brandBrainStorageKey()));
+  } catch {
+    hasBrandBrainLocalStorage = false;
+  }
+  return {
+    exists: false,
+    brandId: null,
+    source: "not-implemented",
+    reason: "no-canonical-brand-runtime",
+    evidence: {
+      hasBrandCoreState: Boolean(state.brandCore && typeof state.brandCore === "object"),
+      hasBrandBrainLocalStorage,
+      note: "Brand Core / Brand Brain data exists, but it is not a canonical Active Brand identity."
+    }
+  };
+}
+
+function getRuntimeCanvasSource() {
+  if (state.runtimeDiagnostics?.canvasSource) return state.runtimeDiagnostics.canvasSource;
+  if (state.currentBoardId || getBoardIdFromPath()) return "/boards/:id";
+  if (state.nodes.length || state.edges.length) return "unknown";
+  return "empty/default state";
+}
+
+function getActiveContext() {
+  const pathBoardId = getBoardIdFromPath();
+  const boardId = state.session?.boardId || state.currentBoardId || pathBoardId || null;
+  const canvasSource = getRuntimeCanvasSource();
+  const canvasLoaded = canvasSource !== "empty/default state" || state.nodes.length > 0 || state.edges.length > 0;
+  const boardBacked = Boolean(boardId);
+  return {
+    workspaceId: state.session?.workspaceId || null,
+    brandId: state.session?.brandId || null,
+    boardId,
+    activeView: state.activeView,
+    startupSource: state.runtimeDiagnostics?.startupBranch || "unknown",
+    boardBacked,
+    sessionInitialized: Boolean(state.session?.isInitialized),
+    canvasLoaded,
+    anonymousCanvas: canvasLoaded && !boardBacked
+  };
+}
+
+function getRuntimeAutosaveDiagnostics() {
+  const currentBoardId = resolveExistingBoardId();
+  if (currentBoardId) {
+    return {
+      mode: "update-existing-board",
+      wouldCreateBoard: false,
+      reason: "existing-board"
+    };
+  }
+  if (state.boardAccess?.canEdit === false) {
+    return {
+      mode: "blocked-read-only",
+      wouldCreateBoard: false,
+      reason: "read-only"
+    };
+  }
+  return {
+    mode: "blocked-no-board",
+    wouldCreateBoard: false,
+    reason: "autosave-update-only",
+    lastBlockedAutosave: state.runtimeDiagnostics?.lastBlockedAutosave || null
+  };
+}
+
+function buildRuntimeAlignmentDiagnostics() {
+  const pathBoardId = getBoardIdFromPath();
+  const activeContext = getActiveContext();
+  const currentBoardId = activeContext.boardId;
+  const runtimeSession = state.session || {};
+  const brandSession = getPassiveBrandSessionReadiness();
+  const canvasSource = getRuntimeCanvasSource();
+  return {
+    activeContext,
+    currentUser: {
+      exists: Boolean(state.user?.email),
+      userEmail: state.user?.email || null,
+      authConfigured: state.authConfigured !== false
+    },
+    session: {
+      workspaceId: runtimeSession.workspaceId,
+      brandId: runtimeSession.brandId,
+      boardId: runtimeSession.boardId,
+      source: runtimeSession.source,
+      isInitialized: runtimeSession.isInitialized
+    },
+    brandSession,
+    legacyRuntime: {
+      currentBoardId: state.currentBoardId || null,
+      pathBoardId,
+      activeView: activeContext.activeView
+    },
+    sessionRuntime: {
+      workspaceId: runtimeSession.workspaceId,
+      brandId: runtimeSession.brandId,
+      boardId: runtimeSession.boardId,
+      source: runtimeSession.source,
+      isInitialized: runtimeSession.isInitialized,
+      mirrorsLegacyBoardId: runtimeSession.boardId === currentBoardId
+    },
+    architectureWarnings: brandSession.exists ? [] : ["Active Brand runtime is not implemented; session.brandId intentionally remains null."],
+    workspace: {
+      exists: false,
+      mode: "not-implemented"
+    },
+    brand: {
+      exists: false,
+      mode: "not-implemented"
+    },
+    board: {
+      currentBoardId,
+      boardAccess: state.boardAccess || null,
+      isBoardBacked: activeContext.boardBacked,
+      source: currentBoardId ? "/boards/:id" : "none"
+    },
+    canvas: {
+      hasNodes: state.nodes.length > 0,
+      nodeCount: state.nodes.length,
+      edgeCount: state.edges.length,
+      source: canvasSource,
+      isBoardBacked: activeContext.boardBacked,
+      isAnonymousEditable: activeContext.anonymousCanvas
+    },
+    autosave: getRuntimeAutosaveDiagnostics(),
+    startup: {
+      branch: state.runtimeDiagnostics?.startupBranch || "unknown",
+      pathBoardId: state.runtimeDiagnostics?.pathBoardId || pathBoardId || null
+    },
+    localDraft: {
+      exists: Boolean(state.runtimeDiagnostics?.localDraft?.exists),
+      restored: Boolean(state.runtimeDiagnostics?.localDraft?.restored),
+      reason: state.runtimeDiagnostics?.localDraft?.reason || ""
+    },
+    view: {
+      activeView: state.activeView
+    }
+  };
+}
+
+function logRuntimeAlignmentDiagnostics(reason = "manual") {
+  const diagnostics = buildRuntimeAlignmentDiagnostics();
+  console.info("[Runtime Alignment Diagnostics]", { reason, ...diagnostics });
+  return diagnostics;
+}
+
+if (typeof window !== "undefined") {
+  window.debugRuntimeAlignmentDiagnostics = logRuntimeAlignmentDiagnostics;
+}
+
+function formatDashboardTimestamp(value) {
+  if (!value) return "Not available yet";
+  const parsed = Date.parse(value);
+  if (Number.isNaN(parsed)) return "Not available yet";
+  return new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit"
+  }).format(new Date(parsed));
+}
+
+function getDashboardBoardStatus(activeContext) {
+  if (!activeContext.boardBacked) {
+    return activeContext.canvasLoaded ? "Local canvas only" : "Not available yet";
+  }
+  if (state.boardAccess?.canEdit === false) return "View-only board";
+  if (state.boardAccess?.reason === "owner") return "Owned board";
+  if (state.boardAccess?.reason === "editor") return "Editable board";
+  if (state.boardAccess?.reason === "unowned") return "Claim available";
+  return "Board-backed";
+}
+
+function getDashboardContinueWorkingModel() {
+  const activeContext = getActiveContext();
+  const boardId = activeContext.boardId;
+  const hasBoardName = typeof state.currentBoardName === "string" && state.currentBoardName.trim();
+  const hasNodes = state.nodes.length > 0;
+  const lastUpdated = state.lastKnownUpdatedAt || state.canvasMetadata?.updatedAt || null;
+  const isCurrentCanvas = activeContext.boardBacked || activeContext.canvasLoaded;
+  return {
+    activeContext,
+    title: hasBoardName ? state.currentBoardName.trim() : (boardId ? "Untitled board" : "No board selected"),
+    ownership: activeContext.boardBacked ? "Board-backed" : (activeContext.canvasLoaded ? "Not board-backed" : "No active board"),
+    nodeCount: state.nodes.length,
+    lastUpdated: formatDashboardTimestamp(lastUpdated),
+    boardStatus: getDashboardBoardStatus(activeContext),
+    progress: null,
+    nextAction: activeContext.boardBacked
+      ? "Continue editing this Campaign Canvas."
+      : hasNodes
+        ? "Open Campaign Canvas to review the current local work."
+        : "Select a board to continue your campaign work.",
+    contextLabel: activeContext.boardBacked
+      ? `Active Board ID: ${String(boardId).slice(0, 8)}…`
+      : "Dashboard reads current runtime state only.",
+    buttonLabel: isCurrentCanvas ? "Open Board" : "Open Boards",
+    opensCanvas: isCurrentCanvas,
+    isEmpty: !isCurrentCanvas
+  };
+}
+
+function renderDashboardContinueWorking() {
+  if (!el.dashboardView) return;
+  const card = document.getElementById("dashboard-continue-working");
+  if (!card) return;
+  const model = getDashboardContinueWorkingModel();
+  const title = card.querySelector("#dashboard-continue-title");
+  const action = card.querySelector("#dashboard-continue-action");
+  const backed = card.querySelector("#dashboard-continue-backed");
+  const nodes = card.querySelector("#dashboard-continue-nodes");
+  const updated = card.querySelector("#dashboard-continue-updated");
+  const status = card.querySelector("#dashboard-continue-status");
+  const progressRow = card.querySelector("#dashboard-continue-progress-row");
+  const progress = card.querySelector("#dashboard-continue-progress");
+  const context = card.querySelector("#dashboard-continue-context");
+  const openButton = card.querySelector("#dashboard-continue-open");
+
+  card.classList.toggle("is-empty", model.isEmpty);
+  if (title) title.textContent = model.title;
+  if (action) action.textContent = model.nextAction;
+  if (backed) backed.textContent = model.ownership;
+  if (nodes) nodes.textContent = String(model.nodeCount);
+  if (updated) updated.textContent = model.lastUpdated;
+  if (status) status.textContent = model.boardStatus;
+  if (progressRow) progressRow.classList.toggle("hidden", !model.progress);
+  if (progress) progress.textContent = model.progress || "";
+  if (context) context.textContent = model.contextLabel;
+  if (openButton) openButton.textContent = model.buttonLabel;
+  el.dashboardView?.querySelectorAll('[data-dashboard-action="open-current-board"]').forEach((button) => {
+    button.dataset.dashboardTarget = model.opensCanvas ? "canvas" : "boards";
+  });
+}
+
+function refreshDashboardIfVisible() {
+  if (!el.dashboardView || el.dashboardView.classList.contains("hidden")) return;
+  renderDashboardContinueWorking();
+  renderDashboardBrandEvolution();
+  renderDashboardSuggestedOpportunities();
+  renderDashboardTodaysFocus();
+}
+
+const DASHBOARD_BRAND_SIGNAL_FIELDS = [
+  { key: "brandCore", label: "Brand Core" },
+  { key: "valueProposition", label: "Value Proposition" },
+  { key: "toneOfVoice", label: "Tone of Voice" },
+  { key: "messagingPillars", label: "Messaging Pillars" },
+  { key: "personas", label: "Personas" },
+  { key: "contentGuidelines", label: "Content Guidelines" },
+  { key: "dosAndDonts", label: "Do / Don't Rules" },
+  { key: "brandVoiceExamples", label: "Brand Voice Examples" },
+  { key: "keywords", label: "Keywords" },
+  { key: "brandAssets", label: "Brand Assets" }
+];
+
+const DASHBOARD_KNOWLEDGE_INPUTS = ["Founder Story", "Market Research", "Pitch Deck", "Whitepaper", "Business Plan"];
+
+function hasMeaningfulBrandValue(value) {
+  if (Array.isArray(value)) return value.some((item) => hasMeaningfulBrandValue(item));
+  if (typeof value === "string") return value.trim().length > 0;
+  if (!value || typeof value !== "object") return false;
+  return Object.values(value).some((item) => hasMeaningfulBrandValue(item));
+}
+
+function getBrandSignalPreview(value) {
+  if (typeof value === "string") return value.trim();
+  if (Array.isArray(value)) {
+    const item = value.find((entry) => hasMeaningfulBrandValue(entry));
+    if (!item) return "";
+    if (typeof item === "string") return item.trim();
+    return item.name || item.title || item.note || "Saved structured input";
+  }
+  if (value && typeof value === "object") {
+    if (value.good) return value.good;
+    if (value.domain) return value.domain;
+    if (value.logo) return value.logo;
+    if (Array.isArray(value.colors) && value.colors.length) return value.colors[0];
+    if (Array.isArray(value.references) && value.references.length) return String(value.references[0] || "").trim();
+    return "Saved structured input";
+  }
+  return "";
+}
+
+function getDashboardBrandSignals() {
+  const brandCore = normalizeBrandCoreState(state.brandCore || defaultBrandCoreState());
+  return DASHBOARD_BRAND_SIGNAL_FIELDS.map((field) => {
+    const value = brandCore[field.key];
+    return {
+      ...field,
+      hasValue: hasMeaningfulBrandValue(value),
+      preview: getBrandSignalPreview(value)
+    };
+  });
+}
+
+function getDashboardKnowledgeInputStatus() {
+  const brandCore = normalizeBrandCoreState(state.brandCore || defaultBrandCoreState());
+  const customTiles = Array.isArray(brandCore.customTiles) ? brandCore.customTiles : [];
+  const references = Array.isArray(brandCore.brandAssets?.references) ? brandCore.brandAssets.references : [];
+  const searchable = [
+    brandCore.brandCore,
+    brandCore.valueProposition,
+    ...customTiles.flatMap((tile) => [tile?.title, tile?.content]),
+    ...references
+  ].filter(Boolean).join(" ").toLowerCase();
+  return DASHBOARD_KNOWLEDGE_INPUTS.map((label) => ({
+    label,
+    exists: searchable.includes(label.toLowerCase())
+  }));
+}
+
+function getDashboardBrandEvolutionModel() {
+  const signals = getDashboardBrandSignals();
+  const completedSignals = signals.filter((signal) => signal.hasValue);
+  const missingCoreSignal = signals.find((signal) => !signal.hasValue);
+  const knowledgeInputs = getDashboardKnowledgeInputStatus();
+  const missingKnowledge = knowledgeInputs.filter((input) => !input.exists);
+  const firstSignal = completedSignals[0];
+  const hasSignals = completedSignals.length > 0;
+  return {
+    hasSignals,
+    title: hasSignals ? "Brand Brain is becoming clearer" : "Brand signals will appear once Brand Core is connected.",
+    completeness: hasSignals
+      ? `${completedSignals.length} of ${signals.length} Brand Core signals present. ${missingKnowledge.length ? `${missingKnowledge.length} strategic input${missingKnowledge.length === 1 ? "" : "s"} still missing.` : "All strategic inputs detected."}`
+      : "No Brand Core signals yet.",
+    learning: firstSignal
+      ? `${firstSignal.label}: ${String(firstSignal.preview || "Saved input").slice(0, 120)}`
+      : "Brand signals will appear once Brand Core is connected.",
+    improvement: missingKnowledge.length
+      ? `${missingKnowledge.length} strategic input${missingKnowledge.length === 1 ? " is" : "s are"} still missing. Add ${missingKnowledge[0].label} next to strengthen future campaign recommendations.`
+      : missingCoreSignal
+        ? `Add ${missingCoreSignal.label} to make Brand Core more complete.`
+        : "Review Brand Core before the next campaign so recommendations stay aligned.",
+    missingKnowledge
+  };
+}
+
+function renderDashboardBrandEvolution() {
+  const card = document.getElementById("dashboard-brand-evolution");
+  if (!card) return;
+  const model = getDashboardBrandEvolutionModel();
+  const title = card.querySelector("#dashboard-brand-evolution-title");
+  const empty = card.querySelector("#dashboard-brand-evolution-empty");
+  const content = card.querySelector("#dashboard-brand-evolution-content");
+  const completeness = card.querySelector("#dashboard-brand-completeness");
+  const learning = card.querySelector("#dashboard-brand-learning");
+  const improvement = card.querySelector("#dashboard-brand-improvement");
+  const missingPills = card.querySelector("#dashboard-brand-missing-pills");
+
+  if (title) title.textContent = model.title;
+  if (empty) empty.classList.toggle("hidden", model.hasSignals);
+  if (content) content.classList.toggle("hidden", !model.hasSignals);
+  if (completeness) completeness.textContent = model.completeness;
+  if (learning) learning.textContent = model.learning;
+  if (improvement) improvement.textContent = model.improvement;
+  if (missingPills) {
+    missingPills.innerHTML = "";
+    const pills = model.missingKnowledge.length ? model.missingKnowledge : [{ label: "No required knowledge gaps detected" }];
+    pills.forEach((input) => {
+      const pill = document.createElement("button");
+      pill.type = "button";
+      pill.className = "fk-pill dashboard-brand-pill";
+      pill.dataset.dashboardAction = "open-brand";
+      pill.textContent = input.label;
+      missingPills.appendChild(pill);
+    });
+  }
+}
+
+function countDashboardNodesByType(type) {
+  return state.nodes.filter((node) => node?.type === type).length;
+}
+
+function getDashboardSuggestedOpportunities() {
+  const opportunities = [];
+  const signals = getDashboardBrandSignals();
+  const hasBrandSignals = signals.some((signal) => signal.hasValue);
+  const knowledgeInputs = getDashboardKnowledgeInputStatus();
+  const missingKnowledge = new Set(knowledgeInputs.filter((input) => !input.exists).map((input) => input.label));
+  const personasSignal = signals.find((signal) => signal.key === "personas");
+  const landingPageCount = countDashboardNodesByType("Landing Page");
+  const emailCount = countDashboardNodesByType("Email Campaign");
+  const socialCount = countDashboardNodesByType("Social Media Posting");
+  const draftCount = state.nodes.filter((node) => normalizeNodeStatus(node?.status) === "Draft").length;
+
+  const addOpportunity = (id, title, explanation) => {
+    if (opportunities.some((entry) => entry.id === id)) return;
+    opportunities.push({ id, title, explanation });
+  };
+
+  if (hasBrandSignals && missingKnowledge.has("Founder Story")) {
+    addOpportunity("founder-story", "Explore founder-led storytelling", "A Founder Story input can give the next campaign a more human trust layer.");
+  }
+  if (hasBrandSignals && missingKnowledge.has("Market Research")) {
+    addOpportunity("market-research", "Expand ICP research", "Market Research can sharpen the audience and category context for upcoming ideas.");
+  }
+  if (hasBrandSignals && !personasSignal?.hasValue) {
+    addOpportunity("audience-language", "Sharpen audience language", "Persona details can help campaign nodes speak to the right buyer more clearly.");
+  }
+  if (landingPageCount > 0) {
+    addOpportunity("landing-page", "Review landing page message", "A Landing Page node is ready for a focused pass on clarity, trust, and next action.");
+  }
+  if (emailCount > 0) {
+    addOpportunity("email-sequence", "Strengthen follow-up sequence", "An Email Campaign node can become a more connected follow-up path from the campaign idea.");
+  }
+  if (socialCount > 0) {
+    addOpportunity("social-sequence", "Turn posts into a campaign sequence", "Social Media Posting nodes can be grouped into a clearer sequence across the campaign.");
+  }
+  if (draftCount >= 3) {
+    addOpportunity("draft-flow", "Review draft-to-ready flow", "Several Draft nodes are available for a calm pass toward review-ready campaign assets.");
+  }
+
+  return opportunities.slice(0, 3);
+}
+
+function renderDashboardSuggestedOpportunities() {
+  const section = document.getElementById("dashboard-suggested-opportunities");
+  if (!section) return;
+  const empty = section.querySelector("#dashboard-suggested-opportunities-empty");
+  const list = section.querySelector("#dashboard-suggested-opportunities-list");
+  if (!list) return;
+  const opportunities = getDashboardSuggestedOpportunities();
+  if (empty) empty.classList.toggle("hidden", opportunities.length > 0);
+  list.classList.toggle("hidden", opportunities.length === 0);
+  list.innerHTML = "";
+  opportunities.forEach((opportunity) => {
+    const card = document.createElement("article");
+    const title = document.createElement("strong");
+    title.textContent = opportunity.title;
+    const explanation = document.createElement("span");
+    explanation.textContent = opportunity.explanation;
+    card.append(title, explanation);
+    list.appendChild(card);
+  });
+}
+
+function isDashboardNodeComplete(node) {
+  const rawStatus = typeof node?.status === "string" ? node.status.trim().toLowerCase() : "";
+  const status = normalizeNodeStatus(node?.status);
+  return status === "Approved" || status === "Published" || rawStatus === "done" || rawStatus === "completed" || rawStatus === "complete";
+}
+
+function dashboardNodeTimestamp(node) {
+  const value = node?.updatedAt || node?.modifiedAt || node?.createdAt || node?.time || "";
+  const parsed = Date.parse(value);
+  return Number.isNaN(parsed) ? 0 : parsed;
+}
+
+function getDashboardNodeOwnerLabel(node) {
+  const ownerEmail = normalizeOwnerEmail(node?.ownerEmail);
+  if (!ownerEmail) return "Campaign node";
+  const currentEmail = normalizeOwnerEmail(state.user?.email);
+  if (currentEmail && ownerEmail === currentEmail) return "Assigned to you";
+  return `Owner: ${nodeOwnerDisplayName(node)}`;
+}
+
+function getDashboardTodaysFocusActions() {
+  const currentEmail = normalizeOwnerEmail(state.user?.email);
+  return state.nodes
+    .map((node, index) => {
+      const ownerEmail = normalizeOwnerEmail(node?.ownerEmail);
+      return {
+        node,
+        index,
+        ownerEmail,
+        assignedToCurrentUser: Boolean(currentEmail && ownerEmail && ownerEmail === currentEmail),
+        hasOwner: Boolean(ownerEmail),
+        complete: isDashboardNodeComplete(node),
+        timestamp: dashboardNodeTimestamp(node)
+      };
+    })
+    .filter((entry) => !entry.complete)
+    .sort((a, b) => {
+      if (a.assignedToCurrentUser !== b.assignedToCurrentUser) return a.assignedToCurrentUser ? -1 : 1;
+      if (a.hasOwner !== b.hasOwner) return a.hasOwner ? -1 : 1;
+      if (a.timestamp !== b.timestamp) return b.timestamp - a.timestamp;
+      return b.index - a.index;
+    })
+    .slice(0, 3)
+    .map((entry) => {
+      const node = entry.node;
+      const status = nodeStatusLabel(node?.status);
+      return {
+        id: node.id,
+        title: node.title?.trim() || node.type || "Untitled node",
+        type: node.type || "Node",
+        status,
+        ownerLabel: getDashboardNodeOwnerLabel(node)
+      };
+    });
+}
+
+function renderDashboardTodaysFocus() {
+  const section = document.getElementById("dashboard-todays-focus");
+  if (!section) return;
+  const empty = section.querySelector("#dashboard-todays-focus-empty");
+  const list = section.querySelector("#dashboard-todays-focus-list");
+  if (!list) return;
+  const actions = getDashboardTodaysFocusActions();
+  if (empty) empty.classList.toggle("hidden", actions.length > 0);
+  list.classList.toggle("hidden", actions.length === 0);
+  list.innerHTML = "";
+  actions.forEach((action) => {
+    const card = document.createElement("article");
+    card.className = "dashboard-focus-action";
+    card.tabIndex = 0;
+    card.setAttribute("role", "button");
+    card.dataset.dashboardFocusNode = action.id;
+    const title = document.createElement("strong");
+    title.textContent = action.title;
+    const meta = document.createElement("span");
+    meta.textContent = `${action.ownerLabel} · ${action.type} · ${action.status}`;
+    card.append(title, meta);
+    list.appendChild(card);
+  });
+}
+
 function getCurrentBrandBrainBoardId() {
   return state.currentBoardId || getBoardIdFromPath() || "";
 }
@@ -3663,6 +4235,8 @@ function brandBrainStorageKey(boardId = getCurrentBrandBrainBoardId()) {
 function loadCampaignCanvasState() {
   const raw = localStorage.getItem(STORAGE_KEY); if (!raw) return false;
   const campaignState = JSON.parse(raw); console.log("Loaded campaignCanvasState", campaignState);
+  state.runtimeDiagnostics.canvasSource = "localStorage campaignCanvasState";
+  state.runtimeDiagnostics.localDraft = { exists: true, restored: true, reason: "loadCampaignCanvasState" };
   applyCampaignState(withBoardSchemaDefaults(campaignState), "Restored from local storage");
   return true;
 }
@@ -3766,15 +4340,29 @@ async function saveBoardToServer(trigger = "manual") {
       canvas_json: canvasStateForSave,
       brand_core_snapshot: serializeBrandCoreSnapshot()
     };
-    const pathname = window.location.pathname || '';
-    const pathBoardId = pathname.startsWith('/boards/')
-      ? decodeURIComponent(pathname.replace(/^\/boards\//, '').split('/')[0]).trim()
-      : null;
-    const currentBoardId = state.currentBoardId || pathBoardId || getBoardIdFromPath();
-    const isUpdate = Boolean(currentBoardId);
+    const persistenceTarget = resolveBoardPersistenceTarget();
+    const currentBoardId = persistenceTarget.boardId;
+    const isUpdate = persistenceTarget.isUpdate;
+    if (trigger === "autosave" && !currentBoardId) {
+      state.runtimeDiagnostics.lastBlockedAutosave = {
+        mode: "blocked-no-board",
+        reason: "autosave-update-only",
+        trigger,
+        at: new Date().toISOString(),
+        hasNodes: state.nodes.length > 0,
+        hasEdges: state.edges.length > 0,
+        canvasSource: state.runtimeDiagnostics?.canvasSource || "unknown"
+      };
+      console.warn("[Funklix Save Guard] Autosave skipped without an existing board id", {
+        currentBoardId,
+        ...state.runtimeDiagnostics.lastBlockedAutosave
+      });
+      setSaveStatus("Unsaved local changes");
+      return false;
+    }
     if (isUpdate) payload.name = null;
-    const endpoint = isUpdate ? `/api/boards/${currentBoardId}` : '/api/boards';
-    const method = isUpdate ? 'PUT' : 'POST';
+    const endpoint = persistenceTarget.endpoint;
+    const method = persistenceTarget.method;
     console.log('Current board id:', currentBoardId);
     console.log('Save method:', currentBoardId ? 'PUT' : 'POST');
     console.log('Save endpoint:', endpoint);
@@ -3829,6 +4417,7 @@ async function saveBoardToServer(trigger = "manual") {
     console.log('Saved board response id:', data?.id);
     const returnedId = data?.id || currentBoardId;
     if (returnedId) state.currentBoardId = returnedId;
+    syncRuntimeSessionFromLegacy(isUpdate ? "save-board-update" : "save-board-create");
     if (data?.name && typeof data.name === "string") state.currentBoardName = data.name;
     state.lastLocalSaveAt = saveTimestamp;
     state.lastKnownUpdatedAt = data?.updated_at || new Date().toISOString();
@@ -3844,6 +4433,7 @@ async function saveBoardToServer(trigger = "manual") {
     refreshLastSavedSnapshot();
     setSharePanelState(returnedId, new Date(), data?.owner_email || state.currentBoardOwnerEmail || null, data?.owner_name || state.currentBoardOwnerName || null, data?.owner_avatar || state.currentBoardOwnerAvatar || null);
     applyBoardAccessFromServer(data?.access, "saveBoardToServer");
+    refreshDashboardIfVisible();
 
     if (!isUpdate && returnedId) {
       const nextPath = `/boards/${returnedId}`;
@@ -3869,6 +4459,7 @@ async function loadBoardFromUrlIfPresent() {
   state.isBoardLoading = true;
   state.isBoardHydrating = true;
   state.currentBoardId = boardId;
+  syncRuntimeSessionFromLegacy("board-load-start");
   clearAutosaveTimer();
   resetBrandBrainForBoardHydration();
   renderBrandCoreTiles();
@@ -3881,6 +4472,7 @@ async function loadBoardFromUrlIfPresent() {
     const snapshot = data?.brand_core_snapshot && typeof data.brand_core_snapshot === "object" ? data.brand_core_snapshot : null;
     debugBrandBrainScope("board-snapshot-received", { boardId, hasSnapshot: Boolean(snapshot), ...brandDnaScopeSummary(snapshot || {}) });
     state.currentBoardId = data?.id || boardId;
+    syncRuntimeSessionFromLegacy("board-load");
     state.currentBoardName = data?.name || "";
     state.lastKnownUpdatedAt = data?.updated_at || null;
     state.brandCore = snapshot ? normalizeBrandCoreState(snapshot) : normalizeBrandCoreState(defaultBrandCoreState());
@@ -3899,10 +4491,12 @@ async function loadBoardFromUrlIfPresent() {
       return false;
     }
     const normalizedCanvasState = withBoardSchemaDefaults(incomingCanvasState);
+    state.runtimeDiagnostics.canvasSource = "/boards/:id";
     applyCampaignState(normalizedCanvasState, `Loaded board ${boardId.slice(0, 8)}...`);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(normalizedCanvasState));
     startPresenceLite();
     startBoardRefreshPolling();
+    refreshDashboardIfVisible();
     return true;
   } catch (error) {
     console.error(error);
@@ -5687,6 +6281,8 @@ async function generateCampaignChainProgressively(plan, { onStatus = null, setup
     updateListView();
     const ideaNode = createdByIndex.get(0) || createdNodes[0];
     appendActivity("generated_campaign_chain", { node: ideaNode, nodeTitle: activityNodeTitle(ideaNode) });
+    state.runtimeDiagnostics.canvasSource = "generated campaign";
+    logRuntimeAlignmentDiagnostics("generated-campaign");
     markUnsaved();
     setSaveStatus("Campaign generated");
     return createdNodes;
@@ -11277,6 +11873,12 @@ function setActiveView(view) {
   }
   el.cycleViewButton.textContent =
     view === "home" ? "Home" : view === "board" ? "Board View" : view === "list" ? "List View" : view === "calendar" ? "Calendar View" : view === "boards_library" ? "Boards" : view === "insights" ? "Insights" : view === "ai_brain" ? "AI Brain" : "Brand Core";
+  if (isHome) {
+    renderDashboardContinueWorking();
+    renderDashboardBrandEvolution();
+    renderDashboardSuggestedOpportunities();
+    renderDashboardTodaysFocus();
+  }
   if (view === "list") updateListView();
   if (view === "calendar") renderCalendarView();
   if (view === "insights" || view === "ai_brain") renderCampaignIntelligence();
@@ -12128,6 +12730,16 @@ el.aiBrainNavButton?.addEventListener("click", () => {
   setActiveView("ai_brain");
 });
 el.dashboardView?.addEventListener("click", (event) => {
+  const focusNodeCard = event.target.closest("[data-dashboard-focus-node]");
+  if (focusNodeCard) {
+    const nodeId = focusNodeCard.dataset.dashboardFocusNode;
+    if (nodeId && getNode(nodeId)) {
+      setAppMode("canvas");
+      requestAnimationFrame(() => focusNodeInCanvas(nodeId, { behavior: "smooth", select: true, pulse: true }));
+    }
+    return;
+  }
+
   const actionButton = event.target.closest("[data-dashboard-action]");
   if (!actionButton) return;
 
@@ -12141,6 +12753,15 @@ el.dashboardView?.addEventListener("click", (event) => {
 
   if (action === "open-boards") {
     el.boardsNavButton?.click();
+    return;
+  }
+
+  if (action === "open-current-board") {
+    if (actionButton.dataset.dashboardTarget === "canvas") {
+      el.campaignCanvasNavButton?.click();
+    } else {
+      el.boardsNavButton?.click();
+    }
     return;
   }
 
@@ -12421,7 +13042,21 @@ async function bootApp() {
   if (new URLSearchParams(window.location.search).get("auth_error") === "not_configured") setAuthMessage("Google Login is not configured yet.");
   bindGlobalResetDelegation();
   const boardIdFromPath = getBoardIdFromPath();
+  const hasLocalCanvasDraft = Boolean(localStorage.getItem(STORAGE_KEY));
+  state.runtimeDiagnostics.pathBoardId = boardIdFromPath;
+  state.runtimeDiagnostics.startupBranch = boardIdFromPath
+    ? "/boards/:id"
+    : (hasLocalCanvasDraft ? "root-localStorage-guarded" : "root-home");
+  state.runtimeDiagnostics.canvasSource = boardIdFromPath
+    ? "/boards/:id"
+    : "empty/default state";
+  state.runtimeDiagnostics.localDraft = {
+    exists: hasLocalCanvasDraft,
+    restored: false,
+    reason: hasLocalCanvasDraft ? "root-startup-guard" : "none"
+  };
   state.currentBoardId = boardIdFromPath;
+  syncRuntimeSessionFromLegacy(boardIdFromPath ? "boot-board-route" : "boot-root");
   loadBrandBrainState();
   setSharePanelState(state.currentBoardId);
   if (boardIdFromPath) {
@@ -12429,7 +13064,6 @@ async function bootApp() {
     await loadBoardFromUrlIfPresent();
   } else {
     loadBrandBrainState();
-    loadCampaignCanvasState();
   }
   centerBoardStartPosition();
   applyCanvasZoom(state.zoom);
@@ -12450,6 +13084,7 @@ async function bootApp() {
   bindEditingPresenceTracking();
   startPresenceLite();
   startBoardRefreshPolling();
+  logRuntimeAlignmentDiagnostics("boot");
 }
 
 if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", () => { void bootApp(); });
