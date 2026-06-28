@@ -3214,7 +3214,7 @@ function scheduleAutosave() {
     isDirty: state.isDirty,
     isSaving: state.isSaving,
     lastKnownUpdatedAt: state.lastKnownUpdatedAt,
-    currentBoardId: state.currentBoardId || getBoardIdFromPath()
+    currentBoardId: resolveExistingBoardId()
   });
   state.autosaveTimer = setTimeout(() => {
     state.autosaveTimer = null;
@@ -3222,7 +3222,7 @@ function scheduleAutosave() {
       isDirty: state.isDirty,
       isSaving: state.isSaving,
       lastKnownUpdatedAt: state.lastKnownUpdatedAt,
-      currentBoardId: state.currentBoardId || getBoardIdFromPath()
+      currentBoardId: resolveExistingBoardId()
     });
     if (!state.isDirty) { return; }
     if (state.isBoardLoading) { return; }
@@ -3671,8 +3671,27 @@ function getBoardIdFromPath() {
   return null;
 }
 
+function resolveExistingBoardId() {
+  return state.currentBoardId || getBoardIdFromPath();
+}
+
+function resolveBoardPersistenceTarget() {
+  const pathname = window.location.pathname || '';
+  const pathBoardId = pathname.startsWith('/boards/')
+    ? decodeURIComponent(pathname.replace(/^\/boards\//, '').split('/')[0]).trim()
+    : null;
+  const boardId = state.currentBoardId || pathBoardId || getBoardIdFromPath();
+  const isUpdate = Boolean(boardId);
+  return {
+    boardId,
+    isUpdate,
+    endpoint: isUpdate ? `/api/boards/${boardId}` : '/api/boards',
+    method: isUpdate ? 'PUT' : 'POST'
+  };
+}
+
 function syncRuntimeSessionFromLegacy(source = "legacy-runtime") {
-  const legacyBoardId = state.currentBoardId || getBoardIdFromPath() || null;
+  const legacyBoardId = resolveExistingBoardId() || null;
   state.session = {
     workspaceId: null,
     brandId: null,
@@ -3730,7 +3749,7 @@ function getActiveContext() {
 }
 
 function getRuntimeAutosaveDiagnostics() {
-  const currentBoardId = state.currentBoardId || getBoardIdFromPath();
+  const currentBoardId = resolveExistingBoardId();
   if (currentBoardId) {
     return {
       mode: "update-existing-board",
@@ -4329,15 +4348,12 @@ async function saveBoardToServer(trigger = "manual") {
       canvas_json: canvasStateForSave,
       brand_core_snapshot: serializeBrandCoreSnapshot()
     };
-    const pathname = window.location.pathname || '';
-    const pathBoardId = pathname.startsWith('/boards/')
-      ? decodeURIComponent(pathname.replace(/^\/boards\//, '').split('/')[0]).trim()
-      : null;
-    const currentBoardId = state.currentBoardId || pathBoardId || getBoardIdFromPath();
-    const isUpdate = Boolean(currentBoardId);
+    const persistenceTarget = resolveBoardPersistenceTarget();
+    const currentBoardId = persistenceTarget.boardId;
+    const isUpdate = persistenceTarget.isUpdate;
     if (isUpdate) payload.name = null;
-    const endpoint = isUpdate ? `/api/boards/${currentBoardId}` : '/api/boards';
-    const method = isUpdate ? 'PUT' : 'POST';
+    const endpoint = persistenceTarget.endpoint;
+    const method = persistenceTarget.method;
     console.log('Current board id:', currentBoardId);
     console.log('Save method:', currentBoardId ? 'PUT' : 'POST');
     console.log('Save endpoint:', endpoint);
