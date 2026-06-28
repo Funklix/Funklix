@@ -166,6 +166,12 @@ const state = {
       exists: false,
       restored: false,
       reason: ""
+    },
+    boardOwnership: {
+      hasBrandOwner: false,
+      brandId: null,
+      source: "not-implemented",
+      reason: "boards-have-no-canonical-brand-field"
     }
   }
 };
@@ -1214,6 +1220,7 @@ async function saveBoardAsNew(payload) {
 
   const newId = data?.id;
   if (newId) {
+    setPassiveBoardOwnershipDiagnostics(data, "save-as-new-response");
     state.currentBoardId = newId;
     syncRuntimeSessionFromLegacy("save-as-new");
     saveBrandBrainState({ markDirty: false });
@@ -1269,6 +1276,7 @@ async function duplicateCurrentBoard() {
 
     const newId = data?.id;
     if (!newId) throw new Error('Duplicate board response missing id');
+    setPassiveBoardOwnershipDiagnostics(data, "duplicate-board-response");
     state.currentBoardId = newId;
     syncRuntimeSessionFromLegacy("duplicate-board");
     saveBrandBrainState({ markDirty: false });
@@ -3702,6 +3710,55 @@ function syncRuntimeSessionFromLegacy(source = "legacy-runtime") {
   return state.session;
 }
 
+function readPassiveBrandIdFromBoardPayload(boardPayload = {}) {
+  const candidates = [
+    { field: "brandId", value: boardPayload?.brandId },
+    { field: "brand_id", value: boardPayload?.brand_id }
+  ];
+  const match = candidates.find(({ value }) => typeof value === "string" && value.trim());
+  if (!match) return { brandId: null, field: null };
+  return { brandId: match.value.trim(), field: match.field };
+}
+
+function buildPassiveBoardOwnershipDiagnostics(boardPayload = null, source = "runtime") {
+  const { brandId, field } = readPassiveBrandIdFromBoardPayload(boardPayload || {});
+  if (brandId) {
+    return {
+      hasBrandOwner: true,
+      brandId,
+      source,
+      reason: "brand-field-present-passive-only",
+      field,
+      trustedForBehavior: false
+    };
+  }
+  const hasBoardContext = Boolean(boardPayload?.id || resolveExistingBoardId());
+  if (!hasBoardContext) {
+    return {
+      hasBrandOwner: false,
+      brandId: null,
+      source: "none",
+      reason: "no-board-loaded"
+    };
+  }
+  return {
+    hasBrandOwner: false,
+    brandId: null,
+    source: "not-implemented",
+    reason: "boards-have-no-canonical-brand-field"
+  };
+}
+
+function setPassiveBoardOwnershipDiagnostics(boardPayload = null, source = "runtime") {
+  const ownership = buildPassiveBoardOwnershipDiagnostics(boardPayload, source);
+  state.runtimeDiagnostics.boardOwnership = ownership;
+  return ownership;
+}
+
+function getPassiveBoardOwnershipDiagnostics() {
+  return state.runtimeDiagnostics?.boardOwnership || buildPassiveBoardOwnershipDiagnostics(null, "runtime");
+}
+
 function getPassiveBrandSessionReadiness() {
   let hasBrandBrainLocalStorage = false;
   try {
@@ -3822,6 +3879,7 @@ function buildRuntimeAlignmentDiagnostics() {
       isBoardBacked: activeContext.boardBacked,
       source: currentBoardId ? "/boards/:id" : "none"
     },
+    boardOwnership: getPassiveBoardOwnershipDiagnostics(),
     canvas: {
       hasNodes: state.nodes.length > 0,
       nodeCount: state.nodes.length,
@@ -4416,6 +4474,7 @@ async function saveBoardToServer(trigger = "manual") {
     }
     console.log('Saved board response id:', data?.id);
     const returnedId = data?.id || currentBoardId;
+    setPassiveBoardOwnershipDiagnostics(data, isUpdate ? "save-board-update-response" : "save-board-create-response");
     if (returnedId) state.currentBoardId = returnedId;
     syncRuntimeSessionFromLegacy(isUpdate ? "save-board-update" : "save-board-create");
     if (data?.name && typeof data.name === "string") state.currentBoardName = data.name;
@@ -4471,6 +4530,7 @@ async function loadBoardFromUrlIfPresent() {
     if (!response.ok) throw new Error(data?.error || 'Failed to load board');
     const snapshot = data?.brand_core_snapshot && typeof data.brand_core_snapshot === "object" ? data.brand_core_snapshot : null;
     debugBrandBrainScope("board-snapshot-received", { boardId, hasSnapshot: Boolean(snapshot), ...brandDnaScopeSummary(snapshot || {}) });
+    setPassiveBoardOwnershipDiagnostics(data, "board-load-response");
     state.currentBoardId = data?.id || boardId;
     syncRuntimeSessionFromLegacy("board-load");
     state.currentBoardName = data?.name || "";
