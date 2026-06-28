@@ -304,16 +304,15 @@
               </section>
             </div>
 
-            <section class="mission-focus fk-card">
+            <section id="dashboard-todays-focus" class="mission-focus fk-card" aria-labelledby="dashboard-todays-focus-title">
               <div class="dashboard-card-header fk-card-header">
                 <span class="dashboard-kicker fk-badge">Today’s Focus</span>
-                <h2 class="dashboard-card-title">Three node-level actions</h2>
+                <h2 id="dashboard-todays-focus-title" class="dashboard-card-title">Node-level actions</h2>
               </div>
-              <div class="mission-focus-list">
-                <article><strong>Review primary campaign angle</strong><span>Assigned node placeholder</span></article>
-                <article><strong>Confirm landing page message</strong><span>Assigned node placeholder</span></article>
-                <article><strong>Prepare next social asset</strong><span>Assigned node placeholder</span></article>
+              <div id="dashboard-todays-focus-empty" class="mission-empty-state">
+                <p>Node-level actions will appear once a campaign board is active.</p>
               </div>
+              <div id="dashboard-todays-focus-list" class="mission-focus-list hidden" aria-label="Today’s Focus node actions"></div>
             </section>
 
             <div class="mission-support-grid">

@@ -3933,6 +3933,7 @@ function refreshDashboardIfVisible() {
   if (!el.dashboardView || el.dashboardView.classList.contains("hidden")) return;
   renderDashboardContinueWorking();
   renderDashboardBrandEvolution();
+  renderDashboardTodaysFocus();
 }
 
 const DASHBOARD_BRAND_SIGNAL_FIELDS = [
@@ -4058,6 +4059,84 @@ function renderDashboardBrandEvolution() {
       missingPills.appendChild(pill);
     });
   }
+}
+
+function isDashboardNodeComplete(node) {
+  const rawStatus = typeof node?.status === "string" ? node.status.trim().toLowerCase() : "";
+  const status = normalizeNodeStatus(node?.status);
+  return status === "Approved" || status === "Published" || rawStatus === "done" || rawStatus === "completed" || rawStatus === "complete";
+}
+
+function dashboardNodeTimestamp(node) {
+  const value = node?.updatedAt || node?.modifiedAt || node?.createdAt || node?.time || "";
+  const parsed = Date.parse(value);
+  return Number.isNaN(parsed) ? 0 : parsed;
+}
+
+function getDashboardNodeOwnerLabel(node) {
+  const ownerEmail = normalizeOwnerEmail(node?.ownerEmail);
+  if (!ownerEmail) return "Campaign node";
+  const currentEmail = normalizeOwnerEmail(state.user?.email);
+  if (currentEmail && ownerEmail === currentEmail) return "Assigned to you";
+  return `Owner: ${nodeOwnerDisplayName(node)}`;
+}
+
+function getDashboardTodaysFocusActions() {
+  const currentEmail = normalizeOwnerEmail(state.user?.email);
+  return state.nodes
+    .map((node, index) => {
+      const ownerEmail = normalizeOwnerEmail(node?.ownerEmail);
+      return {
+        node,
+        index,
+        ownerEmail,
+        assignedToCurrentUser: Boolean(currentEmail && ownerEmail && ownerEmail === currentEmail),
+        hasOwner: Boolean(ownerEmail),
+        complete: isDashboardNodeComplete(node),
+        timestamp: dashboardNodeTimestamp(node)
+      };
+    })
+    .filter((entry) => !entry.complete)
+    .sort((a, b) => {
+      if (a.assignedToCurrentUser !== b.assignedToCurrentUser) return a.assignedToCurrentUser ? -1 : 1;
+      if (a.hasOwner !== b.hasOwner) return a.hasOwner ? -1 : 1;
+      if (a.timestamp !== b.timestamp) return b.timestamp - a.timestamp;
+      return b.index - a.index;
+    })
+    .slice(0, 3)
+    .map((entry) => {
+      const node = entry.node;
+      const status = nodeStatusLabel(node?.status);
+      return {
+        id: node.id,
+        title: node.title?.trim() || node.type || "Untitled node",
+        type: node.type || "Node",
+        status,
+        ownerLabel: getDashboardNodeOwnerLabel(node)
+      };
+    });
+}
+
+function renderDashboardTodaysFocus() {
+  const section = document.getElementById("dashboard-todays-focus");
+  if (!section) return;
+  const empty = section.querySelector("#dashboard-todays-focus-empty");
+  const list = section.querySelector("#dashboard-todays-focus-list");
+  if (!list) return;
+  const actions = getDashboardTodaysFocusActions();
+  if (empty) empty.classList.toggle("hidden", actions.length > 0);
+  list.classList.toggle("hidden", actions.length === 0);
+  list.innerHTML = "";
+  actions.forEach((action) => {
+    const card = document.createElement("article");
+    card.className = "dashboard-focus-action";
+    const title = document.createElement("strong");
+    title.textContent = action.title;
+    const meta = document.createElement("span");
+    meta.textContent = `${action.ownerLabel} · ${action.type} · ${action.status}`;
+    card.append(title, meta);
+    list.appendChild(card);
+  });
 }
 
 function getCurrentBrandBrainBoardId() {
@@ -11699,6 +11778,7 @@ function setActiveView(view) {
   if (isHome) {
     renderDashboardContinueWorking();
     renderDashboardBrandEvolution();
+    renderDashboardTodaysFocus();
   }
   if (view === "list") updateListView();
   if (view === "calendar") renderCalendarView();
