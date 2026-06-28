@@ -212,50 +212,130 @@
         </header>
 
         <section id="dashboard-view" class="dashboard-view hidden" aria-labelledby="dashboard-title">
-          <div class="dashboard-hero fk-section">
-            <div class="dashboard-hero-copy">
-              <span class="dashboard-kicker fk-badge">Home</span>
-              <h1 id="dashboard-title">Welcome back to Funklix</h1>
-              <p>Your AI Marketing Operating System starts here. Jump into the workspace you need, or review placeholder surfaces that will become live dashboard intelligence later.</p>
+          <div class="mission-control">
+            <section class="mission-hero fk-section" aria-labelledby="dashboard-title">
+              <div class="mission-avatar" aria-hidden="true">
+                <span>F</span>
+              </div>
+              <div class="mission-hero-copy">
+                <span class="dashboard-kicker fk-badge">Daily Briefing</span>
+                <h1 id="dashboard-title">Good morning. I have your focus ready.</h1>
+                <p>I found the clearest next step in our workspace. Start with the current campaign, then review the brand signals and opportunities below.</p>
+              </div>
+              <div class="mission-hero-actions">
+                <button class="fk-btn fk-btn-primary" type="button" data-dashboard-action="open-current-board">Continue Campaign</button>
+                <button class="fk-btn fk-btn-secondary" type="button" data-dashboard-action="open-ai-brain">Talk to Brand</button>
+              </div>
+            </section>
+
+            <section id="dashboard-continue-working" class="dashboard-continue-working fk-card" aria-labelledby="dashboard-continue-title">
+              <div class="dashboard-continue-copy">
+                <div class="dashboard-card-header fk-card-header">
+                  <span class="dashboard-kicker fk-badge">Continue Working</span>
+                  <h2 id="dashboard-continue-title" class="dashboard-card-title">No board selected</h2>
+                </div>
+                <p id="dashboard-continue-action" class="dashboard-continue-action">Select a board to continue your campaign work.</p>
+              </div>
+              <div class="dashboard-continue-meta" aria-label="Current board details">
+                <div class="dashboard-continue-stat">
+                  <span>Ownership</span>
+                  <strong id="dashboard-continue-backed">No active board</strong>
+                </div>
+                <div class="dashboard-continue-stat">
+                  <span>Nodes</span>
+                  <strong id="dashboard-continue-nodes">0</strong>
+                </div>
+                <div class="dashboard-continue-stat">
+                  <span>Last Updated</span>
+                  <strong id="dashboard-continue-updated">Not available yet</strong>
+                </div>
+                <div class="dashboard-continue-stat">
+                  <span>Board Status</span>
+                  <strong id="dashboard-continue-status">Not available yet</strong>
+                </div>
+                <div id="dashboard-continue-progress-row" class="dashboard-continue-stat hidden">
+                  <span>Progress</span>
+                  <strong id="dashboard-continue-progress"></strong>
+                </div>
+              </div>
+              <div class="dashboard-continue-footer">
+                <span id="dashboard-continue-context" class="dashboard-continue-context">Dashboard reads current runtime state only.</span>
+                <button id="dashboard-continue-open" class="fk-btn fk-btn-primary" type="button" data-dashboard-action="open-current-board">Open Boards</button>
+              </div>
+            </section>
+
+            <div class="mission-two-column">
+              <section id="dashboard-brand-evolution" class="mission-card dashboard-brand-evolution fk-card" aria-labelledby="dashboard-brand-evolution-title">
+                <div class="dashboard-card-header fk-card-header">
+                  <span class="dashboard-kicker fk-badge">Brand Evolution</span>
+                  <h2 id="dashboard-brand-evolution-title" class="dashboard-card-title">Brand signals will appear once Brand Core is connected.</h2>
+                </div>
+                <div id="dashboard-brand-evolution-empty" class="mission-empty-state">
+                  <p>Brand signals will appear once Brand Core is connected.</p>
+                </div>
+                <div id="dashboard-brand-evolution-content" class="mission-card-body hidden">
+                  <div class="mission-callout">
+                    <span>Completeness</span>
+                    <strong id="dashboard-brand-completeness">No Brand Core signals yet.</strong>
+                  </div>
+                  <div class="mission-callout">
+                    <span>Newest available learning</span>
+                    <strong id="dashboard-brand-learning">No Brand Core signals yet.</strong>
+                  </div>
+                  <p id="dashboard-brand-improvement" class="mission-muted">Add Brand Core details to unlock better recommendations.</p>
+                  <div class="dashboard-brand-missing" aria-label="Missing knowledge inputs">
+                    <span>Missing knowledge</span>
+                    <div id="dashboard-brand-missing-pills" class="dashboard-brand-pills"></div>
+                  </div>
+                </div>
+              </section>
+
+              <section class="mission-card fk-card">
+                <div class="dashboard-card-header fk-card-header">
+                  <span class="dashboard-kicker fk-badge">Suggested Opportunities</span>
+                  <h2 class="dashboard-card-title">Prepared ideas to explore</h2>
+                </div>
+                <div class="mission-opportunities">
+                  <article>Explore Founder-led storytelling</article>
+                  <article>Test a new positioning angle</article>
+                  <article>Expand ICP research</article>
+                </div>
+              </section>
             </div>
-            <div class="dashboard-hero-actions dashboard-quick-actions">
-              <button class="fk-btn fk-btn-primary" type="button" data-dashboard-action="create-campaign">Create Campaign</button>
-              <button class="fk-btn fk-btn-secondary" type="button" data-dashboard-action="open-boards">Open Boards</button>
-              <button class="fk-btn fk-btn-secondary" type="button" data-dashboard-action="open-brand">Open Brand</button>
-              <button class="fk-btn fk-btn-ghost" type="button" data-dashboard-action="open-ai-brain">Open AI Brain</button>
+
+            <section class="mission-focus fk-card">
+              <div class="dashboard-card-header fk-card-header">
+                <span class="dashboard-kicker fk-badge">Today’s Focus</span>
+                <h2 class="dashboard-card-title">Three node-level actions</h2>
+              </div>
+              <div class="mission-focus-list">
+                <article><strong>Review primary campaign angle</strong><span>Assigned node placeholder</span></article>
+                <article><strong>Confirm landing page message</strong><span>Assigned node placeholder</span></article>
+                <article><strong>Prepare next social asset</strong><span>Assigned node placeholder</span></article>
+              </div>
+            </section>
+
+            <div class="mission-support-grid">
+              <section class="mission-card fk-card">
+                <div class="dashboard-card-header fk-card-header">
+                  <span class="dashboard-kicker fk-badge">Live Campaigns</span>
+                  <h2 class="dashboard-card-title">No deployed campaigns yet</h2>
+                </div>
+                <p class="mission-muted">Live campaign status will appear here after deployment data exists. No fake analytics are shown.</p>
+              </section>
+
+              <section class="mission-card fk-card">
+                <div class="dashboard-card-header fk-card-header">
+                  <span class="dashboard-kicker fk-badge">Team Activity</span>
+                  <h2 class="dashboard-card-title">Meaningful updates</h2>
+                </div>
+                <div class="mission-activity-list">
+                  <span>AI suggestion accepted</span>
+                  <span>Asset approved</span>
+                  <span>Campaign deployed</span>
+                </div>
+              </section>
             </div>
-          </div>
-
-          <div class="dashboard-grid">
-            <section class="dashboard-card fk-card">
-              <div class="dashboard-card-header fk-card-header">
-                <span class="dashboard-kicker fk-badge">Brand</span>
-                <h2 class="dashboard-card-title">Brand Status</h2>
-              </div>
-              <div class="dashboard-card-body fk-card-body">
-                <p class="dashboard-placeholder">Brand status will appear here after Brand intelligence is connected.</p>
-              </div>
-            </section>
-
-            <section class="dashboard-card fk-card">
-              <div class="dashboard-card-header fk-card-header">
-                <span class="dashboard-kicker fk-badge">Insights</span>
-                <h2 class="dashboard-card-title">Insight Highlights</h2>
-              </div>
-              <div class="dashboard-card-body fk-card-body">
-                <p class="dashboard-placeholder">Insight highlights will appear here after Insights wiring is defined.</p>
-              </div>
-            </section>
-
-            <section class="dashboard-card fk-card">
-              <div class="dashboard-card-header fk-card-header">
-                <span class="dashboard-kicker fk-badge">AI Brain</span>
-                <h2 class="dashboard-card-title">AI Activity</h2>
-              </div>
-              <div class="dashboard-card-body fk-card-body">
-                <p class="dashboard-placeholder">AI activity will appear here after AI Brain activity surfaces are designed.</p>
-              </div>
-            </section>
           </div>
         </section>
 
