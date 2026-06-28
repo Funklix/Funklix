@@ -266,17 +266,28 @@
             </section>
 
             <div class="mission-two-column">
-              <section class="mission-card fk-card">
+              <section id="dashboard-brand-evolution" class="mission-card dashboard-brand-evolution fk-card" aria-labelledby="dashboard-brand-evolution-title">
                 <div class="dashboard-card-header fk-card-header">
                   <span class="dashboard-kicker fk-badge">Brand Evolution</span>
-                  <h2 class="dashboard-card-title">Brand Brain is becoming clearer</h2>
+                  <h2 id="dashboard-brand-evolution-title" class="dashboard-card-title">Brand signals will appear once Brand Core is connected.</h2>
                 </div>
-                <div class="mission-card-body">
+                <div id="dashboard-brand-evolution-empty" class="mission-empty-state">
+                  <p>Brand signals will appear once Brand Core is connected.</p>
+                </div>
+                <div id="dashboard-brand-evolution-content" class="mission-card-body hidden">
                   <div class="mission-callout">
-                    <span>Newest learning</span>
-                    <strong>Founder Story, Market Research, Pitch Deck, Whitepaper, and Business Plan inputs will strengthen future recommendations.</strong>
+                    <span>Completeness</span>
+                    <strong id="dashboard-brand-completeness">No Brand Core signals yet.</strong>
                   </div>
-                  <p class="mission-muted">Suggested improvement: add one trust-building source before the next campaign review.</p>
+                  <div class="mission-callout">
+                    <span>Newest available learning</span>
+                    <strong id="dashboard-brand-learning">No Brand Core signals yet.</strong>
+                  </div>
+                  <p id="dashboard-brand-improvement" class="mission-muted">Add Brand Core details to unlock better recommendations.</p>
+                  <div class="dashboard-brand-missing" aria-label="Missing knowledge inputs">
+                    <span>Missing knowledge</span>
+                    <div id="dashboard-brand-missing-pills" class="dashboard-brand-pills"></div>
+                  </div>
                 </div>
               </section>
 

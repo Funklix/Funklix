@@ -3930,7 +3930,134 @@ function renderDashboardContinueWorking() {
 }
 
 function refreshDashboardIfVisible() {
-  if (el.dashboardView && !el.dashboardView.classList.contains("hidden")) renderDashboardContinueWorking();
+  if (!el.dashboardView || el.dashboardView.classList.contains("hidden")) return;
+  renderDashboardContinueWorking();
+  renderDashboardBrandEvolution();
+}
+
+const DASHBOARD_BRAND_SIGNAL_FIELDS = [
+  { key: "brandCore", label: "Brand Core" },
+  { key: "valueProposition", label: "Value Proposition" },
+  { key: "toneOfVoice", label: "Tone of Voice" },
+  { key: "messagingPillars", label: "Messaging Pillars" },
+  { key: "personas", label: "Personas" },
+  { key: "contentGuidelines", label: "Content Guidelines" },
+  { key: "dosAndDonts", label: "Do / Don't Rules" },
+  { key: "brandVoiceExamples", label: "Brand Voice Examples" },
+  { key: "keywords", label: "Keywords" },
+  { key: "brandAssets", label: "Brand Assets" }
+];
+
+const DASHBOARD_KNOWLEDGE_INPUTS = ["Founder Story", "Market Research", "Pitch Deck", "Whitepaper", "Business Plan"];
+
+function hasMeaningfulBrandValue(value) {
+  if (Array.isArray(value)) return value.some((item) => hasMeaningfulBrandValue(item));
+  if (typeof value === "string") return value.trim().length > 0;
+  if (!value || typeof value !== "object") return false;
+  return Object.values(value).some((item) => hasMeaningfulBrandValue(item));
+}
+
+function getBrandSignalPreview(value) {
+  if (typeof value === "string") return value.trim();
+  if (Array.isArray(value)) {
+    const item = value.find((entry) => hasMeaningfulBrandValue(entry));
+    if (!item) return "";
+    if (typeof item === "string") return item.trim();
+    return item.name || item.title || item.note || "Saved structured input";
+  }
+  if (value && typeof value === "object") {
+    if (value.good) return value.good;
+    if (value.domain) return value.domain;
+    if (value.logo) return value.logo;
+    if (Array.isArray(value.colors) && value.colors.length) return value.colors[0];
+    if (Array.isArray(value.references) && value.references.length) return String(value.references[0] || "").trim();
+    return "Saved structured input";
+  }
+  return "";
+}
+
+function getDashboardBrandSignals() {
+  const brandCore = normalizeBrandCoreState(state.brandCore || defaultBrandCoreState());
+  return DASHBOARD_BRAND_SIGNAL_FIELDS.map((field) => {
+    const value = brandCore[field.key];
+    return {
+      ...field,
+      hasValue: hasMeaningfulBrandValue(value),
+      preview: getBrandSignalPreview(value)
+    };
+  });
+}
+
+function getDashboardKnowledgeInputStatus() {
+  const brandCore = normalizeBrandCoreState(state.brandCore || defaultBrandCoreState());
+  const customTiles = Array.isArray(brandCore.customTiles) ? brandCore.customTiles : [];
+  const references = Array.isArray(brandCore.brandAssets?.references) ? brandCore.brandAssets.references : [];
+  const searchable = [
+    brandCore.brandCore,
+    brandCore.valueProposition,
+    ...customTiles.flatMap((tile) => [tile?.title, tile?.content]),
+    ...references
+  ].filter(Boolean).join(" ").toLowerCase();
+  return DASHBOARD_KNOWLEDGE_INPUTS.map((label) => ({
+    label,
+    exists: searchable.includes(label.toLowerCase())
+  }));
+}
+
+function getDashboardBrandEvolutionModel() {
+  const signals = getDashboardBrandSignals();
+  const completedSignals = signals.filter((signal) => signal.hasValue);
+  const missingCoreSignal = signals.find((signal) => !signal.hasValue);
+  const knowledgeInputs = getDashboardKnowledgeInputStatus();
+  const missingKnowledge = knowledgeInputs.filter((input) => !input.exists);
+  const firstSignal = completedSignals[0];
+  const hasSignals = completedSignals.length > 0;
+  return {
+    hasSignals,
+    title: hasSignals ? "Brand Brain is becoming clearer" : "Brand signals will appear once Brand Core is connected.",
+    completeness: hasSignals
+      ? `${completedSignals.length} of ${signals.length} Brand Core signals present.`
+      : "No Brand Core signals yet.",
+    learning: firstSignal
+      ? `${firstSignal.label}: ${String(firstSignal.preview || "Saved input").slice(0, 120)}`
+      : "Brand signals will appear once Brand Core is connected.",
+    improvement: missingKnowledge.length
+      ? `Add ${missingKnowledge[0].label} to strengthen future campaign recommendations.`
+      : missingCoreSignal
+        ? `Add ${missingCoreSignal.label} to make Brand Core more complete.`
+        : "Review Brand Core before the next campaign so recommendations stay aligned.",
+    missingKnowledge
+  };
+}
+
+function renderDashboardBrandEvolution() {
+  const card = document.getElementById("dashboard-brand-evolution");
+  if (!card) return;
+  const model = getDashboardBrandEvolutionModel();
+  const title = card.querySelector("#dashboard-brand-evolution-title");
+  const empty = card.querySelector("#dashboard-brand-evolution-empty");
+  const content = card.querySelector("#dashboard-brand-evolution-content");
+  const completeness = card.querySelector("#dashboard-brand-completeness");
+  const learning = card.querySelector("#dashboard-brand-learning");
+  const improvement = card.querySelector("#dashboard-brand-improvement");
+  const missingPills = card.querySelector("#dashboard-brand-missing-pills");
+
+  if (title) title.textContent = model.title;
+  if (empty) empty.classList.toggle("hidden", model.hasSignals);
+  if (content) content.classList.toggle("hidden", !model.hasSignals);
+  if (completeness) completeness.textContent = model.completeness;
+  if (learning) learning.textContent = model.learning;
+  if (improvement) improvement.textContent = model.improvement;
+  if (missingPills) {
+    missingPills.innerHTML = "";
+    const pills = model.missingKnowledge.length ? model.missingKnowledge : [{ label: "No required knowledge gaps detected" }];
+    pills.forEach((input) => {
+      const pill = document.createElement("span");
+      pill.className = "fk-pill dashboard-brand-pill";
+      pill.textContent = input.label;
+      missingPills.appendChild(pill);
+    });
+  }
 }
 
 function getCurrentBrandBrainBoardId() {
@@ -11569,7 +11696,10 @@ function setActiveView(view) {
   }
   el.cycleViewButton.textContent =
     view === "home" ? "Home" : view === "board" ? "Board View" : view === "list" ? "List View" : view === "calendar" ? "Calendar View" : view === "boards_library" ? "Boards" : view === "insights" ? "Insights" : view === "ai_brain" ? "AI Brain" : "Brand Core";
-  if (isHome) renderDashboardContinueWorking();
+  if (isHome) {
+    renderDashboardContinueWorking();
+    renderDashboardBrandEvolution();
+  }
   if (view === "list") updateListView();
   if (view === "calendar") renderCalendarView();
   if (view === "insights" || view === "ai_brain") renderCampaignIntelligence();
