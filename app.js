@@ -3753,30 +3753,22 @@ function getRuntimeAutosaveDiagnostics() {
   if (currentBoardId) {
     return {
       mode: "update-existing-board",
-      wouldCreateBoard: false
-    };
-  }
-  if (state.nodes.length === 0 && state.edges.length === 0) {
-    return {
-      mode: "idle-no-editable-canvas",
-      wouldCreateBoard: false
+      wouldCreateBoard: false,
+      reason: "existing-board"
     };
   }
   if (state.boardAccess?.canEdit === false) {
     return {
       mode: "blocked-read-only",
-      wouldCreateBoard: false
-    };
-  }
-  if (!state.user?.email) {
-    return {
-      mode: "create-board-requires-auth",
-      wouldCreateBoard: true
+      wouldCreateBoard: false,
+      reason: "read-only"
     };
   }
   return {
-    mode: "would-create-board",
-    wouldCreateBoard: true
+    mode: "blocked-no-board",
+    wouldCreateBoard: false,
+    reason: "autosave-update-only",
+    lastBlockedAutosave: state.runtimeDiagnostics?.lastBlockedAutosave || null
   };
 }
 
@@ -4352,13 +4344,18 @@ async function saveBoardToServer(trigger = "manual") {
     const currentBoardId = persistenceTarget.boardId;
     const isUpdate = persistenceTarget.isUpdate;
     if (trigger === "autosave" && !currentBoardId) {
-      console.warn("[Funklix Save Guard] Autosave skipped without an existing board id", {
-        trigger,
+      state.runtimeDiagnostics.lastBlockedAutosave = {
+        mode: "blocked-no-board",
         reason: "autosave-update-only",
-        currentBoardId,
+        trigger,
+        at: new Date().toISOString(),
         hasNodes: state.nodes.length > 0,
         hasEdges: state.edges.length > 0,
         canvasSource: state.runtimeDiagnostics?.canvasSource || "unknown"
+      };
+      console.warn("[Funklix Save Guard] Autosave skipped without an existing board id", {
+        currentBoardId,
+        ...state.runtimeDiagnostics.lastBlockedAutosave
       });
       setSaveStatus("Unsaved local changes");
       return false;

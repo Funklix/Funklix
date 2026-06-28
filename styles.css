@@ -5025,14 +5025,6 @@ button:active {
   gap: var(--fk-space-3);
 }
 
-#dashboard-view .mission-card-body,
-#dashboard-view .mission-opportunities,
-#dashboard-view .mission-focus-list,
-#dashboard-view .mission-activity-list {
-  display: grid;
-  gap: var(--fk-space-3);
-}
-
 #dashboard-view .mission-callout,
 #dashboard-view .mission-opportunities article,
 #dashboard-view .mission-focus-list article,
