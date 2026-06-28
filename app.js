@@ -3891,7 +3891,7 @@ function getDashboardContinueWorkingModel() {
     contextLabel: activeContext.boardBacked
       ? `Active Board ID: ${String(boardId).slice(0, 8)}…`
       : "Dashboard reads current runtime state only.",
-    buttonLabel: isCurrentCanvas ? "Open Campaign Canvas" : "Open Boards",
+    buttonLabel: isCurrentCanvas ? "Open Board" : "Open Boards",
     opensCanvas: isCurrentCanvas,
     isEmpty: !isCurrentCanvas
   };

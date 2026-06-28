@@ -4823,17 +4823,6 @@ button:active {
   max-width: 650px;
   margin: 0;
   color: var(--fk-color-muted);
-  line-height: 1.65;
-}
-
-#dashboard-view .mission-control__lead {
-  max-width: 720px;
-  color: var(--fk-color-text) !important;
-  font-size: clamp(1.02rem, 1.8vw, 1.28rem);
-}
-
-#dashboard-view .mission-control__insight {
-  max-width: 640px;
   font-size: var(--fk-font-size-md);
   line-height: 1.65;
 }
@@ -4946,6 +4935,10 @@ button:active {
   align-items: stretch;
 }
 
+#dashboard-view .mission-support-grid {
+  margin-top: var(--fk-space-2);
+}
+
 #dashboard-view .mission-card,
 #dashboard-view .mission-focus {
   min-width: 0;
@@ -5001,6 +4994,20 @@ button:active {
   gap: var(--fk-space-3);
   padding-top: var(--fk-space-2);
   border-top: 1px solid var(--fk-color-border);
+}
+
+#dashboard-view .dashboard-continue-context {
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+#dashboard-view .dashboard-continue-stat.hidden {
+  display: none;
+}
+
+#dashboard-view .dashboard-continue-working.is-empty {
+  grid-template-columns: 1fr;
+  gap: var(--fk-space-4);
 }
 
 #dashboard-view .mission-card-body,
