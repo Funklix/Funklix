@@ -4988,33 +4988,6 @@ button:active {
   overflow-wrap: anywhere;
 }
 
-#dashboard-view .dashboard-continue-footer {
-  display: flex;
-  grid-column: 1 / -1;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--fk-space-3);
-  padding-top: var(--fk-space-2);
-  border-top: 1px solid var(--fk-color-border);
-}
-
-#dashboard-view .dashboard-continue-context {
-  text-transform: none;
-  letter-spacing: 0;
-}
-
-#dashboard-view .dashboard-continue-stat.hidden {
-  display: none;
-}
-
-#dashboard-view .mission-card-body,
-#dashboard-view .mission-opportunities,
-#dashboard-view .mission-focus-list,
-#dashboard-view .mission-activity-list {
-  display: grid;
-  gap: var(--fk-space-3);
-}
-
 #dashboard-view .mission-card-body,
 #dashboard-view .mission-opportunities,
 #dashboard-view .mission-focus-list,
@@ -5037,7 +5010,8 @@ button:active {
 }
 
 #dashboard-view .mission-callout span,
-#dashboard-view .mission-focus-list span {
+#dashboard-view .mission-focus-list span,
+#dashboard-view .mission-opportunities span {
   color: var(--fk-color-muted);
   font-size: var(--fk-font-size-sm);
 }
@@ -5054,18 +5028,6 @@ button:active {
   border-radius: var(--fk-radius-lg);
   background: var(--fk-color-surface-muted);
   color: var(--fk-color-heading);
-}
-
-#dashboard-view .mission-callout span,
-#dashboard-view .mission-focus-list span {
-  color: var(--fk-color-muted);
-  font-size: var(--fk-font-size-sm);
-}
-
-#dashboard-view .mission-muted {
-  margin: 0;
-  color: var(--fk-color-muted);
-  line-height: 1.6;
 }
 
 #dashboard-view .mission-empty-state p {

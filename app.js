@@ -3933,6 +3933,7 @@ function refreshDashboardIfVisible() {
   if (!el.dashboardView || el.dashboardView.classList.contains("hidden")) return;
   renderDashboardContinueWorking();
   renderDashboardBrandEvolution();
+  renderDashboardSuggestedOpportunities();
   renderDashboardTodaysFocus();
 }
 
@@ -4059,6 +4060,73 @@ function renderDashboardBrandEvolution() {
       missingPills.appendChild(pill);
     });
   }
+}
+
+function countDashboardNodesByType(type) {
+  return state.nodes.filter((node) => node?.type === type).length;
+}
+
+function getDashboardSuggestedOpportunities() {
+  const opportunities = [];
+  const signals = getDashboardBrandSignals();
+  const hasBrandSignals = signals.some((signal) => signal.hasValue);
+  const knowledgeInputs = getDashboardKnowledgeInputStatus();
+  const missingKnowledge = new Set(knowledgeInputs.filter((input) => !input.exists).map((input) => input.label));
+  const personasSignal = signals.find((signal) => signal.key === "personas");
+  const landingPageCount = countDashboardNodesByType("Landing Page");
+  const emailCount = countDashboardNodesByType("Email Campaign");
+  const socialCount = countDashboardNodesByType("Social Media Posting");
+  const draftCount = state.nodes.filter((node) => normalizeNodeStatus(node?.status) === "Draft").length;
+
+  const addOpportunity = (id, title, explanation) => {
+    if (opportunities.some((entry) => entry.id === id)) return;
+    opportunities.push({ id, title, explanation });
+  };
+
+  if (hasBrandSignals && missingKnowledge.has("Founder Story")) {
+    addOpportunity("founder-story", "Explore founder-led storytelling", "A Founder Story input can give the next campaign a more human trust layer.");
+  }
+  if (hasBrandSignals && missingKnowledge.has("Market Research")) {
+    addOpportunity("market-research", "Expand ICP research", "Market Research can sharpen the audience and category context for upcoming ideas.");
+  }
+  if (hasBrandSignals && !personasSignal?.hasValue) {
+    addOpportunity("audience-language", "Sharpen audience language", "Persona details can help campaign nodes speak to the right buyer more clearly.");
+  }
+  if (landingPageCount > 0) {
+    addOpportunity("landing-page", "Review landing page message", "A Landing Page node is ready for a focused pass on clarity, trust, and next action.");
+  }
+  if (emailCount > 0) {
+    addOpportunity("email-sequence", "Strengthen follow-up sequence", "An Email Campaign node can become a more connected follow-up path from the campaign idea.");
+  }
+  if (socialCount > 0) {
+    addOpportunity("social-sequence", "Turn posts into a campaign sequence", "Social Media Posting nodes can be grouped into a clearer sequence across the campaign.");
+  }
+  if (draftCount >= 3) {
+    addOpportunity("draft-flow", "Review draft-to-ready flow", "Several Draft nodes are available for a calm pass toward review-ready campaign assets.");
+  }
+
+  return opportunities.slice(0, 3);
+}
+
+function renderDashboardSuggestedOpportunities() {
+  const section = document.getElementById("dashboard-suggested-opportunities");
+  if (!section) return;
+  const empty = section.querySelector("#dashboard-suggested-opportunities-empty");
+  const list = section.querySelector("#dashboard-suggested-opportunities-list");
+  if (!list) return;
+  const opportunities = getDashboardSuggestedOpportunities();
+  if (empty) empty.classList.toggle("hidden", opportunities.length > 0);
+  list.classList.toggle("hidden", opportunities.length === 0);
+  list.innerHTML = "";
+  opportunities.forEach((opportunity) => {
+    const card = document.createElement("article");
+    const title = document.createElement("strong");
+    title.textContent = opportunity.title;
+    const explanation = document.createElement("span");
+    explanation.textContent = opportunity.explanation;
+    card.append(title, explanation);
+    list.appendChild(card);
+  });
 }
 
 function isDashboardNodeComplete(node) {
@@ -11778,6 +11846,7 @@ function setActiveView(view) {
   if (isHome) {
     renderDashboardContinueWorking();
     renderDashboardBrandEvolution();
+    renderDashboardSuggestedOpportunities();
     renderDashboardTodaysFocus();
   }
   if (view === "list") updateListView();
