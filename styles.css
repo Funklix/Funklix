@@ -4809,7 +4809,6 @@ button:active {
 
 #dashboard-view .mission-hero-copy {
   display: grid;
-  gap: var(--fk-space-2);
 }
 
 #dashboard-view .mission-hero h1 {
@@ -4951,9 +4950,79 @@ button:active {
 
 #dashboard-view .dashboard-card-title {
   margin: 0;
+  max-width: 620px;
+  color: var(--fk-color-muted);
+  font-size: var(--fk-font-size-md);
+  line-height: 1.55;
+}
+
+#dashboard-view .dashboard-continue-meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--fk-space-3);
+}
+
+#dashboard-view .dashboard-continue-stat {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: var(--fk-space-3);
+  border: 1px solid var(--fk-color-border);
+  border-radius: var(--fk-radius-lg);
+  background: var(--fk-color-surface-muted);
+}
+
+#dashboard-view .dashboard-continue-stat span,
+#dashboard-view .dashboard-continue-context {
+  color: var(--fk-color-muted);
+  font-size: var(--fk-font-size-xs);
+  font-weight: var(--fk-font-weight-medium);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+#dashboard-view .dashboard-continue-stat strong {
   color: var(--fk-color-heading);
-  font-size: var(--fk-font-size-lg);
-  letter-spacing: -0.02em;
+  font-size: var(--fk-font-size-md);
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+#dashboard-view .mission-card-body,
+#dashboard-view .mission-opportunities,
+#dashboard-view .mission-focus-list,
+#dashboard-view .mission-activity-list {
+  display: grid;
+  gap: var(--fk-space-3);
+}
+
+#dashboard-view .mission-card-body,
+#dashboard-view .mission-opportunities,
+#dashboard-view .mission-focus-list,
+#dashboard-view .mission-activity-list {
+  display: grid;
+  gap: var(--fk-space-3);
+}
+
+#dashboard-view .mission-callout,
+#dashboard-view .mission-opportunities article,
+#dashboard-view .mission-focus-list article,
+#dashboard-view .mission-activity-list span {
+  display: grid;
+  gap: 6px;
+  padding: var(--fk-space-3);
+  border: 1px solid var(--fk-color-border);
+  border-radius: var(--fk-radius-lg);
+  background: var(--fk-color-surface-muted);
+  color: var(--fk-color-heading);
+}
+
+#dashboard-view .mission-card-body,
+#dashboard-view .mission-opportunities,
+#dashboard-view .mission-focus-list,
+#dashboard-view .mission-activity-list {
+  display: grid;
+  gap: var(--fk-space-3);
 }
 
 #dashboard-view .mission-card-body,
@@ -4995,7 +5064,71 @@ button:active {
   border: 1px dashed var(--fk-color-border);
   border-radius: var(--fk-radius-lg);
   background: var(--fk-color-surface-muted);
+  color: var(--fk-color-heading);
+  cursor: pointer;
+}
+
+#dashboard-view .dashboard-brand-pill:hover,
+#dashboard-view .dashboard-focus-action:hover {
+  border-color: var(--fk-color-primary-soft);
+  background: rgba(102, 82, 255, 0.08);
+}
+
+#dashboard-view .dashboard-focus-action {
+  cursor: pointer;
+}
+
+#dashboard-view .dashboard-focus-action:focus-visible,
+#dashboard-view .dashboard-brand-pill:focus-visible {
+  outline: 2px solid var(--fk-color-primary);
+  outline-offset: 2px;
+}
+
+#dashboard-view .mission-empty-state p {
+  margin: 0;
+  line-height: 1.6;
+}
+
+#dashboard-view .dashboard-brand-missing {
+  display: grid;
+  gap: var(--fk-space-2);
+}
+
+#dashboard-view .dashboard-brand-missing > span {
   color: var(--fk-color-muted);
+  font-size: var(--fk-font-size-xs);
+  font-weight: var(--fk-font-weight-medium);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+#dashboard-view .dashboard-brand-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--fk-space-2);
+}
+
+#dashboard-view .dashboard-brand-pill {
+  border-color: var(--fk-color-border);
+  background: var(--fk-color-surface-muted);
+  color: var(--fk-color-heading);
+  cursor: pointer;
+}
+
+#dashboard-view .dashboard-brand-pill:hover,
+#dashboard-view .dashboard-focus-action:hover {
+  border-color: var(--fk-color-primary-soft);
+  background: rgba(102, 82, 255, 0.08);
+}
+
+#dashboard-view .dashboard-focus-action {
+  cursor: pointer;
+}
+
+#dashboard-view .dashboard-focus-action:focus-visible,
+#dashboard-view .dashboard-brand-pill:focus-visible {
+  outline: 2px solid var(--fk-color-primary);
+  outline-offset: 2px;
 }
 
 #dashboard-view .mission-empty-state p {
