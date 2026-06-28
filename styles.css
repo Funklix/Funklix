@@ -4809,7 +4809,6 @@ button:active {
 
 #dashboard-view .mission-hero-copy {
   display: grid;
-  gap: var(--fk-space-2);
 }
 
 #dashboard-view .mission-hero h1 {
@@ -4824,6 +4823,17 @@ button:active {
   max-width: 650px;
   margin: 0;
   color: var(--fk-color-muted);
+  line-height: 1.65;
+}
+
+#dashboard-view .mission-control__lead {
+  max-width: 720px;
+  color: var(--fk-color-text) !important;
+  font-size: clamp(1.02rem, 1.8vw, 1.28rem);
+}
+
+#dashboard-view .mission-control__insight {
+  max-width: 640px;
   font-size: var(--fk-font-size-md);
   line-height: 1.65;
 }
@@ -4945,9 +4955,52 @@ button:active {
 
 #dashboard-view .dashboard-card-title {
   margin: 0;
+  max-width: 620px;
+  color: var(--fk-color-muted);
+  font-size: var(--fk-font-size-md);
+  line-height: 1.55;
+}
+
+#dashboard-view .dashboard-continue-meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--fk-space-3);
+}
+
+#dashboard-view .dashboard-continue-stat {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: var(--fk-space-3);
+  border: 1px solid var(--fk-color-border);
+  border-radius: var(--fk-radius-lg);
+  background: var(--fk-color-surface-muted);
+}
+
+#dashboard-view .dashboard-continue-stat span,
+#dashboard-view .dashboard-continue-context {
+  color: var(--fk-color-muted);
+  font-size: var(--fk-font-size-xs);
+  font-weight: var(--fk-font-weight-medium);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+#dashboard-view .dashboard-continue-stat strong {
   color: var(--fk-color-heading);
-  font-size: var(--fk-font-size-lg);
-  letter-spacing: -0.02em;
+  font-size: var(--fk-font-size-md);
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+#dashboard-view .dashboard-continue-footer {
+  display: flex;
+  grid-column: 1 / -1;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--fk-space-3);
+  padding-top: var(--fk-space-2);
+  border-top: 1px solid var(--fk-color-border);
 }
 
 #dashboard-view .mission-card-body,
