@@ -2618,6 +2618,7 @@ function renderAuthState() {
   if (!signedIn) {
     if (el.authAvatar) el.authAvatar.classList.add("hidden");
     if (el.authAvatarFallback) el.authAvatarFallback.classList.add("hidden");
+    refreshDashboardIfVisible();
     return;
   }
   el.authName.textContent = state.user.name || "Google user";
@@ -2631,6 +2632,7 @@ function renderAuthState() {
     el.authAvatarFallback.textContent = getUserInitials(state.user);
     el.authAvatarFallback.classList.toggle("hidden", hasAvatar);
   }
+  refreshDashboardIfVisible();
 }
 
 async function loadSessionUser() {
@@ -3937,6 +3939,23 @@ function getDashboardBoardStatus(activeContext) {
   return "Board-backed";
 }
 
+function getDashboardUserFirstName() {
+  const displayName = typeof state.user?.name === "string" ? state.user.name.trim() : "";
+  if (!displayName) return "";
+  if (displayName.toLowerCase() === "google user") return "";
+  return displayName.split(/\s+/)[0]?.slice(0, 32) || "";
+}
+
+function renderDashboardHero() {
+  const title = document.getElementById("dashboard-title");
+  const subtitle = document.getElementById("dashboard-hero-subtitle");
+  const support = document.getElementById("dashboard-hero-support");
+  const firstName = getDashboardUserFirstName();
+  if (title) title.textContent = firstName ? `Good morning, ${firstName}.` : "Good morning.";
+  if (subtitle) subtitle.textContent = "Your next best move is ready.";
+  if (support) support.textContent = "Start with the current campaign, then review the brand signals and opportunities below.";
+}
+
 function getDashboardContinueWorkingModel() {
   const activeContext = getActiveContext();
   const boardId = activeContext.boardId;
@@ -4000,6 +4019,7 @@ function renderDashboardContinueWorking() {
 
 function refreshDashboardIfVisible() {
   if (!el.dashboardView || el.dashboardView.classList.contains("hidden")) return;
+  renderDashboardHero();
   renderDashboardContinueWorking();
   renderDashboardBrandEvolution();
   renderDashboardSuggestedOpportunities();
