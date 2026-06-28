@@ -212,85 +212,55 @@
         </header>
 
         <section id="dashboard-view" class="dashboard-view hidden" aria-labelledby="dashboard-title">
-          <div class="dashboard-hero fk-section">
-            <div class="dashboard-hero-copy">
-              <span class="dashboard-kicker fk-badge">Home</span>
-              <h1 id="dashboard-title">Welcome back to Funklix</h1>
-              <p>Your AI Marketing Operating System starts here. Jump into the workspace you need, or review placeholder surfaces that will become live dashboard intelligence later.</p>
-            </div>
-            <div class="dashboard-hero-actions dashboard-quick-actions">
-              <button class="fk-btn fk-btn-primary" type="button" data-dashboard-action="create-campaign">Create Campaign</button>
-              <button class="fk-btn fk-btn-secondary" type="button" data-dashboard-action="open-boards">Open Boards</button>
-              <button class="fk-btn fk-btn-secondary" type="button" data-dashboard-action="open-brand">Open Brand</button>
-              <button class="fk-btn fk-btn-ghost" type="button" data-dashboard-action="open-ai-brain">Open AI Brain</button>
-            </div>
-          </div>
-
-          <section id="dashboard-continue-working" class="dashboard-continue-working fk-card" aria-labelledby="dashboard-continue-title">
-            <div class="dashboard-continue-copy">
-              <div class="dashboard-card-header fk-card-header">
-                <span class="dashboard-kicker fk-badge">Continue Working</span>
-                <h2 id="dashboard-continue-title" class="dashboard-card-title">No board selected</h2>
+          <div class="mission-control">
+            <section class="mission-hero fk-section" aria-labelledby="dashboard-title">
+              <div class="mission-avatar" aria-hidden="true">
+                <span>F</span>
               </div>
-              <p id="dashboard-continue-action" class="dashboard-continue-action">Select a board to continue your campaign work.</p>
-            </div>
-            <div class="dashboard-continue-meta" aria-label="Current board details">
-              <div class="dashboard-continue-stat">
-                <span>Ownership</span>
-                <strong id="dashboard-continue-backed">No active board</strong>
+              <div class="mission-hero-copy">
+                <span class="dashboard-kicker fk-badge">Daily Briefing</span>
+                <h1 id="dashboard-title">Good morning. I have the brand ready.</h1>
+                <p>I found the clearest next step in our workspace. Start with the current campaign, then review the brand signals and opportunities below.</p>
               </div>
-              <div class="dashboard-continue-stat">
-                <span>Nodes</span>
-                <strong id="dashboard-continue-nodes">0</strong>
-              </div>
-              <div class="dashboard-continue-stat">
-                <span>Last Updated</span>
-                <strong id="dashboard-continue-updated">Not available yet</strong>
-              </div>
-              <div class="dashboard-continue-stat">
-                <span>Board Status</span>
-                <strong id="dashboard-continue-status">Not available yet</strong>
-              </div>
-              <div id="dashboard-continue-progress-row" class="dashboard-continue-stat hidden">
-                <span>Progress</span>
-                <strong id="dashboard-continue-progress"></strong>
-              </div>
-            </div>
-            <div class="dashboard-continue-footer">
-              <span id="dashboard-continue-context" class="dashboard-continue-context">Dashboard reads current runtime state only.</span>
-              <button id="dashboard-continue-open" class="fk-btn fk-btn-primary" type="button" data-dashboard-action="open-current-board">Open Boards</button>
-            </div>
-          </section>
-
-          <div class="dashboard-grid">
-            <section class="dashboard-card fk-card">
-              <div class="dashboard-card-header fk-card-header">
-                <span class="dashboard-kicker fk-badge">Brand</span>
-                <h2 class="dashboard-card-title">Brand Status</h2>
-              </div>
-              <div class="dashboard-card-body fk-card-body">
-                <p class="dashboard-placeholder">Brand status will appear here after Brand intelligence is connected.</p>
+              <div class="mission-hero-actions">
+                <button class="fk-btn fk-btn-primary" type="button" data-dashboard-action="open-current-board">Continue Campaign</button>
+                <button class="fk-btn fk-btn-secondary" type="button" data-dashboard-action="open-ai-brain">Talk to Brand</button>
               </div>
             </section>
 
-            <section class="mission-control__card mission-control__card--featured fk-card" aria-labelledby="mission-continue-title">
-              <div class="mission-control__section-heading">
-                <span class="dashboard-kicker fk-badge">Continue Working</span>
-                <h2 id="mission-continue-title">Founder-led Launch Campaign</h2>
-              </div>
-              <div class="mission-control__summary-row">
-                <div class="mission-control__summary-item">
-                  <span class="mission-control__label">Status</span>
-                  <strong>Review-ready draft</strong>
+            <section id="dashboard-continue-working" class="dashboard-continue-working fk-card" aria-labelledby="dashboard-continue-title">
+              <div class="dashboard-continue-copy">
+                <div class="dashboard-card-header fk-card-header">
+                  <span class="dashboard-kicker fk-badge">Continue Working</span>
+                  <h2 id="dashboard-continue-title" class="dashboard-card-title">No board selected</h2>
                 </div>
-                <div class="mission-control__summary-item">
-                  <span class="mission-control__label">Completeness</span>
-                  <strong>Nearly ready</strong>
+                <p id="dashboard-continue-action" class="dashboard-continue-action">Select a board to continue your campaign work.</p>
+              </div>
+              <div class="dashboard-continue-meta" aria-label="Current board details">
+                <div class="dashboard-continue-stat">
+                  <span>Ownership</span>
+                  <strong id="dashboard-continue-backed">No active board</strong>
+                </div>
+                <div class="dashboard-continue-stat">
+                  <span>Nodes</span>
+                  <strong id="dashboard-continue-nodes">0</strong>
+                </div>
+                <div class="dashboard-continue-stat">
+                  <span>Last Updated</span>
+                  <strong id="dashboard-continue-updated">Not available yet</strong>
+                </div>
+                <div class="dashboard-continue-stat">
+                  <span>Board Status</span>
+                  <strong id="dashboard-continue-status">Not available yet</strong>
+                </div>
+                <div id="dashboard-continue-progress-row" class="dashboard-continue-stat hidden">
+                  <span>Progress</span>
+                  <strong id="dashboard-continue-progress"></strong>
                 </div>
               </div>
-              <div class="mission-control__content-block">
-                <span class="mission-control__label">Last meaningful update</span>
-                <p>The landing-page story and first email sequence are aligned around founder credibility.</p>
+              <div class="dashboard-continue-footer">
+                <span id="dashboard-continue-context" class="dashboard-continue-context">Dashboard reads current runtime state only.</span>
+                <button id="dashboard-continue-open" class="fk-btn fk-btn-primary" type="button" data-dashboard-action="open-current-board">Open Boards</button>
               </div>
               <div class="mission-control__content-block">
                 <span class="mission-control__label">Next recommended action</span>
@@ -302,129 +272,64 @@
               <p>No live campaign data is shown yet. When deployment and analytics models are connected, this space will provide lightweight orientation only.</p>
             </section>
 
-            <div class="mission-control__paired-section">
-              <section class="mission-control__card fk-card" aria-labelledby="mission-brand-title">
-                <div class="mission-control__section-heading">
+            <div class="mission-two-column">
+              <section class="mission-card fk-card">
+                <div class="dashboard-card-header fk-card-header">
                   <span class="dashboard-kicker fk-badge">Brand Evolution</span>
-                  <h2 id="mission-brand-title">The Brand Brain is getting sharper.</h2>
+                  <h2 class="dashboard-card-title">Brand Brain is becoming clearer</h2>
                 </div>
-                <div class="mission-control__stack">
-                  <div class="mission-control__content-block">
-                    <span class="mission-control__label">Brand Brain Completeness</span>
-                    <p>Core positioning, audience, and voice foundations are in place.</p>
+                <div class="mission-card-body">
+                  <div class="mission-callout">
+                    <span>Newest learning</span>
+                    <strong>Founder Story, Market Research, Pitch Deck, Whitepaper, and Business Plan inputs will strengthen future recommendations.</strong>
                   </div>
-                  <div class="mission-control__content-block">
-                    <span class="mission-control__label">Newest Learning</span>
-                    <p>Founder-led trust signals fit the current campaign direction.</p>
-                  </div>
-                  <div class="mission-control__content-block">
-                    <span class="mission-control__label">Suggested Improvement</span>
-                    <p>Add more origin-story detail so campaign copy can feel more specific.</p>
-                  </div>
-                </div>
-                <div class="mission-control__knowledge">
-                  <span class="mission-control__label">Missing Knowledge</span>
-                  <div class="mission-control__pill-row">
-                    <span class="fk-pill">Founder Story</span>
-                    <span class="fk-pill">Market Research</span>
-                    <span class="fk-pill">Pitch Deck</span>
-                    <span class="fk-pill">Whitepaper</span>
-                    <span class="fk-pill">Business Plan</span>
-                  </div>
+                  <p class="mission-muted">Suggested improvement: add one trust-building source before the next campaign review.</p>
                 </div>
               </section>
 
-              <section class="mission-control__card fk-card" aria-labelledby="mission-opportunities-title">
-                <div class="mission-control__section-heading">
+              <section class="mission-card fk-card">
+                <div class="dashboard-card-header fk-card-header">
                   <span class="dashboard-kicker fk-badge">Suggested Opportunities</span>
-                  <h2 id="mission-opportunities-title">Prepared ideas worth exploring.</h2>
+                  <h2 class="dashboard-card-title">Prepared ideas to explore</h2>
                 </div>
-                <div class="mission-control__opportunities">
-                  <article class="mission-control__opportunity">
-                    <span>01</span>
-                    <div>
-                      <strong>Explore Founder-led storytelling</strong>
-                      <p>Use the origin story as a trust-building campaign thread.</p>
-                    </div>
-                  </article>
-                  <article class="mission-control__opportunity">
-                    <span>02</span>
-                    <div>
-                      <strong>Test new positioning angle</strong>
-                      <p>Frame the offer around clarity before campaign velocity.</p>
-                    </div>
-                  </article>
-                  <article class="mission-control__opportunity">
-                    <span>03</span>
-                    <div>
-                      <strong>Expand ICP research</strong>
-                      <p>Capture sharper audience language before scaling assets.</p>
-                    </div>
-                  </article>
+                <div class="mission-opportunities">
+                  <article>Explore Founder-led storytelling</article>
+                  <article>Test a new positioning angle</article>
+                  <article>Expand ICP research</article>
                 </div>
               </section>
             </div>
 
-            <section class="mission-control__card fk-card" aria-labelledby="mission-focus-title">
-              <div class="mission-control__section-heading mission-control__section-heading--row">
-                <div>
-                  <span class="dashboard-kicker fk-badge">Today's Focus</span>
-                  <h2 id="mission-focus-title">Three assigned nodes to move forward.</h2>
-                </div>
-                <span class="mission-control__note">Static node placeholders</span>
+            <section class="mission-focus fk-card">
+              <div class="dashboard-card-header fk-card-header">
+                <span class="dashboard-kicker fk-badge">Today’s Focus</span>
+                <h2 class="dashboard-card-title">Three node-level actions</h2>
               </div>
-              <div class="mission-control__focus-list">
-                <article class="mission-control__focus-item">
-                  <span class="mission-control__dot" aria-hidden="true"></span>
-                  <div>
-                    <strong>Review landing-page hero node</strong>
-                    <p>Confirm the first message feels founder-led and specific.</p>
-                  </div>
-                </article>
-                <article class="mission-control__focus-item">
-                  <span class="mission-control__dot" aria-hidden="true"></span>
-                  <div>
-                    <strong>Approve launch email node</strong>
-                    <p>Check that the opening email reflects the same strategic promise.</p>
-                  </div>
-                </article>
-                <article class="mission-control__focus-item">
-                  <span class="mission-control__dot" aria-hidden="true"></span>
-                  <div>
-                    <strong>Complete audience objection node</strong>
-                    <p>Add one more customer objection before campaign review.</p>
-                  </div>
-                </article>
+              <div class="mission-focus-list">
+                <article><strong>Review primary campaign angle</strong><span>Assigned node placeholder</span></article>
+                <article><strong>Confirm landing page message</strong><span>Assigned node placeholder</span></article>
+                <article><strong>Prepare next social asset</strong><span>Assigned node placeholder</span></article>
               </div>
             </section>
 
-            <div class="mission-control__supporting-section">
-              <section class="mission-control__card mission-control__empty-state fk-card" aria-labelledby="mission-live-title">
-                <div class="mission-control__section-heading">
+            <div class="mission-support-grid">
+              <section class="mission-card fk-card">
+                <div class="dashboard-card-header fk-card-header">
                   <span class="dashboard-kicker fk-badge">Live Campaigns</span>
-                  <h2 id="mission-live-title">Campaigns will appear here after deployment.</h2>
+                  <h2 class="dashboard-card-title">No deployed campaigns yet</h2>
                 </div>
-                <p>No live campaign data is shown yet. When deployment and analytics models are connected, this space will provide lightweight orientation only.</p>
+                <p class="mission-muted">Live campaign status will appear here after deployment data exists. No fake analytics are shown.</p>
               </section>
 
-              <section class="mission-control__card fk-card" aria-labelledby="mission-activity-title">
-                <div class="mission-control__section-heading">
+              <section class="mission-card fk-card">
+                <div class="dashboard-card-header fk-card-header">
                   <span class="dashboard-kicker fk-badge">Team Activity</span>
-                  <h2 id="mission-activity-title">Meaningful updates, not noise.</h2>
+                  <h2 class="dashboard-card-title">Meaningful updates</h2>
                 </div>
-                <div class="mission-control__activity-list">
-                  <article>
-                    <span class="mission-control__dot" aria-hidden="true"></span>
-                    <p><strong>AI suggestion accepted</strong> for the campaign positioning node.</p>
-                  </article>
-                  <article>
-                    <span class="mission-control__dot" aria-hidden="true"></span>
-                    <p><strong>Asset approved</strong> for the launch email sequence.</p>
-                  </article>
-                  <article>
-                    <span class="mission-control__dot" aria-hidden="true"></span>
-                    <p><strong>Team member updated node</strong> in the Founder Story board.</p>
-                  </article>
+                <div class="mission-activity-list">
+                  <span>AI suggestion accepted</span>
+                  <span>Asset approved</span>
+                  <span>Campaign deployed</span>
                 </div>
               </section>
             </div>
