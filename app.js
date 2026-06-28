@@ -4351,6 +4351,18 @@ async function saveBoardToServer(trigger = "manual") {
     const persistenceTarget = resolveBoardPersistenceTarget();
     const currentBoardId = persistenceTarget.boardId;
     const isUpdate = persistenceTarget.isUpdate;
+    if (trigger === "autosave" && !currentBoardId) {
+      console.warn("[Funklix Save Guard] Autosave skipped without an existing board id", {
+        trigger,
+        reason: "autosave-update-only",
+        currentBoardId,
+        hasNodes: state.nodes.length > 0,
+        hasEdges: state.edges.length > 0,
+        canvasSource: state.runtimeDiagnostics?.canvasSource || "unknown"
+      });
+      setSaveStatus("Unsaved local changes");
+      return false;
+    }
     if (isUpdate) payload.name = null;
     const endpoint = persistenceTarget.endpoint;
     const method = persistenceTarget.method;

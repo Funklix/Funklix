@@ -5025,6 +5025,14 @@ button:active {
   gap: var(--fk-space-3);
 }
 
+#dashboard-view .mission-card-body,
+#dashboard-view .mission-opportunities,
+#dashboard-view .mission-focus-list,
+#dashboard-view .mission-activity-list {
+  display: grid;
+  gap: var(--fk-space-3);
+}
+
 #dashboard-view .mission-callout,
 #dashboard-view .mission-opportunities article,
 #dashboard-view .mission-focus-list article,
@@ -5055,36 +5063,6 @@ button:active {
   padding: var(--fk-space-3);
   border: 1px dashed var(--fk-color-border);
   border-radius: var(--fk-radius-lg);
-  background: var(--fk-color-surface-muted);
-  color: var(--fk-color-heading);
-}
-
-#dashboard-view .mission-empty-state p {
-  margin: 0;
-  line-height: 1.6;
-}
-
-#dashboard-view .dashboard-brand-missing {
-  display: grid;
-  gap: var(--fk-space-2);
-}
-
-#dashboard-view .dashboard-brand-missing > span {
-  color: var(--fk-color-muted);
-  font-size: var(--fk-font-size-xs);
-  font-weight: var(--fk-font-weight-medium);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-#dashboard-view .dashboard-brand-pills {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--fk-space-2);
-}
-
-#dashboard-view .dashboard-brand-pill {
-  border-color: var(--fk-color-border);
   background: var(--fk-color-surface-muted);
   color: var(--fk-color-heading);
   cursor: pointer;
