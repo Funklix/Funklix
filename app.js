@@ -3892,7 +3892,8 @@ function getDashboardContinueWorkingModel() {
       ? `Active Board ID: ${String(boardId).slice(0, 8)}…`
       : "Dashboard reads current runtime state only.",
     buttonLabel: isCurrentCanvas ? "Open Campaign Canvas" : "Open Boards",
-    opensCanvas: isCurrentCanvas
+    opensCanvas: isCurrentCanvas,
+    isEmpty: !isCurrentCanvas
   };
 }
 
@@ -3912,6 +3913,7 @@ function renderDashboardContinueWorking() {
   const context = card.querySelector("#dashboard-continue-context");
   const openButton = card.querySelector("#dashboard-continue-open");
 
+  card.classList.toggle("is-empty", model.isEmpty);
   if (title) title.textContent = model.title;
   if (action) action.textContent = model.nextAction;
   if (backed) backed.textContent = model.ownership;
