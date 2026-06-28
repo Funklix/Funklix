@@ -5066,36 +5066,23 @@ button:active {
   border-color: var(--fk-color-border);
   background: var(--fk-color-surface-muted);
   color: var(--fk-color-heading);
+  cursor: pointer;
 }
 
-#dashboard-view .mission-empty-state p {
-  margin: 0;
-  line-height: 1.6;
+#dashboard-view .dashboard-brand-pill:hover,
+#dashboard-view .dashboard-focus-action:hover {
+  border-color: var(--fk-color-primary-soft);
+  background: rgba(102, 82, 255, 0.08);
 }
 
-#dashboard-view .dashboard-brand-missing {
-  display: grid;
-  gap: var(--fk-space-2);
+#dashboard-view .dashboard-focus-action {
+  cursor: pointer;
 }
 
-#dashboard-view .dashboard-brand-missing > span {
-  color: var(--fk-color-muted);
-  font-size: var(--fk-font-size-xs);
-  font-weight: var(--fk-font-weight-medium);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-#dashboard-view .dashboard-brand-pills {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--fk-space-2);
-}
-
-#dashboard-view .dashboard-brand-pill {
-  border-color: var(--fk-color-border);
-  background: var(--fk-color-surface-muted);
-  color: var(--fk-color-heading);
+#dashboard-view .dashboard-focus-action:focus-visible,
+#dashboard-view .dashboard-brand-pill:focus-visible {
+  outline: 2px solid var(--fk-color-primary);
+  outline-offset: 2px;
 }
 
 #dashboard-view .mission-empty-state p {
