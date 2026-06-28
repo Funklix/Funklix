@@ -4016,13 +4016,13 @@ function getDashboardBrandEvolutionModel() {
     hasSignals,
     title: hasSignals ? "Brand Brain is becoming clearer" : "Brand signals will appear once Brand Core is connected.",
     completeness: hasSignals
-      ? `${completedSignals.length} of ${signals.length} Brand Core signals present.`
+      ? `${completedSignals.length} of ${signals.length} Brand Core signals present. ${missingKnowledge.length ? `${missingKnowledge.length} strategic input${missingKnowledge.length === 1 ? "" : "s"} still missing.` : "All strategic inputs detected."}`
       : "No Brand Core signals yet.",
     learning: firstSignal
       ? `${firstSignal.label}: ${String(firstSignal.preview || "Saved input").slice(0, 120)}`
       : "Brand signals will appear once Brand Core is connected.",
     improvement: missingKnowledge.length
-      ? `Add ${missingKnowledge[0].label} to strengthen future campaign recommendations.`
+      ? `${missingKnowledge.length} strategic input${missingKnowledge.length === 1 ? " is" : "s are"} still missing. Add ${missingKnowledge[0].label} next to strengthen future campaign recommendations.`
       : missingCoreSignal
         ? `Add ${missingCoreSignal.label} to make Brand Core more complete.`
         : "Review Brand Core before the next campaign so recommendations stay aligned.",
