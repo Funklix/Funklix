@@ -4809,7 +4809,6 @@ button:active {
 
 #dashboard-view .mission-hero-copy {
   display: grid;
-  gap: var(--fk-space-2);
 }
 
 #dashboard-view .mission-hero h1 {
@@ -4823,6 +4822,68 @@ button:active {
 #dashboard-view .mission-hero p {
   max-width: 650px;
   margin: 0;
+  color: var(--fk-color-muted);
+  line-height: 1.65;
+}
+
+#dashboard-view .mission-control__lead {
+  max-width: 720px;
+  color: var(--fk-color-text) !important;
+  font-size: clamp(1.02rem, 1.8vw, 1.28rem);
+}
+
+#dashboard-view .mission-control__insight {
+  max-width: 640px;
+  font-size: var(--fk-font-size-md);
+}
+
+#dashboard-view .mission-control__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--fk-space-3);
+  align-items: center;
+  margin-top: var(--fk-space-2);
+}
+
+#dashboard-view .mission-control__card {
+  gap: clamp(16px, 2.4vw, 24px);
+  padding: clamp(22px, 3vw, 34px);
+  border-color: rgba(83, 104, 255, 0.12);
+  border-radius: 28px;
+  box-shadow: 0 18px 48px rgba(43, 52, 98, 0.08);
+}
+
+#dashboard-view .mission-control__card--featured {
+  min-height: 250px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(250, 251, 255, 0.94)),
+    radial-gradient(circle at 92% 10%, rgba(83, 104, 255, 0.12), transparent 24%);
+}
+
+#dashboard-view .mission-control__section-heading {
+  gap: var(--fk-space-2);
+}
+
+
+.dashboard-continue-working {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(280px, 0.9fr);
+  gap: var(--fk-space-5);
+  align-items: stretch;
+  margin-bottom: var(--fk-space-5);
+  border-color: var(--fk-color-primary-soft);
+  background: linear-gradient(135deg, var(--fk-color-surface) 0%, var(--fk-color-surface-muted) 100%);
+}
+
+.dashboard-continue-copy {
+  display: grid;
+  gap: var(--fk-space-3);
+  align-content: start;
+}
+
+.dashboard-continue-action {
+  margin: 0;
+  max-width: 620px;
   color: var(--fk-color-muted);
   font-size: var(--fk-font-size-md);
   line-height: 1.65;
@@ -4933,7 +4994,7 @@ button:active {
 #dashboard-view .dashboard-card-title {
   margin: 0;
   color: var(--fk-color-heading);
-  font-size: var(--fk-font-size-lg);
+  font-size: clamp(1.05rem, 1.8vw, 1.35rem);
   letter-spacing: -0.02em;
 }
 
