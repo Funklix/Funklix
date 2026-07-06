@@ -4981,6 +4981,20 @@ button:active {
   line-height: 1.65;
 }
 
+#dashboard-view .mission-hero p.dashboard-hero-briefing {
+  display: grid;
+  gap: 8px;
+}
+
+#dashboard-view .dashboard-hero-focus-line {
+  white-space: pre-line;
+}
+
+#dashboard-view .dashboard-hero-mission-insight {
+  color: var(--fk-color-heading);
+  font-weight: var(--fk-font-weight-semibold);
+}
+
 #dashboard-view .mission-hero-actions {
   display: flex;
   flex-wrap: wrap;

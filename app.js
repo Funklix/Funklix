@@ -4147,16 +4147,53 @@ function getDashboardBucketCount(buckets = [], key = "") {
 }
 
 function getDashboardExecutiveSummaryLine(campaignHealth) {
+  if (campaignHealth.progressPercent >= 100) return "Campaign ready.";
   if (campaignHealth.progressPercent > 80) return "You're approaching launch.";
-  if (campaignHealth.progressPercent > 50) return "Great progress so far.";
-  if (campaignHealth.completedNodes > 0) return "Your campaign is taking shape.";
-  return "Your next milestone is ready.";
+  if (campaignHealth.progressPercent > 50) return "You're making strong progress.";
+  if (campaignHealth.progressPercent > 20) return "Momentum is building.";
+  if (campaignHealth.progressPercent > 0) return "Your campaign is taking shape.";
+  return "Let's build your campaign.";
 }
 
-function getDashboardDailyBriefingFocusLine() {
-  const focusItem = getDashboardTodaysFocusActions()[0];
+function getDashboardDailyBriefingFocusLine(focusItem = null) {
   return focusItem?.title ? `Today you're focusing on:
 ${focusItem.title}` : "";
+}
+
+function getDashboardEdgeSource(edge) {
+  return Array.isArray(edge) ? edge[0] : (edge?.source || edge?.sourceNodeId || edge?.from || edge?.fromNodeId || "");
+}
+
+function getDashboardEdgeTarget(edge) {
+  return Array.isArray(edge) ? edge[1] : (edge?.target || edge?.targetNodeId || edge?.to || edge?.toNodeId || "");
+}
+
+function getDashboardDownstreamNodeCount(nodeId) {
+  if (!nodeId) return 0;
+  const downstreamIds = new Set();
+  state.edges.forEach((edge) => {
+    if (getDashboardEdgeSource(edge) === nodeId) {
+      const targetId = getDashboardEdgeTarget(edge);
+      if (targetId) downstreamIds.add(targetId);
+    }
+  });
+  return downstreamIds.size;
+}
+
+function getMissionInsight(focusItem = null, campaignHealth = getDashboardCampaignHealthModel(state.nodes)) {
+  const focusNode = focusItem?.id ? getNode(focusItem.id) : null;
+  if (focusNode) {
+    const downstreamCount = getDashboardDownstreamNodeCount(focusNode.id);
+    const statusBucket = getDashboardCampaignStatusBucket(focusNode.status);
+    if (downstreamCount > 0) return `Completing this unlocks ${downstreamCount} downstream asset${downstreamCount === 1 ? "" : "s"}.`;
+    if (statusBucket === "inReview") return "Approving this moves the campaign forward.";
+    if (statusBucket === "needsChanges") return "Resolving feedback keeps downstream work moving.";
+    if (statusBucket === "draft" && downstreamCount > 0) return "Publishing this enables the next campaign step.";
+    return "This is your highest priority active asset.";
+  }
+  if (campaignHealth.totalNodes > 0 && campaignHealth.completedNodes === campaignHealth.totalNodes) return "Campaign is ready for launch.";
+  if (campaignHealth.progressPercent > 80) return "You're approaching campaign completion.";
+  return "";
 }
 
 function getDashboardDailyBriefingModel() {
@@ -4183,10 +4220,13 @@ function getDashboardDailyBriefingModel() {
     };
   }
 
+  const focusItem = getDashboardTodaysFocusActions()[0] || null;
   return {
     greeting,
     subtitle: getDashboardExecutiveSummaryLine(campaignHealth),
-    support: getDashboardDailyBriefingFocusLine()
+    support: "",
+    focusLine: getDashboardDailyBriefingFocusLine(focusItem),
+    missionInsight: getMissionInsight(focusItem, campaignHealth)
   };
 }
 
@@ -4199,8 +4239,26 @@ function renderDashboardHero() {
   if (title) title.textContent = briefing.greeting;
   if (subtitle) subtitle.textContent = briefing.subtitle;
   if (support) {
-    support.textContent = briefing.support;
-    support.classList.toggle("hidden", !briefing.support);
+    support.replaceChildren();
+    const hasStructuredBriefing = Boolean(briefing.focusLine || briefing.missionInsight);
+    support.classList.toggle("dashboard-hero-briefing", hasStructuredBriefing);
+    support.classList.toggle("hidden", !briefing.support && !hasStructuredBriefing);
+    if (hasStructuredBriefing) {
+      if (briefing.focusLine) {
+        const focus = document.createElement("span");
+        focus.className = "dashboard-hero-focus-line";
+        focus.textContent = briefing.focusLine;
+        support.appendChild(focus);
+      }
+      if (briefing.missionInsight) {
+        const insight = document.createElement("span");
+        insight.className = "dashboard-hero-mission-insight";
+        insight.textContent = briefing.missionInsight;
+        support.appendChild(insight);
+      }
+      return;
+    }
+    support.textContent = briefing.support || "";
   }
 }
 
