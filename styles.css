@@ -5017,6 +5017,61 @@ button:active {
   line-height: 1.55;
 }
 
+#dashboard-view .dashboard-campaign-summary {
+  display: grid;
+  gap: var(--fk-space-3);
+  padding-top: var(--fk-space-2);
+}
+
+#dashboard-view .dashboard-campaign-summary-label {
+  color: var(--fk-color-muted);
+  font-size: var(--fk-font-size-xs);
+  font-weight: var(--fk-font-weight-semibold);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+#dashboard-view .dashboard-campaign-summary p {
+  margin: 0;
+  max-width: 640px;
+  color: var(--fk-color-heading);
+  font-size: var(--fk-font-size-md);
+  line-height: 1.6;
+}
+
+#dashboard-view .dashboard-campaign-summary-fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--fk-space-3);
+  margin: var(--fk-space-2) 0 0;
+}
+
+#dashboard-view .dashboard-campaign-summary-fields div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: var(--fk-space-3);
+  border: 1px solid rgba(102, 82, 255, 0.14);
+  border-radius: var(--fk-radius-lg);
+  background: rgba(255, 255, 255, 0.72);
+}
+
+#dashboard-view .dashboard-campaign-summary-fields dt {
+  color: var(--fk-color-muted);
+  font-size: var(--fk-font-size-xs);
+  font-weight: var(--fk-font-weight-medium);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+#dashboard-view .dashboard-campaign-summary-fields dd {
+  margin: 0;
+  color: var(--fk-color-heading);
+  font-size: var(--fk-font-size-sm);
+  font-weight: var(--fk-font-weight-semibold);
+  overflow-wrap: anywhere;
+}
+
 #dashboard-view .dashboard-campaign-health {
   display: grid;
   gap: var(--fk-space-4);
@@ -5109,6 +5164,25 @@ button:active {
 #dashboard-view .dashboard-campaign-chip strong {
   color: var(--fk-color-heading);
   font-size: var(--fk-font-size-sm);
+}
+
+#dashboard-view .dashboard-campaign-chip-list.is-kpi {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+#dashboard-view .dashboard-campaign-chip-list.is-kpi .dashboard-campaign-chip {
+  display: grid;
+  align-items: start;
+  gap: 4px;
+  min-height: 74px;
+  padding: var(--fk-space-3);
+  border-radius: var(--fk-radius-lg);
+}
+
+#dashboard-view .dashboard-campaign-chip-list.is-kpi .dashboard-campaign-chip strong {
+  font-size: 1.45rem;
+  line-height: 1;
 }
 
 #dashboard-view .dashboard-campaign-updated {
@@ -5494,7 +5568,8 @@ button:active {
   }
 
   #dashboard-view .dashboard-continue-meta,
-  #dashboard-view .dashboard-campaign-health-grid {
+  #dashboard-view .dashboard-campaign-health-grid,
+  #dashboard-view .dashboard-campaign-summary-fields {
     grid-template-columns: 1fr;
   }
 

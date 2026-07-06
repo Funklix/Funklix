@@ -3995,13 +3995,61 @@ function getDashboardCampaignHealthModel(nodes = []) {
     totalNodes,
     completedNodes,
     progressPercent,
-    progressCopy: `${completedNodes} of ${totalNodes} nodes complete`,
+    remainingNodes: Math.max(0, totalNodes - completedNodes),
+    progressCopy: `${completedNodes} Approved · ${Math.max(0, totalNodes - completedNodes)} Remaining`,
     statusBuckets: DASHBOARD_CAMPAIGN_STATUS_BUCKETS
       .map((bucket) => ({ ...bucket, count: statusCounts[bucket.key] || 0 }))
       .filter((bucket) => bucket.key !== "other" || bucket.count > 0),
     typeBuckets: DASHBOARD_CAMPAIGN_TYPE_BUCKETS
       .map((bucket) => ({ ...bucket, count: typeCounts[bucket.key] || 0 }))
-      .filter((bucket) => bucket.key !== "other" || bucket.count > 0)
+      .filter((bucket) => bucket.count > 0)
+      .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label))
+  };
+}
+
+function getDashboardCampaignSummaryText(value, maxLength = 220) {
+  const text = typeof value === "string" ? value.replace(/\s+/g, " ").trim() : "";
+  if (!text) return "";
+  return text.length > maxLength ? `${text.slice(0, maxLength - 1).trim()}…` : text;
+}
+
+function getDashboardNodeSummaryText(node) {
+  if (!node || typeof node !== "object") return "";
+  return getDashboardCampaignSummaryText(node.description || node.content || node.title || "");
+}
+
+function findDashboardCampaignSummaryNode(nodes = []) {
+  const safeNodes = Array.isArray(nodes) ? nodes : [];
+  return safeNodes.find((node) => getDashboardCampaignTypeBucket(node?.type) === "ideas" && !node?.parentId && getDashboardNodeSummaryText(node))
+    || safeNodes.find((node) => getDashboardCampaignTypeBucket(node?.type) === "ideas" && getDashboardNodeSummaryText(node))
+    || safeNodes.find((node) => String(node?.type || "").toLowerCase().includes("campaign") && getDashboardNodeSummaryText(node))
+    || safeNodes.find((node) => getDashboardNodeSummaryText(node))
+    || null;
+}
+
+function getDashboardCampaignFieldValue(nodes = [], field = "", preferredNode = null) {
+  const candidates = [preferredNode, ...(Array.isArray(nodes) ? nodes : [])].filter(Boolean);
+  for (const node of candidates) {
+    const value = getDashboardCampaignSummaryText(node?.[field], 120);
+    if (value) return value;
+  }
+  return "";
+}
+
+function getDashboardCampaignSummaryModel(nodes = [], hasCampaign = false) {
+  const summaryNode = findDashboardCampaignSummaryNode(nodes);
+  const summary = summaryNode
+    ? [getDashboardNodeSummaryText(summaryNode)].filter(Boolean)
+    : ["This campaign is ready to continue. Open the Campaign Canvas to keep building."];
+
+  return {
+    isFallback: !summaryNode,
+    paragraphs: hasCampaign ? summary : [],
+    fields: hasCampaign ? [
+      { label: "Primary Objective", value: getDashboardCampaignFieldValue(nodes, "goal", summaryNode) },
+      { label: "Primary Audience", value: getDashboardCampaignFieldValue(nodes, "audience", summaryNode) },
+      { label: "Channel", value: getDashboardCampaignFieldValue(nodes, "channel", summaryNode) }
+    ].filter((field) => field.value) : []
   };
 }
 
@@ -4106,6 +4154,7 @@ function getDashboardContinueWorkingModel() {
   const campaignHealth = getDashboardCampaignHealthModel(state.nodes);
   const hasNoActiveBoard = !isCurrentCanvas;
   const hasEmptyCampaign = isCurrentCanvas && campaignHealth.totalNodes === 0;
+  const campaignSummary = getDashboardCampaignSummaryModel(state.nodes, isCurrentCanvas);
 
   return {
     activeContext,
@@ -4116,12 +4165,13 @@ function getDashboardContinueWorkingModel() {
         : (hasBoardName ? state.currentBoardName.trim() : (boardId ? "Untitled board" : "Current campaign")),
     lastUpdated: formatDashboardTimestamp(lastUpdated),
     campaignHealth,
+    campaignSummary,
     nextAction: hasNoActiveBoard
       ? "Select a board to continue your campaign work."
       : hasEmptyCampaign
         ? "Add or generate nodes to start building campaign health."
         : "Pick up this campaign where you left off.",
-    contextLabel: hasNoActiveBoard ? "" : "Campaign health is derived from current Canvas nodes.",
+    contextLabel: hasNoActiveBoard ? "" : "Campaign health updates automatically as your campaign evolves.",
     buttonLabel: isCurrentCanvas ? "Open Board" : "Open Boards",
     opensCanvas: isCurrentCanvas,
     isEmpty: hasNoActiveBoard,
@@ -4129,8 +4179,9 @@ function getDashboardContinueWorkingModel() {
   };
 }
 
-function renderDashboardCampaignBucketList(container, buckets = []) {
+function renderDashboardCampaignBucketList(container, buckets = [], options = {}) {
   if (!container) return;
+  container.classList.toggle("is-kpi", options.variant === "kpi");
   container.replaceChildren();
   buckets.forEach((bucket) => {
     const item = document.createElement("span");
@@ -4144,6 +4195,48 @@ function renderDashboardCampaignBucketList(container, buckets = []) {
   });
 }
 
+function renderDashboardCampaignSummary(container, summary) {
+  if (!container) return;
+  let summaryEl = container.querySelector("#dashboard-campaign-summary");
+  if (!summaryEl) {
+    summaryEl = document.createElement("div");
+    summaryEl.id = "dashboard-campaign-summary";
+    summaryEl.className = "dashboard-campaign-summary";
+    container.appendChild(summaryEl);
+  }
+  summaryEl.replaceChildren();
+  const hasSummary = Boolean(summary?.paragraphs?.length || summary?.fields?.length);
+  summaryEl.classList.toggle("hidden", !hasSummary);
+  if (!hasSummary) return;
+
+  const heading = document.createElement("span");
+  heading.className = "dashboard-campaign-summary-label";
+  heading.textContent = "Campaign Summary";
+  summaryEl.appendChild(heading);
+
+  (summary?.paragraphs || []).slice(0, 2).forEach((paragraph) => {
+    if (!paragraph) return;
+    const p = document.createElement("p");
+    p.textContent = paragraph;
+    summaryEl.appendChild(p);
+  });
+
+  if (summary?.fields?.length) {
+    const fieldList = document.createElement("dl");
+    fieldList.className = "dashboard-campaign-summary-fields";
+    summary.fields.forEach((field) => {
+      const item = document.createElement("div");
+      const term = document.createElement("dt");
+      term.textContent = field.label;
+      const description = document.createElement("dd");
+      description.textContent = field.value;
+      item.append(term, description);
+      fieldList.appendChild(item);
+    });
+    summaryEl.appendChild(fieldList);
+  }
+}
+
 function renderDashboardContinueWorking() {
   if (!el.dashboardView) return;
   const card = document.getElementById("dashboard-continue-working");
@@ -4151,6 +4244,7 @@ function renderDashboardContinueWorking() {
   const model = getDashboardContinueWorkingModel();
   const title = card.querySelector("#dashboard-continue-title");
   const action = card.querySelector("#dashboard-continue-action");
+  const copy = card.querySelector(".dashboard-continue-copy");
   const health = card.querySelector("#dashboard-campaign-health");
   const progressPercent = card.querySelector("#dashboard-campaign-progress-percent");
   const progressFill = card.querySelector("#dashboard-campaign-progress-fill");
@@ -4166,11 +4260,12 @@ function renderDashboardContinueWorking() {
   card.classList.toggle("is-campaign-empty", model.isCampaignEmpty);
   if (title) title.textContent = model.title;
   if (action) action.textContent = model.nextAction;
+  renderDashboardCampaignSummary(copy, model.campaignSummary);
   if (health) health.classList.toggle("hidden", model.isEmpty);
   if (progressPercent) progressPercent.textContent = `${model.campaignHealth.progressPercent}%`;
   if (progressFill) progressFill.style.width = `${model.campaignHealth.progressPercent}%`;
   if (progressCopy) progressCopy.textContent = model.campaignHealth.progressCopy;
-  renderDashboardCampaignBucketList(statusList, model.campaignHealth.statusBuckets);
+  renderDashboardCampaignBucketList(statusList, model.campaignHealth.statusBuckets, { variant: "kpi" });
   renderDashboardCampaignBucketList(typeList, model.campaignHealth.typeBuckets);
   if (emptyNote) emptyNote.classList.toggle("hidden", !model.isCampaignEmpty);
   if (updated) updated.textContent = model.lastUpdated;
