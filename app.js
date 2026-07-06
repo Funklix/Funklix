@@ -4047,12 +4047,12 @@ function getDashboardContinueWorkingModel() {
     boardStatus: getDashboardBoardStatus(activeContext),
     progress: null,
     nextAction: activeContext.boardBacked
-      ? "Continue editing this Campaign Canvas."
+      ? "Pick up this campaign where you left off."
       : hasNodes
         ? "Open Campaign Canvas to review the current local work."
         : "Select a board to continue your campaign work.",
     contextLabel: activeContext.boardBacked
-      ? `Active Board ID: ${String(boardId).slice(0, 8)}…`
+      ? "Board-backed workspace"
       : "Dashboard reads current runtime state only.",
     buttonLabel: isCurrentCanvas ? "Open Board" : "Open Boards",
     opensCanvas: isCurrentCanvas,
