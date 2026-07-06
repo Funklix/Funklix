@@ -3969,15 +3969,8 @@ function resolveDashboardHeroAvatar() {
   const brandDNA = brandCore.brandDNA && typeof brandCore.brandDNA === "object" && !Array.isArray(brandCore.brandDNA) ? brandCore.brandDNA : {};
   const brandAssets = brandCore.brandAssets && typeof brandCore.brandAssets === "object" && !Array.isArray(brandCore.brandAssets) ? brandCore.brandAssets : {};
   const avatar = brandDNA.avatar && typeof brandDNA.avatar === "object" && !Array.isArray(brandDNA.avatar) ? brandDNA.avatar : {};
-  const imageUrl = [
-    avatar.imageUrl,
-    avatar.url,
-    brandCore.avatarImageUrl,
-    brandCore.avatarUrl,
-    brandCore.logo,
-    brandAssets.logo
-  ].map(getSafeDashboardAvatarImageUrl).find(Boolean) || "";
-  if (imageUrl) return { imageUrl, initial: "", source: "brand-avatar-image" };
+  const acceptedAvatarImageUrl = getSafeDashboardAvatarImageUrl(getApprovedBrandAvatarUrl());
+  if (acceptedAvatarImageUrl) return { imageUrl: acceptedAvatarImageUrl, initial: "", source: "accepted-brand-avatar-image" };
 
   const brandAvatarInitial = [
     avatar.initial,
@@ -10899,8 +10892,9 @@ function formatAiReviewComment(review = {}) {
 }
 
 function getApprovedBrandAvatarUrl() {
-  const avatar = state.brandCore?.brandDNA?.avatar;
-  return avatar?.userApproved && avatar?.imageUrl ? avatar.imageUrl : "";
+  const brandDNA = state.brandCore?.brandDNA;
+  const avatar = brandDNA?.avatar;
+  return brandDNA?.userApproved && avatar?.userApproved && avatar?.imageUrl ? avatar.imageUrl : "";
 }
 
 function addAiReviewPostitToNode(node, review) {
@@ -12037,6 +12031,7 @@ function setActiveView(view) {
   el.cycleViewButton.textContent =
     view === "home" ? "Home" : view === "board" ? "Board View" : view === "list" ? "List View" : view === "calendar" ? "Calendar View" : view === "boards_library" ? "Boards" : view === "insights" ? "Insights" : view === "ai_brain" ? "AI Brain" : "Brand Core";
   if (isHome) {
+    renderDashboardHero();
     renderDashboardContinueWorking();
     renderDashboardBrandEvolution();
     renderDashboardSuggestedOpportunities();
