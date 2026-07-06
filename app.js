@@ -4202,7 +4202,7 @@ function getDashboardDailyBriefingModel() {
   const campaignHealth = getDashboardCampaignHealthModel(state.nodes);
   const campaignName = getDashboardCampaignDisplayName(activeContext);
   const firstName = getDashboardUserFirstName();
-  const greeting = firstName ? `Good morning, ${firstName}.` : "Good morning.";
+  const greeting = firstName ? `Hi ${firstName},` : "Hi there,";
 
   if (!isCurrentCanvas) {
     return {
