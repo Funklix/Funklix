@@ -3996,7 +3996,7 @@ function getDashboardCampaignHealthModel(nodes = []) {
     completedNodes,
     progressPercent,
     remainingNodes: Math.max(0, totalNodes - completedNodes),
-    progressCopy: `${completedNodes} Approved · ${Math.max(0, totalNodes - completedNodes)} Remaining`,
+    progressCopy: `${completedNodes} approved · ${Math.max(0, totalNodes - completedNodes)} remaining`,
     statusBuckets: DASHBOARD_CAMPAIGN_STATUS_BUCKETS
       .map((bucket) => ({ ...bucket, count: statusCounts[bucket.key] || 0 }))
       .filter((bucket) => bucket.key !== "other" || bucket.count > 0),
@@ -4146,20 +4146,17 @@ function getDashboardBucketCount(buckets = [], key = "") {
   return buckets.find((bucket) => bucket.key === key)?.count || 0;
 }
 
-function getDashboardDailyBriefingNextMove(campaignHealth) {
+function getDashboardExecutiveSummaryLine(campaignHealth) {
+  if (campaignHealth.progressPercent > 80) return "You're approaching launch.";
+  if (campaignHealth.progressPercent > 50) return "Great progress so far.";
+  if (campaignHealth.completedNodes > 0) return "Your campaign is taking shape.";
+  return "Your next milestone is ready.";
+}
+
+function getDashboardDailyBriefingFocusLine() {
   const focusItem = getDashboardTodaysFocusActions()[0];
-  if (focusItem?.title) return `Start with: ${focusItem.title}.`;
-
-  const draftCount = getDashboardBucketCount(campaignHealth.statusBuckets, "draft");
-  if (draftCount >= 3) return "Review draft nodes to move the campaign forward.";
-
-  const inReviewCount = getDashboardBucketCount(campaignHealth.statusBuckets, "inReview");
-  if (inReviewCount > 0) return "Review in-progress assets before expanding the campaign.";
-
-  const topOpportunity = getDashboardSuggestedOpportunities()[0];
-  if (topOpportunity?.title) return `Next opportunity: ${topOpportunity.title}.`;
-
-  return "Open the campaign board to continue building.";
+  return focusItem?.title ? `Today you're focusing on:
+${focusItem.title}` : "";
 }
 
 function getDashboardDailyBriefingModel() {
@@ -4188,8 +4185,8 @@ function getDashboardDailyBriefingModel() {
 
   return {
     greeting,
-    subtitle: `${campaignName} is ${campaignHealth.progressPercent}% complete.`,
-    support: getDashboardDailyBriefingNextMove(campaignHealth)
+    subtitle: getDashboardExecutiveSummaryLine(campaignHealth),
+    support: getDashboardDailyBriefingFocusLine()
   };
 }
 
@@ -4201,7 +4198,10 @@ function renderDashboardHero() {
   renderDashboardHeroAvatar();
   if (title) title.textContent = briefing.greeting;
   if (subtitle) subtitle.textContent = briefing.subtitle;
-  if (support) support.textContent = briefing.support;
+  if (support) {
+    support.textContent = briefing.support;
+    support.classList.toggle("hidden", !briefing.support);
+  }
 }
 
 function getDashboardContinueWorkingModel() {
@@ -4245,6 +4245,7 @@ function renderDashboardCampaignBucketList(container, buckets = [], options = {}
   buckets.forEach((bucket) => {
     const item = document.createElement("span");
     item.className = "dashboard-campaign-chip";
+    item.dataset.bucket = bucket.key;
     const label = document.createElement("span");
     label.textContent = bucket.label;
     const count = document.createElement("strong");

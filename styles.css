@@ -5180,6 +5180,26 @@ button:active {
   border-radius: var(--fk-radius-lg);
 }
 
+#dashboard-view .dashboard-campaign-chip-list.is-kpi .dashboard-campaign-chip::before {
+  content: "";
+  width: 28px;
+  height: 3px;
+  border-radius: 999px;
+  background: rgba(32, 35, 54, 0.16);
+}
+
+#dashboard-view .dashboard-campaign-chip-list.is-kpi .dashboard-campaign-chip[data-bucket="completed"]::before {
+  background: rgba(22, 164, 123, 0.82);
+}
+
+#dashboard-view .dashboard-campaign-chip-list.is-kpi .dashboard-campaign-chip[data-bucket="inReview"]::before {
+  background: rgba(216, 150, 26, 0.78);
+}
+
+#dashboard-view .dashboard-campaign-chip-list.is-kpi .dashboard-campaign-chip[data-bucket="needsChanges"]::before {
+  background: rgba(221, 83, 83, 0.72);
+}
+
 #dashboard-view .dashboard-campaign-chip-list.is-kpi .dashboard-campaign-chip strong {
   font-size: 1.45rem;
   line-height: 1;
