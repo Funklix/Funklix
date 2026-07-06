@@ -3939,6 +3939,120 @@ function getDashboardBoardStatus(activeContext) {
   return "Board-backed";
 }
 
+const DASHBOARD_CAMPAIGN_STATUS_BUCKETS = [
+  { key: "completed", label: "Completed" },
+  { key: "inReview", label: "In Review" },
+  { key: "draft", label: "Draft" },
+  { key: "needsChanges", label: "Needs Changes" },
+  { key: "other", label: "Other" }
+];
+
+const DASHBOARD_CAMPAIGN_TYPE_BUCKETS = [
+  { key: "ideas", label: "Ideas" },
+  { key: "campaignVariations", label: "Campaign Variations" },
+  { key: "content", label: "Content" },
+  { key: "socialPosts", label: "Social Posts" },
+  { key: "landingPages", label: "Landing Pages" },
+  { key: "emailCampaigns", label: "Email Campaigns" },
+  { key: "other", label: "Other" }
+];
+
+function getDashboardCampaignStatusBucket(status) {
+  const value = String(status || "").trim().toLowerCase();
+  if (["approved", "published", "done", "completed", "complete"].includes(value)) return "completed";
+  if (["in review", "review", "in-review", "in_review"].includes(value)) return "inReview";
+  if (["needs changes", "needs change", "changes", "needs-changes", "needs_changes"].includes(value)) return "needsChanges";
+  if (!value || value === "draft") return "draft";
+  return "other";
+}
+
+function getDashboardCampaignTypeBucket(type) {
+  const value = String(type || "").trim().toLowerCase();
+  if (value === "idea" || value === "ideas") return "ideas";
+  if (value === "campaign variation" || value === "campaign variations") return "campaignVariations";
+  if (value === "content") return "content";
+  if (["social media posting", "social media post", "social post", "social posts"].includes(value)) return "socialPosts";
+  if (value === "landing page" || value === "landing pages") return "landingPages";
+  if (value === "email campaign" || value === "email campaigns") return "emailCampaigns";
+  return "other";
+}
+
+function getDashboardCampaignHealthModel(nodes = []) {
+  const safeNodes = Array.isArray(nodes) ? nodes : [];
+  const totalNodes = safeNodes.length;
+  const statusCounts = DASHBOARD_CAMPAIGN_STATUS_BUCKETS.reduce((counts, bucket) => ({ ...counts, [bucket.key]: 0 }), {});
+  const typeCounts = DASHBOARD_CAMPAIGN_TYPE_BUCKETS.reduce((counts, bucket) => ({ ...counts, [bucket.key]: 0 }), {});
+
+  safeNodes.forEach((node) => {
+    statusCounts[getDashboardCampaignStatusBucket(node?.status)] += 1;
+    typeCounts[getDashboardCampaignTypeBucket(node?.type)] += 1;
+  });
+
+  const completedNodes = statusCounts.completed;
+  const progressPercent = totalNodes ? Math.round((completedNodes / totalNodes) * 100) : 0;
+
+  return {
+    totalNodes,
+    completedNodes,
+    progressPercent,
+    remainingNodes: Math.max(0, totalNodes - completedNodes),
+    progressCopy: `${completedNodes} Approved · ${Math.max(0, totalNodes - completedNodes)} Remaining`,
+    statusBuckets: DASHBOARD_CAMPAIGN_STATUS_BUCKETS
+      .map((bucket) => ({ ...bucket, count: statusCounts[bucket.key] || 0 }))
+      .filter((bucket) => bucket.key !== "other" || bucket.count > 0),
+    typeBuckets: DASHBOARD_CAMPAIGN_TYPE_BUCKETS
+      .map((bucket) => ({ ...bucket, count: typeCounts[bucket.key] || 0 }))
+      .filter((bucket) => bucket.count > 0)
+      .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label))
+  };
+}
+
+function getDashboardCampaignSummaryText(value, maxLength = 220) {
+  const text = typeof value === "string" ? value.replace(/\s+/g, " ").trim() : "";
+  if (!text) return "";
+  return text.length > maxLength ? `${text.slice(0, maxLength - 1).trim()}…` : text;
+}
+
+function getDashboardNodeSummaryText(node) {
+  if (!node || typeof node !== "object") return "";
+  return getDashboardCampaignSummaryText(node.description || node.content || node.title || "");
+}
+
+function findDashboardCampaignSummaryNode(nodes = []) {
+  const safeNodes = Array.isArray(nodes) ? nodes : [];
+  return safeNodes.find((node) => getDashboardCampaignTypeBucket(node?.type) === "ideas" && !node?.parentId && getDashboardNodeSummaryText(node))
+    || safeNodes.find((node) => getDashboardCampaignTypeBucket(node?.type) === "ideas" && getDashboardNodeSummaryText(node))
+    || safeNodes.find((node) => String(node?.type || "").toLowerCase().includes("campaign") && getDashboardNodeSummaryText(node))
+    || safeNodes.find((node) => getDashboardNodeSummaryText(node))
+    || null;
+}
+
+function getDashboardCampaignFieldValue(nodes = [], field = "", preferredNode = null) {
+  const candidates = [preferredNode, ...(Array.isArray(nodes) ? nodes : [])].filter(Boolean);
+  for (const node of candidates) {
+    const value = getDashboardCampaignSummaryText(node?.[field], 120);
+    if (value) return value;
+  }
+  return "";
+}
+
+function getDashboardCampaignSummaryModel(nodes = [], hasCampaign = false) {
+  const summaryNode = findDashboardCampaignSummaryNode(nodes);
+  const summary = summaryNode
+    ? [getDashboardNodeSummaryText(summaryNode)].filter(Boolean)
+    : ["This campaign is ready to continue. Open the Campaign Canvas to keep building."];
+
+  return {
+    isFallback: !summaryNode,
+    paragraphs: hasCampaign ? summary : [],
+    fields: hasCampaign ? [
+      { label: "Primary Objective", value: getDashboardCampaignFieldValue(nodes, "goal", summaryNode) },
+      { label: "Primary Audience", value: getDashboardCampaignFieldValue(nodes, "audience", summaryNode) },
+      { label: "Channel", value: getDashboardCampaignFieldValue(nodes, "channel", summaryNode) }
+    ].filter((field) => field.value) : []
+  };
+}
+
 function getDashboardUserFirstName() {
   const displayName = typeof state.user?.name === "string" ? state.user.name.trim() : "";
   if (!displayName) return "";
@@ -3946,11 +4060,86 @@ function getDashboardUserFirstName() {
   return displayName.split(/\s+/)[0]?.slice(0, 32) || "";
 }
 
+function getCleanDashboardAvatarText(value) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function getDashboardAvatarInitial(value) {
+  const source = getCleanDashboardAvatarText(value);
+  if (!source) return "";
+  const alphaNumeric = source.match(/[A-Za-z0-9]/u)?.[0] || "";
+  return alphaNumeric.toUpperCase();
+}
+
+function getSafeDashboardAvatarImageUrl(value) {
+  const url = getCleanDashboardAvatarText(value);
+  if (!url) return "";
+  if (/^(https?:|data:image\/|blob:)/i.test(url)) return url;
+  return "";
+}
+
+function resolveDashboardHeroAvatar() {
+  const brandCore = state.brandCore && typeof state.brandCore === "object" && !Array.isArray(state.brandCore) ? state.brandCore : {};
+  const brandDNA = brandCore.brandDNA && typeof brandCore.brandDNA === "object" && !Array.isArray(brandCore.brandDNA) ? brandCore.brandDNA : {};
+  const brandAssets = brandCore.brandAssets && typeof brandCore.brandAssets === "object" && !Array.isArray(brandCore.brandAssets) ? brandCore.brandAssets : {};
+  const avatar = brandDNA.avatar && typeof brandDNA.avatar === "object" && !Array.isArray(brandDNA.avatar) ? brandDNA.avatar : {};
+  const acceptedAvatarImageUrl = getSafeDashboardAvatarImageUrl(getApprovedBrandAvatarUrl());
+  if (acceptedAvatarImageUrl) return { imageUrl: acceptedAvatarImageUrl, initial: "", source: "accepted-brand-avatar-image" };
+
+  const brandAvatarInitial = [
+    avatar.initial,
+    avatar.icon,
+    brandDNA.initial,
+    brandDNA.icon,
+    brandCore.avatarInitial,
+    brandCore.avatarIcon,
+    brandCore.initial,
+    brandCore.icon
+  ].map(getDashboardAvatarInitial).find(Boolean) || "";
+  if (brandAvatarInitial) return { imageUrl: "", initial: brandAvatarInitial, source: "brand-avatar-initial" };
+
+  const brandNameInitial = [
+    brandCore.brandName,
+    brandCore.name,
+    brandCore.title,
+    brandDNA.brandName,
+    brandDNA.name,
+    brandAssets.name,
+    brandAssets.domain
+  ].map(getDashboardAvatarInitial).find(Boolean) || "";
+  if (brandNameInitial) return { imageUrl: "", initial: brandNameInitial, source: "brand-name-initial" };
+
+  const userInitial = getDashboardAvatarInitial(state.user?.name || state.user?.email || "");
+  if (userInitial) return { imageUrl: "", initial: userInitial, source: "user-initial" };
+
+  return { imageUrl: "", initial: "B", source: "neutral-brand-fallback" };
+}
+
+function renderDashboardHeroAvatar() {
+  const avatarEl = document.getElementById("dashboard-hero-avatar");
+  if (!avatarEl) return;
+  const model = resolveDashboardHeroAvatar();
+  avatarEl.dataset.avatarSource = model.source;
+  avatarEl.replaceChildren();
+  if (model.imageUrl) {
+    const img = document.createElement("img");
+    img.src = model.imageUrl;
+    img.alt = "Brand avatar";
+    avatarEl.appendChild(img);
+    return;
+  }
+  const initial = document.createElement("span");
+  initial.id = "dashboard-hero-avatar-initial";
+  initial.textContent = model.initial || "B";
+  avatarEl.appendChild(initial);
+}
+
 function renderDashboardHero() {
   const title = document.getElementById("dashboard-title");
   const subtitle = document.getElementById("dashboard-hero-subtitle");
   const support = document.getElementById("dashboard-hero-support");
   const firstName = getDashboardUserFirstName();
+  renderDashboardHeroAvatar();
   if (title) title.textContent = firstName ? `Good morning, ${firstName}.` : "Good morning.";
   if (subtitle) subtitle.textContent = "Your next best move is ready.";
   if (support) support.textContent = "Start with the current campaign, then review the brand signals and opportunities below.";
@@ -3960,29 +4149,92 @@ function getDashboardContinueWorkingModel() {
   const activeContext = getActiveContext();
   const boardId = activeContext.boardId;
   const hasBoardName = typeof state.currentBoardName === "string" && state.currentBoardName.trim();
-  const hasNodes = state.nodes.length > 0;
   const lastUpdated = state.lastKnownUpdatedAt || state.canvasMetadata?.updatedAt || null;
   const isCurrentCanvas = activeContext.boardBacked || activeContext.canvasLoaded;
+  const campaignHealth = getDashboardCampaignHealthModel(state.nodes);
+  const hasNoActiveBoard = !isCurrentCanvas;
+  const hasEmptyCampaign = isCurrentCanvas && campaignHealth.totalNodes === 0;
+  const campaignSummary = getDashboardCampaignSummaryModel(state.nodes, isCurrentCanvas);
+
   return {
     activeContext,
-    title: hasBoardName ? state.currentBoardName.trim() : (boardId ? "Untitled board" : "No board selected"),
-    ownership: activeContext.boardBacked ? "Board-backed" : (activeContext.canvasLoaded ? "Not board-backed" : "No active board"),
-    nodeCount: state.nodes.length,
+    title: hasNoActiveBoard
+      ? "No board selected"
+      : hasEmptyCampaign
+        ? "Campaign board is ready."
+        : (hasBoardName ? state.currentBoardName.trim() : (boardId ? "Untitled board" : "Current campaign")),
     lastUpdated: formatDashboardTimestamp(lastUpdated),
-    boardStatus: getDashboardBoardStatus(activeContext),
-    progress: null,
-    nextAction: activeContext.boardBacked
-      ? "Continue editing this Campaign Canvas."
-      : hasNodes
-        ? "Open Campaign Canvas to review the current local work."
-        : "Select a board to continue your campaign work.",
-    contextLabel: activeContext.boardBacked
-      ? `Active Board ID: ${String(boardId).slice(0, 8)}…`
-      : "Dashboard reads current runtime state only.",
+    campaignHealth,
+    campaignSummary,
+    nextAction: hasNoActiveBoard
+      ? "Select a board to continue your campaign work."
+      : hasEmptyCampaign
+        ? "Add or generate nodes to start building campaign health."
+        : "Pick up this campaign where you left off.",
+    contextLabel: hasNoActiveBoard ? "" : "Campaign health updates automatically as your campaign evolves.",
     buttonLabel: isCurrentCanvas ? "Open Board" : "Open Boards",
     opensCanvas: isCurrentCanvas,
-    isEmpty: !isCurrentCanvas
+    isEmpty: hasNoActiveBoard,
+    isCampaignEmpty: hasEmptyCampaign
   };
+}
+
+function renderDashboardCampaignBucketList(container, buckets = [], options = {}) {
+  if (!container) return;
+  container.classList.toggle("is-kpi", options.variant === "kpi");
+  container.replaceChildren();
+  buckets.forEach((bucket) => {
+    const item = document.createElement("span");
+    item.className = "dashboard-campaign-chip";
+    const label = document.createElement("span");
+    label.textContent = bucket.label;
+    const count = document.createElement("strong");
+    count.textContent = String(bucket.count);
+    item.append(label, count);
+    container.appendChild(item);
+  });
+}
+
+function renderDashboardCampaignSummary(container, summary) {
+  if (!container) return;
+  let summaryEl = container.querySelector("#dashboard-campaign-summary");
+  if (!summaryEl) {
+    summaryEl = document.createElement("div");
+    summaryEl.id = "dashboard-campaign-summary";
+    summaryEl.className = "dashboard-campaign-summary";
+    container.appendChild(summaryEl);
+  }
+  summaryEl.replaceChildren();
+  const hasSummary = Boolean(summary?.paragraphs?.length || summary?.fields?.length);
+  summaryEl.classList.toggle("hidden", !hasSummary);
+  if (!hasSummary) return;
+
+  const heading = document.createElement("span");
+  heading.className = "dashboard-campaign-summary-label";
+  heading.textContent = "Campaign Summary";
+  summaryEl.appendChild(heading);
+
+  (summary?.paragraphs || []).slice(0, 2).forEach((paragraph) => {
+    if (!paragraph) return;
+    const p = document.createElement("p");
+    p.textContent = paragraph;
+    summaryEl.appendChild(p);
+  });
+
+  if (summary?.fields?.length) {
+    const fieldList = document.createElement("dl");
+    fieldList.className = "dashboard-campaign-summary-fields";
+    summary.fields.forEach((field) => {
+      const item = document.createElement("div");
+      const term = document.createElement("dt");
+      term.textContent = field.label;
+      const description = document.createElement("dd");
+      description.textContent = field.value;
+      item.append(term, description);
+      fieldList.appendChild(item);
+    });
+    summaryEl.appendChild(fieldList);
+  }
 }
 
 function renderDashboardContinueWorking() {
@@ -3992,25 +4244,35 @@ function renderDashboardContinueWorking() {
   const model = getDashboardContinueWorkingModel();
   const title = card.querySelector("#dashboard-continue-title");
   const action = card.querySelector("#dashboard-continue-action");
-  const backed = card.querySelector("#dashboard-continue-backed");
-  const nodes = card.querySelector("#dashboard-continue-nodes");
+  const copy = card.querySelector(".dashboard-continue-copy");
+  const health = card.querySelector("#dashboard-campaign-health");
+  const progressPercent = card.querySelector("#dashboard-campaign-progress-percent");
+  const progressFill = card.querySelector("#dashboard-campaign-progress-fill");
+  const progressCopy = card.querySelector("#dashboard-campaign-progress-copy");
+  const statusList = card.querySelector("#dashboard-campaign-status-list");
+  const typeList = card.querySelector("#dashboard-campaign-type-list");
+  const emptyNote = card.querySelector("#dashboard-campaign-empty-note");
   const updated = card.querySelector("#dashboard-continue-updated");
-  const status = card.querySelector("#dashboard-continue-status");
-  const progressRow = card.querySelector("#dashboard-continue-progress-row");
-  const progress = card.querySelector("#dashboard-continue-progress");
   const context = card.querySelector("#dashboard-continue-context");
   const openButton = card.querySelector("#dashboard-continue-open");
 
   card.classList.toggle("is-empty", model.isEmpty);
+  card.classList.toggle("is-campaign-empty", model.isCampaignEmpty);
   if (title) title.textContent = model.title;
   if (action) action.textContent = model.nextAction;
-  if (backed) backed.textContent = model.ownership;
-  if (nodes) nodes.textContent = String(model.nodeCount);
+  renderDashboardCampaignSummary(copy, model.campaignSummary);
+  if (health) health.classList.toggle("hidden", model.isEmpty);
+  if (progressPercent) progressPercent.textContent = `${model.campaignHealth.progressPercent}%`;
+  if (progressFill) progressFill.style.width = `${model.campaignHealth.progressPercent}%`;
+  if (progressCopy) progressCopy.textContent = model.campaignHealth.progressCopy;
+  renderDashboardCampaignBucketList(statusList, model.campaignHealth.statusBuckets, { variant: "kpi" });
+  renderDashboardCampaignBucketList(typeList, model.campaignHealth.typeBuckets);
+  if (emptyNote) emptyNote.classList.toggle("hidden", !model.isCampaignEmpty);
   if (updated) updated.textContent = model.lastUpdated;
-  if (status) status.textContent = model.boardStatus;
-  if (progressRow) progressRow.classList.toggle("hidden", !model.progress);
-  if (progress) progress.textContent = model.progress || "";
-  if (context) context.textContent = model.contextLabel;
+  if (context) {
+    context.textContent = model.contextLabel;
+    context.classList.toggle("hidden", !model.contextLabel);
+  }
   if (openButton) openButton.textContent = model.buttonLabel;
   el.dashboardView?.querySelectorAll('[data-dashboard-action="open-current-board"]').forEach((button) => {
     button.dataset.dashboardTarget = model.opensCanvas ? "canvas" : "boards";
@@ -4658,6 +4920,7 @@ function saveBrandBrainState(options = {}) {
   console.log("Saving brandBrainState", brandState);
   localStorage.setItem(brandBrainStorageKey(), JSON.stringify(brandState));
   if (shouldMarkDirty) markUnsaved();
+  refreshDashboardIfVisible();
 }
 
 function loadBrandBrainState() {
@@ -10816,8 +11079,9 @@ function formatAiReviewComment(review = {}) {
 }
 
 function getApprovedBrandAvatarUrl() {
-  const avatar = state.brandCore?.brandDNA?.avatar;
-  return avatar?.userApproved && avatar?.imageUrl ? avatar.imageUrl : "";
+  const brandDNA = state.brandCore?.brandDNA;
+  const avatar = brandDNA?.avatar;
+  return brandDNA?.userApproved && avatar?.userApproved && avatar?.imageUrl ? avatar.imageUrl : "";
 }
 
 function addAiReviewPostitToNode(node, review) {
@@ -11954,6 +12218,7 @@ function setActiveView(view) {
   el.cycleViewButton.textContent =
     view === "home" ? "Home" : view === "board" ? "Board View" : view === "list" ? "List View" : view === "calendar" ? "Calendar View" : view === "boards_library" ? "Boards" : view === "insights" ? "Insights" : view === "ai_brain" ? "AI Brain" : "Brand Core";
   if (isHome) {
+    renderDashboardHero();
     renderDashboardContinueWorking();
     renderDashboardBrandEvolution();
     renderDashboardSuggestedOpportunities();
