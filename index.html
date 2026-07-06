@@ -255,33 +255,34 @@
                 </div>
                 <p id="dashboard-continue-action" class="dashboard-continue-action">Select a board to continue your campaign work.</p>
               </div>
-              <div class="dashboard-continue-meta" aria-label="Current board details">
-                <div class="dashboard-continue-stat">
-                  <span>Ownership</span>
-                  <strong id="dashboard-continue-backed">No active board</strong>
+              <div id="dashboard-campaign-health" class="dashboard-campaign-health" aria-label="Campaign health overview">
+                <div class="dashboard-campaign-progress">
+                  <div class="dashboard-campaign-progress-header">
+                    <span>Campaign Progress</span>
+                    <strong id="dashboard-campaign-progress-percent">0%</strong>
+                  </div>
+                  <div class="dashboard-campaign-progress-track" aria-hidden="true">
+                    <span id="dashboard-campaign-progress-fill"></span>
+                  </div>
+                  <p id="dashboard-campaign-progress-copy">0 of 0 nodes complete</p>
                 </div>
-                <div class="dashboard-continue-stat">
-                  <span>Nodes</span>
-                  <strong id="dashboard-continue-nodes">0</strong>
+                <div class="dashboard-campaign-health-grid">
+                  <div class="dashboard-campaign-health-section">
+                    <span>Workflow Snapshot</span>
+                    <div id="dashboard-campaign-status-list" class="dashboard-campaign-chip-list"></div>
+                  </div>
+                  <div class="dashboard-campaign-health-section">
+                    <span>Campaign Structure</span>
+                    <div id="dashboard-campaign-type-list" class="dashboard-campaign-chip-list"></div>
+                  </div>
                 </div>
-                <div class="dashboard-continue-stat">
-                  <span>Last Updated</span>
-                  <strong id="dashboard-continue-updated">Not available yet</strong>
-                </div>
-                <div class="dashboard-continue-stat">
-                  <span>Board Status</span>
-                  <strong id="dashboard-continue-status">Not available yet</strong>
-                </div>
-                <div id="dashboard-continue-progress-row" class="dashboard-continue-stat hidden">
-                  <span>Progress</span>
-                  <strong id="dashboard-continue-progress"></strong>
-                </div>
+                <p id="dashboard-campaign-empty-note" class="dashboard-campaign-empty-note hidden">Add or generate nodes to start building campaign health.</p>
+                <p class="dashboard-campaign-updated">Last updated <strong id="dashboard-continue-updated">Not available yet</strong></p>
               </div>
               <div class="dashboard-continue-footer">
                 <span id="dashboard-continue-context" class="dashboard-continue-context">Dashboard reads current runtime state only.</span>
                 <button id="dashboard-continue-open" class="fk-btn fk-btn-primary" type="button" data-dashboard-action="open-current-board">Open Boards</button>
               </div>
-              <p>No live campaign data is shown yet. When deployment and analytics models are connected, this space will provide lightweight orientation only.</p>
             </section>
 
             <div class="mission-two-column">
