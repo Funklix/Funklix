@@ -3946,11 +3946,93 @@ function getDashboardUserFirstName() {
   return displayName.split(/\s+/)[0]?.slice(0, 32) || "";
 }
 
+function getCleanDashboardAvatarText(value) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function getDashboardAvatarInitial(value) {
+  const source = getCleanDashboardAvatarText(value);
+  if (!source) return "";
+  const alphaNumeric = source.match(/[A-Za-z0-9]/u)?.[0] || "";
+  return alphaNumeric.toUpperCase();
+}
+
+function getSafeDashboardAvatarImageUrl(value) {
+  const url = getCleanDashboardAvatarText(value);
+  if (!url) return "";
+  if (/^(https?:|data:image\/|blob:)/i.test(url)) return url;
+  return "";
+}
+
+function resolveDashboardHeroAvatar() {
+  const brandCore = state.brandCore && typeof state.brandCore === "object" && !Array.isArray(state.brandCore) ? state.brandCore : {};
+  const brandDNA = brandCore.brandDNA && typeof brandCore.brandDNA === "object" && !Array.isArray(brandCore.brandDNA) ? brandCore.brandDNA : {};
+  const brandAssets = brandCore.brandAssets && typeof brandCore.brandAssets === "object" && !Array.isArray(brandCore.brandAssets) ? brandCore.brandAssets : {};
+  const avatar = brandDNA.avatar && typeof brandDNA.avatar === "object" && !Array.isArray(brandDNA.avatar) ? brandDNA.avatar : {};
+  const imageUrl = [
+    avatar.imageUrl,
+    avatar.url,
+    brandCore.avatarImageUrl,
+    brandCore.avatarUrl,
+    brandCore.logo,
+    brandAssets.logo
+  ].map(getSafeDashboardAvatarImageUrl).find(Boolean) || "";
+  if (imageUrl) return { imageUrl, initial: "", source: "brand-avatar-image" };
+
+  const brandAvatarInitial = [
+    avatar.initial,
+    avatar.icon,
+    brandDNA.initial,
+    brandDNA.icon,
+    brandCore.avatarInitial,
+    brandCore.avatarIcon,
+    brandCore.initial,
+    brandCore.icon
+  ].map(getDashboardAvatarInitial).find(Boolean) || "";
+  if (brandAvatarInitial) return { imageUrl: "", initial: brandAvatarInitial, source: "brand-avatar-initial" };
+
+  const brandNameInitial = [
+    brandCore.brandName,
+    brandCore.name,
+    brandCore.title,
+    brandDNA.brandName,
+    brandDNA.name,
+    brandAssets.name,
+    brandAssets.domain
+  ].map(getDashboardAvatarInitial).find(Boolean) || "";
+  if (brandNameInitial) return { imageUrl: "", initial: brandNameInitial, source: "brand-name-initial" };
+
+  const userInitial = getDashboardAvatarInitial(state.user?.name || state.user?.email || "");
+  if (userInitial) return { imageUrl: "", initial: userInitial, source: "user-initial" };
+
+  return { imageUrl: "", initial: "B", source: "neutral-brand-fallback" };
+}
+
+function renderDashboardHeroAvatar() {
+  const avatarEl = document.getElementById("dashboard-hero-avatar");
+  if (!avatarEl) return;
+  const model = resolveDashboardHeroAvatar();
+  avatarEl.dataset.avatarSource = model.source;
+  avatarEl.replaceChildren();
+  if (model.imageUrl) {
+    const img = document.createElement("img");
+    img.src = model.imageUrl;
+    img.alt = "Brand avatar";
+    avatarEl.appendChild(img);
+    return;
+  }
+  const initial = document.createElement("span");
+  initial.id = "dashboard-hero-avatar-initial";
+  initial.textContent = model.initial || "B";
+  avatarEl.appendChild(initial);
+}
+
 function renderDashboardHero() {
   const title = document.getElementById("dashboard-title");
   const subtitle = document.getElementById("dashboard-hero-subtitle");
   const support = document.getElementById("dashboard-hero-support");
   const firstName = getDashboardUserFirstName();
+  renderDashboardHeroAvatar();
   if (title) title.textContent = firstName ? `Good morning, ${firstName}.` : "Good morning.";
   if (subtitle) subtitle.textContent = "Your next best move is ready.";
   if (support) support.textContent = "Start with the current campaign, then review the brand signals and opportunities below.";
@@ -4658,6 +4740,7 @@ function saveBrandBrainState(options = {}) {
   console.log("Saving brandBrainState", brandState);
   localStorage.setItem(brandBrainStorageKey(), JSON.stringify(brandState));
   if (shouldMarkDirty) markUnsaved();
+  refreshDashboardIfVisible();
 }
 
 function loadBrandBrainState() {
