@@ -4134,15 +4134,74 @@ function renderDashboardHeroAvatar() {
   avatarEl.appendChild(initial);
 }
 
+function getDashboardCampaignDisplayName(activeContext = getActiveContext()) {
+  const boardId = activeContext?.boardId;
+  const boardName = typeof state.currentBoardName === "string" ? state.currentBoardName.trim() : "";
+  if (boardName) return boardName;
+  if (boardId) return "Untitled board";
+  return "Current campaign";
+}
+
+function getDashboardBucketCount(buckets = [], key = "") {
+  return buckets.find((bucket) => bucket.key === key)?.count || 0;
+}
+
+function getDashboardDailyBriefingNextMove(campaignHealth) {
+  const focusItem = getDashboardTodaysFocusActions()[0];
+  if (focusItem?.title) return `Start with: ${focusItem.title}.`;
+
+  const draftCount = getDashboardBucketCount(campaignHealth.statusBuckets, "draft");
+  if (draftCount >= 3) return "Review draft nodes to move the campaign forward.";
+
+  const inReviewCount = getDashboardBucketCount(campaignHealth.statusBuckets, "inReview");
+  if (inReviewCount > 0) return "Review in-progress assets before expanding the campaign.";
+
+  const topOpportunity = getDashboardSuggestedOpportunities()[0];
+  if (topOpportunity?.title) return `Next opportunity: ${topOpportunity.title}.`;
+
+  return "Open the campaign board to continue building.";
+}
+
+function getDashboardDailyBriefingModel() {
+  const activeContext = getActiveContext();
+  const isCurrentCanvas = activeContext.boardBacked || activeContext.canvasLoaded;
+  const campaignHealth = getDashboardCampaignHealthModel(state.nodes);
+  const campaignName = getDashboardCampaignDisplayName(activeContext);
+  const firstName = getDashboardUserFirstName();
+  const greeting = firstName ? `Good morning, ${firstName}.` : "Good morning.";
+
+  if (!isCurrentCanvas) {
+    return {
+      greeting,
+      subtitle: "Select a board to see your campaign focus.",
+      support: "Your briefing will update once a campaign board is active."
+    };
+  }
+
+  if (campaignHealth.totalNodes === 0) {
+    return {
+      greeting,
+      subtitle: `${campaignName} is ready to build.`,
+      support: "Add or generate nodes to create your first campaign health signals."
+    };
+  }
+
+  return {
+    greeting,
+    subtitle: `${campaignName} is ${campaignHealth.progressPercent}% complete.`,
+    support: getDashboardDailyBriefingNextMove(campaignHealth)
+  };
+}
+
 function renderDashboardHero() {
   const title = document.getElementById("dashboard-title");
   const subtitle = document.getElementById("dashboard-hero-subtitle");
   const support = document.getElementById("dashboard-hero-support");
-  const firstName = getDashboardUserFirstName();
+  const briefing = getDashboardDailyBriefingModel();
   renderDashboardHeroAvatar();
-  if (title) title.textContent = firstName ? `Good morning, ${firstName}.` : "Good morning.";
-  if (subtitle) subtitle.textContent = "Your next best move is ready.";
-  if (support) support.textContent = "Start with the current campaign, then review the brand signals and opportunities below.";
+  if (title) title.textContent = briefing.greeting;
+  if (subtitle) subtitle.textContent = briefing.subtitle;
+  if (support) support.textContent = briefing.support;
 }
 
 function getDashboardContinueWorkingModel() {
