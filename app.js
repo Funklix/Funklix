@@ -3831,6 +3831,24 @@ function getRuntimeAutosaveDiagnostics() {
   };
 }
 
+function getNodeRelationshipDiagnostics() {
+  const relationshipMap = getNodeRelationshipMap();
+  const isolatedNodeCount = Object.keys(relationshipMap.nodesById).filter((nodeId) => {
+    return (relationshipMap.incomingByNodeId[nodeId]?.length || 0) === 0
+      && (relationshipMap.outgoingByNodeId[nodeId]?.length || 0) === 0;
+  }).length;
+
+  return {
+    nodeCount: relationshipMap.nodeCount,
+    edgeCount: relationshipMap.edgeCount,
+    rootCount: relationshipMap.roots.length,
+    leafCount: relationshipMap.leaves.length,
+    invalidEdgeCount: relationshipMap.invalidEdges.length,
+    hasCycles: relationshipMap.hasCycles,
+    isolatedNodeCount
+  };
+}
+
 function buildRuntimeAlignmentDiagnostics() {
   const pathBoardId = getBoardIdFromPath();
   const activeContext = getActiveContext();
@@ -3890,6 +3908,7 @@ function buildRuntimeAlignmentDiagnostics() {
       isBoardBacked: activeContext.boardBacked,
       isAnonymousEditable: activeContext.anonymousCanvas
     },
+    relationshipGraph: getNodeRelationshipDiagnostics(),
     autosave: getRuntimeAutosaveDiagnostics(),
     startup: {
       branch: state.runtimeDiagnostics?.startupBranch || "unknown",
@@ -3914,6 +3933,7 @@ function logRuntimeAlignmentDiagnostics(reason = "manual") {
 
 if (typeof window !== "undefined") {
   window.debugRuntimeAlignmentDiagnostics = logRuntimeAlignmentDiagnostics;
+  window.debugNodeRelationshipDiagnostics = getNodeRelationshipDiagnostics;
 }
 
 function formatDashboardTimestamp(value) {
@@ -4158,6 +4178,114 @@ function getDashboardExecutiveSummaryLine(campaignHealth) {
 function getDashboardDailyBriefingFocusLine(focusItem = null) {
   return focusItem?.title ? `Today you're focusing on:
 ${focusItem.title}` : "";
+}
+
+function normalizeNodeRelationshipEdge(edge, index = -1) {
+  const source = Array.isArray(edge)
+    ? edge[0]
+    : edge?.from ?? edge?.fromId ?? edge?.source ?? "";
+  const target = Array.isArray(edge)
+    ? edge[1]
+    : edge?.to ?? edge?.toId ?? edge?.target ?? "";
+
+  return {
+    index,
+    source: typeof source === "string" ? source : String(source || ""),
+    target: typeof target === "string" ? target : String(target || ""),
+    raw: edge
+  };
+}
+
+function relationshipMapHasCycles(nodeIds = [], outgoingByNodeId = {}) {
+  const visiting = new Set();
+  const visited = new Set();
+
+  function visit(nodeId) {
+    if (visiting.has(nodeId)) return true;
+    if (visited.has(nodeId)) return false;
+
+    visiting.add(nodeId);
+    const downstreamIds = outgoingByNodeId[nodeId] || [];
+    for (const downstreamId of downstreamIds) {
+      if (visit(downstreamId)) return true;
+    }
+    visiting.delete(nodeId);
+    visited.add(nodeId);
+    return false;
+  }
+
+  return nodeIds.some((nodeId) => visit(nodeId));
+}
+
+function getNodeRelationshipMap() {
+  const nodesById = {};
+  const outgoingByNodeId = {};
+  const incomingByNodeId = {};
+  const nodeIds = [];
+
+  state.nodes.forEach((node) => {
+    if (!node?.id) return;
+    nodesById[node.id] = { ...node };
+    outgoingByNodeId[node.id] = [];
+    incomingByNodeId[node.id] = [];
+    nodeIds.push(node.id);
+  });
+
+  const invalidEdges = [];
+  let edgeCount = 0;
+
+  state.edges.forEach((edge, index) => {
+    const normalized = normalizeNodeRelationshipEdge(edge, index);
+    const { source, target } = normalized;
+    const hasSource = Boolean(source && nodesById[source]);
+    const hasTarget = Boolean(target && nodesById[target]);
+
+    if (!hasSource || !hasTarget) {
+      invalidEdges.push({
+        index,
+        source,
+        target,
+        reason: !source || !target ? "missing-endpoint" : !hasSource ? "missing-source-node" : "missing-target-node",
+        edge
+      });
+      return;
+    }
+
+    if (!outgoingByNodeId[source].includes(target)) outgoingByNodeId[source].push(target);
+    if (!incomingByNodeId[target].includes(source)) incomingByNodeId[target].push(source);
+    edgeCount += 1;
+  });
+
+  const roots = nodeIds.filter((nodeId) => incomingByNodeId[nodeId].length === 0);
+  const leaves = nodeIds.filter((nodeId) => outgoingByNodeId[nodeId].length === 0);
+
+  return {
+    nodesById,
+    outgoingByNodeId,
+    incomingByNodeId,
+    roots,
+    leaves,
+    nodeCount: nodeIds.length,
+    edgeCount,
+    hasCycles: relationshipMapHasCycles(nodeIds, outgoingByNodeId),
+    invalidEdges
+  };
+}
+
+function getNodeDownstreamCount(nodeId) {
+  if (!nodeId) return 0;
+  const relationshipMap = getNodeRelationshipMap();
+  return relationshipMap.outgoingByNodeId[nodeId]?.length || 0;
+}
+
+function getNodeUpstreamCount(nodeId) {
+  if (!nodeId) return 0;
+  const relationshipMap = getNodeRelationshipMap();
+  return relationshipMap.incomingByNodeId[nodeId]?.length || 0;
+}
+
+if (typeof window !== "undefined") {
+  window.debugNodeRelationshipMap = getNodeRelationshipMap;
 }
 
 function getDashboardEdgeSource(edge) {
