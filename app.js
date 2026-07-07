@@ -3831,6 +3831,24 @@ function getRuntimeAutosaveDiagnostics() {
   };
 }
 
+function getNodeRelationshipDiagnostics() {
+  const relationshipMap = getNodeRelationshipMap();
+  const isolatedNodeCount = Object.keys(relationshipMap.nodesById).filter((nodeId) => {
+    return (relationshipMap.incomingByNodeId[nodeId]?.length || 0) === 0
+      && (relationshipMap.outgoingByNodeId[nodeId]?.length || 0) === 0;
+  }).length;
+
+  return {
+    nodeCount: relationshipMap.nodeCount,
+    edgeCount: relationshipMap.edgeCount,
+    rootCount: relationshipMap.roots.length,
+    leafCount: relationshipMap.leaves.length,
+    invalidEdgeCount: relationshipMap.invalidEdges.length,
+    hasCycles: relationshipMap.hasCycles,
+    isolatedNodeCount
+  };
+}
+
 function buildRuntimeAlignmentDiagnostics() {
   const pathBoardId = getBoardIdFromPath();
   const activeContext = getActiveContext();
@@ -3890,6 +3908,7 @@ function buildRuntimeAlignmentDiagnostics() {
       isBoardBacked: activeContext.boardBacked,
       isAnonymousEditable: activeContext.anonymousCanvas
     },
+    relationshipGraph: getNodeRelationshipDiagnostics(),
     autosave: getRuntimeAutosaveDiagnostics(),
     startup: {
       branch: state.runtimeDiagnostics?.startupBranch || "unknown",
@@ -3914,6 +3933,7 @@ function logRuntimeAlignmentDiagnostics(reason = "manual") {
 
 if (typeof window !== "undefined") {
   window.debugRuntimeAlignmentDiagnostics = logRuntimeAlignmentDiagnostics;
+  window.debugNodeRelationshipDiagnostics = getNodeRelationshipDiagnostics;
 }
 
 function formatDashboardTimestamp(value) {
