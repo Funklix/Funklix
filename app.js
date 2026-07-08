@@ -13567,11 +13567,13 @@ function getBoardBrandSnapshot(board = {}) {
 }
 
 function getBoardBrandDisplay(board = {}, boardName = "") {
+  const displaySnapshot = board?.brand_display && typeof board.brand_display === "object" && !Array.isArray(board.brand_display) ? board.brand_display : {};
   const snapshot = getBoardBrandSnapshot(board) || {};
   const brandDNA = snapshot.brandDNA && typeof snapshot.brandDNA === "object" && !Array.isArray(snapshot.brandDNA) ? snapshot.brandDNA : {};
   const avatar = brandDNA.avatar && typeof brandDNA.avatar === "object" && !Array.isArray(brandDNA.avatar) ? brandDNA.avatar : {};
   const brandAssets = snapshot.brandAssets && typeof snapshot.brandAssets === "object" && !Array.isArray(snapshot.brandAssets) ? snapshot.brandAssets : {};
   const brandName = [
+    displaySnapshot.name,
     snapshot.brandName,
     snapshot.name,
     snapshot.title,
@@ -13580,6 +13582,7 @@ function getBoardBrandDisplay(board = {}, boardName = "") {
     brandAssets.name
   ].map((value) => (typeof value === "string" ? value.trim() : "")).find(Boolean) || "";
   const avatarUrl = [
+    displaySnapshot.avatarUrl,
     brandDNA?.userApproved && avatar?.userApproved ? avatar.imageUrl : "",
     snapshot.avatarImageUrl,
     snapshot.avatarUrl,
