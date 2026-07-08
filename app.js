@@ -13402,6 +13402,10 @@ function bindGlobalResetDelegation() {
       event.preventDefault();
       window.resetBrandBrainState();
     }
+    if (event.target.closest("[data-empty-create-board]")) {
+      event.preventDefault();
+      el.boardsCreateButton?.click();
+    }
     const openBtn = event.target.closest("[data-open-board]");
     if (openBtn) {
       const id = openBtn.getAttribute("data-open-board");
@@ -13548,7 +13552,7 @@ async function loadBoardsLibrary() {
     state.boardsLibrary = Array.isArray(data?.boards) ? data.boards : [];
     renderBoardsLibrary();
   } catch (error) {
-    if (el.boardsLibraryList) el.boardsLibraryList.textContent = 'Could not load boards.';
+    if (el.boardsLibraryList) el.boardsLibraryList.innerHTML = '<div class="board-empty fk-card"><strong>Could not load boards.</strong><span>Please try again from the Boards navigation item.</span></div>';
   }
 }
 
@@ -13563,12 +13567,12 @@ function renderBoardsLibrary() {
     if (el.boardsLibrarySubtitle) el.boardsLibrarySubtitle.textContent = 'Open a board or sign in to save one to your account.';
   }
   if (!state.boardsLibrary.length) {
-    el.boardsLibraryList.innerHTML = `<div class="board-empty"><strong>No boards yet</strong><span>Create your first board to start collaborating.</span></div>`;
+    el.boardsLibraryList.innerHTML = `<div class="board-empty fk-card"><span class="boards-empty-kicker fk-badge">No saved workspaces</span><strong>No boards yet</strong><span>Create your first board to start collaborating.</span><button type="button" class="fk-btn fk-btn-primary" data-empty-create-board>Create New Board</button></div>`;
     return;
   }
   state.boardsLibrary.forEach((board, index) => {
     const row = document.createElement('div');
-    row.className = 'board-row';
+    row.className = 'board-row fk-card';
     const savedAt = board.updated_at ? new Date(board.updated_at).toLocaleString('de-DE') : '—';
     const boardName = board.name || 'Campaign Canvas Board';
     const userEmail = typeof state.user?.email === "string" ? state.user.email.trim().toLowerCase() : "";
@@ -13579,10 +13583,10 @@ function renderBoardsLibrary() {
     const isShared = !!board.owner_email && !isOwner;
     const isCopy = /\(copy\)$/i.test(boardName.trim());
     const ownerBy = deriveOwnerDisplayName(board.owner_name || "", board.owner_email || "");
-    const roleChip = isOwner ? '<span class="board-row-chip owned">Your Board</span>' : (isEditor ? '<span class="board-row-chip shared">Editor</span>' : (isShared ? '<span class="board-row-chip shared">Shared</span>' : '<span class="board-row-chip shared">Open</span>'));
-    const copyChip = isCopy ? '<span class="board-row-chip copy">Copy</span>' : '';
+    const roleChip = isOwner ? '<span class="board-row-chip owned fk-pill">Your Board</span>' : (isEditor ? '<span class="board-row-chip shared fk-pill">Editor</span>' : (isShared ? '<span class="board-row-chip shared fk-pill">Shared</span>' : '<span class="board-row-chip shared fk-pill">Open</span>'));
+    const copyChip = isCopy ? '<span class="board-row-chip copy fk-pill">Copy</span>' : '';
     const ownerLine = isOwner ? 'You can edit this board.' : (isEditor ? `By ${ownerBy || 'another user'}` : (isShared ? `By ${ownerBy || 'another user'}` : 'No owner yet'));
-    row.innerHTML = `<div><div class="board-row-titleline"><strong class="board-row-title">${boardName}</strong>${roleChip}${copyChip}</div><div class="board-row-meta">Last active: ${savedAt}</div><div class="board-row-meta">${ownerLine}</div><div class="board-rename hidden" data-rename-wrap="${board.id}"><input data-rename-input="${board.id}" value="${board.name || ''}" /><button data-rename-save="${board.id}" type="button">Save</button><button data-rename-cancel="${board.id}" type="button">Cancel</button></div></div><div class="board-row-actions"><button class="icon-btn" data-open-board="${board.id}" title="Open" aria-label="Open board">↗</button><button class="icon-btn" data-copy-board="${board.id}" title="Copy link" aria-label="Copy link">⧉</button><button class="icon-btn" data-rename-board="${board.id}" title="Rename" aria-label="Rename board">✎</button><button class="icon-btn danger" data-delete-board="${board.id}" title="Delete" aria-label="Delete board">🗑</button><button class="icon-btn" data-up-board="${board.id}" data-index="${index}" title="Move up">↑</button><button class="icon-btn" data-down-board="${board.id}" data-index="${index}" title="Move down">↓</button>${state.user?.email && !board.owner_email ? `<button class="icon-btn" data-claim-board="${board.id}" title="Claim">Claim</button>` : ""}</div>`;
+    row.innerHTML = `<div class="board-row-content"><div class="board-row-titleline"><strong class="board-row-title">${boardName}</strong>${roleChip}${copyChip}</div><div class="board-row-meta">Last active: ${savedAt}</div><div class="board-row-meta">${ownerLine}</div><div class="board-rename hidden" data-rename-wrap="${board.id}"><input class="fk-input" data-rename-input="${board.id}" value="${board.name || ''}" /><button class="fk-btn fk-btn-primary" data-rename-save="${board.id}" type="button">Save</button><button class="fk-btn fk-btn-ghost" data-rename-cancel="${board.id}" type="button">Cancel</button></div></div><div class="board-row-actions"><button class="board-action-btn fk-btn fk-btn-primary" data-open-board="${board.id}" title="Open" aria-label="Open board">Open</button><button class="board-action-btn fk-btn fk-btn-secondary" data-copy-board="${board.id}" title="Copy link" aria-label="Copy link">Copy Link</button><button class="board-action-btn fk-btn fk-btn-ghost" data-rename-board="${board.id}" title="Rename" aria-label="Rename board">Rename</button><button class="board-action-btn danger fk-btn fk-btn-ghost" data-delete-board="${board.id}" title="Delete" aria-label="Delete board">Delete</button><button class="board-action-btn board-action-icon fk-btn fk-btn-ghost" data-up-board="${board.id}" data-index="${index}" title="Move up" aria-label="Move board up">↑</button><button class="board-action-btn board-action-icon fk-btn fk-btn-ghost" data-down-board="${board.id}" data-index="${index}" title="Move down" aria-label="Move board down">↓</button>${state.user?.email && !board.owner_email ? `<button class="board-action-btn fk-btn fk-btn-secondary" data-claim-board="${board.id}" title="Claim">Claim</button>` : ""}</div>`;
     el.boardsLibraryList.appendChild(row);
   });
 }
