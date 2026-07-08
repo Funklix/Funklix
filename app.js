@@ -13554,6 +13554,37 @@ async function loadBoardsLibrary() {
   } catch (error) {
     if (el.boardsLibraryList) el.boardsLibraryList.innerHTML = '<div class="board-empty fk-card"><strong>Could not load boards.</strong><span>Please try again from the Boards navigation item.</span></div>';
   }
+  const snapshot = board?.brand_core_snapshot || board?.brandCoreSnapshot || board?.brandCore || null;
+  return snapshot && typeof snapshot === "object" && !Array.isArray(snapshot) ? snapshot : null;
+}
+
+function getBoardBrandDisplay(board = {}, boardName = "") {
+  const displaySnapshot = board?.brand_display && typeof board.brand_display === "object" && !Array.isArray(board.brand_display) ? board.brand_display : {};
+  const snapshot = getBoardBrandSnapshot(board) || {};
+  const brandDNA = snapshot.brandDNA && typeof snapshot.brandDNA === "object" && !Array.isArray(snapshot.brandDNA) ? snapshot.brandDNA : {};
+  const avatar = brandDNA.avatar && typeof brandDNA.avatar === "object" && !Array.isArray(brandDNA.avatar) ? brandDNA.avatar : {};
+  const brandAssets = snapshot.brandAssets && typeof snapshot.brandAssets === "object" && !Array.isArray(snapshot.brandAssets) ? snapshot.brandAssets : {};
+  const brandName = [
+    displaySnapshot.name,
+    snapshot.brandName,
+    snapshot.name,
+    snapshot.title,
+    brandDNA.brandName,
+    brandDNA.name,
+    brandAssets.name
+  ].map((value) => (typeof value === "string" ? value.trim() : "")).find(Boolean) || "";
+  const avatarUrl = [
+    displaySnapshot.avatarUrl,
+    brandDNA?.userApproved && avatar?.userApproved ? avatar.imageUrl : "",
+    snapshot.avatarImageUrl,
+    snapshot.avatarUrl,
+    snapshot.brandAvatarUrl
+  ].map(getSafeDashboardAvatarImageUrl).find(Boolean) || "";
+  return {
+    name: brandName,
+    avatarUrl,
+    initial: getDashboardAvatarInitial(brandName) || getDashboardAvatarInitial(boardName) || "B"
+  };
 }
 
 function getBoardBrandSnapshot(board = {}) {
