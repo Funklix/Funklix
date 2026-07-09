@@ -13654,6 +13654,124 @@ async function persistBoardOrderFromDom(initialOrder = []) {
   } finally {
     loadBoardsLibrary();
   }
+  const snapshot = board?.brand_core_snapshot || board?.brandCoreSnapshot || board?.brandCore || null;
+  return snapshot && typeof snapshot === "object" && !Array.isArray(snapshot) ? snapshot : null;
+}
+
+function getBoardBrandDisplay(board = {}, boardName = "") {
+  const displaySnapshot = board?.brand_display && typeof board.brand_display === "object" && !Array.isArray(board.brand_display) ? board.brand_display : {};
+  const snapshot = getBoardBrandSnapshot(board) || {};
+  const brandDNA = snapshot.brandDNA && typeof snapshot.brandDNA === "object" && !Array.isArray(snapshot.brandDNA) ? snapshot.brandDNA : {};
+  const avatar = brandDNA.avatar && typeof brandDNA.avatar === "object" && !Array.isArray(brandDNA.avatar) ? brandDNA.avatar : {};
+  const brandAssets = snapshot.brandAssets && typeof snapshot.brandAssets === "object" && !Array.isArray(snapshot.brandAssets) ? snapshot.brandAssets : {};
+  const brandName = [
+    displaySnapshot.name,
+    snapshot.brandName,
+    snapshot.name,
+    snapshot.title,
+    brandDNA.brandName,
+    brandDNA.name,
+    brandAssets.name
+  ].map((value) => (typeof value === "string" ? value.trim() : "")).find(Boolean) || "";
+  const avatarUrl = [
+    displaySnapshot.avatarUrl,
+    brandDNA?.userApproved && avatar?.userApproved ? avatar.imageUrl : "",
+    snapshot.avatarImageUrl,
+    snapshot.avatarUrl,
+    snapshot.brandAvatarUrl
+  ].map(getSafeDashboardAvatarImageUrl).find(Boolean) || "";
+  return {
+    name: brandName,
+    avatarUrl,
+    initial: getDashboardAvatarInitial(brandName) || getDashboardAvatarInitial(boardName) || "B"
+  };
+}
+
+function getDisplayedBoards() {
+  const boards = Array.isArray(state.boardsLibrary) ? [...state.boardsLibrary] : [];
+  const currentBoardId = state.currentBoardId || getBoardIdFromPath() || "";
+  if (!currentBoardId) return boards;
+  const activeIndex = boards.findIndex((board) => String(board?.id || "") === String(currentBoardId));
+  if (activeIndex <= 0) return boards;
+  const [activeBoard] = boards.splice(activeIndex, 1);
+  return [activeBoard, ...boards];
+}
+
+function getBoardsDomOrder() {
+  if (!el.boardsLibraryList) return [];
+  return [...el.boardsLibraryList.querySelectorAll('.board-row[data-board-id]')]
+    .map((row) => row.getAttribute('data-board-id'))
+    .filter(Boolean);
+}
+
+function getBoardDragAfterElement(container, y) {
+  const rows = [...container.querySelectorAll('.board-row[data-board-id]:not(.is-dragging)')];
+  return rows.reduce((closest, child) => {
+    const box = child.getBoundingClientRect();
+    const offset = y - box.top - box.height / 2;
+    if (offset < 0 && offset > closest.offset) return { offset, element: child };
+    return closest;
+  }, { offset: Number.NEGATIVE_INFINITY, element: null }).element;
+}
+
+async function persistBoardOrderFromDom(initialOrder = []) {
+  const orderedIds = getBoardsDomOrder();
+  if (!orderedIds.length || orderedIds.join('|') === initialOrder.join('|')) return;
+  const boardById = new Map(state.boardsLibrary.map((board) => [String(board?.id || ''), board]));
+  const orderedBoards = orderedIds.map((id) => boardById.get(String(id))).filter(Boolean);
+  if (orderedBoards.length !== orderedIds.length) {
+    loadBoardsLibrary();
+    return;
+  }
+  try {
+    await Promise.all(orderedBoards.map(async (board, index) => {
+      const response = await fetch(`/api/boards/${board.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ order_index: index })
+      });
+      if (!response.ok) throw new Error(`Failed to update board order for ${board.id}`);
+    }));
+  } catch (error) {
+    console.error('[Boards Drag Reorder] Failed to persist order', error);
+  } finally {
+    loadBoardsLibrary();
+  }
+}
+
+function bindBoardRowDragHandlers(row) {
+  row.addEventListener('dragstart', (event) => {
+    if (event.target.closest('button, input, textarea, select, a')) {
+      event.preventDefault();
+      return;
+    }
+    row.classList.add('is-dragging');
+    row.setAttribute('aria-grabbed', 'true');
+    row.dataset.dragInitialOrder = getBoardsDomOrder().join('|');
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', row.dataset.boardId || '');
+  });
+
+  row.addEventListener('dragend', () => {
+    const initialOrder = (row.dataset.dragInitialOrder || '').split('|').filter(Boolean);
+    row.classList.remove('is-dragging');
+    row.setAttribute('aria-grabbed', 'false');
+    delete row.dataset.dragInitialOrder;
+    persistBoardOrderFromDom(initialOrder);
+  });
+}
+
+function bindBoardsListDragHandlers() {
+  if (!el.boardsLibraryList || el.boardsLibraryList.dataset.dragBound === 'true') return;
+  el.boardsLibraryList.dataset.dragBound = 'true';
+  el.boardsLibraryList.addEventListener('dragover', (event) => {
+    const dragging = el.boardsLibraryList.querySelector('.board-row.is-dragging');
+    if (!dragging) return;
+    event.preventDefault();
+    const afterElement = getBoardDragAfterElement(el.boardsLibraryList, event.clientY);
+    if (afterElement == null) el.boardsLibraryList.appendChild(dragging);
+    else el.boardsLibraryList.insertBefore(dragging, afterElement);
+  });
 }
 
 function bindBoardRowDragHandlers(row) {
