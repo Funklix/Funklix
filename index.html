@@ -386,7 +386,17 @@
           </div>
         </section>
 
-        <section id="boards-library-view" class="board-list-view hidden boards-library-page"><div class="boards-header-row"><h2 id="boards-library-title">Boards</h2><button id="boards-create-btn" class="primary-add boards-create-btn" type="button">Create New Board</button></div><p id="boards-library-subtitle">Manage your saved Campaign Canvas boards.</p><div id="boards-library-list" class="boards-library-panel"></div></section>
+        <section id="boards-library-view" class="board-list-view hidden boards-library-page fk-section" aria-labelledby="boards-library-title">
+          <div class="boards-header-row">
+            <div class="boards-header-copy">
+              <span class="boards-library-kicker fk-badge">Campaign Workspace Library</span>
+              <h2 id="boards-library-title">Boards</h2>
+              <p id="boards-library-subtitle">Manage your saved Campaign Canvas boards.</p>
+            </div>
+            <button id="boards-create-btn" class="primary-add boards-create-btn fk-btn fk-btn-primary" type="button">Create New Board</button>
+          </div>
+          <div id="boards-library-list" class="boards-library-panel"></div>
+        </section>
         <section id="board-list-view" class="board-list-view hidden">
           <h2>Node List View</h2>
           <div id="node-list-view"></div>

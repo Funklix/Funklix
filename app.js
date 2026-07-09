@@ -13402,6 +13402,10 @@ function bindGlobalResetDelegation() {
       event.preventDefault();
       window.resetBrandBrainState();
     }
+    if (event.target.closest("[data-empty-create-board]")) {
+      event.preventDefault();
+      el.boardsCreateButton?.click();
+    }
     const openBtn = event.target.closest("[data-open-board]");
     if (openBtn) {
       const id = openBtn.getAttribute("data-open-board");
@@ -13548,8 +13552,143 @@ async function loadBoardsLibrary() {
     state.boardsLibrary = Array.isArray(data?.boards) ? data.boards : [];
     renderBoardsLibrary();
   } catch (error) {
-    if (el.boardsLibraryList) el.boardsLibraryList.textContent = 'Could not load boards.';
+    if (el.boardsLibraryList) el.boardsLibraryList.innerHTML = '<div class="board-empty fk-card"><strong>Could not load boards.</strong><span>Please try again from the Boards navigation item.</span></div>';
   }
+}
+
+function getBoardBrandSnapshot(board = {}) {
+  const boardId = board?.id ? String(board.id) : "";
+  const currentBoardId = state.currentBoardId || getBoardIdFromPath() || "";
+  if (boardId && currentBoardId && boardId === String(currentBoardId) && state.brandCore && typeof state.brandCore === "object" && !Array.isArray(state.brandCore)) {
+    return state.brandCore;
+  }
+  const snapshot = board?.brand_core_snapshot || board?.brandCoreSnapshot || board?.brandCore || null;
+  return snapshot && typeof snapshot === "object" && !Array.isArray(snapshot) ? snapshot : null;
+}
+
+function getBoardBrandDisplay(board = {}, boardName = "") {
+  const displaySnapshot = board?.brand_display && typeof board.brand_display === "object" && !Array.isArray(board.brand_display) ? board.brand_display : {};
+  const snapshot = getBoardBrandSnapshot(board) || {};
+  const brandDNA = snapshot.brandDNA && typeof snapshot.brandDNA === "object" && !Array.isArray(snapshot.brandDNA) ? snapshot.brandDNA : {};
+  const avatar = brandDNA.avatar && typeof brandDNA.avatar === "object" && !Array.isArray(brandDNA.avatar) ? brandDNA.avatar : {};
+  const brandAssets = snapshot.brandAssets && typeof snapshot.brandAssets === "object" && !Array.isArray(snapshot.brandAssets) ? snapshot.brandAssets : {};
+  const brandName = [
+    displaySnapshot.name,
+    snapshot.brandName,
+    snapshot.name,
+    snapshot.title,
+    brandDNA.brandName,
+    brandDNA.name,
+    brandAssets.name
+  ].map((value) => (typeof value === "string" ? value.trim() : "")).find(Boolean) || "";
+  const avatarUrl = [
+    displaySnapshot.avatarUrl,
+    brandDNA?.userApproved && avatar?.userApproved ? avatar.imageUrl : "",
+    snapshot.avatarImageUrl,
+    snapshot.avatarUrl,
+    snapshot.brandAvatarUrl
+  ].map(getSafeDashboardAvatarImageUrl).find(Boolean) || "";
+  return {
+    name: brandName,
+    avatarUrl,
+    initial: getDashboardAvatarInitial(brandName) || getDashboardAvatarInitial(boardName) || "B"
+  };
+}
+
+
+function getBoardLastEdited(board = {}) {
+  const rawTimestamp = board?.updated_at || board?.updatedAt || "";
+  if (!rawTimestamp) return "Not available yet";
+  const parsedTimestamp = new Date(rawTimestamp);
+  if (Number.isNaN(parsedTimestamp.getTime())) return "Not available yet";
+  return parsedTimestamp.toLocaleString('de-DE');
+}
+
+function getDisplayedBoards() {
+  const boards = Array.isArray(state.boardsLibrary) ? [...state.boardsLibrary] : [];
+  const currentBoardId = state.currentBoardId || getBoardIdFromPath() || "";
+  if (!currentBoardId) return boards;
+  const activeIndex = boards.findIndex((board) => String(board?.id || "") === String(currentBoardId));
+  if (activeIndex <= 0) return boards;
+  const [activeBoard] = boards.splice(activeIndex, 1);
+  return [activeBoard, ...boards];
+}
+
+function getBoardsDomOrder() {
+  if (!el.boardsLibraryList) return [];
+  return [...el.boardsLibraryList.querySelectorAll('.board-row[data-board-id]')]
+    .map((row) => row.getAttribute('data-board-id'))
+    .filter(Boolean);
+}
+
+function getBoardDragAfterElement(container, y) {
+  const rows = [...container.querySelectorAll('.board-row[data-board-id]:not(.is-dragging)')];
+  return rows.reduce((closest, child) => {
+    const box = child.getBoundingClientRect();
+    const offset = y - box.top - box.height / 2;
+    if (offset < 0 && offset > closest.offset) return { offset, element: child };
+    return closest;
+  }, { offset: Number.NEGATIVE_INFINITY, element: null }).element;
+}
+
+async function persistBoardOrderFromDom(initialOrder = []) {
+  const orderedIds = getBoardsDomOrder();
+  if (!orderedIds.length || orderedIds.join('|') === initialOrder.join('|')) return;
+  const boardById = new Map(state.boardsLibrary.map((board) => [String(board?.id || ''), board]));
+  const orderedBoards = orderedIds.map((id) => boardById.get(String(id))).filter(Boolean);
+  if (orderedBoards.length !== orderedIds.length) {
+    loadBoardsLibrary();
+    return;
+  }
+  try {
+    await Promise.all(orderedBoards.map(async (board, index) => {
+      const response = await fetch(`/api/boards/${board.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ order_index: index })
+      });
+      if (!response.ok) throw new Error(`Failed to update board order for ${board.id}`);
+    }));
+  } catch (error) {
+    console.error('[Boards Drag Reorder] Failed to persist order', error);
+  } finally {
+    loadBoardsLibrary();
+  }
+}
+
+function bindBoardRowDragHandlers(row) {
+  row.addEventListener('dragstart', (event) => {
+    if (event.target.closest('button, input, textarea, select, a')) {
+      event.preventDefault();
+      return;
+    }
+    row.classList.add('is-dragging');
+    row.setAttribute('aria-grabbed', 'true');
+    row.dataset.dragInitialOrder = getBoardsDomOrder().join('|');
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', row.dataset.boardId || '');
+  });
+
+  row.addEventListener('dragend', () => {
+    const initialOrder = (row.dataset.dragInitialOrder || '').split('|').filter(Boolean);
+    row.classList.remove('is-dragging');
+    row.setAttribute('aria-grabbed', 'false');
+    delete row.dataset.dragInitialOrder;
+    persistBoardOrderFromDom(initialOrder);
+  });
+}
+
+function bindBoardsListDragHandlers() {
+  if (!el.boardsLibraryList || el.boardsLibraryList.dataset.dragBound === 'true') return;
+  el.boardsLibraryList.dataset.dragBound = 'true';
+  el.boardsLibraryList.addEventListener('dragover', (event) => {
+    const dragging = el.boardsLibraryList.querySelector('.board-row.is-dragging');
+    if (!dragging) return;
+    event.preventDefault();
+    const afterElement = getBoardDragAfterElement(el.boardsLibraryList, event.clientY);
+    if (afterElement == null) el.boardsLibraryList.appendChild(dragging);
+    else el.boardsLibraryList.insertBefore(dragging, afterElement);
+  });
 }
 
 function renderBoardsLibrary() {
@@ -13563,13 +13702,18 @@ function renderBoardsLibrary() {
     if (el.boardsLibrarySubtitle) el.boardsLibrarySubtitle.textContent = 'Open a board or sign in to save one to your account.';
   }
   if (!state.boardsLibrary.length) {
-    el.boardsLibraryList.innerHTML = `<div class="board-empty"><strong>No boards yet</strong><span>Create your first board to start collaborating.</span></div>`;
+    el.boardsLibraryList.innerHTML = `<div class="board-empty fk-card"><span class="boards-empty-kicker fk-badge">No saved workspaces</span><strong>No boards yet</strong><span>Create your first board to start collaborating.</span><button type="button" class="fk-btn fk-btn-primary" data-empty-create-board>Create New Board</button></div>`;
     return;
   }
-  state.boardsLibrary.forEach((board, index) => {
+  bindBoardsListDragHandlers();
+  getDisplayedBoards().forEach((board) => {
+    const sourceIndex = state.boardsLibrary.indexOf(board);
     const row = document.createElement('div');
-    row.className = 'board-row';
-    const savedAt = board.updated_at ? new Date(board.updated_at).toLocaleString('de-DE') : '—';
+    row.className = 'board-row fk-card';
+    row.draggable = true;
+    row.dataset.boardId = String(board.id || '');
+    row.setAttribute('aria-grabbed', 'false');
+    const savedAt = getBoardLastEdited(board);
     const boardName = board.name || 'Campaign Canvas Board';
     const userEmail = typeof state.user?.email === "string" ? state.user.email.trim().toLowerCase() : "";
     const ownerEmail = typeof board.owner_email === "string" ? board.owner_email.trim().toLowerCase() : "";
@@ -13579,10 +13723,16 @@ function renderBoardsLibrary() {
     const isShared = !!board.owner_email && !isOwner;
     const isCopy = /\(copy\)$/i.test(boardName.trim());
     const ownerBy = deriveOwnerDisplayName(board.owner_name || "", board.owner_email || "");
-    const roleChip = isOwner ? '<span class="board-row-chip owned">Your Board</span>' : (isEditor ? '<span class="board-row-chip shared">Editor</span>' : (isShared ? '<span class="board-row-chip shared">Shared</span>' : '<span class="board-row-chip shared">Open</span>'));
-    const copyChip = isCopy ? '<span class="board-row-chip copy">Copy</span>' : '';
+    const roleChip = isOwner ? '<span class="board-row-chip owned fk-pill">Your Board</span>' : (isEditor ? '<span class="board-row-chip shared fk-pill">Editor</span>' : (isShared ? '<span class="board-row-chip shared fk-pill">Shared</span>' : '<span class="board-row-chip shared fk-pill">Open</span>'));
+    const copyChip = isCopy ? '<span class="board-row-chip copy fk-pill">Copy</span>' : '';
     const ownerLine = isOwner ? 'You can edit this board.' : (isEditor ? `By ${ownerBy || 'another user'}` : (isShared ? `By ${ownerBy || 'another user'}` : 'No owner yet'));
-    row.innerHTML = `<div><div class="board-row-titleline"><strong class="board-row-title">${boardName}</strong>${roleChip}${copyChip}</div><div class="board-row-meta">Last active: ${savedAt}</div><div class="board-row-meta">${ownerLine}</div><div class="board-rename hidden" data-rename-wrap="${board.id}"><input data-rename-input="${board.id}" value="${board.name || ''}" /><button data-rename-save="${board.id}" type="button">Save</button><button data-rename-cancel="${board.id}" type="button">Cancel</button></div></div><div class="board-row-actions"><button class="icon-btn" data-open-board="${board.id}" title="Open" aria-label="Open board">↗</button><button class="icon-btn" data-copy-board="${board.id}" title="Copy link" aria-label="Copy link">⧉</button><button class="icon-btn" data-rename-board="${board.id}" title="Rename" aria-label="Rename board">✎</button><button class="icon-btn danger" data-delete-board="${board.id}" title="Delete" aria-label="Delete board">🗑</button><button class="icon-btn" data-up-board="${board.id}" data-index="${index}" title="Move up">↑</button><button class="icon-btn" data-down-board="${board.id}" data-index="${index}" title="Move down">↓</button>${state.user?.email && !board.owner_email ? `<button class="icon-btn" data-claim-board="${board.id}" title="Claim">Claim</button>` : ""}</div>`;
+    const boardBrand = getBoardBrandDisplay(board, boardName);
+    const boardAvatar = boardBrand.avatarUrl
+      ? `<img src="${escapeHtml(boardBrand.avatarUrl)}" alt="${escapeHtml(boardBrand.name || boardName)} Brand Avatar" />`
+      : `<span>${escapeHtml(boardBrand.initial)}</span>`;
+    const brandLine = boardBrand.name ? `<div class="board-row-brand"><span>Brand</span><strong>${escapeHtml(boardBrand.name)}</strong></div>` : "";
+    row.innerHTML = `<div class="board-row-drag-handle" title="Drag to reorder" aria-hidden="true">⋮⋮</div><div class="board-row-content"><div class="board-row-avatar" aria-hidden="true">${boardAvatar}</div><div class="board-row-details"><div class="board-row-titleline"><strong class="board-row-title">${escapeHtml(boardName)}</strong>${roleChip}${copyChip}</div>${brandLine}<div class="board-row-meta"><span>Last edited</span><strong>${escapeHtml(savedAt)}</strong></div><div class="board-row-description">${escapeHtml(ownerLine)}</div><div class="board-rename hidden" data-rename-wrap="${escapeHtml(board.id)}"><input class="fk-input" data-rename-input="${escapeHtml(board.id)}" value="${escapeHtml(board.name || '')}" /><button class="fk-btn fk-btn-primary" data-rename-save="${escapeHtml(board.id)}" type="button">Save</button><button class="fk-btn fk-btn-ghost" data-rename-cancel="${escapeHtml(board.id)}" type="button">Cancel</button></div></div></div><div class="board-row-actions"><button class="board-action-btn fk-btn fk-btn-primary" data-open-board="${escapeHtml(board.id)}" title="Open" aria-label="Open board">Open</button><button class="board-action-btn fk-btn fk-btn-secondary" data-copy-board="${escapeHtml(board.id)}" title="Copy link" aria-label="Copy link">Copy Link</button><button class="board-action-btn board-action-tertiary fk-btn fk-btn-ghost" data-rename-board="${escapeHtml(board.id)}" title="Rename" aria-label="Rename board">Rename</button><button class="board-action-btn board-action-tertiary danger fk-btn fk-btn-ghost" data-delete-board="${escapeHtml(board.id)}" title="Delete" aria-label="Delete board">Delete</button><button class="board-action-btn board-action-tertiary fk-btn fk-btn-ghost" data-up-board="${escapeHtml(board.id)}" data-index="${sourceIndex}" title="Move up" aria-label="Move board up">Move Up</button><button class="board-action-btn board-action-tertiary fk-btn fk-btn-ghost" data-down-board="${escapeHtml(board.id)}" data-index="${sourceIndex}" title="Move down" aria-label="Move board down">Move Down</button>${state.user?.email && !board.owner_email ? `<button class="board-action-btn fk-btn fk-btn-secondary" data-claim-board="${escapeHtml(board.id)}" title="Claim">Claim</button>` : ""}</div>`;
+    bindBoardRowDragHandlers(row);
     el.boardsLibraryList.appendChild(row);
   });
 }
