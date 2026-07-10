@@ -6393,3 +6393,41 @@ button:active {
     grid-template-columns: 1fr;
   }
 }
+
+/* Brand Core shell regression fix: restore page scroll and editor width */
+.brand-core-workspace.fk-section {
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 0;
+  align-content: start;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.brand-core-workspace .brand-workspace-body {
+  align-items: start;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 360px);
+  overflow: visible;
+}
+
+.brand-core-workspace .brand-core-canvas {
+  align-self: start;
+  min-height: auto;
+  overflow: visible;
+}
+
+.brand-core-workspace .brand-core-side {
+  align-self: start;
+  min-width: 320px;
+  width: 100%;
+}
+
+@media (max-width: 1400px) {
+  .brand-core-workspace .brand-workspace-body {
+    grid-template-columns: 1fr;
+  }
+
+  .brand-core-workspace .brand-core-side {
+    min-width: 0;
+  }
+}
