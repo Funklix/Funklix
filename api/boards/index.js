@@ -2,6 +2,49 @@ const { pool, ensureBoardsTable } = require('../_boards-storage');
 const { getSessionUser } = require('../_auth-session');
 const { normalizeEmail } = require('../_board-access');
 
+function cleanBrandDisplayText(value) {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function getSafeBrandDisplayImageUrl(value) {
+  const url = cleanBrandDisplayText(value);
+  if (!url) return null;
+  if (/^(https?:|data:image\/)/i.test(url)) return url;
+  return null;
+}
+
+function getBoardBrandDisplaySnapshot(board = {}) {
+  const snapshot = board?.brand_core_snapshot && typeof board.brand_core_snapshot === 'object' && !Array.isArray(board.brand_core_snapshot)
+    ? board.brand_core_snapshot
+    : {};
+  const brandDNA = snapshot.brandDNA && typeof snapshot.brandDNA === 'object' && !Array.isArray(snapshot.brandDNA) ? snapshot.brandDNA : {};
+  const avatar = brandDNA.avatar && typeof brandDNA.avatar === 'object' && !Array.isArray(brandDNA.avatar) ? brandDNA.avatar : {};
+  const brandAssets = snapshot.brandAssets && typeof snapshot.brandAssets === 'object' && !Array.isArray(snapshot.brandAssets) ? snapshot.brandAssets : {};
+  const name = [
+    snapshot.brandName,
+    snapshot.name,
+    snapshot.title,
+    brandDNA.brandName,
+    brandDNA.name,
+    brandAssets.name
+  ].map(cleanBrandDisplayText).find(Boolean) || null;
+  const avatarUrl = [
+    brandDNA?.userApproved && avatar?.userApproved ? avatar.imageUrl : '',
+    snapshot.avatarImageUrl,
+    snapshot.avatarUrl,
+    snapshot.brandAvatarUrl
+  ].map(getSafeBrandDisplayImageUrl).find(Boolean) || null;
+  return { name, avatarUrl };
+}
+
+function serializeBoardListRow(row = {}) {
+  const { brand_core_snapshot, ...safeRow } = row;
+  return {
+    ...safeRow,
+    brand_display: getBoardBrandDisplaySnapshot({ brand_core_snapshot })
+  };
+}
+
 module.exports = async function handler(req, res) {
   if (req.method !== 'POST' && req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -19,7 +62,7 @@ module.exports = async function handler(req, res) {
       if (user?.email) {
         const email = normalizeEmail(user.email);
         result = await pool.query(
-          `SELECT b.id, b.name, b.updated_at, b.order_index, b.owner_id, b.owner_email, b.owner_name, b.owner_avatar, b.created_by, b.created_at,
+          `SELECT b.id, b.name, b.updated_at, b.order_index, b.owner_id, b.owner_email, b.owner_name, b.owner_avatar, b.created_by, b.created_at, b.brand_core_snapshot,
                   CASE
                     WHEN LOWER(COALESCE(b.owner_email, '')) = $1 THEN 'owner'
                     WHEN be.email IS NOT NULL THEN 'editor'
@@ -42,7 +85,7 @@ module.exports = async function handler(req, res) {
       } else {
         result = { rows: [] };
       }
-      return res.status(200).json({ boards: result.rows });
+      return res.status(200).json({ boards: result.rows.map(serializeBoardListRow) });
     }
 
     const { name: rawName = '', canvas_json = null, brand_core_snapshot = null } = req.body || {};
