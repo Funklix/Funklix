@@ -4613,6 +4613,56 @@ const BRAND_WORKSPACE_MISSING_KNOWLEDGE_SECTIONS = {
   deployment: ["Pitch Deck", "Whitepaper"]
 };
 
+const BRAND_WORKSPACE_MISSING_KNOWLEDGE_TITLE_TO_SECTION = Object.entries(BRAND_WORKSPACE_MISSING_KNOWLEDGE_SECTIONS)
+  .reduce((mapping, [section, titles]) => {
+    titles.forEach((title) => { mapping[title] = section; });
+    return mapping;
+  }, {});
+
+function normalizeBrandWorkspaceKnowledgeTitle(value = "") {
+  return String(value || "").trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+function getCanonicalMissingKnowledgeTitle(value = "") {
+  const normalized = normalizeBrandWorkspaceKnowledgeTitle(value);
+  return Object.keys(BRAND_WORKSPACE_MISSING_KNOWLEDGE_TITLE_TO_SECTION)
+    .find((title) => normalizeBrandWorkspaceKnowledgeTitle(title) === normalized) || "";
+}
+
+function getBrandWorkspaceSectionForCustomTileTitle(value = "") {
+  const canonicalTitle = getCanonicalMissingKnowledgeTitle(value);
+  return canonicalTitle ? BRAND_WORKSPACE_MISSING_KNOWLEDGE_TITLE_TO_SECTION[canonicalTitle] || "" : "";
+}
+
+function findBrandWorkspaceCustomTileIndexByTitle(value = "") {
+  const canonicalTitle = getCanonicalMissingKnowledgeTitle(value);
+  if (!canonicalTitle || !Array.isArray(state.brandCore?.customTiles)) return -1;
+  const normalized = normalizeBrandWorkspaceKnowledgeTitle(canonicalTitle);
+  return state.brandCore.customTiles.findIndex((tile) => normalizeBrandWorkspaceKnowledgeTitle(tile?.title) === normalized);
+}
+
+function focusBrandCoreEditorSafely() {
+  el.brandEditorPanel?.scrollIntoView?.({ block: "nearest", inline: "nearest", behavior: "smooth" });
+  const editable = el.brandEditorPanel?.querySelector("input, textarea");
+  editable?.focus?.({ preventScroll: true });
+}
+
+function createOrSelectMissingKnowledgeTile(rawTitle = "") {
+  const canonicalTitle = getCanonicalMissingKnowledgeTitle(rawTitle);
+  if (!canonicalTitle) return;
+  state.brandCore = normalizeBrandCoreState(state.brandCore || defaultBrandCoreState());
+  let tileIndex = findBrandWorkspaceCustomTileIndexByTitle(canonicalTitle);
+  if (tileIndex < 0) {
+    state.brandCore.customTiles.push({ title: canonicalTitle, content: "", items: [] });
+    tileIndex = state.brandCore.customTiles.length - 1;
+    saveBrandBrainState();
+  }
+  state.brandCoreSelectedKey = `custom:${tileIndex}`;
+  renderBrandCoreTiles();
+  renderBrandCoreEditor();
+  focusBrandCoreEditorSafely();
+}
+
 function getBrandWorkspaceMissingKnowledgeForSection(section = "") {
   const allowedLabels = BRAND_WORKSPACE_MISSING_KNOWLEDGE_SECTIONS[section] || [];
   if (!allowedLabels.length) return [];
@@ -4629,7 +4679,7 @@ function renderBrandWorkspaceMissingKnowledgeBlock(section = "") {
       <strong>Strengthen this area</strong>
       <p>Add these strategic inputs when available. They are read-only prompts and do not create new Brand fields yet.</p>
       <div class="brand-workspace-missing-list">
-        ${missingItems.map((item) => `<span class="fk-pill">${escapeHtml(item.label)}</span>`).join("")}
+        ${missingItems.map((item) => `<button type="button" class="brand-workspace-missing-action fk-pill" data-missing-knowledge-title="${escapeHtml(item.label)}" aria-label="Create or open ${escapeHtml(item.label)} custom Brand tile">${escapeHtml(item.label)}<span aria-hidden="true">Add tile</span></button>`).join("")}
       </div>
     </div>`;
 }
@@ -5908,7 +5958,10 @@ function renderBrandCoreTiles() {
     card.className = "bc-node";
     card.dataset.bcKey = `custom:${idx}`;
     card.innerHTML = `<div class="bc-title">${tile.title || "Custom Tile"}</div><div class="bc-preview"><p>${(tile.content || "").slice(0, 120)}</p></div><div class="bc-count">custom</div>`;
-    customRow.appendChild(card);
+    const section = getBrandWorkspaceSectionForCustomTileTitle(tile?.title || "");
+    const sectionRow = section ? el.brandCoreCanvas.querySelector(`[data-brand-workspace-section="${section}"] .bc-row`) : null;
+    if (sectionRow) sectionRow.appendChild(card);
+    else customRow.appendChild(card);
   });
   const addCard = document.createElement("article");
   addCard.className = "bc-node bc-add-custom";
@@ -13510,6 +13563,12 @@ el.dashboardView?.addEventListener("click", (event) => {
   }
 });
 el.brandCoreCanvas.addEventListener("click", (event) => {
+  const missingKnowledgeAction = event.target.closest("[data-missing-knowledge-title]");
+  if (missingKnowledgeAction) {
+    event.preventDefault();
+    createOrSelectMissingKnowledgeTile(missingKnowledgeAction.dataset.missingKnowledgeTitle || "");
+    return;
+  }
   const n = event.target.closest(".bc-node[data-bc-key]");
   if (!n) return;
   el.brandCoreCanvas.querySelectorAll(".bc-node.selected").forEach((x) => x.classList.remove("selected"));

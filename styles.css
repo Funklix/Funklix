@@ -6522,3 +6522,32 @@ button:active {
     overflow: visible;
   }
 }
+
+/* Brand Core PR 3: actionable missing knowledge tiles */
+.brand-core-workspace .brand-workspace-missing-action {
+  appearance: none;
+  cursor: pointer;
+  font: inherit;
+  transition: background 160ms ease, border-color 160ms ease, color 160ms ease, transform 160ms ease;
+}
+
+.brand-core-workspace .brand-workspace-missing-action span {
+  color: #6554f1;
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.brand-core-workspace .brand-workspace-missing-action:hover,
+.brand-core-workspace .brand-workspace-missing-action:focus-visible {
+  background: #ffffff;
+  border-color: rgba(111, 91, 255, 0.45);
+  color: #312a78;
+  transform: translateY(-1px);
+}
+
+.brand-core-workspace .brand-workspace-missing-action:focus-visible {
+  outline: 2px solid rgba(111, 91, 255, 0.34);
+  outline-offset: 2px;
+}
