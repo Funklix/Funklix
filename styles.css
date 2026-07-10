@@ -6431,3 +6431,94 @@ button:active {
     min-width: 0;
   }
 }
+
+/* Brand Core PR 2: sticky editor, readable cards, contextual missing knowledge */
+@media (min-width: 1401px) {
+  .brand-core-workspace .brand-core-side {
+    position: sticky;
+    top: var(--fk-space-4);
+    max-height: calc(100vh - var(--fk-space-8));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+}
+
+.brand-core-workspace .brand-dna-score-grid {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.brand-core-workspace .brand-dna-signals {
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+}
+
+.brand-core-workspace .brand-dna-score,
+.brand-core-workspace .brand-dna-block,
+.brand-core-workspace .brand-dna-signals > div,
+.brand-core-workspace .brand-dna-avatar-details,
+.brand-core-workspace .bc-node,
+.brand-core-workspace .bc-preview,
+.brand-core-workspace .bc-edit-list li,
+.brand-core-workspace .bc-tags,
+.brand-core-workspace .bc-tags span,
+.brand-core-workspace .bc-assets-preview {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.brand-core-workspace .bc-row {
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+}
+
+.brand-core-workspace .bc-node {
+  max-height: none;
+  overflow: visible;
+}
+
+.brand-core-workspace .bc-preview {
+  display: block;
+  max-height: none;
+  overflow: visible;
+}
+
+.brand-core-workspace .bc-edit-list li {
+  align-items: flex-start;
+}
+
+.brand-core-workspace .bc-edit-list li button {
+  flex: 0 0 auto;
+}
+
+.brand-core-workspace .brand-workspace-missing-knowledge {
+  background: rgba(248, 249, 255, 0.86);
+  border: 1px dashed rgba(111, 91, 255, 0.22);
+  border-radius: 16px;
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+}
+
+.brand-core-workspace .brand-workspace-missing-knowledge strong {
+  color: #312a78;
+  font-size: 0.92rem;
+}
+
+.brand-core-workspace .brand-workspace-missing-knowledge p {
+  color: #66708f;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.brand-core-workspace .brand-workspace-missing-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+@media (max-width: 1400px) {
+  .brand-core-workspace .brand-core-side {
+    position: static;
+    max-height: none;
+    overflow: visible;
+  }
+}

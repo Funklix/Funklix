@@ -4607,6 +4607,46 @@ function getDashboardKnowledgeInputStatus() {
   }));
 }
 
+const BRAND_WORKSPACE_MISSING_KNOWLEDGE_SECTIONS = {
+  intelligence: ["Founder Story"],
+  strategy: ["Market Research", "Business Plan"],
+  deployment: ["Pitch Deck", "Whitepaper"]
+};
+
+function getBrandWorkspaceMissingKnowledgeForSection(section = "") {
+  const allowedLabels = BRAND_WORKSPACE_MISSING_KNOWLEDGE_SECTIONS[section] || [];
+  if (!allowedLabels.length) return [];
+  const missingKnowledge = getDashboardKnowledgeInputStatus().filter((item) => !item.exists);
+  return missingKnowledge.filter((item) => allowedLabels.includes(item.label));
+}
+
+function renderBrandWorkspaceMissingKnowledgeBlock(section = "") {
+  const missingItems = getBrandWorkspaceMissingKnowledgeForSection(section);
+  if (!missingItems.length) return "";
+  return `
+    <div class="brand-workspace-missing-knowledge" data-missing-knowledge-section="${escapeHtml(section)}">
+      <span class="brand-workspace-kicker fk-badge">Missing knowledge</span>
+      <strong>Strengthen this area</strong>
+      <p>Add these strategic inputs when available. They are read-only prompts and do not create new Brand fields yet.</p>
+      <div class="brand-workspace-missing-list">
+        ${missingItems.map((item) => `<span class="fk-pill">${escapeHtml(item.label)}</span>`).join("")}
+      </div>
+    </div>`;
+}
+
+function refreshBrandWorkspaceMissingKnowledgeBlocks() {
+  if (!el.brandCoreCanvas) return;
+  Object.keys(BRAND_WORKSPACE_MISSING_KNOWLEDGE_SECTIONS).forEach((section) => {
+    const group = el.brandCoreCanvas.querySelector(`[data-brand-workspace-section="${section}"]`);
+    if (!group) return;
+    const existingBlock = group.querySelector(`[data-missing-knowledge-section="${section}"]`);
+    const html = renderBrandWorkspaceMissingKnowledgeBlock(section);
+    if (html && existingBlock) existingBlock.outerHTML = html;
+    else if (html) group.querySelector(".brand-workspace-group-header")?.insertAdjacentHTML("afterend", html);
+    else existingBlock?.remove();
+  });
+}
+
 function getDashboardBrandEvolutionModel() {
   const signals = getDashboardBrandSignals();
   const completedSignals = signals.filter((signal) => signal.hasValue);
@@ -5783,12 +5823,13 @@ function renderBrandCoreTiles() {
           <article class="bc-node bc-main selected" data-bc-key="brandCore"></article>
         </div>
       </section>
-      <section class="brand-workspace-group fk-card" aria-labelledby="brand-strategy-title">
+      <section class="brand-workspace-group fk-card" data-brand-workspace-section="strategy" aria-labelledby="brand-strategy-title">
         <div class="brand-workspace-group-header">
           <span class="brand-workspace-kicker fk-badge">Strategy</span>
           <h2 id="brand-strategy-title">Positioning, ICP and messaging</h2>
           <p>Shape the market story, audience and value proposition that guide campaigns.</p>
         </div>
+        ${renderBrandWorkspaceMissingKnowledgeBlock("strategy")}
         <div class="bc-row">
           <article class="bc-node" data-bc-key="valueProposition"></article>
           <article class="bc-node" data-bc-key="personas"></article>
@@ -5796,20 +5837,22 @@ function renderBrandCoreTiles() {
           <article class="bc-node" data-bc-key="toneOfVoice"></article>
         </div>
       </section>
-      <section class="brand-workspace-group brand-workspace-group-intelligence fk-card" aria-labelledby="brand-intelligence-title">
+      <section class="brand-workspace-group brand-workspace-group-intelligence fk-card" data-brand-workspace-section="intelligence" aria-labelledby="brand-intelligence-title">
         <div class="brand-workspace-group-header">
           <span class="brand-workspace-kicker fk-badge">Intelligence</span>
           <h2 id="brand-intelligence-title">Brand DNA, Avatar, knowledge and website analysis</h2>
           <p>Use existing Brand Brain context to guide AI interpretation and review.</p>
         </div>
+        ${renderBrandWorkspaceMissingKnowledgeBlock("intelligence")}
         <section class="brand-dna-card" id="brand-dna-card"></section>
       </section>
-      <section class="brand-workspace-group fk-card" aria-labelledby="brand-deployment-title">
+      <section class="brand-workspace-group fk-card" data-brand-workspace-section="deployment" aria-labelledby="brand-deployment-title">
         <div class="brand-workspace-group-header">
           <span class="brand-workspace-kicker fk-badge">Deployment</span>
           <h2 id="brand-deployment-title">Assets, keywords, guidelines and voice examples</h2>
           <p>Define the reusable rules and assets campaigns should follow.</p>
         </div>
+        ${renderBrandWorkspaceMissingKnowledgeBlock("deployment")}
         <div class="bc-row">
           <article class="bc-node bc-assets" data-bc-key="brandAssets"></article>
           <article class="bc-node" data-bc-key="keywords"></article>
@@ -5820,6 +5863,7 @@ function renderBrandCoreTiles() {
       </section>`;
   }
   renderBrandDnaCard();
+  refreshBrandWorkspaceMissingKnowledgeBlocks();
   el.brandCoreCanvas.querySelectorAll(".bc-custom-row, .brand-workspace-custom-group").forEach((n) => n.remove());
   const titleMap = { brandCore: "BRAND CORE", toneOfVoice: "TONE OF VOICE", messagingPillars: "MESSAGING PILLARS", valueProposition: "VALUE PROPOSITION", personas: "PERSONAS", contentGuidelines: "CONTENT GUIDELINES", dosAndDonts: "DO'S & DON'TS", brandVoiceExamples: "BRAND VOICE EXAMPLES", keywords: "KEYWORDS", brandAssets: "BRAND ASSETS" };
   document.querySelectorAll(".bc-node[data-bc-key]").forEach((tile) => {
