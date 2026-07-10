@@ -417,17 +417,38 @@
           <h2>AI Brain</h2>
           <div id="ai-brain-summary" class="boards-library-panel"></div>
         </section>
-        <section id="brand-core-workspace" class="brand-core-workspace hidden">
-          <header class="brand-mode-header">
-            <h1>🧠 Brand Brain</h1>
-            <button id="reset-brand-core-btn" type="button">Reset Brand Core</button>
+        <section id="brand-core-workspace" class="brand-core-workspace fk-section hidden" aria-labelledby="brand-workspace-title">
+          <header class="brand-mode-header brand-workspace-hero fk-card">
+            <div class="brand-workspace-hero-main">
+              <span class="brand-workspace-kicker fk-badge">Brand Workspace</span>
+              <div class="brand-workspace-title-row">
+                <div class="brand-workspace-avatar" id="brand-workspace-avatar" aria-hidden="true">B</div>
+                <div>
+                  <h1 id="brand-workspace-title">Brand Workspace</h1>
+                  <p id="brand-workspace-name">Current board Brand</p>
+                </div>
+              </div>
+              <p class="brand-workspace-support">Build the strategic foundation your AI and campaigns will use.</p>
+            </div>
+            <div class="brand-workspace-hero-side">
+              <div class="brand-workspace-readiness" aria-label="Brand readiness summary">
+                <span class="fk-pill">Readiness</span>
+                <strong id="brand-workspace-readiness-label">Brand signals pending</strong>
+                <small id="brand-workspace-readiness-detail">Complete the sections below to strengthen future campaign recommendations.</small>
+              </div>
+              <button id="reset-brand-core-btn" class="fk-btn fk-btn-ghost" type="button">Reset Brand Core</button>
+            </div>
           </header>
-          <div class="brand-core-canvas" id="brand-core-canvas"></div>
-          <aside class="brand-core-side">
-            <h3>Brand Core Details</h3>
-            <h4 id="bc-editor-title">BRAND CORE</h4>
-            <div id="bc-editor-panel"></div>
-          </aside>
+          <div class="brand-workspace-body">
+            <div class="brand-core-canvas" id="brand-core-canvas" aria-label="Brand knowledge sections"></div>
+            <aside class="brand-core-side fk-card">
+              <span class="brand-workspace-kicker fk-badge">Editor</span>
+              <h3>Brand Core Details</h3>
+              <p class="brand-core-side-copy">Select a section to refine the Brand knowledge used by campaigns and AI.</p>
+              <h4 id="bc-editor-title">BRAND CORE</h4>
+              <div id="bc-editor-panel"></div>
+            </aside>
+          </div>
         </section>
       </main>
 

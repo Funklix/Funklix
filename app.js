@@ -192,6 +192,10 @@ const el = {
   boardListView: document.getElementById("board-list-view"),
   calendarView: document.getElementById("calendar-view"),
   brandCoreWorkspace: document.getElementById("brand-core-workspace"),
+  brandWorkspaceAvatar: document.getElementById("brand-workspace-avatar"),
+  brandWorkspaceName: document.getElementById("brand-workspace-name"),
+  brandWorkspaceReadinessLabel: document.getElementById("brand-workspace-readiness-label"),
+  brandWorkspaceReadinessDetail: document.getElementById("brand-workspace-readiness-detail"),
   cycleViewButton: document.getElementById("cycle-view-btn"),
   viewMenuButton: document.getElementById("view-menu-btn"),
   viewMenu: document.getElementById("view-menu"),
@@ -5457,7 +5461,67 @@ function renderBrandAvatarSection(result) {
     </div>`;
 }
 
+function resolveBrandWorkspaceDisplayName() {
+  const brandCore = state.brandCore && typeof state.brandCore === "object" && !Array.isArray(state.brandCore) ? state.brandCore : {};
+  const brandDNA = brandCore.brandDNA && typeof brandCore.brandDNA === "object" && !Array.isArray(brandCore.brandDNA) ? brandCore.brandDNA : {};
+  const brandAssets = brandCore.brandAssets && typeof brandCore.brandAssets === "object" && !Array.isArray(brandCore.brandAssets) ? brandCore.brandAssets : {};
+  return [
+    brandCore.brandName,
+    brandCore.name,
+    brandCore.title,
+    brandDNA.brandName,
+    brandDNA.name,
+    brandAssets.name,
+    brandAssets.domain
+  ].map((value) => (typeof value === "string" ? value.trim() : "")).find(Boolean) || "Current board Brand";
+}
+
+function resolveBrandWorkspaceAvatar(displayName = "") {
+  const brandCore = state.brandCore && typeof state.brandCore === "object" && !Array.isArray(state.brandCore) ? state.brandCore : {};
+  const brandDNA = brandCore.brandDNA && typeof brandCore.brandDNA === "object" && !Array.isArray(brandCore.brandDNA) ? brandCore.brandDNA : {};
+  const avatar = brandDNA.avatar && typeof brandDNA.avatar === "object" && !Array.isArray(brandDNA.avatar) ? brandDNA.avatar : {};
+  const imageUrl = getSafeDashboardAvatarImageUrl(getApprovedBrandAvatarUrl());
+  if (imageUrl) return { imageUrl, initial: "" };
+  const initial = [
+    avatar.initial,
+    avatar.icon,
+    brandDNA.initial,
+    brandDNA.icon,
+    brandCore.avatarInitial,
+    brandCore.avatarIcon,
+    brandCore.initial,
+    brandCore.icon,
+    displayName
+  ].map(getDashboardAvatarInitial).find(Boolean) || "B";
+  return { imageUrl: "", initial };
+}
+
+function renderBrandWorkspaceHero() {
+  const displayName = resolveBrandWorkspaceDisplayName();
+  const avatar = resolveBrandWorkspaceAvatar(displayName);
+  if (el.brandWorkspaceName) el.brandWorkspaceName.textContent = displayName;
+  if (el.brandWorkspaceAvatar) {
+    el.brandWorkspaceAvatar.innerHTML = avatar.imageUrl
+      ? `<img src="${escapeHtml(avatar.imageUrl)}" alt="" />`
+      : `<span>${escapeHtml(avatar.initial || getDashboardAvatarInitial(displayName) || "B")}</span>`;
+  }
+  if (!el.brandWorkspaceReadinessLabel || !el.brandWorkspaceReadinessDetail) return;
+  const signals = getDashboardBrandSignals();
+  const completedSignals = signals.filter((signal) => signal.hasValue);
+  if (completedSignals.length) {
+    el.brandWorkspaceReadinessLabel.textContent = `${completedSignals.length} of ${signals.length} Brand signals present`;
+    const nextMissing = signals.find((signal) => !signal.hasValue);
+    el.brandWorkspaceReadinessDetail.textContent = nextMissing
+      ? `Next suggested section: ${nextMissing.label}.`
+      : "Core Brand signals are present. Review and refine before deployment.";
+  } else {
+    el.brandWorkspaceReadinessLabel.textContent = "Brand signals pending";
+    el.brandWorkspaceReadinessDetail.textContent = "Complete the sections below to strengthen future campaign recommendations.";
+  }
+}
+
 function renderBrandDnaCard() {
+  renderBrandWorkspaceHero();
   if (!el.brandCoreCanvas) return;
   let card = el.brandCoreCanvas.querySelector("#brand-dna-card");
   if (!card) {
@@ -5706,26 +5770,57 @@ function renderBrandCoreEditor() {
 function renderBrandCoreTiles() {
   console.log("BrandBrain mounted");
   console.log("BrandBrain data:", state.brandCore);
+  renderBrandWorkspaceHero();
   if (!el.brandCoreCanvas.querySelector(".bc-node")) {
     el.brandCoreCanvas.innerHTML = `
-      <section class="brand-dna-card" id="brand-dna-card"></section>
-      <article class="bc-node bc-main selected" data-bc-key="brandCore"></article>
-      <div class="bc-row">
-        <article class="bc-node" data-bc-key="toneOfVoice"></article>
-        <article class="bc-node" data-bc-key="messagingPillars"></article>
-        <article class="bc-node" data-bc-key="valueProposition"></article>
-        <article class="bc-node" data-bc-key="personas"></article>
-      </div>
-      <div class="bc-row">
-        <article class="bc-node" data-bc-key="contentGuidelines"></article>
-        <article class="bc-node" data-bc-key="dosAndDonts"></article>
-        <article class="bc-node" data-bc-key="brandVoiceExamples"></article>
-        <article class="bc-node" data-bc-key="keywords"></article>
-      </div>
-      <article class="bc-node bc-assets" data-bc-key="brandAssets"></article>`;
+      <section class="brand-workspace-group brand-workspace-group-foundation fk-card" aria-labelledby="brand-foundation-title">
+        <div class="brand-workspace-group-header">
+          <span class="brand-workspace-kicker fk-badge">Foundation</span>
+          <h2 id="brand-foundation-title">Identity, mission, vision and values</h2>
+          <p>Start with the core truth the rest of the Brand Workspace should support.</p>
+        </div>
+        <div class="bc-row bc-row-foundation">
+          <article class="bc-node bc-main selected" data-bc-key="brandCore"></article>
+        </div>
+      </section>
+      <section class="brand-workspace-group fk-card" aria-labelledby="brand-strategy-title">
+        <div class="brand-workspace-group-header">
+          <span class="brand-workspace-kicker fk-badge">Strategy</span>
+          <h2 id="brand-strategy-title">Positioning, ICP and messaging</h2>
+          <p>Shape the market story, audience and value proposition that guide campaigns.</p>
+        </div>
+        <div class="bc-row">
+          <article class="bc-node" data-bc-key="valueProposition"></article>
+          <article class="bc-node" data-bc-key="personas"></article>
+          <article class="bc-node" data-bc-key="messagingPillars"></article>
+          <article class="bc-node" data-bc-key="toneOfVoice"></article>
+        </div>
+      </section>
+      <section class="brand-workspace-group brand-workspace-group-intelligence fk-card" aria-labelledby="brand-intelligence-title">
+        <div class="brand-workspace-group-header">
+          <span class="brand-workspace-kicker fk-badge">Intelligence</span>
+          <h2 id="brand-intelligence-title">Brand DNA, Avatar, knowledge and website analysis</h2>
+          <p>Use existing Brand Brain context to guide AI interpretation and review.</p>
+        </div>
+        <section class="brand-dna-card" id="brand-dna-card"></section>
+      </section>
+      <section class="brand-workspace-group fk-card" aria-labelledby="brand-deployment-title">
+        <div class="brand-workspace-group-header">
+          <span class="brand-workspace-kicker fk-badge">Deployment</span>
+          <h2 id="brand-deployment-title">Assets, keywords, guidelines and voice examples</h2>
+          <p>Define the reusable rules and assets campaigns should follow.</p>
+        </div>
+        <div class="bc-row">
+          <article class="bc-node bc-assets" data-bc-key="brandAssets"></article>
+          <article class="bc-node" data-bc-key="keywords"></article>
+          <article class="bc-node" data-bc-key="contentGuidelines"></article>
+          <article class="bc-node" data-bc-key="dosAndDonts"></article>
+          <article class="bc-node" data-bc-key="brandVoiceExamples"></article>
+        </div>
+      </section>`;
   }
   renderBrandDnaCard();
-  el.brandCoreCanvas.querySelectorAll(".bc-custom-row").forEach((n) => n.remove());
+  el.brandCoreCanvas.querySelectorAll(".bc-custom-row, .brand-workspace-custom-group").forEach((n) => n.remove());
   const titleMap = { brandCore: "BRAND CORE", toneOfVoice: "TONE OF VOICE", messagingPillars: "MESSAGING PILLARS", valueProposition: "VALUE PROPOSITION", personas: "PERSONAS", contentGuidelines: "CONTENT GUIDELINES", dosAndDonts: "DO'S & DON'TS", brandVoiceExamples: "BRAND VOICE EXAMPLES", keywords: "KEYWORDS", brandAssets: "BRAND ASSETS" };
   document.querySelectorAll(".bc-node[data-bc-key]").forEach((tile) => {
     const key = tile.dataset.bcKey;
@@ -5757,6 +5852,10 @@ function renderBrandCoreTiles() {
     }
     tile.innerHTML = `<div class="bc-title">${title}</div><div class="bc-preview">${preview}</div><div class="bc-count">${count}</div>`;
   });
+  const customGroup = document.createElement("section");
+  customGroup.className = "brand-workspace-group brand-workspace-custom-group fk-card";
+  customGroup.setAttribute("aria-labelledby", "brand-custom-knowledge-title");
+  customGroup.innerHTML = `<div class="brand-workspace-group-header"><span class="brand-workspace-kicker fk-badge">Custom Knowledge</span><h2 id="brand-custom-knowledge-title">Additional Brand context</h2><p>Keep specialized knowledge close to the Brand sections without changing the core model.</p></div>`;
   const customRow = document.createElement("div");
   customRow.className = "bc-row bc-custom-row";
   if (!Array.isArray(state.brandCore.customTiles)) state.brandCore.customTiles = [];
@@ -5772,7 +5871,8 @@ function renderBrandCoreTiles() {
   addCard.dataset.bcKey = "custom:add";
   addCard.innerHTML = `<div class="bc-title">+ Add custom tile</div><div class="bc-preview"><p>Create your own brand section.</p></div>`;
   customRow.appendChild(addCard);
-  el.brandCoreCanvas.appendChild(customRow);
+  customGroup.appendChild(customRow);
+  el.brandCoreCanvas.appendChild(customGroup);
 }
 
 function connectedIds() {
