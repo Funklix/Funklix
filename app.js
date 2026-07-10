@@ -4623,6 +4623,22 @@ function normalizeBrandWorkspaceKnowledgeTitle(value = "") {
   return String(value || "").trim().replace(/\s+/g, " ").toLowerCase();
 }
 
+function isValidBrandCustomTile(tile) {
+  if (!tile || typeof tile !== "object" || Array.isArray(tile)) return false;
+  const title = typeof tile.title === "string" ? tile.title.trim() : "";
+  const content = typeof tile.content === "string" ? tile.content.trim() : "";
+  const hasItems = Array.isArray(tile.items) && tile.items.length > 0;
+  return Boolean(title || content || hasItems);
+}
+
+function isMalformedGeneratedCustomTile(tile) {
+  if (!isValidBrandCustomTile(tile)) return false;
+  const title = typeof tile.title === "string" ? tile.title.trim() : "";
+  const content = typeof tile.content === "string" ? tile.content.trim() : "";
+  const hasItems = Array.isArray(tile.items) && tile.items.length > 0;
+  return /^custom:\d+$/i.test(title) && !content && !hasItems;
+}
+
 function getCanonicalMissingKnowledgeTitle(value = "") {
   const normalized = normalizeBrandWorkspaceKnowledgeTitle(value);
   return Object.keys(BRAND_WORKSPACE_MISSING_KNOWLEDGE_TITLE_TO_SECTION)
@@ -4638,7 +4654,11 @@ function findBrandWorkspaceCustomTileIndexByTitle(value = "") {
   const canonicalTitle = getCanonicalMissingKnowledgeTitle(value);
   if (!canonicalTitle || !Array.isArray(state.brandCore?.customTiles)) return -1;
   const normalized = normalizeBrandWorkspaceKnowledgeTitle(canonicalTitle);
-  return state.brandCore.customTiles.findIndex((tile) => normalizeBrandWorkspaceKnowledgeTitle(tile?.title) === normalized);
+  return state.brandCore.customTiles.findIndex((tile) => (
+    isValidBrandCustomTile(tile)
+    && !isMalformedGeneratedCustomTile(tile)
+    && normalizeBrandWorkspaceKnowledgeTitle(tile?.title) === normalized
+  ));
 }
 
 function focusBrandCoreEditorSafely() {
@@ -4677,7 +4697,7 @@ function renderBrandWorkspaceMissingKnowledgeBlock(section = "") {
     <div class="brand-workspace-missing-knowledge" data-missing-knowledge-section="${escapeHtml(section)}">
       <span class="brand-workspace-kicker fk-badge">Missing knowledge</span>
       <strong>Strengthen this area</strong>
-      <p>Add these strategic inputs when available. They are read-only prompts and do not create new Brand fields yet.</p>
+      <p>Add the missing knowledge your Brand and campaigns should be able to use.</p>
       <div class="brand-workspace-missing-list">
         ${missingItems.map((item) => `<button type="button" class="brand-workspace-missing-action fk-pill" data-missing-knowledge-title="${escapeHtml(item.label)}" aria-label="Create or open ${escapeHtml(item.label)} custom Brand tile">${escapeHtml(item.label)}<span aria-hidden="true">Add tile</span></button>`).join("")}
       </div>
@@ -5774,12 +5794,24 @@ function renderBrandCoreEditor() {
   const activeKey = state.brandCoreSelectedKey;
   if (activeKey.startsWith("custom:")) {
     const idx = Number(activeKey.split(":")[1]);
-    const tile = state.brandCore.customTiles[idx];
-    el.brandEditorTitle.textContent = tile?.title || "Custom Tile";
-    el.brandEditorPanel.innerHTML = `<div class="bc-editor-meta"><p class="bc-helper">Custom Brand Tile</p><span class="bc-badge">custom</span></div><label>Title</label><input id="bc-custom-title" value="${tile?.title || ""}"/><label>Content</label><textarea id="bc-custom-content" rows="5">${tile?.content || ""}</textarea><button id="bc-custom-delete" type="button">Remove custom tile</button>`;
+    const tile = Number.isInteger(idx) ? state.brandCore.customTiles[idx] : null;
+    if (!isValidBrandCustomTile(tile) || isMalformedGeneratedCustomTile(tile)) {
+      state.brandCoreSelectedKey = "brandCore";
+      renderBrandCoreTiles();
+      renderBrandCoreEditor();
+      return;
+    }
+    el.brandEditorTitle.textContent = tile.title || "Custom Tile";
+    el.brandEditorPanel.innerHTML = `<div class="bc-editor-meta"><p class="bc-helper">Custom Brand Tile</p><span class="bc-badge">custom</span></div><label>Title</label><input id="bc-custom-title" value="${tile.title || ""}"/><label>Content</label><textarea id="bc-custom-content" rows="5">${tile.content || ""}</textarea><button id="bc-custom-delete" type="button">Remove custom tile</button>`;
     el.brandEditorPanel.querySelector("#bc-custom-title").addEventListener("input", (e) => { tile.title = e.target.value; saveBrandBrainState(); renderBrandCoreTiles(); });
     el.brandEditorPanel.querySelector("#bc-custom-content").addEventListener("input", (e) => { tile.content = e.target.value; saveBrandBrainState(); renderBrandCoreTiles(); });
-    el.brandEditorPanel.querySelector("#bc-custom-delete").addEventListener("click", () => { state.brandCore.customTiles.splice(idx, 1); state.brandCoreSelectedKey = "brandCore"; saveBrandBrainState(); renderBrandCoreEditor(); });
+    el.brandEditorPanel.querySelector("#bc-custom-delete").addEventListener("click", () => {
+      state.brandCore.customTiles = state.brandCore.customTiles.filter((_, tileIndex) => tileIndex !== idx);
+      state.brandCoreSelectedKey = "brandCore";
+      saveBrandBrainState();
+      renderBrandCoreTiles();
+      renderBrandCoreEditor();
+    });
     return;
   }
   const labelMap = {
@@ -5914,9 +5946,9 @@ function renderBrandCoreTiles() {
   }
   renderBrandDnaCard();
   refreshBrandWorkspaceMissingKnowledgeBlocks();
-  el.brandCoreCanvas.querySelectorAll(".bc-custom-row, .brand-workspace-custom-group").forEach((n) => n.remove());
+  el.brandCoreCanvas.querySelectorAll(".bc-custom-row, .brand-workspace-custom-group, .bc-node[data-bc-key^='custom:']").forEach((n) => n.remove());
   const titleMap = { brandCore: "BRAND CORE", toneOfVoice: "TONE OF VOICE", messagingPillars: "MESSAGING PILLARS", valueProposition: "VALUE PROPOSITION", personas: "PERSONAS", contentGuidelines: "CONTENT GUIDELINES", dosAndDonts: "DO'S & DON'TS", brandVoiceExamples: "BRAND VOICE EXAMPLES", keywords: "KEYWORDS", brandAssets: "BRAND ASSETS" };
-  document.querySelectorAll(".bc-node[data-bc-key]").forEach((tile) => {
+  el.brandCoreCanvas.querySelectorAll(".bc-node[data-bc-key]:not([data-bc-key^='custom:'])").forEach((tile) => {
     const key = tile.dataset.bcKey;
     const val = state.brandCore[key];
     const title = titleMap[key] || key;
@@ -5954,8 +5986,9 @@ function renderBrandCoreTiles() {
   customRow.className = "bc-row bc-custom-row";
   if (!Array.isArray(state.brandCore.customTiles)) state.brandCore.customTiles = [];
   state.brandCore.customTiles.forEach((tile, idx) => {
+    if (!isValidBrandCustomTile(tile) || isMalformedGeneratedCustomTile(tile)) return;
     const card = document.createElement("article");
-    card.className = "bc-node";
+    card.className = `bc-node${state.brandCoreSelectedKey === `custom:${idx}` ? " selected" : ""}`;
     card.dataset.bcKey = `custom:${idx}`;
     card.innerHTML = `<div class="bc-title">${tile.title || "Custom Tile"}</div><div class="bc-preview"><p>${(tile.content || "").slice(0, 120)}</p></div><div class="bc-count">custom</div>`;
     const section = getBrandWorkspaceSectionForCustomTileTitle(tile?.title || "");
