@@ -171,6 +171,7 @@ const KNOWLEDGE_MODULE_REGISTRY = Object.freeze({
   dos_and_donts: Object.freeze({
     id: "dos_and_donts",
     label: "Do's & Don'ts",
+    editorLabel: "Do / Don't",
     section: KNOWLEDGE_MODULE_SECTIONS.DEPLOYMENT,
     description: "Explicit Brand behavior rules for what to do and what to avoid.",
     defaultCapabilities: BASE_STRUCTURED_CAPABILITIES,
@@ -181,7 +182,7 @@ const KNOWLEDGE_MODULE_REGISTRY = Object.freeze({
   }),
   voice_examples: Object.freeze({
     id: "voice_examples",
-    label: "Voice Examples",
+    label: "Brand Voice Examples",
     section: KNOWLEDGE_MODULE_SECTIONS.DEPLOYMENT,
     description: "Examples of good and avoided Brand voice execution.",
     defaultCapabilities: BASE_STRUCTURED_CAPABILITIES,
@@ -335,7 +336,7 @@ function getModuleCategory(moduleId) {
   return getModuleDefinition(moduleId)?.category || null;
 }
 
-module.exports = {
+const KnowledgeModuleRegistry = Object.freeze({
   KNOWLEDGE_MODULE_CATEGORIES,
   KNOWLEDGE_MODULE_REGISTRY,
   KNOWLEDGE_MODULE_SECTIONS,
@@ -343,4 +344,12 @@ module.exports = {
   getModuleDefinition,
   getModulesForSection,
   isKnownModule
-};
+});
+
+if (typeof window !== "undefined") {
+  window.KnowledgeModuleRegistry = KnowledgeModuleRegistry;
+}
+
+if (typeof module !== "undefined" && module.exports) {
+  module.exports = KnowledgeModuleRegistry;
+}

@@ -4607,17 +4607,60 @@ function getDashboardKnowledgeInputStatus() {
   }));
 }
 
-const BRAND_WORKSPACE_MISSING_KNOWLEDGE_SECTIONS = {
-  intelligence: ["Founder Story"],
-  strategy: ["Market Research", "Business Plan"],
-  deployment: ["Pitch Deck", "Whitepaper"]
-};
+const BRAND_WORKSPACE_MISSING_KNOWLEDGE_MODULE_IDS = Object.freeze([
+  "founder_story",
+  "market_research",
+  "business_plan",
+  "pitch_deck",
+  "whitepaper"
+]);
 
-const BRAND_WORKSPACE_MISSING_KNOWLEDGE_TITLE_TO_SECTION = Object.entries(BRAND_WORKSPACE_MISSING_KNOWLEDGE_SECTIONS)
-  .reduce((mapping, [section, titles]) => {
-    titles.forEach((title) => { mapping[title] = section; });
+const BRAND_CORE_KEY_TO_KNOWLEDGE_MODULE_ID = Object.freeze({
+  brandCore: "brand_core",
+  valueProposition: "value_proposition",
+  personas: "personas",
+  messagingPillars: "messaging_pillars",
+  toneOfVoice: "tone_of_voice",
+  brandAssets: "brand_assets",
+  keywords: "keywords",
+  contentGuidelines: "content_guidelines",
+  dosAndDonts: "dos_and_donts",
+  brandVoiceExamples: "voice_examples"
+});
+
+function getKnowledgeModuleRegistryApi() {
+  return typeof window !== "undefined" ? window.KnowledgeModuleRegistry || null : null;
+}
+
+function getRuntimeKnowledgeModuleDefinition(moduleId = "") {
+  return getKnowledgeModuleRegistryApi()?.getModuleDefinition?.(moduleId) || null;
+}
+
+function getBrandCoreModuleDefinitionForKey(key = "") {
+  const moduleId = BRAND_CORE_KEY_TO_KNOWLEDGE_MODULE_ID[key];
+  return moduleId ? getRuntimeKnowledgeModuleDefinition(moduleId) : null;
+}
+
+function getBrandCoreModuleLabel(key = "", options = {}) {
+  const definition = getBrandCoreModuleDefinitionForKey(key);
+  const label = options.editor ? definition?.editorLabel || definition?.label : definition?.label;
+  return label || key;
+}
+
+function getMissingKnowledgeModuleDefinitions() {
+  return BRAND_WORKSPACE_MISSING_KNOWLEDGE_MODULE_IDS
+    .map((moduleId) => getRuntimeKnowledgeModuleDefinition(moduleId))
+    .filter(Boolean);
+}
+
+function getBrandWorkspaceMissingKnowledgeSections() {
+  return getMissingKnowledgeModuleDefinitions().reduce((mapping, definition) => {
+    if (!definition.section || !definition.label) return mapping;
+    if (!mapping[definition.section]) mapping[definition.section] = [];
+    mapping[definition.section].push(definition.label);
     return mapping;
   }, {});
+}
 
 function normalizeBrandWorkspaceKnowledgeTitle(value = "") {
   return String(value || "").trim().replace(/\s+/g, " ").toLowerCase();
@@ -4641,13 +4684,17 @@ function isMalformedGeneratedCustomTile(tile) {
 
 function getCanonicalMissingKnowledgeTitle(value = "") {
   const normalized = normalizeBrandWorkspaceKnowledgeTitle(value);
-  return Object.keys(BRAND_WORKSPACE_MISSING_KNOWLEDGE_TITLE_TO_SECTION)
+  return getMissingKnowledgeModuleDefinitions()
+    .map((definition) => definition.label)
     .find((title) => normalizeBrandWorkspaceKnowledgeTitle(title) === normalized) || "";
 }
 
 function getBrandWorkspaceSectionForCustomTileTitle(value = "") {
   const canonicalTitle = getCanonicalMissingKnowledgeTitle(value);
-  return canonicalTitle ? BRAND_WORKSPACE_MISSING_KNOWLEDGE_TITLE_TO_SECTION[canonicalTitle] || "" : "";
+  const normalized = normalizeBrandWorkspaceKnowledgeTitle(canonicalTitle);
+  const definition = getMissingKnowledgeModuleDefinitions()
+    .find((moduleDefinition) => normalizeBrandWorkspaceKnowledgeTitle(moduleDefinition.label) === normalized);
+  return definition?.section || "";
 }
 
 function findBrandWorkspaceCustomTileIndexByTitle(value = "") {
@@ -4684,7 +4731,7 @@ function createOrSelectMissingKnowledgeTile(rawTitle = "") {
 }
 
 function getBrandWorkspaceMissingKnowledgeForSection(section = "") {
-  const allowedLabels = BRAND_WORKSPACE_MISSING_KNOWLEDGE_SECTIONS[section] || [];
+  const allowedLabels = getBrandWorkspaceMissingKnowledgeSections()[section] || [];
   if (!allowedLabels.length) return [];
   const missingKnowledge = getDashboardKnowledgeInputStatus().filter((item) => !item.exists);
   return missingKnowledge.filter((item) => allowedLabels.includes(item.label));
@@ -4706,7 +4753,7 @@ function renderBrandWorkspaceMissingKnowledgeBlock(section = "") {
 
 function refreshBrandWorkspaceMissingKnowledgeBlocks() {
   if (!el.brandCoreCanvas) return;
-  Object.keys(BRAND_WORKSPACE_MISSING_KNOWLEDGE_SECTIONS).forEach((section) => {
+  Object.keys(getBrandWorkspaceMissingKnowledgeSections()).forEach((section) => {
     const group = el.brandCoreCanvas.querySelector(`[data-brand-workspace-section="${section}"]`);
     if (!group) return;
     const existingBlock = group.querySelector(`[data-missing-knowledge-section="${section}"]`);
@@ -5814,12 +5861,7 @@ function renderBrandCoreEditor() {
     });
     return;
   }
-  const labelMap = {
-    brandCore: "Brand Core", toneOfVoice: "Tone of Voice", messagingPillars: "Messaging Pillars",
-    valueProposition: "Value Proposition", personas: "Personas", contentGuidelines: "Content Guidelines",
-    dosAndDonts: "Do / Don't", brandVoiceExamples: "Brand Voice Examples", keywords: "Keywords", brandAssets: "Brand Assets"
-  };
-  el.brandEditorTitle.textContent = labelMap[activeKey] || "Brand Core";
+  el.brandEditorTitle.textContent = getBrandCoreModuleLabel(activeKey, { editor: true }) || "Brand Core";
   const value = state.brandCore[activeKey];
   const key = activeKey;
   const count = Array.isArray(value)
@@ -5947,11 +5989,10 @@ function renderBrandCoreTiles() {
   renderBrandDnaCard();
   refreshBrandWorkspaceMissingKnowledgeBlocks();
   el.brandCoreCanvas.querySelectorAll(".bc-custom-row, .brand-workspace-custom-group, .bc-node[data-bc-key^='custom:']").forEach((n) => n.remove());
-  const titleMap = { brandCore: "BRAND CORE", toneOfVoice: "TONE OF VOICE", messagingPillars: "MESSAGING PILLARS", valueProposition: "VALUE PROPOSITION", personas: "PERSONAS", contentGuidelines: "CONTENT GUIDELINES", dosAndDonts: "DO'S & DON'TS", brandVoiceExamples: "BRAND VOICE EXAMPLES", keywords: "KEYWORDS", brandAssets: "BRAND ASSETS" };
   el.brandCoreCanvas.querySelectorAll(".bc-node[data-bc-key]:not([data-bc-key^='custom:'])").forEach((tile) => {
     const key = tile.dataset.bcKey;
     const val = state.brandCore[key];
-    const title = titleMap[key] || key;
+    const title = getBrandCoreModuleLabel(key).toUpperCase();
     let preview = "";
     let count = "";
     if (key === "keywords") {
