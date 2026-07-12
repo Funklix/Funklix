@@ -4615,19 +4615,6 @@ const BRAND_WORKSPACE_MISSING_KNOWLEDGE_MODULE_IDS = Object.freeze([
   "whitepaper"
 ]);
 
-const BRAND_CORE_KEY_TO_KNOWLEDGE_MODULE_ID = Object.freeze({
-  brandCore: "brand_core",
-  valueProposition: "value_proposition",
-  personas: "personas",
-  messagingPillars: "messaging_pillars",
-  toneOfVoice: "tone_of_voice",
-  brandAssets: "brand_assets",
-  keywords: "keywords",
-  contentGuidelines: "content_guidelines",
-  dosAndDonts: "dos_and_donts",
-  brandVoiceExamples: "voice_examples"
-});
-
 function getKnowledgeModuleRegistryApi() {
   return typeof window !== "undefined" ? window.KnowledgeModuleRegistry || null : null;
 }
@@ -4637,8 +4624,7 @@ function getRuntimeKnowledgeModuleDefinition(moduleId = "") {
 }
 
 function getBrandCoreModuleDefinitionForKey(key = "") {
-  const moduleId = BRAND_CORE_KEY_TO_KNOWLEDGE_MODULE_ID[key];
-  return moduleId ? getRuntimeKnowledgeModuleDefinition(moduleId) : null;
+  return getKnowledgeModuleRegistryApi()?.getModuleDefinitionForRuntimeStateKey?.(key) || null;
 }
 
 function getBrandCoreModuleLabel(key = "", options = {}) {

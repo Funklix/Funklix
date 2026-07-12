@@ -28,6 +28,7 @@ const KNOWLEDGE_MODULE_REGISTRY = Object.freeze({
   brand_core: Object.freeze({
     id: "brand_core",
     label: "Brand Core",
+    runtimeStateKeys: Object.freeze(["brandCore"]),
     section: KNOWLEDGE_MODULE_SECTIONS.FOUNDATION,
     description: "The central Brand overview and strategic truth that other Brand Workspace modules support.",
     defaultCapabilities: BASE_TEXT_CAPABILITIES,
@@ -72,6 +73,7 @@ const KNOWLEDGE_MODULE_REGISTRY = Object.freeze({
   value_proposition: Object.freeze({
     id: "value_proposition",
     label: "Value Proposition",
+    runtimeStateKeys: Object.freeze(["valueProposition"]),
     section: KNOWLEDGE_MODULE_SECTIONS.STRATEGY,
     description: "The concise value promise that differentiates the Brand in the market.",
     defaultCapabilities: BASE_TEXT_CAPABILITIES,
@@ -83,6 +85,7 @@ const KNOWLEDGE_MODULE_REGISTRY = Object.freeze({
   messaging_pillars: Object.freeze({
     id: "messaging_pillars",
     label: "Messaging Pillars",
+    runtimeStateKeys: Object.freeze(["messagingPillars"]),
     section: KNOWLEDGE_MODULE_SECTIONS.STRATEGY,
     description: "Reusable strategic messages that guide campaign and content creation.",
     defaultCapabilities: BASE_STRUCTURED_CAPABILITIES,
@@ -94,6 +97,7 @@ const KNOWLEDGE_MODULE_REGISTRY = Object.freeze({
   tone_of_voice: Object.freeze({
     id: "tone_of_voice",
     label: "Tone of Voice",
+    runtimeStateKeys: Object.freeze(["toneOfVoice"]),
     section: KNOWLEDGE_MODULE_SECTIONS.STRATEGY,
     description: "The tonal traits that shape how the Brand sounds across channels.",
     defaultCapabilities: BASE_STRUCTURED_CAPABILITIES,
@@ -105,6 +109,7 @@ const KNOWLEDGE_MODULE_REGISTRY = Object.freeze({
   personas: Object.freeze({
     id: "personas",
     label: "Personas",
+    runtimeStateKeys: Object.freeze(["personas"]),
     section: KNOWLEDGE_MODULE_SECTIONS.STRATEGY,
     description: "Audience personas and notes that help campaigns speak to real customer contexts.",
     defaultCapabilities: BASE_STRUCTURED_CAPABILITIES,
@@ -138,6 +143,7 @@ const KNOWLEDGE_MODULE_REGISTRY = Object.freeze({
   brand_assets: Object.freeze({
     id: "brand_assets",
     label: "Brand Assets",
+    runtimeStateKeys: Object.freeze(["brandAssets"]),
     section: KNOWLEDGE_MODULE_SECTIONS.DEPLOYMENT,
     description: "Reusable deployment assets such as domain, logo, colors, typography, and references.",
     defaultCapabilities: BASE_STRUCTURED_CAPABILITIES,
@@ -149,6 +155,7 @@ const KNOWLEDGE_MODULE_REGISTRY = Object.freeze({
   keywords: Object.freeze({
     id: "keywords",
     label: "Keywords",
+    runtimeStateKeys: Object.freeze(["keywords"]),
     section: KNOWLEDGE_MODULE_SECTIONS.DEPLOYMENT,
     description: "Reusable words and phrases campaigns should understand or emphasize.",
     defaultCapabilities: BASE_STRUCTURED_CAPABILITIES,
@@ -160,6 +167,7 @@ const KNOWLEDGE_MODULE_REGISTRY = Object.freeze({
   content_guidelines: Object.freeze({
     id: "content_guidelines",
     label: "Content Guidelines",
+    runtimeStateKeys: Object.freeze(["contentGuidelines"]),
     section: KNOWLEDGE_MODULE_SECTIONS.DEPLOYMENT,
     description: "Reusable rules for creating Brand-aligned content.",
     defaultCapabilities: BASE_STRUCTURED_CAPABILITIES,
@@ -172,6 +180,7 @@ const KNOWLEDGE_MODULE_REGISTRY = Object.freeze({
     id: "dos_and_donts",
     label: "Do's & Don'ts",
     editorLabel: "Do / Don't",
+    runtimeStateKeys: Object.freeze(["dosAndDonts"]),
     section: KNOWLEDGE_MODULE_SECTIONS.DEPLOYMENT,
     description: "Explicit Brand behavior rules for what to do and what to avoid.",
     defaultCapabilities: BASE_STRUCTURED_CAPABILITIES,
@@ -183,6 +192,7 @@ const KNOWLEDGE_MODULE_REGISTRY = Object.freeze({
   voice_examples: Object.freeze({
     id: "voice_examples",
     label: "Brand Voice Examples",
+    runtimeStateKeys: Object.freeze(["brandVoiceExamples"]),
     section: KNOWLEDGE_MODULE_SECTIONS.DEPLOYMENT,
     description: "Examples of good and avoided Brand voice execution.",
     defaultCapabilities: BASE_STRUCTURED_CAPABILITIES,
@@ -194,6 +204,7 @@ const KNOWLEDGE_MODULE_REGISTRY = Object.freeze({
   brand_dna: Object.freeze({
     id: "brand_dna",
     label: "Brand DNA",
+    runtimeStateKeys: Object.freeze(["brandDNA"]),
     section: KNOWLEDGE_MODULE_SECTIONS.INTELLIGENCE,
     description: "Accepted Brand DNA signals and interpretation used to guide AI and campaign thinking.",
     defaultCapabilities: Object.freeze(["reviewWorkflow", "readiness"]),
@@ -336,12 +347,21 @@ function getModuleCategory(moduleId) {
   return getModuleDefinition(moduleId)?.category || null;
 }
 
+function getModuleDefinitionForRuntimeStateKey(stateKey) {
+  const normalizedStateKey = String(stateKey || "").trim();
+  if (!normalizedStateKey) return null;
+  return Object.values(KNOWLEDGE_MODULE_REGISTRY).find((definition) => (
+    Array.isArray(definition.runtimeStateKeys) && definition.runtimeStateKeys.includes(normalizedStateKey)
+  )) || null;
+}
+
 const KnowledgeModuleRegistry = Object.freeze({
   KNOWLEDGE_MODULE_CATEGORIES,
   KNOWLEDGE_MODULE_REGISTRY,
   KNOWLEDGE_MODULE_SECTIONS,
   getModuleCategory,
   getModuleDefinition,
+  getModuleDefinitionForRuntimeStateKey,
   getModulesForSection,
   isKnownModule
 });
