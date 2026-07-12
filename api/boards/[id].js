@@ -111,15 +111,31 @@ module.exports = async function handler(req, res) {
         if (!board) return res.status(404).json({ error: 'Board not found' });
         if (!access?.canRename) return res.status(403).json({ error: 'Forbidden' });
 
-        updated = await pool.query(
-          `UPDATE boards
-           SET name = COALESCE($2, name),
-               order_index = COALESCE($3, order_index),
-               updated_at = NOW()
-           WHERE id = $1
-           RETURNING id, name, updated_at, order_index, owner_id, owner_email, owner_name, owner_avatar, created_by, created_at`,
-          [id, name, Number.isInteger(order_index) ? order_index : null]
-        );
+        const hasNameUpdate = Object.prototype.hasOwnProperty.call(req.body || {}, 'name');
+        const hasOrderUpdate = Object.prototype.hasOwnProperty.call(req.body || {}, 'order_index') && Number.isInteger(order_index);
+        if (!hasNameUpdate && !hasOrderUpdate) {
+          return res.status(400).json({ error: 'No supported patch fields provided' });
+        }
+
+        if (hasNameUpdate) {
+          updated = await pool.query(
+            `UPDATE boards
+             SET name = COALESCE($2, name),
+                 order_index = CASE WHEN $3::integer IS NULL THEN order_index ELSE $3::integer END,
+                 updated_at = NOW()
+             WHERE id = $1
+             RETURNING id, name, updated_at, order_index, owner_id, owner_email, owner_name, owner_avatar, created_by, created_at`,
+            [id, name, hasOrderUpdate ? order_index : null]
+          );
+        } else {
+          updated = await pool.query(
+            `UPDATE boards
+             SET order_index = $2
+             WHERE id = $1
+             RETURNING id, name, updated_at, order_index, owner_id, owner_email, owner_name, owner_avatar, created_by, created_at`,
+            [id, order_index]
+          );
+        }
       }
       if (updated.rowCount === 0) return res.status(404).json({ error: 'Board not found' });
       return res.status(200).json(updated.rows[0]);
