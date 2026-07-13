@@ -1,0 +1,25 @@
+name: Runtime Boot Safety
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  runtime-boot-safety:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Check runtime script syntax
+        run: |
+          node --check knowledge-module-registry.js
+          node --check knowledge-module-identity.js
+          node --check knowledge-module-runtime-adapter.js
+          node --check app.js
+          node --check campaign-v3.js
+      - name: Check browser script integrity
+        run: node scripts/check-browser-script-integrity.js
+      - name: Check Knowledge Module browser globals
+        run: node scripts/check-knowledge-module-browser-globals.js

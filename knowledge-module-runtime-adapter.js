@@ -2,12 +2,9 @@
 
 let commonJsRegistry = null;
 let commonJsIdentity = null;
-if (typeof require === "function") {
-  try {
-    commonJsRegistry = require("./knowledge-module-registry");
-  } catch (_error) {
-    commonJsRegistry = null;
-  }
+const hasCommonJsModule = typeof module !== "undefined" && module && module.exports;
+if (hasCommonJsModule && typeof require === "function") {
+  commonJsRegistry = require("./knowledge-module-registry");
   commonJsIdentity = require("./knowledge-module-identity");
 }
 
