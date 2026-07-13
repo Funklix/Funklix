@@ -61,6 +61,12 @@ function normalizeKnowledgeModuleTitle(value = "") {
   return String(value || "").trim().replace(/\s+/g, " ").toLowerCase();
 }
 
+function getValidPersistedModuleDefinition(moduleType = "", registryApi) {
+  const registry = getRegistryApi(registryApi);
+  if (!registry || typeof moduleType !== "string") return null;
+  return registry.getModuleDefinition?.(moduleType) || null;
+}
+
 function getKnownCustomTileDefinition(tileTitle = "", registryApi) {
   const registry = getRegistryApi(registryApi);
   const normalizedTitle = normalizeKnowledgeModuleTitle(tileTitle);
@@ -68,6 +74,11 @@ function getKnownCustomTileDefinition(tileTitle = "", registryApi) {
   return KNOWN_CUSTOM_TILE_MODULE_IDS
     .map((moduleId) => registry.getModuleDefinition?.(moduleId))
     .find((definition) => normalizeKnowledgeModuleTitle(definition?.label) === normalizedTitle) || null;
+}
+
+function resolveCustomTileDefinition(tileObject, registryApi) {
+  return getValidPersistedModuleDefinition(tileObject?.moduleType, registryApi)
+    || getKnownCustomTileDefinition(tileObject?.title, registryApi);
 }
 
 function resolveCustomDefinition(registryApi) {
@@ -103,7 +114,7 @@ function adaptCustomTileToKnowledgeModule(tile, index, options = {}) {
   const identity = getIdentityApi(options.identityApi);
   const customDefinition = resolveCustomDefinition(registry);
   const tileObject = tile && typeof tile === "object" && !Array.isArray(tile) ? tile : {};
-  const knownDefinition = getKnownCustomTileDefinition(tileObject.title, registry);
+  const knownDefinition = resolveCustomTileDefinition(tileObject, registry);
   const definition = knownDefinition || customDefinition;
   const stableId = identity?.isKnowledgeModuleInstanceId?.(tileObject.id) ? tileObject.id : "";
   const runtimeKey = stableId ? `custom-id:${stableId}` : `custom:${index}`;
