@@ -192,6 +192,10 @@ const el = {
   boardListView: document.getElementById("board-list-view"),
   calendarView: document.getElementById("calendar-view"),
   brandCoreWorkspace: document.getElementById("brand-core-workspace"),
+  brandWorkspaceAvatar: document.getElementById("brand-workspace-avatar"),
+  brandWorkspaceName: document.getElementById("brand-workspace-name"),
+  brandWorkspaceReadinessLabel: document.getElementById("brand-workspace-readiness-label"),
+  brandWorkspaceReadinessDetail: document.getElementById("brand-workspace-readiness-detail"),
   cycleViewButton: document.getElementById("cycle-view-btn"),
   viewMenuButton: document.getElementById("view-menu-btn"),
   viewMenu: document.getElementById("view-menu"),
@@ -4603,6 +4607,205 @@ function getDashboardKnowledgeInputStatus() {
   }));
 }
 
+const BRAND_WORKSPACE_MISSING_KNOWLEDGE_MODULE_IDS = Object.freeze([
+  "founder_story",
+  "market_research",
+  "business_plan",
+  "pitch_deck",
+  "whitepaper"
+]);
+
+function getKnowledgeModuleRegistryApi() {
+  return typeof window !== "undefined" ? window.KnowledgeModuleRegistry || null : null;
+}
+
+
+function getKnowledgeModuleIdentityApi() {
+  return typeof window !== "undefined" ? window.KnowledgeModuleIdentity || null : null;
+}
+
+function createKnowledgeModuleInstanceId() {
+  const identity = getKnowledgeModuleIdentityApi();
+  return identity?.createKnowledgeModuleInstanceId?.() || `km_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 14)}`;
+}
+
+function isKnowledgeModuleInstanceId(value = "") {
+  const identity = getKnowledgeModuleIdentityApi();
+  return Boolean(identity?.isKnowledgeModuleInstanceId?.(value));
+}
+
+function createBrandCustomTile(title = "", content = "") {
+  return {
+    id: createKnowledgeModuleInstanceId(),
+    title,
+    content,
+    items: []
+  };
+}
+
+function getCustomTileStableId(tile) {
+  return tile && typeof tile === "object" && isKnowledgeModuleInstanceId(tile.id) ? tile.id : "";
+}
+
+function getCustomTileRuntimeKey(tile, index) {
+  const stableId = getCustomTileStableId(tile);
+  return stableId ? `custom-id:${stableId}` : `custom:${index}`;
+}
+
+function isCustomTileRuntimeKey(runtimeKey = "") {
+  return /^custom-id:km_[A-Za-z0-9_-]+$/.test(runtimeKey) || /^custom:\d+$/.test(runtimeKey);
+}
+
+function findCustomTileIndexByRuntimeKey(runtimeKey = "") {
+  if (!Array.isArray(state.brandCore?.customTiles) || typeof runtimeKey !== "string") return -1;
+  if (runtimeKey.startsWith("custom-id:")) {
+    const stableId = runtimeKey.slice("custom-id:".length);
+    if (!isKnowledgeModuleInstanceId(stableId)) return -1;
+    return state.brandCore.customTiles.findIndex((tile) => getCustomTileStableId(tile) === stableId);
+  }
+  if (runtimeKey.startsWith("custom:")) {
+    const index = Number(runtimeKey.slice("custom:".length));
+    return Number.isInteger(index) && index >= 0 && index < state.brandCore.customTiles.length ? index : -1;
+  }
+  return -1;
+}
+
+function getCustomTileByRuntimeKey(runtimeKey = "") {
+  const index = findCustomTileIndexByRuntimeKey(runtimeKey);
+  return index >= 0 ? { tile: state.brandCore.customTiles[index], index } : { tile: null, index: -1 };
+}
+
+function getRuntimeKnowledgeModuleDefinition(moduleId = "") {
+  return getKnowledgeModuleRegistryApi()?.getModuleDefinition?.(moduleId) || null;
+}
+
+function getBrandCoreModuleDefinitionForKey(key = "") {
+  return getKnowledgeModuleRegistryApi()?.getModuleDefinitionForRuntimeStateKey?.(key) || null;
+}
+
+function getBrandCoreModuleLabel(key = "", options = {}) {
+  const definition = getBrandCoreModuleDefinitionForKey(key);
+  const label = options.editor ? definition?.editorLabel || definition?.label : definition?.label;
+  return label || key;
+}
+
+function getMissingKnowledgeModuleDefinitions() {
+  return BRAND_WORKSPACE_MISSING_KNOWLEDGE_MODULE_IDS
+    .map((moduleId) => getRuntimeKnowledgeModuleDefinition(moduleId))
+    .filter(Boolean);
+}
+
+function getBrandWorkspaceMissingKnowledgeSections() {
+  return getMissingKnowledgeModuleDefinitions().reduce((mapping, definition) => {
+    if (!definition.section || !definition.label) return mapping;
+    if (!mapping[definition.section]) mapping[definition.section] = [];
+    mapping[definition.section].push(definition.label);
+    return mapping;
+  }, {});
+}
+
+function normalizeBrandWorkspaceKnowledgeTitle(value = "") {
+  return String(value || "").trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+function isValidBrandCustomTile(tile) {
+  if (!tile || typeof tile !== "object" || Array.isArray(tile)) return false;
+  const title = typeof tile.title === "string" ? tile.title.trim() : "";
+  const content = typeof tile.content === "string" ? tile.content.trim() : "";
+  const hasItems = Array.isArray(tile.items) && tile.items.length > 0;
+  return Boolean(title || content || hasItems);
+}
+
+function isMalformedGeneratedCustomTile(tile) {
+  if (!isValidBrandCustomTile(tile)) return false;
+  const title = typeof tile.title === "string" ? tile.title.trim() : "";
+  const content = typeof tile.content === "string" ? tile.content.trim() : "";
+  const hasItems = Array.isArray(tile.items) && tile.items.length > 0;
+  return /^custom:\d+$/i.test(title) && !content && !hasItems;
+}
+
+function getCanonicalMissingKnowledgeTitle(value = "") {
+  const normalized = normalizeBrandWorkspaceKnowledgeTitle(value);
+  return getMissingKnowledgeModuleDefinitions()
+    .map((definition) => definition.label)
+    .find((title) => normalizeBrandWorkspaceKnowledgeTitle(title) === normalized) || "";
+}
+
+function getBrandWorkspaceSectionForCustomTileTitle(value = "") {
+  const canonicalTitle = getCanonicalMissingKnowledgeTitle(value);
+  const normalized = normalizeBrandWorkspaceKnowledgeTitle(canonicalTitle);
+  const definition = getMissingKnowledgeModuleDefinitions()
+    .find((moduleDefinition) => normalizeBrandWorkspaceKnowledgeTitle(moduleDefinition.label) === normalized);
+  return definition?.section || "";
+}
+
+function findBrandWorkspaceCustomTileIndexByTitle(value = "") {
+  const canonicalTitle = getCanonicalMissingKnowledgeTitle(value);
+  if (!canonicalTitle || !Array.isArray(state.brandCore?.customTiles)) return -1;
+  const normalized = normalizeBrandWorkspaceKnowledgeTitle(canonicalTitle);
+  return state.brandCore.customTiles.findIndex((tile) => (
+    isValidBrandCustomTile(tile)
+    && !isMalformedGeneratedCustomTile(tile)
+    && normalizeBrandWorkspaceKnowledgeTitle(tile?.title) === normalized
+  ));
+}
+
+function focusBrandCoreEditorSafely() {
+  el.brandEditorPanel?.scrollIntoView?.({ block: "nearest", inline: "nearest", behavior: "smooth" });
+  const editable = el.brandEditorPanel?.querySelector("input, textarea");
+  editable?.focus?.({ preventScroll: true });
+}
+
+function createOrSelectMissingKnowledgeTile(rawTitle = "") {
+  const canonicalTitle = getCanonicalMissingKnowledgeTitle(rawTitle);
+  if (!canonicalTitle) return;
+  state.brandCore = normalizeBrandCoreState(state.brandCore || defaultBrandCoreState());
+  let tileIndex = findBrandWorkspaceCustomTileIndexByTitle(canonicalTitle);
+  if (tileIndex < 0) {
+    state.brandCore.customTiles.push(createBrandCustomTile(canonicalTitle, ""));
+    tileIndex = state.brandCore.customTiles.length - 1;
+    saveBrandBrainState();
+  }
+  state.brandCoreSelectedKey = getCustomTileRuntimeKey(state.brandCore.customTiles[tileIndex], tileIndex);
+  renderBrandCoreTiles();
+  renderBrandCoreEditor();
+  focusBrandCoreEditorSafely();
+}
+
+function getBrandWorkspaceMissingKnowledgeForSection(section = "") {
+  const allowedLabels = getBrandWorkspaceMissingKnowledgeSections()[section] || [];
+  if (!allowedLabels.length) return [];
+  const missingKnowledge = getDashboardKnowledgeInputStatus().filter((item) => !item.exists);
+  return missingKnowledge.filter((item) => allowedLabels.includes(item.label));
+}
+
+function renderBrandWorkspaceMissingKnowledgeBlock(section = "") {
+  const missingItems = getBrandWorkspaceMissingKnowledgeForSection(section);
+  if (!missingItems.length) return "";
+  return `
+    <div class="brand-workspace-missing-knowledge" data-missing-knowledge-section="${escapeHtml(section)}">
+      <span class="brand-workspace-kicker fk-badge">Missing knowledge</span>
+      <strong>Strengthen this area</strong>
+      <p>Add the missing knowledge your Brand and campaigns should be able to use.</p>
+      <div class="brand-workspace-missing-list">
+        ${missingItems.map((item) => `<button type="button" class="brand-workspace-missing-action fk-pill" data-missing-knowledge-title="${escapeHtml(item.label)}" aria-label="Create or open ${escapeHtml(item.label)} custom Brand tile">${escapeHtml(item.label)}<span aria-hidden="true">Add tile</span></button>`).join("")}
+      </div>
+    </div>`;
+}
+
+function refreshBrandWorkspaceMissingKnowledgeBlocks() {
+  if (!el.brandCoreCanvas) return;
+  Object.keys(getBrandWorkspaceMissingKnowledgeSections()).forEach((section) => {
+    const group = el.brandCoreCanvas.querySelector(`[data-brand-workspace-section="${section}"]`);
+    if (!group) return;
+    const existingBlock = group.querySelector(`[data-missing-knowledge-section="${section}"]`);
+    const html = renderBrandWorkspaceMissingKnowledgeBlock(section);
+    if (html && existingBlock) existingBlock.outerHTML = html;
+    else if (html) group.querySelector(".brand-workspace-group-header")?.insertAdjacentHTML("afterend", html);
+    else existingBlock?.remove();
+  });
+}
+
 function getDashboardBrandEvolutionModel() {
   const signals = getDashboardBrandSignals();
   const completedSignals = signals.filter((signal) => signal.hasValue);
@@ -5457,7 +5660,67 @@ function renderBrandAvatarSection(result) {
     </div>`;
 }
 
+function resolveBrandWorkspaceDisplayName() {
+  const brandCore = state.brandCore && typeof state.brandCore === "object" && !Array.isArray(state.brandCore) ? state.brandCore : {};
+  const brandDNA = brandCore.brandDNA && typeof brandCore.brandDNA === "object" && !Array.isArray(brandCore.brandDNA) ? brandCore.brandDNA : {};
+  const brandAssets = brandCore.brandAssets && typeof brandCore.brandAssets === "object" && !Array.isArray(brandCore.brandAssets) ? brandCore.brandAssets : {};
+  return [
+    brandCore.brandName,
+    brandCore.name,
+    brandCore.title,
+    brandDNA.brandName,
+    brandDNA.name,
+    brandAssets.name,
+    brandAssets.domain
+  ].map((value) => (typeof value === "string" ? value.trim() : "")).find(Boolean) || "Current board Brand";
+}
+
+function resolveBrandWorkspaceAvatar(displayName = "") {
+  const brandCore = state.brandCore && typeof state.brandCore === "object" && !Array.isArray(state.brandCore) ? state.brandCore : {};
+  const brandDNA = brandCore.brandDNA && typeof brandCore.brandDNA === "object" && !Array.isArray(brandCore.brandDNA) ? brandCore.brandDNA : {};
+  const avatar = brandDNA.avatar && typeof brandDNA.avatar === "object" && !Array.isArray(brandDNA.avatar) ? brandDNA.avatar : {};
+  const imageUrl = getSafeDashboardAvatarImageUrl(getApprovedBrandAvatarUrl());
+  if (imageUrl) return { imageUrl, initial: "" };
+  const initial = [
+    avatar.initial,
+    avatar.icon,
+    brandDNA.initial,
+    brandDNA.icon,
+    brandCore.avatarInitial,
+    brandCore.avatarIcon,
+    brandCore.initial,
+    brandCore.icon,
+    displayName
+  ].map(getDashboardAvatarInitial).find(Boolean) || "B";
+  return { imageUrl: "", initial };
+}
+
+function renderBrandWorkspaceHero() {
+  const displayName = resolveBrandWorkspaceDisplayName();
+  const avatar = resolveBrandWorkspaceAvatar(displayName);
+  if (el.brandWorkspaceName) el.brandWorkspaceName.textContent = displayName;
+  if (el.brandWorkspaceAvatar) {
+    el.brandWorkspaceAvatar.innerHTML = avatar.imageUrl
+      ? `<img src="${escapeHtml(avatar.imageUrl)}" alt="" />`
+      : `<span>${escapeHtml(avatar.initial || getDashboardAvatarInitial(displayName) || "B")}</span>`;
+  }
+  if (!el.brandWorkspaceReadinessLabel || !el.brandWorkspaceReadinessDetail) return;
+  const signals = getDashboardBrandSignals();
+  const completedSignals = signals.filter((signal) => signal.hasValue);
+  if (completedSignals.length) {
+    el.brandWorkspaceReadinessLabel.textContent = `${completedSignals.length} of ${signals.length} Brand signals present`;
+    const nextMissing = signals.find((signal) => !signal.hasValue);
+    el.brandWorkspaceReadinessDetail.textContent = nextMissing
+      ? `Next suggested section: ${nextMissing.label}.`
+      : "Core Brand signals are present. Review and refine before deployment.";
+  } else {
+    el.brandWorkspaceReadinessLabel.textContent = "Brand signals pending";
+    el.brandWorkspaceReadinessDetail.textContent = "Complete the sections below to strengthen future campaign recommendations.";
+  }
+}
+
 function renderBrandDnaCard() {
+  renderBrandWorkspaceHero();
   if (!el.brandCoreCanvas) return;
   let card = el.brandCoreCanvas.querySelector("#brand-dna-card");
   if (!card) {
@@ -5612,28 +5875,35 @@ function acceptBrandDna() {
 function renderBrandCoreEditor() {
   const selectedKey = state.brandCoreSelectedKey;
   if (selectedKey === "custom:add") {
-    state.brandCore.customTiles.push({ title: "New Custom Tile", content: "", items: [] });
-    state.brandCoreSelectedKey = `custom:${state.brandCore.customTiles.length - 1}`;
+    state.brandCore.customTiles.push(createBrandCustomTile("New Custom Tile", ""));
+    const newTileIndex = state.brandCore.customTiles.length - 1;
+    state.brandCoreSelectedKey = getCustomTileRuntimeKey(state.brandCore.customTiles[newTileIndex], newTileIndex);
     saveBrandBrainState();
     renderBrandCoreTiles();
   }
   const activeKey = state.brandCoreSelectedKey;
-  if (activeKey.startsWith("custom:")) {
-    const idx = Number(activeKey.split(":")[1]);
-    const tile = state.brandCore.customTiles[idx];
-    el.brandEditorTitle.textContent = tile?.title || "Custom Tile";
-    el.brandEditorPanel.innerHTML = `<div class="bc-editor-meta"><p class="bc-helper">Custom Brand Tile</p><span class="bc-badge">custom</span></div><label>Title</label><input id="bc-custom-title" value="${tile?.title || ""}"/><label>Content</label><textarea id="bc-custom-content" rows="5">${tile?.content || ""}</textarea><button id="bc-custom-delete" type="button">Remove custom tile</button>`;
+  if (isCustomTileRuntimeKey(activeKey)) {
+    const { tile, index: idx } = getCustomTileByRuntimeKey(activeKey);
+    if (!isValidBrandCustomTile(tile) || isMalformedGeneratedCustomTile(tile)) {
+      state.brandCoreSelectedKey = "brandCore";
+      renderBrandCoreTiles();
+      renderBrandCoreEditor();
+      return;
+    }
+    el.brandEditorTitle.textContent = tile.title || "Custom Tile";
+    el.brandEditorPanel.innerHTML = `<div class="bc-editor-meta"><p class="bc-helper">Custom Brand Tile</p><span class="bc-badge">custom</span></div><label>Title</label><input id="bc-custom-title" value="${tile.title || ""}"/><label>Content</label><textarea id="bc-custom-content" rows="5">${tile.content || ""}</textarea><button id="bc-custom-delete" type="button">Remove custom tile</button>`;
     el.brandEditorPanel.querySelector("#bc-custom-title").addEventListener("input", (e) => { tile.title = e.target.value; saveBrandBrainState(); renderBrandCoreTiles(); });
     el.brandEditorPanel.querySelector("#bc-custom-content").addEventListener("input", (e) => { tile.content = e.target.value; saveBrandBrainState(); renderBrandCoreTiles(); });
-    el.brandEditorPanel.querySelector("#bc-custom-delete").addEventListener("click", () => { state.brandCore.customTiles.splice(idx, 1); state.brandCoreSelectedKey = "brandCore"; saveBrandBrainState(); renderBrandCoreEditor(); });
+    el.brandEditorPanel.querySelector("#bc-custom-delete").addEventListener("click", () => {
+      state.brandCore.customTiles = state.brandCore.customTiles.filter((_, tileIndex) => tileIndex !== idx);
+      state.brandCoreSelectedKey = "brandCore";
+      saveBrandBrainState();
+      renderBrandCoreTiles();
+      renderBrandCoreEditor();
+    });
     return;
   }
-  const labelMap = {
-    brandCore: "Brand Core", toneOfVoice: "Tone of Voice", messagingPillars: "Messaging Pillars",
-    valueProposition: "Value Proposition", personas: "Personas", contentGuidelines: "Content Guidelines",
-    dosAndDonts: "Do / Don't", brandVoiceExamples: "Brand Voice Examples", keywords: "Keywords", brandAssets: "Brand Assets"
-  };
-  el.brandEditorTitle.textContent = labelMap[activeKey] || "Brand Core";
+  el.brandEditorTitle.textContent = getBrandCoreModuleLabel(activeKey, { editor: true }) || "Brand Core";
   const value = state.brandCore[activeKey];
   const key = activeKey;
   const count = Array.isArray(value)
@@ -5706,31 +5976,65 @@ function renderBrandCoreEditor() {
 function renderBrandCoreTiles() {
   console.log("BrandBrain mounted");
   console.log("BrandBrain data:", state.brandCore);
+  renderBrandWorkspaceHero();
   if (!el.brandCoreCanvas.querySelector(".bc-node")) {
     el.brandCoreCanvas.innerHTML = `
-      <section class="brand-dna-card" id="brand-dna-card"></section>
-      <article class="bc-node bc-main selected" data-bc-key="brandCore"></article>
-      <div class="bc-row">
-        <article class="bc-node" data-bc-key="toneOfVoice"></article>
-        <article class="bc-node" data-bc-key="messagingPillars"></article>
-        <article class="bc-node" data-bc-key="valueProposition"></article>
-        <article class="bc-node" data-bc-key="personas"></article>
-      </div>
-      <div class="bc-row">
-        <article class="bc-node" data-bc-key="contentGuidelines"></article>
-        <article class="bc-node" data-bc-key="dosAndDonts"></article>
-        <article class="bc-node" data-bc-key="brandVoiceExamples"></article>
-        <article class="bc-node" data-bc-key="keywords"></article>
-      </div>
-      <article class="bc-node bc-assets" data-bc-key="brandAssets"></article>`;
+      <section class="brand-workspace-group brand-workspace-group-foundation fk-card" aria-labelledby="brand-foundation-title">
+        <div class="brand-workspace-group-header">
+          <span class="brand-workspace-kicker fk-badge">Foundation</span>
+          <h2 id="brand-foundation-title">Identity, mission, vision and values</h2>
+          <p>Start with the core truth the rest of the Brand Workspace should support.</p>
+        </div>
+        <div class="bc-row bc-row-foundation">
+          <article class="bc-node bc-main selected" data-bc-key="brandCore"></article>
+        </div>
+      </section>
+      <section class="brand-workspace-group fk-card" data-brand-workspace-section="strategy" aria-labelledby="brand-strategy-title">
+        <div class="brand-workspace-group-header">
+          <span class="brand-workspace-kicker fk-badge">Strategy</span>
+          <h2 id="brand-strategy-title">Positioning, ICP and messaging</h2>
+          <p>Shape the market story, audience and value proposition that guide campaigns.</p>
+        </div>
+        ${renderBrandWorkspaceMissingKnowledgeBlock("strategy")}
+        <div class="bc-row">
+          <article class="bc-node" data-bc-key="valueProposition"></article>
+          <article class="bc-node" data-bc-key="personas"></article>
+          <article class="bc-node" data-bc-key="messagingPillars"></article>
+          <article class="bc-node" data-bc-key="toneOfVoice"></article>
+        </div>
+      </section>
+      <section class="brand-workspace-group brand-workspace-group-intelligence fk-card" data-brand-workspace-section="intelligence" aria-labelledby="brand-intelligence-title">
+        <div class="brand-workspace-group-header">
+          <span class="brand-workspace-kicker fk-badge">Intelligence</span>
+          <h2 id="brand-intelligence-title">Brand DNA, Avatar, knowledge and website analysis</h2>
+          <p>Use existing Brand Brain context to guide AI interpretation and review.</p>
+        </div>
+        ${renderBrandWorkspaceMissingKnowledgeBlock("intelligence")}
+        <section class="brand-dna-card" id="brand-dna-card"></section>
+      </section>
+      <section class="brand-workspace-group fk-card" data-brand-workspace-section="deployment" aria-labelledby="brand-deployment-title">
+        <div class="brand-workspace-group-header">
+          <span class="brand-workspace-kicker fk-badge">Deployment</span>
+          <h2 id="brand-deployment-title">Assets, keywords, guidelines and voice examples</h2>
+          <p>Define the reusable rules and assets campaigns should follow.</p>
+        </div>
+        ${renderBrandWorkspaceMissingKnowledgeBlock("deployment")}
+        <div class="bc-row">
+          <article class="bc-node bc-assets" data-bc-key="brandAssets"></article>
+          <article class="bc-node" data-bc-key="keywords"></article>
+          <article class="bc-node" data-bc-key="contentGuidelines"></article>
+          <article class="bc-node" data-bc-key="dosAndDonts"></article>
+          <article class="bc-node" data-bc-key="brandVoiceExamples"></article>
+        </div>
+      </section>`;
   }
   renderBrandDnaCard();
-  el.brandCoreCanvas.querySelectorAll(".bc-custom-row").forEach((n) => n.remove());
-  const titleMap = { brandCore: "BRAND CORE", toneOfVoice: "TONE OF VOICE", messagingPillars: "MESSAGING PILLARS", valueProposition: "VALUE PROPOSITION", personas: "PERSONAS", contentGuidelines: "CONTENT GUIDELINES", dosAndDonts: "DO'S & DON'TS", brandVoiceExamples: "BRAND VOICE EXAMPLES", keywords: "KEYWORDS", brandAssets: "BRAND ASSETS" };
-  document.querySelectorAll(".bc-node[data-bc-key]").forEach((tile) => {
+  refreshBrandWorkspaceMissingKnowledgeBlocks();
+  el.brandCoreCanvas.querySelectorAll(".bc-custom-row, .brand-workspace-custom-group, .bc-node[data-bc-key^='custom:'], .bc-node[data-bc-key^='custom-id:']").forEach((n) => n.remove());
+  el.brandCoreCanvas.querySelectorAll(".bc-node[data-bc-key]:not([data-bc-key^='custom:']):not([data-bc-key^='custom-id:'])").forEach((tile) => {
     const key = tile.dataset.bcKey;
     const val = state.brandCore[key];
-    const title = titleMap[key] || key;
+    const title = getBrandCoreModuleLabel(key).toUpperCase();
     let preview = "";
     let count = "";
     if (key === "keywords") {
@@ -5757,22 +6061,32 @@ function renderBrandCoreTiles() {
     }
     tile.innerHTML = `<div class="bc-title">${title}</div><div class="bc-preview">${preview}</div><div class="bc-count">${count}</div>`;
   });
+  const customGroup = document.createElement("section");
+  customGroup.className = "brand-workspace-group brand-workspace-custom-group fk-card";
+  customGroup.setAttribute("aria-labelledby", "brand-custom-knowledge-title");
+  customGroup.innerHTML = `<div class="brand-workspace-group-header"><span class="brand-workspace-kicker fk-badge">Custom Knowledge</span><h2 id="brand-custom-knowledge-title">Additional Brand context</h2><p>Keep specialized knowledge close to the Brand sections without changing the core model.</p></div>`;
   const customRow = document.createElement("div");
   customRow.className = "bc-row bc-custom-row";
   if (!Array.isArray(state.brandCore.customTiles)) state.brandCore.customTiles = [];
   state.brandCore.customTiles.forEach((tile, idx) => {
+    if (!isValidBrandCustomTile(tile) || isMalformedGeneratedCustomTile(tile)) return;
     const card = document.createElement("article");
-    card.className = "bc-node";
-    card.dataset.bcKey = `custom:${idx}`;
+    const runtimeKey = getCustomTileRuntimeKey(tile, idx);
+    card.className = `bc-node${state.brandCoreSelectedKey === runtimeKey ? " selected" : ""}`;
+    card.dataset.bcKey = runtimeKey;
     card.innerHTML = `<div class="bc-title">${tile.title || "Custom Tile"}</div><div class="bc-preview"><p>${(tile.content || "").slice(0, 120)}</p></div><div class="bc-count">custom</div>`;
-    customRow.appendChild(card);
+    const section = getBrandWorkspaceSectionForCustomTileTitle(tile?.title || "");
+    const sectionRow = section ? el.brandCoreCanvas.querySelector(`[data-brand-workspace-section="${section}"] .bc-row`) : null;
+    if (sectionRow) sectionRow.appendChild(card);
+    else customRow.appendChild(card);
   });
   const addCard = document.createElement("article");
   addCard.className = "bc-node bc-add-custom";
   addCard.dataset.bcKey = "custom:add";
   addCard.innerHTML = `<div class="bc-title">+ Add custom tile</div><div class="bc-preview"><p>Create your own brand section.</p></div>`;
   customRow.appendChild(addCard);
-  el.brandCoreCanvas.appendChild(customRow);
+  customGroup.appendChild(customRow);
+  el.brandCoreCanvas.appendChild(customGroup);
 }
 
 function connectedIds() {
@@ -13366,6 +13680,12 @@ el.dashboardView?.addEventListener("click", (event) => {
   }
 });
 el.brandCoreCanvas.addEventListener("click", (event) => {
+  const missingKnowledgeAction = event.target.closest("[data-missing-knowledge-title]");
+  if (missingKnowledgeAction) {
+    event.preventDefault();
+    createOrSelectMissingKnowledgeTile(missingKnowledgeAction.dataset.missingKnowledgeTitle || "");
+    return;
+  }
   const n = event.target.closest(".bc-node[data-bc-key]");
   if (!n) return;
   el.brandCoreCanvas.querySelectorAll(".bc-node.selected").forEach((x) => x.classList.remove("selected"));
@@ -13401,6 +13721,10 @@ function bindGlobalResetDelegation() {
       console.log("RESET BRAND CLICK DELEGATED");
       event.preventDefault();
       window.resetBrandBrainState();
+    }
+    if (event.target.closest("[data-empty-create-board]")) {
+      event.preventDefault();
+      el.boardsCreateButton?.click();
     }
     const openBtn = event.target.closest("[data-open-board]");
     if (openBtn) {
@@ -13548,8 +13872,143 @@ async function loadBoardsLibrary() {
     state.boardsLibrary = Array.isArray(data?.boards) ? data.boards : [];
     renderBoardsLibrary();
   } catch (error) {
-    if (el.boardsLibraryList) el.boardsLibraryList.textContent = 'Could not load boards.';
+    if (el.boardsLibraryList) el.boardsLibraryList.innerHTML = '<div class="board-empty fk-card"><strong>Could not load boards.</strong><span>Please try again from the Boards navigation item.</span></div>';
   }
+}
+
+function getBoardBrandSnapshot(board = {}) {
+  const boardId = board?.id ? String(board.id) : "";
+  const currentBoardId = state.currentBoardId || getBoardIdFromPath() || "";
+  if (boardId && currentBoardId && boardId === String(currentBoardId) && state.brandCore && typeof state.brandCore === "object" && !Array.isArray(state.brandCore)) {
+    return state.brandCore;
+  }
+  const snapshot = board?.brand_core_snapshot || board?.brandCoreSnapshot || board?.brandCore || null;
+  return snapshot && typeof snapshot === "object" && !Array.isArray(snapshot) ? snapshot : null;
+}
+
+function getBoardBrandDisplay(board = {}, boardName = "") {
+  const displaySnapshot = board?.brand_display && typeof board.brand_display === "object" && !Array.isArray(board.brand_display) ? board.brand_display : {};
+  const snapshot = getBoardBrandSnapshot(board) || {};
+  const brandDNA = snapshot.brandDNA && typeof snapshot.brandDNA === "object" && !Array.isArray(snapshot.brandDNA) ? snapshot.brandDNA : {};
+  const avatar = brandDNA.avatar && typeof brandDNA.avatar === "object" && !Array.isArray(brandDNA.avatar) ? brandDNA.avatar : {};
+  const brandAssets = snapshot.brandAssets && typeof snapshot.brandAssets === "object" && !Array.isArray(snapshot.brandAssets) ? snapshot.brandAssets : {};
+  const brandName = [
+    displaySnapshot.name,
+    snapshot.brandName,
+    snapshot.name,
+    snapshot.title,
+    brandDNA.brandName,
+    brandDNA.name,
+    brandAssets.name
+  ].map((value) => (typeof value === "string" ? value.trim() : "")).find(Boolean) || "";
+  const avatarUrl = [
+    displaySnapshot.avatarUrl,
+    brandDNA?.userApproved && avatar?.userApproved ? avatar.imageUrl : "",
+    snapshot.avatarImageUrl,
+    snapshot.avatarUrl,
+    snapshot.brandAvatarUrl
+  ].map(getSafeDashboardAvatarImageUrl).find(Boolean) || "";
+  return {
+    name: brandName,
+    avatarUrl,
+    initial: getDashboardAvatarInitial(brandName) || getDashboardAvatarInitial(boardName) || "B"
+  };
+}
+
+
+function getBoardLastEdited(board = {}) {
+  const rawTimestamp = board?.updated_at || board?.updatedAt || "";
+  if (!rawTimestamp) return "Not available yet";
+  const parsedTimestamp = new Date(rawTimestamp);
+  if (Number.isNaN(parsedTimestamp.getTime())) return "Not available yet";
+  return parsedTimestamp.toLocaleString('de-DE');
+}
+
+function getDisplayedBoards() {
+  const boards = Array.isArray(state.boardsLibrary) ? [...state.boardsLibrary] : [];
+  const currentBoardId = state.currentBoardId || getBoardIdFromPath() || "";
+  if (!currentBoardId) return boards;
+  const activeIndex = boards.findIndex((board) => String(board?.id || "") === String(currentBoardId));
+  if (activeIndex <= 0) return boards;
+  const [activeBoard] = boards.splice(activeIndex, 1);
+  return [activeBoard, ...boards];
+}
+
+function getBoardsDomOrder() {
+  if (!el.boardsLibraryList) return [];
+  return [...el.boardsLibraryList.querySelectorAll('.board-row[data-board-id]')]
+    .map((row) => row.getAttribute('data-board-id'))
+    .filter(Boolean);
+}
+
+function getBoardDragAfterElement(container, y) {
+  const rows = [...container.querySelectorAll('.board-row[data-board-id]:not(.is-dragging)')];
+  return rows.reduce((closest, child) => {
+    const box = child.getBoundingClientRect();
+    const offset = y - box.top - box.height / 2;
+    if (offset < 0 && offset > closest.offset) return { offset, element: child };
+    return closest;
+  }, { offset: Number.NEGATIVE_INFINITY, element: null }).element;
+}
+
+async function persistBoardOrderFromDom(initialOrder = []) {
+  const orderedIds = getBoardsDomOrder();
+  if (!orderedIds.length || orderedIds.join('|') === initialOrder.join('|')) return;
+  const boardById = new Map(state.boardsLibrary.map((board) => [String(board?.id || ''), board]));
+  const orderedBoards = orderedIds.map((id) => boardById.get(String(id))).filter(Boolean);
+  if (orderedBoards.length !== orderedIds.length) {
+    loadBoardsLibrary();
+    return;
+  }
+  try {
+    await Promise.all(orderedBoards.map(async (board, index) => {
+      const response = await fetch(`/api/boards/${board.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ order_index: index })
+      });
+      if (!response.ok) throw new Error(`Failed to update board order for ${board.id}`);
+    }));
+  } catch (error) {
+    console.error('[Boards Drag Reorder] Failed to persist order', error);
+  } finally {
+    loadBoardsLibrary();
+  }
+}
+
+function bindBoardRowDragHandlers(row) {
+  row.addEventListener('dragstart', (event) => {
+    if (event.target.closest('button, input, textarea, select, a')) {
+      event.preventDefault();
+      return;
+    }
+    row.classList.add('is-dragging');
+    row.setAttribute('aria-grabbed', 'true');
+    row.dataset.dragInitialOrder = getBoardsDomOrder().join('|');
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', row.dataset.boardId || '');
+  });
+
+  row.addEventListener('dragend', () => {
+    const initialOrder = (row.dataset.dragInitialOrder || '').split('|').filter(Boolean);
+    row.classList.remove('is-dragging');
+    row.setAttribute('aria-grabbed', 'false');
+    delete row.dataset.dragInitialOrder;
+    persistBoardOrderFromDom(initialOrder);
+  });
+}
+
+function bindBoardsListDragHandlers() {
+  if (!el.boardsLibraryList || el.boardsLibraryList.dataset.dragBound === 'true') return;
+  el.boardsLibraryList.dataset.dragBound = 'true';
+  el.boardsLibraryList.addEventListener('dragover', (event) => {
+    const dragging = el.boardsLibraryList.querySelector('.board-row.is-dragging');
+    if (!dragging) return;
+    event.preventDefault();
+    const afterElement = getBoardDragAfterElement(el.boardsLibraryList, event.clientY);
+    if (afterElement == null) el.boardsLibraryList.appendChild(dragging);
+    else el.boardsLibraryList.insertBefore(dragging, afterElement);
+  });
 }
 
 function renderBoardsLibrary() {
@@ -13563,13 +14022,18 @@ function renderBoardsLibrary() {
     if (el.boardsLibrarySubtitle) el.boardsLibrarySubtitle.textContent = 'Open a board or sign in to save one to your account.';
   }
   if (!state.boardsLibrary.length) {
-    el.boardsLibraryList.innerHTML = `<div class="board-empty"><strong>No boards yet</strong><span>Create your first board to start collaborating.</span></div>`;
+    el.boardsLibraryList.innerHTML = `<div class="board-empty fk-card"><span class="boards-empty-kicker fk-badge">No saved workspaces</span><strong>No boards yet</strong><span>Create your first board to start collaborating.</span><button type="button" class="fk-btn fk-btn-primary" data-empty-create-board>Create New Board</button></div>`;
     return;
   }
-  state.boardsLibrary.forEach((board, index) => {
+  bindBoardsListDragHandlers();
+  getDisplayedBoards().forEach((board) => {
+    const sourceIndex = state.boardsLibrary.indexOf(board);
     const row = document.createElement('div');
-    row.className = 'board-row';
-    const savedAt = board.updated_at ? new Date(board.updated_at).toLocaleString('de-DE') : '—';
+    row.className = 'board-row fk-card';
+    row.draggable = true;
+    row.dataset.boardId = String(board.id || '');
+    row.setAttribute('aria-grabbed', 'false');
+    const savedAt = getBoardLastEdited(board);
     const boardName = board.name || 'Campaign Canvas Board';
     const userEmail = typeof state.user?.email === "string" ? state.user.email.trim().toLowerCase() : "";
     const ownerEmail = typeof board.owner_email === "string" ? board.owner_email.trim().toLowerCase() : "";
@@ -13579,10 +14043,16 @@ function renderBoardsLibrary() {
     const isShared = !!board.owner_email && !isOwner;
     const isCopy = /\(copy\)$/i.test(boardName.trim());
     const ownerBy = deriveOwnerDisplayName(board.owner_name || "", board.owner_email || "");
-    const roleChip = isOwner ? '<span class="board-row-chip owned">Your Board</span>' : (isEditor ? '<span class="board-row-chip shared">Editor</span>' : (isShared ? '<span class="board-row-chip shared">Shared</span>' : '<span class="board-row-chip shared">Open</span>'));
-    const copyChip = isCopy ? '<span class="board-row-chip copy">Copy</span>' : '';
+    const roleChip = isOwner ? '<span class="board-row-chip owned fk-pill">Your Board</span>' : (isEditor ? '<span class="board-row-chip shared fk-pill">Editor</span>' : (isShared ? '<span class="board-row-chip shared fk-pill">Shared</span>' : '<span class="board-row-chip shared fk-pill">Open</span>'));
+    const copyChip = isCopy ? '<span class="board-row-chip copy fk-pill">Copy</span>' : '';
     const ownerLine = isOwner ? 'You can edit this board.' : (isEditor ? `By ${ownerBy || 'another user'}` : (isShared ? `By ${ownerBy || 'another user'}` : 'No owner yet'));
-    row.innerHTML = `<div><div class="board-row-titleline"><strong class="board-row-title">${boardName}</strong>${roleChip}${copyChip}</div><div class="board-row-meta">Last active: ${savedAt}</div><div class="board-row-meta">${ownerLine}</div><div class="board-rename hidden" data-rename-wrap="${board.id}"><input data-rename-input="${board.id}" value="${board.name || ''}" /><button data-rename-save="${board.id}" type="button">Save</button><button data-rename-cancel="${board.id}" type="button">Cancel</button></div></div><div class="board-row-actions"><button class="icon-btn" data-open-board="${board.id}" title="Open" aria-label="Open board">↗</button><button class="icon-btn" data-copy-board="${board.id}" title="Copy link" aria-label="Copy link">⧉</button><button class="icon-btn" data-rename-board="${board.id}" title="Rename" aria-label="Rename board">✎</button><button class="icon-btn danger" data-delete-board="${board.id}" title="Delete" aria-label="Delete board">🗑</button><button class="icon-btn" data-up-board="${board.id}" data-index="${index}" title="Move up">↑</button><button class="icon-btn" data-down-board="${board.id}" data-index="${index}" title="Move down">↓</button>${state.user?.email && !board.owner_email ? `<button class="icon-btn" data-claim-board="${board.id}" title="Claim">Claim</button>` : ""}</div>`;
+    const boardBrand = getBoardBrandDisplay(board, boardName);
+    const boardAvatar = boardBrand.avatarUrl
+      ? `<img src="${escapeHtml(boardBrand.avatarUrl)}" alt="${escapeHtml(boardBrand.name || boardName)} Brand Avatar" />`
+      : `<span>${escapeHtml(boardBrand.initial)}</span>`;
+    const brandLine = boardBrand.name ? `<div class="board-row-brand"><span>Brand</span><strong>${escapeHtml(boardBrand.name)}</strong></div>` : "";
+    row.innerHTML = `<div class="board-row-drag-handle" title="Drag to reorder" aria-hidden="true">⋮⋮</div><div class="board-row-content"><div class="board-row-avatar" aria-hidden="true">${boardAvatar}</div><div class="board-row-details"><div class="board-row-titleline"><strong class="board-row-title">${escapeHtml(boardName)}</strong>${roleChip}${copyChip}</div>${brandLine}<div class="board-row-meta"><span>Last edited</span><strong>${escapeHtml(savedAt)}</strong></div><div class="board-row-description">${escapeHtml(ownerLine)}</div><div class="board-rename hidden" data-rename-wrap="${escapeHtml(board.id)}"><input class="fk-input" data-rename-input="${escapeHtml(board.id)}" value="${escapeHtml(board.name || '')}" /><button class="fk-btn fk-btn-primary" data-rename-save="${escapeHtml(board.id)}" type="button">Save</button><button class="fk-btn fk-btn-ghost" data-rename-cancel="${escapeHtml(board.id)}" type="button">Cancel</button></div></div></div><div class="board-row-actions"><button class="board-action-btn fk-btn fk-btn-primary" data-open-board="${escapeHtml(board.id)}" title="Open" aria-label="Open board">Open</button><button class="board-action-btn fk-btn fk-btn-secondary" data-copy-board="${escapeHtml(board.id)}" title="Copy link" aria-label="Copy link">Copy Link</button><button class="board-action-btn board-action-tertiary fk-btn fk-btn-ghost" data-rename-board="${escapeHtml(board.id)}" title="Rename" aria-label="Rename board">Rename</button><button class="board-action-btn board-action-tertiary danger fk-btn fk-btn-ghost" data-delete-board="${escapeHtml(board.id)}" title="Delete" aria-label="Delete board">Delete</button><button class="board-action-btn board-action-tertiary fk-btn fk-btn-ghost" data-up-board="${escapeHtml(board.id)}" data-index="${sourceIndex}" title="Move up" aria-label="Move board up">Move Up</button><button class="board-action-btn board-action-tertiary fk-btn fk-btn-ghost" data-down-board="${escapeHtml(board.id)}" data-index="${sourceIndex}" title="Move down" aria-label="Move board down">Move Down</button>${state.user?.email && !board.owner_email ? `<button class="board-action-btn fk-btn fk-btn-secondary" data-claim-board="${escapeHtml(board.id)}" title="Claim">Claim</button>` : ""}</div>`;
+    bindBoardRowDragHandlers(row);
     el.boardsLibraryList.appendChild(row);
   });
 }
