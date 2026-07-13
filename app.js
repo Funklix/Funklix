@@ -4619,6 +4619,62 @@ function getKnowledgeModuleRegistryApi() {
   return typeof window !== "undefined" ? window.KnowledgeModuleRegistry || null : null;
 }
 
+
+function getKnowledgeModuleIdentityApi() {
+  return typeof window !== "undefined" ? window.KnowledgeModuleIdentity || null : null;
+}
+
+function createKnowledgeModuleInstanceId() {
+  const identity = getKnowledgeModuleIdentityApi();
+  return identity?.createKnowledgeModuleInstanceId?.() || `km_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 14)}`;
+}
+
+function isKnowledgeModuleInstanceId(value = "") {
+  const identity = getKnowledgeModuleIdentityApi();
+  return Boolean(identity?.isKnowledgeModuleInstanceId?.(value));
+}
+
+function createBrandCustomTile(title = "", content = "") {
+  return {
+    id: createKnowledgeModuleInstanceId(),
+    title,
+    content,
+    items: []
+  };
+}
+
+function getCustomTileStableId(tile) {
+  return tile && typeof tile === "object" && isKnowledgeModuleInstanceId(tile.id) ? tile.id : "";
+}
+
+function getCustomTileRuntimeKey(tile, index) {
+  const stableId = getCustomTileStableId(tile);
+  return stableId ? `custom-id:${stableId}` : `custom:${index}`;
+}
+
+function isCustomTileRuntimeKey(runtimeKey = "") {
+  return /^custom-id:km_[A-Za-z0-9_-]+$/.test(runtimeKey) || /^custom:\d+$/.test(runtimeKey);
+}
+
+function findCustomTileIndexByRuntimeKey(runtimeKey = "") {
+  if (!Array.isArray(state.brandCore?.customTiles) || typeof runtimeKey !== "string") return -1;
+  if (runtimeKey.startsWith("custom-id:")) {
+    const stableId = runtimeKey.slice("custom-id:".length);
+    if (!isKnowledgeModuleInstanceId(stableId)) return -1;
+    return state.brandCore.customTiles.findIndex((tile) => getCustomTileStableId(tile) === stableId);
+  }
+  if (runtimeKey.startsWith("custom:")) {
+    const index = Number(runtimeKey.slice("custom:".length));
+    return Number.isInteger(index) && index >= 0 && index < state.brandCore.customTiles.length ? index : -1;
+  }
+  return -1;
+}
+
+function getCustomTileByRuntimeKey(runtimeKey = "") {
+  const index = findCustomTileIndexByRuntimeKey(runtimeKey);
+  return index >= 0 ? { tile: state.brandCore.customTiles[index], index } : { tile: null, index: -1 };
+}
+
 function getRuntimeKnowledgeModuleDefinition(moduleId = "") {
   return getKnowledgeModuleRegistryApi()?.getModuleDefinition?.(moduleId) || null;
 }
@@ -4706,11 +4762,11 @@ function createOrSelectMissingKnowledgeTile(rawTitle = "") {
   state.brandCore = normalizeBrandCoreState(state.brandCore || defaultBrandCoreState());
   let tileIndex = findBrandWorkspaceCustomTileIndexByTitle(canonicalTitle);
   if (tileIndex < 0) {
-    state.brandCore.customTiles.push({ title: canonicalTitle, content: "", items: [] });
+    state.brandCore.customTiles.push(createBrandCustomTile(canonicalTitle, ""));
     tileIndex = state.brandCore.customTiles.length - 1;
     saveBrandBrainState();
   }
-  state.brandCoreSelectedKey = `custom:${tileIndex}`;
+  state.brandCoreSelectedKey = getCustomTileRuntimeKey(state.brandCore.customTiles[tileIndex], tileIndex);
   renderBrandCoreTiles();
   renderBrandCoreEditor();
   focusBrandCoreEditorSafely();
@@ -5819,15 +5875,15 @@ function acceptBrandDna() {
 function renderBrandCoreEditor() {
   const selectedKey = state.brandCoreSelectedKey;
   if (selectedKey === "custom:add") {
-    state.brandCore.customTiles.push({ title: "New Custom Tile", content: "", items: [] });
-    state.brandCoreSelectedKey = `custom:${state.brandCore.customTiles.length - 1}`;
+    state.brandCore.customTiles.push(createBrandCustomTile("New Custom Tile", ""));
+    const newTileIndex = state.brandCore.customTiles.length - 1;
+    state.brandCoreSelectedKey = getCustomTileRuntimeKey(state.brandCore.customTiles[newTileIndex], newTileIndex);
     saveBrandBrainState();
     renderBrandCoreTiles();
   }
   const activeKey = state.brandCoreSelectedKey;
-  if (activeKey.startsWith("custom:")) {
-    const idx = Number(activeKey.split(":")[1]);
-    const tile = Number.isInteger(idx) ? state.brandCore.customTiles[idx] : null;
+  if (isCustomTileRuntimeKey(activeKey)) {
+    const { tile, index: idx } = getCustomTileByRuntimeKey(activeKey);
     if (!isValidBrandCustomTile(tile) || isMalformedGeneratedCustomTile(tile)) {
       state.brandCoreSelectedKey = "brandCore";
       renderBrandCoreTiles();
@@ -5974,8 +6030,8 @@ function renderBrandCoreTiles() {
   }
   renderBrandDnaCard();
   refreshBrandWorkspaceMissingKnowledgeBlocks();
-  el.brandCoreCanvas.querySelectorAll(".bc-custom-row, .brand-workspace-custom-group, .bc-node[data-bc-key^='custom:']").forEach((n) => n.remove());
-  el.brandCoreCanvas.querySelectorAll(".bc-node[data-bc-key]:not([data-bc-key^='custom:'])").forEach((tile) => {
+  el.brandCoreCanvas.querySelectorAll(".bc-custom-row, .brand-workspace-custom-group, .bc-node[data-bc-key^='custom:'], .bc-node[data-bc-key^='custom-id:']").forEach((n) => n.remove());
+  el.brandCoreCanvas.querySelectorAll(".bc-node[data-bc-key]:not([data-bc-key^='custom:']):not([data-bc-key^='custom-id:'])").forEach((tile) => {
     const key = tile.dataset.bcKey;
     const val = state.brandCore[key];
     const title = getBrandCoreModuleLabel(key).toUpperCase();
@@ -6015,8 +6071,9 @@ function renderBrandCoreTiles() {
   state.brandCore.customTiles.forEach((tile, idx) => {
     if (!isValidBrandCustomTile(tile) || isMalformedGeneratedCustomTile(tile)) return;
     const card = document.createElement("article");
-    card.className = `bc-node${state.brandCoreSelectedKey === `custom:${idx}` ? " selected" : ""}`;
-    card.dataset.bcKey = `custom:${idx}`;
+    const runtimeKey = getCustomTileRuntimeKey(tile, idx);
+    card.className = `bc-node${state.brandCoreSelectedKey === runtimeKey ? " selected" : ""}`;
+    card.dataset.bcKey = runtimeKey;
     card.innerHTML = `<div class="bc-title">${tile.title || "Custom Tile"}</div><div class="bc-preview"><p>${(tile.content || "").slice(0, 120)}</p></div><div class="bc-count">custom</div>`;
     const section = getBrandWorkspaceSectionForCustomTileTitle(tile?.title || "");
     const sectionRow = section ? el.brandCoreCanvas.querySelector(`[data-brand-workspace-section="${section}"] .bc-row`) : null;

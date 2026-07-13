@@ -1,12 +1,14 @@
 "use strict";
 
 let commonJsRegistry = null;
+let commonJsIdentity = null;
 if (typeof require === "function") {
   try {
     commonJsRegistry = require("./knowledge-module-registry");
   } catch (_error) {
     commonJsRegistry = null;
   }
+  commonJsIdentity = require("./knowledge-module-identity");
 }
 
 const KNOWN_CUSTOM_TILE_MODULE_IDS = Object.freeze([
@@ -21,6 +23,12 @@ function getRegistryApi(registryApi) {
   if (registryApi) return registryApi;
   if (typeof window !== "undefined" && window.KnowledgeModuleRegistry) return window.KnowledgeModuleRegistry;
   return commonJsRegistry;
+}
+
+function getIdentityApi(identityApi) {
+  if (identityApi) return identityApi;
+  if (typeof window !== "undefined" && window.KnowledgeModuleIdentity) return window.KnowledgeModuleIdentity;
+  return commonJsIdentity;
 }
 
 function clonePlainValue(value) {
@@ -92,11 +100,13 @@ function adaptBuiltInBrandCoreModule(stateKey, brandCoreState = {}, options = {}
 
 function adaptCustomTileToKnowledgeModule(tile, index, options = {}) {
   const registry = getRegistryApi(options.registryApi);
+  const identity = getIdentityApi(options.identityApi);
   const customDefinition = resolveCustomDefinition(registry);
   const tileObject = tile && typeof tile === "object" && !Array.isArray(tile) ? tile : {};
   const knownDefinition = getKnownCustomTileDefinition(tileObject.title, registry);
   const definition = knownDefinition || customDefinition;
-  const runtimeKey = `custom:${index}`;
+  const stableId = identity?.isKnowledgeModuleInstanceId?.(tileObject.id) ? tileObject.id : "";
+  const runtimeKey = stableId ? `custom-id:${stableId}` : `custom:${index}`;
 
   return Object.freeze({
     runtimeKey,
@@ -108,7 +118,12 @@ function adaptCustomTileToKnowledgeModule(tile, index, options = {}) {
     section: knownDefinition?.section || customDefinition?.section || "custom",
     category: knownDefinition?.category || customDefinition?.category || "custom",
     capabilities: cloneCapabilities(definition),
-    sourceReference: Object.freeze({ runtimeKey, customTileIndex: index }),
+    sourceReference: Object.freeze({
+      runtimeKey,
+      id: stableId || null,
+      customTileIndex: index,
+      legacyRuntimeOnly: !stableId
+    }),
     isKnownModule: Boolean(knownDefinition),
     isLegacy: true,
     isCustom: true,
@@ -130,7 +145,10 @@ function getKnowledgeModuleRuntimeViews(brandCoreState = {}, options = {}) {
     .filter(Boolean);
   const customTiles = Array.isArray(brandCoreState?.customTiles) ? brandCoreState.customTiles : [];
   const customViews = customTiles
-    .map((tile, index) => adaptCustomTileToKnowledgeModule(tile, index, { registryApi: registry }));
+    .map((tile, index) => adaptCustomTileToKnowledgeModule(tile, index, {
+      registryApi: registry,
+      identityApi: options.identityApi
+    }));
   return Object.freeze([...builtInViews, ...customViews]);
 }
 
