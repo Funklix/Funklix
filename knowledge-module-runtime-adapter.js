@@ -67,6 +67,12 @@ function getKnownCustomTileDefinition(tileTitle = "", registryApi) {
     .find((definition) => normalizeKnowledgeModuleTitle(definition?.label) === normalizedTitle) || null;
 }
 
+function getPersistedCustomTileModuleDefinition(tile, registryApi) {
+  const registry = getRegistryApi(registryApi);
+  if (!registry || typeof tile?.moduleType !== "string") return null;
+  return registry.getModuleDefinition?.(tile.moduleType) || null;
+}
+
 function resolveCustomDefinition(registryApi) {
   return getRegistryApi(registryApi)?.getModuleDefinition?.("custom") || null;
 }
@@ -100,20 +106,23 @@ function adaptCustomTileToKnowledgeModule(tile, index, options = {}) {
   const identity = getIdentityApi(options.identityApi);
   const customDefinition = resolveCustomDefinition(registry);
   const tileObject = tile && typeof tile === "object" && !Array.isArray(tile) ? tile : {};
-  const knownDefinition = getKnownCustomTileDefinition(tileObject.title, registry);
+  const persistedDefinition = getPersistedCustomTileModuleDefinition(tileObject, registry);
+  const knownDefinition = persistedDefinition || getKnownCustomTileDefinition(tileObject.title, registry);
   const definition = knownDefinition || customDefinition;
   const stableId = identity?.isKnowledgeModuleInstanceId?.(tileObject.id) ? tileObject.id : "";
   const runtimeKey = stableId ? `custom-id:${stableId}` : `custom:${index}`;
+  const moduleType = definition?.id || "custom";
+  const isKnownModule = Boolean(knownDefinition && knownDefinition.id !== "custom");
 
   return Object.freeze({
     runtimeKey,
     sourceType: "custom-tile",
-    moduleType: knownDefinition?.id || "custom",
+    moduleType,
     definition: cloneModuleDefinition(definition),
     title: typeof tileObject.title === "string" && tileObject.title ? tileObject.title : definition?.label || "Custom Tile",
     content: typeof tileObject.content === "string" ? tileObject.content : "",
-    section: knownDefinition?.section || customDefinition?.section || "custom",
-    category: knownDefinition?.category || customDefinition?.category || "custom",
+    section: definition?.section || customDefinition?.section || "custom",
+    category: definition?.category || customDefinition?.category || "custom",
     capabilities: cloneCapabilities(definition),
     sourceReference: Object.freeze({
       runtimeKey,
@@ -121,7 +130,7 @@ function adaptCustomTileToKnowledgeModule(tile, index, options = {}) {
       customTileIndex: index,
       legacyRuntimeOnly: !stableId
     }),
-    isKnownModule: Boolean(knownDefinition),
+    isKnownModule,
     isLegacy: true,
     isCustom: true,
     isPersisted: Boolean(tile && typeof tile === "object")

@@ -4634,13 +4634,15 @@ function isKnowledgeModuleInstanceId(value = "") {
   return Boolean(identity?.isKnowledgeModuleInstanceId?.(value));
 }
 
-function createBrandCustomTile(title = "", content = "") {
-  return {
+function createBrandCustomTile(title = "", content = "", options = {}) {
+  const tile = {
     id: createKnowledgeModuleInstanceId(),
     title,
     content,
     items: []
   };
+  if (options.moduleType) tile.moduleType = options.moduleType;
+  return tile;
 }
 
 function getCustomTileStableId(tile) {
@@ -4724,11 +4726,19 @@ function isMalformedGeneratedCustomTile(tile) {
   return /^custom:\d+$/i.test(title) && !content && !hasItems;
 }
 
+function getMissingKnowledgeModuleDefinitionForRequest(value = "") {
+  const request = String(value || "").trim();
+  if (!request) return null;
+  const supportedDefinitions = getMissingKnowledgeModuleDefinitions();
+  const requestedDefinition = getRuntimeKnowledgeModuleDefinition(request);
+  if (requestedDefinition && supportedDefinitions.some((definition) => definition.id === requestedDefinition.id)) return requestedDefinition;
+  const normalized = normalizeBrandWorkspaceKnowledgeTitle(request);
+  return supportedDefinitions
+    .find((definition) => normalizeBrandWorkspaceKnowledgeTitle(definition.label) === normalized) || null;
+}
+
 function getCanonicalMissingKnowledgeTitle(value = "") {
-  const normalized = normalizeBrandWorkspaceKnowledgeTitle(value);
-  return getMissingKnowledgeModuleDefinitions()
-    .map((definition) => definition.label)
-    .find((title) => normalizeBrandWorkspaceKnowledgeTitle(title) === normalized) || "";
+  return getMissingKnowledgeModuleDefinitionForRequest(value)?.label || "";
 }
 
 function getBrandWorkspaceSectionForCustomTileTitle(value = "") {
@@ -4757,12 +4767,13 @@ function focusBrandCoreEditorSafely() {
 }
 
 function createOrSelectMissingKnowledgeTile(rawTitle = "") {
-  const canonicalTitle = getCanonicalMissingKnowledgeTitle(rawTitle);
-  if (!canonicalTitle) return;
+  const definition = getMissingKnowledgeModuleDefinitionForRequest(rawTitle);
+  if (!definition?.id || !definition?.label) return;
+  const canonicalTitle = definition.label;
   state.brandCore = normalizeBrandCoreState(state.brandCore || defaultBrandCoreState());
   let tileIndex = findBrandWorkspaceCustomTileIndexByTitle(canonicalTitle);
   if (tileIndex < 0) {
-    state.brandCore.customTiles.push(createBrandCustomTile(canonicalTitle, ""));
+    state.brandCore.customTiles.push(createBrandCustomTile(canonicalTitle, "", { moduleType: definition.id }));
     tileIndex = state.brandCore.customTiles.length - 1;
     saveBrandBrainState();
   }
@@ -4788,7 +4799,11 @@ function renderBrandWorkspaceMissingKnowledgeBlock(section = "") {
       <strong>Strengthen this area</strong>
       <p>Add the missing knowledge your Brand and campaigns should be able to use.</p>
       <div class="brand-workspace-missing-list">
-        ${missingItems.map((item) => `<button type="button" class="brand-workspace-missing-action fk-pill" data-missing-knowledge-title="${escapeHtml(item.label)}" aria-label="Create or open ${escapeHtml(item.label)} custom Brand tile">${escapeHtml(item.label)}<span aria-hidden="true">Add tile</span></button>`).join("")}
+        ${missingItems.map((item) => {
+          const definition = getMissingKnowledgeModuleDefinitionForRequest(item.label);
+          const moduleId = definition?.id || "";
+          return `<button type="button" class="brand-workspace-missing-action fk-pill" data-missing-knowledge-title="${escapeHtml(item.label)}" data-missing-knowledge-module-id="${escapeHtml(moduleId)}" aria-label="Create or open ${escapeHtml(item.label)} custom Brand tile">${escapeHtml(item.label)}<span aria-hidden="true">Add tile</span></button>`;
+        }).join("")}
       </div>
     </div>`;
 }
@@ -13683,7 +13698,7 @@ el.brandCoreCanvas.addEventListener("click", (event) => {
   const missingKnowledgeAction = event.target.closest("[data-missing-knowledge-title]");
   if (missingKnowledgeAction) {
     event.preventDefault();
-    createOrSelectMissingKnowledgeTile(missingKnowledgeAction.dataset.missingKnowledgeTitle || "");
+    createOrSelectMissingKnowledgeTile(missingKnowledgeAction.dataset.missingKnowledgeModuleId || missingKnowledgeAction.dataset.missingKnowledgeTitle || "");
     return;
   }
   const n = event.target.closest(".bc-node[data-bc-key]");
