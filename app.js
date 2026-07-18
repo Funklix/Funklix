@@ -4749,6 +4749,16 @@ function getBrandWorkspaceSectionForCustomTileTitle(value = "") {
   return definition?.section || "";
 }
 
+function isSupportedMissingKnowledgeModuleDefinition(definition) {
+  return Boolean(definition?.id && BRAND_WORKSPACE_MISSING_KNOWLEDGE_MODULE_IDS.includes(definition.id));
+}
+
+function getValidPersistedMissingKnowledgeModuleDefinition(tile) {
+  if (!tile || typeof tile !== "object" || typeof tile.moduleType !== "string") return null;
+  const definition = getRuntimeKnowledgeModuleDefinition(tile.moduleType);
+  return isSupportedMissingKnowledgeModuleDefinition(definition) ? definition : null;
+}
+
 function findBrandWorkspaceCustomTileIndexByTitle(value = "") {
   const canonicalTitle = getCanonicalMissingKnowledgeTitle(value);
   if (!canonicalTitle || !Array.isArray(state.brandCore?.customTiles)) return -1;
@@ -4756,8 +4766,21 @@ function findBrandWorkspaceCustomTileIndexByTitle(value = "") {
   return state.brandCore.customTiles.findIndex((tile) => (
     isValidBrandCustomTile(tile)
     && !isMalformedGeneratedCustomTile(tile)
+    && !getValidPersistedMissingKnowledgeModuleDefinition(tile)
     && normalizeBrandWorkspaceKnowledgeTitle(tile?.title) === normalized
   ));
+}
+
+function findBrandWorkspaceCanonicalModuleTileIndex(moduleType = "", canonicalTitle = "") {
+  const requestedDefinition = getMissingKnowledgeModuleDefinitionForRequest(moduleType);
+  if (!isSupportedMissingKnowledgeModuleDefinition(requestedDefinition) || !Array.isArray(state.brandCore?.customTiles)) return -1;
+  const typedMatchIndex = state.brandCore.customTiles.findIndex((tile) => (
+    isValidBrandCustomTile(tile)
+    && !isMalformedGeneratedCustomTile(tile)
+    && getValidPersistedMissingKnowledgeModuleDefinition(tile)?.id === requestedDefinition.id
+  ));
+  if (typedMatchIndex >= 0) return typedMatchIndex;
+  return findBrandWorkspaceCustomTileIndexByTitle(canonicalTitle || requestedDefinition.label);
 }
 
 function focusBrandCoreEditorSafely() {
@@ -4771,7 +4794,7 @@ function createOrSelectMissingKnowledgeTile(rawTitle = "") {
   if (!definition?.id || !definition?.label) return;
   const canonicalTitle = definition.label;
   state.brandCore = normalizeBrandCoreState(state.brandCore || defaultBrandCoreState());
-  let tileIndex = findBrandWorkspaceCustomTileIndexByTitle(canonicalTitle);
+  let tileIndex = findBrandWorkspaceCanonicalModuleTileIndex(definition.id, canonicalTitle);
   if (tileIndex < 0) {
     state.brandCore.customTiles.push(createBrandCustomTile(canonicalTitle, "", { moduleType: definition.id }));
     tileIndex = state.brandCore.customTiles.length - 1;
