@@ -4594,17 +4594,14 @@ function getDashboardBrandSignals() {
 function getDashboardKnowledgeInputStatus() {
   const brandCore = normalizeBrandCoreState(state.brandCore || defaultBrandCoreState());
   const customTiles = Array.isArray(brandCore.customTiles) ? brandCore.customTiles : [];
-  const references = Array.isArray(brandCore.brandAssets?.references) ? brandCore.brandAssets.references : [];
-  const searchable = [
-    brandCore.brandCore,
-    brandCore.valueProposition,
-    ...customTiles.flatMap((tile) => [tile?.title, tile?.content]),
-    ...references
-  ].filter(Boolean).join(" ").toLowerCase();
-  return DASHBOARD_KNOWLEDGE_INPUTS.map((label) => ({
-    label,
-    exists: searchable.includes(label.toLowerCase())
-  }));
+  const presentModuleIds = getPresentBrandWorkspaceCanonicalModuleIds(customTiles);
+  return DASHBOARD_KNOWLEDGE_INPUTS.map((label) => {
+    const definition = getMissingKnowledgeModuleDefinitionForRequest(label);
+    return {
+      label,
+      exists: Boolean(definition?.id && presentModuleIds.has(definition.id))
+    };
+  });
 }
 
 const BRAND_WORKSPACE_MISSING_KNOWLEDGE_MODULE_IDS = Object.freeze([
@@ -4741,12 +4738,43 @@ function getCanonicalMissingKnowledgeTitle(value = "") {
   return getMissingKnowledgeModuleDefinitionForRequest(value)?.label || "";
 }
 
-function getBrandWorkspaceSectionForCustomTileTitle(value = "") {
-  const canonicalTitle = getCanonicalMissingKnowledgeTitle(value);
+function getBrandWorkspaceSectionForCustomTile(tile) {
+  const typedDefinition = getValidPersistedMissingKnowledgeModuleDefinition(tile);
+  if (typedDefinition?.section) return typedDefinition.section;
+  const canonicalTitle = getCanonicalMissingKnowledgeTitle(tile?.title || "");
   const normalized = normalizeBrandWorkspaceKnowledgeTitle(canonicalTitle);
   const definition = getMissingKnowledgeModuleDefinitions()
     .find((moduleDefinition) => normalizeBrandWorkspaceKnowledgeTitle(moduleDefinition.label) === normalized);
   return definition?.section || "";
+}
+
+function isSupportedMissingKnowledgeModuleDefinition(definition) {
+  return Boolean(definition?.id && BRAND_WORKSPACE_MISSING_KNOWLEDGE_MODULE_IDS.includes(definition.id));
+}
+
+function getValidPersistedMissingKnowledgeModuleDefinition(tile) {
+  if (!tile || typeof tile !== "object" || typeof tile.moduleType !== "string") return null;
+  const definition = getRuntimeKnowledgeModuleDefinition(tile.moduleType);
+  return isSupportedMissingKnowledgeModuleDefinition(definition) ? definition : null;
+}
+
+function getPresentBrandWorkspaceCanonicalModuleIds(customTiles = []) {
+  const presentModuleIds = new Set();
+  if (!Array.isArray(customTiles)) return presentModuleIds;
+  const supportedDefinitions = getMissingKnowledgeModuleDefinitions();
+  customTiles.forEach((tile) => {
+    if (!isValidBrandCustomTile(tile) || isMalformedGeneratedCustomTile(tile)) return;
+    const typedDefinition = getValidPersistedMissingKnowledgeModuleDefinition(tile);
+    if (typedDefinition?.id) {
+      presentModuleIds.add(typedDefinition.id);
+      return;
+    }
+    const normalizedTitle = normalizeBrandWorkspaceKnowledgeTitle(tile?.title);
+    const legacyDefinition = supportedDefinitions
+      .find((definition) => normalizeBrandWorkspaceKnowledgeTitle(definition.label) === normalizedTitle);
+    if (legacyDefinition?.id) presentModuleIds.add(legacyDefinition.id);
+  });
+  return presentModuleIds;
 }
 
 function findBrandWorkspaceCustomTileIndexByTitle(value = "") {
@@ -4756,8 +4784,21 @@ function findBrandWorkspaceCustomTileIndexByTitle(value = "") {
   return state.brandCore.customTiles.findIndex((tile) => (
     isValidBrandCustomTile(tile)
     && !isMalformedGeneratedCustomTile(tile)
+    && !getValidPersistedMissingKnowledgeModuleDefinition(tile)
     && normalizeBrandWorkspaceKnowledgeTitle(tile?.title) === normalized
   ));
+}
+
+function findBrandWorkspaceCanonicalModuleTileIndex(moduleType = "", canonicalTitle = "") {
+  const requestedDefinition = getMissingKnowledgeModuleDefinitionForRequest(moduleType);
+  if (!isSupportedMissingKnowledgeModuleDefinition(requestedDefinition) || !Array.isArray(state.brandCore?.customTiles)) return -1;
+  const typedMatchIndex = state.brandCore.customTiles.findIndex((tile) => (
+    isValidBrandCustomTile(tile)
+    && !isMalformedGeneratedCustomTile(tile)
+    && getValidPersistedMissingKnowledgeModuleDefinition(tile)?.id === requestedDefinition.id
+  ));
+  if (typedMatchIndex >= 0) return typedMatchIndex;
+  return findBrandWorkspaceCustomTileIndexByTitle(canonicalTitle || requestedDefinition.label);
 }
 
 function focusBrandCoreEditorSafely() {
@@ -4771,7 +4812,7 @@ function createOrSelectMissingKnowledgeTile(rawTitle = "") {
   if (!definition?.id || !definition?.label) return;
   const canonicalTitle = definition.label;
   state.brandCore = normalizeBrandCoreState(state.brandCore || defaultBrandCoreState());
-  let tileIndex = findBrandWorkspaceCustomTileIndexByTitle(canonicalTitle);
+  let tileIndex = findBrandWorkspaceCanonicalModuleTileIndex(definition.id, canonicalTitle);
   if (tileIndex < 0) {
     state.brandCore.customTiles.push(createBrandCustomTile(canonicalTitle, "", { moduleType: definition.id }));
     tileIndex = state.brandCore.customTiles.length - 1;
@@ -6090,7 +6131,7 @@ function renderBrandCoreTiles() {
     card.className = `bc-node${state.brandCoreSelectedKey === runtimeKey ? " selected" : ""}`;
     card.dataset.bcKey = runtimeKey;
     card.innerHTML = `<div class="bc-title">${tile.title || "Custom Tile"}</div><div class="bc-preview"><p>${(tile.content || "").slice(0, 120)}</p></div><div class="bc-count">custom</div>`;
-    const section = getBrandWorkspaceSectionForCustomTileTitle(tile?.title || "");
+    const section = getBrandWorkspaceSectionForCustomTile(tile);
     const sectionRow = section ? el.brandCoreCanvas.querySelector(`[data-brand-workspace-section="${section}"] .bc-row`) : null;
     if (sectionRow) sectionRow.appendChild(card);
     else customRow.appendChild(card);
