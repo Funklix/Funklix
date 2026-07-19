@@ -4787,6 +4787,52 @@ function getFounderStoryModuleData(tile) {
   }, {});
 }
 
+const FOUNDER_STORY_EMPTY_CARD_PREVIEW = "Capture the founder’s origin, motivation, turning point, and vision.";
+const FOUNDER_STORY_CARD_PREVIEW_MAX_LENGTH = 120;
+const FOUNDER_STORY_PREVIEW_FIELD_ORDER = Object.freeze([
+  "observedProblem",
+  "motivation",
+  "turningPoint",
+  "background",
+  "vision",
+  "founderNameRole",
+  "proofPoints"
+]);
+
+function normalizeFounderStoryPreviewText(value = "") {
+  return String(value || "").trim().replace(/\s+/g, " ");
+}
+
+function truncateFounderStoryCardPreview(value = "") {
+  const normalized = normalizeFounderStoryPreviewText(value);
+  if (normalized.length <= FOUNDER_STORY_CARD_PREVIEW_MAX_LENGTH) return normalized;
+  return `${normalized.slice(0, FOUNDER_STORY_CARD_PREVIEW_MAX_LENGTH - 1).trimEnd()}…`;
+}
+
+function getFounderStoryDerivedStatus(tile) {
+  const storyData = getFounderStoryModuleData(tile);
+  const hasNarrative = Boolean(normalizeFounderStoryPreviewText(tile?.content));
+  if (hasNarrative) return { id: "story_ready", label: "Story ready" };
+  const hasStructuredInput = FOUNDER_STORY_FIELD_KEYS.some((key) => Boolean(normalizeFounderStoryPreviewText(storyData[key])));
+  return hasStructuredInput ? { id: "in_progress", label: "In progress" } : { id: "empty", label: "Empty" };
+}
+
+function getFounderStoryCardPreview(tile) {
+  const narrative = normalizeFounderStoryPreviewText(tile?.content);
+  if (narrative) return truncateFounderStoryCardPreview(narrative);
+  const storyData = getFounderStoryModuleData(tile);
+  const structuredPreview = FOUNDER_STORY_PREVIEW_FIELD_ORDER
+    .map((key) => normalizeFounderStoryPreviewText(storyData[key]))
+    .find(Boolean);
+  return truncateFounderStoryCardPreview(structuredPreview || FOUNDER_STORY_EMPTY_CARD_PREVIEW);
+}
+
+function renderFounderStoryCustomTileCardContent(tile) {
+  const status = getFounderStoryDerivedStatus(tile);
+  const preview = getFounderStoryCardPreview(tile);
+  return `<div class="bc-title">${escapeHtml(tile.title || "Founder Story")}</div><div class="bc-preview"><p>${escapeHtml(preview)}</p></div><div class="bc-count">${escapeHtml(status.label)}</div>`;
+}
+
 function removeBrandWorkspaceCustomTileAtIndex(tileIndex) {
   state.brandCore.customTiles = state.brandCore.customTiles.filter((_, index) => index !== tileIndex);
   state.brandCoreSelectedKey = "brandCore";
@@ -6229,7 +6275,9 @@ function renderBrandCoreTiles() {
     const runtimeKey = getCustomTileRuntimeKey(tile, idx);
     card.className = `bc-node${state.brandCoreSelectedKey === runtimeKey ? " selected" : ""}`;
     card.dataset.bcKey = runtimeKey;
-    card.innerHTML = `<div class="bc-title">${tile.title || "Custom Tile"}</div><div class="bc-preview"><p>${(tile.content || "").slice(0, 120)}</p></div><div class="bc-count">custom</div>`;
+    card.innerHTML = isFounderStoryCustomTile(tile)
+      ? renderFounderStoryCustomTileCardContent(tile)
+      : `<div class="bc-title">${tile.title || "Custom Tile"}</div><div class="bc-preview"><p>${(tile.content || "").slice(0, 120)}</p></div><div class="bc-count">custom</div>`;
     const section = getBrandWorkspaceSectionForCustomTile(tile);
     const sectionRow = section ? el.brandCoreCanvas.querySelector(`[data-brand-workspace-section="${section}"] .bc-row`) : null;
     if (sectionRow) sectionRow.appendChild(card);
