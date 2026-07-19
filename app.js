@@ -4738,8 +4738,10 @@ function getCanonicalMissingKnowledgeTitle(value = "") {
   return getMissingKnowledgeModuleDefinitionForRequest(value)?.label || "";
 }
 
-function getBrandWorkspaceSectionForCustomTileTitle(value = "") {
-  const canonicalTitle = getCanonicalMissingKnowledgeTitle(value);
+function getBrandWorkspaceSectionForCustomTile(tile) {
+  const typedDefinition = getValidPersistedMissingKnowledgeModuleDefinition(tile);
+  if (typedDefinition?.section) return typedDefinition.section;
+  const canonicalTitle = getCanonicalMissingKnowledgeTitle(tile?.title || "");
   const normalized = normalizeBrandWorkspaceKnowledgeTitle(canonicalTitle);
   const definition = getMissingKnowledgeModuleDefinitions()
     .find((moduleDefinition) => normalizeBrandWorkspaceKnowledgeTitle(moduleDefinition.label) === normalized);
@@ -6129,7 +6131,7 @@ function renderBrandCoreTiles() {
     card.className = `bc-node${state.brandCoreSelectedKey === runtimeKey ? " selected" : ""}`;
     card.dataset.bcKey = runtimeKey;
     card.innerHTML = `<div class="bc-title">${tile.title || "Custom Tile"}</div><div class="bc-preview"><p>${(tile.content || "").slice(0, 120)}</p></div><div class="bc-count">custom</div>`;
-    const section = getBrandWorkspaceSectionForCustomTileTitle(tile?.title || "");
+    const section = getBrandWorkspaceSectionForCustomTile(tile);
     const sectionRow = section ? el.brandCoreCanvas.querySelector(`[data-brand-workspace-section="${section}"] .bc-row`) : null;
     if (sectionRow) sectionRow.appendChild(card);
     else customRow.appendChild(card);
