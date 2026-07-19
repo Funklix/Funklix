@@ -4594,17 +4594,14 @@ function getDashboardBrandSignals() {
 function getDashboardKnowledgeInputStatus() {
   const brandCore = normalizeBrandCoreState(state.brandCore || defaultBrandCoreState());
   const customTiles = Array.isArray(brandCore.customTiles) ? brandCore.customTiles : [];
-  const references = Array.isArray(brandCore.brandAssets?.references) ? brandCore.brandAssets.references : [];
-  const searchable = [
-    brandCore.brandCore,
-    brandCore.valueProposition,
-    ...customTiles.flatMap((tile) => [tile?.title, tile?.content]),
-    ...references
-  ].filter(Boolean).join(" ").toLowerCase();
-  return DASHBOARD_KNOWLEDGE_INPUTS.map((label) => ({
-    label,
-    exists: searchable.includes(label.toLowerCase())
-  }));
+  const presentModuleIds = getPresentBrandWorkspaceCanonicalModuleIds(customTiles);
+  return DASHBOARD_KNOWLEDGE_INPUTS.map((label) => {
+    const definition = getMissingKnowledgeModuleDefinitionForRequest(label);
+    return {
+      label,
+      exists: Boolean(definition?.id && presentModuleIds.has(definition.id))
+    };
+  });
 }
 
 const BRAND_WORKSPACE_MISSING_KNOWLEDGE_MODULE_IDS = Object.freeze([
@@ -4757,6 +4754,25 @@ function getValidPersistedMissingKnowledgeModuleDefinition(tile) {
   if (!tile || typeof tile !== "object" || typeof tile.moduleType !== "string") return null;
   const definition = getRuntimeKnowledgeModuleDefinition(tile.moduleType);
   return isSupportedMissingKnowledgeModuleDefinition(definition) ? definition : null;
+}
+
+function getPresentBrandWorkspaceCanonicalModuleIds(customTiles = []) {
+  const presentModuleIds = new Set();
+  if (!Array.isArray(customTiles)) return presentModuleIds;
+  const supportedDefinitions = getMissingKnowledgeModuleDefinitions();
+  customTiles.forEach((tile) => {
+    if (!isValidBrandCustomTile(tile) || isMalformedGeneratedCustomTile(tile)) return;
+    const typedDefinition = getValidPersistedMissingKnowledgeModuleDefinition(tile);
+    if (typedDefinition?.id) {
+      presentModuleIds.add(typedDefinition.id);
+      return;
+    }
+    const normalizedTitle = normalizeBrandWorkspaceKnowledgeTitle(tile?.title);
+    const legacyDefinition = supportedDefinitions
+      .find((definition) => normalizeBrandWorkspaceKnowledgeTitle(definition.label) === normalizedTitle);
+    if (legacyDefinition?.id) presentModuleIds.add(legacyDefinition.id);
+  });
+  return presentModuleIds;
 }
 
 function findBrandWorkspaceCustomTileIndexByTitle(value = "") {
