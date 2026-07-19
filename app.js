@@ -4594,17 +4594,14 @@ function getDashboardBrandSignals() {
 function getDashboardKnowledgeInputStatus() {
   const brandCore = normalizeBrandCoreState(state.brandCore || defaultBrandCoreState());
   const customTiles = Array.isArray(brandCore.customTiles) ? brandCore.customTiles : [];
-  const references = Array.isArray(brandCore.brandAssets?.references) ? brandCore.brandAssets.references : [];
-  const searchable = [
-    brandCore.brandCore,
-    brandCore.valueProposition,
-    ...customTiles.flatMap((tile) => [tile?.title, tile?.content]),
-    ...references
-  ].filter(Boolean).join(" ").toLowerCase();
-  return DASHBOARD_KNOWLEDGE_INPUTS.map((label) => ({
-    label,
-    exists: searchable.includes(label.toLowerCase())
-  }));
+  const presentModuleIds = getPresentBrandWorkspaceCanonicalModuleIds(customTiles);
+  return DASHBOARD_KNOWLEDGE_INPUTS.map((label) => {
+    const definition = getMissingKnowledgeModuleDefinitionForRequest(label);
+    return {
+      label,
+      exists: Boolean(definition?.id && presentModuleIds.has(definition.id))
+    };
+  });
 }
 
 const BRAND_WORKSPACE_MISSING_KNOWLEDGE_MODULE_IDS = Object.freeze([
@@ -4741,12 +4738,142 @@ function getCanonicalMissingKnowledgeTitle(value = "") {
   return getMissingKnowledgeModuleDefinitionForRequest(value)?.label || "";
 }
 
-function getBrandWorkspaceSectionForCustomTileTitle(value = "") {
-  const canonicalTitle = getCanonicalMissingKnowledgeTitle(value);
+function getBrandWorkspaceSectionForCustomTile(tile) {
+  const typedDefinition = getValidPersistedMissingKnowledgeModuleDefinition(tile);
+  if (typedDefinition?.section) return typedDefinition.section;
+  const canonicalTitle = getCanonicalMissingKnowledgeTitle(tile?.title || "");
   const normalized = normalizeBrandWorkspaceKnowledgeTitle(canonicalTitle);
   const definition = getMissingKnowledgeModuleDefinitions()
     .find((moduleDefinition) => normalizeBrandWorkspaceKnowledgeTitle(moduleDefinition.label) === normalized);
   return definition?.section || "";
+}
+
+function isSupportedMissingKnowledgeModuleDefinition(definition) {
+  return Boolean(definition?.id && BRAND_WORKSPACE_MISSING_KNOWLEDGE_MODULE_IDS.includes(definition.id));
+}
+
+function getValidPersistedMissingKnowledgeModuleDefinition(tile) {
+  if (!tile || typeof tile !== "object" || typeof tile.moduleType !== "string") return null;
+  const definition = getRuntimeKnowledgeModuleDefinition(tile.moduleType);
+  return isSupportedMissingKnowledgeModuleDefinition(definition) ? definition : null;
+}
+
+function isFounderStoryCustomTile(tile) {
+  return getValidPersistedMissingKnowledgeModuleDefinition(tile)?.id === "founder_story";
+}
+
+const FOUNDER_STORY_FIELD_DEFINITIONS = Object.freeze([
+  { key: "founderNameRole", label: "Founder name and role", rows: 2 },
+  { key: "background", label: "Background and professional context", rows: 3 },
+  { key: "observedProblem", label: "Problem or insight personally observed", rows: 3 },
+  { key: "motivation", label: "Personal motivation", rows: 3 },
+  { key: "turningPoint", label: "Turning point", rows: 3 },
+  { key: "proofPoints", label: "Proof points and credibility", rows: 3 },
+  { key: "vision", label: "Vision and future impact", rows: 3 }
+]);
+
+const FOUNDER_STORY_FIELD_KEYS = Object.freeze(FOUNDER_STORY_FIELD_DEFINITIONS.map((field) => field.key));
+
+function getFounderStoryFieldDomId(fieldKey) {
+  return `brand-core-founder-story-${fieldKey.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)}`;
+}
+
+function getFounderStoryModuleData(tile) {
+  const source = tile?.moduleData?.founderStory;
+  const safeSource = source && typeof source === "object" && !Array.isArray(source) ? source : {};
+  return FOUNDER_STORY_FIELD_KEYS.reduce((data, key) => {
+    data[key] = typeof safeSource[key] === "string" ? safeSource[key] : "";
+    return data;
+  }, {});
+}
+
+function removeBrandWorkspaceCustomTileAtIndex(tileIndex) {
+  state.brandCore.customTiles = state.brandCore.customTiles.filter((_, index) => index !== tileIndex);
+  state.brandCoreSelectedKey = "brandCore";
+  saveBrandBrainState();
+  renderBrandCoreTiles();
+  renderBrandCoreEditor();
+}
+
+function saveFounderStoryModuleData(tile, fieldValues) {
+  const existingModuleData = tile.moduleData && typeof tile.moduleData === "object" && !Array.isArray(tile.moduleData) ? tile.moduleData : {};
+  const existingFounderStory = existingModuleData.founderStory && typeof existingModuleData.founderStory === "object" && !Array.isArray(existingModuleData.founderStory) ? existingModuleData.founderStory : {};
+  tile.moduleData = {
+    ...existingModuleData,
+    founderStory: {
+      ...existingFounderStory,
+      ...FOUNDER_STORY_FIELD_KEYS.reduce((data, key) => {
+        data[key] = typeof fieldValues[key] === "string" ? fieldValues[key] : "";
+        return data;
+      }, {})
+    }
+  };
+}
+
+function renderFounderStoryCustomTileEditor(tile, idx) {
+  const storyData = getFounderStoryModuleData(tile);
+  const fieldMarkup = FOUNDER_STORY_FIELD_DEFINITIONS.map((field) => `
+    <label>${escapeHtml(field.label)}</label>
+    <textarea id="${getFounderStoryFieldDomId(field.key)}" rows="${field.rows}">${escapeHtml(storyData[field.key])}</textarea>
+  `).join("");
+  el.brandEditorTitle.textContent = tile.title || "Founder Story";
+  el.brandEditorPanel.innerHTML = `
+    <div class="bc-editor-meta">
+      <p class="bc-helper">Founder Story Knowledge Module</p>
+      <span class="bc-badge">Founder Story</span>
+    </div>
+    <p class="bc-helper">Capture the founder origin, motivation, credibility, turning point, and vision. Use the narrative as the reusable story for Brand and campaign work.</p>
+    <label>Title</label>
+    <input id="brand-core-founder-story-title" value="${escapeHtml(tile.title || "")}"/>
+    ${fieldMarkup}
+    <label>Founder Story Narrative</label>
+    <p class="bc-helper">Edit the final narrative manually. Structured fields are saved as source material and do not overwrite this narrative.</p>
+    <textarea id="brand-core-founder-story-narrative" rows="6">${escapeHtml(tile.content || "")}</textarea>
+    <button id="brand-core-founder-story-delete" type="button">Remove custom tile</button>
+  `;
+  const readFounderStoryFieldValues = () => FOUNDER_STORY_FIELD_KEYS.reduce((values, key) => {
+    const input = el.brandEditorPanel.querySelector(`#${getFounderStoryFieldDomId(key)}`);
+    values[key] = input?.value || "";
+    return values;
+  }, {});
+  el.brandEditorPanel.querySelector("#brand-core-founder-story-title").addEventListener("input", (event) => {
+    tile.title = event.target.value;
+    saveBrandBrainState();
+    renderBrandCoreTiles();
+  });
+  el.brandEditorPanel.querySelector("#brand-core-founder-story-narrative").addEventListener("input", (event) => {
+    tile.content = event.target.value;
+    saveBrandBrainState();
+    renderBrandCoreTiles();
+  });
+  FOUNDER_STORY_FIELD_KEYS.forEach((key) => {
+    el.brandEditorPanel.querySelector(`#${getFounderStoryFieldDomId(key)}`).addEventListener("input", () => {
+      saveFounderStoryModuleData(tile, readFounderStoryFieldValues());
+      saveBrandBrainState();
+    });
+  });
+  el.brandEditorPanel.querySelector("#brand-core-founder-story-delete").addEventListener("click", () => {
+    removeBrandWorkspaceCustomTileAtIndex(idx);
+  });
+}
+
+function getPresentBrandWorkspaceCanonicalModuleIds(customTiles = []) {
+  const presentModuleIds = new Set();
+  if (!Array.isArray(customTiles)) return presentModuleIds;
+  const supportedDefinitions = getMissingKnowledgeModuleDefinitions();
+  customTiles.forEach((tile) => {
+    if (!isValidBrandCustomTile(tile) || isMalformedGeneratedCustomTile(tile)) return;
+    const typedDefinition = getValidPersistedMissingKnowledgeModuleDefinition(tile);
+    if (typedDefinition?.id) {
+      presentModuleIds.add(typedDefinition.id);
+      return;
+    }
+    const normalizedTitle = normalizeBrandWorkspaceKnowledgeTitle(tile?.title);
+    const legacyDefinition = supportedDefinitions
+      .find((definition) => normalizeBrandWorkspaceKnowledgeTitle(definition.label) === normalizedTitle);
+    if (legacyDefinition?.id) presentModuleIds.add(legacyDefinition.id);
+  });
+  return presentModuleIds;
 }
 
 function findBrandWorkspaceCustomTileIndexByTitle(value = "") {
@@ -4756,8 +4883,21 @@ function findBrandWorkspaceCustomTileIndexByTitle(value = "") {
   return state.brandCore.customTiles.findIndex((tile) => (
     isValidBrandCustomTile(tile)
     && !isMalformedGeneratedCustomTile(tile)
+    && !getValidPersistedMissingKnowledgeModuleDefinition(tile)
     && normalizeBrandWorkspaceKnowledgeTitle(tile?.title) === normalized
   ));
+}
+
+function findBrandWorkspaceCanonicalModuleTileIndex(moduleType = "", canonicalTitle = "") {
+  const requestedDefinition = getMissingKnowledgeModuleDefinitionForRequest(moduleType);
+  if (!isSupportedMissingKnowledgeModuleDefinition(requestedDefinition) || !Array.isArray(state.brandCore?.customTiles)) return -1;
+  const typedMatchIndex = state.brandCore.customTiles.findIndex((tile) => (
+    isValidBrandCustomTile(tile)
+    && !isMalformedGeneratedCustomTile(tile)
+    && getValidPersistedMissingKnowledgeModuleDefinition(tile)?.id === requestedDefinition.id
+  ));
+  if (typedMatchIndex >= 0) return typedMatchIndex;
+  return findBrandWorkspaceCustomTileIndexByTitle(canonicalTitle || requestedDefinition.label);
 }
 
 function focusBrandCoreEditorSafely() {
@@ -4771,7 +4911,7 @@ function createOrSelectMissingKnowledgeTile(rawTitle = "") {
   if (!definition?.id || !definition?.label) return;
   const canonicalTitle = definition.label;
   state.brandCore = normalizeBrandCoreState(state.brandCore || defaultBrandCoreState());
-  let tileIndex = findBrandWorkspaceCustomTileIndexByTitle(canonicalTitle);
+  let tileIndex = findBrandWorkspaceCanonicalModuleTileIndex(definition.id, canonicalTitle);
   if (tileIndex < 0) {
     state.brandCore.customTiles.push(createBrandCustomTile(canonicalTitle, "", { moduleType: definition.id }));
     tileIndex = state.brandCore.customTiles.length - 1;
@@ -5905,16 +6045,16 @@ function renderBrandCoreEditor() {
       renderBrandCoreEditor();
       return;
     }
+    if (isFounderStoryCustomTile(tile)) {
+      renderFounderStoryCustomTileEditor(tile, idx);
+      return;
+    }
     el.brandEditorTitle.textContent = tile.title || "Custom Tile";
     el.brandEditorPanel.innerHTML = `<div class="bc-editor-meta"><p class="bc-helper">Custom Brand Tile</p><span class="bc-badge">custom</span></div><label>Title</label><input id="bc-custom-title" value="${tile.title || ""}"/><label>Content</label><textarea id="bc-custom-content" rows="5">${tile.content || ""}</textarea><button id="bc-custom-delete" type="button">Remove custom tile</button>`;
     el.brandEditorPanel.querySelector("#bc-custom-title").addEventListener("input", (e) => { tile.title = e.target.value; saveBrandBrainState(); renderBrandCoreTiles(); });
     el.brandEditorPanel.querySelector("#bc-custom-content").addEventListener("input", (e) => { tile.content = e.target.value; saveBrandBrainState(); renderBrandCoreTiles(); });
     el.brandEditorPanel.querySelector("#bc-custom-delete").addEventListener("click", () => {
-      state.brandCore.customTiles = state.brandCore.customTiles.filter((_, tileIndex) => tileIndex !== idx);
-      state.brandCoreSelectedKey = "brandCore";
-      saveBrandBrainState();
-      renderBrandCoreTiles();
-      renderBrandCoreEditor();
+      removeBrandWorkspaceCustomTileAtIndex(idx);
     });
     return;
   }
@@ -6090,7 +6230,7 @@ function renderBrandCoreTiles() {
     card.className = `bc-node${state.brandCoreSelectedKey === runtimeKey ? " selected" : ""}`;
     card.dataset.bcKey = runtimeKey;
     card.innerHTML = `<div class="bc-title">${tile.title || "Custom Tile"}</div><div class="bc-preview"><p>${(tile.content || "").slice(0, 120)}</p></div><div class="bc-count">custom</div>`;
-    const section = getBrandWorkspaceSectionForCustomTileTitle(tile?.title || "");
+    const section = getBrandWorkspaceSectionForCustomTile(tile);
     const sectionRow = section ? el.brandCoreCanvas.querySelector(`[data-brand-workspace-section="${section}"] .bc-row`) : null;
     if (sectionRow) sectionRow.appendChild(card);
     else customRow.appendChild(card);
