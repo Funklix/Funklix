@@ -4763,13 +4763,13 @@ function isFounderStoryCustomTile(tile) {
 }
 
 const FOUNDER_STORY_FIELD_DEFINITIONS = Object.freeze([
-  { key: "founderNameRole", label: "Founder name and role", rows: 2 },
-  { key: "background", label: "Background and professional context", rows: 3 },
-  { key: "observedProblem", label: "Problem or insight personally observed", rows: 3 },
-  { key: "motivation", label: "Personal motivation", rows: 3 },
-  { key: "turningPoint", label: "Turning point", rows: 3 },
-  { key: "proofPoints", label: "Proof points and credibility", rows: 3 },
-  { key: "vision", label: "Vision and future impact", rows: 3 }
+  { key: "founderNameRole", label: "Founder name and role", placeholder: "Alex Morgan, Founder and CEO", rows: 2 },
+  { key: "observedProblem", label: "Problem or insight", placeholder: "What did the founder personally observe that needed to change?", rows: 3 },
+  { key: "motivation", label: "Personal motivation", placeholder: "Why did this problem matter personally?", rows: 3 },
+  { key: "turningPoint", label: "Turning point", placeholder: "What moment turned the idea into a real commitment?", rows: 3 },
+  { key: "background", label: "Relevant background", placeholder: "What experience shaped the founder’s perspective?", rows: 3 },
+  { key: "proofPoints", label: "Proof points and credibility", placeholder: "Relevant expertise, achievements, lived experience, or early traction", rows: 3 },
+  { key: "vision", label: "Vision and future impact", placeholder: "What future does the founder want to help create?", rows: 3 }
 ]);
 
 const FOUNDER_STORY_FIELD_KEYS = Object.freeze(FOUNDER_STORY_FIELD_DEFINITIONS.map((field) => field.key));
@@ -4858,23 +4858,29 @@ function saveFounderStoryModuleData(tile, fieldValues) {
 
 function renderFounderStoryCustomTileEditor(tile, idx) {
   const storyData = getFounderStoryModuleData(tile);
-  const fieldMarkup = FOUNDER_STORY_FIELD_DEFINITIONS.map((field) => `
-    <label>${escapeHtml(field.label)}</label>
-    <textarea id="${getFounderStoryFieldDomId(field.key)}" rows="${field.rows}">${escapeHtml(storyData[field.key])}</textarea>
-  `).join("");
+  const fieldMarkup = FOUNDER_STORY_FIELD_DEFINITIONS.map((field) => {
+    const fieldId = getFounderStoryFieldDomId(field.key);
+    return `
+      <label for="${fieldId}">${escapeHtml(field.label)}</label>
+      <textarea id="${fieldId}" rows="${field.rows}" placeholder="${escapeHtml(field.placeholder || "")}">${escapeHtml(storyData[field.key])}</textarea>
+    `;
+  }).join("");
   el.brandEditorTitle.textContent = tile.title || "Founder Story";
   el.brandEditorPanel.innerHTML = `
     <div class="bc-editor-meta">
       <p class="bc-helper">Founder Story Knowledge Module</p>
       <span class="bc-badge">Founder Story</span>
     </div>
-    <p class="bc-helper">Capture the founder origin, motivation, credibility, turning point, and vision. Use the narrative as the reusable story for Brand and campaign work.</p>
-    <label>Title</label>
+    <p class="bc-helper">Capture the facts behind the founder’s journey. Partial answers are fine. These details stay as source material for a reusable founder story.</p>
+    <label for="brand-core-founder-story-title">Title</label>
     <input id="brand-core-founder-story-title" value="${escapeHtml(tile.title || "")}"/>
+    <h5>Source facts</h5>
+    <p class="bc-helper">Add the moments, motivations, and proof points that make the story specific and credible.</p>
     ${fieldMarkup}
-    <label>Founder Story Narrative</label>
-    <p class="bc-helper">Edit the final narrative manually. Structured fields are saved as source material and do not overwrite this narrative.</p>
-    <textarea id="brand-core-founder-story-narrative" rows="6">${escapeHtml(tile.content || "")}</textarea>
+    <h5>Reusable Founder Story Narrative</h5>
+    <p class="bc-helper">Write or refine the narrative used across brand, campaign, website, pitch, and communication work. Changes to source facts do not automatically rewrite this narrative.</p>
+    <label for="brand-core-founder-story-narrative">Founder Story narrative</label>
+    <textarea id="brand-core-founder-story-narrative" rows="6" placeholder="Write the reusable founder story here when you are ready.">${escapeHtml(tile.content || "")}</textarea>
     <button id="brand-core-founder-story-delete" type="button">Remove custom tile</button>
   `;
   const readFounderStoryFieldValues = () => FOUNDER_STORY_FIELD_KEYS.reduce((values, key) => {
