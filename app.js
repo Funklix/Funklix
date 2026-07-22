@@ -4856,6 +4856,200 @@ function saveFounderStoryModuleData(tile, fieldValues) {
   };
 }
 
+
+const FOUNDER_STORY_GENERATE_MINIMUM_INPUT_MESSAGE = "Add the founder’s identity and at least two story details before generating.";
+const FOUNDER_STORY_GENERATE_GENERIC_ERROR_MESSAGE = "We couldn’t generate the Founder Story. Your existing content is unchanged. Please try again.";
+const FOUNDER_STORY_GENERATE_DETAIL_KEYS = Object.freeze([
+  "observedProblem",
+  "motivation",
+  "turningPoint",
+  "background",
+  "proofPoints",
+  "vision"
+]);
+const FOUNDER_STORY_GENERATE_MAX_NARRATIVE_LENGTH = 6000;
+
+function getMeaningfulFounderStoryValue(value = "") {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function getReliableBrandNameForFounderStoryGeneration() {
+  const candidates = [
+    state.currentBoardName,
+    state.brandCore?.brandName,
+    state.brandCore?.name,
+    state.brandCore?.brandAssets?.name
+  ];
+  return candidates.map((value) => getMeaningfulFounderStoryValue(value)).find(Boolean) || "";
+}
+
+function getFounderStoryGenerationBrandContext() {
+  const brandCore = state.brandCore && typeof state.brandCore === "object" ? state.brandCore : {};
+  const brandAssets = brandCore.brandAssets && typeof brandCore.brandAssets === "object" ? brandCore.brandAssets : {};
+  const brandDNA = brandCore.brandDNA && typeof brandCore.brandDNA === "object" ? brandCore.brandDNA : {};
+  const toText = (value) => getMeaningfulFounderStoryValue(value);
+  const toListText = (value, maxItems = 8) => Array.isArray(value)
+    ? value.map((item) => toText(item)).filter(Boolean).slice(0, maxItems).join("; ")
+    : toText(value);
+  return {
+    brandName: getReliableBrandNameForFounderStoryGeneration(),
+    mission: toText(brandCore.mission || brandCore.brandMission),
+    vision: toText(brandCore.vision || brandCore.brandVision),
+    values: toListText(brandCore.values || brandCore.brandValues),
+    audience: Array.isArray(brandCore.personas)
+      ? brandCore.personas.map((persona) => {
+        if (typeof persona === "string") return toText(persona);
+        if (!persona || typeof persona !== "object") return "";
+        return [persona.name, persona.note, persona.description, persona.needs].map(toText).filter(Boolean).join(" — ");
+      }).filter(Boolean).slice(0, 6).join("; ")
+      : toText(brandCore.personas),
+    positioning: toText(brandCore.brandCore || brandCore.positioning || brandCore.valueProposition),
+    toneOfVoice: toListText(brandCore.toneOfVoice),
+    category: toText(brandCore.category || brandCore.industry),
+    tagline: toText(brandCore.tagline),
+    brandDNA: [brandDNA.primaryArchetype, brandDNA.secondaryArchetype].map(toText).filter(Boolean).join("; "),
+    website: toText(brandAssets.domain)
+  };
+}
+
+function filterFounderStoryGenerationBrandContext(context = {}) {
+  return Object.entries(context).reduce((filtered, [key, value]) => {
+    const text = getMeaningfulFounderStoryValue(value);
+    if (text) filtered[key] = text.slice(0, 1200);
+    return filtered;
+  }, {});
+}
+
+function validateFounderStoryGenerationInput(source = {}, brandContext = {}) {
+  const hasIdentity = Boolean(getMeaningfulFounderStoryValue(source.founderNameRole) || getMeaningfulFounderStoryValue(brandContext.brandName));
+  const detailCount = FOUNDER_STORY_GENERATE_DETAIL_KEYS.filter((key) => Boolean(getMeaningfulFounderStoryValue(source[key]))).length;
+  return { ok: hasIdentity && detailCount >= 2, hasIdentity, detailCount };
+}
+
+function setFounderStoryGenerateMessage(message = "", tone = "") {
+  const messageEl = el.brandEditorPanel?.querySelector?.("#brand-core-founder-story-generate-message");
+  if (!messageEl) return;
+  messageEl.textContent = message;
+  messageEl.dataset.tone = tone || "";
+}
+
+function findFounderStoryTileByStableId(tileId) {
+  if (!tileId || !Array.isArray(state.brandCore?.customTiles)) return null;
+  return state.brandCore.customTiles.find((candidate) => candidate?.id === tileId) || null;
+}
+
+function assertCurrentFounderStoryGenerationContext(requestContext) {
+  if (!requestContext?.tileId) return { ok: false, message: "This Founder Story is no longer available." };
+  const tile = findFounderStoryTileByStableId(requestContext.tileId);
+  if (!tile || !isFounderStoryCustomTile(tile)) return { ok: false, message: "This Founder Story is no longer available." };
+  if ((state.currentBoardId || "") !== (requestContext.boardId || "")) return { ok: false, message: "The Brand context changed. Generate again before applying." };
+  const selected = getCustomTileByRuntimeKey(state.brandCoreSelectedKey)?.tile;
+  if (selected?.id !== requestContext.tileId) return { ok: false, message: "Select this Founder Story again before applying the generated narrative." };
+  return { ok: true, tile };
+}
+
+function openFounderStoryGeneratedReview({ narrative, requestContext }) {
+  const overlay = document.createElement("div");
+  overlay.className = "brand-confirm-modal";
+  const card = document.createElement("div");
+  card.className = "brand-confirm-card";
+  const heading = document.createElement("h3");
+  heading.id = "brand-core-founder-story-generate-heading";
+  heading.textContent = "Generated Founder Story";
+  const helper = document.createElement("p");
+  helper.textContent = requestContext.hadExistingNarrative
+    ? "Review this generated narrative before replacing your current Founder Story."
+    : "Review this generated narrative before adding it to your Founder Story.";
+  const textarea = document.createElement("textarea");
+  textarea.id = "brand-core-founder-story-generate-preview";
+  textarea.rows = 10;
+  textarea.value = narrative;
+  const actions = document.createElement("div");
+  actions.className = "brand-confirm-actions";
+  const cancel = document.createElement("button");
+  cancel.type = "button";
+  cancel.id = "brand-core-founder-story-generate-cancel";
+  cancel.textContent = "Keep current narrative";
+  const apply = document.createElement("button");
+  apply.type = "button";
+  apply.className = "primary-add";
+  apply.id = "brand-core-founder-story-generate-apply";
+  apply.textContent = "Use this narrative";
+  actions.append(cancel, apply);
+  card.append(heading, helper, textarea, actions);
+  overlay.appendChild(card);
+  document.body.appendChild(overlay);
+  cancel.addEventListener("click", () => overlay.remove());
+  apply.addEventListener("click", () => {
+    const context = assertCurrentFounderStoryGenerationContext(requestContext);
+    if (!context.ok) {
+      setFounderStoryGenerateMessage(context.message, "error");
+      overlay.remove();
+      return;
+    }
+    const acceptedNarrative = getMeaningfulFounderStoryValue(textarea.value).slice(0, FOUNDER_STORY_GENERATE_MAX_NARRATIVE_LENGTH);
+    if (!acceptedNarrative) {
+      setFounderStoryGenerateMessage(FOUNDER_STORY_GENERATE_GENERIC_ERROR_MESSAGE, "error");
+      return;
+    }
+    context.tile.content = acceptedNarrative;
+    saveBrandBrainState();
+    renderBrandCoreTiles();
+    renderBrandCoreEditor();
+    overlay.remove();
+  });
+}
+
+async function generateFounderStoryNarrative(tile) {
+  if (state.founderStoryGeneration?.inFlight) return;
+  const tileId = getMeaningfulFounderStoryValue(tile?.id);
+  if (!tileId || !isFounderStoryCustomTile(tile)) return;
+  const source = getFounderStoryModuleData(tile);
+  const brandContext = filterFounderStoryGenerationBrandContext(getFounderStoryGenerationBrandContext());
+  if (!validateFounderStoryGenerationInput(source, brandContext).ok) {
+    setFounderStoryGenerateMessage(FOUNDER_STORY_GENERATE_MINIMUM_INPUT_MESSAGE, "error");
+    return;
+  }
+  const button = el.brandEditorPanel.querySelector("#brand-core-founder-story-generate-button");
+  const requestContext = {
+    tileId,
+    boardId: state.currentBoardId || getBoardIdFromPath() || "",
+    selectedKey: state.brandCoreSelectedKey,
+    hadExistingNarrative: Boolean(getMeaningfulFounderStoryValue(tile.content))
+  };
+  state.founderStoryGeneration = { inFlight: true, request: requestContext };
+  if (button) { button.disabled = true; button.textContent = "Generating…"; }
+  setFounderStoryGenerateMessage("", "");
+  try {
+    const response = await fetch("/api/generate-founder-story", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        moduleType: "founder_story",
+        boardId: requestContext.boardId,
+        source,
+        brandContext,
+        existingNarrative: getMeaningfulFounderStoryValue(tile.content)
+      })
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || payload?.success === false) throw new Error(payload?.error?.message || payload?.error || FOUNDER_STORY_GENERATE_GENERIC_ERROR_MESSAGE);
+    const narrative = typeof payload?.narrative === "string" ? payload.narrative.trim() : "";
+    if (!narrative || narrative.length > FOUNDER_STORY_GENERATE_MAX_NARRATIVE_LENGTH) throw new Error(FOUNDER_STORY_GENERATE_GENERIC_ERROR_MESSAGE);
+    const context = assertCurrentFounderStoryGenerationContext(requestContext);
+    if (!context.ok) {
+      setFounderStoryGenerateMessage(context.message, "error");
+      return;
+    }
+    openFounderStoryGeneratedReview({ narrative, requestContext });
+  } catch (_) {
+    setFounderStoryGenerateMessage(FOUNDER_STORY_GENERATE_GENERIC_ERROR_MESSAGE, "error");
+  } finally {
+    state.founderStoryGeneration = { inFlight: false, request: null };
+    if (button) { button.disabled = false; button.textContent = "Generate Founder Story"; }
+  }
+}
+
 function renderFounderStoryCustomTileEditor(tile, idx) {
   const storyData = getFounderStoryModuleData(tile);
   const fieldMarkup = FOUNDER_STORY_FIELD_DEFINITIONS.map((field) => {
@@ -4877,6 +5071,10 @@ function renderFounderStoryCustomTileEditor(tile, idx) {
     <h5>Source facts</h5>
     <p class="bc-helper">Add the moments, motivations, and proof points that make the story specific and credible.</p>
     ${fieldMarkup}
+    <div class="posting-actions bc-add-row">
+      <button id="brand-core-founder-story-generate-button" type="button" class="primary-add">Generate Founder Story</button>
+    </div>
+    <p class="bc-helper" id="brand-core-founder-story-generate-message" aria-live="polite"></p>
     <h5>Reusable Founder Story Narrative</h5>
     <p class="bc-helper">Write or refine the narrative used across brand, campaign, website, pitch, and communication work. Changes to source facts do not automatically rewrite this narrative.</p>
     <label for="brand-core-founder-story-narrative">Founder Story narrative</label>
@@ -4897,6 +5095,9 @@ function renderFounderStoryCustomTileEditor(tile, idx) {
     tile.content = event.target.value;
     saveBrandBrainState();
     renderBrandCoreTiles();
+  });
+  el.brandEditorPanel.querySelector("#brand-core-founder-story-generate-button").addEventListener("click", () => {
+    generateFounderStoryNarrative(tile);
   });
   FOUNDER_STORY_FIELD_KEYS.forEach((key) => {
     el.brandEditorPanel.querySelector(`#${getFounderStoryFieldDomId(key)}`).addEventListener("input", () => {
