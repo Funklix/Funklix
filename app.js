@@ -41,6 +41,7 @@ const NODE_STATUSES = [
 const NODE_STATUS_BY_VALUE = new Map(NODE_STATUSES.map((status) => [status.value, status]));
 
 let activeLightbox = null;
+let activeBrandDnaRecommendation = null;
 
 const state = {
   nodes: [],
@@ -5159,12 +5160,14 @@ function focusBrandCoreEditorSafely() {
   editable?.focus?.({ preventScroll: true });
 }
 
-function createOrSelectMissingKnowledgeTile(rawTitle = "") {
+function createOrSelectMissingKnowledgeTile(rawTitle = "", options = {}) {
   const definition = getMissingKnowledgeModuleDefinitionForRequest(rawTitle);
   if (!definition?.id || !definition?.label) return;
   const canonicalTitle = definition.label;
   state.brandCore = normalizeBrandCoreState(state.brandCore || defaultBrandCoreState());
-  let tileIndex = findBrandWorkspaceCanonicalModuleTileIndex(definition.id, canonicalTitle);
+  let tileIndex = options.typedOnly
+    ? state.brandCore.customTiles.findIndex((tile) => getValidPersistedMissingKnowledgeModuleDefinition(tile)?.id === definition.id)
+    : findBrandWorkspaceCanonicalModuleTileIndex(definition.id, canonicalTitle);
   if (tileIndex < 0) {
     state.brandCore.customTiles.push(createBrandCustomTile(canonicalTitle, "", { moduleType: definition.id }));
     tileIndex = state.brandCore.customTiles.length - 1;
@@ -6127,6 +6130,123 @@ function renderBrandWorkspaceHero() {
   }
 }
 
+function getBrandDnaRecommendationCopy(status) {
+  if (status === "ambiguous") {
+    return {
+      title: "Review your Founder Story",
+      body: "Funklix found more than one Founder Story linked to this brand and cannot determine which one to use yet. Review your Founder Story setup before generating Brand DNA, or continue with the information currently available.",
+      primary: "Review Founder Story"
+    };
+  }
+  if (status === "error") {
+    return {
+      title: "Review your Founder Story",
+      body: "Funklix could not confirm whether your Founder Story is ready for Brand DNA. You can review it first or continue with the information currently available.",
+      primary: "Review Founder Story"
+    };
+  }
+  return {
+    title: "Add your Founder Story first?",
+    body: "Your Founder Story helps Funklix understand the motivations, experiences, and beliefs behind your brand. Adding it first can make your Brand DNA more accurate and personal.",
+    primary: status === "incomplete" ? "Complete Founder Story" : "Add Founder Story"
+  };
+}
+
+function openResolvedFounderStory(dependency) {
+  const runtimeKey = dependency?.resolutionStatus === "resolved"
+    ? window.KnowledgeModuleDependencyEngine?.resolveModuleInstances?.({ state, moduleType: "founder_story" })?.instances?.[0]?.runtimeKey
+    : "";
+  if (!runtimeKey || !getCustomTileByRuntimeKey(runtimeKey).tile) return false;
+  setAppMode("brand");
+  state.brandCoreSelectedKey = runtimeKey;
+  renderBrandCoreTiles();
+  renderBrandCoreEditor();
+  focusBrandCoreEditorSafely();
+  return true;
+}
+
+function reviewAmbiguousFounderStories() {
+  setAppMode("brand");
+  renderBrandCoreTiles();
+  renderBrandCoreEditor();
+  el.brandCoreCanvas?.querySelector?.(".brand-workspace-custom-group")?.scrollIntoView?.({ block: "nearest", behavior: "smooth" });
+  el.brandCoreButton?.focus?.();
+}
+
+function showBrandDnaFounderStoryRecommendation(preflight, trigger) {
+  if (activeBrandDnaRecommendation) return;
+  const copy = getBrandDnaRecommendationCopy(preflight.status);
+  const overlay = document.createElement("div");
+  overlay.className = "brand-confirm-modal brand-dna-founder-story-recommendation";
+  overlay.setAttribute("role", "dialog");
+  overlay.setAttribute("aria-modal", "true");
+  overlay.setAttribute("aria-labelledby", "brand-dna-founder-story-recommendation-title");
+  overlay.innerHTML = `<div class="brand-confirm-card"><button type="button" class="brand-dna-recommendation-close" aria-label="Close">×</button><h3 id="brand-dna-founder-story-recommendation-title"></h3><p class="brand-dna-recommendation-body"></p><div class="brand-confirm-actions"><button type="button" id="brand-dna-continue-anyway">Continue Anyway</button><button type="button" class="primary-add" id="brand-dna-open-founder-story"></button></div></div>`;
+  overlay.querySelector("#brand-dna-founder-story-recommendation-title").textContent = copy.title;
+  overlay.querySelector(".brand-dna-recommendation-body").textContent = copy.body;
+  overlay.querySelector("#brand-dna-open-founder-story").textContent = copy.primary;
+  const primaryButton = overlay.querySelector("#brand-dna-open-founder-story");
+  const continueButton = overlay.querySelector("#brand-dna-continue-anyway");
+  const closeButton = overlay.querySelector(".brand-dna-recommendation-close");
+  let closed = false;
+
+  const cleanup = ({ restoreFocus = false } = {}) => {
+    if (closed) return;
+    closed = true;
+    document.removeEventListener("keydown", onKeydown);
+    overlay.removeEventListener("click", onBackdropClick);
+    primaryButton.removeEventListener("click", onPrimary);
+    continueButton.removeEventListener("click", onContinue);
+    closeButton.removeEventListener("click", onPassiveDismiss);
+    overlay.remove();
+    activeBrandDnaRecommendation = null;
+    if (restoreFocus && trigger?.isConnected) trigger.focus();
+  };
+  const onPassiveDismiss = () => cleanup({ restoreFocus: true });
+  const onKeydown = (event) => {
+    if (event.key === "Escape") onPassiveDismiss();
+  };
+  const onBackdropClick = (event) => {
+    if (event.target === overlay) onPassiveDismiss();
+  };
+  const onContinue = () => {
+    cleanup();
+    discoverBrandDna();
+  };
+  const onPrimary = () => {
+    cleanup();
+    if (preflight.status === "ambiguous") {
+      reviewAmbiguousFounderStories();
+      return;
+    }
+    if (openResolvedFounderStory(preflight.dependency)) return;
+    createOrSelectMissingKnowledgeTile("founder_story", { typedOnly: true });
+  };
+
+  activeBrandDnaRecommendation = { overlay };
+  document.body.appendChild(overlay);
+  document.addEventListener("keydown", onKeydown);
+  overlay.addEventListener("click", onBackdropClick);
+  primaryButton.addEventListener("click", onPrimary);
+  continueButton.addEventListener("click", onContinue);
+  closeButton.addEventListener("click", onPassiveDismiss);
+  primaryButton.focus();
+}
+
+function initiateBrandDnaGeneration(trigger = null) {
+  if (state.brandDnaLoading || activeBrandDnaRecommendation) return;
+  const preflightApi = window.BrandDnaGenerationPreflight;
+  const preflight = preflightApi?.evaluateBrandDnaGenerationPreflight?.({
+    state,
+    dependencyEngine: window.KnowledgeModuleDependencyEngine
+  }) || { status: "error", dependency: null };
+  if (preflight.status === "usable") {
+    discoverBrandDna();
+    return;
+  }
+  showBrandDnaFounderStoryRecommendation(preflight, trigger);
+}
+
 function renderBrandDnaCard() {
   renderBrandWorkspaceHero();
   if (!el.brandCoreCanvas) return;
@@ -6161,7 +6281,7 @@ function renderBrandDnaCard() {
     ${result ? brandDnaResultHtml(result) : `<div class="brand-dna-empty"><strong>Ready when your Brand Brain has enough context.</strong><span>We will look at your founder story, mission, value proposition, messaging pillars, ICP, tone, website/domain, and visual assets.</span></div>`}
     ${hasAcceptedResult ? renderBrandAvatarSection(accepted) : ""}
   `;
-  card.querySelector("#brand-dna-regenerate")?.addEventListener("click", () => discoverBrandDna());
+  card.querySelector("#brand-dna-regenerate")?.addEventListener("click", (event) => initiateBrandDnaGeneration(event.currentTarget));
   card.querySelector("#brand-dna-refine")?.addEventListener("click", () => refineBrandDna());
   card.querySelector("#brand-dna-accept")?.addEventListener("click", () => acceptBrandDna());
   card.querySelector("#brand-avatar-generate")?.addEventListener("click", () => generateBrandAvatar());

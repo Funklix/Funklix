@@ -1,5 +1,7 @@
 "use strict";
 
+(() => {
+
 let commonJsRegistry = null;
 let commonJsIdentity = null;
 const hasCommonJsModule = typeof module !== "undefined" && module && module.exports;
@@ -252,3 +254,4 @@ if (typeof window !== "undefined") {
 if (hasCommonJsModule) {
   module.exports = KnowledgeModuleDependencyEngine;
 }
+})();

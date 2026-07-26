@@ -9,7 +9,9 @@ const repoRoot = path.resolve(__dirname, "..");
 const files = [
   "knowledge-module-registry.js",
   "knowledge-module-identity.js",
-  "knowledge-module-runtime-adapter.js"
+  "knowledge-module-runtime-adapter.js",
+  "knowledge-module-dependency-engine.js",
+  "brand-dna-generation-preflight.js"
 ];
 const sources = Object.fromEntries(files.map((file) => [file, fs.readFileSync(path.join(repoRoot, file), "utf8")]));
 const failures = [];
@@ -31,6 +33,8 @@ function runBrowserLike(name, extra = {}) {
     assert(typeof sandbox.window.KnowledgeModuleRegistry === "object", `${name}: registry global missing`);
     assert(typeof sandbox.window.KnowledgeModuleIdentity === "object", `${name}: identity global missing`);
     assert(typeof sandbox.window.KnowledgeModuleRuntimeAdapter === "object", `${name}: adapter global missing`);
+    assert(typeof sandbox.window.KnowledgeModuleDependencyEngine?.evaluateDirectDependencies === "function", `${name}: dependency engine global missing`);
+    assert(typeof sandbox.window.BrandDnaGenerationPreflight?.evaluateBrandDnaGenerationPreflight === "function", `${name}: Brand DNA preflight global missing`);
   } catch (error) {
     failures.push(`${name}: ${error.message}`);
   }
@@ -64,9 +68,13 @@ try {
   const registry = loadCommonJs("knowledge-module-registry.js");
   const identity = loadCommonJs("knowledge-module-identity.js");
   const adapter = loadCommonJs("knowledge-module-runtime-adapter.js");
+  const engine = loadCommonJs("knowledge-module-dependency-engine.js");
+  const preflight = loadCommonJs("brand-dna-generation-preflight.js");
   assert(typeof registry === "object" && typeof registry.getModuleDefinition === "function", "commonjs: registry export missing");
   assert(typeof identity === "object" && typeof identity.createKnowledgeModuleInstanceId === "function", "commonjs: identity export missing");
   assert(typeof adapter === "object" && typeof adapter.getKnowledgeModuleRuntimeViews === "function", "commonjs: adapter export missing");
+  assert(typeof engine === "object" && typeof engine.evaluateDirectDependencies === "function", "commonjs: dependency engine export missing");
+  assert(typeof preflight === "object" && typeof preflight.evaluateBrandDnaGenerationPreflight === "function", "commonjs: Brand DNA preflight export missing");
 } catch (error) {
   failures.push(`commonjs: ${error.message}`);
 }
