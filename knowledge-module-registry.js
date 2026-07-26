@@ -19,6 +19,16 @@ const KNOWLEDGE_MODULE_CATEGORIES = Object.freeze({
   CUSTOM: "custom"
 });
 
+const KNOWLEDGE_GRAPH_ROLES = Object.freeze(["source", "derived"]);
+const KNOWLEDGE_GRAPH_LAYERS = Object.freeze([
+  "knowledge_acquisition",
+  "brand_intelligence",
+  "content_intelligence",
+  "execution"
+]);
+const KNOWLEDGE_GRAPH_DEPENDENCY_REQUIREMENTS = Object.freeze(["required", "recommended"]);
+const KNOWLEDGE_GRAPH_ACQUISITION_METHODS = Object.freeze(["manual"]);
+
 const BASE_TEXT_CAPABILITIES = Object.freeze(["editableText"]);
 const BASE_STRUCTURED_CAPABILITIES = Object.freeze(["editableText", "structuredFields"]);
 const FUTURE_AI_REVIEW_CAPABILITIES = Object.freeze(["aiActions", "reviewWorkflow", "readiness", "history", "graphProjection", "searchIndexing"]);
@@ -211,7 +221,15 @@ const KNOWLEDGE_MODULE_REGISTRY = Object.freeze({
     futureCapabilities: Object.freeze(["aiActions", "history", "graphProjection", "searchIndexing"]),
     iconName: "dna",
     allowMultiple: false,
-    category: KNOWLEDGE_MODULE_CATEGORIES.INTELLIGENCE
+    category: KNOWLEDGE_MODULE_CATEGORIES.INTELLIGENCE,
+    knowledgeGraph: Object.freeze({
+      role: "derived",
+      layer: "brand_intelligence",
+      dependencies: Object.freeze([
+        Object.freeze({ moduleType: "founder_story", requirement: "recommended" })
+      ]),
+      acquisitionMethods: Object.freeze([])
+    })
   }),
   brand_avatar: Object.freeze({
     id: "brand_avatar",
@@ -244,7 +262,13 @@ const KNOWLEDGE_MODULE_REGISTRY = Object.freeze({
     futureCapabilities: FUTURE_AI_REVIEW_CAPABILITIES,
     iconName: "story",
     allowMultiple: false,
-    category: KNOWLEDGE_MODULE_CATEGORIES.KNOWLEDGE
+    category: KNOWLEDGE_MODULE_CATEGORIES.KNOWLEDGE,
+    knowledgeGraph: Object.freeze({
+      role: "source",
+      layer: "knowledge_acquisition",
+      dependencies: Object.freeze([]),
+      acquisitionMethods: Object.freeze(["manual"])
+    })
   }),
   market_research: Object.freeze({
     id: "market_research",
@@ -355,7 +379,113 @@ function getModuleDefinitionForRuntimeStateKey(stateKey) {
   )) || null;
 }
 
+function assertExactKeys(value, expectedKeys, path) {
+  const actualKeys = Object.keys(value);
+  const unknownKeys = actualKeys.filter((key) => !expectedKeys.includes(key));
+  const missingKeys = expectedKeys.filter((key) => !actualKeys.includes(key));
+  if (unknownKeys.length) throw new Error(`${path} contains unknown properties: ${unknownKeys.join(", ")}`);
+  if (missingKeys.length) throw new Error(`${path} is missing required properties: ${missingKeys.join(", ")}`);
+}
+
+function validateKnowledgeModuleRegistry(registry = KNOWLEDGE_MODULE_REGISTRY) {
+  if (!registry || typeof registry !== "object" || Array.isArray(registry)) {
+    throw new TypeError("Knowledge Module registry must be an object.");
+  }
+
+  const graphDefinitions = [];
+  Object.entries(registry).forEach(([registryKey, definition]) => {
+    if (!definition || typeof definition !== "object" || Array.isArray(definition)) {
+      throw new TypeError(`Knowledge Module definition ${registryKey} must be an object.`);
+    }
+    if (!Object.prototype.hasOwnProperty.call(definition, "knowledgeGraph")) return;
+
+    const graph = definition.knowledgeGraph;
+    const path = `Knowledge Module ${registryKey}.knowledgeGraph`;
+    if (!graph || typeof graph !== "object" || Array.isArray(graph)) {
+      throw new TypeError(`${path} must be an object.`);
+    }
+    if (!Object.isFrozen(graph)) throw new Error(`${path} must be frozen.`);
+    assertExactKeys(graph, ["role", "layer", "dependencies", "acquisitionMethods"], path);
+    if (!KNOWLEDGE_GRAPH_ROLES.includes(graph.role)) {
+      throw new Error(`${path}.role must be one of: ${KNOWLEDGE_GRAPH_ROLES.join(", ")}.`);
+    }
+    if (!KNOWLEDGE_GRAPH_LAYERS.includes(graph.layer)) {
+      throw new Error(`${path}.layer must be one of: ${KNOWLEDGE_GRAPH_LAYERS.join(", ")}.`);
+    }
+    if (!Array.isArray(graph.dependencies) || !Object.isFrozen(graph.dependencies)) {
+      throw new TypeError(`${path}.dependencies must be a frozen array.`);
+    }
+    if (!Array.isArray(graph.acquisitionMethods) || !Object.isFrozen(graph.acquisitionMethods)) {
+      throw new TypeError(`${path}.acquisitionMethods must be a frozen array.`);
+    }
+
+    const dependencyTargets = new Set();
+    graph.dependencies.forEach((dependency, index) => {
+      const dependencyPath = `${path}.dependencies[${index}]`;
+      if (!dependency || typeof dependency !== "object" || Array.isArray(dependency)) {
+        throw new TypeError(`${dependencyPath} must be an object.`);
+      }
+      if (!Object.isFrozen(dependency)) throw new Error(`${dependencyPath} must be frozen.`);
+      assertExactKeys(dependency, ["moduleType", "requirement"], dependencyPath);
+      if (typeof dependency.moduleType !== "string" || dependency.moduleType !== normalizeModuleId(dependency.moduleType)) {
+        throw new Error(`${dependencyPath}.moduleType must be a canonical stable moduleType string.`);
+      }
+      const targetDefinition = registry[dependency.moduleType];
+      if (!targetDefinition || targetDefinition.id !== dependency.moduleType) {
+        throw new Error(`${dependencyPath}.moduleType must reference a registered stable moduleType.`);
+      }
+      if (dependency.moduleType === definition.id) {
+        throw new Error(`${dependencyPath}.moduleType must not create a self-dependency.`);
+      }
+      if (dependencyTargets.has(dependency.moduleType)) {
+        throw new Error(`${path}.dependencies contains duplicate moduleType ${dependency.moduleType}.`);
+      }
+      dependencyTargets.add(dependency.moduleType);
+      if (!KNOWLEDGE_GRAPH_DEPENDENCY_REQUIREMENTS.includes(dependency.requirement)) {
+        throw new Error(`${dependencyPath}.requirement must be one of: ${KNOWLEDGE_GRAPH_DEPENDENCY_REQUIREMENTS.join(", ")}.`);
+      }
+    });
+
+    const acquisitionMethods = new Set();
+    graph.acquisitionMethods.forEach((method, index) => {
+      if (!KNOWLEDGE_GRAPH_ACQUISITION_METHODS.includes(method)) {
+        throw new Error(`${path}.acquisitionMethods[${index}] must be one of: ${KNOWLEDGE_GRAPH_ACQUISITION_METHODS.join(", ")}.`);
+      }
+      if (acquisitionMethods.has(method)) {
+        throw new Error(`${path}.acquisitionMethods contains duplicate method ${method}.`);
+      }
+      acquisitionMethods.add(method);
+    });
+    graphDefinitions.push(definition);
+  });
+
+  const visited = new Set();
+  const active = new Set();
+  function visit(definition, path = []) {
+    if (active.has(definition.id)) {
+      throw new Error(`Knowledge Graph dependencies contain a cycle: ${[...path, definition.id].join(" -> ")}.`);
+    }
+    if (visited.has(definition.id)) return;
+    active.add(definition.id);
+    const nextPath = [...path, definition.id];
+    definition.knowledgeGraph.dependencies.forEach(({ moduleType }) => {
+      const target = registry[moduleType];
+      if (target?.knowledgeGraph) visit(target, nextPath);
+    });
+    active.delete(definition.id);
+    visited.add(definition.id);
+  }
+  graphDefinitions.forEach((definition) => visit(definition));
+  return true;
+}
+
+validateKnowledgeModuleRegistry();
+
 const KnowledgeModuleRegistry = Object.freeze({
+  KNOWLEDGE_GRAPH_ACQUISITION_METHODS,
+  KNOWLEDGE_GRAPH_DEPENDENCY_REQUIREMENTS,
+  KNOWLEDGE_GRAPH_LAYERS,
+  KNOWLEDGE_GRAPH_ROLES,
   KNOWLEDGE_MODULE_CATEGORIES,
   KNOWLEDGE_MODULE_REGISTRY,
   KNOWLEDGE_MODULE_SECTIONS,
@@ -363,7 +493,8 @@ const KnowledgeModuleRegistry = Object.freeze({
   getModuleDefinition,
   getModuleDefinitionForRuntimeStateKey,
   getModulesForSection,
-  isKnownModule
+  isKnownModule,
+  validateKnowledgeModuleRegistry
 });
 
 if (typeof window !== "undefined") {
