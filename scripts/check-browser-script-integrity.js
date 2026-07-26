@@ -110,6 +110,8 @@ const requiredOrder = [
   "knowledge-module-registry.js",
   "knowledge-module-identity.js",
   "knowledge-module-runtime-adapter.js",
+  "knowledge-module-dependency-engine.js",
+  "brand-dna-generation-preflight.js",
   "app.js"
 ];
 const presentRequired = requiredOrder.filter((file) => localFiles.includes(file));
