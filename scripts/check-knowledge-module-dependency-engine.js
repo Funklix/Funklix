@@ -73,9 +73,9 @@ assert.deepStrictEqual({ status: builtIn.status, sourceType: builtIn.instances[0
 
 const empty = engine.evaluateKnowledgeModule({ state: founderState(), moduleType: "founder_story" });
 assert.deepStrictEqual({ available: empty.available, started: empty.started, ready: empty.ready, accepted: empty.accepted }, {
-  available: true, started: false, ready: false, accepted: null
+  available: true, started: false, ready: false, accepted: false
 });
-assert(empty.diagnostics.includes("acceptance_not_observable"));
+assert(empty.diagnostics.includes("acceptance_required"));
 
 const whitespace = engine.evaluateKnowledgeModule({
   state: founderState({ founderNameRole: " \n ", observedProblem: "\t" }),
@@ -98,12 +98,15 @@ assert.strictEqual(oneDetail.ready, false);
 
 const minimumState = founderState({ founderNameRole: "Alex, founder", observedProblem: "A real problem", motivation: "It mattered" });
 const minimum = engine.evaluateKnowledgeModule({ state: minimumState, moduleType: "founder_story" });
-assert.strictEqual(minimum.ready, true);
-assert.strictEqual(minimum.accepted, null);
+assert.strictEqual(minimum.ready, false);
+assert.strictEqual(minimum.accepted, false);
+minimumState.brandCore.customTiles[0].content = "Accepted narrative";
+minimumState.brandCore.customTiles[0].moduleData.founderStoryLifecycle = { status: "accepted", acceptedAt: "2026-07-27T00:00:00.000Z" };
+assert.strictEqual(engine.evaluateKnowledgeModule({ state: minimumState, moduleType: "founder_story" }).ready, true);
 
 const brandNameFallbackState = founderState({ observedProblem: "A real problem", vision: "A better future" });
 brandNameFallbackState.currentBoardName = "Fixture Brand";
-assert.strictEqual(engine.evaluateKnowledgeModule({ state: brandNameFallbackState, moduleType: "founder_story" }).ready, true);
+assert.strictEqual(engine.evaluateKnowledgeModule({ state: brandNameFallbackState, moduleType: "founder_story" }).ready, false);
 
 const narrativeOnly = engine.evaluateKnowledgeModule({
   state: founderState({}, { content: "A generated and explicitly selected narrative." }),
@@ -111,7 +114,7 @@ const narrativeOnly = engine.evaluateKnowledgeModule({
 });
 assert.strictEqual(narrativeOnly.started, false);
 assert.strictEqual(narrativeOnly.ready, false);
-assert.strictEqual(narrativeOnly.accepted, null);
+assert.strictEqual(narrativeOnly.accepted, false);
 
 function dependency(state) {
   const result = engine.evaluateDirectDependencies({ state, consumerModuleType: "brand_dna" });
@@ -139,8 +142,8 @@ assert(partialDependency.diagnostics.includes("dependency_not_ready"));
 const usableDependency = dependency(minimumState);
 assert.strictEqual(usableDependency.usable, true);
 assert.strictEqual(usableDependency.missing, false);
-assert.strictEqual(usableDependency.accepted, null);
-assert.deepStrictEqual(usableDependency.diagnostics, ["acceptance_not_observable", "dependency_usable"]);
+assert.strictEqual(usableDependency.accepted, true);
+assert.deepStrictEqual(usableDependency.diagnostics, ["dependency_usable"]);
 
 const ambiguousDependency = dependency(ambiguousState);
 assert.strictEqual(ambiguousDependency.usable, false);

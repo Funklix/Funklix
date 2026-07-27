@@ -109,6 +109,7 @@ const state = {
   ,founderStoryAcceptanceInFlight: new Set()
   ,founderStoryAcceptanceHandled: new Set()
   ,brandAvatarLoading: false
+  ,brandFoundationTransitionInFlight: false
   ,appMode: "canvas"
   ,boardsLibrary: []
   ,contentPackLoadingById: {}
@@ -4978,7 +4979,7 @@ function openFounderStoryGeneratedReview({ narrative, requestContext }) {
   apply.type = "button";
   apply.className = "primary-add";
   apply.id = "brand-core-founder-story-generate-apply";
-  apply.textContent = "Use this narrative";
+  apply.textContent = "Apply";
   actions.append(cancel, apply);
   card.append(heading, helper, textarea, actions);
   overlay.appendChild(card);
@@ -5000,17 +5001,20 @@ function openFounderStoryGeneratedReview({ narrative, requestContext }) {
     apply.disabled = true;
     apply.textContent = "Applying…";
     const previousNarrative = context.tile.content;
+    const previousLifecycle = context.tile.moduleData?.founderStoryLifecycle;
     context.tile.content = acceptedNarrative;
+    context.tile.moduleData = { ...(context.tile.moduleData || {}), founderStoryLifecycle: { status: "accepted", acceptedAt: new Date().toISOString() } };
     renderBrandCoreTiles();
     const acceptedContext = getPersistedFounderStoryContext(context.tile);
     const acceptanceEventKey = getFounderStoryAcceptanceEventKey(context.tile, acceptedContext);
     const persisted = await persistFounderStoryAcceptance(context.tile, acceptanceEventKey);
     if (!persisted) {
       context.tile.content = previousNarrative;
+      context.tile.moduleData = { ...(context.tile.moduleData || {}), founderStoryLifecycle: previousLifecycle };
       saveBrandBrainState({ markDirty: false });
       renderBrandCoreTiles();
       apply.disabled = false;
-      apply.textContent = "Use this narrative";
+      apply.textContent = "Apply";
       setFounderStoryGenerateMessage("We couldn’t save the Founder Story. Your Brand Archetype is unchanged.", "error");
       return;
     }
@@ -5182,16 +5186,16 @@ function renderFounderStoryWebsiteImportReview(controller, fields) {
     applyButton.disabled = true;
     applyButton.textContent = "Applying…";
     renderBrandCoreTiles();
-    const acceptedContext = getPersistedFounderStoryContext(latest.tile);
-    const acceptanceEventKey = getFounderStoryAcceptanceEventKey(latest.tile, acceptedContext);
-    const persisted = await persistFounderStoryAcceptance(latest.tile, acceptanceEventKey);
+    latest.tile.moduleData = { ...(latest.tile.moduleData || {}), founderStoryImport: { status: "confirmed_source_facts", confirmedAt: new Date().toISOString() } };
+    saveBrandBrainState();
+    const persisted = await saveBoardToServer("founder-story-source-facts");
     if (!persisted) {
       saveFounderStoryModuleData(latest.tile, previous);
       saveBrandBrainState({ markDirty: false });
       renderBrandCoreTiles();
       applyButton.disabled = false;
       applyButton.textContent = "Apply selected fields";
-      error.textContent = "We couldn’t save the Founder Story. Your Brand Archetype is unchanged.";
+      error.textContent = "We couldn’t save the Source Facts. Your Founder Story is unchanged.";
       return;
     }
     closeFounderStoryWebsiteImport(controller, { restoreFocus: false });
@@ -5304,6 +5308,7 @@ function renderFounderStoryCustomTileEditor(tile, idx) {
   });
   el.brandEditorPanel.querySelector("#brand-core-founder-story-narrative").addEventListener("input", (event) => {
     tile.content = event.target.value;
+    tile.moduleData = { ...(tile.moduleData || {}), founderStoryLifecycle: { status: "draft" } };
     saveBrandBrainState();
     renderBrandCoreTiles();
   });
@@ -5316,6 +5321,7 @@ function renderFounderStoryCustomTileEditor(tile, idx) {
   FOUNDER_STORY_FIELD_KEYS.forEach((key) => {
     el.brandEditorPanel.querySelector(`#${getFounderStoryFieldDomId(key)}`).addEventListener("input", () => {
       saveFounderStoryModuleData(tile, readFounderStoryFieldValues());
+      tile.moduleData = { ...(tile.moduleData || {}), founderStoryLifecycle: { status: "draft" } };
       saveBrandBrainState();
     });
   });
@@ -6079,6 +6085,7 @@ function loadBrandBrainState() {
   state.brandDnaReassessment = null;
   state.brandDnaLoading = false;
   state.brandAvatarLoading = false;
+  state.brandFoundationTransitionInFlight = false;
 }
 
 function resetBrandBrainForBoardHydration() {
@@ -6087,6 +6094,7 @@ function resetBrandBrainForBoardHydration() {
   state.brandDnaReassessment = null;
   state.brandDnaLoading = false;
   state.brandAvatarLoading = false;
+  state.brandFoundationTransitionInFlight = false;
 }
 
 function debugBrandBrainScope(event, details = {}) {
@@ -6199,6 +6207,7 @@ async function analyzeBrandDomainFromEditor() {
     };
 
     saveBrandBrainState();
+    await saveBoardToServer("brand-domain-analysis");
     renderBrandCoreTiles();
     renderBrandCoreEditor();
   } catch (error) {
@@ -6208,6 +6217,32 @@ async function analyzeBrandDomainFromEditor() {
       analyzeButton.disabled = false;
       analyzeButton.textContent = originalLabel;
     }
+  }
+}
+
+async function replacePrimaryBrandLogo(file) {
+  if (!file || !["image/png", "image/jpeg", "image/webp", "image/gif"].includes(file.type) || file.size > 2 * 1024 * 1024) {
+    alert("Choose a PNG, JPEG, WebP, or GIF logo up to 2 MB.");
+    return;
+  }
+  const value = state.brandCore?.brandAssets;
+  if (!value) return;
+  value.logoAsset = { ...(value.logoAsset || {}), kind: "company_logo", role: "primary", status: "candidate", source: "manual_upload" };
+  renderBrandCoreEditor();
+  try {
+    const dataUrl = await new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = reject; reader.readAsDataURL(file); });
+    const response = await fetch("/api/upload-brand-logo", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ imageBase64: String(dataUrl).split(",")[1] || "", mimeType: file.type }) });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || !payload.imageUrl) throw new Error(payload.error || "Could not persist the logo.");
+    value.logo = payload.imageUrl;
+    value.logoAsset = { kind: "company_logo", role: "primary", status: "persisted", source: "manual_upload", mimeType: payload.mimeType, persistedAt: new Date().toISOString() };
+    saveBrandBrainState();
+    await saveBoardToServer("brand-logo-replacement");
+    renderBrandCoreTiles(); renderBrandCoreEditor();
+  } catch (error) {
+    value.logoAsset = { ...(value.logoAsset || {}), status: "unavailable" };
+    renderBrandCoreEditor();
+    alert(error?.message || "Could not persist the logo.");
   }
 }
 
@@ -6254,6 +6289,7 @@ function normalizeBrandAvatar(avatar = null) {
     prompt,
     style: String(avatar.style || "semi-realistic symbolic figure").trim() || "semi-realistic symbolic figure",
     generatedAt: avatar.generatedAt || new Date().toISOString(),
+    logoReference: avatar.logoReference && typeof avatar.logoReference === "object" ? { ...avatar.logoReference } : { available: false, used: false },
     userApproved: Boolean(avatar.userApproved)
   };
 }
@@ -6412,7 +6448,7 @@ function renderBrandWorkspaceHero() {
       : "Core Brand signals are present. Review and refine before deployment.";
   } else {
     el.brandWorkspaceReadinessLabel.textContent = "Brand signals pending";
-    el.brandWorkspaceReadinessDetail.textContent = "Complete the sections below to strengthen future campaign recommendations.";
+    el.brandWorkspaceReadinessDetail.textContent = "Start with Brand Assets: enter your company domain and Analyze Website.";
   }
 }
 
@@ -6432,9 +6468,9 @@ function getBrandDnaRecommendationCopy(status) {
     };
   }
   return {
-    title: "Add your Founder Story first?",
-    body: "Your Founder Story helps Funklix understand the motivations, experiences, and beliefs behind your brand. Adding it first can make your Brand DNA more accurate and personal.",
-    primary: status === "incomplete" ? "Complete Founder Story" : "Add Founder Story"
+    title: "Do you already have a Founder Story?",
+    body: "Your Founder Story helps Funklix understand the motivation, experiences, and values behind the company. It can significantly improve your Brand Archetype and Brand DNA. You can also add or update it later.",
+    primary: "Add Founder Story"
   };
 }
 
@@ -6632,6 +6668,7 @@ async function generateBrandAvatar(optionalUserDirection = "") {
       prompt: payload.prompt,
       style: "semi-realistic symbolic figure",
       generatedAt: payload.generatedAt || new Date().toISOString(),
+      logoReference: payload.logoReference || { available: false, used: false },
       userApproved: false
     });
     saveBrandBrainState({ markDirty: true });
@@ -6643,12 +6680,16 @@ async function generateBrandAvatar(optionalUserDirection = "") {
   }
 }
 
-function acceptBrandAvatar() {
+async function acceptBrandAvatar() {
   const avatar = normalizeBrandAvatar(state.brandCore?.brandDNA?.avatar);
-  if (!avatar?.imageUrl || !getAcceptedBrandDna()) return;
+  if (!avatar?.imageUrl || !getAcceptedBrandDna() || state.brandFoundationTransitionInFlight) return;
+  state.brandFoundationTransitionInFlight = true;
   state.brandCore.brandDNA.avatar = { ...avatar, userApproved: true };
   saveBrandBrainState({ markDirty: true });
+  const persisted = await saveBoardToServer("brand-avatar-accept");
+  state.brandFoundationTransitionInFlight = false;
   renderBrandDnaCard();
+  if (persisted === true) showFirstCampaignRecommendation();
 }
 
 function editBrandAvatarPrompt() {
@@ -6699,16 +6740,42 @@ function refineBrandDna() {
   discoverBrandDna(guidance.trim());
 }
 
-function acceptBrandDna() {
+async function acceptBrandDna() {
   const result = state.brandDnaDraft || state.brandCore?.brandDNA;
-  if (!result?.primaryArchetype) return;
+  if (!result?.primaryArchetype || state.brandFoundationTransitionInFlight) return;
+  state.brandFoundationTransitionInFlight = true;
   state.brandCore = normalizeBrandCoreState(state.brandCore);
   state.brandCore.brandDNA = normalizeBrandDnaResult({ ...result, userApproved: true }, true);
   state.brandDnaDraft = null;
   state.brandDnaReassessment = null;
   saveBrandBrainState({ markDirty: true });
+  const persisted = await saveBoardToServer("brand-dna-accept");
+  state.brandFoundationTransitionInFlight = false;
   renderBrandCoreTiles();
   renderBrandCoreEditor();
+  if (persisted === true) showBrandAvatarRecommendation();
+}
+
+function showBrandAvatarRecommendation() {
+  if (document.getElementById("brand-avatar-next-recommendation")) return;
+  const overlay = document.createElement("div");
+  overlay.id = "brand-avatar-next-recommendation"; overlay.className = "brand-confirm-modal";
+  overlay.innerHTML = `<div class="brand-confirm-card"><h3>Your Brand DNA is ready</h3><p>Create your Brand Avatar next to turn your archetype, personality, and visual identity into a recognizable character.</p><div class="brand-confirm-actions"><button type="button" data-later>Maybe later</button><button type="button" class="primary-add" data-next>Create Brand Avatar</button></div></div>`;
+  const close = () => overlay.remove();
+  overlay.querySelector("[data-later]").addEventListener("click", close);
+  overlay.querySelector("[data-next]").addEventListener("click", () => { close(); document.querySelector("#brand-avatar-generate")?.focus(); });
+  document.body.appendChild(overlay);
+}
+
+function showFirstCampaignRecommendation() {
+  if (document.getElementById("first-campaign-next-recommendation")) return;
+  const overlay = document.createElement("div");
+  overlay.id = "first-campaign-next-recommendation"; overlay.className = "brand-confirm-modal";
+  overlay.innerHTML = `<div class="brand-confirm-card"><h3>Your brand foundation is ready</h3><p>Turn your Brand DNA into your first campaign and start building it directly on the Canvas.</p><div class="brand-confirm-actions"><button type="button" data-later>Explore Brand Brain</button><button type="button" class="primary-add" data-next>Create First Campaign</button></div></div>`;
+  const close = () => overlay.remove();
+  overlay.querySelector("[data-later]").addEventListener("click", close);
+  overlay.querySelector("[data-next]").addEventListener("click", () => { close(); setAppMode("canvas"); el.createCampaignButton?.click(); });
+  document.body.appendChild(overlay);
 }
 
 function renderBrandCoreEditor() {
@@ -6783,8 +6850,11 @@ function renderBrandCoreEditor() {
     el.brandEditorPanel.insertAdjacentHTML("beforeend", `<label>Good example</label><textarea class="bc-good" id="bc-good" rows="3">${value.good || ""}</textarea><label>Avoid example</label><textarea class="bc-bad" id="bc-avoid" rows="3">${value.avoid || ""}</textarea>`);
     ["bc-good","bc-avoid"].forEach((id) => el.brandEditorPanel.querySelector(`#${id}`).addEventListener("input", () => { value.good = el.brandEditorPanel.querySelector("#bc-good").value; value.avoid = el.brandEditorPanel.querySelector("#bc-avoid").value; saveBrandBrainState(); renderBrandCoreTiles(); }));
   } else if (key === "brandAssets") {
-    el.brandEditorPanel.insertAdjacentHTML("beforeend", `<label>Domain URL</label><input id="bc-domain" value="${value.domain || ""}"/><button id="bc-analyze-domain" type="button">Analyze Website</button><label>Typography</label><input id="bc-typo" value="${value.typography || ""}"/><label>Logo URL</label><input id="bc-logo" value="${value.logo || ""}"/><label>Palette</label><div class="posting-actions bc-add-row"><input id="bc-color-add" placeholder="#AABBCC"/><input id="bc-color-picker" type="color" value="#6f5bff"/><button type="button" id="bc-color-plus">+</button></div><div class="bc-tags">${(value.colors||[]).map((c,i)=>`<span data-i="${i}">${c}</span>`).join("")}</div>`);
-    ["bc-domain","bc-typo","bc-logo"].forEach((id) => el.brandEditorPanel.querySelector(`#${id}`).addEventListener("input", () => { value.domain = el.brandEditorPanel.querySelector("#bc-domain").value; value.typography = el.brandEditorPanel.querySelector("#bc-typo").value; value.logo = el.brandEditorPanel.querySelector("#bc-logo").value; saveBrandBrainState(); renderBrandCoreTiles(); }));
+    const logoStatus = value.logoAsset?.status || (value.logo ? "persisted" : "not_found");
+    el.brandEditorPanel.insertAdjacentHTML("beforeend", `<label>Domain URL</label><input id="bc-domain" value="${escapeHtml(value.domain || "")}"/><button id="bc-analyze-domain" type="button">Analyze Website</button><label>Typography</label><input id="bc-typo" value="${escapeHtml(value.typography || "")}"/><label>Primary company logo</label>${value.logo ? `<img class="bc-primary-logo" src="${escapeHtml(value.logo)}" alt="Saved primary company logo"/>` : `<p class="bc-helper">No usable logo was found. You can add one now or continue.</p>`}<p class="bc-helper" data-logo-status>${escapeHtml(logoStatus.replace(/_/g, " "))}</p><div class="posting-actions bc-add-row"><input id="bc-logo-upload" type="file" accept="image/png,image/jpeg,image/webp,image/gif"/><button type="button" id="bc-logo-remove" ${value.logo ? "" : "disabled"}>Remove logo</button></div><label>Palette</label><div class="posting-actions bc-add-row"><input id="bc-color-add" placeholder="#AABBCC"/><input id="bc-color-picker" type="color" value="#6f5bff"/><button type="button" id="bc-color-plus">+</button></div><div class="bc-tags">${(value.colors||[]).map((c,i)=>`<span data-i="${i}">${c}</span>`).join("")}</div>`);
+    ["bc-domain","bc-typo"].forEach((id) => el.brandEditorPanel.querySelector(`#${id}`).addEventListener("input", () => { value.domain = el.brandEditorPanel.querySelector("#bc-domain").value; value.typography = el.brandEditorPanel.querySelector("#bc-typo").value; saveBrandBrainState(); renderBrandCoreTiles(); }));
+    el.brandEditorPanel.querySelector("#bc-logo-upload").addEventListener("change", (event) => replacePrimaryBrandLogo(event.target.files?.[0]));
+    el.brandEditorPanel.querySelector("#bc-logo-remove").addEventListener("click", () => { value.logo = ""; value.logoAsset = { ...(value.logoAsset || {}), kind: "company_logo", role: "primary", status: "rejected", rejectedAt: new Date().toISOString() }; saveBrandBrainState(); renderBrandCoreTiles(); renderBrandCoreEditor(); });
     el.brandEditorPanel.querySelector("#bc-analyze-domain").addEventListener("click", analyzeBrandDomainFromEditor);
     el.brandEditorPanel.querySelector("#bc-color-picker").addEventListener("input", () => {
       const picked = el.brandEditorPanel.querySelector("#bc-color-picker").value.trim();
@@ -6889,7 +6959,7 @@ function renderBrandCoreTiles() {
       preview = `<ul>${val.slice(0,3).map((p) => `<li>${p.name}<small> ${p.note}</small></li>`).join("")}</ul>`;
       count = `${val.length} personas`;
     } else if (key === "brandAssets") {
-      preview = `<div class="bc-assets-preview"><span>${val.domain || ""}</span><span>${val.typography || ""}</span><div class="bc-colors">${(val.colors||[]).slice(0,4).map((c) => `<i style="background:${c}"></i>`).join("")}</div></div>`;
+      preview = `<div class="bc-assets-preview">${val.logo ? `<img class="bc-primary-logo" src="${escapeHtml(val.logo)}" alt="Primary company logo"/>` : ""}<span>${escapeHtml(val.domain || "")}</span><span>${escapeHtml(val.typography || "")}</span><div class="bc-colors">${(val.colors||[]).slice(0,4).map((c) => `<i style="background:${c}"></i>`).join("")}</div></div>`;
       count = "assets";
     } else if (Array.isArray(val)) {
       preview = `<ul>${val.slice(0, 4).map((v) => `<li>${v}</li>`).join("")}</ul>`;

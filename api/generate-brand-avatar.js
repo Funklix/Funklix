@@ -29,6 +29,7 @@ function buildAvatarPrompt({ brandBrainData = {}, brandDNA = {}, optionalUserDir
   const recommendedVoice = cleanText(brandDNA.recommendedVoice, 500) || "not provided";
   const domain = cleanText(brandAssets.domain || brandBrainData.website || brandBrainData.domain, 220) || "not provided";
   const userDirection = cleanText(optionalUserDirection, 600);
+  const companyName = cleanText(brandBrainData.brandName || brandBrainData.name || brandAssets.name, 160) || "not provided";
 
   return `Create a Brand Avatar image that visualizes the brand personality.
 
@@ -40,6 +41,7 @@ Brand DNA:
 - Recommended visual direction: ${recommendedVisualDirection}
 
 Brand inputs:
+- Company name: ${companyName}
 - Brand colors: ${colors}
 - Tone of voice: ${tone}
 - Messaging pillars: ${messagingPillars}
@@ -79,6 +81,10 @@ module.exports = async function handler(req, res) {
 
     const brandBrainContext = buildBrandBrainContext(boardId, brandBrainData);
     const prompt = buildAvatarPrompt({ brandBrainData, brandDNA, optionalUserDirection, brandBrainContext });
+    const logoAsset = brandBrainData?.brandAssets?.logoAsset;
+    const logoReference = brandBrainData?.brandAssets?.logo && logoAsset?.status === "persisted"
+      ? { available: true, assetUrl: brandBrainData.brandAssets.logo, role: "primary_company_logo" }
+      : { available: false };
 
     const response = await fetch("https://api.openai.com/v1/images/generations", {
       method: "POST",
@@ -108,6 +114,7 @@ module.exports = async function handler(req, res) {
     return res.status(200).json({
       imageUrl: uploaded.imageUrl,
       prompt,
+      logoReference: { available: logoReference.available, used: false, reason: logoReference.available ? "generation_endpoint_has_no_image_reference_input" : "no_persisted_logo" },
       generatedAt: new Date().toISOString()
     });
   } catch (error) {

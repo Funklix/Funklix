@@ -38,4 +38,14 @@ async function uploadGeneratedImage({ imageBase64, mimeType = "image/png", prefi
   return { imageUrl: blob.url, mimeType: resolvedMimeType };
 }
 
-module.exports = { uploadGeneratedImage };
+async function uploadImageBuffer({ buffer, mimeType, prefix = "uploaded" }) {
+  if (!Buffer.isBuffer(buffer) || !buffer.length) throw new Error("Image buffer is required");
+  const extensions = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp", "image/gif": "gif" };
+  const extension = extensions[mimeType];
+  if (!extension) throw new Error("Unsupported image type");
+  const pathname = `${prefix}/${Date.now()}-${Math.random().toString(36).slice(2)}.${extension}`;
+  const blob = await put(pathname, buffer, { access: "public", contentType: mimeType, addRandomSuffix: false });
+  return { imageUrl: blob.url, mimeType };
+}
+
+module.exports = { uploadGeneratedImage, uploadImageBuffer };

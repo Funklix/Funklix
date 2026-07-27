@@ -55,6 +55,7 @@ const readyTile = founderTile({
   motivation: "   It mattered personally   ",
   background: "   "
 }, { content: "  Canonical reviewed narrative.  " });
+readyTile.moduleData.founderStoryLifecycle = { status: "accepted", acceptedAt: "2026-07-27T00:00:00.000Z" };
 const readyState = stateWith(readyTile);
 const before = JSON.stringify(readyState);
 const context = contextFor(readyState);
@@ -80,7 +81,7 @@ assert.strictEqual(contextFor(stateWith({ id: "km_legacy_title_0001", title: "Fo
 assert.strictEqual(preflightApi.buildUsableFounderStoryContext({ state: readyState, preflight: { status: "error", dependency: null }, identityApi: identity }), null, "evaluation failure must omit context");
 
 const withoutNarrative = contextFor(stateWith(founderTile({ founderNameRole: "Alex", motivation: "Why", vision: "Future" })));
-assert(withoutNarrative && !Object.prototype.hasOwnProperty.call(withoutNarrative, "supplementalNarrative"));
+assert.strictEqual(withoutNarrative, null, "facts without an accepted narrative must be omitted");
 
 const sanitized = discoverRoute.sanitizeFounderStoryContext({
   structuredFacts: { ...context.structuredFacts, unexpected: "exclude", vision: null },
