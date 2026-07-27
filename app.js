@@ -5051,6 +5051,180 @@ async function generateFounderStoryNarrative(tile) {
   }
 }
 
+const FOUNDER_STORY_IMPORT_MAX_VALUE_LENGTH = 1600;
+const FOUNDER_STORY_IMPORT_ERROR_MESSAGES = Object.freeze({
+  invalid_url: "Enter a valid public webpage URL.", unsupported_scheme: "Use a public http or https webpage.",
+  credentials_not_allowed: "URLs containing sign-in details are unsupported.", invalid_host: "Enter a valid public webpage URL.",
+  port_not_allowed: "That webpage address is unsupported.", unsafe_destination: "Private or unsafe destinations are unsupported.",
+  dns_failed: "That webpage could not be reached.", retrieval_failed: "That webpage could not be retrieved.",
+  redirect_failed: "The webpage redirect could not be followed safely.", redirect_loop: "The webpage redirect could not be followed safely.",
+  too_many_redirects: "The webpage has too many redirects.", timeout: "The webpage took too long to respond.",
+  response_too_large: "That webpage is too large to import.", unsupported_content_type: "That address does not return a supported webpage.",
+  unsupported_encoding: "That webpage uses an unsupported response format.", empty_content: "The page did not contain usable server-rendered text.",
+  invalid_source: "The page did not contain usable server-rendered text.", invalid_ai_response: "The AI suggestions could not be safely validated.",
+  provider_failed: "The AI service could not map this page right now.", mapping_failed: "The AI service could not map this page right now.",
+  ai_unavailable: "The AI service is not configured for website import.", rate_limited: "The AI service is busy. Try again shortly."
+});
+let activeFounderStoryWebsiteImport = null;
+
+function assertFounderStoryWebsiteImportContext(controller) {
+  if (!controller || activeFounderStoryWebsiteImport !== controller || controller.closed) return { ok: false, message: "This import was superseded." };
+  if ((state.currentBoardId || getBoardIdFromPath() || "") !== controller.boardId) return { ok: false, message: "The Board changed during import." };
+  const tile = findFounderStoryTileByStableId(controller.tileId);
+  if (!tile || tile !== controller.tile || !isFounderStoryCustomTile(tile)) return { ok: false, message: "This Founder Story is no longer available." };
+  if (!controller.overlay?.isConnected || controller.overlay.dataset.importToken !== controller.token) return { ok: false, message: "This import is no longer available." };
+  return { ok: true, tile };
+}
+
+function closeFounderStoryWebsiteImport(controller, { restoreFocus = true } = {}) {
+  if (!controller || controller.closed) return;
+  controller.closed = true;
+  controller.abortController?.abort();
+  controller.overlay?.remove();
+  if (activeFounderStoryWebsiteImport === controller) activeFounderStoryWebsiteImport = null;
+  if (restoreFocus && controller.returnFocus?.isConnected) controller.returnFocus.focus();
+  controller.draft = null;
+  controller.abortController = null;
+}
+
+function getFounderStoryImportError(payload, fallback) {
+  return FOUNDER_STORY_IMPORT_ERROR_MESSAGES[payload?.error?.code] || fallback;
+}
+
+function validateFounderStoryWebsiteImportFields(fields, sourceText) {
+  if (!fields || typeof fields !== "object" || Array.isArray(fields)) return null;
+  const keys = Object.keys(fields);
+  if (keys.length !== FOUNDER_STORY_FIELD_KEYS.length || keys.some((key) => !FOUNDER_STORY_FIELD_KEYS.includes(key))) return null;
+  const validated = {};
+  for (const key of FOUNDER_STORY_FIELD_KEYS) {
+    const item = fields[key];
+    if (!item || typeof item !== "object" || Array.isArray(item) || Object.keys(item).length !== 2
+      || typeof item.value !== "string" || typeof item.evidence !== "string") return null;
+    const value = item.value.trim();
+    const evidence = item.evidence.trim();
+    if (value.length > FOUNDER_STORY_IMPORT_MAX_VALUE_LENGTH || evidence.length > 300) return null;
+    if (value && (!evidence || !sourceText.includes(evidence))) validated[key] = { value: "", evidence: "" };
+    else if (!value && evidence) return null;
+    else validated[key] = { value, evidence: value ? evidence : "" };
+  }
+  return validated;
+}
+
+function renderFounderStoryWebsiteImportReview(controller, fields) {
+  const context = assertFounderStoryWebsiteImportContext(controller);
+  if (!context.ok) return closeFounderStoryWebsiteImport(controller);
+  const current = getFounderStoryModuleData(context.tile);
+  const supported = FOUNDER_STORY_FIELD_DEFINITIONS.filter(({ key }) => fields[key]?.value && fields[key]?.evidence);
+  const body = controller.card.querySelector("[data-founder-story-import-body]");
+  if (!supported.length) {
+    body.innerHTML = `<p class="bc-import-error" role="status">No supported Founder Story information was found. Your existing content is unchanged.</p>`;
+    return;
+  }
+  controller.draft = Object.fromEntries(supported.map(({ key }) => [key, {
+    value: fields[key].value.slice(0, FOUNDER_STORY_IMPORT_MAX_VALUE_LENGTH), evidence: fields[key].evidence,
+    selected: !getMeaningfulFounderStoryValue(current[key])
+  }]));
+  body.innerHTML = `<p class="bc-helper">Review each supported suggestion. Existing values are never selected for replacement automatically.</p>
+    <div class="founder-story-import-fields">${supported.map((field) => {
+      const item = controller.draft[field.key];
+      return `<section class="founder-story-import-field" data-import-field="${field.key}">
+        <label class="founder-story-import-select"><input type="checkbox" data-import-select ${item.selected ? "checked" : ""}> Apply ${escapeHtml(field.label)}</label>
+        <p><strong>Current:</strong> ${escapeHtml(current[field.key] || "Empty")}</p>
+        <label>Proposed value<textarea rows="3" maxlength="${FOUNDER_STORY_IMPORT_MAX_VALUE_LENGTH}" data-import-value>${escapeHtml(item.value)}</textarea></label>
+        <p class="founder-story-import-evidence"><strong>Source excerpt:</strong> “${escapeHtml(item.evidence)}”</p>
+      </section>`;
+    }).join("")}</div>
+    <p class="bc-import-error" data-founder-story-import-error role="alert"></p>
+    <div class="brand-confirm-actions"><button type="button" data-import-cancel>Cancel</button><button type="button" class="primary-add" data-import-apply>Apply selected fields</button></div>`;
+  body.querySelectorAll("[data-import-field]").forEach((section) => {
+    const key = section.dataset.importField;
+    const checkbox = section.querySelector("[data-import-select]");
+    const textarea = section.querySelector("[data-import-value]");
+    checkbox.addEventListener("change", () => { controller.draft[key].selected = checkbox.checked && Boolean(textarea.value.trim()); });
+    textarea.addEventListener("input", () => {
+      controller.draft[key].value = textarea.value;
+      if (!textarea.value.trim()) { checkbox.checked = false; controller.draft[key].selected = false; }
+    });
+  });
+  body.querySelector("[data-import-cancel]").addEventListener("click", () => closeFounderStoryWebsiteImport(controller));
+  const applyButton = body.querySelector("[data-import-apply]");
+  applyButton.addEventListener("click", () => {
+    const latest = assertFounderStoryWebsiteImportContext(controller);
+    const error = body.querySelector("[data-founder-story-import-error]");
+    if (!latest.ok) { applyButton.disabled = true; error.textContent = latest.message; return; }
+    const selected = Object.entries(controller.draft).filter(([key, item]) => FOUNDER_STORY_FIELD_KEYS.includes(key) && item.selected && item.evidence && item.value.trim());
+    if (!selected.length) { error.textContent = "Select at least one non-empty suggestion to apply."; return; }
+    const next = getFounderStoryModuleData(latest.tile);
+    selected.forEach(([key, item]) => { next[key] = item.value.trim().slice(0, FOUNDER_STORY_IMPORT_MAX_VALUE_LENGTH); });
+    saveFounderStoryModuleData(latest.tile, next);
+    saveBrandBrainState();
+    renderBrandCoreTiles();
+    closeFounderStoryWebsiteImport(controller, { restoreFocus: false });
+    renderBrandCoreEditor();
+  });
+  body.querySelector("[data-import-value]")?.focus();
+}
+
+async function startFounderStoryWebsiteImport(controller) {
+  const context = assertFounderStoryWebsiteImportContext(controller);
+  if (!context.ok || controller.inFlight) return;
+  const input = controller.card.querySelector("[data-founder-story-import-url]");
+  const button = controller.card.querySelector("[data-founder-story-import-start]");
+  const error = controller.card.querySelector("[data-founder-story-import-error]");
+  const url = input.value.trim();
+  if (!url) { error.textContent = "Enter one public webpage URL."; return; }
+  controller.inFlight = true;
+  controller.abortController = new AbortController();
+  button.disabled = true; button.textContent = "Retrieving…"; error.textContent = "";
+  try {
+    const extractionResponse = await fetch("/api/extract-website-text", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url }), signal: controller.abortController.signal
+    });
+    const extraction = await extractionResponse.json().catch(() => ({}));
+    if (!extractionResponse.ok || extraction?.success === false) throw Object.assign(new Error(), { payload: extraction, stage: "retrieval" });
+    if (!assertFounderStoryWebsiteImportContext(controller).ok) return;
+    button.textContent = "Mapping…";
+    const mappingResponse = await fetch("/api/map-founder-story-website", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: extraction?.source?.title || "", text: extraction?.content?.text || "" }), signal: controller.abortController.signal
+    });
+    const mapping = await mappingResponse.json().catch(() => ({}));
+    if (!mappingResponse.ok || mapping?.success === false) throw Object.assign(new Error(), { payload: mapping, stage: "mapping" });
+    if (!assertFounderStoryWebsiteImportContext(controller).ok) return;
+    const fields = validateFounderStoryWebsiteImportFields(mapping.fields, extraction?.content?.text || "");
+    if (!fields) throw Object.assign(new Error(), { payload: { error: { code: "invalid_ai_response" } }, stage: "mapping" });
+    renderFounderStoryWebsiteImportReview(controller, fields);
+  } catch (failure) {
+    if (failure?.name === "AbortError" || !assertFounderStoryWebsiteImportContext(controller).ok) return;
+    error.textContent = getFounderStoryImportError(failure.payload, failure.stage === "retrieval" ? "That webpage could not be retrieved." : "The AI service could not map this page right now.");
+    button.disabled = false; button.textContent = "Try import again";
+  } finally { controller.inFlight = false; }
+}
+
+function openFounderStoryWebsiteImport(tile, returnFocus) {
+  if (activeFounderStoryWebsiteImport) closeFounderStoryWebsiteImport(activeFounderStoryWebsiteImport, { restoreFocus: false });
+  const overlay = document.createElement("div");
+  overlay.className = "brand-confirm-modal founder-story-import-modal";
+  overlay.setAttribute("role", "dialog"); overlay.setAttribute("aria-modal", "true"); overlay.setAttribute("aria-labelledby", "founder-story-import-heading");
+  const token = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  overlay.dataset.importToken = token;
+  overlay.innerHTML = `<div class="brand-confirm-card founder-story-import-card"><button type="button" class="brand-dna-recommendation-close" aria-label="Close website import" data-import-close>×</button>
+    <h3 id="founder-story-import-heading">Import Founder Story facts</h3><div data-founder-story-import-body>
+    <p>Funklix securely retrieves the public webpage on the server and sends extracted text to the configured AI service. Private, login-protected, authenticated, or paywalled pages are unsupported. Suggestions require review before they change your Founder Story.</p>
+    <label for="founder-story-import-url">Public webpage URL</label><input id="founder-story-import-url" type="url" data-founder-story-import-url placeholder="https://example.com/about">
+    <p class="bc-import-error" data-founder-story-import-error role="alert"></p><div class="brand-confirm-actions"><button type="button" data-import-cancel>Cancel</button><button type="button" class="primary-add" data-founder-story-import-start>Retrieve and map</button></div></div></div>`;
+  document.body.appendChild(overlay);
+  const controller = { tile, tileId: tile.id, boardId: state.currentBoardId || getBoardIdFromPath() || "", token, overlay, card: overlay.querySelector(".brand-confirm-card"), returnFocus, abortController: null, draft: null, inFlight: false, closed: false };
+  activeFounderStoryWebsiteImport = controller;
+  const close = () => closeFounderStoryWebsiteImport(controller);
+  overlay.querySelector("[data-import-close]").addEventListener("click", close);
+  overlay.querySelector("[data-import-cancel]").addEventListener("click", close);
+  overlay.querySelector("[data-founder-story-import-start]").addEventListener("click", () => startFounderStoryWebsiteImport(controller));
+  overlay.addEventListener("click", (event) => { if (event.target === overlay) close(); });
+  overlay.addEventListener("keydown", (event) => { if (event.key === "Escape") { event.preventDefault(); close(); } });
+  overlay.querySelector("[data-founder-story-import-url]").focus();
+}
+
 function renderFounderStoryCustomTileEditor(tile, idx) {
   const storyData = getFounderStoryModuleData(tile);
   const fieldMarkup = FOUNDER_STORY_FIELD_DEFINITIONS.map((field) => {
@@ -5073,6 +5247,7 @@ function renderFounderStoryCustomTileEditor(tile, idx) {
     <p class="bc-helper">Add the moments, motivations, and proof points that make the story specific and credible.</p>
     ${fieldMarkup}
     <div class="posting-actions bc-add-row">
+      <button id="brand-core-founder-story-website-import-button" type="button">Import from website</button>
       <button id="brand-core-founder-story-generate-button" type="button" class="primary-add">Generate Founder Story</button>
     </div>
     <p class="bc-helper" id="brand-core-founder-story-generate-message" aria-live="polite"></p>
@@ -5099,6 +5274,9 @@ function renderFounderStoryCustomTileEditor(tile, idx) {
   });
   el.brandEditorPanel.querySelector("#brand-core-founder-story-generate-button").addEventListener("click", () => {
     generateFounderStoryNarrative(tile);
+  });
+  el.brandEditorPanel.querySelector("#brand-core-founder-story-website-import-button").addEventListener("click", (event) => {
+    openFounderStoryWebsiteImport(tile, event.currentTarget);
   });
   FOUNDER_STORY_FIELD_KEYS.forEach((key) => {
     el.brandEditorPanel.querySelector(`#${getFounderStoryFieldDomId(key)}`).addEventListener("input", () => {
