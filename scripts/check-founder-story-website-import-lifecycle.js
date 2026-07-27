@@ -15,7 +15,7 @@ assert.match(app, /state\.currentBoardId \|\| getBoardIdFromPath/);
 assert.match(app, /if \(!context\.ok \|\| controller\.inFlight\) return/);
 assert.match(app, /selected: !getMeaningfulFounderStoryValue\(current\[key\]\)/);
 assert.match(app, /if \(!textarea\.value\.trim\(\)\) \{ checkbox\.checked = false/);
-assert.match(app, /saveFounderStoryModuleData\(latest\.tile, next\);\s*saveBrandBrainState\(\)/);
+assert.match(app, /saveFounderStoryModuleData\(latest\.tile, next\);[\s\S]*persistFounderStoryAcceptance\(latest\.tile, acceptanceEventKey\)/);
 assert.doesNotMatch(app.slice(app.indexOf("function openFounderStoryWebsiteImport"), app.indexOf("function renderFounderStoryCustomTileEditor")), /tile\.content\s*=/);
 assert.match(app, /if \(event\.key === "Escape"\)/);
 assert.match(app, /if \(event\.target === overlay\) close\(\)/);

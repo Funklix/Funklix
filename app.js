@@ -105,6 +105,9 @@ const state = {
   brandCoreSelectedKey: "brandCore"
   ,brandDnaDraft: null
   ,brandDnaLoading: false
+  ,brandDnaReassessment: null
+  ,founderStoryAcceptanceInFlight: new Set()
+  ,founderStoryAcceptanceHandled: new Set()
   ,brandAvatarLoading: false
   ,appMode: "canvas"
   ,boardsLibrary: []
@@ -4981,7 +4984,8 @@ function openFounderStoryGeneratedReview({ narrative, requestContext }) {
   overlay.appendChild(card);
   document.body.appendChild(overlay);
   cancel.addEventListener("click", () => overlay.remove());
-  apply.addEventListener("click", () => {
+  apply.addEventListener("click", async () => {
+    if (apply.disabled) return;
     const context = assertCurrentFounderStoryGenerationContext(requestContext);
     if (!context.ok) {
       setFounderStoryGenerateMessage(context.message, "error");
@@ -4993,11 +4997,25 @@ function openFounderStoryGeneratedReview({ narrative, requestContext }) {
       setFounderStoryGenerateMessage(FOUNDER_STORY_GENERATE_GENERIC_ERROR_MESSAGE, "error");
       return;
     }
+    apply.disabled = true;
+    apply.textContent = "Applying…";
+    const previousNarrative = context.tile.content;
     context.tile.content = acceptedNarrative;
-    saveBrandBrainState();
     renderBrandCoreTiles();
-    renderBrandCoreEditor();
+    const acceptedContext = getPersistedFounderStoryContext(context.tile);
+    const acceptanceEventKey = getFounderStoryAcceptanceEventKey(context.tile, acceptedContext);
+    const persisted = await persistFounderStoryAcceptance(context.tile, acceptanceEventKey);
+    if (!persisted) {
+      context.tile.content = previousNarrative;
+      saveBrandBrainState({ markDirty: false });
+      renderBrandCoreTiles();
+      apply.disabled = false;
+      apply.textContent = "Use this narrative";
+      setFounderStoryGenerateMessage("We couldn’t save the Founder Story. Your Brand Archetype is unchanged.", "error");
+      return;
+    }
     overlay.remove();
+    renderBrandCoreEditor();
   });
 }
 
@@ -5150,17 +5168,32 @@ function renderFounderStoryWebsiteImportReview(controller, fields) {
   });
   body.querySelector("[data-import-cancel]").addEventListener("click", () => closeFounderStoryWebsiteImport(controller));
   const applyButton = body.querySelector("[data-import-apply]");
-  applyButton.addEventListener("click", () => {
+  applyButton.addEventListener("click", async () => {
+    if (applyButton.disabled) return;
     const latest = assertFounderStoryWebsiteImportContext(controller);
     const error = body.querySelector("[data-founder-story-import-error]");
     if (!latest.ok) { applyButton.disabled = true; error.textContent = latest.message; return; }
     const selected = Object.entries(controller.draft).filter(([key, item]) => FOUNDER_STORY_FIELD_KEYS.includes(key) && item.selected && item.evidence && item.value.trim());
     if (!selected.length) { error.textContent = "Select at least one non-empty suggestion to apply."; return; }
     const next = getFounderStoryModuleData(latest.tile);
+    const previous = getFounderStoryModuleData(latest.tile);
     selected.forEach(([key, item]) => { next[key] = item.value.trim().slice(0, FOUNDER_STORY_IMPORT_MAX_VALUE_LENGTH); });
     saveFounderStoryModuleData(latest.tile, next);
-    saveBrandBrainState();
+    applyButton.disabled = true;
+    applyButton.textContent = "Applying…";
     renderBrandCoreTiles();
+    const acceptedContext = getPersistedFounderStoryContext(latest.tile);
+    const acceptanceEventKey = getFounderStoryAcceptanceEventKey(latest.tile, acceptedContext);
+    const persisted = await persistFounderStoryAcceptance(latest.tile, acceptanceEventKey);
+    if (!persisted) {
+      saveFounderStoryModuleData(latest.tile, previous);
+      saveBrandBrainState({ markDirty: false });
+      renderBrandCoreTiles();
+      applyButton.disabled = false;
+      applyButton.textContent = "Apply selected fields";
+      error.textContent = "We couldn’t save the Founder Story. Your Brand Archetype is unchanged.";
+      return;
+    }
     closeFounderStoryWebsiteImport(controller, { restoreFocus: false });
     renderBrandCoreEditor();
   });
@@ -5821,6 +5854,7 @@ async function saveBoardToServer(trigger = "manual") {
       if (window.location.pathname !== nextPath) window.history.pushState({}, '', nextPath);
 
     }
+    return true;
   } catch (error) {
     console.error(error);
     if (saveRequestId === state.latestSaveRequestId) {
@@ -5828,6 +5862,7 @@ async function saveBoardToServer(trigger = "manual") {
     } else {
       console.warn('[Funklix Save Guard] Ignored stale save failure');
     }
+    return false;
   } finally {
     if (saveRequestId === state.latestSaveRequestId) state.isSaving = false;
   }
@@ -5963,6 +5998,75 @@ function saveBrandBrainState(options = {}) {
   refreshDashboardIfVisible();
 }
 
+function getPersistedFounderStoryContext(tile) {
+  if (!tile || !isFounderStoryCustomTile(tile)) return null;
+  return window.BrandDnaGenerationPreflight?.serializeFounderStoryContext?.(tile) || null;
+}
+
+function getFounderStoryAcceptanceEventKey(tile, acceptedContext) {
+  const boardId = state.currentBoardId || getBoardIdFromPath() || "local";
+  return `${boardId}:${tile?.id || "founder_story"}:${JSON.stringify(acceptedContext || {})}`;
+}
+
+function showFounderStoryCompleteRecommendation() {
+  if (document.getElementById("founder-story-archetype-recommendation")) return;
+  const overlay = document.createElement("div");
+  overlay.id = "founder-story-archetype-recommendation";
+  overlay.className = "brand-confirm-modal";
+  overlay.setAttribute("role", "dialog");
+  overlay.setAttribute("aria-modal", "true");
+  overlay.setAttribute("aria-labelledby", "founder-story-archetype-recommendation-title");
+  overlay.innerHTML = `<div class="brand-confirm-card"><button type="button" class="brand-dna-recommendation-close" aria-label="Maybe later">×</button><h3 id="founder-story-archetype-recommendation-title">Founder Story complete</h3><p>Your Founder Story is ready. Define your Brand Archetype next to translate it into a consistent brand personality.</p><div class="brand-confirm-actions"><button type="button" id="founder-story-archetype-later">Maybe later</button><button type="button" class="primary-add" id="founder-story-archetype-define">Define Brand Archetype</button></div></div>`;
+  const close = () => overlay.remove();
+  overlay.querySelector(".brand-dna-recommendation-close").addEventListener("click", close);
+  overlay.querySelector("#founder-story-archetype-later").addEventListener("click", close);
+  overlay.addEventListener("click", (event) => { if (event.target === overlay) close(); });
+  overlay.querySelector("#founder-story-archetype-define").addEventListener("click", () => {
+    close();
+    setAppMode("brand");
+    renderBrandDnaCard();
+    initiateBrandDnaGeneration(document.querySelector("#brand-dna-regenerate"));
+  });
+  document.body.appendChild(overlay);
+  overlay.querySelector("#founder-story-archetype-define").focus();
+}
+
+async function continueAfterPersistedFounderStoryAcceptance(tile, acceptanceEventKey) {
+  if (!acceptanceEventKey) return false;
+  if (state.founderStoryAcceptanceInFlight.has(acceptanceEventKey) || state.founderStoryAcceptanceHandled.has(acceptanceEventKey)) return true;
+  state.founderStoryAcceptanceInFlight.add(acceptanceEventKey);
+  try {
+    const founderStoryContext = getPersistedFounderStoryContext(tile);
+    if (!founderStoryContext) return false;
+    state.founderStoryAcceptanceHandled.add(acceptanceEventKey);
+    const existingArchetype = state.brandCore?.brandDNA;
+    if (!existingArchetype?.primaryArchetype) {
+      showFounderStoryCompleteRecommendation();
+      return true;
+    }
+    state.brandDnaReassessment = {
+      existingArchetype: normalizeBrandDnaResult(existingArchetype, Boolean(existingArchetype.userApproved)),
+      founderStoryContext
+    };
+    setAppMode("brand");
+    renderBrandDnaCard();
+    await discoverBrandDna("", {
+      founderStoryContext,
+      reassessmentContext: state.brandDnaReassessment.existingArchetype
+    });
+    return true;
+  } finally {
+    state.founderStoryAcceptanceInFlight.delete(acceptanceEventKey);
+  }
+}
+
+async function persistFounderStoryAcceptance(tile, acceptanceEventKey) {
+  saveBrandBrainState();
+  const persisted = await saveBoardToServer("founder-story-apply");
+  if (persisted !== true) return false;
+  return continueAfterPersistedFounderStoryAcceptance(tile, acceptanceEventKey);
+}
+
 function loadBrandBrainState() {
   const raw = localStorage.getItem(brandBrainStorageKey());
   if (raw) {
@@ -5972,6 +6076,7 @@ function loadBrandBrainState() {
     state.brandCore = normalizeBrandCoreState(defaultBrandCoreState());
   }
   state.brandDnaDraft = null;
+  state.brandDnaReassessment = null;
   state.brandDnaLoading = false;
   state.brandAvatarLoading = false;
 }
@@ -5979,6 +6084,7 @@ function loadBrandBrainState() {
 function resetBrandBrainForBoardHydration() {
   state.brandCore = normalizeBrandCoreState(defaultBrandCoreState());
   state.brandDnaDraft = null;
+  state.brandDnaReassessment = null;
   state.brandDnaLoading = false;
   state.brandAvatarLoading = false;
 }
@@ -6430,7 +6536,12 @@ function initiateBrandDnaGeneration(trigger = null) {
       showBrandDnaFounderStoryRecommendation({ status: "error", dependency: preflight.dependency }, trigger);
       return;
     }
-    discoverBrandDna("", { founderStoryContext });
+    discoverBrandDna("", {
+      founderStoryContext,
+      ...(state.brandDnaReassessment?.existingArchetype
+        ? { reassessmentContext: state.brandDnaReassessment.existingArchetype }
+        : {})
+    });
     return;
   }
   showBrandDnaFounderStoryRecommendation(preflight, trigger);
@@ -6452,6 +6563,7 @@ function renderBrandDnaCard() {
   const hasAcceptedResult = Boolean(accepted?.primaryArchetype && accepted.userApproved && !draft);
   const hasDraft = Boolean(draft?.primaryArchetype);
   const loading = Boolean(state.brandDnaLoading);
+  const isReassessment = Boolean(state.brandDnaReassessment?.existingArchetype);
   const statusLabel = hasAcceptedResult ? "Accepted Brand DNA" : hasDraft ? "Review generated Brand DNA" : "Phase 1";
   card.innerHTML = `
     <div class="brand-dna-header">
@@ -6462,10 +6574,12 @@ function renderBrandDnaCard() {
       </div>
       <div class="brand-dna-actions">
         ${hasDraft ? `<button type="button" class="primary-add" id="brand-dna-accept">✓ Accept</button>` : ""}
+        ${isReassessment ? `<button type="button" id="brand-dna-keep-existing">Keep existing Archetype</button>` : ""}
         <button type="button" id="brand-dna-refine" ${loading || !result ? "disabled" : ""}>✏ Refine</button>
         <button type="button" id="brand-dna-regenerate" ${loading ? "disabled" : ""}>🔄 ${result ? "Regenerate" : "Generate Brand DNA"}</button>
       </div>
     </div>
+    ${isReassessment ? `<p class="bc-helper">Your Founder Story adds important context to your Brand Archetype. We’ve reassessed the fit for you. Review the result, or keep your existing Archetype unchanged.</p>` : ""}
     ${loading ? `<div class="brand-dna-loading">Analyzing your Brand Brain, founder signals, voice, ICP, and visual assets…</div>` : ""}
     ${result ? brandDnaResultHtml(result) : `<div class="brand-dna-empty"><strong>Ready when your Brand Brain has enough context.</strong><span>We will look at your founder story, mission, value proposition, messaging pillars, ICP, tone, website/domain, and visual assets.</span></div>`}
     ${hasAcceptedResult ? renderBrandAvatarSection(accepted) : ""}
@@ -6473,6 +6587,11 @@ function renderBrandDnaCard() {
   card.querySelector("#brand-dna-regenerate")?.addEventListener("click", (event) => initiateBrandDnaGeneration(event.currentTarget));
   card.querySelector("#brand-dna-refine")?.addEventListener("click", () => refineBrandDna());
   card.querySelector("#brand-dna-accept")?.addEventListener("click", () => acceptBrandDna());
+  card.querySelector("#brand-dna-keep-existing")?.addEventListener("click", () => {
+    state.brandDnaDraft = null;
+    state.brandDnaReassessment = null;
+    renderBrandDnaCard();
+  });
   card.querySelector("#brand-avatar-generate")?.addEventListener("click", () => generateBrandAvatar());
   card.querySelector("#brand-avatar-accept")?.addEventListener("click", () => acceptBrandAvatar());
   card.querySelector("#brand-avatar-edit")?.addEventListener("click", () => editBrandAvatarPrompt());
@@ -6554,7 +6673,8 @@ async function discoverBrandDna(refineGuidance = "", requestContext = {}) {
         boardId: state.currentBoardId || getBoardIdFromPath() || "",
         brandBrainData: state.brandCore,
         refineGuidance,
-        ...(requestContext?.founderStoryContext ? { founderStoryContext: requestContext.founderStoryContext } : {})
+        ...(requestContext?.founderStoryContext ? { founderStoryContext: requestContext.founderStoryContext } : {}),
+        ...(requestContext?.reassessmentContext ? { reassessmentContext: requestContext.reassessmentContext } : {})
       })
     });
     const payload = await response.json().catch(() => ({}));
@@ -6585,6 +6705,7 @@ function acceptBrandDna() {
   state.brandCore = normalizeBrandCoreState(state.brandCore);
   state.brandCore.brandDNA = normalizeBrandDnaResult({ ...result, userApproved: true }, true);
   state.brandDnaDraft = null;
+  state.brandDnaReassessment = null;
   saveBrandBrainState({ markDirty: true });
   renderBrandCoreTiles();
   renderBrandCoreEditor();
