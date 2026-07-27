@@ -128,10 +128,53 @@ function hasMeaningfulBrandData(brandBrainData = {}) {
   });
 }
 
-function buildDiscoveryPrompt({ brandBrainContext, brandBrainData, refineGuidance }) {
+const FOUNDER_STORY_CONTEXT_FIELD_KEYS = Object.freeze([
+  'founderNameRole',
+  'observedProblem',
+  'motivation',
+  'turningPoint',
+  'background',
+  'proofPoints',
+  'vision'
+]);
+
+function sanitizeFounderStoryContext(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const source = value.structuredFacts;
+  if (!source || typeof source !== 'object' || Array.isArray(source)) return null;
+  const structuredFacts = FOUNDER_STORY_CONTEXT_FIELD_KEYS.reduce((facts, key) => {
+    const text = typeof source[key] === 'string' ? cleanText(source[key], 2000) : '';
+    if (text) facts[key] = text;
+    return facts;
+  }, {});
+  if (!Object.keys(structuredFacts).length) return null;
+  const context = { structuredFacts };
+  const narrative = typeof value.supplementalNarrative === 'string'
+    ? cleanText(value.supplementalNarrative, 6000)
+    : '';
+  if (narrative) context.supplementalNarrative = narrative;
+  return context;
+}
+
+function buildFounderStoryPromptSection(founderStoryContext) {
+  const context = sanitizeFounderStoryContext(founderStoryContext);
+  if (!context) return '';
+  const lines = [
+    'FOUNDER STORY CONTEXT',
+    'Structured Founder Story facts (authoritative):',
+    JSON.stringify(context.structuredFacts, null, 2)
+  ];
+  if (context.supplementalNarrative) {
+    lines.push('Supplemental Founder Story narrative:', context.supplementalNarrative);
+  }
+  lines.push('Use the Founder Story as strategic context when defining the Brand DNA. Identify how the founder\'s motivations, formative experiences, beliefs, and intended change influence the brand\'s purpose, archetype, values, personality, voice, positioning, emotional narrative, strategic differentiation, and relationship with its audience. Synthesize this context with the other brand inputs; do not mechanically turn every founder characteristic into a brand characteristic or copy the story into every section. Structured Founder Story facts are authoritative, narrative text is supplemental, and structured facts take precedence if they conflict. Do not invent missing details, and preserve the required Brand DNA output structure.');
+  return lines.join('\n');
+}
+
+function buildDiscoveryPrompt({ brandBrainContext, brandBrainData, refineGuidance, founderStoryContext }) {
   const website = brandBrainData?.brandAssets?.domain || brandBrainData?.website || brandBrainData?.domain || '';
   const refinement = cleanText(refineGuidance, 500);
-  return `You are a senior brand strategist specializing in Jungian brand archetypes.
+  const prompt = `You are a senior brand strategist specializing in Jungian brand archetypes.
 
 Analyze the available Brand Brain and discover the brand's likely Brand DNA.
 
@@ -172,6 +215,12 @@ Rules:
 - Keep the reasoning concise, clear, and emotionally understandable for non-marketers.
 - Use plain text only. No markdown bold. No markdown headings. No code fences.
 - Return strict JSON only.`;
+  const founderStorySection = buildFounderStoryPromptSection(founderStoryContext);
+  if (!founderStorySection) return prompt;
+  return prompt.replace(
+    '\nWebsite/domain context if present:',
+    `\n${founderStorySection}\n\nWebsite/domain context if present:`
+  );
 }
 
 module.exports = async function handler(req, res) {
@@ -181,13 +230,13 @@ module.exports = async function handler(req, res) {
   if (!apiKey) return res.status(500).json({ error: 'Server is missing OPENAI_API_KEY' });
 
   try {
-    const { boardId = '', brandBrainData = {}, refineGuidance = '' } = req.body || {};
+    const { boardId = '', brandBrainData = {}, refineGuidance = '', founderStoryContext } = req.body || {};
     if (!hasMeaningfulBrandData(brandBrainData)) {
       return res.status(400).json({ error: 'Add Brand Brain details before discovering Brand DNA.' });
     }
 
     const brandBrainContext = buildBrandBrainContext(boardId, brandBrainData);
-    const prompt = buildDiscoveryPrompt({ brandBrainContext, brandBrainData, refineGuidance });
+    const prompt = buildDiscoveryPrompt({ brandBrainContext, brandBrainData, refineGuidance, founderStoryContext });
 
     const response = await fetch('https://api.openai.com/v1/responses', {
       method: 'POST',
@@ -290,3 +339,7 @@ module.exports = async function handler(req, res) {
     return res.status(500).json({ error: error?.message || 'Could not discover Brand DNA' });
   }
 };
+
+module.exports.buildDiscoveryPrompt = buildDiscoveryPrompt;
+module.exports.buildFounderStoryPromptSection = buildFounderStoryPromptSection;
+module.exports.sanitizeFounderStoryContext = sanitizeFounderStoryContext;

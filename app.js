@@ -6241,7 +6241,16 @@ function initiateBrandDnaGeneration(trigger = null) {
     dependencyEngine: window.KnowledgeModuleDependencyEngine
   }) || { status: "error", dependency: null };
   if (preflight.status === "usable") {
-    discoverBrandDna();
+    const founderStoryContext = preflightApi?.buildUsableFounderStoryContext?.({
+      state,
+      preflight,
+      identityApi: window.KnowledgeModuleIdentity
+    });
+    if (!founderStoryContext) {
+      showBrandDnaFounderStoryRecommendation({ status: "error", dependency: preflight.dependency }, trigger);
+      return;
+    }
+    discoverBrandDna("", { founderStoryContext });
     return;
   }
   showBrandDnaFounderStoryRecommendation(preflight, trigger);
@@ -6353,7 +6362,7 @@ function editBrandAvatarPrompt() {
   generateBrandAvatar(direction.trim());
 }
 
-async function discoverBrandDna(refineGuidance = "") {
+async function discoverBrandDna(refineGuidance = "", requestContext = {}) {
   if (state.brandDnaLoading) return;
   state.brandDnaLoading = true;
   renderBrandDnaCard();
@@ -6364,7 +6373,8 @@ async function discoverBrandDna(refineGuidance = "") {
       body: JSON.stringify({
         boardId: state.currentBoardId || getBoardIdFromPath() || "",
         brandBrainData: state.brandCore,
-        refineGuidance
+        refineGuidance,
+        ...(requestContext?.founderStoryContext ? { founderStoryContext: requestContext.founderStoryContext } : {})
       })
     });
     const payload = await response.json().catch(() => ({}));

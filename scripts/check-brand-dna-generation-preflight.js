@@ -4,7 +4,6 @@
 const assert = require("assert");
 const fs = require("fs");
 const path = require("path");
-const { execFileSync } = require("child_process");
 const preflight = require("../brand-dna-generation-preflight");
 
 function dependency(overrides = {}) {
@@ -51,18 +50,15 @@ assert(appSource.includes("initiateBrandDnaGeneration(event.currentTarget)"), "g
 assert(appSource.includes("cleanup();\n    discoverBrandDna();"), "Continue Anyway must close before calling the preserved generator");
 assert(appSource.includes("if (state.brandDnaLoading || activeBrandDnaRecommendation) return;"), "duplicate activation guard missing");
 assert(appSource.includes("createOrSelectMissingKnowledgeTile(\"founder_story\", { typedOnly: true })"), "missing Founder Story must use typed registry-backed creation");
-assert(!preflightSource.includes("founderNameRole") && !preflightSource.includes("observedProblem"), "A4 must not reproduce Founder Story readiness fields");
+const evaluationSource = preflightSource.slice(preflightSource.indexOf("function evaluateBrandDnaGenerationPreflight"), preflightSource.indexOf("const FOUNDER_STORY_CONTEXT_FIELD_KEYS"));
+assert(!evaluationSource.includes("founderNameRole") && !evaluationSource.includes("observedProblem"), "A4 must not reproduce Founder Story readiness fields");
 assert(!appSource.slice(appSource.indexOf("function initiateBrandDnaGeneration"), appSource.indexOf("function renderBrandDnaCard")).includes("moduleData?.founderStory"), "A4 preflight must not inspect Founder Story fields");
 
 const discoverStart = appSource.indexOf("async function discoverBrandDna(");
 const discoverEnd = appSource.indexOf("\nfunction refineBrandDna", discoverStart);
 const discoverSource = appSource.slice(discoverStart, discoverEnd);
-const baselineAppSource = execFileSync("git", ["show", "HEAD:app.js"], { cwd: repoRoot, encoding: "utf8" });
-const baselineDiscoverStart = baselineAppSource.indexOf("async function discoverBrandDna(");
-const baselineDiscoverEnd = baselineAppSource.indexOf("\nfunction refineBrandDna", baselineDiscoverStart);
-assert.strictEqual(discoverSource, baselineAppSource.slice(baselineDiscoverStart, baselineDiscoverEnd), "preserved Brand DNA generation function changed");
 assert(discoverSource.includes('fetch("/api/discover-brand-dna"'), "Brand DNA endpoint changed");
 assert(discoverSource.includes("brandBrainData: state.brandCore") && discoverSource.includes("refineGuidance"), "Brand DNA request shape changed");
-assert(!discoverSource.includes("founder_story") && !discoverSource.includes("Founder Story"), "A4 added Founder Story-specific request data");
+assert(discoverSource.includes("...(requestContext?.founderStoryContext ? { founderStoryContext: requestContext.founderStoryContext } : {})"), "A5 optional request context handoff missing");
 
 console.log("Brand DNA generation preflight checks passed.");
