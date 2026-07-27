@@ -9,7 +9,8 @@ const TIMEOUT_MS = 10000;
 const USER_AGENT = 'Funklix-Website-Text/1.0';
 const SAFE_NODE_ERROR_CODES = new Set([
   'EAI_AGAIN', 'ENOTFOUND', 'EINVAL', 'ERR_INVALID_ARG_TYPE', 'ECONNREFUSED', 'ECONNRESET',
-  'ENETUNREACH', 'EHOSTUNREACH', 'ETIMEDOUT', 'ERR_TLS_CERT_ALTNAME_INVALID', 'CERT_HAS_EXPIRED',
+  'ENETUNREACH', 'EHOSTUNREACH', 'ETIMEDOUT', 'ERR_INVALID_IP_ADDRESS',
+  'ERR_TLS_CERT_ALTNAME_INVALID', 'CERT_HAS_EXPIRED',
   'DEPTH_ZERO_SELF_SIGNED_CERT', 'SELF_SIGNED_CERT_IN_CHAIN', 'UNABLE_TO_VERIFY_LEAF_SIGNATURE',
   'UNABLE_TO_GET_ISSUER_CERT_LOCALLY'
 ]);
@@ -66,7 +67,11 @@ function requestOnce(url, addresses, { signal, requestImpl, diagnostics = create
       path: `${url.pathname}${url.search}`,
       method: 'GET',
       headers: { Accept: 'text/html, application/xhtml+xml', 'Accept-Encoding': 'identity', 'User-Agent': USER_AGENT, Host: url.host },
-      lookup: (_hostname, _options, callback) => callback(null, selected.address, selected.family),
+      lookup: (_hostname, lookupOptions, callback) => {
+        const result = { address: selected.address, family: Number(selected.family) };
+        if (lookupOptions && typeof lookupOptions === 'object' && lookupOptions.all) callback(null, [result]);
+        else callback(null, result.address, result.family);
+      },
       signal
     }, (response) => {
       diagnostics.headersReceived = true;

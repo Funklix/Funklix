@@ -23,6 +23,9 @@ const result = await retrieveWebsiteText('https://example.com/start?token=secret
 assert.deepStrictEqual(result, { status: 'success', source: { url: 'https://example.com/about', title: 'About' }, content: { text: 'Hello\nWorld', truncated: false } });
 assert.strictEqual(captures.length, 2); captures.forEach((options) => { assert.strictEqual(options.method, 'GET'); assert.deepStrictEqual(Object.keys(options.headers).sort(), ['Accept', 'Accept-Encoding', 'Host', 'User-Agent'].sort()); });
 await new Promise((resolve) => captures[0].lookup('ignored', {}, (_error, address) => { assert.strictEqual(address, '93.184.216.34'); resolve(); }));
+await new Promise((resolve) => captures[0].lookup('ignored', { all: true }, (_error, addresses) => {
+  assert.deepStrictEqual(addresses, [{ address: '93.184.216.34', family: 4 }]); resolve();
+}));
 assert.strictEqual(captures[0].hostname, 'example.com');
 assert.strictEqual(captures[0].servername, 'example.com', 'TLS verification must retain the submitted hostname while the socket is pinned');
 assert.strictEqual(captures[0].headers.Host, 'example.com');
