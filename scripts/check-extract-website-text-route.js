@@ -1,0 +1,20 @@
+#!/usr/bin/env node
+const assert = require('assert');
+process.env.AUTH_SECRET = 'route-test-secret';
+const { createSessionToken } = require('../api/_auth-session');
+const retrievalPath = require.resolve('../api/_website-retrieval');
+require(retrievalPath);
+require.cache[retrievalPath].exports.retrieveWebsiteText = async (url) => ({ status: 'success', source: { url, title: 'Fixture' }, content: { text: 'Text', truncated: false } });
+delete require.cache[require.resolve('../api/extract-website-text')];
+const handler = require('../api/extract-website-text');
+function invoke(req) { const result = {}; const res = { status(code) { result.status = code; return this; }, json(body) { result.body = body; return this; } }; return Promise.resolve(handler(req, res)).then(() => result); }
+(async () => {
+assert.strictEqual((await invoke({ method: 'GET', headers: {} })).status, 405);
+assert.strictEqual((await invoke({ method: 'POST', headers: {}, body: { url: 'https://example.com' } })).status, 401);
+const token = createSessionToken({ email: 'founder@example.com' });
+const auth = { cookie: `funklix_session=${encodeURIComponent(token)}` };
+assert.strictEqual((await invoke({ method: 'POST', headers: auth, body: { url: 'https://example.com', extra: true } })).status, 400);
+const success = await invoke({ method: 'POST', headers: auth, body: { url: 'https://example.com/about' } });
+assert.strictEqual(success.status, 200); assert.strictEqual(success.body.content.text, 'Text'); assert.strictEqual(JSON.stringify(success.body).includes('<html'), false);
+console.log('Website text route checks passed.');
+})().catch((error) => { console.error(error); process.exit(1); });
