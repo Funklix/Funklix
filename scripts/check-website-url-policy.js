@@ -9,8 +9,13 @@ for (const url of ['/about', 'ftp://example.com', 'https://user:pass@example.com
 }
 assert.strictEqual(isPublicAddress('8.8.8.8'), true);
 assert.strictEqual(isPublicAddress('2606:4700:4700::1111'), true);
+assert.strictEqual(isPublicAddress('2001:8d8:1800:1::1'), true, 'ordinary 2000::/10 global unicast must remain reachable');
+assert.strictEqual(isPublicAddress('2001:db8::1'), false, 'the actual IPv6 documentation range remains blocked');
 assert.strictEqual(isPublicAddress('100.64.0.1'), false);
 assert.deepStrictEqual(await resolvePublicAddresses('example.com', async () => [{ address: '93.184.216.34', family: 4 }]), [{ address: '93.184.216.34', family: 4 }]);
+assert.deepStrictEqual(await resolvePublicAddresses('dual-stack.example', async () => [
+  { address: '93.184.216.34', family: 4 }, { address: '2001:8d8:1800:1::1', family: 6 }
+]), [{ address: '93.184.216.34', family: 4 }, { address: '2001:8d8:1800:1::1', family: 6 }]);
 await assert.rejects(resolvePublicAddresses('evil.test', async () => [{ address: '10.0.0.1', family: 4 }]));
 await assert.rejects(resolvePublicAddresses('mixed.test', async () => [{ address: '93.184.216.34', family: 4 }, { address: '127.0.0.1', family: 4 }]));
 console.log('Website URL policy checks passed.');

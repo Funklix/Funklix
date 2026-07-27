@@ -2,7 +2,7 @@ const dns = require('dns');
 const net = require('net');
 
 class WebsitePolicyError extends Error {
-  constructor(code, message) { super(message); this.code = code; }
+  constructor(code, message, options) { super(message, options); this.code = code; }
 }
 
 function ipv4Number(address) {
@@ -53,7 +53,8 @@ function isPublicAddress(address) {
   }
   const first = words[0];
   if (words.every((word) => word === 0) || words.slice(0, 7).every((word) => word === 0) && words[7] === 1) return false;
-  return !((first & 0xfe00) === 0xfc00 || (first & 0xffc0) === 0xfe80 || (first & 0xff00) === 0xff00 || (first & 0xffc0) === 0x2000);
+  const documentation = first === 0x2001 && words[1] === 0x0db8;
+  return !((first & 0xfe00) === 0xfc00 || (first & 0xffc0) === 0xfe80 || (first & 0xff00) === 0xff00 || documentation);
 }
 
 function validateWebsiteUrl(input) {
@@ -75,10 +76,18 @@ function validateWebsiteUrl(input) {
   return url;
 }
 
-async function resolvePublicAddresses(hostname, lookup = dns.promises.lookup) {
-  if (net.isIP(hostname)) return [{ address: hostname, family: net.isIP(hostname) }];
+async function resolvePublicAddresses(hostname, lookup = dns.promises.lookup, diagnostics) {
+  if (net.isIP(hostname)) {
+    if (diagnostics) { diagnostics.dnsCompleted = true; diagnostics.stage = 'dns_validation'; }
+    return [{ address: hostname, family: net.isIP(hostname) }];
+  }
   let answers;
-  try { answers = await lookup(hostname, { all: true, verbatim: true }); } catch { throw new WebsitePolicyError('dns_failed', 'The webpage host could not be resolved.'); }
+  try {
+    answers = await lookup(hostname, { all: true, verbatim: true });
+    if (diagnostics) { diagnostics.dnsCompleted = true; diagnostics.stage = 'dns_validation'; }
+  } catch (error) {
+    throw new WebsitePolicyError('dns_failed', 'The webpage host could not be resolved.', { cause: error });
+  }
   if (!Array.isArray(answers) || !answers.length || answers.some(({ address }) => !isPublicAddress(address))) throw new WebsitePolicyError('unsafe_destination', 'That destination is not available.');
   return answers.map(({ address, family }) => ({ address, family: Number(family) || net.isIP(address) }));
 }
