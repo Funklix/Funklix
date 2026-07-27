@@ -1066,7 +1066,7 @@ button:active {
 .bc-edit-list { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 5px; }
 .bc-edit-list li { background: #f6f8ff; border: 1px solid #e1e6f6; border-radius: 10px; padding: 8px 10px; cursor: pointer; }
 .bc-edit-list li { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
-.bc-edit-list li button { border: none; background: #eef1fb; color: #7a83a8; cursor: pointer; width: 22px; height: 22px; border-radius: 999px; }
+.bc-edit-list li .bc-editor-icon-action { flex: 0 0 auto; }
 .bc-edit-list li small { color: #8f95af; font-size: 0.72rem; }
 .brand-core-side label { font-size: 0.76rem; color: #707899; margin-top: 4px; }
 .brand-core-side input,
@@ -1075,7 +1075,59 @@ button:active {
 .brand-core-side textarea:focus { outline: none; border-color: #6f5bff; box-shadow: 0 0 0 2px #6f5bff2b; }
 .brand-core-side .posting-actions input { flex: 1; }
 .bc-add-row { gap: 8px; margin-top: 4px; }
-.bc-add-row button { border: 1px solid #c9befa; background: #6f5bff; color: #fff; border-radius: 9px; width: 34px; height: 34px; }
+.bc-add-row .bc-editor-icon-action,
+.bc-edit-list .bc-editor-icon-action {
+  min-height: calc(var(--fk-space-5) * 2);
+  padding: 0;
+  width: calc(var(--fk-space-5) * 2);
+}
+
+.bc-logo-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--fk-space-2);
+  margin-top: var(--fk-space-1);
+}
+
+.brand-core-side .bc-logo-upload-input {
+  border: 0;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  padding: 0;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
+
+.bc-logo-upload-input:focus-visible + .bc-logo-upload-action {
+  border-color: var(--fk-color-primary);
+  outline: var(--fk-space-1) solid var(--fk-color-primary-soft);
+  outline-offset: var(--fk-space-1);
+}
+
+.brand-core-side .bc-logo-upload-action {
+  color: var(--fk-color-heading);
+  font-size: var(--fk-font-size-sm);
+  font-weight: var(--fk-font-weight-bold);
+  margin-top: 0;
+  width: auto;
+}
+
+.brand-core-side .bc-logo-remove {
+  color: var(--fk-color-danger);
+  width: auto;
+}
+
+.brand-core-side .bc-logo-remove:hover,
+.brand-core-side .bc-logo-remove:focus-visible {
+  background: var(--fk-color-danger-soft);
+  border-color: var(--fk-color-danger);
+  color: var(--fk-color-danger);
+}
 .brand-core-side .founder-story-actions {
   display: flex;
   flex-wrap: wrap;
@@ -3193,8 +3245,18 @@ button:active {
 
 .brand-confirm-card h3 { margin: 0 0 8px; color: #4736c8; }
 .brand-confirm-card p { margin: 0 0 14px; color: #5e657f; font-size: 0.92rem; }
-.brand-confirm-actions { display: flex; justify-content: flex-end; gap: 8px; }
-.brand-confirm-actions button { border-radius: 9px; padding: 7px 10px; }
+.brand-confirm-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--fk-space-2);
+  justify-content: flex-end;
+}
+
+.brand-confirm-actions button:not(.fk-btn) {
+  border-radius: 9px;
+  padding: 7px 10px;
+}
 
 .founder-story-import-card { width: min(760px, 94vw); max-height: 88vh; overflow: auto; position: relative; }
 .founder-story-import-card > .brand-dna-recommendation-close { top: 8px; right: 8px; }
@@ -3216,13 +3278,28 @@ button:active {
   position: absolute;
   right: 12px;
   top: 10px;
-  border: 0;
-  background: transparent;
-  color: #6b7188;
-  cursor: pointer;
+  min-height: calc(var(--fk-space-5) * 2);
+  min-width: calc(var(--fk-space-5) * 2);
   font-size: 1.35rem;
   line-height: 1;
-  padding: 4px 7px;
+  padding: 0;
+}
+
+.brand-dna-recommendation-close:hover {
+  background: var(--fk-color-surface-muted);
+  border-color: var(--fk-color-border);
+  color: var(--fk-color-heading);
+  transform: translateY(-1px);
+}
+
+.brand-dna-recommendation-close:active {
+  transform: translateY(0);
+}
+
+.brand-dna-recommendation-close:focus-visible {
+  border-color: var(--fk-color-primary);
+  outline: var(--fk-space-1) solid var(--fk-color-primary-soft);
+  outline-offset: var(--fk-space-1);
 }
 
 .brand-dna-founder-story-recommendation .brand-confirm-actions {
@@ -3966,21 +4043,6 @@ button:active {
   min-width: 220px;
 }
 
-.brand-dna-actions button {
-  border: 1px solid #cfc8ff;
-  border-radius: 999px;
-  background: #fff;
-  color: #5f52cf;
-  cursor: pointer;
-  font-weight: 800;
-  padding: 8px 12px;
-}
-
-.brand-dna-actions button:disabled {
-  cursor: not-allowed;
-  opacity: 0.55;
-}
-
 .brand-dna-loading,
 .brand-dna-empty {
   background: rgba(255, 255, 255, 0.72);
@@ -4127,6 +4189,24 @@ button:active {
   flex: 0 0 auto;
   overflow: hidden;
   padding: 0;
+  transition: border-color 160ms ease, box-shadow 160ms ease, transform 140ms ease;
+}
+
+.brand-dna-avatar-image:hover {
+  border-color: var(--fk-color-primary);
+  box-shadow: var(--fk-shadow-md);
+  transform: translateY(-1px);
+}
+
+.brand-dna-avatar-image:active {
+  box-shadow: var(--fk-shadow-sm);
+  transform: translateY(0);
+}
+
+.brand-dna-avatar-image:focus-visible {
+  border-color: var(--fk-color-primary);
+  outline: var(--fk-space-1) solid var(--fk-color-primary-soft);
+  outline-offset: var(--fk-space-1);
 }
 
 .brand-dna-avatar-image img {
