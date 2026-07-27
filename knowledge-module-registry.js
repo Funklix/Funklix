@@ -27,7 +27,7 @@ const KNOWLEDGE_GRAPH_LAYERS = Object.freeze([
   "execution"
 ]);
 const KNOWLEDGE_GRAPH_DEPENDENCY_REQUIREMENTS = Object.freeze(["required", "recommended"]);
-const KNOWLEDGE_GRAPH_ACQUISITION_METHODS = Object.freeze(["manual"]);
+const KNOWLEDGE_GRAPH_ACQUISITION_METHODS = Object.freeze(["manual", "paste", "ai_generation"]);
 
 const BASE_TEXT_CAPABILITIES = Object.freeze(["editableText"]);
 const BASE_STRUCTURED_CAPABILITIES = Object.freeze(["editableText", "structuredFields"]);
@@ -275,22 +275,36 @@ const KNOWLEDGE_MODULE_REGISTRY = Object.freeze({
     label: "Market Research",
     section: KNOWLEDGE_MODULE_SECTIONS.STRATEGY,
     description: "Market context, trends, customer pain, competitors, category insights, and positioning evidence.",
-    defaultCapabilities: BASE_TEXT_CAPABILITIES,
-    futureCapabilities: Object.freeze([...FUTURE_AI_REVIEW_CAPABILITIES, "citations", "sourceMetadata"]),
+    defaultCapabilities: Object.freeze(["editableText", "structuredFields", "aiActions", "reviewWorkflow", "readiness", "graphProjection"]),
+    futureCapabilities: Object.freeze(["history", "searchIndexing"]),
     iconName: "research",
     allowMultiple: false,
-    category: KNOWLEDGE_MODULE_CATEGORIES.KNOWLEDGE
+    category: KNOWLEDGE_MODULE_CATEGORIES.KNOWLEDGE,
+    knowledgeGraph: Object.freeze({
+      role: "source",
+      layer: "knowledge_acquisition",
+      dependencies: Object.freeze([]),
+      acquisitionMethods: Object.freeze(["manual", "paste", "ai_generation"])
+    })
   }),
   business_plan: Object.freeze({
     id: "business_plan",
     label: "Business Plan",
     section: KNOWLEDGE_MODULE_SECTIONS.STRATEGY,
     description: "Business model, target markets, channels, economics, goals, risks, and strategic assumptions.",
-    defaultCapabilities: BASE_TEXT_CAPABILITIES,
-    futureCapabilities: FUTURE_AI_REVIEW_CAPABILITIES,
+    defaultCapabilities: Object.freeze(["editableText", "structuredFields", "aiActions", "reviewWorkflow", "readiness", "graphProjection"]),
+    futureCapabilities: Object.freeze(["history", "searchIndexing"]),
     iconName: "plan",
     allowMultiple: false,
-    category: KNOWLEDGE_MODULE_CATEGORIES.KNOWLEDGE
+    category: KNOWLEDGE_MODULE_CATEGORIES.KNOWLEDGE,
+    knowledgeGraph: Object.freeze({
+      role: "derived",
+      layer: "brand_intelligence",
+      dependencies: Object.freeze([
+        Object.freeze({ moduleType: "market_research", requirement: "recommended" })
+      ]),
+      acquisitionMethods: Object.freeze(["manual", "paste", "ai_generation"])
+    })
   }),
   pitch_deck: Object.freeze({
     id: "pitch_deck",

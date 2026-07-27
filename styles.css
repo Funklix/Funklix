@@ -6677,6 +6677,41 @@ button:active {
   transform: translateY(-1px);
 }
 
+/* Strategy Knowledge Modules: shared, additive lifecycle surfaces. */
+.strategy-module-card-actions,
+.strategy-module-editor-actions,
+.strategy-module-maintenance {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--fk-space-2);
+}
+
+.strategy-module-card-actions .fk-btn {
+  min-height: 34px;
+  padding: 6px 10px;
+}
+
+.knowledge-module-status[data-status="accepted"] { color: #18794e; }
+.knowledge-module-status[data-status="needs_review"],
+.knowledge-module-status[data-status="draft"] { color: #7a5a00; }
+.knowledge-module-status[data-status="error"] { color: #b42318; }
+
+.strategy-module-section {
+  border: 1px solid var(--fk-color-border);
+  border-radius: var(--fk-radius-md);
+  display: grid;
+  gap: var(--fk-space-2);
+  margin: var(--fk-space-3) 0;
+  min-width: 0;
+  padding: var(--fk-space-3);
+}
+
+.strategy-module-section legend { color: var(--fk-color-heading); font-weight: 800; padding: 0 var(--fk-space-2); }
+.strategy-module-section textarea { box-sizing: border-box; width: 100%; }
+.strategy-accepted-summary { background: var(--fk-color-surface-muted); border-radius: var(--fk-radius-md); padding: var(--fk-space-3); }
+.strategy-accepted-summary p { overflow-wrap: anywhere; white-space: pre-wrap; }
+[data-strategy-message][data-tone="error"] { color: #b42318; }
+
 .brand-core-workspace .brand-workspace-missing-action:focus-visible {
   outline: 2px solid rgba(111, 91, 255, 0.34);
   outline-offset: 2px;
