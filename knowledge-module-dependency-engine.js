@@ -128,7 +128,65 @@ function evaluateFounderStory(instance, state) {
   return { started, ready, accepted, diagnostics };
 }
 
-const READINESS_EVALUATORS = Object.freeze({ founder_story: evaluateFounderStory });
+const PLACEHOLDER_TEXT = /^(?:n\/?a|none|unknown|tbd|to be determined|not provided|placeholder)$/i;
+
+function meaningfulKnowledgeValue(value) {
+  if (Array.isArray(value)) return value.some(meaningfulKnowledgeValue);
+  if (typeof value === "string") {
+    const text = value.trim();
+    return Boolean(text && !PLACEHOLDER_TEXT.test(text));
+  }
+  return false;
+}
+
+function acceptedStrategyFacts(instance, namespace) {
+  const moduleState = instance?.moduleData?.[namespace];
+  const accepted = moduleState?.accepted;
+  const valid = accepted && typeof accepted === "object" && meaningfulText(accepted.acceptedAt)
+    && meaningfulText(accepted.revisionId) && meaningfulText(moduleState?.lifecycle?.status) === "accepted";
+  return valid && accepted.structuredFacts && typeof accepted.structuredFacts === "object"
+    ? { accepted, facts: accepted.structuredFacts }
+    : null;
+}
+
+function strategyResult(instance, namespace, predicate) {
+  const data = instance?.moduleData?.[namespace];
+  const started = Boolean(data?.draft && (meaningfulText(data.draft.content) || meaningfulKnowledgeValue(Object.values(data.draft.structuredFacts || {}))));
+  const resolved = acceptedStrategyFacts(instance, namespace);
+  const accepted = Boolean(resolved);
+  const ready = Boolean(resolved && predicate(resolved.facts));
+  const diagnostics = [];
+  if (!started && !accepted) diagnostics.push("module_not_started");
+  if (!ready) diagnostics.push("module_not_ready");
+  if (!accepted) diagnostics.push("acceptance_required");
+  return { started, ready, accepted, diagnostics };
+}
+
+function evaluateMarketResearch(instance) {
+  return strategyResult(instance, "marketResearch", (facts) => (
+    meaningfulKnowledgeValue(facts.marketCategory) || meaningfulKnowledgeValue(facts.marketScope)
+  ) && meaningfulKnowledgeValue(facts.customerSegments)
+    && meaningfulKnowledgeValue(facts.primaryNeeds)
+    && (meaningfulKnowledgeValue(facts.competitors) || meaningfulKnowledgeValue(facts.alternatives))
+    && (meaningfulKnowledgeValue(facts.opportunities) || meaningfulKnowledgeValue(facts.risks) || meaningfulKnowledgeValue(facts.trends))
+    && (meaningfulKnowledgeValue(facts.positioningImplications) || meaningfulKnowledgeValue(facts.messagingImplications)
+      || meaningfulKnowledgeValue(facts.channelImplications) || meaningfulKnowledgeValue(facts.recommendedNextSteps)));
+}
+
+function evaluateBusinessPlan(instance) {
+  return strategyResult(instance, "businessPlan", (facts) => meaningfulKnowledgeValue(facts.businessSummary)
+    && meaningfulKnowledgeValue(facts.problem) && meaningfulKnowledgeValue(facts.solution)
+    && meaningfulKnowledgeValue(facts.targetCustomers)
+    && (meaningfulKnowledgeValue(facts.offer) || meaningfulKnowledgeValue(facts.revenueModel))
+    && (meaningfulKnowledgeValue(facts.acquisitionStrategy) || meaningfulKnowledgeValue(facts.salesChannels))
+    && (meaningfulKnowledgeValue(facts.objectives) || meaningfulKnowledgeValue(facts.keyMilestones)));
+}
+
+const READINESS_EVALUATORS = Object.freeze({
+  founder_story: evaluateFounderStory,
+  market_research: evaluateMarketResearch,
+  business_plan: evaluateBusinessPlan
+});
 
 function evaluateModuleReadiness({ definition, instance, state } = {}) {
   const moduleType = definition?.id || "";
