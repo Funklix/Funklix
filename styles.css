@@ -3179,6 +3179,17 @@ button:active {
 .brand-confirm-actions { display: flex; justify-content: flex-end; gap: 8px; }
 .brand-confirm-actions button { border-radius: 9px; padding: 7px 10px; }
 
+.founder-story-import-card { width: min(760px, 94vw); max-height: 88vh; overflow: auto; position: relative; }
+.founder-story-import-card > .brand-dna-recommendation-close { top: 8px; right: 8px; }
+.founder-story-import-card input[type="url"],
+.founder-story-import-card textarea { width: 100%; box-sizing: border-box; }
+.founder-story-import-fields { display: grid; gap: 12px; margin: 12px 0; }
+.founder-story-import-field { border: 1px solid #e1e5f4; border-radius: 10px; padding: 12px; }
+.founder-story-import-field p { margin: 7px 0; overflow-wrap: anywhere; }
+.founder-story-import-select { display: flex; gap: 8px; align-items: center; font-weight: 700; }
+.founder-story-import-evidence { border-left: 3px solid #dcd7ff; padding-left: 9px; }
+.bc-import-error { color: #a52d2d !important; min-height: 1.25em; }
+
 .brand-dna-founder-story-recommendation .brand-confirm-card {
   position: relative;
   padding: 22px;
