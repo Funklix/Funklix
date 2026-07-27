@@ -18,7 +18,12 @@ module.exports = async function handler(req, res) {
   } catch (error) {
     const code = typeof error?.code === 'string' ? error.code : 'retrieval_failed';
     const status = STATUS_BY_CODE[code] || 502;
-    console.error('[WEBSITE_TEXT_RETRIEVAL_FAILED]', { code, status });
+    console.error('[WEBSITE_TEXT_RETRIEVAL_FAILED]', error?.diagnostics || {
+      stage: 'route', normalizedErrorCode: 'UNKNOWN_TRANSPORT_ERROR', errorName: 'Error', addressFamily: null,
+      dnsStarted: false, dnsCompleted: false, addressSelected: false, socketStarted: false,
+      socketConnected: false, tlsStarted: false, tlsCompleted: false, headersReceived: false,
+      redirectCount: 0, boundedBytesReceived: 0, finalStableErrorCode: code, elapsedMs: 0
+    });
     return res.status(status).json({ success: false, error: { code, message: error?.message || 'The webpage could not be retrieved.' } });
   }
 };
