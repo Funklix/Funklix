@@ -5053,14 +5053,16 @@ async function generateFounderStoryNarrative(tile) {
 
 const FOUNDER_STORY_IMPORT_MAX_VALUE_LENGTH = 1600;
 const FOUNDER_STORY_IMPORT_ERROR_MESSAGES = Object.freeze({
-  invalid_url: "Enter a valid public webpage URL.", unsupported_scheme: "Use a public http or https webpage.",
-  credentials_not_allowed: "URLs containing sign-in details are unsupported.", invalid_host: "Enter a valid public webpage URL.",
-  port_not_allowed: "That webpage address is unsupported.", unsafe_destination: "Private or unsafe destinations are unsupported.",
-  dns_failed: "That webpage could not be reached.", retrieval_failed: "That webpage could not be retrieved.",
-  redirect_failed: "The webpage redirect could not be followed safely.", redirect_loop: "The webpage redirect could not be followed safely.",
-  too_many_redirects: "The webpage has too many redirects.", timeout: "The webpage took too long to respond.",
-  response_too_large: "That webpage is too large to import.", unsupported_content_type: "That address does not return a supported webpage.",
-  unsupported_encoding: "That webpage uses an unsupported response format.", empty_content: "The page did not contain usable server-rendered text.",
+  invalid_url: "The URL is invalid.", unsupported_scheme: "The URL is invalid.",
+  credentials_not_allowed: "This destination cannot be accessed securely.", invalid_host: "The URL is invalid.",
+  port_not_allowed: "This destination cannot be accessed securely.", unsafe_destination: "This destination cannot be accessed securely.",
+  dns_failed: "The webpage could not be reached. Please try again.", retrieval_failed: "The webpage could not be reached. Please try again.",
+  invalid_redirect: "The webpage redirected to an unsupported destination.", redirect_failed: "The webpage redirected to an unsupported destination.",
+  redirect_loop: "The webpage redirected to an unsupported destination.", too_many_redirects: "The webpage redirected to an unsupported destination.",
+  timeout: "The webpage took too long to respond.", request_cancelled: "The webpage request was cancelled.",
+  response_too_large: "The webpage response was too large.", unsupported_content_type: "This page does not provide supported HTML content.",
+  unsupported_encoding: "This page does not provide supported HTML content.", empty_content: "No usable text could be extracted from this page.",
+  http_error: "The webpage rejected the retrieval request.",
   invalid_source: "The page did not contain usable server-rendered text.", invalid_ai_response: "The AI suggestions could not be safely validated.",
   provider_failed: "The AI service could not map this page right now.", mapping_failed: "The AI service could not map this page right now.",
   ai_unavailable: "The AI service is not configured for website import.", rate_limited: "The AI service is busy. Try again shortly."

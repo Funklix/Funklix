@@ -20,4 +20,13 @@ assert.doesNotMatch(app.slice(app.indexOf("function openFounderStoryWebsiteImpor
 assert.match(app, /if \(event\.key === "Escape"\)/);
 assert.match(app, /if \(event\.target === overlay\) close\(\)/);
 assert.match(app, /controller\.draft = null/);
+for (const message of [
+  "The URL is invalid.", "This destination cannot be accessed securely.",
+  "The webpage redirected to an unsupported destination.", "The webpage took too long to respond.",
+  "The webpage response was too large.", "This page does not provide supported HTML content.",
+  "No usable text could be extracted from this page.", "The webpage rejected the retrieval request.",
+  "The webpage could not be reached. Please try again."
+]) assert.ok(app.includes(message), `missing stable client message: ${message}`);
+const retrievalFailureHandler = app.slice(app.indexOf("} catch (failure) {", app.indexOf("async function startFounderStoryWebsiteImport")), app.indexOf("function openFounderStoryWebsiteImport"));
+assert.doesNotMatch(retrievalFailureHandler, /saveFounderStoryModuleData|saveBrandBrainState/, "retrieval failures must produce zero Founder Story mutation");
 console.log("Founder Story website import lifecycle checks passed (draft, apply, cancellation, and stale identity guards).");

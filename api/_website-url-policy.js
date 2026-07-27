@@ -53,7 +53,8 @@ function isPublicAddress(address) {
   }
   const first = words[0];
   if (words.every((word) => word === 0) || words.slice(0, 7).every((word) => word === 0) && words[7] === 1) return false;
-  return !((first & 0xfe00) === 0xfc00 || (first & 0xffc0) === 0xfe80 || (first & 0xff00) === 0xff00 || (first & 0xffc0) === 0x2000);
+  const documentation = first === 0x2001 && words[1] === 0x0db8;
+  return !((first & 0xfe00) === 0xfc00 || (first & 0xffc0) === 0xfe80 || (first & 0xff00) === 0xff00 || documentation);
 }
 
 function validateWebsiteUrl(input) {
