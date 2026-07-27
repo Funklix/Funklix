@@ -5246,16 +5246,16 @@ function renderFounderStoryCustomTileEditor(tile, idx) {
     <h5>Source facts</h5>
     <p class="bc-helper">Add the moments, motivations, and proof points that make the story specific and credible.</p>
     ${fieldMarkup}
-    <div class="posting-actions bc-add-row">
-      <button id="brand-core-founder-story-website-import-button" type="button">Import from website</button>
-      <button id="brand-core-founder-story-generate-button" type="button" class="primary-add">Generate Founder Story</button>
+    <div class="posting-actions bc-add-row founder-story-actions">
+      <button id="brand-core-founder-story-website-import-button" type="button" class="fk-btn fk-btn-secondary">Import from website</button>
+      <button id="brand-core-founder-story-generate-button" type="button" class="primary-add fk-btn fk-btn-primary">Generate Founder Story</button>
     </div>
     <p class="bc-helper" id="brand-core-founder-story-generate-message" aria-live="polite"></p>
     <h5>Reusable Founder Story Narrative</h5>
     <p class="bc-helper">Write or refine the narrative used across brand, campaign, website, pitch, and communication work. Changes to source facts do not automatically rewrite this narrative.</p>
     <label for="brand-core-founder-story-narrative">Founder Story narrative</label>
     <textarea id="brand-core-founder-story-narrative" rows="6" placeholder="Write the reusable founder story here when you are ready.">${escapeHtml(tile.content || "")}</textarea>
-    <button id="brand-core-founder-story-delete" type="button">Remove custom tile</button>
+    <button id="brand-core-founder-story-delete" class="bc-custom-delete fk-btn fk-btn-ghost" type="button">Remove custom tile</button>
   `;
   const readFounderStoryFieldValues = () => FOUNDER_STORY_FIELD_KEYS.reduce((values, key) => {
     const input = el.brandEditorPanel.querySelector(`#${getFounderStoryFieldDomId(key)}`);
@@ -6611,7 +6611,7 @@ function renderBrandCoreEditor() {
       return;
     }
     el.brandEditorTitle.textContent = tile.title || "Custom Tile";
-    el.brandEditorPanel.innerHTML = `<div class="bc-editor-meta"><p class="bc-helper">Custom Brand Tile</p><span class="bc-badge">custom</span></div><label>Title</label><input id="bc-custom-title" value="${tile.title || ""}"/><label>Content</label><textarea id="bc-custom-content" rows="5">${tile.content || ""}</textarea><button id="bc-custom-delete" type="button">Remove custom tile</button>`;
+    el.brandEditorPanel.innerHTML = `<div class="bc-editor-meta"><p class="bc-helper">Custom Brand Tile</p><span class="bc-badge">custom</span></div><label>Title</label><input id="bc-custom-title" value="${tile.title || ""}"/><label>Content</label><textarea id="bc-custom-content" rows="5">${tile.content || ""}</textarea><button id="bc-custom-delete" class="bc-custom-delete fk-btn fk-btn-ghost" type="button">Remove custom tile</button>`;
     el.brandEditorPanel.querySelector("#bc-custom-title").addEventListener("input", (e) => { tile.title = e.target.value; saveBrandBrainState(); renderBrandCoreTiles(); });
     el.brandEditorPanel.querySelector("#bc-custom-content").addEventListener("input", (e) => { tile.content = e.target.value; saveBrandBrainState(); renderBrandCoreTiles(); });
     el.brandEditorPanel.querySelector("#bc-custom-delete").addEventListener("click", () => {
