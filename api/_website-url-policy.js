@@ -2,7 +2,7 @@ const dns = require('dns');
 const net = require('net');
 
 class WebsitePolicyError extends Error {
-  constructor(code, message) { super(message); this.code = code; }
+  constructor(code, message, options) { super(message, options); this.code = code; }
 }
 
 function ipv4Number(address) {
@@ -76,10 +76,18 @@ function validateWebsiteUrl(input) {
   return url;
 }
 
-async function resolvePublicAddresses(hostname, lookup = dns.promises.lookup) {
-  if (net.isIP(hostname)) return [{ address: hostname, family: net.isIP(hostname) }];
+async function resolvePublicAddresses(hostname, lookup = dns.promises.lookup, diagnostics) {
+  if (net.isIP(hostname)) {
+    if (diagnostics) { diagnostics.dnsCompleted = true; diagnostics.stage = 'dns_validation'; }
+    return [{ address: hostname, family: net.isIP(hostname) }];
+  }
   let answers;
-  try { answers = await lookup(hostname, { all: true, verbatim: true }); } catch { throw new WebsitePolicyError('dns_failed', 'The webpage host could not be resolved.'); }
+  try {
+    answers = await lookup(hostname, { all: true, verbatim: true });
+    if (diagnostics) { diagnostics.dnsCompleted = true; diagnostics.stage = 'dns_validation'; }
+  } catch (error) {
+    throw new WebsitePolicyError('dns_failed', 'The webpage host could not be resolved.', { cause: error });
+  }
   if (!Array.isArray(answers) || !answers.length || answers.some(({ address }) => !isPublicAddress(address))) throw new WebsitePolicyError('unsafe_destination', 'That destination is not available.');
   return answers.map(({ address, family }) => ({ address, family: Number(family) || net.isIP(address) }));
 }
