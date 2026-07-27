@@ -38,6 +38,8 @@ const FOUNDER_STORY_CONTEXT_FIELD_KEYS = Object.freeze([
 ]);
 
 function serializeFounderStoryContext(instance) {
+  if (typeof instance?.content !== "string" || !instance.content.trim()
+    || typeof instance?.moduleData?.founderStoryLifecycle?.acceptedAt !== "string") return null;
   const source = instance?.moduleData?.founderStory;
   if (!source || typeof source !== "object" || Array.isArray(source)) return null;
   const structuredFacts = FOUNDER_STORY_CONTEXT_FIELD_KEYS.reduce((facts, key) => {

@@ -1,3 +1,7 @@
+const { retrieveWebsiteText } = require('./_website-retrieval');
+const { retrievePublicImage } = require('./_website-image-retrieval');
+const { uploadImageBuffer } = require('./_image-storage');
+
 module.exports = async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
@@ -10,14 +14,9 @@ module.exports = async function handler(req, res) {
 
     let normalized = domainUrl.trim();
     if (!/^https?:\/\//i.test(normalized)) normalized = `https://${normalized}`;
-
-    const pageRes = await fetch(normalized, {
-      redirect: "follow",
-      headers: { "User-Agent": "CampaignCanvasBrandAnalyzer/1.0" }
-    });
-    if (!pageRes.ok) return res.status(400).json({ error: "Could not fetch website" });
-
-    const html = await pageRes.text();
+    const website = await retrieveWebsiteText(normalized, { includeHtml: true });
+    normalized = website.source.url;
+    const html = website.internalHtml;
     const safeHtml = html.slice(0, 300000);
 
 
@@ -112,9 +111,29 @@ Website context:\n${extracted}`;
 
     try {
       const parsed = JSON.parse(sanitized);
+      const detectedLogoUrl = toAbsolute(logoCandidate);
+      let persistedLogo = null;
+      if (detectedLogoUrl) {
+        try {
+          const fetched = await retrievePublicImage(detectedLogoUrl);
+          const uploaded = await uploadImageBuffer({ buffer: fetched.buffer, mimeType: fetched.mimeType, prefix: 'brand-logo' });
+          persistedLogo = { url: uploaded.imageUrl, sourceUrl: fetched.sourceUrl, mimeType: uploaded.mimeType };
+        } catch (_logoError) {
+          // Logo discovery is optional; company analysis remains successful.
+        }
+      }
       parsed.brandAssets = {
         domain: parsed?.brandAssets?.domain || normalized,
-        logo: parsed?.brandAssets?.logo || toAbsolute(logoCandidate) || "",
+        logo: persistedLogo?.url || "",
+        logoAsset: persistedLogo ? {
+          kind: "company_logo", role: "primary", status: "persisted", source: "domain_analysis",
+          sourceUrl: persistedLogo.sourceUrl, mimeType: persistedLogo.mimeType, candidateDetected: true,
+          fetched: true, persisted: true, persistedAt: new Date().toISOString()
+        } : {
+          kind: "company_logo", role: "primary", status: detectedLogoUrl ? "unavailable" : "not_found",
+          source: "domain_analysis", candidateUrl: detectedLogoUrl || "", candidateDetected: Boolean(detectedLogoUrl),
+          fetched: false, persisted: false
+        },
         colors: Array.isArray(parsed?.brandAssets?.colors) && parsed.brandAssets.colors.length ? parsed.brandAssets.colors : extractedColors,
         typography: parsed?.brandAssets?.typography || fontCandidate || "",
         references: Array.isArray(parsed?.brandAssets?.references) ? parsed.brandAssets.references : []

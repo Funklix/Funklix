@@ -157,7 +157,10 @@ async function retrieveWebsiteText(input, options = {}) {
       const html = await readBounded(response, options.maxResponseBytes ?? MAX_RESPONSE_BYTES, diagnostics);
       diagnostics.stage = 'extraction';
       const extracted = extractHtmlText(html, options.extractionOptions);
-      return { status: 'success', source: { url: url.href, title: extracted.title }, content: { text: extracted.text, truncated: extracted.truncated } };
+      const result = { status: 'success', source: { url: url.href, title: extracted.title }, content: { text: extracted.text, truncated: extracted.truncated } };
+      // HTML is exposed only to trusted server-side callers (domain analysis), never by the public extraction route.
+      if (options.includeHtml === true) result.internalHtml = html;
+      return result;
     }
   } catch (error) {
     let safe;

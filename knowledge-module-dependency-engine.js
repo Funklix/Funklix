@@ -119,12 +119,13 @@ function evaluateFounderStory(instance, state) {
   // (or the existing Brand-name fallback) plus at least two of the six details.
   const hasIdentity = Boolean(meaningfulText(source.founderNameRole) || getFounderStoryBrandName(state));
   const detailCount = FOUNDER_STORY_DETAIL_KEYS.filter((key) => Boolean(meaningfulText(source[key]))).length;
-  const ready = hasIdentity && detailCount >= 2;
+  const accepted = Boolean(meaningfulText(instance?.content) && meaningfulText(instance?.moduleData?.founderStoryLifecycle?.acceptedAt));
+  const ready = hasIdentity && detailCount >= 2 && accepted;
   const diagnostics = [];
   if (!started) diagnostics.push("module_not_started");
   if (!ready) diagnostics.push("module_not_ready");
-  diagnostics.push("acceptance_not_observable");
-  return { started, ready, accepted: null, diagnostics };
+  if (!accepted) diagnostics.push("acceptance_required");
+  return { started, ready, accepted, diagnostics };
 }
 
 const READINESS_EVALUATORS = Object.freeze({ founder_story: evaluateFounderStory });
