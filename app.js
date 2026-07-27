@@ -4974,10 +4974,11 @@ function openFounderStoryGeneratedReview({ narrative, requestContext }) {
   const cancel = document.createElement("button");
   cancel.type = "button";
   cancel.id = "brand-core-founder-story-generate-cancel";
+  cancel.className = "fk-btn fk-btn-ghost";
   cancel.textContent = "Keep current narrative";
   const apply = document.createElement("button");
   apply.type = "button";
-  apply.className = "primary-add";
+  apply.className = "fk-btn fk-btn-primary";
   apply.id = "brand-core-founder-story-generate-apply";
   apply.textContent = "Apply";
   actions.append(cancel, apply);
@@ -5159,7 +5160,7 @@ function renderFounderStoryWebsiteImportReview(controller, fields) {
       </section>`;
     }).join("")}</div>
     <p class="bc-import-error" data-founder-story-import-error role="alert"></p>
-    <div class="brand-confirm-actions"><button type="button" data-import-cancel>Cancel</button><button type="button" class="primary-add" data-import-apply>Apply selected fields</button></div>`;
+    <div class="brand-confirm-actions"><button type="button" class="fk-btn fk-btn-ghost" data-import-cancel>Cancel</button><button type="button" class="fk-btn fk-btn-primary" data-import-apply>Apply selected fields</button></div>`;
   body.querySelectorAll("[data-import-field]").forEach((section) => {
     const key = section.dataset.importField;
     const checkbox = section.querySelector("[data-import-select]");
@@ -5247,11 +5248,11 @@ function openFounderStoryWebsiteImport(tile, returnFocus) {
   overlay.setAttribute("role", "dialog"); overlay.setAttribute("aria-modal", "true"); overlay.setAttribute("aria-labelledby", "founder-story-import-heading");
   const token = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   overlay.dataset.importToken = token;
-  overlay.innerHTML = `<div class="brand-confirm-card founder-story-import-card"><button type="button" class="brand-dna-recommendation-close" aria-label="Close website import" data-import-close>×</button>
+  overlay.innerHTML = `<div class="brand-confirm-card founder-story-import-card"><button type="button" class="brand-dna-recommendation-close fk-btn fk-btn-ghost" aria-label="Close website import" data-import-close>×</button>
     <h3 id="founder-story-import-heading">Import Founder Story facts</h3><div data-founder-story-import-body>
     <p>Funklix securely retrieves the public webpage on the server and sends extracted text to the configured AI service. Private, login-protected, authenticated, or paywalled pages are unsupported. Suggestions require review before they change your Founder Story.</p>
     <label for="founder-story-import-url">Public webpage URL</label><input id="founder-story-import-url" type="url" data-founder-story-import-url placeholder="https://example.com/about">
-    <p class="bc-import-error" data-founder-story-import-error role="alert"></p><div class="brand-confirm-actions"><button type="button" data-import-cancel>Cancel</button><button type="button" class="primary-add" data-founder-story-import-start>Retrieve and map</button></div></div></div>`;
+    <p class="bc-import-error" data-founder-story-import-error role="alert"></p><div class="brand-confirm-actions"><button type="button" class="fk-btn fk-btn-ghost" data-import-cancel>Cancel</button><button type="button" class="fk-btn fk-btn-primary" data-founder-story-import-start>Retrieve and map</button></div></div></div>`;
   document.body.appendChild(overlay);
   const controller = { tile, tileId: tile.id, boardId: state.currentBoardId || getBoardIdFromPath() || "", token, overlay, card: overlay.querySelector(".brand-confirm-card"), returnFocus, abortController: null, draft: null, inFlight: false, closed: false };
   activeFounderStoryWebsiteImport = controller;
@@ -6022,7 +6023,7 @@ function showFounderStoryCompleteRecommendation() {
   overlay.setAttribute("role", "dialog");
   overlay.setAttribute("aria-modal", "true");
   overlay.setAttribute("aria-labelledby", "founder-story-archetype-recommendation-title");
-  overlay.innerHTML = `<div class="brand-confirm-card"><button type="button" class="brand-dna-recommendation-close" aria-label="Maybe later">×</button><h3 id="founder-story-archetype-recommendation-title">Founder Story complete</h3><p>Your Founder Story is ready. Define your Brand Archetype next to translate it into a consistent brand personality.</p><div class="brand-confirm-actions"><button type="button" id="founder-story-archetype-later">Maybe later</button><button type="button" class="primary-add" id="founder-story-archetype-define">Define Brand Archetype</button></div></div>`;
+  overlay.innerHTML = `<div class="brand-confirm-card"><button type="button" class="brand-dna-recommendation-close fk-btn fk-btn-ghost" aria-label="Maybe later">×</button><h3 id="founder-story-archetype-recommendation-title">Founder Story complete</h3><p>Your Founder Story is ready. Define your Brand Archetype next to translate it into a consistent brand personality.</p><div class="brand-confirm-actions"><button type="button" class="fk-btn fk-btn-ghost" id="founder-story-archetype-later">Maybe later</button><button type="button" class="fk-btn fk-btn-primary" id="founder-story-archetype-define">Define Brand Archetype</button></div></div>`;
   const close = () => overlay.remove();
   overlay.querySelector(".brand-dna-recommendation-close").addEventListener("click", close);
   overlay.querySelector("#founder-story-archetype-later").addEventListener("click", close);
@@ -6155,7 +6156,7 @@ function showBrandSuggestionConfirmModal() {
   return new Promise((resolve) => {
     const overlay = document.createElement("div");
     overlay.className = "brand-confirm-modal";
-    overlay.innerHTML = `<div class="brand-confirm-card"><h3>Apply Suggestions</h3><p>Replace current Brand Brain with generated suggestions?</p><div class="brand-confirm-actions"><button type="button" id="brand-confirm-cancel">Cancel</button><button type="button" class="primary-add" id="brand-confirm-apply">Apply Suggestions</button></div></div>`;
+    overlay.innerHTML = `<div class="brand-confirm-card"><h3>Apply Suggestions</h3><p>Replace current Brand Brain with generated suggestions?</p><div class="brand-confirm-actions"><button type="button" class="fk-btn fk-btn-ghost" id="brand-confirm-cancel">Cancel</button><button type="button" class="fk-btn fk-btn-primary" id="brand-confirm-apply">Apply Suggestions</button></div></div>`;
     document.body.appendChild(overlay);
     const close = (value) => {
       overlay.remove();
@@ -6386,9 +6387,9 @@ function renderBrandAvatarSection(result) {
           </div>
         </div>` : `<div class="brand-dna-empty"><strong>No Brand Avatar yet.</strong><span>Generate a symbolic identity image from your accepted Brand DNA.</span></div>`}
       <div class="brand-dna-actions brand-dna-avatar-actions">
-        ${hasAvatar && !avatar.userApproved ? `<button type="button" class="primary-add" id="brand-avatar-accept" ${isLoading ? "disabled" : ""}>Accept Avatar</button>` : ""}
-        <button type="button" id="brand-avatar-generate" ${isLoading ? "disabled" : ""}>${hasAvatar ? "Regenerate" : "Generate Brand Avatar"}</button>
-        ${hasAvatar ? `<button type="button" id="brand-avatar-edit" ${isLoading ? "disabled" : ""}>Edit Prompt</button>` : ""}
+        ${hasAvatar && !avatar.userApproved ? `<button type="button" class="fk-btn fk-btn-primary" id="brand-avatar-accept" ${isLoading ? "disabled" : ""}>Accept Avatar</button>` : ""}
+        <button type="button" class="fk-btn ${hasAvatar ? "fk-btn-secondary" : "fk-btn-primary"}" id="brand-avatar-generate" ${isLoading ? "disabled" : ""}>${hasAvatar ? "Regenerate" : "Generate Brand Avatar"}</button>
+        ${hasAvatar ? `<button type="button" class="fk-btn fk-btn-ghost" id="brand-avatar-edit" ${isLoading ? "disabled" : ""}>Edit Prompt</button>` : ""}
       </div>
     </div>`;
 }
@@ -6503,7 +6504,7 @@ function showBrandDnaFounderStoryRecommendation(preflight, trigger) {
   overlay.setAttribute("role", "dialog");
   overlay.setAttribute("aria-modal", "true");
   overlay.setAttribute("aria-labelledby", "brand-dna-founder-story-recommendation-title");
-  overlay.innerHTML = `<div class="brand-confirm-card"><button type="button" class="brand-dna-recommendation-close" aria-label="Close">×</button><h3 id="brand-dna-founder-story-recommendation-title"></h3><p class="brand-dna-recommendation-body"></p><div class="brand-confirm-actions"><button type="button" id="brand-dna-continue-anyway">Continue Anyway</button><button type="button" class="primary-add" id="brand-dna-open-founder-story"></button></div></div>`;
+  overlay.innerHTML = `<div class="brand-confirm-card"><button type="button" class="brand-dna-recommendation-close fk-btn fk-btn-ghost" aria-label="Close">×</button><h3 id="brand-dna-founder-story-recommendation-title"></h3><p class="brand-dna-recommendation-body"></p><div class="brand-confirm-actions"><button type="button" class="fk-btn fk-btn-secondary" id="brand-dna-continue-anyway">Continue Anyway</button><button type="button" class="fk-btn fk-btn-primary" id="brand-dna-open-founder-story"></button></div></div>`;
   overlay.querySelector("#brand-dna-founder-story-recommendation-title").textContent = copy.title;
   overlay.querySelector(".brand-dna-recommendation-body").textContent = copy.body;
   overlay.querySelector("#brand-dna-open-founder-story").textContent = copy.primary;
@@ -6609,10 +6610,10 @@ function renderBrandDnaCard() {
         <p>Understand the personality behind your brand and unlock more consistent AI-generated marketing.</p>
       </div>
       <div class="brand-dna-actions">
-        ${hasDraft ? `<button type="button" class="primary-add" id="brand-dna-accept">✓ Accept</button>` : ""}
-        ${isReassessment ? `<button type="button" id="brand-dna-keep-existing">Keep existing Archetype</button>` : ""}
-        <button type="button" id="brand-dna-refine" ${loading || !result ? "disabled" : ""}>✏ Refine</button>
-        <button type="button" id="brand-dna-regenerate" ${loading ? "disabled" : ""}>🔄 ${result ? "Regenerate" : "Generate Brand DNA"}</button>
+        ${hasDraft ? `<button type="button" class="fk-btn fk-btn-primary" id="brand-dna-accept">✓ Accept</button>` : ""}
+        ${isReassessment ? `<button type="button" class="fk-btn fk-btn-secondary" id="brand-dna-keep-existing">Keep existing Archetype</button>` : ""}
+        <button type="button" class="fk-btn fk-btn-secondary" id="brand-dna-refine" ${loading || !result ? "disabled" : ""}>✏ Refine</button>
+        <button type="button" class="fk-btn ${hasAcceptedResult ? "fk-btn-secondary" : "fk-btn-primary"}" id="brand-dna-regenerate" ${loading ? "disabled" : ""}>🔄 ${result ? "Regenerate" : "Generate Brand DNA"}</button>
       </div>
     </div>
     ${isReassessment ? `<p class="bc-helper">Your Founder Story adds important context to your Brand Archetype. We’ve reassessed the fit for you. Review the result, or keep your existing Archetype unchanged.</p>` : ""}
@@ -6760,7 +6761,7 @@ function showBrandAvatarRecommendation() {
   if (document.getElementById("brand-avatar-next-recommendation")) return;
   const overlay = document.createElement("div");
   overlay.id = "brand-avatar-next-recommendation"; overlay.className = "brand-confirm-modal";
-  overlay.innerHTML = `<div class="brand-confirm-card"><h3>Your Brand DNA is ready</h3><p>Create your Brand Avatar next to turn your archetype, personality, and visual identity into a recognizable character.</p><div class="brand-confirm-actions"><button type="button" data-later>Maybe later</button><button type="button" class="primary-add" data-next>Create Brand Avatar</button></div></div>`;
+  overlay.innerHTML = `<div class="brand-confirm-card"><h3>Your Brand DNA is ready</h3><p>Create your Brand Avatar next to turn your archetype, personality, and visual identity into a recognizable character.</p><div class="brand-confirm-actions"><button type="button" class="fk-btn fk-btn-ghost" data-later>Maybe later</button><button type="button" class="fk-btn fk-btn-primary" data-next>Create Brand Avatar</button></div></div>`;
   const close = () => overlay.remove();
   overlay.querySelector("[data-later]").addEventListener("click", close);
   overlay.querySelector("[data-next]").addEventListener("click", () => { close(); document.querySelector("#brand-avatar-generate")?.focus(); });
@@ -6771,7 +6772,7 @@ function showFirstCampaignRecommendation() {
   if (document.getElementById("first-campaign-next-recommendation")) return;
   const overlay = document.createElement("div");
   overlay.id = "first-campaign-next-recommendation"; overlay.className = "brand-confirm-modal";
-  overlay.innerHTML = `<div class="brand-confirm-card"><h3>Your brand foundation is ready</h3><p>Turn your Brand DNA into your first campaign and start building it directly on the Canvas.</p><div class="brand-confirm-actions"><button type="button" data-later>Explore Brand Brain</button><button type="button" class="primary-add" data-next>Create First Campaign</button></div></div>`;
+  overlay.innerHTML = `<div class="brand-confirm-card"><h3>Your brand foundation is ready</h3><p>Turn your Brand DNA into your first campaign and start building it directly on the Canvas.</p><div class="brand-confirm-actions"><button type="button" class="fk-btn fk-btn-ghost" data-later>Explore Brand Brain</button><button type="button" class="fk-btn fk-btn-primary" data-next>Create First Campaign</button></div></div>`;
   const close = () => overlay.remove();
   overlay.querySelector("[data-later]").addEventListener("click", close);
   overlay.querySelector("[data-next]").addEventListener("click", () => { close(); setAppMode("canvas"); el.createCampaignButton?.click(); });
@@ -6832,17 +6833,17 @@ function renderBrandCoreEditor() {
   } else if (key === "toneOfVoice" || key === "messagingPillars" || key === "contentGuidelines") {
     const title = key === "toneOfVoice" ? "Add trait" : key === "messagingPillars" ? "Add pillar" : "Add guideline";
     const listPrefix = key === "messagingPillars" ? "ol" : "ul";
-    const listItems = value.map((v, i) => `<li data-i="${i}">${v}<button type="button">✕</button></li>`).join("");
-    el.brandEditorPanel.insertAdjacentHTML("beforeend", `<label>${title}</label><div class="posting-actions bc-add-row"><input id="bc-list-add" placeholder="${title}"/><button type="button" id="bc-list-plus">+</button></div><${listPrefix} class="bc-edit-list">${listItems}</${listPrefix}>`);
+    const listItems = value.map((v, i) => `<li data-i="${i}">${v}<button type="button" class="bc-editor-icon-action fk-btn fk-btn-ghost" aria-label="Remove item">✕</button></li>`).join("");
+    el.brandEditorPanel.insertAdjacentHTML("beforeend", `<label>${title}</label><div class="posting-actions bc-add-row"><input id="bc-list-add" placeholder="${title}"/><button type="button" class="bc-editor-icon-action fk-btn fk-btn-primary" id="bc-list-plus" aria-label="${title}">+</button></div><${listPrefix} class="bc-edit-list">${listItems}</${listPrefix}>`);
     el.brandEditorPanel.querySelector("button").addEventListener("click", () => { const v = el.brandEditorPanel.querySelector("#bc-list-add").value.trim(); if (!v) return; value.push(v); saveBrandBrainState(); renderBrandCoreEditor(); });
     el.brandEditorPanel.querySelectorAll("li button").forEach((btn) => btn.addEventListener("click", (e) => { const idx = Number(e.target.closest("li").dataset.i); value.splice(idx, 1); saveBrandBrainState(); renderBrandCoreEditor(); }));
   } else if (key === "dosAndDonts") {
     const d = value;
     el.brandEditorPanel.insertAdjacentHTML("beforeend", `
-      <label>Do</label><div class="posting-actions bc-add-row"><input id="bc-do-add" placeholder="Add Do"/><button type="button">+</button></div>
-      <ul class="bc-edit-list">${d.dos.map((v, i) => `<li data-i="${i}" data-t="do">${v}<button type="button">✕</button></li>`).join("")}</ul>
-      <label>Don't</label><div class="posting-actions bc-add-row"><input id="bc-dont-add" placeholder="Add Don't"/><button type="button" id="bc-dont-plus">+</button></div>
-      <ul class="bc-edit-list">${d.donts.map((v, i) => `<li data-i="${i}" data-t="dont">${v}<button type="button">✕</button></li>`).join("")}</ul>`);
+      <label>Do</label><div class="posting-actions bc-add-row"><input id="bc-do-add" placeholder="Add Do"/><button type="button" class="bc-editor-icon-action fk-btn fk-btn-primary" aria-label="Add Do">+</button></div>
+      <ul class="bc-edit-list">${d.dos.map((v, i) => `<li data-i="${i}" data-t="do">${v}<button type="button" class="bc-editor-icon-action fk-btn fk-btn-ghost" aria-label="Remove Do">✕</button></li>`).join("")}</ul>
+      <label>Don't</label><div class="posting-actions bc-add-row"><input id="bc-dont-add" placeholder="Add Don't"/><button type="button" class="bc-editor-icon-action fk-btn fk-btn-primary" id="bc-dont-plus" aria-label="Add Don't">+</button></div>
+      <ul class="bc-edit-list">${d.donts.map((v, i) => `<li data-i="${i}" data-t="dont">${v}<button type="button" class="bc-editor-icon-action fk-btn fk-btn-ghost" aria-label="Remove Don't">✕</button></li>`).join("")}</ul>`);
     el.brandEditorPanel.querySelector("button").addEventListener("click", () => { const v = el.brandEditorPanel.querySelector("#bc-do-add").value.trim(); if (!v) return; d.dos.push(v); saveBrandBrainState(); renderBrandCoreEditor(); });
     el.brandEditorPanel.querySelector("#bc-dont-plus").addEventListener("click", () => { const v = el.brandEditorPanel.querySelector("#bc-dont-add").value.trim(); if (!v) return; d.donts.push(v); saveBrandBrainState(); renderBrandCoreEditor(); });
     el.brandEditorPanel.querySelectorAll("li button").forEach((btn) => btn.addEventListener("click", (e) => { const li = e.target.closest("li"); const idx = Number(li.dataset.i); if (li.dataset.t === "do") d.dos.splice(idx, 1); else d.donts.splice(idx, 1); saveBrandBrainState(); renderBrandCoreEditor(); }));
@@ -6851,7 +6852,7 @@ function renderBrandCoreEditor() {
     ["bc-good","bc-avoid"].forEach((id) => el.brandEditorPanel.querySelector(`#${id}`).addEventListener("input", () => { value.good = el.brandEditorPanel.querySelector("#bc-good").value; value.avoid = el.brandEditorPanel.querySelector("#bc-avoid").value; saveBrandBrainState(); renderBrandCoreTiles(); }));
   } else if (key === "brandAssets") {
     const logoStatus = value.logoAsset?.status || (value.logo ? "persisted" : "not_found");
-    el.brandEditorPanel.insertAdjacentHTML("beforeend", `<label>Domain URL</label><input id="bc-domain" value="${escapeHtml(value.domain || "")}"/><button id="bc-analyze-domain" type="button">Analyze Website</button><label>Typography</label><input id="bc-typo" value="${escapeHtml(value.typography || "")}"/><label>Primary company logo</label>${value.logo ? `<img class="bc-primary-logo" src="${escapeHtml(value.logo)}" alt="Saved primary company logo"/>` : `<p class="bc-helper">No usable logo was found. You can add one now or continue.</p>`}<p class="bc-helper" data-logo-status>${escapeHtml(logoStatus.replace(/_/g, " "))}</p><div class="posting-actions bc-add-row"><input id="bc-logo-upload" type="file" accept="image/png,image/jpeg,image/webp,image/gif"/><button type="button" id="bc-logo-remove" ${value.logo ? "" : "disabled"}>Remove logo</button></div><label>Palette</label><div class="posting-actions bc-add-row"><input id="bc-color-add" placeholder="#AABBCC"/><input id="bc-color-picker" type="color" value="#6f5bff"/><button type="button" id="bc-color-plus">+</button></div><div class="bc-tags">${(value.colors||[]).map((c,i)=>`<span data-i="${i}">${c}</span>`).join("")}</div>`);
+    el.brandEditorPanel.insertAdjacentHTML("beforeend", `<label>Domain URL</label><input id="bc-domain" value="${escapeHtml(value.domain || "")}"/><button id="bc-analyze-domain" class="fk-btn fk-btn-primary" type="button">Analyze Website</button><label>Typography</label><input id="bc-typo" value="${escapeHtml(value.typography || "")}"/><label>Primary company logo</label>${value.logo ? `<img class="bc-primary-logo" src="${escapeHtml(value.logo)}" alt="Saved primary company logo"/>` : `<p class="bc-helper">No usable logo was found. You can add one now or continue.</p>`}<p class="bc-helper" data-logo-status>${escapeHtml(logoStatus.replace(/_/g, " "))}</p><div class="bc-logo-actions"><input id="bc-logo-upload" class="bc-logo-upload-input" type="file" accept="image/png,image/jpeg,image/webp,image/gif"/><label for="bc-logo-upload" class="bc-logo-upload-action fk-btn fk-btn-secondary">${value.logo ? "Replace logo" : "Upload logo"}</label><button type="button" id="bc-logo-remove" class="bc-logo-remove fk-btn fk-btn-ghost" ${value.logo ? "" : "disabled"}>Remove logo</button></div><label>Palette</label><div class="posting-actions bc-add-row"><input id="bc-color-add" placeholder="#AABBCC"/><input id="bc-color-picker" type="color" value="#6f5bff"/><button type="button" id="bc-color-plus" class="bc-editor-icon-action fk-btn fk-btn-primary" aria-label="Add color">+</button></div><div class="bc-tags">${(value.colors||[]).map((c,i)=>`<span data-i="${i}">${c}</span>`).join("")}</div>`);
     ["bc-domain","bc-typo"].forEach((id) => el.brandEditorPanel.querySelector(`#${id}`).addEventListener("input", () => { value.domain = el.brandEditorPanel.querySelector("#bc-domain").value; value.typography = el.brandEditorPanel.querySelector("#bc-typo").value; saveBrandBrainState(); renderBrandCoreTiles(); }));
     el.brandEditorPanel.querySelector("#bc-logo-upload").addEventListener("change", (event) => replacePrimaryBrandLogo(event.target.files?.[0]));
     el.brandEditorPanel.querySelector("#bc-logo-remove").addEventListener("click", () => { value.logo = ""; value.logoAsset = { ...(value.logoAsset || {}), kind: "company_logo", role: "primary", status: "rejected", rejectedAt: new Date().toISOString() }; saveBrandBrainState(); renderBrandCoreTiles(); renderBrandCoreEditor(); });
@@ -6863,7 +6864,7 @@ function renderBrandCoreEditor() {
     el.brandEditorPanel.querySelector("#bc-color-plus").addEventListener("click", () => { const c = (el.brandEditorPanel.querySelector("#bc-color-add").value.trim() || el.brandEditorPanel.querySelector("#bc-color-picker").value.trim()).toUpperCase(); if (!/^#([0-9A-F]{6})$/.test(c)) return; value.colors.push(c); saveBrandBrainState(); renderBrandCoreEditor(); });
     el.brandEditorPanel.querySelectorAll(".bc-tags span").forEach((chip) => chip.addEventListener("click", () => { value.colors.splice(Number(chip.dataset.i),1); saveBrandBrainState(); renderBrandCoreEditor(); }));
   } else if (key === "personas") {
-    el.brandEditorPanel.insertAdjacentHTML("beforeend", `<div class="posting-actions bc-add-row"><input id="bc-p-name" placeholder="Persona"/><input id="bc-p-note" placeholder="Label"/><button type="button">+</button></div><ul class="bc-edit-list">${value.map((p, i) => `<li data-i="${i}">${p.name} <small>${p.note}</small><button type="button">✕</button></li>`).join("")}</ul>`);
+    el.brandEditorPanel.insertAdjacentHTML("beforeend", `<div class="posting-actions bc-add-row"><input id="bc-p-name" placeholder="Persona"/><input id="bc-p-note" placeholder="Label"/><button type="button" class="bc-editor-icon-action fk-btn fk-btn-primary" aria-label="Add persona">+</button></div><ul class="bc-edit-list">${value.map((p, i) => `<li data-i="${i}">${p.name} <small>${p.note}</small><button type="button" class="bc-editor-icon-action fk-btn fk-btn-ghost" aria-label="Remove persona">✕</button></li>`).join("")}</ul>`);
     el.brandEditorPanel.querySelector("button").addEventListener("click", () => { const n = el.brandEditorPanel.querySelector("#bc-p-name").value.trim(); if (!n) return; value.push({ name: n, note: el.brandEditorPanel.querySelector("#bc-p-note").value.trim() }); saveBrandBrainState(); renderBrandCoreEditor(); });
     el.brandEditorPanel.querySelectorAll("li button").forEach((btn) => btn.addEventListener("click", (e) => { value.splice(Number(e.target.closest("li").dataset.i), 1); saveBrandBrainState(); renderBrandCoreEditor(); }));
   } else if (key === "keywords") {
