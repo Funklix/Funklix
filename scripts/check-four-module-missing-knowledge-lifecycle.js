@@ -1,0 +1,10 @@
+'use strict';
+const assert = require('assert'); const fs = require('fs');
+const app = fs.readFileSync('app.js','utf8'); const registry = require('../knowledge-module-registry');
+assert.deepStrictEqual(['market_research','business_plan','pitch_deck','whitepaper'].map(x=>registry.getModuleDefinition(x).id), ['market_research','business_plan','pitch_deck','whitepaper']);
+assert(app.includes('STRATEGY_MODULE_CONFIG[definition.id]'));
+assert(app.includes('evaluateKnowledgeModule?.({ state, moduleType: definition.id })?.ready === true'));
+assert(app.includes('if (typedDefinition?.id && !STRATEGY_MODULE_CONFIG[typedDefinition.id])'));
+assert(app.includes('getStrategyModuleConfig(tile)\n        ? renderStrategyModuleCardContent(tile)'));
+assert(!/moduleData\.(pitchDeck|whitepaper)/.test(app));
+console.log('Four-module missing-knowledge boundary checks passed.');

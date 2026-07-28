@@ -4604,7 +4604,9 @@ function getDashboardKnowledgeInputStatus() {
     const definition = getMissingKnowledgeModuleDefinitionForRequest(label);
     return {
       label,
-      exists: Boolean(definition?.id && presentModuleIds.has(definition.id))
+      exists: Boolean(definition?.id && (STRATEGY_MODULE_CONFIG[definition.id]
+        ? window.KnowledgeModuleDependencyEngine?.evaluateKnowledgeModule?.({ state, moduleType: definition.id })?.ready === true
+        : presentModuleIds.has(definition.id)))
     };
   });
 }
@@ -4765,6 +4767,210 @@ function getValidPersistedMissingKnowledgeModuleDefinition(tile) {
 
 function isFounderStoryCustomTile(tile) {
   return getValidPersistedMissingKnowledgeModuleDefinition(tile)?.id === "founder_story";
+}
+
+const STRATEGY_MODULE_CONFIG = Object.freeze({
+  market_research: Object.freeze({
+    namespace: "marketResearch", label: "Market Research", endpoint: "/api/generate-market-research",
+    generationHelp: "Generate a structured first draft from the information entered here and your accepted Brand Brain knowledge. Funklix will organize supported information into the relevant sections and leave unknown facts open for review.",
+    fields: Object.freeze([
+      ["Market Definition", [["marketCategory", "Market category"], ["geographicFocus", "Geographic focus"], ["marketScope", "Market scope"], ["researchObjective", "Research objective"], ["researchDate", "Research date"]]],
+      ["Target Customers", [["customerSegments", "Customer segments", true], ["primaryNeeds", "Primary needs", true], ["buyingTriggers", "Buying triggers", true], ["adoptionBarriers", "Adoption barriers", true]]],
+      ["Competitive Landscape", [["competitors", "Competitors", true], ["alternatives", "Alternatives", true], ["differentiationOpportunities", "Differentiation opportunities", true]]],
+      ["Market Dynamics", [["trends", "Trends", true], ["opportunities", "Opportunities", true], ["risks", "Risks", true]]],
+      ["Strategic Implications", [["positioningImplications", "Positioning implications", true], ["messagingImplications", "Messaging implications", true], ["channelImplications", "Channel implications", true], ["recommendedNextSteps", "Recommended next steps", true]]],
+      ["Evidence and Assumptions", [["userProvidedFacts", "User-provided facts", true], ["assumptionsToValidate", "Assumptions requiring confirmation", true], ["sourceNotes", "Source notes", true]]]
+    ])
+  }),
+  business_plan: Object.freeze({
+    namespace: "businessPlan", label: "Business Plan", endpoint: "/api/generate-business-plan",
+    generationHelp: "Generate a structured first draft from the information entered here and your accepted Brand Brain knowledge. Funklix will organize the available information into a practical business-plan structure and leave unsupported details open for review.",
+    fields: Object.freeze([
+      ["Business Overview", [["businessSummary", "Business summary"], ["problem", "Problem"], ["solution", "Solution"], ["currentStage", "Current stage"], ["objectives", "Objectives", true]]],
+      ["Customer and Market", [["targetCustomers", "Target customers", true], ["marketNeed", "Market need"], ["competitivePosition", "Competitive position"], ["marketResearchReference", "Market Research reference"]]],
+      ["Business Model", [["offer", "Offer"], ["revenueModel", "Revenue model"], ["pricing", "Pricing (optional)"], ["salesChannels", "Sales channels", true], ["distributionModel", "Distribution model"]]],
+      ["Go-to-Market", [["acquisitionStrategy", "Acquisition strategy", true], ["retentionStrategy", "Retention strategy", true], ["partnerships", "Partnerships", true], ["keyMilestones", "Key milestones", true]]],
+      ["Operations", [["coreActivities", "Core activities", true], ["resources", "Resources", true], ["team", "Team", true], ["operationalRisks", "Operational risks", true]]],
+      ["Financial Assumptions (optional)", [["revenueAssumptions", "Revenue assumptions"], ["costAssumptions", "Cost assumptions"], ["fundingNeeds", "Funding needs"], ["budgetNotes", "Budget notes"]]],
+      ["Validation", [["confirmedFacts", "Confirmed facts", true], ["assumptionsToValidate", "Assumptions requiring confirmation", true], ["openQuestions", "Open questions", true]]]
+    ])
+  })
+});
+
+const STRATEGY_LIFECYCLE_STATUSES = new Set(["empty", "draft", "generating", "needs_review", "saving", "accepted", "stale", "error"]);
+const activeStrategyModuleGenerations = new Map();
+const activeStrategyModulePersistence = new Set();
+
+function getStrategyModuleConfig(tileOrType) {
+  const moduleType = typeof tileOrType === "string" ? tileOrType : getValidPersistedMissingKnowledgeModuleDefinition(tileOrType)?.id;
+  return STRATEGY_MODULE_CONFIG[moduleType] || null;
+}
+
+function emptyStrategyFacts(config) {
+  return config.fields.flatMap(([, fields]) => fields).reduce((facts, [key, , list]) => { facts[key] = list ? [] : ""; return facts; }, {});
+}
+
+function normalizeStrategyFacts(value, config) {
+  const source = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  return config.fields.flatMap(([, fields]) => fields).reduce((facts, [key, , list]) => {
+    facts[key] = list
+      ? (Array.isArray(source[key]) ? source[key] : typeof source[key] === "string" ? source[key].split(/\n+/) : []).map((item) => String(item || "").trim()).filter(Boolean).slice(0, 20)
+      : String(source[key] || "").trim().slice(0, 1600);
+    return facts;
+  }, {});
+}
+
+function normalizeStrategyModuleData(tile, { restoration = false } = {}) {
+  const config = getStrategyModuleConfig(tile);
+  if (!config) return null;
+  const source = tile?.moduleData?.[config.namespace] && typeof tile.moduleData[config.namespace] === "object" ? tile.moduleData[config.namespace] : {};
+  const accepted = source.accepted && typeof source.accepted === "object" && source.accepted.acceptedAt && source.accepted.revisionId ? {
+    content: String(source.accepted.content || "").slice(0, 6000), structuredFacts: normalizeStrategyFacts(source.accepted.structuredFacts, config),
+    acceptedAt: String(source.accepted.acceptedAt), revisionId: String(source.accepted.revisionId), provenanceRefs: Array.isArray(source.accepted.provenanceRefs) ? source.accepted.provenanceRefs.map(String).slice(0, 20) : []
+  } : null;
+  const draft = source.draft && typeof source.draft === "object" ? {
+    content: String(source.draft.content || "").slice(0, 6000), structuredFacts: normalizeStrategyFacts(source.draft.structuredFacts, config),
+    createdAt: source.draft.createdAt || "", origin: ["manual", "paste", "ai_generation"].includes(source.draft.origin) ? source.draft.origin : "manual",
+    basedOnAcceptedRevisionId: String(source.draft.basedOnAcceptedRevisionId || "")
+  } : null;
+  let status = STRATEGY_LIFECYCLE_STATUSES.has(source.lifecycle?.status) ? source.lifecycle.status : accepted ? "accepted" : draft ? "draft" : "empty";
+  if (restoration && ["generating", "saving"].includes(status)) status = draft ? "needs_review" : accepted ? "accepted" : "error";
+  return { structuredFacts: normalizeStrategyFacts(source.structuredFacts || draft?.structuredFacts, config), draft, accepted,
+    lifecycle: { status, updatedAt: source.lifecycle?.updatedAt || "", lastError: restoration && ["generating", "saving"].includes(source.lifecycle?.status) ? "The interrupted action did not resume. Continue when ready." : String(source.lifecycle?.lastError || "").slice(0, 500) },
+    pendingGeneration: restoration ? null : source.pendingGeneration || null };
+}
+
+function saveStrategyModuleData(tile, data, options) {
+  const config = getStrategyModuleConfig(tile);
+  tile.moduleData = { ...(tile.moduleData || {}), [config.namespace]: data };
+  saveBrandBrainState(options);
+}
+
+function strategyModuleEvaluation(tile) {
+  const moduleType = getValidPersistedMissingKnowledgeModuleDefinition(tile)?.id;
+  const candidateState = {
+    ...state,
+    brandCore: {
+      ...(state.brandCore || {}),
+      customTiles: (Array.isArray(state.brandCore?.customTiles) ? state.brandCore.customTiles : [])
+        .map((current) => current?.id === tile?.id ? tile : current)
+    }
+  };
+  return window.KnowledgeModuleDependencyEngine?.evaluateKnowledgeModule?.({ state: candidateState, moduleType }) || { ready: false, diagnostics: [] };
+}
+
+function strategyStatus(tile) {
+  const data = normalizeStrategyModuleData(tile);
+  if (!data) return { id: "empty", label: "Not started" };
+  const status = data.lifecycle.status;
+  const labels = { empty: "Not started", draft: "Draft", generating: "Generating", needs_review: "Needs review", saving: "Saving", accepted: "Accepted", stale: "Stale", error: "Error" };
+  return { id: status, label: labels[status] || "Not started" };
+}
+
+function renderStrategyModuleCardContent(tile) {
+  const config = getStrategyModuleConfig(tile);
+  const data = normalizeStrategyModuleData(tile);
+  const status = strategyStatus(tile);
+  const acceptedSummary = data?.accepted?.content || Object.values(data?.accepted?.structuredFacts || {}).flat().find(Boolean) || "";
+  const preview = data?.accepted ? acceptedSummary : data?.draft ? "A reviewable draft is saved. Accepted Brand knowledge is unchanged." : `Build a reusable ${config.label} from your inputs.`;
+  const primary = status.id === "empty" ? `Start ${config.label}` : status.id === "needs_review" ? "Review draft" : status.id === "accepted" ? "Edit" : "Continue editing";
+  return `<div class="bc-title">${escapeHtml(config.label)}</div><div class="knowledge-module-status fk-badge" data-status="${escapeHtml(status.id)}">${escapeHtml(status.label)}</div><div class="bc-preview"><p>${escapeHtml(String(preview).slice(0, 150))}</p></div><div class="strategy-module-card-actions"><button type="button" class="fk-btn fk-btn-primary" data-strategy-open>${escapeHtml(primary)}</button>${data?.accepted ? `<button type="button" class="fk-btn fk-btn-secondary" data-strategy-generate>Generate new draft</button>` : ""}</div>`;
+}
+
+function createStrategyDraft(tile, facts, content, origin = "manual") {
+  const data = normalizeStrategyModuleData(tile);
+  const config = getStrategyModuleConfig(tile);
+  data.structuredFacts = normalizeStrategyFacts(facts, config);
+  data.draft = { content: String(content || "").slice(0, 6000), structuredFacts: data.structuredFacts, createdAt: data.draft?.createdAt || new Date().toISOString(), origin, basedOnAcceptedRevisionId: data.accepted?.revisionId || "" };
+  data.lifecycle = { status: origin === "ai_generation" ? "needs_review" : "draft", updatedAt: new Date().toISOString(), lastError: "" };
+  data.pendingGeneration = null;
+  saveStrategyModuleData(tile, data);
+  return data;
+}
+
+function strategyReadinessMessage(config, evaluation) {
+  const missing = new Set((evaluation?.diagnostics || []).filter((item) => item.startsWith("missing_cluster:")).map((item) => item.slice("missing_cluster:".length)));
+  const messages = [];
+  if (config.namespace === "marketResearch") {
+    if (missing.has("market_definition") && missing.has("customer_understanding")) messages.push("Add a basic market definition and some customer context.");
+    else if (missing.has("market_definition")) messages.push("Add a basic market definition.");
+    else if (missing.has("customer_understanding")) messages.push("Add some customer context, such as a segment or primary need.");
+    if (missing.has("strategic_insight")) messages.push("Add at least one strategic market insight, such as a trend, opportunity, risk, competitor, or implication.");
+  } else {
+    if (missing.has("business_concept") && missing.has("customer_market")) messages.push("Describe the business or offer and who it serves.");
+    else if (missing.has("business_concept")) messages.push("Describe the business or offer.");
+    else if (missing.has("customer_market")) messages.push("Describe who the business serves or the market need.");
+    if (missing.has("execution_direction")) messages.push("Add at least one commercial or operational direction, such as a sales channel, acquisition approach, objective, or core activity.");
+  }
+  return messages.join(" ") || "Add enough meaningful information across the required strategy clusters.";
+}
+
+function showStrategyConfirm(title, message, confirmLabel) {
+  return new Promise((resolve) => {
+    const overlay = document.createElement("div"); overlay.className = "brand-confirm-modal";
+    overlay.innerHTML = `<div class="brand-confirm-card"><h3>${escapeHtml(title)}</h3><p>${escapeHtml(message)}</p><div class="brand-confirm-actions"><button type="button" class="fk-btn fk-btn-ghost" data-cancel>Cancel</button><button type="button" class="fk-btn fk-btn-primary" data-confirm>${escapeHtml(confirmLabel)}</button></div></div>`;
+    document.body.appendChild(overlay); const close = (value) => { overlay.remove(); resolve(value); };
+    overlay.querySelector("[data-cancel]").addEventListener("click", () => close(false)); overlay.querySelector("[data-confirm]").addEventListener("click", () => close(true));
+    overlay.addEventListener("click", (event) => { if (event.target === overlay) close(false); }); overlay.querySelector("[data-cancel]").focus();
+  });
+}
+
+async function applyStrategyModuleDraft(tile, currentDraft) {
+  if (activeStrategyModulePersistence.has(tile?.id)) return false;
+  activeStrategyModulePersistence.add(tile.id);
+  const config = getStrategyModuleConfig(tile); const data = normalizeStrategyModuleData(tile);
+  const normalizedDraft = { content: String(currentDraft?.content || "").slice(0, 6000), structuredFacts: normalizeStrategyFacts(currentDraft?.structuredFacts, config), createdAt: currentDraft?.createdAt || new Date().toISOString(), origin: currentDraft?.origin || "manual", basedOnAcceptedRevisionId: data.accepted?.revisionId || "" };
+  const candidate = { content: normalizedDraft.content, structuredFacts: normalizedDraft.structuredFacts, acceptedAt: new Date().toISOString(), revisionId: createKnowledgeModuleInstanceId(), provenanceRefs: [normalizedDraft.origin] };
+  const previous = JSON.parse(JSON.stringify(data));
+  const candidateData = { ...data, draft: normalizedDraft, structuredFacts: normalizedDraft.structuredFacts, accepted: candidate, lifecycle: { status: "saving", updatedAt: new Date().toISOString(), lastError: "" }, pendingGeneration: null };
+  const validationTile = { ...tile, moduleData: { ...(tile.moduleData || {}), [config.namespace]: { ...candidateData, lifecycle: { ...candidateData.lifecycle, status: "accepted" } } } };
+  const evaluation = strategyModuleEvaluation(validationTile);
+  if (!evaluation.ready) {
+    data.draft = normalizedDraft; data.structuredFacts = normalizedDraft.structuredFacts;
+    data.lifecycle = { status: "draft", updatedAt: new Date().toISOString(), lastError: "" };
+    saveStrategyModuleData(tile, data);
+    setStrategyEditorMessage(strategyReadinessMessage(config, evaluation), "readiness");
+    activeStrategyModulePersistence.delete(tile.id); return false;
+  }
+  setStrategyEditorMessage("", "");
+  saveStrategyModuleData(tile, candidateData);
+  if (await saveBoardToServer(`${config.namespace}-apply-candidate`) !== true) {
+    previous.lifecycle = { ...previous.lifecycle, status: "error", lastError: "We couldn’t save the accepted version. Your draft is preserved." };
+    saveStrategyModuleData(tile, previous, { markDirty: false }); activeStrategyModulePersistence.delete(tile.id); renderBrandCoreTiles(); renderBrandCoreEditor(); return false;
+  }
+  candidateData.lifecycle = { status: "accepted", updatedAt: new Date().toISOString(), lastError: "" };
+  candidateData.draft = null;
+  saveStrategyModuleData(tile, candidateData);
+  if (await saveBoardToServer(`${config.namespace}-apply-finalize`) !== true) {
+    saveStrategyModuleData(tile, previous, { markDirty: false }); activeStrategyModulePersistence.delete(tile.id); renderBrandCoreTiles(); renderBrandCoreEditor(); return false;
+  }
+  activeStrategyModulePersistence.delete(tile.id);
+  renderBrandCoreTiles(); renderBrandCoreEditor();
+  return true;
+}
+
+function setStrategyEditorMessage(message, tone = "") {
+  const element = el.brandEditorPanel?.querySelector?.("[data-strategy-message]"); if (!element) return; element.textContent = message; element.dataset.tone = tone;
+}
+
+async function generateStrategyModuleDraft(tile) {
+  const config = getStrategyModuleConfig(tile); const tileId = getCustomTileStableId(tile); const boardId = getCurrentBrandBrainBoardId(); const generationUserEmail = String(state.user?.email || "").toLowerCase();
+  if (!config || !tileId || !boardId || activeStrategyModuleGenerations.has(tileId)) return;
+  const data = normalizeStrategyModuleData(tile); const requestId = createKnowledgeModuleInstanceId();
+  const pending = { requestId, boardId, moduleId: tileId, basedOnAcceptedRevisionId: data.accepted?.revisionId || "", startedAt: new Date().toISOString() };
+  data.pendingGeneration = pending; data.lifecycle = { status: "generating", updatedAt: pending.startedAt, lastError: "" }; saveStrategyModuleData(tile, data); renderBrandCoreTiles(); renderBrandCoreEditor();
+  activeStrategyModuleGenerations.set(tileId, pending);
+  try {
+    const response = await fetch(config.endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...pending, explicitInputs: data.draft?.structuredFacts || data.structuredFacts, explicitNarrative: data.draft?.content || "", brandBrainData: state.brandCore }) });
+    const payload = await response.json().catch(() => ({})); if (!response.ok) throw new Error(payload.error || "Draft generation failed");
+    const current = findBrandWorkspaceCanonicalModuleTileIndex(getValidPersistedMissingKnowledgeModuleDefinition(tile)?.id);
+    const liveTile = current >= 0 ? state.brandCore.customTiles[current] : null; const active = activeStrategyModuleGenerations.get(tileId);
+    if (!liveTile || liveTile !== tile || state.currentBoardId !== boardId || String(state.user?.email || "").toLowerCase() !== generationUserEmail || active?.requestId !== requestId || payload.requestId !== requestId) return;
+    createStrategyDraft(tile, payload.draft?.structuredFacts, payload.draft?.content, "ai_generation"); renderBrandCoreTiles(); renderBrandCoreEditor();
+  } catch (error) {
+    if (activeStrategyModuleGenerations.get(tileId)?.requestId !== requestId) return;
+    const latest = normalizeStrategyModuleData(tile); latest.pendingGeneration = null; latest.lifecycle = { status: "error", updatedAt: new Date().toISOString(), lastError: error?.message || "Draft generation failed" }; saveStrategyModuleData(tile, latest); renderBrandCoreTiles(); renderBrandCoreEditor();
+  } finally { if (activeStrategyModuleGenerations.get(tileId)?.requestId === requestId) activeStrategyModuleGenerations.delete(tileId); }
 }
 
 const FOUNDER_STORY_FIELD_DEFINITIONS = Object.freeze([
@@ -5331,6 +5537,51 @@ function renderFounderStoryCustomTileEditor(tile, idx) {
   });
 }
 
+function renderStrategyModuleEditor(tile, idx) {
+  const config = getStrategyModuleConfig(tile); const data = normalizeStrategyModuleData(tile); const status = strategyStatus(tile);
+  const editing = data.draft || { content: data.accepted?.content || "", structuredFacts: data.accepted?.structuredFacts || emptyStrategyFacts(config), origin: "manual" };
+  const fieldsMarkup = config.fields.map(([section, fields]) => `<fieldset class="strategy-module-section"><legend>${escapeHtml(section)}</legend>${fields.map(([key, label, list]) => {
+    const value = editing.structuredFacts?.[key]; const text = list ? (Array.isArray(value) ? value.join("\n") : value || "") : value || "";
+    return `<label for="brand-core-${config.namespace.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`)}-${key.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`)}">${escapeHtml(label)}</label><textarea id="brand-core-${config.namespace.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`)}-${key.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`)}" data-strategy-field="${escapeHtml(key)}" data-list="${list ? "true" : "false"}" rows="${list ? 3 : 2}">${escapeHtml(text)}</textarea>`;
+  }).join("")}</fieldset>`).join("");
+  el.brandEditorTitle.textContent = config.label;
+  el.brandEditorPanel.innerHTML = `<div class="bc-editor-meta"><p class="bc-helper">${escapeHtml(config.label)} Knowledge Module</p><span class="bc-badge">${escapeHtml(status.label)}</span></div>
+    <p class="bc-helper">Create a strategic draft from your inputs. Funklix does not browse the web or verify current market data.</p>
+    ${data.accepted ? `<section class="strategy-accepted-summary"><h5>Current accepted version</h5><p>${escapeHtml((data.accepted.content || Object.values(data.accepted.structuredFacts).flat().find(Boolean) || "Accepted structured knowledge").slice(0, 500))}</p></section>` : ""}
+    <h5>${data.draft ? "Current draft" : data.accepted ? "Edit as a new draft" : "Start draft"}</h5>${fieldsMarkup}
+    <label for="brand-core-${config.namespace.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`)}-narrative">Narrative / pasted existing text</label>
+    <textarea id="brand-core-${config.namespace.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`)}-narrative" data-strategy-narrative rows="7" placeholder="Add an optional plain-language summary. Empty headings and templates do not count as meaningful content.">${escapeHtml(editing.content || "")}</textarea>
+    <p class="bc-helper">Pasted text and AI output remain editable drafts until you review and Apply a sufficiently useful version. You do not need to complete every field.</p>
+    <p class="bc-helper strategy-generation-help">${escapeHtml(config.generationHelp)}</p>
+    <div class="posting-actions strategy-module-editor-actions">
+      <button type="button" class="fk-btn fk-btn-secondary" data-strategy-save>Save draft</button>
+      <button type="button" class="fk-btn fk-btn-secondary" data-strategy-generate ${status.id === "generating" ? "disabled" : ""}>${status.id === "generating" ? "Generating strategic draft…" : "Generate draft"}</button>
+      <button type="button" class="fk-btn fk-btn-primary" data-strategy-apply ${["generating", "saving"].includes(status.id) || state.boardAccess?.canEdit === false ? "disabled" : ""}>Apply</button>
+    </div><p class="bc-helper" data-strategy-message data-tone="${status.id === "error" ? "error" : ""}" aria-live="polite">${escapeHtml(data.lifecycle.lastError || "")}</p>
+    <div class="posting-actions strategy-module-maintenance">${data.draft ? `<button type="button" class="fk-btn fk-btn-ghost" data-strategy-discard>Discard draft</button>` : ""}${data.accepted ? `<button type="button" class="fk-btn fk-btn-ghost" data-strategy-remove-accepted>Remove accepted knowledge</button>` : ""}<button type="button" class="fk-btn fk-btn-ghost" data-strategy-delete>Delete/reset module</button></div>`;
+  const collectCurrentStrategyDraft = (origin = "manual") => {
+    const facts = emptyStrategyFacts(config);
+    el.brandEditorPanel.querySelectorAll("[data-strategy-field]").forEach((input) => { facts[input.dataset.strategyField] = input.dataset.list === "true" ? input.value.split(/\n+/).map((v) => v.trim()).filter(Boolean) : input.value; });
+    return { structuredFacts: normalizeStrategyFacts(facts, config), content: String(el.brandEditorPanel.querySelector("[data-strategy-narrative]")?.value || "").slice(0, 6000), createdAt: data.draft?.createdAt || new Date().toISOString(), origin, basedOnAcceptedRevisionId: data.accepted?.revisionId || "" };
+  };
+  const markDraft = (origin = "manual") => { const current = collectCurrentStrategyDraft(origin); createStrategyDraft(tile, current.structuredFacts, current.content, origin); return current; };
+  el.brandEditorPanel.querySelectorAll("[data-strategy-field], [data-strategy-narrative]").forEach((input) => input.addEventListener("input", (event) => {
+    markDraft(event.inputType === "insertFromPaste" ? "paste" : "manual");
+    const message = el.brandEditorPanel.querySelector("[data-strategy-message]");
+    if (message?.dataset.tone === "readiness") setStrategyEditorMessage("", "");
+  }));
+  el.brandEditorPanel.querySelector("[data-strategy-save]").addEventListener("click", () => { markDraft("manual"); setStrategyEditorMessage("Draft saved locally and queued for board autosave."); renderBrandCoreTiles(); });
+  el.brandEditorPanel.querySelector("[data-strategy-generate]").addEventListener("click", () => { markDraft("manual"); generateStrategyModuleDraft(tile); });
+  el.brandEditorPanel.querySelector("[data-strategy-apply]").addEventListener("click", () => {
+    const current = collectCurrentStrategyDraft(data.draft?.origin || "manual");
+    const button = el.brandEditorPanel.querySelector("[data-strategy-apply]"); button.disabled = true;
+    applyStrategyModuleDraft(tile, current).finally(() => { if (button.isConnected && status.id !== "generating" && state.boardAccess?.canEdit !== false) button.disabled = false; });
+  });
+  el.brandEditorPanel.querySelector("[data-strategy-discard]")?.addEventListener("click", async () => { if (!await showStrategyConfirm("Discard current draft?", "The accepted version will remain unchanged.", "Discard draft")) return; const next = normalizeStrategyModuleData(tile); next.draft = null; next.structuredFacts = emptyStrategyFacts(config); next.lifecycle = { status: next.accepted ? "accepted" : "empty", updatedAt: new Date().toISOString(), lastError: "" }; saveStrategyModuleData(tile, next); renderBrandCoreTiles(); renderBrandCoreEditor(); });
+  el.brandEditorPanel.querySelector("[data-strategy-remove-accepted]")?.addEventListener("click", async () => { if (!await showStrategyConfirm("Remove accepted knowledge?", "Campaigns will stop using this accepted knowledge after the board save succeeds.", "Remove accepted knowledge")) return; const previous = normalizeStrategyModuleData(tile); const pending = JSON.parse(JSON.stringify(previous)); pending.lifecycle = { status: "accepted", updatedAt: new Date().toISOString(), lastError: "" }; pending.pendingRemoval = true; saveStrategyModuleData(tile, pending); if (await saveBoardToServer(`${config.namespace}-remove-request`) !== true) { previous.lifecycle = { ...previous.lifecycle, status: "error", lastError: "Accepted knowledge could not be removed." }; saveStrategyModuleData(tile, previous, { markDirty: false }); } else { const next = JSON.parse(JSON.stringify(previous)); next.accepted = null; next.pendingRemoval = false; next.lifecycle = { status: next.draft ? "draft" : "empty", updatedAt: new Date().toISOString(), lastError: "" }; saveStrategyModuleData(tile, next); if (await saveBoardToServer(`${config.namespace}-remove-finalize`) !== true) { saveStrategyModuleData(tile, previous, { markDirty: false }); } } renderBrandCoreTiles(); renderBrandCoreEditor(); });
+  el.brandEditorPanel.querySelector("[data-strategy-delete]").addEventListener("click", async () => { if (!await showStrategyConfirm("Delete/reset module?", "This removes its draft and accepted knowledge. You can add it again later.", "Delete module")) return; activeStrategyModuleGenerations.delete(tile.id); const previousTiles = state.brandCore.customTiles.slice(); state.brandCore.customTiles = state.brandCore.customTiles.filter((candidate) => candidate !== tile); saveBrandBrainState(); if (await saveBoardToServer(`${config.namespace}-delete`) !== true) { state.brandCore.customTiles = previousTiles; saveBrandBrainState({ markDirty: false }); } state.brandCoreSelectedKey = "brandCore"; renderBrandCoreTiles(); renderBrandCoreEditor(); });
+}
+
 function getPresentBrandWorkspaceCanonicalModuleIds(customTiles = []) {
   const presentModuleIds = new Set();
   if (!Array.isArray(customTiles)) return presentModuleIds;
@@ -5338,14 +5589,14 @@ function getPresentBrandWorkspaceCanonicalModuleIds(customTiles = []) {
   customTiles.forEach((tile) => {
     if (!isValidBrandCustomTile(tile) || isMalformedGeneratedCustomTile(tile)) return;
     const typedDefinition = getValidPersistedMissingKnowledgeModuleDefinition(tile);
-    if (typedDefinition?.id) {
+    if (typedDefinition?.id && !STRATEGY_MODULE_CONFIG[typedDefinition.id]) {
       presentModuleIds.add(typedDefinition.id);
       return;
     }
     const normalizedTitle = normalizeBrandWorkspaceKnowledgeTitle(tile?.title);
     const legacyDefinition = supportedDefinitions
       .find((definition) => normalizeBrandWorkspaceKnowledgeTitle(definition.label) === normalizedTitle);
-    if (legacyDefinition?.id) presentModuleIds.add(legacyDefinition.id);
+    if (legacyDefinition?.id && !STRATEGY_MODULE_CONFIG[legacyDefinition.id]) presentModuleIds.add(legacyDefinition.id);
   });
   return presentModuleIds;
 }
@@ -5899,7 +6150,7 @@ async function loadBoardFromUrlIfPresent() {
     syncRuntimeSessionFromLegacy("board-load");
     state.currentBoardName = data?.name || "";
     state.lastKnownUpdatedAt = data?.updated_at || null;
-    state.brandCore = snapshot ? normalizeBrandCoreState(snapshot) : normalizeBrandCoreState(defaultBrandCoreState());
+    state.brandCore = snapshot ? normalizeBrandCoreState(snapshot, { restoration: true }) : normalizeBrandCoreState(defaultBrandCoreState(), { restoration: true });
     renderBrandCoreTiles();
     renderBrandCoreEditor();
     saveBrandBrainState({ markDirty: false });
@@ -5961,11 +6212,18 @@ function normalizeBrandDnaSnapshot(brandDNA = null) {
   return clonePlainObject(brandDNA);
 }
 
-function normalizeBrandCoreState(brandCore = {}) {
+function normalizeBrandCoreState(brandCore = {}, options = {}) {
   const defaults = defaultBrandCoreState();
   const safeBrandCore = brandCore && typeof brandCore === "object" && !Array.isArray(brandCore) ? brandCore : {};
   const hasIncomingBrandDNA = safeBrandCore.brandDNA && typeof safeBrandCore.brandDNA === "object" && !Array.isArray(safeBrandCore.brandDNA);
 
+  const customTiles = Array.isArray(safeBrandCore.customTiles) ? safeBrandCore.customTiles : [];
+  customTiles.forEach((tile) => {
+    const config = getStrategyModuleConfig(tile);
+    if (!config) return;
+    const normalized = normalizeStrategyModuleData(tile, { restoration: options.restoration === true });
+    tile.moduleData = { ...(tile.moduleData || {}), [config.namespace]: normalized };
+  });
   return {
     ...defaults,
     ...safeBrandCore,
@@ -5981,7 +6239,7 @@ function normalizeBrandCoreState(brandCore = {}) {
       ...defaults.brandAssets,
       ...(safeBrandCore.brandAssets && typeof safeBrandCore.brandAssets === "object" ? safeBrandCore.brandAssets : {})
     },
-    customTiles: Array.isArray(safeBrandCore.customTiles) ? safeBrandCore.customTiles : [],
+    customTiles,
     brandDNA: normalizeBrandDnaSnapshot(hasIncomingBrandDNA ? safeBrandCore.brandDNA : null)
   };
 }
@@ -6077,7 +6335,7 @@ async function persistFounderStoryAcceptance(tile, acceptanceEventKey) {
 function loadBrandBrainState() {
   const raw = localStorage.getItem(brandBrainStorageKey());
   if (raw) {
-    state.brandCore = normalizeBrandCoreState(JSON.parse(raw));
+    state.brandCore = normalizeBrandCoreState(JSON.parse(raw), { restoration: true });
     console.log("Loaded brandBrainState", state.brandCore);
   } else {
     state.brandCore = normalizeBrandCoreState(defaultBrandCoreState());
@@ -6090,6 +6348,7 @@ function loadBrandBrainState() {
 }
 
 function resetBrandBrainForBoardHydration() {
+  activeStrategyModuleGenerations.clear();
   state.brandCore = normalizeBrandCoreState(defaultBrandCoreState());
   state.brandDnaDraft = null;
   state.brandDnaReassessment = null;
@@ -6801,6 +7060,10 @@ function renderBrandCoreEditor() {
       renderFounderStoryCustomTileEditor(tile, idx);
       return;
     }
+    if (getStrategyModuleConfig(tile)) {
+      renderStrategyModuleEditor(tile, idx);
+      return;
+    }
     el.brandEditorTitle.textContent = tile.title || "Custom Tile";
     el.brandEditorPanel.innerHTML = `<div class="bc-editor-meta"><p class="bc-helper">Custom Brand Tile</p><span class="bc-badge">custom</span></div><label>Title</label><input id="bc-custom-title" value="${tile.title || ""}"/><label>Content</label><textarea id="bc-custom-content" rows="5">${tile.content || ""}</textarea><button id="bc-custom-delete" class="bc-custom-delete fk-btn fk-btn-ghost" type="button">Remove custom tile</button>`;
     el.brandEditorPanel.querySelector("#bc-custom-title").addEventListener("input", (e) => { tile.title = e.target.value; saveBrandBrainState(); renderBrandCoreTiles(); });
@@ -6986,7 +7249,9 @@ function renderBrandCoreTiles() {
     card.dataset.bcKey = runtimeKey;
     card.innerHTML = isFounderStoryCustomTile(tile)
       ? renderFounderStoryCustomTileCardContent(tile)
-      : `<div class="bc-title">${tile.title || "Custom Tile"}</div><div class="bc-preview"><p>${(tile.content || "").slice(0, 120)}</p></div><div class="bc-count">custom</div>`;
+      : getStrategyModuleConfig(tile)
+        ? renderStrategyModuleCardContent(tile)
+        : `<div class="bc-title">${tile.title || "Custom Tile"}</div><div class="bc-preview"><p>${(tile.content || "").slice(0, 120)}</p></div><div class="bc-count">custom</div>`;
     const section = getBrandWorkspaceSectionForCustomTile(tile);
     const sectionRow = section ? el.brandCoreCanvas.querySelector(`[data-brand-workspace-section="${section}"] .bc-row`) : null;
     if (sectionRow) sectionRow.appendChild(card);
@@ -14596,6 +14861,13 @@ el.brandCoreCanvas.addEventListener("click", (event) => {
   if (missingKnowledgeAction) {
     event.preventDefault();
     createOrSelectMissingKnowledgeTile(missingKnowledgeAction.dataset.missingKnowledgeModuleId || missingKnowledgeAction.dataset.missingKnowledgeTitle || "");
+    return;
+  }
+  const strategyGenerate = event.target.closest("[data-strategy-generate]");
+  if (strategyGenerate) {
+    const card = strategyGenerate.closest(".bc-node[data-bc-key]");
+    const tile = getCustomTileByRuntimeKey(card?.dataset.bcKey || "").tile;
+    if (tile && getStrategyModuleConfig(tile)) generateStrategyModuleDraft(tile);
     return;
   }
   const n = event.target.closest(".bc-node[data-bc-key]");
