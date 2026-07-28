@@ -1,6 +1,8 @@
 const { pool, ensureBoardsTable } = require('../_boards-storage');
 const { getBoardAccess, normalizeEmail, refreshOwnEditorIdentity } = require('../_board-access');
 const { getSessionUser } = require('../_auth-session');
+const { ensureDocumentTables, pool: documentPool } = require('../_document-records');
+const { deletePrivate } = require('../_document-storage');
 
 const BOARD_COLUMNS = 'id, name, canvas_json, brand_core_snapshot, created_at, updated_at, order_index, owner_id, owner_email, owner_name, owner_avatar, created_by';
 
@@ -148,8 +150,13 @@ module.exports = async function handler(req, res) {
       if (!board) return res.status(404).json({ error: 'Board not found' });
       if (!access?.canDelete) return res.status(403).json({ error: 'Forbidden' });
 
+      await ensureDocumentTables();
+      const linkedDocuments = await documentPool.query("SELECT id::text, storage_key FROM brand_documents WHERE board_id = $1 AND deleted_at IS NULL UNION ALL SELECT id::text, storage_key FROM brand_document_upload_intents WHERE board_id = $1 AND status IN ('pending','failed','expired','cancelled')", [id]);
       const deleted = await pool.query('DELETE FROM boards WHERE id = $1 RETURNING id', [id]);
       if (deleted.rowCount === 0) return res.status(404).json({ error: 'Board not found' });
+      await Promise.allSettled(linkedDocuments.rows.map((document) => deletePrivate(document.storage_key).catch((error) => {
+        console.warn('[BOARD_DOCUMENT_CLEANUP_DEFERRED]', { documentId: document.id, code: error?.name || 'storage_error' });
+      })));
       return res.status(200).json({ id });
     }
 
