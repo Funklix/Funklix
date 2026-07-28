@@ -108,6 +108,8 @@ const state = {
   ,brandDnaReassessment: null
   ,founderStoryAcceptanceInFlight: new Set()
   ,founderStoryAcceptanceHandled: new Set()
+  ,documentSourceStateByTileId: new Map()
+  ,documentSourceOperationByTileId: new Map()
   ,brandAvatarLoading: false
   ,brandFoundationTransitionInFlight: false
   ,appMode: "canvas"
@@ -5052,6 +5054,142 @@ function removeBrandWorkspaceCustomTileAtIndex(tileIndex) {
   renderBrandCoreEditor();
 }
 
+const DOCUMENT_SOURCE_MODULE_TYPES = new Set(["pitch_deck", "whitepaper"]);
+const DOCUMENT_SOURCE_MEDIA_TYPES = Object.freeze({
+  pdf: "application/pdf",
+  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+});
+
+function getDocumentSourceType(tile) {
+  const moduleType = getValidPersistedMissingKnowledgeModuleDefinition(tile)?.id || "";
+  return DOCUMENT_SOURCE_MODULE_TYPES.has(moduleType) ? moduleType : "";
+}
+
+function getDocumentSourceState(tile) {
+  return state.documentSourceStateByTileId.get(tile?.id) || { status: "empty", document: null, error: "", selectedFile: null, progress: 0 };
+}
+
+function setDocumentSourceState(tile, next) {
+  if (!tile?.id) return;
+  state.documentSourceStateByTileId.set(tile.id, { ...getDocumentSourceState(tile), ...next });
+}
+
+function documentSourceRequestParams(tile) {
+  return { boardId: getCurrentBrandBrainBoardId(), tileId: tile?.id || "", sourceType: getDocumentSourceType(tile) };
+}
+
+function documentSourceQuery(tile, extra = {}) {
+  return new URLSearchParams({ ...documentSourceRequestParams(tile), ...extra }).toString();
+}
+
+async function loadDocumentSourceMetadata(tile, { force = false } = {}) {
+  const params = documentSourceRequestParams(tile);
+  if (!params.boardId || !params.tileId || !params.sourceType || (!force && getDocumentSourceState(tile).loading)) return;
+  const requestId = createKnowledgeModuleInstanceId();
+  setDocumentSourceState(tile, { loading: true, metadataRequestId: requestId, error: "" });
+  try {
+    const response = await fetch(`/api/documents/metadata?${documentSourceQuery(tile)}`, { headers: { Accept: "application/json" } });
+    const payload = await response.json().catch(() => ({}));
+    const current = getDocumentSourceState(tile);
+    if (current.metadataRequestId !== requestId || state.currentBoardId !== params.boardId || !state.brandCore.customTiles.some((item) => item?.id === tile.id)) return;
+    if (!response.ok) throw new Error(payload?.error?.message || "Document state could not be loaded.");
+    setDocumentSourceState(tile, { loading: false, status: payload.document ? "uploaded" : "empty", document: payload.document || null, error: "" });
+    if (getCustomTileByRuntimeKey(state.brandCoreSelectedKey).tile?.id === tile.id) renderBrandCoreEditor();
+    renderBrandCoreTiles();
+  } catch (error) {
+    if (getDocumentSourceState(tile).metadataRequestId !== requestId) return;
+    setDocumentSourceState(tile, { loading: false, error: error?.message || "Document state could not be loaded." });
+    if (getCustomTileByRuntimeKey(state.brandCoreSelectedKey).tile?.id === tile.id) renderBrandCoreEditor();
+  }
+}
+
+function validateDocumentSourceFileSelection(file) {
+  if (!file) return "Choose a PDF or DOCX file.";
+  if (file.size <= 0 || file.size > 20 * 1024 * 1024) return "Documents must be 20 MB or smaller.";
+  const extension = String(file.name || "").toLowerCase().split(".").pop();
+  if (extension === "doc" || extension === "docm") return "Legacy DOC and macro-enabled DOCM files are not supported.";
+  if (!DOCUMENT_SOURCE_MEDIA_TYPES[extension]) return "Use a PDF or DOCX file.";
+  return "";
+}
+
+async function uploadDocumentSource(tile) {
+  const current = getDocumentSourceState(tile); const file = current.selectedFile;
+  const selectionError = validateDocumentSourceFileSelection(file);
+  if (selectionError) { setDocumentSourceState(tile, { error: selectionError }); renderBrandCoreEditor(); return; }
+  if (state.documentSourceOperationByTileId.has(tile.id) || state.boardAccess?.canEdit === false) return;
+  const identity = documentSourceRequestParams(tile); const requestId = `doc_${createKnowledgeModuleInstanceId().slice(3)}`;
+  const controller = new AbortController(); state.documentSourceOperationByTileId.set(tile.id, { requestId, controller, boardId: identity.boardId });
+  setDocumentSourceState(tile, { status: current.document ? "replacing" : "uploading", error: "", progress: 0 }); renderBrandCoreEditor(); renderBrandCoreTiles();
+  try {
+    const extension = file.name.toLowerCase().split(".").pop(); const mediaType = DOCUMENT_SOURCE_MEDIA_TYPES[extension];
+    const intentResponse = await fetch("/api/documents/upload-intent", { method: "POST", headers: { "Content-Type": "application/json" }, signal: controller.signal, body: JSON.stringify({ ...identity, requestId, filename: file.name, mediaType }) });
+    const intent = await intentResponse.json().catch(() => ({})); if (!intentResponse.ok) throw new Error(intent?.error?.message || "Upload could not start.");
+    const uploadResponse = await fetch(intent.uploadUrl, { method: "PUT", headers: { "Content-Type": mediaType }, body: file, signal: controller.signal });
+    if (!uploadResponse.ok) throw new Error("The private upload failed. Please try again.");
+    const completeResponse = await fetch("/api/documents/complete", { method: "POST", headers: { "Content-Type": "application/json" }, signal: controller.signal, body: JSON.stringify({ ...identity, requestId }) });
+    const completed = await completeResponse.json().catch(() => ({})); if (!completeResponse.ok) throw new Error(completed?.error?.message || "The uploaded document could not be validated.");
+    const active = state.documentSourceOperationByTileId.get(tile.id);
+    if (active?.requestId !== requestId || state.currentBoardId !== identity.boardId || !state.user?.email || !state.brandCore.customTiles.some((item) => item?.id === tile.id)) return;
+    setDocumentSourceState(tile, { status: "uploaded", document: completed.document, selectedFile: null, progress: 100, error: "" });
+  } catch (error) {
+    if (error?.name !== "AbortError" && state.documentSourceOperationByTileId.get(tile.id)?.requestId === requestId) setDocumentSourceState(tile, { status: current.document ? "uploaded" : "upload_error", document: current.document, error: error?.message || "Upload failed." });
+  } finally {
+    if (state.documentSourceOperationByTileId.get(tile.id)?.requestId === requestId) state.documentSourceOperationByTileId.delete(tile.id);
+    if (getCustomTileByRuntimeKey(state.brandCoreSelectedKey).tile?.id === tile.id) renderBrandCoreEditor(); renderBrandCoreTiles();
+  }
+}
+
+async function deleteDocumentSource(tile, { removeTileAfter = false } = {}) {
+  const current = getDocumentSourceState(tile); const document = current.document; const identity = documentSourceRequestParams(tile);
+  if (state.documentSourceOperationByTileId.has(tile.id)) state.documentSourceOperationByTileId.get(tile.id)?.controller?.abort();
+  if (!document && !removeTileAfter) return true;
+  const requestId = createKnowledgeModuleInstanceId(); state.documentSourceOperationByTileId.set(tile.id, { requestId, boardId: identity.boardId });
+  setDocumentSourceState(tile, { status: "deleting", error: "" }); renderBrandCoreEditor();
+  try {
+    const response = await fetch("/api/documents", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...identity, documentId: document?.documentId || "", deleteForTile: removeTileAfter }) });
+    const payload = await response.json().catch(() => ({})); if (!response.ok) throw new Error(payload?.error?.message || "The document could not be deleted.");
+    if (state.documentSourceOperationByTileId.get(tile.id)?.requestId !== requestId || state.currentBoardId !== identity.boardId) return false;
+    setDocumentSourceState(tile, { status: "empty", document: null, selectedFile: null, error: "" });
+    if (removeTileAfter) removeBrandWorkspaceCustomTileAtIndex(state.brandCore.customTiles.findIndex((item) => item === tile));
+    return true;
+  } catch (error) { if (state.documentSourceOperationByTileId.get(tile.id)?.requestId === requestId) setDocumentSourceState(tile, { status: document ? "uploaded" : "upload_error", document, error: error?.message || "Delete failed." }); return false; }
+  finally { if (state.documentSourceOperationByTileId.get(tile.id)?.requestId === requestId) state.documentSourceOperationByTileId.delete(tile.id); if (!removeTileAfter) { renderBrandCoreEditor(); renderBrandCoreTiles(); } }
+}
+
+function formatDocumentBytes(value) {
+  const bytes = Number(value || 0); if (bytes < 1024) return `${bytes} B`; if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`; return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function renderDocumentSourceCardContent(tile) {
+  const source = getDocumentSourceState(tile); const label = getRuntimeKnowledgeModuleDefinition(getDocumentSourceType(tile))?.label || tile.title || "Document";
+  const preview = source.document?.displayFilename || (source.loading ? "Loading private document…" : "Upload one private PDF or DOCX source.");
+  const status = source.status === "replacing" ? "Replacing" : source.status === "uploading" ? "Uploading" : source.status === "deleting" ? "Deleting" : source.document ? "Uploaded" : "Source only";
+  return `<div class="bc-title">${escapeHtml(label)}</div><div class="bc-preview"><p>${escapeHtml(preview)}</p></div><div class="bc-count">${escapeHtml(status)}</div>`;
+}
+
+function renderDocumentSourceEditor(tile, idx) {
+  const source = getDocumentSourceState(tile); const document = source.document; const sourceLabel = getRuntimeKnowledgeModuleDefinition(getDocumentSourceType(tile))?.label || "Document";
+  const busy = source.loading || ["uploading", "replacing", "deleting"].includes(source.status); el.brandEditorTitle.textContent = sourceLabel;
+  el.brandEditorPanel.innerHTML = `<div class="bc-editor-meta"><p class="bc-helper">Private document source</p><span class="bc-badge">${escapeHtml(source.status.replace(/_/g, " "))}</span></div>
+    <p class="bc-helper">Upload one PDF or DOCX (maximum 20 MB and 100 pages). This private source does not update Brand Knowledge. Analysis and review are not available in Phase A.</p>
+    ${document ? `<section class="document-source-summary fk-card"><strong data-document-name></strong><dl><div><dt>Type</dt><dd>${escapeHtml(document.extension.toUpperCase())}</dd></div><div><dt>Size</dt><dd>${escapeHtml(formatDocumentBytes(document.fileSize))}</dd></div><div><dt>Uploaded</dt><dd>${escapeHtml(new Date(document.uploadedAt).toLocaleString())}</dd></div><div><dt>Validation</dt><dd>Structurally validated; page count ${escapeHtml(document.pageCountStatus === "best_effort_validated" ? `best-effort ${document.pageCount || ""}` : "requires later parser validation")}</dd></div><div><dt>Malware scan</dt><dd>${escapeHtml(document.malwareScanStatus === "not_configured" ? "Not configured — not scanned" : document.malwareScanStatus)}</dd></div></dl><div class="posting-actions"><a class="fk-btn fk-btn-secondary" data-document-download>Download</a><button type="button" class="fk-btn fk-btn-ghost" data-document-delete ${busy ? "disabled" : ""}>Delete document</button></div></section>` : `<p class="document-source-empty">No active document.</p>`}
+    <label for="brand-document-file">${document ? "Choose replacement" : "Choose document"}</label><input id="brand-document-file" class="fk-input" type="file" accept="application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,.pdf,.docx" ${busy ? "disabled" : ""}/>
+    <button id="brand-document-upload" class="fk-btn fk-btn-primary" type="button" ${busy || !source.selectedFile || state.boardAccess?.canEdit === false ? "disabled" : ""}>${source.status === "uploading" ? "Uploading…" : source.status === "replacing" ? "Replacing…" : document ? "Replace active document" : "Upload private document"}</button>
+    <p class="bc-helper" data-document-selection>${source.selectedFile ? escapeHtml(`${source.selectedFile.name} · ${formatDocumentBytes(source.selectedFile.size)}`) : "Selecting a file does not save or analyze it."}</p>
+    <p class="bc-helper document-source-error" aria-live="polite">${escapeHtml(source.error || "")}</p>
+    <button class="fk-btn fk-btn-secondary" type="button" disabled aria-describedby="document-analysis-unavailable">Analyze document</button><p class="bc-helper" id="document-analysis-unavailable">Analysis will be added as a separate controlled step.</p>
+    <details class="document-source-legacy"><summary>Private legacy notes</summary><p class="bc-helper">These earlier notes are preserved privately and excluded from Campaign context.</p><textarea id="bc-custom-content" rows="5">${escapeHtml(tile.content || "")}</textarea></details>
+    <button id="bc-custom-delete" class="bc-custom-delete fk-btn fk-btn-ghost" type="button" ${busy ? "disabled" : ""}>Remove custom tile</button>`;
+  el.brandEditorPanel.querySelector("[data-document-name]")?.append(document.displayFilename);
+  const download = el.brandEditorPanel.querySelector("[data-document-download]"); if (download) download.href = `/api/documents/download?${documentSourceQuery(tile, { documentId: document.documentId })}`;
+  el.brandEditorPanel.querySelector("#brand-document-file").addEventListener("change", (event) => { const selectedFile = event.target.files?.[0] || null; setDocumentSourceState(tile, { selectedFile, error: validateDocumentSourceFileSelection(selectedFile) }); renderDocumentSourceEditor(tile, idx); });
+  el.brandEditorPanel.querySelector("#brand-document-upload").addEventListener("click", () => uploadDocumentSource(tile));
+  el.brandEditorPanel.querySelector("[data-document-delete]")?.addEventListener("click", async () => { if (await showStrategyConfirm("Delete private document?", "This removes the active source file. It does not change Brand Knowledge.", "Delete document")) deleteDocumentSource(tile); });
+  el.brandEditorPanel.querySelector("#bc-custom-content").addEventListener("input", (event) => { tile.content = event.target.value; saveBrandBrainState(); renderBrandCoreTiles(); });
+  el.brandEditorPanel.querySelector("#bc-custom-delete").addEventListener("click", async () => { if (!await showStrategyConfirm("Remove document-source tile?", "Its active private document will be deleted. Existing Brand Knowledge is unchanged.", "Remove tile")) return; await deleteDocumentSource(tile, { removeTileAfter: true }); });
+  if (!source.loading && source.document === null && !source.metadataLoaded) { setDocumentSourceState(tile, { metadataLoaded: true }); loadDocumentSourceMetadata(tile, { force: true }); }
+}
+
 function saveFounderStoryModuleData(tile, fieldValues) {
   const existingModuleData = tile.moduleData && typeof tile.moduleData === "object" && !Array.isArray(tile.moduleData) ? tile.moduleData : {};
   const existingFounderStory = existingModuleData.founderStory && typeof existingModuleData.founderStory === "object" && !Array.isArray(existingModuleData.founderStory) ? existingModuleData.founderStory : {};
@@ -6349,6 +6487,9 @@ function loadBrandBrainState() {
 
 function resetBrandBrainForBoardHydration() {
   activeStrategyModuleGenerations.clear();
+  state.documentSourceOperationByTileId.forEach((operation) => operation?.controller?.abort?.());
+  state.documentSourceOperationByTileId.clear();
+  state.documentSourceStateByTileId.clear();
   state.brandCore = normalizeBrandCoreState(defaultBrandCoreState());
   state.brandDnaDraft = null;
   state.brandDnaReassessment = null;
@@ -7060,6 +7201,10 @@ function renderBrandCoreEditor() {
       renderFounderStoryCustomTileEditor(tile, idx);
       return;
     }
+    if (getDocumentSourceType(tile)) {
+      renderDocumentSourceEditor(tile, idx);
+      return;
+    }
     if (getStrategyModuleConfig(tile)) {
       renderStrategyModuleEditor(tile, idx);
       return;
@@ -7251,6 +7396,8 @@ function renderBrandCoreTiles() {
       ? renderFounderStoryCustomTileCardContent(tile)
       : getStrategyModuleConfig(tile)
         ? renderStrategyModuleCardContent(tile)
+        : getDocumentSourceType(tile)
+          ? renderDocumentSourceCardContent(tile)
         : `<div class="bc-title">${tile.title || "Custom Tile"}</div><div class="bc-preview"><p>${(tile.content || "").slice(0, 120)}</p></div><div class="bc-count">custom</div>`;
     const section = getBrandWorkspaceSectionForCustomTile(tile);
     const sectionRow = section ? el.brandCoreCanvas.querySelector(`[data-brand-workspace-section="${section}"] .bc-row`) : null;
@@ -14110,6 +14257,9 @@ el.googleSigninButton?.addEventListener("click", () => {
   window.location.href = `/api/auth/google/start?returnTo=${encodeURIComponent(returnTo)}`;
 });
 el.authSignoutButton?.addEventListener("click", async () => {
+  state.documentSourceOperationByTileId.forEach((operation) => operation?.controller?.abort?.());
+  state.documentSourceOperationByTileId.clear();
+  state.documentSourceStateByTileId.clear();
   await fetch("/api/auth/session", { method: "DELETE" });
   state.user = null;
   stopPresenceLite();

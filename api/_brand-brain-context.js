@@ -55,6 +55,8 @@ const STRATEGY_MODULES = Object.freeze({
   })
 });
 
+const PRIVATE_DOCUMENT_SOURCE_MODULES = new Set(['pitch_deck', 'whitepaper']);
+
 function validStableModuleId(value) {
   return typeof value === 'string' && /^km_[A-Za-z0-9][A-Za-z0-9_-]{7,}$/.test(value);
 }
@@ -138,7 +140,7 @@ function normalizeBrandBrainData(brandBrainData = {}) {
     },
     keywords: cleanList(data.keywords, 16),
     customContext: customTiles
-      .filter((tile) => !STRATEGY_MODULES[tile?.moduleType])
+      .filter((tile) => !STRATEGY_MODULES[tile?.moduleType] && !PRIVATE_DOCUMENT_SOURCE_MODULES.has(tile?.moduleType))
       .map(formatCustomTile).filter(Boolean).slice(0, 8),
     acceptedStrategyModules
   };
