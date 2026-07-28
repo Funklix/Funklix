@@ -128,15 +128,31 @@ function evaluateFounderStory(instance, state) {
   return { started, ready, accepted, diagnostics };
 }
 
-const PLACEHOLDER_TEXT = /^(?:n\/?a|none|unknown|tbd|to be determined|not provided|placeholder)$/i;
+const PLACEHOLDER_TEXT = /^(?:n\/?a|none|unknown|tbd|to be determined|not provided|placeholder|test)$/i;
+
+function meaningfulNarrative(value) {
+  if (typeof value !== "string") return "";
+  const body = value.split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line && !/^#{1,6}\s+[^\n]+$/.test(line))
+    .join(" ").replace(/\s+/g, " ").trim();
+  return meaningfulKnowledgeValue(body) ? body : "";
+}
 
 function meaningfulKnowledgeValue(value) {
   if (Array.isArray(value)) return value.some(meaningfulKnowledgeValue);
   if (typeof value === "string") {
     const text = value.trim();
-    return Boolean(text && !PLACEHOLDER_TEXT.test(text));
+    return Boolean(text && !PLACEHOLDER_TEXT.test(text) && /[\p{L}\p{N}]/u.test(text) && !/^[\p{P}\p{S}\s]+$/u.test(text));
   }
   return false;
+}
+
+function meaningfulFact(facts, key) {
+  const value = facts?.[key];
+  const label = key.replace(/([A-Z])/g, " $1").trim().toLowerCase();
+  if (typeof value === "string" && value.trim().toLowerCase() === label) return false;
+  return meaningfulKnowledgeValue(value);
 }
 
 function acceptedStrategyFacts(instance, namespace) {
@@ -149,37 +165,42 @@ function acceptedStrategyFacts(instance, namespace) {
     : null;
 }
 
-function strategyResult(instance, namespace, predicate) {
+function strategyResult(instance, namespace, evaluateClusters) {
   const data = instance?.moduleData?.[namespace];
   const started = Boolean(data?.draft && (meaningfulText(data.draft.content) || meaningfulKnowledgeValue(Object.values(data.draft.structuredFacts || {}))));
   const resolved = acceptedStrategyFacts(instance, namespace);
   const accepted = Boolean(resolved);
-  const ready = Boolean(resolved && predicate(resolved.facts));
+  const clusters = resolved ? evaluateClusters(resolved.facts, meaningfulNarrative(resolved.accepted.content)) : {};
+  const missingClusters = Object.entries(clusters).filter(([, ready]) => !ready).map(([cluster]) => cluster);
+  const ready = Boolean(resolved && !missingClusters.length);
   const diagnostics = [];
   if (!started && !accepted) diagnostics.push("module_not_started");
   if (!ready) diagnostics.push("module_not_ready");
   if (!accepted) diagnostics.push("acceptance_required");
+  missingClusters.forEach((cluster) => diagnostics.push(`missing_cluster:${cluster}`));
   return { started, ready, accepted, diagnostics };
 }
 
 function evaluateMarketResearch(instance) {
-  return strategyResult(instance, "marketResearch", (facts) => (
-    meaningfulKnowledgeValue(facts.marketCategory) || meaningfulKnowledgeValue(facts.marketScope)
-  ) && meaningfulKnowledgeValue(facts.customerSegments)
-    && meaningfulKnowledgeValue(facts.primaryNeeds)
-    && (meaningfulKnowledgeValue(facts.competitors) || meaningfulKnowledgeValue(facts.alternatives))
-    && (meaningfulKnowledgeValue(facts.opportunities) || meaningfulKnowledgeValue(facts.risks) || meaningfulKnowledgeValue(facts.trends))
-    && (meaningfulKnowledgeValue(facts.positioningImplications) || meaningfulKnowledgeValue(facts.messagingImplications)
-      || meaningfulKnowledgeValue(facts.channelImplications) || meaningfulKnowledgeValue(facts.recommendedNextSteps)));
+  return strategyResult(instance, "marketResearch", (facts, narrative) => ({
+    market_definition: meaningfulFact(facts, "marketCategory") || meaningfulFact(facts, "marketScope")
+      || /\bmarket|category|sector|industry|space\b/i.test(narrative),
+    customer_understanding: meaningfulFact(facts, "customerSegments") || meaningfulFact(facts, "primaryNeeds")
+      || /\bcustomer|buyer|audience|segment|need|pain|user\b/i.test(narrative),
+    strategic_insight: ["competitors", "alternatives", "trends", "opportunities", "risks", "differentiationOpportunities", "positioningImplications", "messagingImplications", "channelImplications", "recommendedNextSteps"].some((key) => meaningfulFact(facts, key))
+      || /\bcompet|alternative|trend|opportun|risk|differentiat|position|messag|channel|recommend|strategy|strategic\b/i.test(narrative)
+  }));
 }
 
 function evaluateBusinessPlan(instance) {
-  return strategyResult(instance, "businessPlan", (facts) => meaningfulKnowledgeValue(facts.businessSummary)
-    && meaningfulKnowledgeValue(facts.problem) && meaningfulKnowledgeValue(facts.solution)
-    && meaningfulKnowledgeValue(facts.targetCustomers)
-    && (meaningfulKnowledgeValue(facts.offer) || meaningfulKnowledgeValue(facts.revenueModel))
-    && (meaningfulKnowledgeValue(facts.acquisitionStrategy) || meaningfulKnowledgeValue(facts.salesChannels))
-    && (meaningfulKnowledgeValue(facts.objectives) || meaningfulKnowledgeValue(facts.keyMilestones)));
+  return strategyResult(instance, "businessPlan", (facts, narrative) => ({
+    business_concept: ["businessSummary", "problem", "solution", "offer"].some((key) => meaningfulFact(facts, key))
+      || /\bbusiness|offer|product|service|solution|problem|value\b/i.test(narrative),
+    customer_market: ["targetCustomers", "marketNeed", "competitivePosition"].some((key) => meaningfulFact(facts, key))
+      || /\bcustomer|buyer|audience|market|user|client|serve|need|problem\b/i.test(narrative),
+    execution_direction: ["revenueModel", "salesChannels", "distributionModel", "acquisitionStrategy", "retentionStrategy", "partnerships", "objectives", "keyMilestones", "coreActivities", "resources"].some((key) => meaningfulFact(facts, key))
+      || /\brevenue|sales|distribution|acquisition|retention|partner|objective|milestone|operat|execute|resource|channel|commercial\b/i.test(narrative)
+  }));
 }
 
 const READINESS_EVALUATORS = Object.freeze({
