@@ -4,6 +4,7 @@ const { getBoardAccess, normalizeEmail } = require('./_board-access');
 const { DOCUMENT_TYPES, MAX_DOCUMENT_BYTES, sanitizeFilename, validateDocument, DocumentValidationError } = require('./_document-validation');
 const storage = require('./_document-storage');
 const records = require('./_document-records');
+const processing = require('./_document-processing-records');
 
 function noStore(res) { res.setHeader('Cache-Control', 'private, no-store, max-age=0'); res.setHeader('X-Content-Type-Options', 'nosniff'); }
 function clean(value, max = 200) { return typeof value === 'string' ? value.trim().slice(0, max) : ''; }
@@ -68,7 +69,7 @@ async function complete(req, res) {
   try { object = await storage.readPrivate(upload.storage_key); const buffer = await streamToBuffer(object); const validated = validateDocument({ buffer, filename: upload.display_filename, declaredMimeType: object.blob.contentType || upload.declared_media_type });
     const client = await records.pool.connect(); let oldKey = null;
     try { await client.query('BEGIN'); const current = await records.getActiveDocument(auth.boardId, auth.tileId, client, { forUpdate: true }); if ((current?.id || null) !== (upload.expected_document_id || null) || current?.upload_status === 'deleting') throw new DocumentValidationError('stale_upload', 'A newer document change already exists.', 409);
-      if (current) { oldKey = current.storage_key; await client.query("UPDATE brand_documents SET active=FALSE, replaced_at=NOW() WHERE id=$1", [current.id]); }
+      if (current) { oldKey = current.storage_key; await processing.supersedeDocumentProcessing(current, client); await client.query("UPDATE brand_documents SET active=FALSE, replaced_at=NOW() WHERE id=$1", [current.id]); }
       const inserted = await client.query(`INSERT INTO brand_documents(board_id,tile_id,source_type,original_filename,display_filename,media_type,extension,file_size,content_hash,storage_key,malware_scan_status,page_count,page_count_status,created_by,replaced_at,revision) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'not_configured',$11,$12,$13,$14,$15) RETURNING *`, [auth.boardId, auth.tileId, auth.sourceType, upload.original_filename, validated.displayFilename, validated.mediaType, validated.extension, validated.fileSize, validated.contentHash, upload.storage_key, validated.pageCount, validated.pageCountStatus, normalizeEmail(auth.user.email), current ? new Date() : null, (current?.revision || 0) + 1]);
       await client.query("UPDATE brand_document_upload_intents SET status='completed' WHERE id=$1 AND status='pending'", [upload.id]); await client.query('COMMIT');
       if (oldKey) storage.deletePrivate(oldKey).catch(() => console.warn('[DOCUMENT_CLEANUP_DEFERRED]', { documentId: current.id }));
@@ -84,7 +85,7 @@ async function remove(req, res) {
   cancelled.rows.forEach((intent) => storage.deletePrivate(intent.storage_key).catch(() => {}));
   try { await client.query('BEGIN'); row = await records.getActiveDocument(auth.boardId, auth.tileId, client, { forUpdate: true }); if (!row) { await client.query('ROLLBACK'); return res.status(200).json({ document: null }); }
     if ((!deleteForTile && !expected) || (expected && row.id !== expected)) { await client.query('ROLLBACK'); return errorResponse(res, 409, 'stale_document', 'The active document changed. Reload and try again.'); }
-    await client.query("UPDATE brand_documents SET upload_status='deleting' WHERE id=$1", [row.id]); await client.query('COMMIT');
+    await processing.supersedeDocumentProcessing(row, client); await client.query("UPDATE brand_documents SET upload_status='deleting' WHERE id=$1", [row.id]); await client.query('COMMIT');
   } catch (error) { await client.query('ROLLBACK'); throw error; } finally { client.release(); }
   try { await storage.deletePrivate(row.storage_key); await records.pool.query("UPDATE brand_documents SET active=FALSE, upload_status='deleted', deleted_at=NOW() WHERE id=$1 AND upload_status='deleting'", [row.id]); return res.status(200).json({ document: null }); }
   catch (_error) { await records.pool.query("UPDATE brand_documents SET upload_status='uploaded' WHERE id=$1 AND active AND deleted_at IS NULL", [row.id]); return errorResponse(res, 503, 'delete_failed', 'The document could not be deleted. Please try again.'); }
