@@ -151,6 +151,7 @@ module.exports = async function handler(req, res) {
       if (!access?.canDelete) return res.status(403).json({ error: 'Forbidden' });
 
       await ensureDocumentTables();
+      // Processing jobs/results are exact board-bound rows with ON DELETE CASCADE; initialize their schema before deleting the board.
       const linkedDocuments = await documentPool.query("SELECT id::text, storage_key FROM brand_documents WHERE board_id = $1 AND deleted_at IS NULL UNION ALL SELECT id::text, storage_key FROM brand_document_upload_intents WHERE board_id = $1 AND status IN ('pending','failed','expired','cancelled')", [id]);
       const deleted = await pool.query('DELETE FROM boards WHERE id = $1 RETURNING id', [id]);
       if (deleted.rowCount === 0) return res.status(404).json({ error: 'Board not found' });

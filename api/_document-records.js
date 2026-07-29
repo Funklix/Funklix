@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const { pool, ensureBoardsTable } = require('./_boards-storage');
+const { ensureDocumentProcessingTables } = require('./_document-processing-records');
 
 const SOURCE_TYPES = new Set(['pitch_deck', 'whitepaper']);
 let schemaReadyPromise;
@@ -26,7 +27,7 @@ async function ensureDocumentTables() {
       status TEXT NOT NULL DEFAULT 'pending', created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), expires_at TIMESTAMPTZ NOT NULL
     );
     CREATE UNIQUE INDEX IF NOT EXISTS brand_document_pending_tile_uidx ON brand_document_upload_intents(board_id,tile_id) WHERE status = 'pending';
-  `).catch((error) => { schemaReadyPromise = null; throw error; });
+  `).then(() => ensureDocumentProcessingTables()).catch((error) => { schemaReadyPromise = null; throw error; });
   return schemaReadyPromise;
 }
 
