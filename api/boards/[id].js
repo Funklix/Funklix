@@ -4,7 +4,7 @@ const { getSessionUser } = require('../_auth-session');
 const { ensureDocumentTables, pool: documentPool } = require('../_document-records');
 const { deletePrivate } = require('../_document-storage');
 
-const BOARD_COLUMNS = 'id, name, canvas_json, brand_core_snapshot, created_at, updated_at, order_index, owner_id, owner_email, owner_name, owner_avatar, created_by';
+const BOARD_COLUMNS = 'id, name, canvas_json, brand_core_snapshot, brand_id, created_at, updated_at, order_index, owner_id, owner_email, owner_name, owner_avatar, created_by';
 
 module.exports = async function handler(req, res) {
   if (req.method !== 'GET' && req.method !== 'PUT' && req.method !== 'PATCH' && req.method !== 'DELETE') {
