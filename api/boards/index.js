@@ -1,6 +1,7 @@
 const { pool, ensureBoardsTable } = require('../_boards-storage');
 const { getSessionUser } = require('../_auth-session');
 const { normalizeEmail } = require('../_board-access');
+const { getOwnedBrand, isBrandId } = require('../_brand-access');
 
 function cleanBrandDisplayText(value) {
   return typeof value === 'string' ? value.trim() : '';
@@ -62,7 +63,7 @@ module.exports = async function handler(req, res) {
       if (user?.email) {
         const email = normalizeEmail(user.email);
         result = await pool.query(
-          `SELECT b.id, b.name, b.updated_at, b.order_index, b.owner_id, b.owner_email, b.owner_name, b.owner_avatar, b.created_by, b.created_at, b.brand_core_snapshot,
+          `SELECT b.id, b.name, b.updated_at, b.order_index, b.owner_id, b.owner_email, b.owner_name, b.owner_avatar, b.created_by, b.created_at, b.brand_id, b.brand_core_snapshot,
                   CASE
                     WHEN LOWER(COALESCE(b.owner_email, '')) = $1 THEN 'owner'
                     WHEN be.email IS NOT NULL THEN 'editor'
@@ -88,7 +89,7 @@ module.exports = async function handler(req, res) {
       return res.status(200).json({ boards: result.rows.map(serializeBoardListRow) });
     }
 
-    const { name: rawName = '', canvas_json = null, brand_core_snapshot = null } = req.body || {};
+    const { name: rawName = '', canvas_json = null, brand_core_snapshot = null, brand_id = null } = req.body || {};
     const user = getSessionUser(req);
     if (!user?.email) {
       return res.status(401).json({ error: 'Authentication required' });
@@ -101,9 +102,20 @@ module.exports = async function handler(req, res) {
 
     await ensureBoardsTable();
     const ownerEmail = normalizeEmail(user.email);
+    let authoritativeSnapshot = brand_core_snapshot;
+    let linkedBrandId = null;
+    if (brand_id !== null && brand_id !== undefined && brand_id !== '') {
+      if (typeof brand_id !== 'string') return res.status(400).json({ error: 'brand_id must be a string' });
+      const requestedBrandId = brand_id.trim();
+      if (!isBrandId(requestedBrandId)) return res.status(400).json({ error: 'brand_id must be a UUID' });
+      const brand = await getOwnedBrand(requestedBrandId, user, { columns: 'id, brand_core' });
+      if (!brand) return res.status(404).json({ error: 'Brand not found' });
+      linkedBrandId = brand.id;
+      authoritativeSnapshot = brand.brand_core;
+    }
     const result = await pool.query(
-      'INSERT INTO boards (name, canvas_json, brand_core_snapshot, owner_id, owner_email, owner_name, owner_avatar, created_by) VALUES ($1, $2::jsonb, $3::jsonb, $4, $5, $6, $7, $8) RETURNING id, name, canvas_json, brand_core_snapshot, updated_at, owner_id, owner_email, owner_name, owner_avatar, created_by, created_at',
-      [name, JSON.stringify(canvas_json), JSON.stringify(brand_core_snapshot || null), ownerEmail, ownerEmail, user?.name || null, user?.avatar || null, ownerEmail]
+      'INSERT INTO boards (name, canvas_json, brand_core_snapshot, brand_id, owner_id, owner_email, owner_name, owner_avatar, created_by) VALUES ($1, $2::jsonb, $3::jsonb, $4, $5, $6, $7, $8, $9) RETURNING id, name, canvas_json, brand_core_snapshot, brand_id, updated_at, owner_id, owner_email, owner_name, owner_avatar, created_by, created_at',
+      [name, JSON.stringify(canvas_json), JSON.stringify(authoritativeSnapshot || null), linkedBrandId, ownerEmail, ownerEmail, user?.name || null, user?.avatar || null, ownerEmail]
     );
 
     return res.status(200).json(result.rows[0]);
