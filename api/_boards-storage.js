@@ -7,6 +7,8 @@ let schemaReadyPromise = null;
 async function ensureBoardsTable() {
   if (!schemaReadyPromise) {
     schemaReadyPromise = (async () => {
+      const { ensureBrandsTable } = require('./_brands-storage');
+      await ensureBrandsTable();
       await pool.query(`
       CREATE TABLE IF NOT EXISTS boards (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -26,6 +28,14 @@ async function ensureBoardsTable() {
       await pool.query('ALTER TABLE boards ADD COLUMN IF NOT EXISTS owner_name TEXT;');
       await pool.query('ALTER TABLE boards ADD COLUMN IF NOT EXISTS owner_avatar TEXT;');
       await pool.query('ALTER TABLE boards ADD COLUMN IF NOT EXISTS created_by TEXT;');
+      await pool.query('ALTER TABLE boards ADD COLUMN IF NOT EXISTS brand_id UUID;');
+      await pool.query('CREATE INDEX IF NOT EXISTS boards_brand_id_idx ON boards (brand_id);');
+      await pool.query(`
+        DO $$ BEGIN
+          ALTER TABLE boards ADD CONSTRAINT boards_brand_id_fkey FOREIGN KEY (brand_id) REFERENCES brands(id) ON DELETE SET NULL;
+        EXCEPTION WHEN duplicate_object THEN NULL;
+        END $$;
+      `);
 
       await pool.query(`
         CREATE TABLE IF NOT EXISTS board_editors (
@@ -43,7 +53,10 @@ async function ensureBoardsTable() {
       await pool.query('CREATE UNIQUE INDEX IF NOT EXISTS board_editors_board_email_uidx ON board_editors (board_id, email);');
       await pool.query('CREATE INDEX IF NOT EXISTS board_editors_email_idx ON board_editors (email);');
       await pool.query('CREATE INDEX IF NOT EXISTS board_editors_board_id_idx ON board_editors (board_id);');
-    })();
+    })().catch((error) => {
+      schemaReadyPromise = null;
+      throw error;
+    });
   }
   return schemaReadyPromise;
 }
