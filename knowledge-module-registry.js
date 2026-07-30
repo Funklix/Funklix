@@ -315,7 +315,8 @@ const KNOWLEDGE_MODULE_REGISTRY = Object.freeze({
     futureCapabilities: Object.freeze([...FUTURE_UPLOAD_CAPABILITIES, "aiActions"]),
     iconName: "deck",
     allowMultiple: false,
-    category: KNOWLEDGE_MODULE_CATEGORIES.KNOWLEDGE
+    category: KNOWLEDGE_MODULE_CATEGORIES.KNOWLEDGE,
+    activeCreatable: false
   }),
   whitepaper: Object.freeze({
     id: "whitepaper",
@@ -326,7 +327,8 @@ const KNOWLEDGE_MODULE_REGISTRY = Object.freeze({
     futureCapabilities: Object.freeze([...FUTURE_UPLOAD_CAPABILITIES, "aiActions"]),
     iconName: "document",
     allowMultiple: false,
-    category: KNOWLEDGE_MODULE_CATEGORIES.KNOWLEDGE
+    category: KNOWLEDGE_MODULE_CATEGORIES.KNOWLEDGE,
+    activeCreatable: false
   }),
   competitor_research: Object.freeze({
     id: "competitor_research",
@@ -372,13 +374,21 @@ function getModuleDefinition(moduleId) {
   return KNOWLEDGE_MODULE_REGISTRY[normalized] || null;
 }
 
-function getModulesForSection(section) {
+function getModulesForSection(section, options = {}) {
   const normalizedSection = String(section || "").trim().toLowerCase();
-  return Object.values(KNOWLEDGE_MODULE_REGISTRY).filter((definition) => definition.section === normalizedSection);
+  return Object.values(KNOWLEDGE_MODULE_REGISTRY).filter((definition) => (
+    definition.section === normalizedSection
+    && (options.includeInactive === true || definition.activeCreatable !== false)
+  ));
 }
 
 function isKnownModule(moduleId) {
   return Boolean(getModuleDefinition(moduleId));
+}
+
+function isActiveCreatableModule(moduleId) {
+  const definition = getModuleDefinition(moduleId);
+  return Boolean(definition && definition.activeCreatable !== false);
 }
 
 function getModuleCategory(moduleId) {
@@ -508,6 +518,7 @@ const KnowledgeModuleRegistry = Object.freeze({
   getModuleDefinitionForRuntimeStateKey,
   getModulesForSection,
   isKnownModule,
+  isActiveCreatableModule,
   validateKnowledgeModuleRegistry
 });
 

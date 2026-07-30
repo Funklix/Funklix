@@ -4558,7 +4558,7 @@ const DASHBOARD_BRAND_SIGNAL_FIELDS = [
   { key: "brandAssets", label: "Brand Assets" }
 ];
 
-const DASHBOARD_KNOWLEDGE_INPUTS = ["Founder Story", "Market Research", "Pitch Deck", "Whitepaper", "Business Plan"];
+const DASHBOARD_KNOWLEDGE_INPUTS = ["Founder Story", "Market Research", "Business Plan"];
 
 function hasMeaningfulBrandValue(value) {
   if (Array.isArray(value)) return value.some((item) => hasMeaningfulBrandValue(item));
@@ -4616,9 +4616,7 @@ function getDashboardKnowledgeInputStatus() {
 const BRAND_WORKSPACE_MISSING_KNOWLEDGE_MODULE_IDS = Object.freeze([
   "founder_story",
   "market_research",
-  "business_plan",
-  "pitch_deck",
-  "whitepaper"
+  "business_plan"
 ]);
 
 function getKnowledgeModuleRegistryApi() {
@@ -4647,7 +4645,7 @@ function createBrandCustomTile(title = "", content = "", options = {}) {
     content,
     items: []
   };
-  if (options.moduleType) tile.moduleType = options.moduleType;
+  if (options.moduleType && getKnowledgeModuleRegistryApi()?.isActiveCreatableModule?.(options.moduleType) !== false) tile.moduleType = options.moduleType;
   return tile;
 }
 
@@ -5162,28 +5160,22 @@ function formatDocumentBytes(value) {
 
 function renderDocumentSourceCardContent(tile) {
   const source = getDocumentSourceState(tile); const label = getRuntimeKnowledgeModuleDefinition(getDocumentSourceType(tile))?.label || tile.title || "Document";
-  const preview = source.document?.displayFilename || (source.loading ? "Loading private document…" : "Upload one private PDF or DOCX source.");
-  const status = source.status === "replacing" ? "Replacing" : source.status === "uploading" ? "Uploading" : source.status === "deleting" ? "Deleting" : source.document ? "Uploaded" : "Source only";
+  const preview = source.document?.displayFilename || (source.loading ? "Loading private document…" : "No stored legacy document.");
+  const status = source.status === "deleting" ? "Deleting" : source.document ? "Legacy document" : "Legacy tile";
   return `<div class="bc-title">${escapeHtml(label)}</div><div class="bc-preview"><p>${escapeHtml(preview)}</p></div><div class="bc-count">${escapeHtml(status)}</div>`;
 }
 
 function renderDocumentSourceEditor(tile, idx) {
   const source = getDocumentSourceState(tile); const document = source.document; const sourceLabel = getRuntimeKnowledgeModuleDefinition(getDocumentSourceType(tile))?.label || "Document";
-  const busy = source.loading || ["uploading", "replacing", "deleting"].includes(source.status); el.brandEditorTitle.textContent = sourceLabel;
-  el.brandEditorPanel.innerHTML = `<div class="bc-editor-meta"><p class="bc-helper">Private document source</p><span class="bc-badge">${escapeHtml(source.status.replace(/_/g, " "))}</span></div>
-    <p class="bc-helper">Upload one PDF or DOCX (maximum 20 MB and 100 pages). This private source does not update Brand Knowledge. Analysis and review are not available in Phase A.</p>
+  const busy = source.loading || source.status === "deleting"; el.brandEditorTitle.textContent = sourceLabel;
+  el.brandEditorPanel.innerHTML = `<div class="bc-editor-meta"><p class="bc-helper">Legacy private document</p><span class="bc-badge">${escapeHtml(source.status.replace(/_/g, " "))}</span></div>
+    <p class="bc-helper">This document module is no longer active. Existing files remain available to download or delete.</p>
     ${document ? `<section class="document-source-summary fk-card"><strong data-document-name></strong><dl><div><dt>Type</dt><dd>${escapeHtml(document.extension.toUpperCase())}</dd></div><div><dt>Size</dt><dd>${escapeHtml(formatDocumentBytes(document.fileSize))}</dd></div><div><dt>Uploaded</dt><dd>${escapeHtml(new Date(document.uploadedAt).toLocaleString())}</dd></div><div><dt>Validation</dt><dd>Structurally validated; page count ${escapeHtml(document.pageCountStatus === "best_effort_validated" ? `best-effort ${document.pageCount || ""}` : "requires later parser validation")}</dd></div><div><dt>Malware scan</dt><dd>${escapeHtml(document.malwareScanStatus === "not_configured" ? "Not configured — not scanned" : document.malwareScanStatus)}</dd></div></dl><div class="posting-actions"><a class="fk-btn fk-btn-secondary" data-document-download>Download</a><button type="button" class="fk-btn fk-btn-ghost" data-document-delete ${busy ? "disabled" : ""}>Delete document</button></div></section>` : `<p class="document-source-empty">No active document.</p>`}
-    <label for="brand-document-file">${document ? "Choose replacement" : "Choose document"}</label><input id="brand-document-file" class="fk-input" type="file" accept="application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,.pdf,.docx" ${busy ? "disabled" : ""}/>
-    <button id="brand-document-upload" class="fk-btn fk-btn-primary" type="button" ${busy || !source.selectedFile || state.boardAccess?.canEdit === false ? "disabled" : ""}>${source.status === "uploading" ? "Uploading…" : source.status === "replacing" ? "Replacing…" : document ? "Replace active document" : "Upload private document"}</button>
-    <p class="bc-helper" data-document-selection>${source.selectedFile ? escapeHtml(`${source.selectedFile.name} · ${formatDocumentBytes(source.selectedFile.size)}`) : "Selecting a file does not save or analyze it."}</p>
     <p class="bc-helper document-source-error" aria-live="polite">${escapeHtml(source.error || "")}</p>
-    <button class="fk-btn fk-btn-secondary" type="button" disabled aria-describedby="document-analysis-unavailable">Analyze document</button><p class="bc-helper" id="document-analysis-unavailable">Analysis will be added as a separate controlled step.</p>
     <details class="document-source-legacy"><summary>Private legacy notes</summary><p class="bc-helper">These earlier notes are preserved privately and excluded from Campaign context.</p><textarea id="bc-custom-content" rows="5">${escapeHtml(tile.content || "")}</textarea></details>
     <button id="bc-custom-delete" class="bc-custom-delete fk-btn fk-btn-ghost" type="button" ${busy ? "disabled" : ""}>Remove custom tile</button>`;
   el.brandEditorPanel.querySelector("[data-document-name]")?.append(document.displayFilename);
   const download = el.brandEditorPanel.querySelector("[data-document-download]"); if (download) download.href = `/api/documents/download?${documentSourceQuery(tile, { documentId: document.documentId })}`;
-  el.brandEditorPanel.querySelector("#brand-document-file").addEventListener("change", (event) => { const selectedFile = event.target.files?.[0] || null; setDocumentSourceState(tile, { selectedFile, error: validateDocumentSourceFileSelection(selectedFile) }); renderDocumentSourceEditor(tile, idx); });
-  el.brandEditorPanel.querySelector("#brand-document-upload").addEventListener("click", () => uploadDocumentSource(tile));
   el.brandEditorPanel.querySelector("[data-document-delete]")?.addEventListener("click", async () => { if (await showStrategyConfirm("Delete private document?", "This removes the active source file. It does not change Brand Knowledge.", "Delete document")) deleteDocumentSource(tile); });
   el.brandEditorPanel.querySelector("#bc-custom-content").addEventListener("input", (event) => { tile.content = event.target.value; saveBrandBrainState(); renderBrandCoreTiles(); });
   el.brandEditorPanel.querySelector("#bc-custom-delete").addEventListener("click", async () => { if (!await showStrategyConfirm("Remove document-source tile?", "Its active private document will be deleted. Existing Brand Knowledge is unchanged.", "Remove tile")) return; await deleteDocumentSource(tile, { removeTileAfter: true }); });
