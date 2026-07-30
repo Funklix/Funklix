@@ -5,6 +5,7 @@ const { DOCUMENT_TYPES, MAX_DOCUMENT_BYTES, sanitizeFilename, validateDocument, 
 const storage = require('./_document-storage');
 const records = require('./_document-records');
 const processing = require('./_document-processing-records');
+const { documentImportDisabled } = require('./_document-feature');
 
 function noStore(res) { res.setHeader('Cache-Control', 'private, no-store, max-age=0'); res.setHeader('X-Content-Type-Options', 'nosniff'); }
 function clean(value, max = 200) { return typeof value === 'string' ? value.trim().slice(0, max) : ''; }
@@ -42,6 +43,9 @@ async function metadata(req, res) {
 
 async function intent(req, res) {
   const auth = await authorize(req, res, { edit: true }); if (!auth) return;
+  return documentImportDisabled(res);
+  /* Legacy implementation retained for reversible reactivation and lifecycle reference. */
+  /* istanbul ignore next */
   const requestId = clean(req.body?.requestId, 180); const originalFilename = clean(req.body?.filename, 500); const declared = clean(req.body?.mediaType, 150);
   const displayFilename = sanitizeFilename(originalFilename); const extension = displayFilename.toLowerCase().split('.').pop();
   if (!requestId || !/^[A-Za-z0-9_-]{12,180}$/.test(requestId)) return errorResponse(res, 400, 'invalid_request', 'A valid upload request is required.');
@@ -60,11 +64,26 @@ async function intent(req, res) {
   catch (error) { await records.pool.query("UPDATE brand_document_upload_intents SET status='failed' WHERE request_id=$1", [requestId]); throw error; }
 }
 
+async function cancelDisabledUploadIntent(auth, requestId) {
+  await records.ensureDocumentTables();
+  const found = await records.pool.query('SELECT * FROM brand_document_upload_intents WHERE request_id=$1 AND board_id=$2 AND tile_id=$3 AND source_type=$4 LIMIT 1', [requestId, auth.boardId, auth.tileId, auth.sourceType]);
+  const upload = found.rows[0];
+  if (upload?.status !== 'pending') return;
+  const cancelled = await records.pool.query("UPDATE brand_document_upload_intents SET status='cancelled' WHERE id=$1 AND request_id=$2 AND board_id=$3 AND tile_id=$4 AND source_type=$5 AND status='pending' RETURNING storage_key", [upload.id, requestId, auth.boardId, auth.tileId, auth.sourceType]);
+  if (cancelled.rows[0]?.storage_key) await storage.deletePrivate(cancelled.rows[0].storage_key).catch(() => {});
+}
+
 async function complete(req, res) {
   const auth = await authorize(req, res, { edit: true }); if (!auth) return;
-  const requestId = clean(req.body?.requestId, 180); await records.ensureDocumentTables();
+  const requestId = clean(req.body?.requestId, 180);
+  await cancelDisabledUploadIntent(auth, requestId);
+  return documentImportDisabled(res);
+  /* Legacy implementation retained for reversible reactivation and lifecycle reference. */
+  /* istanbul ignore next */
+  await records.ensureDocumentTables();
   const found = await records.pool.query('SELECT * FROM brand_document_upload_intents WHERE request_id=$1 AND board_id=$2 AND tile_id=$3 AND source_type=$4 LIMIT 1', [requestId, auth.boardId, auth.tileId, auth.sourceType]);
-  const upload = found.rows[0]; if (!upload || upload.status !== 'pending' || new Date(upload.expires_at) <= new Date()) return errorResponse(res, 409, 'stale_upload', 'This upload is no longer current.');
+  const upload = found.rows[0];
+  if (!upload || upload.status !== 'pending' || new Date(upload.expires_at) <= new Date()) return errorResponse(res, 409, 'stale_upload', 'This upload is no longer current.');
   let object;
   try { object = await storage.readPrivate(upload.storage_key); const buffer = await streamToBuffer(object); const validated = validateDocument({ buffer, filename: upload.display_filename, declaredMimeType: object.blob.contentType || upload.declared_media_type });
     const client = await records.pool.connect(); let oldKey = null;
@@ -100,4 +119,4 @@ async function download(req, res) {
 }
 
 function handler(operation) { return async (req, res) => { noStore(res); try { if (req.method !== 'GET' && !hasBoundedJsonBody(req)) return errorResponse(res, 413, 'request_too_large', 'The request is too large.'); if (operation === 'metadata' && req.method === 'GET') return metadata(req,res); if (operation === 'intent' && req.method === 'POST') return intent(req,res); if (operation === 'complete' && req.method === 'POST') return complete(req,res); if (operation === 'document' && req.method === 'DELETE') return remove(req,res); if (operation === 'download' && req.method === 'GET') return download(req,res); return res.status(405).json({ error: { code: 'method_not_allowed', message: 'Method not allowed.' } }); } catch (error) { console.error('[DOCUMENT_ROUTE_FAILED]', { operation, code: error?.code || 'internal_error' }); return errorResponse(res, 500, error?.message === 'private_document_storage_unavailable' ? 'storage_unavailable' : 'document_operation_failed', error?.message === 'private_document_storage_unavailable' ? 'Private document storage is not configured.' : 'The document operation failed.'); } }; }
-module.exports = { handler, authorize, streamToBuffer };
+module.exports = { handler, authorize, streamToBuffer, cancelDisabledUploadIntent };

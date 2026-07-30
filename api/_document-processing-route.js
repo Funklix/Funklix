@@ -4,6 +4,7 @@ const { normalizeEmail } = require('./_board-access');
 const documentRecords = require('./_document-records');
 const processing = require('./_document-processing-records');
 const { createScannerProvider } = require('./_document-scanner');
+const { documentImportDisabled } = require('./_document-feature');
 
 function noStore(res) { res.setHeader('Cache-Control', 'private, no-store, max-age=0'); res.setHeader('X-Content-Type-Options', 'nosniff'); }
 function clean(value, max = 200) { return typeof value === 'string' ? value.trim().slice(0, max) : ''; }
@@ -35,6 +36,8 @@ async function authorizeBinding(req, res, { edit = false } = {}) {
 
 async function start(req, res) {
   const auth = await authorizeBinding(req, res, { edit: true }); if (!auth) return;
+  return documentImportDisabled(res);
+  /* istanbul ignore next */
   let row = await processing.startJob(auth.binding, normalizeEmail(auth.user.email));
   if (row.state === 'queued' && !createScannerProvider().configured) row = await processing.blockUnconfiguredJob(auth.binding);
   return res.status(row.state === 'queued' ? 202 : 200).json({ job: processing.publicJob(row) });
@@ -49,6 +52,8 @@ async function status(req, res) {
 
 async function retry(req, res) {
   const auth = await authorizeBinding(req, res, { edit: true }); if (!auth) return;
+  return documentImportDisabled(res);
+  /* istanbul ignore next */
   const before = await processing.getBoundJob(auth.binding);
   if (!before) return errorResponse(res, 404, 'processing_job_not_found', 'Processing has not been started for this document.');
   if (!processing.RETRYABLE_JOB_STATES.has(before.state) || before.attempt_count >= before.max_attempts) return errorResponse(res, 409, 'retry_not_allowed', 'This processing job cannot be retried.');
@@ -92,6 +97,8 @@ async function processClaimedJob(claim, scanner = createScannerProvider()) {
 
 async function run(req, res) {
   if (!internalAuthorized(req)) return errorResponse(res, 401, 'worker_unauthorized', 'Worker authentication required.');
+  return documentImportDisabled(res);
+  /* istanbul ignore next */
   await documentRecords.ensureDocumentTables();
   const workerId = clean(req.body?.workerId, 100);
   if (!/^[A-Za-z0-9._:-]{3,100}$/.test(workerId)) return errorResponse(res, 400, 'invalid_worker', 'A valid worker identifier is required.');
