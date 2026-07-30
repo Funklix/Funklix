@@ -8,7 +8,10 @@ function validObject(value) {
 
 module.exports = async function handler(req, res) {
   if (req.method !== 'GET' && req.method !== 'PUT') return res.status(405).json({ error: 'Method not allowed' });
-  if (!process.env.POSTGRES_URL) return res.status(500).json({ error: 'Server is missing POSTGRES_URL' });
+  if (!process.env.POSTGRES_URL) {
+    console.error('[BRAND_ITEM_FAILURE]', { method: req.method, brandId: req.query?.id || null, error: 'POSTGRES_URL is not configured' });
+    return res.status(500).json({ error: 'Failed to load Brand' });
+  }
   const { id } = req.query || {};
   if (!id) return res.status(400).json({ error: 'id is required' });
   if (!isBrandId(id)) return res.status(400).json({ error: 'id must be a UUID' });
@@ -45,6 +48,13 @@ module.exports = async function handler(req, res) {
     }
     return res.status(200).json(serializeBrand(updated.rows[0]));
   } catch (error) {
-    return res.status(500).json({ error: error?.message || 'Failed to load Brand' });
+    console.error('[BRAND_ITEM_FAILURE]', {
+      method: req.method,
+      brandId: id,
+      ownerEmail,
+      error: error?.message || 'unknown',
+      stack: error?.stack || null
+    });
+    return res.status(500).json({ error: 'Failed to load Brand' });
   }
 };

@@ -1,6 +1,7 @@
 const { pool } = require('./_boards-storage');
 
 const BRAND_COLUMNS = 'id, owner_email, name, brand_core, revision, created_at, updated_at';
+const BRAND_SUMMARY_COLUMNS = 'id, name, revision, created_at, updated_at';
 const MAX_BRAND_NAME_LENGTH = 160;
 
 let schemaReadyPromise = null;
@@ -42,10 +43,23 @@ function serializeBrand(row) {
   };
 }
 
+function serializeBrandSummary(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    name: row.name,
+    revision: Number(row.revision),
+    created_at: row.created_at,
+    updated_at: row.updated_at
+  };
+}
+
 module.exports = {
   pool,
   BRAND_COLUMNS,
+  BRAND_SUMMARY_COLUMNS,
   MAX_BRAND_NAME_LENGTH,
   ensureBrandsTable,
-  serializeBrand
+  serializeBrand,
+  serializeBrandSummary
 };

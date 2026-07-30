@@ -108,7 +108,18 @@ module.exports = async function handler(req, res) {
       if (typeof brand_id !== 'string') return res.status(400).json({ error: 'brand_id must be a string' });
       const requestedBrandId = brand_id.trim();
       if (!isBrandId(requestedBrandId)) return res.status(400).json({ error: 'brand_id must be a UUID' });
-      const brand = await getOwnedBrand(requestedBrandId, user, { columns: 'id, brand_core' });
+      let brand;
+      try {
+        brand = await getOwnedBrand(requestedBrandId, user, { columns: 'id, brand_core' });
+      } catch (error) {
+        console.error('[BOARD_BRAND_LOOKUP_FAILURE]', {
+          brandId: requestedBrandId,
+          ownerEmail,
+          error: error?.message || 'unknown',
+          stack: error?.stack || null
+        });
+        return res.status(500).json({ error: 'Failed to save board' });
+      }
       if (!brand) return res.status(404).json({ error: 'Brand not found' });
       linkedBrandId = brand.id;
       authoritativeSnapshot = brand.brand_core;
