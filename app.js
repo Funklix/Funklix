@@ -67,7 +67,7 @@ const state = {
   ,currentBoardId: null
   ,session: {
     workspaceId: null,
-    // Mirrored from verified canonical Brand state; Board behavior continues to use its snapshot.
+    // Active Brand runtime is intentionally not implemented yet; keep brandId null until a canonical Brand owner exists.
     brandId: null,
     boardId: null,
     source: "initial",
@@ -123,7 +123,6 @@ const state = {
   ,nodeSearchQuery: ""
   ,nodeFilters: { type: new Set(), platform: new Set(), state: new Set(), status: new Set(), owner: new Set() }
   ,user: null
-  ,canonicalBrand: window.BrandClientFoundation.createState()
   ,authConfigured: true
   ,currentBoardOwnerEmail: null
   ,currentBoardOwnerName: null
@@ -183,35 +182,6 @@ const state = {
     }
   }
 };
-
-const canonicalBrandController = window.BrandClientFoundation.createController({ state: state.canonicalBrand, fetchImpl: (...args) => fetch(...args) });
-
-function canonicalBrandSessionKey(user = state.user) {
-  return typeof user?.email === "string" && user.email.trim() ? user.email.trim().toLowerCase() : null;
-}
-
-function resetCanonicalBrandSession(user = state.user) {
-  canonicalBrandController.resetSession(canonicalBrandSessionKey(user));
-  syncRuntimeSessionFromLegacy("canonical-brand-session");
-}
-
-function loadOwnedBrandSummaries(options = {}) {
-  return canonicalBrandController.loadSummaries({ authenticated: Boolean(state.user?.email), force: options.force === true });
-}
-
-function activateOwnedCanonicalBrand(brandId) {
-  return canonicalBrandController.activateBrand(brandId).then((brand) => {
-    if (brand) syncRuntimeSessionFromLegacy("canonical-brand-verified");
-    return brand;
-  });
-}
-
-function observeBoardBrandAssociation(boardPayload = {}) {
-  const brandId = canonicalBrandController.setCurrentBoardBrandId(boardPayload?.brand_id || null);
-  if (brandId && state.user?.email) void activateOwnedCanonicalBrand(brandId);
-  else canonicalBrandController.cancelActiveLoad();
-  return brandId;
-}
 
 const el = {
   appShell: document.querySelector(".app-shell"),
@@ -1247,12 +1217,10 @@ async function saveBoardAsNew(payload) {
     setSaveStatus("Sign in with Google to duplicate this board.");
     return;
   }
-  const saveAsNewPayload = { ...(payload || {}) };
-  delete saveAsNewPayload.brand_id;
   const response = await fetch('/api/boards', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(saveAsNewPayload)
+    body: JSON.stringify(payload)
   });
   const data = await response.json();
   if (response.status === 401) {
@@ -1265,7 +1233,6 @@ async function saveBoardAsNew(payload) {
   if (newId) {
     setPassiveBoardOwnershipDiagnostics(data, "save-as-new-response");
     state.currentBoardId = newId;
-    observeBoardBrandAssociation(data);
     syncRuntimeSessionFromLegacy("save-as-new");
     saveBrandBrainState({ markDirty: false });
     state.currentBoardName = data?.name || payload?.name || "Campaign Canvas Copy";
@@ -1322,7 +1289,6 @@ async function duplicateCurrentBoard() {
     if (!newId) throw new Error('Duplicate board response missing id');
     setPassiveBoardOwnershipDiagnostics(data, "duplicate-board-response");
     state.currentBoardId = newId;
-    observeBoardBrandAssociation(data);
     syncRuntimeSessionFromLegacy("duplicate-board");
     saveBrandBrainState({ markDirty: false });
     state.currentBoardName = data?.name || payload.name;
@@ -2681,21 +2647,15 @@ function renderAuthState() {
 }
 
 async function loadSessionUser() {
-  const previousSessionKey = canonicalBrandSessionKey();
   try {
     const response = await fetch('/api/auth/session');
-    if (response.ok) {
-      const data = await response.json();
-      state.user = data?.user || null;
-      state.authConfigured = data?.authConfigured !== false;
-    } else {
-      state.user = null;
-    }
+    if (!response.ok) return;
+    const data = await response.json();
+    state.user = data?.user || null;
+    state.authConfigured = data?.authConfigured !== false;
   } catch (_error) {
     state.user = null;
   }
-  if (canonicalBrandSessionKey() !== previousSessionKey) resetCanonicalBrandSession();
-  if (state.user?.email) void loadOwnedBrandSummaries();
   updateBoardAccessState();
   renderAuthState();
   setSharePanelState(state.currentBoardId || getBoardIdFromPath(), null, state.currentBoardOwnerEmail, state.currentBoardOwnerName, state.currentBoardOwnerAvatar);
@@ -3755,7 +3715,7 @@ function syncRuntimeSessionFromLegacy(source = "legacy-runtime") {
   const legacyBoardId = resolveExistingBoardId() || null;
   state.session = {
     workspaceId: null,
-    brandId: state.canonicalBrand?.activeBrandVerified ? state.canonicalBrand.activeBrandId : null,
+    brandId: null,
     boardId: legacyBoardId,
     source,
     isInitialized: true
@@ -6259,7 +6219,6 @@ async function saveBoardToServer(trigger = "manual") {
     const returnedId = data?.id || currentBoardId;
     setPassiveBoardOwnershipDiagnostics(data, isUpdate ? "save-board-update-response" : "save-board-create-response");
     if (returnedId) state.currentBoardId = returnedId;
-    if (!isUpdate) observeBoardBrandAssociation(data);
     syncRuntimeSessionFromLegacy(isUpdate ? "save-board-update" : "save-board-create");
     if (data?.name && typeof data.name === "string") state.currentBoardName = data.name;
     state.lastLocalSaveAt = saveTimestamp;
@@ -6339,7 +6298,6 @@ async function loadBoardFromUrlIfPresent() {
     const normalizedCanvasState = withBoardSchemaDefaults(incomingCanvasState);
     state.runtimeDiagnostics.canvasSource = "/boards/:id";
     applyCampaignState(normalizedCanvasState, `Loaded board ${boardId.slice(0, 8)}...`);
-    observeBoardBrandAssociation(data);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(normalizedCanvasState));
     startPresenceLite();
     startBoardRefreshPolling();
@@ -14296,7 +14254,6 @@ el.authSignoutButton?.addEventListener("click", async () => {
   state.documentSourceStateByTileId.clear();
   await fetch("/api/auth/session", { method: "DELETE" });
   state.user = null;
-  resetCanonicalBrandSession(null);
   stopPresenceLite();
   state.presenceViewers = [];
   renderPresenceLite();
@@ -15206,7 +15163,7 @@ function showUnsavedLeaveModal() {
   });
 }
 
-async function createNewBoardFlow(options = {}) {
+async function createNewBoardFlow() {
   if (!state.user?.email) {
     setAuthMessage("Sign in with Google to create a board.");
     setSaveStatus("Sign in with Google to create a board.");
@@ -15218,13 +15175,10 @@ async function createNewBoardFlow(options = {}) {
   }
   const name = (await showCreateBoardModal())?.trim();
   if (!name) return;
-  const requestedBrandId = typeof options?.brandId === "string" ? options.brandId.trim() : "";
-  if (requestedBrandId && (!state.canonicalBrand.activeBrandVerified || state.canonicalBrand.activeBrandId !== requestedBrandId)) return false;
-  const payload = { name, canvas_json: blankCanvasState(), ...(requestedBrandId ? { brand_id: requestedBrandId } : { brand_core_snapshot: defaultBrandCoreState() }) };
   const response = await fetch('/api/boards', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
+    body: JSON.stringify({ name, canvas_json: blankCanvasState(), brand_core_snapshot: defaultBrandCoreState() })
   });
   const data = await response.json();
   if (response.status === 401) {
@@ -15232,15 +15186,9 @@ async function createNewBoardFlow(options = {}) {
     setSaveStatus("Sign in with Google to create a board.");
     return;
   }
-  if (!response.ok || !data?.id) return false;
-  observeBoardBrandAssociation(data);
+  if (!response.ok || !data?.id) return;
   window.location.href = `/boards/${data.id}`;
-  return true;
 }
-
-window.loadOwnedBrandSummaries = (options = {}) => loadOwnedBrandSummaries(options);
-window.activateOwnedCanonicalBrand = (brandId) => activateOwnedCanonicalBrand(brandId);
-window.createNewBoardFromBrand = (brandId) => createNewBoardFlow({ brandId });
 
 async function loadBoardsLibrary() {
   try {
