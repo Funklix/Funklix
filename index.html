@@ -108,30 +108,32 @@
           <div class="logo">CC</div>
           <button id="sidebar-toggle-btn" class="sidebar-toggle fk-btn fk-btn-ghost" type="button" aria-label="Collapse sidebar" title="Collapse sidebar">◀</button>
         </div>
-        <section class="brand-switcher-shell fk-card" aria-label="Current Brand">
-          <span class="brand-switcher-eyebrow">Current Brand</span>
+        <section class="brand-switcher-shell fk-card" aria-label="Workspace Brand context">
+          <span class="brand-switcher-eyebrow">Workspace</span>
           <details class="brand-switcher-details">
             <summary class="brand-switcher-summary">
               <span class="brand-switcher-avatar" aria-hidden="true">B</span>
               <span class="brand-switcher-copy">
                 <strong>No Brand selected</strong>
-                <small>Workspace context</small>
+                <small>Brand · Workspace context</small>
               </span>
               <span class="brand-switcher-chevron" aria-hidden="true">⌄</span>
             </summary>
             <div class="brand-switcher-menu" role="status" aria-live="polite">
               <strong>No Brand selected</strong>
-              <span>Brand switching coming soon.</span>
+              <span>Boards remain available in this Workspace. Brand switching is coming soon.</span>
               <button class="fk-btn fk-btn-secondary" type="button" disabled>Create Brand coming soon</button>
             </div>
           </details>
         </section>
-        <nav>
+        <nav aria-label="Workspace navigation">
+          <span class="sidebar-nav-heading">Workspace</span>
           <button id="home-nav-btn" class="nav-item fk-btn" data-icon="🏠"><span class="nav-label">Home</span></button>
-          <button id="campaign-canvas-nav-btn" class="nav-item fk-btn active" data-icon="🧩"><span class="nav-label">Campaign Canvas</span></button>
-          <button id="boards-nav-btn" class="nav-item fk-btn" data-icon="📚"><span class="nav-label">↳ Boards</span></button>
+          <span class="sidebar-nav-heading">Boards</span>
+          <button id="boards-nav-btn" class="nav-item fk-btn" data-icon="📚"><span class="nav-label">Boards</span></button>
+          <button id="campaign-canvas-nav-btn" class="nav-item nav-item-child fk-btn active" data-icon="🧩"><span class="nav-label">Campaign Canvas</span></button>
           <button class="nav-item fk-btn" data-icon="🗂"><span class="nav-label">Content Workspace</span></button>
-          <button id="brand-core-nav-btn" class="nav-item fk-btn" data-icon="🧠"><span class="nav-label">Brand Core</span></button>
+          <button id="brand-core-nav-btn" class="nav-item nav-item-child fk-btn" data-icon="🧠"><span class="nav-label">Board Brand Core</span></button>
           <button id="ai-brain-nav-btn" class="nav-item fk-btn" data-icon="✨"><span class="nav-label">AI Brain</span></button>
           <button id="insights-nav-btn" class="nav-item fk-btn" data-icon="📈"><span class="nav-label">Insights</span></button>
         </nav>
@@ -420,15 +422,15 @@
         <section id="brand-core-workspace" class="brand-core-workspace fk-section hidden" aria-labelledby="brand-workspace-title">
           <header class="brand-mode-header brand-workspace-hero fk-card">
             <div class="brand-workspace-hero-main">
-              <span class="brand-workspace-kicker fk-badge">Brand Workspace</span>
+              <span class="brand-workspace-kicker fk-badge">Board knowledge snapshot</span>
               <div class="brand-workspace-title-row">
                 <div class="brand-workspace-avatar" id="brand-workspace-avatar" aria-hidden="true">B</div>
                 <div>
-                  <h1 id="brand-workspace-title">Brand Workspace</h1>
+                  <h1 id="brand-workspace-title">Board Brand Core</h1>
                   <p id="brand-workspace-name">Current board Brand</p>
                 </div>
               </div>
-              <p class="brand-workspace-support">Build the strategic foundation your AI and campaigns will use.</p>
+              <p class="brand-workspace-support">Saved with the current Board. This snapshot supports its campaigns and AI without changing a Canonical Brand.</p>
             </div>
             <div class="brand-workspace-hero-side">
               <div class="brand-workspace-readiness" aria-label="Brand readiness summary">
