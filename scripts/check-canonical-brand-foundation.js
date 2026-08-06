@@ -59,6 +59,7 @@ boardsStorage.pool.query = async (sql, params = []) => {
     throw new Error("postgres secret: constraint brands_internal_key SQL SELECT * FROM private_schema");
   }
   if (/^(\s*CREATE|\s*ALTER|\s*DO)/.test(text)) return { rowCount: 0, rows: [] };
+  if (text.includes("to_regclass('boards')")) return { rowCount: 1, rows: [{ boards_exist: true, brands_exist: true }] };
   if (text.includes("INSERT INTO brands")) {
     const row = { id: `33333333-3333-4333-8333-${String(brands.size).padStart(12, "0")}`, owner_email: params[0], name: params[1], brand_core: JSON.parse(params[2]), revision: 1, created_at: now, updated_at: now };
     brands.set(row.id, row); return { rowCount: 1, rows: [row] };
@@ -211,6 +212,7 @@ async function call(route, request) { const response = res(); await route(reques
   assert(boardStorageSource.includes("ON DELETE SET NULL"));
   assert(!/UPDATE boards[\s\S]*SET brand_id/.test(boardStorageSource));
   assert(!boardStorageSource.includes("UPDATE boards SET brand_core_snapshot"));
+  assert(!boardStorageSource.includes("ensureBrandsTable"));
   const putSection = boardItemSource.slice(boardItemSource.indexOf("if (req.method === 'PUT')"), boardItemSource.indexOf("if (req.method === 'PATCH')"));
   assert(!putSection.includes("brand_id =")); assert(!putSection.includes("req.body?.brand_id"));
 
@@ -218,15 +220,39 @@ async function call(route, request) { const response = res(); await route(reques
   const retryProbe = `
     process.env.POSTGRES_URL='postgres://test.invalid/funklix';
     const storage=require('./api/_boards-storage'); const brands=require('./api/_brands-storage');
-    let fail=true,calls=0; storage.pool.query=async(sql)=>{calls++; if(fail){fail=false; throw new Error('first failure')} return {rows:[]}};
-    (async()=>{let rejected=false; try{await brands.ensureBrandsTable()}catch(e){rejected=true} if(!rejected)throw new Error('brand first call must fail'); await brands.ensureBrandsTable(); if(calls!==2)throw new Error('brand retry missing'); await brands.ensureBrandsTable(); if(calls!==2)throw new Error('brand initialization is not idempotent')})().catch(e=>{console.error(e);process.exit(1)});`;
+    let brandCreates=0,fail=true; storage.pool.query=async(sql)=>{const text=String(sql);if(text.includes('CREATE TABLE IF NOT EXISTS brands')){brandCreates++;if(fail){fail=false;throw new Error('first failure')}}if(text.includes("to_regclass('boards')"))return {rows:[{boards_exist:false,brands_exist:true}]};return {rows:[]}};
+    (async()=>{let rejected=false; try{await brands.ensureBrandsTable()}catch(e){rejected=true} if(!rejected)throw new Error('brand first call must fail'); await brands.ensureBrandsTable(); if(brandCreates!==2)throw new Error('brand retry missing'); await brands.ensureBrandsTable(); if(brandCreates!==2)throw new Error('brand initialization is not idempotent')})().catch(e=>{console.error(e);process.exit(1)});`;
   execFileSync(process.execPath, ["-e", retryProbe], { cwd: require("path").resolve(__dirname, ".."), stdio: "pipe" });
   const boardRetryProbe = `
     process.env.POSTGRES_URL='postgres://test.invalid/funklix';
-    const storage=require('./api/_boards-storage'); const brands=require('./api/_brands-storage');
-    let phase='brands',failed=false,boardCreates=0; storage.pool.query=async(sql)=>{if(String(sql).includes('CREATE TABLE IF NOT EXISTS brands'))return {rows:[]}; if(String(sql).includes('CREATE TABLE IF NOT EXISTS boards')){boardCreates++;if(!failed){failed=true;throw new Error('first board failure')}} return {rows:[]}};
+    const storage=require('./api/_boards-storage');
+    let failed=false,boardCreates=0; storage.pool.query=async(sql)=>{const text=String(sql);if(text.includes('CREATE TABLE IF NOT EXISTS boards')){boardCreates++;if(!failed){failed=true;throw new Error('first board failure')}}if(text.includes("to_regclass('boards')"))return {rows:[{boards_exist:true,brands_exist:false}]};return {rows:[]}};
     (async()=>{let rejected=false;try{await storage.ensureBoardsTable()}catch(e){rejected=true}if(!rejected)throw new Error('board first call must fail');await storage.ensureBoardsTable();if(boardCreates!==2)throw new Error('board retry missing');const completedCalls=boardCreates;await storage.ensureBoardsTable();if(boardCreates!==completedCalls)throw new Error('board initialization is not idempotent')})().catch(e=>{console.error(e);process.exit(1)});`;
   execFileSync(process.execPath, ["-e", boardRetryProbe], { cwd: require("path").resolve(__dirname, ".."), stdio: "pipe" });
+
+  const brandFailureIsolationProbe = `
+    process.env.POSTGRES_URL='postgres://test.invalid/funklix';
+    const storage=require('./api/_boards-storage');const brands=require('./api/_brands-storage');
+    let boardCreates=0;
+    storage.pool.query=async(sql)=>{const text=String(sql);if(text.includes('CREATE TABLE IF NOT EXISTS brands'))throw new Error('brand bootstrap failure');if(text.includes('CREATE TABLE IF NOT EXISTS boards'))boardCreates++;if(text.includes("to_regclass('boards')"))return {rows:[{boards_exist:true,brands_exist:false}]};return {rows:[]}};
+    (async()=>{let brandRejected=false;try{await brands.ensureBrandsTable()}catch{brandRejected=true}if(!brandRejected)throw new Error('brand failure did not propagate');await storage.ensureBoardsTable();if(boardCreates!==1)throw new Error('brand failure blocked board initialization')})().catch(e=>{console.error(e);process.exit(1)});`;
+  execFileSync(process.execPath, ["-e", brandFailureIsolationProbe], { cwd: require("path").resolve(__dirname, ".."), stdio: "pipe" });
+
+  const relationshipProbe = `
+    process.env.POSTGRES_URL='postgres://test.invalid/funklix';
+    const storage=require('./api/_boards-storage');const brands=require('./api/_brands-storage');
+    let boards=false,brand=false,relationAttempts=0,failRelation=true,boardCreates=0,brandCreates=0;
+    storage.pool.query=async(sql)=>{const text=String(sql);if(text.includes('CREATE TABLE IF NOT EXISTS boards')){boards=true;boardCreates++}if(text.includes('CREATE TABLE IF NOT EXISTS brands')){brand=true;brandCreates++}if(text.includes("to_regclass('boards')"))return {rows:[{boards_exist:boards,brands_exist:brand}]};if(text.includes('ADD CONSTRAINT boards_brand_id_fkey')){relationAttempts++;if(failRelation){failRelation=false;throw new Error('relationship failure')}}return {rows:[]}};
+    (async()=>{await storage.ensureBoardsTable();if(boardCreates!==1||relationAttempts!==0)throw new Error('boards-first availability failed');await brands.ensureBrandsTable();if(brandCreates!==1||relationAttempts!==1)throw new Error('boards-first reconciliation was not attempted');await storage.ensureBoardsTable();if(relationAttempts!==2)throw new Error('relationship retry missing');await storage.ensureBoardsTable();if(relationAttempts!==2)throw new Error('relationship reconciliation not idempotent')})().catch(e=>{console.error(e);process.exit(1)});`;
+  execFileSync(process.execPath, ["-e", relationshipProbe], { cwd: require("path").resolve(__dirname, ".."), stdio: "pipe" });
+
+  const brandsFirstProbe = `
+    process.env.POSTGRES_URL='postgres://test.invalid/funklix';
+    const storage=require('./api/_boards-storage');const brands=require('./api/_brands-storage');
+    let boards=false,brand=false,relations=0;
+    storage.pool.query=async(sql)=>{const text=String(sql);if(text.includes('CREATE TABLE IF NOT EXISTS boards'))boards=true;if(text.includes('CREATE TABLE IF NOT EXISTS brands'))brand=true;if(text.includes("to_regclass('boards')"))return {rows:[{boards_exist:boards,brands_exist:brand}]};if(text.includes('ADD CONSTRAINT boards_brand_id_fkey'))relations++;return {rows:[]}};
+    (async()=>{await brands.ensureBrandsTable();if(relations!==0)throw new Error('missing boards was not safe');await storage.ensureBoardsTable();if(relations!==1)throw new Error('brands-first relationship was not reconciled')})().catch(e=>{console.error(e);process.exit(1)});`;
+  execFileSync(process.execPath, ["-e", brandsFirstProbe], { cwd: require("path").resolve(__dirname, ".."), stdio: "pipe" });
 
   console.log("Canonical Brand Phase 1A.1 hardening checks passed (mock/contract coverage; no live PostgreSQL integration)." );
 })().catch((error) => { console.error(error); process.exitCode = 1; }).finally(() => { boardsStorage.pool.query = originalQuery; });
