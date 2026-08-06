@@ -3,12 +3,47 @@ const { Pool } = require('pg');
 const pool = new Pool({ connectionString: process.env.POSTGRES_URL });
 
 let schemaReadyPromise = null;
+let brandRelationshipReadyPromise = null;
+
+async function reconcileBrandRelationship() {
+  if (!brandRelationshipReadyPromise) {
+    brandRelationshipReadyPromise = (async () => {
+      const relations = await pool.query(`
+        SELECT to_regclass('boards') IS NOT NULL AS boards_exist,
+               to_regclass('brands') IS NOT NULL AS brands_exist;
+      `);
+      const { boards_exist: boardsExist, brands_exist: brandsExist } = relations.rows[0] || {};
+      if (!boardsExist || !brandsExist) return false;
+
+      await pool.query(`
+        DO $$ BEGIN
+          ALTER TABLE boards ADD CONSTRAINT boards_brand_id_fkey FOREIGN KEY (brand_id) REFERENCES brands(id) ON DELETE SET NULL;
+        EXCEPTION WHEN duplicate_object THEN NULL;
+        END $$;
+      `);
+      return true;
+    })().catch((error) => {
+      brandRelationshipReadyPromise = null;
+      throw error;
+    });
+  }
+
+  const ready = await brandRelationshipReadyPromise;
+  if (!ready) brandRelationshipReadyPromise = null;
+  return ready;
+}
+
+async function reconcileBrandRelationshipWithoutBlockingBoards() {
+  try {
+    await reconcileBrandRelationship();
+  } catch {
+    console.error('[BOARD_BRAND_RELATIONSHIP_RECONCILIATION_FAILURE]', { error: 'Optional Brand relationship reconciliation failed' });
+  }
+}
 
 async function ensureBoardsTable() {
   if (!schemaReadyPromise) {
     schemaReadyPromise = (async () => {
-      const { ensureBrandsTable } = require('./_brands-storage');
-      await ensureBrandsTable();
       await pool.query(`
       CREATE TABLE IF NOT EXISTS boards (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -30,12 +65,6 @@ async function ensureBoardsTable() {
       await pool.query('ALTER TABLE boards ADD COLUMN IF NOT EXISTS created_by TEXT;');
       await pool.query('ALTER TABLE boards ADD COLUMN IF NOT EXISTS brand_id UUID;');
       await pool.query('CREATE INDEX IF NOT EXISTS boards_brand_id_idx ON boards (brand_id);');
-      await pool.query(`
-        DO $$ BEGIN
-          ALTER TABLE boards ADD CONSTRAINT boards_brand_id_fkey FOREIGN KEY (brand_id) REFERENCES brands(id) ON DELETE SET NULL;
-        EXCEPTION WHEN duplicate_object THEN NULL;
-        END $$;
-      `);
 
       await pool.query(`
         CREATE TABLE IF NOT EXISTS board_editors (
@@ -58,10 +87,12 @@ async function ensureBoardsTable() {
       throw error;
     });
   }
-  return schemaReadyPromise;
+  await schemaReadyPromise;
+  await reconcileBrandRelationshipWithoutBlockingBoards();
 }
 
 module.exports = {
   pool,
-  ensureBoardsTable
+  ensureBoardsTable,
+  reconcileBrandRelationship
 };

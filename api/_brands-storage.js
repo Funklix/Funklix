@@ -1,4 +1,4 @@
-const { pool } = require('./_boards-storage');
+const { pool, reconcileBrandRelationship } = require('./_boards-storage');
 
 const BRAND_COLUMNS = 'id, owner_email, name, brand_core, revision, created_at, updated_at';
 const BRAND_SUMMARY_COLUMNS = 'id, name, revision, created_at, updated_at';
@@ -28,7 +28,12 @@ async function ensureBrandsTable() {
       throw error;
     });
   }
-  return schemaReadyPromise;
+  await schemaReadyPromise;
+  try {
+    await reconcileBrandRelationship();
+  } catch {
+    console.error('[BRAND_BOARD_RELATIONSHIP_RECONCILIATION_FAILURE]', { error: 'Optional Board relationship reconciliation failed' });
+  }
 }
 
 function serializeBrand(row) {
