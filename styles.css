@@ -487,7 +487,21 @@ body {
 
 .sidebar nav {
   display: grid;
-  gap: var(--fk-space-2);
+  gap: 4px;
+}
+
+.sidebar-nav-heading {
+  color: var(--fk-color-muted);
+  font-size: 0.62rem;
+  font-weight: var(--fk-font-weight-bold);
+  letter-spacing: 0.08em;
+  margin-top: var(--fk-space-2);
+  padding: 0 var(--fk-space-3);
+  text-transform: uppercase;
+}
+
+.nav-item-child {
+  padding-left: calc(var(--fk-space-3) + var(--fk-space-3));
 }
 
 .nav-item {
@@ -534,6 +548,10 @@ body {
 .app-shell.sidebar-collapsed .brand-switcher-copy,
 .app-shell.sidebar-collapsed .brand-switcher-chevron,
 .app-shell.sidebar-collapsed .brand-switcher-menu {
+  display: none;
+}
+
+.app-shell.sidebar-collapsed .sidebar-nav-heading {
   display: none;
 }
 
