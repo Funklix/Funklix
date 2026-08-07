@@ -32,7 +32,7 @@ for (const id of [
   assert(html.includes(`id="${id}"`), `affected pre-existing DOM ID missing: ${id}`);
 }
 
-assert.doesNotMatch(app, /\/api\/brands/, "app.js must not request Canonical Brands");
+assert.match(app, /fetch\("\/api\/brands", \{ headers: \{ Accept: "application\/json" \} \}\)/, "switcher may request only Canonical Brand summaries");
 assert.doesNotMatch(html + app, /BrandClientFoundation/, "Brand client global must not exist");
 assert.doesNotMatch(html, /<script[^>]+(?:brand-client|brand_client)[^>]*>/i, "Brand client script must not be added");
 

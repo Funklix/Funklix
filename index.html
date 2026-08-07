@@ -110,7 +110,7 @@
         </div>
         <section class="brand-switcher-shell fk-card" aria-label="Workspace Brand context">
           <span class="brand-switcher-eyebrow">Workspace</span>
-          <details class="brand-switcher-details">
+          <details class="brand-switcher-details" id="brand-switcher-details">
             <summary class="brand-switcher-summary">
               <span class="brand-switcher-avatar" aria-hidden="true">B</span>
               <span class="brand-switcher-copy">
@@ -119,9 +119,14 @@
               </span>
               <span class="brand-switcher-chevron" aria-hidden="true">⌄</span>
             </summary>
-            <div class="brand-switcher-menu" role="status" aria-live="polite">
-              <strong>No Brand selected</strong>
-              <span>Boards remain available in this Workspace. Brand switching is coming soon.</span>
+            <div class="brand-switcher-menu" id="brand-switcher-menu" aria-live="polite">
+              <div class="brand-switcher-no-brand" aria-current="true">
+                <strong>No Brand selected</strong>
+                <span>Boards remain available in this Workspace.</span>
+              </div>
+              <div class="brand-switcher-catalog" id="brand-switcher-catalog" role="status">
+                <span>Open the switcher to view your read-only Brand catalog.</span>
+              </div>
               <button class="fk-btn fk-btn-secondary" type="button" disabled>Create Brand coming soon</button>
             </div>
           </details>

@@ -21,5 +21,7 @@ jobs:
           node --check campaign-v3.js
       - name: Check browser script integrity
         run: node scripts/check-browser-script-integrity.js
+      - name: Check read-only Canonical Brand catalog
+        run: node scripts/check-bw1-brand-catalog.js
       - name: Check Knowledge Module browser globals
         run: node scripts/check-knowledge-module-browser-globals.js

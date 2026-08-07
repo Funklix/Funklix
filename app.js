@@ -114,6 +114,7 @@ const state = {
   ,brandFoundationTransitionInFlight: false
   ,appMode: "canvas"
   ,boardsLibrary: []
+  ,brandCatalog: { status: "idle", entries: [], requestId: 0, userEmail: "" }
   ,contentPackLoadingById: {}
   ,contentPackErrorById: {}
   ,hashtagDraftByNode: {}
@@ -312,6 +313,8 @@ const el = {
   boardsLibraryList: document.getElementById("boards-library-list"),
   boardsLibraryTitle: document.getElementById("boards-library-title"),
   boardsLibrarySubtitle: document.getElementById("boards-library-subtitle"),
+  brandSwitcherDetails: document.getElementById("brand-switcher-details"),
+  brandSwitcherCatalog: document.getElementById("brand-switcher-catalog"),
   sidebarToggleButton: document.getElementById("sidebar-toggle-btn"),
   brandEditorTitle: document.getElementById("bc-editor-title"),
   brandCoreCanvas: document.getElementById("brand-core-canvas"),
@@ -2622,6 +2625,94 @@ function setAuthMessage(message = "") {
   el.authMessage.classList.toggle("hidden", !message);
 }
 
+function isCanonicalBrandSummary(value) {
+  return Boolean(value
+    && typeof value === "object"
+    && !Array.isArray(value)
+    && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value.id || "")
+    && typeof value.name === "string"
+    && value.name.trim().length > 0
+    && value.name.trim().length <= 160
+    && Number.isInteger(value.revision)
+    && value.revision >= 1
+    && typeof value.created_at === "string"
+    && typeof value.updated_at === "string");
+}
+
+function renderBrandCatalog() {
+  if (!el.brandSwitcherCatalog) return;
+  el.brandSwitcherCatalog.replaceChildren();
+  const status = document.createElement("span");
+  const catalog = state.brandCatalog;
+  if (catalog.status === "loading") status.textContent = "Loading your Brands…";
+  else if (catalog.status === "unauthenticated") status.textContent = "Sign in to view your Brand catalog.";
+  else if (catalog.status === "forbidden") status.textContent = "Your Brand catalog is unavailable for this account.";
+  else if (catalog.status === "error") status.textContent = "Brands could not be loaded. Boards remain available.";
+  else if (catalog.status === "malformed") status.textContent = "The Brand catalog returned an unexpected response. Boards remain available.";
+  else if (catalog.status === "success" && catalog.entries.length === 0) status.textContent = "No Canonical Brands yet. No Brand remains selected.";
+  else if (catalog.status !== "success") status.textContent = "Open the switcher to view your read-only Brand catalog.";
+  if (status.textContent) el.brandSwitcherCatalog.appendChild(status);
+  if (catalog.status !== "success") return;
+  catalog.entries.forEach((brand) => {
+    const entry = document.createElement("button");
+    entry.type = "button";
+    entry.className = "brand-switcher-catalog-entry";
+    entry.disabled = true;
+    entry.setAttribute("aria-label", `${brand.name} — catalog only, selection coming soon`);
+    const avatar = document.createElement("span");
+    avatar.className = "brand-switcher-avatar";
+    avatar.setAttribute("aria-hidden", "true");
+    avatar.textContent = brand.name.trim().charAt(0).toUpperCase() || "B";
+    const copy = document.createElement("span");
+    copy.className = "brand-switcher-copy";
+    const name = document.createElement("strong");
+    name.textContent = brand.name.trim();
+    const note = document.createElement("small");
+    note.textContent = "Catalog only · Selection coming soon";
+    copy.append(name, note);
+    entry.append(avatar, copy);
+    el.brandSwitcherCatalog.appendChild(entry);
+  });
+}
+
+async function loadCanonicalBrandCatalog() {
+  const userEmail = typeof state.user?.email === "string" ? state.user.email.trim().toLowerCase() : "";
+  if (!userEmail) {
+    state.brandCatalog = { status: "unauthenticated", entries: [], requestId: state.brandCatalog.requestId + 1, userEmail: "" };
+    renderBrandCatalog();
+    return;
+  }
+  if (state.brandCatalog.userEmail === userEmail && ["loading", "success"].includes(state.brandCatalog.status)) return;
+  const requestId = state.brandCatalog.requestId + 1;
+  state.brandCatalog = { status: "loading", entries: [], requestId, userEmail };
+  renderBrandCatalog();
+  try {
+    const response = await fetch("/api/brands", { headers: { Accept: "application/json" } });
+    if (requestId !== state.brandCatalog.requestId || userEmail !== (state.user?.email || "").trim().toLowerCase()) return;
+    if (response.status === 401) state.brandCatalog.status = "unauthenticated";
+    else if (response.status === 403) state.brandCatalog.status = "forbidden";
+    else if (!response.ok) state.brandCatalog.status = "error";
+    else {
+      let data = null;
+      try {
+        data = await response.json();
+      } catch (_error) {
+        state.brandCatalog.status = "malformed";
+      }
+      if (!data || !Array.isArray(data.brands) || !data.brands.every(isCanonicalBrandSummary)) {
+        state.brandCatalog.status = "malformed";
+      } else {
+        state.brandCatalog.status = "success";
+        state.brandCatalog.entries = data.brands.map(({ id, name, revision, created_at, updated_at }) => ({ id, name, revision, created_at, updated_at }));
+      }
+    }
+  } catch (_error) {
+    if (requestId !== state.brandCatalog.requestId) return;
+    state.brandCatalog.status = "error";
+  }
+  if (requestId === state.brandCatalog.requestId) renderBrandCatalog();
+}
+
 function renderAuthState() {
   const signedIn = !!state.user;
   if (el.googleSigninButton) el.googleSigninButton.style.display = signedIn ? "none" : "inline-flex";
@@ -2658,6 +2749,9 @@ async function loadSessionUser() {
   }
   updateBoardAccessState();
   renderAuthState();
+  state.brandCatalog = { status: "idle", entries: [], requestId: state.brandCatalog.requestId + 1, userEmail: "" };
+  renderBrandCatalog();
+  if (el.brandSwitcherDetails?.open) void loadCanonicalBrandCatalog();
   setSharePanelState(state.currentBoardId || getBoardIdFromPath(), null, state.currentBoardOwnerEmail, state.currentBoardOwnerName, state.currentBoardOwnerAvatar);
   startPresenceLite();
 }
@@ -14248,12 +14342,17 @@ el.googleSigninButton?.addEventListener("click", () => {
   const returnTo = `${window.location.pathname || "/"}${window.location.search || ""}`;
   window.location.href = `/api/auth/google/start?returnTo=${encodeURIComponent(returnTo)}`;
 });
+el.brandSwitcherDetails?.addEventListener("toggle", () => {
+  if (el.brandSwitcherDetails.open) void loadCanonicalBrandCatalog();
+});
 el.authSignoutButton?.addEventListener("click", async () => {
   state.documentSourceOperationByTileId.forEach((operation) => operation?.controller?.abort?.());
   state.documentSourceOperationByTileId.clear();
   state.documentSourceStateByTileId.clear();
   await fetch("/api/auth/session", { method: "DELETE" });
   state.user = null;
+  state.brandCatalog = { status: "unauthenticated", entries: [], requestId: state.brandCatalog.requestId + 1, userEmail: "" };
+  renderBrandCatalog();
   stopPresenceLite();
   state.presenceViewers = [];
   renderPresenceLite();

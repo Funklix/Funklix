@@ -479,6 +479,51 @@ body {
   font-size: var(--fk-font-size-sm);
 }
 
+.brand-switcher-no-brand,
+.brand-switcher-catalog {
+  display: grid;
+  gap: 3px;
+}
+
+.brand-switcher-no-brand {
+  padding-bottom: var(--fk-space-2);
+  border-bottom: 1px solid var(--fk-color-border);
+}
+
+.brand-switcher-catalog {
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.brand-switcher-catalog-entry {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--fk-space-2);
+  width: 100%;
+  padding: 6px;
+  border: 1px solid var(--fk-color-border);
+  border-radius: var(--fk-radius-sm);
+  background: var(--fk-color-surface);
+  color: var(--fk-color-heading);
+  font: inherit;
+  text-align: left;
+  opacity: 1;
+  cursor: not-allowed;
+}
+
+.brand-switcher-catalog-entry strong,
+.brand-switcher-catalog-entry small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.brand-switcher-catalog-entry small {
+  color: var(--fk-color-muted);
+  font-size: var(--fk-font-size-xs);
+}
+
 .brand-switcher-menu .fk-btn {
   width: 100%;
   min-height: 34px;
