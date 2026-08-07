@@ -486,8 +486,14 @@ body {
 }
 
 .brand-switcher-no-brand {
+  width: 100%;
+  border: 0;
   padding-bottom: var(--fk-space-2);
   border-bottom: 1px solid var(--fk-color-border);
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
 }
 
 .brand-switcher-catalog {
@@ -509,7 +515,17 @@ body {
   font: inherit;
   text-align: left;
   opacity: 1;
-  cursor: not-allowed;
+  cursor: pointer;
+}
+
+.brand-switcher-no-brand:hover,
+.brand-switcher-no-brand:focus-visible,
+.brand-switcher-catalog-entry:hover,
+.brand-switcher-catalog-entry:focus-visible,
+.brand-switcher-catalog-entry[aria-current="true"] {
+  border-color: var(--fk-color-primary);
+  background: var(--fk-color-primary-soft);
+  outline: none;
 }
 
 .brand-switcher-catalog-entry strong,

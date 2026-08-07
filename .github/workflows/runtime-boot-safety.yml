@@ -23,5 +23,7 @@ jobs:
         run: node scripts/check-browser-script-integrity.js
       - name: Check read-only Canonical Brand catalog
         run: node scripts/check-bw1-brand-catalog.js
+      - name: Check ephemeral Canonical Brand selection
+        run: node scripts/check-bw2-ephemeral-brand-selection.js
       - name: Check Knowledge Module browser globals
         run: node scripts/check-knowledge-module-browser-globals.js

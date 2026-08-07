@@ -20,7 +20,7 @@ function functionSource(name) {
 assert.match(html, /id="brand-switcher-details"/, "existing switcher must expose the lazy catalog trigger");
 assert.match(html, /id="brand-switcher-catalog" role="status"/, "catalog states must be announced");
 assert.match(html, /aria-current="true"[\s\S]*No Brand selected/, "No Brand selected must remain effective");
-assert.match(styles, /\.brand-switcher-catalog-entry[\s\S]*cursor: not-allowed/, "catalog entries must look non-interactive");
+assert.match(styles, /\.brand-switcher-catalog-entry[\s\S]*cursor: pointer/, "catalog entries must remain visibly available");
 
 const loader = functionSource("loadCanonicalBrandCatalog");
 const renderer = functionSource("renderBrandCatalog");
@@ -31,8 +31,7 @@ assert.match(loader, /response\.status === 401/, "expired authentication must be
 assert.match(loader, /response\.status === 403/, "authorization failure must be handled");
 assert.match(loader, /Array\.isArray\(data\.brands\)/, "empty and populated summary arrays must be validated");
 assert.match(loader, /requestId !== state\.brandCatalog\.requestId/, "late requests must be ignored");
-assert.match(renderer, /entry\.disabled = true/, "Brand rows must not select a Brand");
-assert.match(renderer, /Catalog only · Selection coming soon/, "Brand rows must explain their read-only behavior");
+assert.doesNotMatch(renderer, /entry\.disabled = true/, "BW-2 may make summary rows explicitly selectable");
 assert.doesNotMatch(loader + renderer, /localStorage|sessionStorage|document\.cookie|history\.|location\./, "catalog must not restore or persist selection");
 assert.doesNotMatch(loader + renderer, /state\.session|state\.brandCore|boardsLibrary|canvas|autosave/i, "catalog must remain independent of active context, Boards, and Canvas");
 assert.doesNotMatch(app, /brandCatalog[^\n]*(?:active|selected)Brand|activeBrand[^\n]*brandCatalog/i, "catalog must not become active Brand authority");

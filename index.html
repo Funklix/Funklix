@@ -112,18 +112,18 @@
           <span class="brand-switcher-eyebrow">Workspace</span>
           <details class="brand-switcher-details" id="brand-switcher-details">
             <summary class="brand-switcher-summary">
-              <span class="brand-switcher-avatar" aria-hidden="true">B</span>
+              <span class="brand-switcher-avatar" id="brand-switcher-current-avatar" aria-hidden="true">B</span>
               <span class="brand-switcher-copy">
-                <strong>No Brand selected</strong>
-                <small>Brand · Workspace context</small>
+                <strong id="brand-switcher-current-name">No Brand selected</strong>
+                <small id="brand-switcher-current-note">Brand · Ephemeral Workspace selection</small>
               </span>
               <span class="brand-switcher-chevron" aria-hidden="true">⌄</span>
             </summary>
             <div class="brand-switcher-menu" id="brand-switcher-menu" aria-live="polite">
-              <div class="brand-switcher-no-brand" aria-current="true">
+              <button class="brand-switcher-no-brand" id="brand-switcher-no-brand" type="button" aria-current="true">
                 <strong>No Brand selected</strong>
                 <span>Boards remain available in this Workspace.</span>
-              </div>
+              </button>
               <div class="brand-switcher-catalog" id="brand-switcher-catalog" role="status">
                 <span>Open the switcher to view your read-only Brand catalog.</span>
               </div>

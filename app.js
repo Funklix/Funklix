@@ -315,6 +315,10 @@ const el = {
   boardsLibrarySubtitle: document.getElementById("boards-library-subtitle"),
   brandSwitcherDetails: document.getElementById("brand-switcher-details"),
   brandSwitcherCatalog: document.getElementById("brand-switcher-catalog"),
+  brandSwitcherNoBrand: document.getElementById("brand-switcher-no-brand"),
+  brandSwitcherCurrentAvatar: document.getElementById("brand-switcher-current-avatar"),
+  brandSwitcherCurrentName: document.getElementById("brand-switcher-current-name"),
+  brandSwitcherCurrentNote: document.getElementById("brand-switcher-current-note"),
   sidebarToggleButton: document.getElementById("sidebar-toggle-btn"),
   brandEditorTitle: document.getElementById("bc-editor-title"),
   brandCoreCanvas: document.getElementById("brand-core-canvas"),
@@ -2639,6 +2643,33 @@ function isCanonicalBrandSummary(value) {
     && typeof value.updated_at === "string");
 }
 
+// Presentation-only state for this switcher and this page lifetime. It is not an
+// application Brand context and must never be used by Boards or Canvas behavior.
+let ephemeralBrandSwitcherSelection = null;
+
+function renderEphemeralBrandSwitcherSelection() {
+  const selection = ephemeralBrandSwitcherSelection;
+  if (el.brandSwitcherCurrentName) el.brandSwitcherCurrentName.textContent = selection?.name || "No Brand selected";
+  if (el.brandSwitcherCurrentAvatar) el.brandSwitcherCurrentAvatar.textContent = selection?.name?.trim().charAt(0).toUpperCase() || "B";
+  if (el.brandSwitcherCurrentNote) el.brandSwitcherCurrentNote.textContent = selection
+    ? "Brand · Selected for this page only"
+    : "Brand · Ephemeral Workspace selection";
+  el.brandSwitcherNoBrand?.setAttribute("aria-current", selection ? "false" : "true");
+}
+
+function clearEphemeralBrandSwitcherSelection({ close = false } = {}) {
+  ephemeralBrandSwitcherSelection = null;
+  renderEphemeralBrandSwitcherSelection();
+  if (close && el.brandSwitcherDetails) el.brandSwitcherDetails.open = false;
+}
+
+function selectEphemeralBrandFromSwitcher(brand) {
+  ephemeralBrandSwitcherSelection = { id: brand.id, name: brand.name.trim() };
+  renderEphemeralBrandSwitcherSelection();
+  renderBrandCatalog();
+  if (el.brandSwitcherDetails) el.brandSwitcherDetails.open = false;
+}
+
 function renderBrandCatalog() {
   if (!el.brandSwitcherCatalog) return;
   el.brandSwitcherCatalog.replaceChildren();
@@ -2657,8 +2688,8 @@ function renderBrandCatalog() {
     const entry = document.createElement("button");
     entry.type = "button";
     entry.className = "brand-switcher-catalog-entry";
-    entry.disabled = true;
-    entry.setAttribute("aria-label", `${brand.name} — catalog only, selection coming soon`);
+    entry.setAttribute("aria-current", ephemeralBrandSwitcherSelection?.id === brand.id ? "true" : "false");
+    entry.setAttribute("aria-label", `${brand.name} — select for this page only`);
     const avatar = document.createElement("span");
     avatar.className = "brand-switcher-avatar";
     avatar.setAttribute("aria-hidden", "true");
@@ -2668,9 +2699,10 @@ function renderBrandCatalog() {
     const name = document.createElement("strong");
     name.textContent = brand.name.trim();
     const note = document.createElement("small");
-    note.textContent = "Catalog only · Selection coming soon";
+    note.textContent = ephemeralBrandSwitcherSelection?.id === brand.id ? "Selected for this page only" : "Select for this page only";
     copy.append(name, note);
     entry.append(avatar, copy);
+    entry.addEventListener("click", () => selectEphemeralBrandFromSwitcher(brand));
     el.brandSwitcherCatalog.appendChild(entry);
   });
 }
@@ -2689,7 +2721,10 @@ async function loadCanonicalBrandCatalog() {
   try {
     const response = await fetch("/api/brands", { headers: { Accept: "application/json" } });
     if (requestId !== state.brandCatalog.requestId || userEmail !== (state.user?.email || "").trim().toLowerCase()) return;
-    if (response.status === 401) state.brandCatalog.status = "unauthenticated";
+    if (response.status === 401) {
+      state.brandCatalog.status = "unauthenticated";
+      clearEphemeralBrandSwitcherSelection();
+    }
     else if (response.status === 403) state.brandCatalog.status = "forbidden";
     else if (!response.ok) state.brandCatalog.status = "error";
     else {
@@ -2704,6 +2739,9 @@ async function loadCanonicalBrandCatalog() {
       } else {
         state.brandCatalog.status = "success";
         state.brandCatalog.entries = data.brands.map(({ id, name, revision, created_at, updated_at }) => ({ id, name, revision, created_at, updated_at }));
+        if (ephemeralBrandSwitcherSelection && !state.brandCatalog.entries.some(({ id }) => id === ephemeralBrandSwitcherSelection.id)) {
+          clearEphemeralBrandSwitcherSelection();
+        }
       }
     }
   } catch (_error) {
@@ -2738,18 +2776,24 @@ function renderAuthState() {
 }
 
 async function loadSessionUser() {
+  const previousUserEmail = typeof state.user?.email === "string" ? state.user.email.trim().toLowerCase() : "";
   try {
     const response = await fetch('/api/auth/session');
-    if (!response.ok) return;
-    const data = await response.json();
-    state.user = data?.user || null;
-    state.authConfigured = data?.authConfigured !== false;
+    if (!response.ok) {
+      state.user = null;
+    } else {
+      const data = await response.json();
+      state.user = data?.user || null;
+      state.authConfigured = data?.authConfigured !== false;
+    }
   } catch (_error) {
     state.user = null;
   }
   updateBoardAccessState();
   renderAuthState();
-  state.brandCatalog = { status: "idle", entries: [], requestId: state.brandCatalog.requestId + 1, userEmail: "" };
+  const currentUserEmail = typeof state.user?.email === "string" ? state.user.email.trim().toLowerCase() : "";
+  if (previousUserEmail !== currentUserEmail) clearEphemeralBrandSwitcherSelection();
+  state.brandCatalog = { status: currentUserEmail ? "idle" : "unauthenticated", entries: [], requestId: state.brandCatalog.requestId + 1, userEmail: "" };
   renderBrandCatalog();
   if (el.brandSwitcherDetails?.open) void loadCanonicalBrandCatalog();
   setSharePanelState(state.currentBoardId || getBoardIdFromPath(), null, state.currentBoardOwnerEmail, state.currentBoardOwnerName, state.currentBoardOwnerAvatar);
@@ -14345,14 +14389,16 @@ el.googleSigninButton?.addEventListener("click", () => {
 el.brandSwitcherDetails?.addEventListener("toggle", () => {
   if (el.brandSwitcherDetails.open) void loadCanonicalBrandCatalog();
 });
+el.brandSwitcherNoBrand?.addEventListener("click", () => clearEphemeralBrandSwitcherSelection({ close: true }));
 el.authSignoutButton?.addEventListener("click", async () => {
   state.documentSourceOperationByTileId.forEach((operation) => operation?.controller?.abort?.());
   state.documentSourceOperationByTileId.clear();
   state.documentSourceStateByTileId.clear();
-  await fetch("/api/auth/session", { method: "DELETE" });
   state.user = null;
   state.brandCatalog = { status: "unauthenticated", entries: [], requestId: state.brandCatalog.requestId + 1, userEmail: "" };
+  clearEphemeralBrandSwitcherSelection({ close: true });
   renderBrandCatalog();
+  await fetch("/api/auth/session", { method: "DELETE" });
   stopPresenceLite();
   state.presenceViewers = [];
   renderPresenceLite();
