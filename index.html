@@ -127,7 +127,17 @@
               <div class="brand-switcher-catalog" id="brand-switcher-catalog" role="status">
                 <span>Open the switcher to view your read-only Brand catalog.</span>
               </div>
-              <button class="fk-btn fk-btn-secondary" type="button" disabled>Create Brand coming soon</button>
+              <button class="fk-btn fk-btn-secondary" id="brand-switcher-create-open" type="button" disabled>Create Brand</button>
+              <form class="brand-switcher-create-form hidden" id="brand-switcher-create-form" aria-labelledby="brand-switcher-create-title" novalidate>
+                <strong id="brand-switcher-create-title">Create a Canonical Brand</strong>
+                <label for="brand-switcher-create-name">Brand name</label>
+                <input id="brand-switcher-create-name" name="name" type="text" maxlength="160" autocomplete="organization" aria-describedby="brand-switcher-create-feedback" required>
+                <span id="brand-switcher-create-feedback" role="status" aria-live="polite"></span>
+                <div class="brand-switcher-create-actions">
+                  <button class="fk-btn fk-btn-primary" id="brand-switcher-create-submit" type="submit">Create Brand</button>
+                  <button class="fk-btn fk-btn-ghost" id="brand-switcher-create-cancel" type="button">Cancel</button>
+                </div>
+              </form>
             </div>
           </details>
         </section>

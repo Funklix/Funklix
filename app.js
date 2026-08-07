@@ -115,6 +115,7 @@ const state = {
   ,appMode: "canvas"
   ,boardsLibrary: []
   ,brandCatalog: { status: "idle", entries: [], requestId: 0, userEmail: "" }
+  ,brandCreation: { status: "initial", requestId: 0, userEmail: "" }
   ,contentPackLoadingById: {}
   ,contentPackErrorById: {}
   ,hashtagDraftByNode: {}
@@ -319,6 +320,12 @@ const el = {
   brandSwitcherCurrentAvatar: document.getElementById("brand-switcher-current-avatar"),
   brandSwitcherCurrentName: document.getElementById("brand-switcher-current-name"),
   brandSwitcherCurrentNote: document.getElementById("brand-switcher-current-note"),
+  brandSwitcherCreateOpen: document.getElementById("brand-switcher-create-open"),
+  brandSwitcherCreateForm: document.getElementById("brand-switcher-create-form"),
+  brandSwitcherCreateName: document.getElementById("brand-switcher-create-name"),
+  brandSwitcherCreateFeedback: document.getElementById("brand-switcher-create-feedback"),
+  brandSwitcherCreateSubmit: document.getElementById("brand-switcher-create-submit"),
+  brandSwitcherCreateCancel: document.getElementById("brand-switcher-create-cancel"),
   sidebarToggleButton: document.getElementById("sidebar-toggle-btn"),
   brandEditorTitle: document.getElementById("bc-editor-title"),
   brandCoreCanvas: document.getElementById("brand-core-canvas"),
@@ -2670,6 +2677,110 @@ function selectEphemeralBrandFromSwitcher(brand) {
   if (el.brandSwitcherDetails) el.brandSwitcherDetails.open = false;
 }
 
+function resetCanonicalBrandCreation({ focusTrigger = false } = {}) {
+  state.brandCreation = { status: "initial", requestId: state.brandCreation.requestId + 1, userEmail: "" };
+  el.brandSwitcherCreateForm?.reset();
+  el.brandSwitcherCreateForm?.classList.add("hidden");
+  el.brandSwitcherCreateOpen?.setAttribute("aria-expanded", "false");
+  el.brandSwitcherCreateName?.removeAttribute("aria-invalid");
+  if (el.brandSwitcherCreateFeedback) el.brandSwitcherCreateFeedback.textContent = "";
+  if (el.brandSwitcherCreateSubmit) el.brandSwitcherCreateSubmit.disabled = false;
+  if (el.brandSwitcherCreateCancel) el.brandSwitcherCreateCancel.disabled = false;
+  if (focusTrigger && el.brandSwitcherDetails?.open) el.brandSwitcherCreateOpen?.focus();
+}
+
+function openCanonicalBrandCreation() {
+  if (!state.user?.email || !el.brandSwitcherCreateForm) return;
+  resetCanonicalBrandCreation();
+  state.brandCreation.status = "editing";
+  state.brandCreation.userEmail = state.user.email.trim().toLowerCase();
+  el.brandSwitcherCreateForm.classList.remove("hidden");
+  el.brandSwitcherCreateOpen?.setAttribute("aria-expanded", "true");
+  el.brandSwitcherCreateName?.focus();
+}
+
+function canonicalBrandCreationError(status) {
+  if (status === 401) return "Your session has expired. Sign in before creating a Brand.";
+  if (status === 403) return "You are not authorized to create a Brand for this account.";
+  if (status === 400 || status === 422) return "That Brand name is not valid. Review it and try again.";
+  if (status === 409) return "A Brand with that name already exists. Choose a different name.";
+  return "The Brand could not be created. Please try again deliberately.";
+}
+
+async function submitCanonicalBrandCreation(event) {
+  event.preventDefault();
+  if (state.brandCreation.status === "submitting") return;
+  const userEmail = typeof state.user?.email === "string" ? state.user.email.trim().toLowerCase() : "";
+  const name = el.brandSwitcherCreateName?.value.trim() || "";
+  if (!name || name.length > 160) {
+    state.brandCreation.status = "validation";
+    if (el.brandSwitcherCreateFeedback) el.brandSwitcherCreateFeedback.textContent = name ? "Brand name must be 160 characters or fewer." : "Enter a Brand name.";
+    el.brandSwitcherCreateName?.setAttribute("aria-invalid", "true");
+    el.brandSwitcherCreateName?.focus();
+    return;
+  }
+  if (!userEmail) {
+    resetCanonicalBrandCreation();
+    clearEphemeralBrandSwitcherSelection();
+    return;
+  }
+  const requestId = state.brandCreation.requestId + 1;
+  state.brandCreation = { status: "submitting", requestId, userEmail };
+  el.brandSwitcherCreateName.value = name;
+  el.brandSwitcherCreateName.removeAttribute("aria-invalid");
+  el.brandSwitcherCreateSubmit.disabled = true;
+  el.brandSwitcherCreateCancel.disabled = true;
+  el.brandSwitcherCreateSubmit.textContent = "Creating…";
+  if (el.brandSwitcherCreateFeedback) el.brandSwitcherCreateFeedback.textContent = "Creating Canonical Brand…";
+  try {
+    const response = await fetch("/api/brands", {
+      method: "POST",
+      headers: { Accept: "application/json", "Content-Type": "application/json" },
+      body: JSON.stringify({ name, brand_core: {} })
+    });
+    if (requestId !== state.brandCreation.requestId || userEmail !== (state.user?.email || "").trim().toLowerCase()) return;
+    if (!response.ok) {
+      state.brandCreation.status = response.status === 401 ? "unauthenticated" : "error";
+      if (response.status === 401) {
+        state.user = null;
+        state.brandCatalog = { status: "unauthenticated", entries: [], requestId: state.brandCatalog.requestId + 1, userEmail: "" };
+        clearEphemeralBrandSwitcherSelection();
+        resetCanonicalBrandCreation();
+        renderBrandCatalog();
+        renderAuthState();
+        return;
+      }
+      if (el.brandSwitcherCreateFeedback) el.brandSwitcherCreateFeedback.textContent = canonicalBrandCreationError(response.status);
+      return;
+    }
+    let brand = null;
+    try { brand = await response.json(); } catch (_error) { /* handled below */ }
+    if (requestId !== state.brandCreation.requestId || userEmail !== (state.user?.email || "").trim().toLowerCase()) return;
+    if (!isCanonicalBrandSummary(brand)) {
+      state.brandCreation.status = "malformed";
+      if (el.brandSwitcherCreateFeedback) el.brandSwitcherCreateFeedback.textContent = "The server returned an unexpected response. The catalog is being refreshed before you take another action.";
+      state.brandCatalog = { status: "idle", entries: [], requestId: state.brandCatalog.requestId + 1, userEmail: "" };
+      void loadCanonicalBrandCatalog();
+      return;
+    }
+    const summary = (({ id, name: confirmedName, revision, created_at, updated_at }) => ({ id, name: confirmedName, revision, created_at, updated_at }))(brand);
+    const existing = state.brandCatalog.userEmail === userEmail ? state.brandCatalog.entries : [];
+    state.brandCatalog = { status: "success", entries: [summary, ...existing.filter(({ id }) => id !== summary.id)], requestId: state.brandCatalog.requestId + 1, userEmail };
+    resetCanonicalBrandCreation({ focusTrigger: true });
+    renderBrandCatalog();
+  } catch (_error) {
+    if (requestId !== state.brandCreation.requestId) return;
+    state.brandCreation.status = "error";
+    if (el.brandSwitcherCreateFeedback) el.brandSwitcherCreateFeedback.textContent = "The Brand could not be created because the network or server is unavailable. Your name is preserved; retry deliberately.";
+  } finally {
+    if (requestId === state.brandCreation.requestId && state.brandCreation.status !== "initial") {
+      el.brandSwitcherCreateSubmit.disabled = false;
+      el.brandSwitcherCreateCancel.disabled = false;
+      el.brandSwitcherCreateSubmit.textContent = "Create Brand";
+    }
+  }
+}
+
 function renderBrandCatalog() {
   if (!el.brandSwitcherCatalog) return;
   el.brandSwitcherCatalog.replaceChildren();
@@ -2753,6 +2864,7 @@ async function loadCanonicalBrandCatalog() {
 
 function renderAuthState() {
   const signedIn = !!state.user;
+  if (el.brandSwitcherCreateOpen) el.brandSwitcherCreateOpen.disabled = !signedIn;
   if (el.googleSigninButton) el.googleSigninButton.style.display = signedIn ? "none" : "inline-flex";
   if (el.authUserWrap) el.authUserWrap.style.display = signedIn ? "inline-flex" : "none";
   if (!signedIn) {
@@ -2793,6 +2905,7 @@ async function loadSessionUser() {
   renderAuthState();
   const currentUserEmail = typeof state.user?.email === "string" ? state.user.email.trim().toLowerCase() : "";
   if (previousUserEmail !== currentUserEmail) clearEphemeralBrandSwitcherSelection();
+  if (previousUserEmail !== currentUserEmail) resetCanonicalBrandCreation();
   state.brandCatalog = { status: currentUserEmail ? "idle" : "unauthenticated", entries: [], requestId: state.brandCatalog.requestId + 1, userEmail: "" };
   renderBrandCatalog();
   if (el.brandSwitcherDetails?.open) void loadCanonicalBrandCatalog();
@@ -14388,14 +14501,19 @@ el.googleSigninButton?.addEventListener("click", () => {
 });
 el.brandSwitcherDetails?.addEventListener("toggle", () => {
   if (el.brandSwitcherDetails.open) void loadCanonicalBrandCatalog();
+  else if (state.brandCreation.status !== "submitting") resetCanonicalBrandCreation();
 });
 el.brandSwitcherNoBrand?.addEventListener("click", () => clearEphemeralBrandSwitcherSelection({ close: true }));
+el.brandSwitcherCreateOpen?.addEventListener("click", openCanonicalBrandCreation);
+el.brandSwitcherCreateForm?.addEventListener("submit", submitCanonicalBrandCreation);
+el.brandSwitcherCreateCancel?.addEventListener("click", () => resetCanonicalBrandCreation({ focusTrigger: true }));
 el.authSignoutButton?.addEventListener("click", async () => {
   state.documentSourceOperationByTileId.forEach((operation) => operation?.controller?.abort?.());
   state.documentSourceOperationByTileId.clear();
   state.documentSourceStateByTileId.clear();
   state.user = null;
   state.brandCatalog = { status: "unauthenticated", entries: [], requestId: state.brandCatalog.requestId + 1, userEmail: "" };
+  resetCanonicalBrandCreation();
   clearEphemeralBrandSwitcherSelection({ close: true });
   renderBrandCatalog();
   await fetch("/api/auth/session", { method: "DELETE" });
