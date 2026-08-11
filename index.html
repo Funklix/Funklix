@@ -127,6 +127,7 @@
               <div class="brand-switcher-catalog" id="brand-switcher-catalog" role="status">
                 <span>Open the switcher to view your read-only Brand catalog.</span>
               </div>
+              <button class="fk-btn fk-btn-secondary" id="brand-workspace-detail-open" type="button" disabled>View Canonical Brand</button>
               <button class="fk-btn fk-btn-secondary" id="brand-switcher-create-open" type="button" disabled>Create Brand</button>
               <form class="brand-switcher-create-form hidden" id="brand-switcher-create-form" aria-labelledby="brand-switcher-create-title" novalidate>
                 <strong id="brand-switcher-create-title">Create a Canonical Brand</strong>
@@ -157,6 +158,19 @@
             </div>
           </form>
         </section>
+        <dialog class="brand-workspace-detail" id="brand-workspace-detail" aria-labelledby="brand-workspace-detail-title" aria-describedby="brand-workspace-detail-context">
+          <div class="brand-workspace-detail-header">
+            <div>
+              <span class="brand-switcher-eyebrow">Brand Workspace</span>
+              <h2 id="brand-workspace-detail-title" tabindex="-1">Canonical Brand</h2>
+            </div>
+            <button class="fk-btn fk-btn-ghost" id="brand-workspace-detail-close" type="button" aria-label="Close Canonical Brand detail">Close</button>
+          </div>
+          <p id="brand-workspace-detail-context">Read-only Workspace Brand details. This is separate from Current Board Brand and is not Board content.</p>
+          <div class="brand-workspace-detail-status" id="brand-workspace-detail-status" role="status" aria-live="polite"></div>
+          <div class="brand-workspace-detail-content hidden" id="brand-workspace-detail-content"></div>
+          <button class="fk-btn fk-btn-secondary hidden" id="brand-workspace-detail-retry" type="button">Retry loading details</button>
+        </dialog>
         <nav aria-label="Workspace navigation">
           <span class="sidebar-nav-heading">Workspace</span>
           <button id="home-nav-btn" class="nav-item fk-btn" data-icon="🏠"><span class="nav-label">Home</span></button>
