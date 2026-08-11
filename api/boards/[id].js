@@ -3,6 +3,7 @@ const { getBoardAccess, normalizeEmail, refreshOwnEditorIdentity } = require('..
 const { getSessionUser } = require('../_auth-session');
 const { ensureDocumentTables, pool: documentPool } = require('../_document-records');
 const { deletePrivate } = require('../_document-storage');
+const { getOwnedBrand, isBrandId } = require('../_brand-access');
 
 const BOARD_COLUMNS = 'id, name, canvas_json, brand_core_snapshot, brand_id, created_at, updated_at, order_index, owner_id, owner_email, owner_name, owner_avatar, created_by';
 
@@ -86,6 +87,29 @@ module.exports = async function handler(req, res) {
       const { name = null, order_index = null, claim = false } = req.body || {};
       const user = getSessionUser(req);
       let updated;
+      const hasBrandAssociationUpdate = Object.prototype.hasOwnProperty.call(req.body || {}, 'brand_id');
+      if (hasBrandAssociationUpdate) {
+        if (!user?.email) return res.status(401).json({ error: 'Authentication required' });
+        if (Object.keys(req.body || {}).some((key) => key !== 'brand_id')) {
+          return res.status(400).json({ error: 'brand_id must be updated separately' });
+        }
+        const brandId = req.body.brand_id;
+        if (brandId !== null && !isBrandId(brandId)) {
+          return res.status(400).json({ error: 'brand_id must be a valid Brand id or null' });
+        }
+        const { board, access } = await getBoardAccess(id, user, { columns: 'id, owner_id, owner_email' });
+        if (!board) return res.status(404).json({ error: 'Board not found' });
+        if (!access?.canEdit) return res.status(403).json({ error: 'Forbidden' });
+        if (brandId !== null && !(await getOwnedBrand(brandId, user, { columns: 'id' }))) {
+          return res.status(404).json({ error: 'Canonical Brand not found' });
+        }
+        updated = await pool.query(
+          `UPDATE boards SET brand_id = $2, updated_at = NOW() WHERE id = $1 RETURNING ${BOARD_COLUMNS}`,
+          [id, brandId]
+        );
+        if (updated.rowCount === 0) return res.status(404).json({ error: 'Board not found' });
+        return res.status(200).json({ ...updated.rows[0], access });
+      }
       if (claim && user?.email) {
         const boardLookup = await pool.query(
           'SELECT id, owner_id, owner_email FROM boards WHERE id = $1 LIMIT 1',
