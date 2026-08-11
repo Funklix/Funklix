@@ -2650,28 +2650,107 @@ function isCanonicalBrandSummary(value) {
     && typeof value.updated_at === "string");
 }
 
-// Presentation-only state for this switcher and this page lifetime. It is not an
-// application Brand context and must never be used by Boards or Canvas behavior.
+// Presentation-only state for this switcher. It is not an application Brand
+// context and must never be used by Boards or Canvas behavior.
 let ephemeralBrandSwitcherSelection = null;
+let brandSwitcherPreferenceGeneration = 0;
+const BRAND_SWITCHER_PREFERENCE_VERSION = 1;
+const BRAND_SWITCHER_PREFERENCE_PREFIX = "funklix.workspace-brand.v1.";
+
+async function brandSwitcherPreferenceKey(userEmail) {
+  const normalized = typeof userEmail === "string" ? userEmail.trim().toLowerCase() : "";
+  if (!normalized || !globalThis.crypto?.subtle || typeof TextEncoder !== "function") return null;
+  try {
+    const digest = await globalThis.crypto.subtle.digest("SHA-256", new TextEncoder().encode(normalized));
+    return `${BRAND_SWITCHER_PREFERENCE_PREFIX}${Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("")}`;
+  } catch (_error) {
+    return null;
+  }
+}
+
+async function removeBrandSwitcherPreference(userEmail, expectedBrandId = null) {
+  const key = await brandSwitcherPreferenceKey(userEmail);
+  if (!key) return;
+  try {
+    if (expectedBrandId) {
+      const parsed = JSON.parse(localStorage.getItem(key));
+      if (parsed?.v !== BRAND_SWITCHER_PREFERENCE_VERSION || parsed?.brandId !== expectedBrandId) return;
+    }
+    localStorage.removeItem(key);
+  } catch (_error) {
+    try { localStorage.removeItem(key); } catch (_storageError) { /* optional storage */ }
+  }
+}
+
+async function persistBrandSwitcherPreference(userEmail, brandId, generation) {
+  const key = await brandSwitcherPreferenceKey(userEmail);
+  if (!key || generation !== brandSwitcherPreferenceGeneration) return;
+  try {
+    localStorage.setItem(key, JSON.stringify({ v: BRAND_SWITCHER_PREFERENCE_VERSION, brandId }));
+  } catch (_error) {
+    // Browser storage is optional; the in-memory selection remains usable.
+  }
+}
+
+async function restoreBrandSwitcherPreference(userEmail, entries, requestId, generation) {
+  const key = await brandSwitcherPreferenceKey(userEmail);
+  if (!key || generation !== brandSwitcherPreferenceGeneration) return;
+  let parsed = null;
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw === null) return;
+    parsed = JSON.parse(raw);
+  } catch (_error) {
+    try { localStorage.removeItem(key); } catch (_storageError) { /* optional storage */ }
+    return;
+  }
+  const validPayload = parsed && typeof parsed === "object" && !Array.isArray(parsed)
+    && Object.keys(parsed).length === 2
+    && parsed.v === BRAND_SWITCHER_PREFERENCE_VERSION
+    && typeof parsed.brandId === "string"
+    && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(parsed.brandId);
+  if (!validPayload) {
+    try { localStorage.removeItem(key); } catch (_error) { /* optional storage */ }
+    return;
+  }
+  const brand = entries.find(({ id }) => id === parsed.brandId);
+  if (!brand) {
+    try { localStorage.removeItem(key); } catch (_error) { /* optional storage */ }
+    return;
+  }
+  if (generation !== brandSwitcherPreferenceGeneration
+    || requestId !== state.brandCatalog.requestId
+    || userEmail !== (state.user?.email || "").trim().toLowerCase()
+    || state.brandCatalog.status !== "success") return;
+  ephemeralBrandSwitcherSelection = { id: brand.id, name: brand.name.trim(), restored: true };
+  renderEphemeralBrandSwitcherSelection();
+}
 
 function renderEphemeralBrandSwitcherSelection() {
   const selection = ephemeralBrandSwitcherSelection;
   if (el.brandSwitcherCurrentName) el.brandSwitcherCurrentName.textContent = selection?.name || "No Brand selected";
   if (el.brandSwitcherCurrentAvatar) el.brandSwitcherCurrentAvatar.textContent = selection?.name?.trim().charAt(0).toUpperCase() || "B";
   if (el.brandSwitcherCurrentNote) el.brandSwitcherCurrentNote.textContent = selection
-    ? "Brand · Selected for this page only"
-    : "Brand · Ephemeral Workspace selection";
+    ? `Brand · ${selection.restored ? "Restored Workspace selection" : "Workspace selection"}`
+    : "Brand · No Workspace selection";
   el.brandSwitcherNoBrand?.setAttribute("aria-current", selection ? "false" : "true");
 }
 
-function clearEphemeralBrandSwitcherSelection({ close = false } = {}) {
+function clearEphemeralBrandSwitcherSelection({ close = false, persist = false } = {}) {
+  const userEmail = typeof state.user?.email === "string" ? state.user.email.trim().toLowerCase() : "";
+  brandSwitcherPreferenceGeneration += 1;
   ephemeralBrandSwitcherSelection = null;
   renderEphemeralBrandSwitcherSelection();
+  if (persist && userEmail) void removeBrandSwitcherPreference(userEmail);
   if (close && el.brandSwitcherDetails) el.brandSwitcherDetails.open = false;
 }
 
 function selectEphemeralBrandFromSwitcher(brand) {
-  ephemeralBrandSwitcherSelection = { id: brand.id, name: brand.name.trim() };
+  const userEmail = typeof state.user?.email === "string" ? state.user.email.trim().toLowerCase() : "";
+  if (!userEmail || state.brandCatalog.status !== "success" || !state.brandCatalog.entries.some(({ id }) => id === brand.id)) return;
+  const generation = ++brandSwitcherPreferenceGeneration;
+  ephemeralBrandSwitcherSelection = { id: brand.id, name: brand.name.trim(), restored: false };
+  void persistBrandSwitcherPreference(userEmail, brand.id, generation);
   renderEphemeralBrandSwitcherSelection();
   renderBrandCatalog();
   if (el.brandSwitcherDetails) el.brandSwitcherDetails.open = false;
@@ -2827,6 +2906,7 @@ async function loadCanonicalBrandCatalog() {
   }
   if (state.brandCatalog.userEmail === userEmail && ["loading", "success"].includes(state.brandCatalog.status)) return;
   const requestId = state.brandCatalog.requestId + 1;
+  const preferenceGeneration = brandSwitcherPreferenceGeneration;
   state.brandCatalog = { status: "loading", entries: [], requestId, userEmail };
   renderBrandCatalog();
   try {
@@ -2850,8 +2930,14 @@ async function loadCanonicalBrandCatalog() {
       } else {
         state.brandCatalog.status = "success";
         state.brandCatalog.entries = data.brands.map(({ id, name, revision, created_at, updated_at }) => ({ id, name, revision, created_at, updated_at }));
+        const hadSelectionBeforeValidation = Boolean(ephemeralBrandSwitcherSelection);
         if (ephemeralBrandSwitcherSelection && !state.brandCatalog.entries.some(({ id }) => id === ephemeralBrandSwitcherSelection.id)) {
+          const staleBrandId = ephemeralBrandSwitcherSelection.id;
           clearEphemeralBrandSwitcherSelection();
+          void removeBrandSwitcherPreference(userEmail, staleBrandId);
+        }
+        if (!hadSelectionBeforeValidation) {
+          await restoreBrandSwitcherPreference(userEmail, state.brandCatalog.entries, requestId, preferenceGeneration);
         }
       }
     }
@@ -14503,7 +14589,7 @@ el.brandSwitcherDetails?.addEventListener("toggle", () => {
   if (el.brandSwitcherDetails.open) void loadCanonicalBrandCatalog();
   else if (state.brandCreation.status !== "submitting") resetCanonicalBrandCreation();
 });
-el.brandSwitcherNoBrand?.addEventListener("click", () => clearEphemeralBrandSwitcherSelection({ close: true }));
+el.brandSwitcherNoBrand?.addEventListener("click", () => clearEphemeralBrandSwitcherSelection({ close: true, persist: true }));
 el.brandSwitcherCreateOpen?.addEventListener("click", openCanonicalBrandCreation);
 el.brandSwitcherCreateForm?.addEventListener("submit", submitCanonicalBrandCreation);
 el.brandSwitcherCreateCancel?.addEventListener("click", () => resetCanonicalBrandCreation({ focusTrigger: true }));

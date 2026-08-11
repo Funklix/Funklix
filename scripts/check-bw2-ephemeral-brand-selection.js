@@ -34,7 +34,7 @@ assert.match(load, /!state\.brandCatalog\.entries\.some[\s\S]{0,180}clearEphemer
 assert.match(app, /previousUserEmail !== currentUserEmail\) clearEphemeralBrandSwitcherSelection/, "account changes must clear selection");
 assert.match(load, /response\.status === 401[\s\S]{0,160}clearEphemeralBrandSwitcherSelection/, "catalog authentication loss must clear selection");
 assert.match(app, /state\.user = null;[\s\S]{0,220}clearEphemeralBrandSwitcherSelection/, "sign-out must clear before its request can complete");
-assert.doesNotMatch(selectionScope, /fetch\(|XMLHttpRequest|localStorage|sessionStorage|document\.cookie|indexedDB|history\.|location\.|brandCore|boardsLibrary|currentBoard|canvas|autosave/i, "selection must not persist, navigate, read details, write, or affect Boards and Canvas");
+assert.doesNotMatch(selectionScope, /fetch\(|XMLHttpRequest|sessionStorage|document\.cookie|indexedDB|history\.|location\.|brandCore|boardsLibrary|currentBoard|canvas|autosave/i, "selection must not navigate, read details, write APIs, or affect Boards and Canvas");
 assert.doesNotMatch(boot, /loadCanonicalBrandCatalog|selectEphemeralBrandFromSwitcher|ephemeralBrandSwitcherSelection/, "startup and direct Board loading must remain independent");
 assert.doesNotMatch(app, /(?:window|globalThis)\.(?:activeBrand|selectedBrand|ephemeralBrandSwitcherSelection)/, "selection must not become application-wide authority");
 assert.match(render, /replaceChildren\(\)/, "rerenders must replace rather than duplicate catalog entries");

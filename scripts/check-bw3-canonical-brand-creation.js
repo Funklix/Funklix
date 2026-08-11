@@ -40,6 +40,6 @@ assert.match(reset, /requestId: state\.brandCreation\.requestId \+ 1/, "cancella
 assert.match(app, /previousUserEmail !== currentUserEmail\) resetCanonicalBrandCreation\(\)/, "account changes must clear creation state");
 assert.match(app, /state\.user = null;[\s\S]{0,300}resetCanonicalBrandCreation\(\)/, "sign-out must clear creation state");
 assert.match(submit, /requestId !== state\.brandCreation\.requestId/g, "late responses must be checked before applying results");
-assert.doesNotMatch(`${open}\n${reset}\n${submit}\n${select}`, /localStorage|sessionStorage|document\.cookie|indexedDB|history\.|serviceWorker/, "BW-3 must add no durable selection or recovery path");
+assert.doesNotMatch(`${open}\n${reset}\n${submit}`, /localStorage|sessionStorage|document\.cookie|indexedDB|history\.|serviceWorker/, "Brand creation must add no durable selection or recovery path");
 
 console.log("BW-3 Canonical Brand creation checks passed.");
