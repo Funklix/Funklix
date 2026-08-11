@@ -321,6 +321,13 @@ const el = {
   brandSwitcherCurrentAvatar: document.getElementById("brand-switcher-current-avatar"),
   brandSwitcherCurrentName: document.getElementById("brand-switcher-current-name"),
   brandSwitcherCurrentNote: document.getElementById("brand-switcher-current-note"),
+  brandWorkspaceDetailOpen: document.getElementById("brand-workspace-detail-open"),
+  brandWorkspaceDetail: document.getElementById("brand-workspace-detail"),
+  brandWorkspaceDetailTitle: document.getElementById("brand-workspace-detail-title"),
+  brandWorkspaceDetailClose: document.getElementById("brand-workspace-detail-close"),
+  brandWorkspaceDetailStatus: document.getElementById("brand-workspace-detail-status"),
+  brandWorkspaceDetailContent: document.getElementById("brand-workspace-detail-content"),
+  brandWorkspaceDetailRetry: document.getElementById("brand-workspace-detail-retry"),
   boardBrandAssociationCurrent: document.getElementById("board-brand-association-current"),
   boardBrandAssociationDetail: document.getElementById("board-brand-association-detail"),
   boardBrandAssociationEdit: document.getElementById("board-brand-association-edit"),
@@ -2749,12 +2756,17 @@ function renderEphemeralBrandSwitcherSelection() {
     ? `Brand · ${selection.restored ? "Restored Workspace selection" : "Workspace selection"}`
     : "Brand · No Workspace selection";
   el.brandSwitcherNoBrand?.setAttribute("aria-current", selection ? "false" : "true");
+  if (el.brandWorkspaceDetailOpen) {
+    const validated = Boolean(selection && state.brandCatalog.status === "success" && state.brandCatalog.entries.some(({ id }) => id === selection.id));
+    el.brandWorkspaceDetailOpen.disabled = !validated;
+  }
 }
 
 function clearEphemeralBrandSwitcherSelection({ close = false, persist = false } = {}) {
   const userEmail = typeof state.user?.email === "string" ? state.user.email.trim().toLowerCase() : "";
   brandSwitcherPreferenceGeneration += 1;
   ephemeralBrandSwitcherSelection = null;
+  closeCanonicalBrandDetail({ restoreFocus: false });
   renderEphemeralBrandSwitcherSelection();
   if (persist && userEmail) void removeBrandSwitcherPreference(userEmail);
   if (close && el.brandSwitcherDetails) el.brandSwitcherDetails.open = false;
@@ -2763,12 +2775,160 @@ function clearEphemeralBrandSwitcherSelection({ close = false, persist = false }
 function selectEphemeralBrandFromSwitcher(brand) {
   const userEmail = typeof state.user?.email === "string" ? state.user.email.trim().toLowerCase() : "";
   if (!userEmail || state.brandCatalog.status !== "success" || !state.brandCatalog.entries.some(({ id }) => id === brand.id)) return;
+  closeCanonicalBrandDetail({ restoreFocus: false });
   const generation = ++brandSwitcherPreferenceGeneration;
   ephemeralBrandSwitcherSelection = { id: brand.id, name: brand.name.trim(), restored: false };
   void persistBrandSwitcherPreference(userEmail, brand.id, generation);
   renderEphemeralBrandSwitcherSelection();
   renderBrandCatalog();
   if (el.brandSwitcherDetails) el.brandSwitcherDetails.open = false;
+}
+
+let canonicalBrandDetail = { status: "closed", requestId: 0, brandId: "", userEmail: "", brand: null, controller: null, returnFocus: null };
+
+function isCanonicalBrandDetail(value, expectedId) {
+  return value && typeof value === "object" && !Array.isArray(value)
+    && value.id === expectedId
+    && typeof value.name === "string" && value.name.trim() && value.name.length <= 160
+    && Number.isSafeInteger(value.revision) && value.revision >= 1
+    && typeof value.created_at === "string" && !Number.isNaN(Date.parse(value.created_at))
+    && typeof value.updated_at === "string" && !Number.isNaN(Date.parse(value.updated_at))
+    && value.brand_core && typeof value.brand_core === "object" && !Array.isArray(value.brand_core);
+}
+
+function readableBrandCoreValue(value) {
+  if (value === null || value === undefined || value === "") return "Not provided";
+  if (Array.isArray(value)) return value.length ? value.map((item) => typeof item === "object" ? JSON.stringify(item) : String(item)).join("\n") : "Not provided";
+  if (typeof value === "object") return Object.keys(value).length ? JSON.stringify(value, null, 2) : "Not provided";
+  return String(value);
+}
+
+function brandDetailFieldLabel(key) {
+  return key.replace(/[_-]+/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function renderCanonicalBrandDetail() {
+  if (!el.brandWorkspaceDetailStatus || !el.brandWorkspaceDetailContent) return;
+  const detail = canonicalBrandDetail;
+  el.brandWorkspaceDetailContent.replaceChildren();
+  el.brandWorkspaceDetailContent.classList.toggle("hidden", detail.status !== "ready");
+  el.brandWorkspaceDetailRetry?.classList.toggle("hidden", !["unavailable", "error", "malformed"].includes(detail.status));
+  if (detail.status === "loading") el.brandWorkspaceDetailStatus.textContent = "Loading authoritative Canonical Brand details…";
+  else if (detail.status === "unavailable") el.brandWorkspaceDetailStatus.textContent = "This Canonical Brand is missing or unavailable to your account.";
+  else if (detail.status === "unauthenticated") el.brandWorkspaceDetailStatus.textContent = "Your session expired. Sign in to view Canonical Brand details.";
+  else if (detail.status === "malformed") el.brandWorkspaceDetailStatus.textContent = "The Brand detail response was unexpected and has not been displayed.";
+  else if (detail.status === "error") el.brandWorkspaceDetailStatus.textContent = "Brand details could not be loaded. Retry when the network or server is available.";
+  else if (detail.status === "ready") el.brandWorkspaceDetailStatus.textContent = "Canonical Brand details loaded. Read-only.";
+  else el.brandWorkspaceDetailStatus.textContent = "";
+  if (detail.status !== "ready" || !detail.brand) return;
+  const brand = detail.brand;
+  el.brandWorkspaceDetailTitle.textContent = brand.name.trim();
+  const meta = document.createElement("dl");
+  meta.className = "brand-workspace-detail-meta";
+  [["Record type", "Canonical Brand"], ["Revision", String(brand.revision)], ["Updated", new Date(brand.updated_at).toLocaleString()]].forEach(([label, value]) => {
+    const term = document.createElement("dt"); term.textContent = label;
+    const description = document.createElement("dd"); description.textContent = value;
+    meta.append(term, description);
+  });
+  const core = document.createElement("section");
+  core.className = "brand-workspace-core";
+  const heading = document.createElement("h3"); heading.textContent = "Canonical Brand Core (read-only)";
+  core.appendChild(heading);
+  const entries = Object.entries(brand.brand_core);
+  if (!entries.length) {
+    const empty = document.createElement("p"); empty.textContent = "No Canonical Brand Core details have been provided."; core.appendChild(empty);
+  } else {
+    const list = document.createElement("dl"); list.className = "brand-workspace-core-list";
+    entries.forEach(([key, value]) => {
+      const item = document.createElement("div"); item.className = "brand-workspace-core-item";
+      const term = document.createElement("dt"); term.textContent = brandDetailFieldLabel(key);
+      const description = document.createElement("dd"); description.textContent = readableBrandCoreValue(value);
+      item.append(term, description); list.appendChild(item);
+    });
+    core.appendChild(list);
+  }
+  el.brandWorkspaceDetailContent.append(meta, core);
+}
+
+function closeCanonicalBrandDetail({ restoreFocus = true } = {}) {
+  const previous = canonicalBrandDetail;
+  previous.controller?.abort();
+  canonicalBrandDetail = { status: "closed", requestId: previous.requestId + 1, brandId: "", userEmail: "", brand: null, controller: null, returnFocus: null };
+  if (el.brandWorkspaceDetail?.open) el.brandWorkspaceDetail.close();
+  if (el.brandWorkspaceDetailTitle) el.brandWorkspaceDetailTitle.textContent = "Canonical Brand";
+  renderCanonicalBrandDetail();
+  if (restoreFocus && previous.returnFocus?.isConnected) previous.returnFocus.focus();
+}
+
+function canonicalBrandDetailErrorStatus(status) {
+  if (status === 401) return "unauthenticated";
+  if ([403, 404].includes(status)) return "unavailable";
+  return "error";
+}
+
+async function loadCanonicalBrandDetail() {
+  const selection = ephemeralBrandSwitcherSelection;
+  const userEmail = (state.user?.email || "").trim().toLowerCase();
+  const catalogValidated = selection && state.brandCatalog.status === "success"
+    && state.brandCatalog.userEmail === userEmail
+    && state.brandCatalog.entries.some(({ id }) => id === selection.id);
+  if (!userEmail || !catalogValidated || !el.brandWorkspaceDetail?.open) {
+    closeCanonicalBrandDetail({ restoreFocus: false });
+    return;
+  }
+  canonicalBrandDetail.controller?.abort();
+  const requestId = canonicalBrandDetail.requestId + 1;
+  const controller = new AbortController();
+  canonicalBrandDetail = { ...canonicalBrandDetail, status: "loading", requestId, brandId: selection.id, userEmail, brand: null, controller };
+  renderCanonicalBrandDetail();
+  try {
+    const response = await fetch(`/api/brands/${encodeURIComponent(selection.id)}`, { headers: { Accept: "application/json" }, signal: controller.signal });
+    const stillCurrent = canonicalBrandDetail.requestId === requestId && canonicalBrandDetail.brandId === selection.id
+      && canonicalBrandDetail.userEmail === (state.user?.email || "").trim().toLowerCase()
+      && ephemeralBrandSwitcherSelection?.id === selection.id && el.brandWorkspaceDetail.open;
+    if (!stillCurrent) return;
+    if (!response.ok) {
+      canonicalBrandDetail.status = canonicalBrandDetailErrorStatus(response.status);
+      canonicalBrandDetail.controller = null;
+      if (response.status === 401) {
+        state.user = null;
+        state.brandCatalog = { status: "unauthenticated", entries: [], requestId: state.brandCatalog.requestId + 1, userEmail: "" };
+        clearEphemeralBrandSwitcherSelection();
+        renderBrandCatalog();
+        renderAuthState();
+        return;
+      }
+      renderCanonicalBrandDetail();
+      return;
+    }
+    let brand = null;
+    try { brand = await response.json(); } catch (_error) { /* handled as malformed */ }
+    if (canonicalBrandDetail.requestId !== requestId || !el.brandWorkspaceDetail.open) return;
+    canonicalBrandDetail.controller = null;
+    if (!isCanonicalBrandDetail(brand, selection.id)) canonicalBrandDetail.status = "malformed";
+    else {
+      canonicalBrandDetail.status = "ready";
+      canonicalBrandDetail.brand = (({ id, name, brand_core, revision, created_at, updated_at }) => ({ id, name, brand_core, revision, created_at, updated_at }))(brand);
+    }
+    renderCanonicalBrandDetail();
+  } catch (error) {
+    if (error?.name === "AbortError" || canonicalBrandDetail.requestId !== requestId) return;
+    canonicalBrandDetail.status = "error";
+    canonicalBrandDetail.controller = null;
+    renderCanonicalBrandDetail();
+  }
+}
+
+function openCanonicalBrandDetail() {
+  const selection = ephemeralBrandSwitcherSelection;
+  const userEmail = (state.user?.email || "").trim().toLowerCase();
+  if (!selection || !userEmail || state.brandCatalog.status !== "success" || state.brandCatalog.userEmail !== userEmail
+    || !state.brandCatalog.entries.some(({ id }) => id === selection.id) || !el.brandWorkspaceDetail) return;
+  canonicalBrandDetail.returnFocus = el.brandWorkspaceDetailOpen;
+  if (el.brandSwitcherDetails) el.brandSwitcherDetails.open = false;
+  el.brandWorkspaceDetail.showModal();
+  el.brandWorkspaceDetailTitle?.focus();
+  void loadCanonicalBrandDetail();
 }
 
 function resetCanonicalBrandCreation({ focusTrigger = false } = {}) {
@@ -14758,6 +14918,13 @@ el.brandSwitcherDetails?.addEventListener("toggle", () => {
   else if (state.brandCreation.status !== "submitting") resetCanonicalBrandCreation();
 });
 el.brandSwitcherNoBrand?.addEventListener("click", () => clearEphemeralBrandSwitcherSelection({ close: true, persist: true }));
+el.brandWorkspaceDetailOpen?.addEventListener("click", openCanonicalBrandDetail);
+el.brandWorkspaceDetailClose?.addEventListener("click", () => closeCanonicalBrandDetail());
+el.brandWorkspaceDetailRetry?.addEventListener("click", () => { void loadCanonicalBrandDetail(); });
+el.brandWorkspaceDetail?.addEventListener("cancel", (event) => {
+  event.preventDefault();
+  closeCanonicalBrandDetail();
+});
 el.brandSwitcherCreateOpen?.addEventListener("click", openCanonicalBrandCreation);
 el.brandSwitcherCreateForm?.addEventListener("submit", submitCanonicalBrandCreation);
 el.brandSwitcherCreateCancel?.addEventListener("click", () => resetCanonicalBrandCreation({ focusTrigger: true }));

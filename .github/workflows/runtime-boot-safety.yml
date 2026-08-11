@@ -31,5 +31,7 @@ jobs:
         run: node scripts/check-bw4-durable-brand-selection.js
       - name: Check explicit Board Brand association
         run: node scripts/check-bw5-board-brand-association.js
+      - name: Check read-only Canonical Brand Workspace detail
+        run: node scripts/check-bw6-brand-workspace-detail.js
       - name: Check Knowledge Module browser globals
         run: node scripts/check-knowledge-module-browser-globals.js
