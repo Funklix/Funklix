@@ -27,5 +27,7 @@ jobs:
         run: node scripts/check-bw2-ephemeral-brand-selection.js
       - name: Check Canonical Brand creation
         run: node scripts/check-bw3-canonical-brand-creation.js
+      - name: Check durable Workspace Brand selection
+        run: node scripts/check-bw4-durable-brand-selection.js
       - name: Check Knowledge Module browser globals
         run: node scripts/check-knowledge-module-browser-globals.js
