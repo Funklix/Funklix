@@ -581,6 +581,20 @@ body {
   gap: var(--fk-space-2);
 }
 
+.board-brand-association {
+  display: grid;
+  gap: var(--fk-space-2);
+  margin-bottom: var(--fk-space-3);
+  padding: var(--fk-space-2);
+}
+.board-brand-association > strong { font-size: var(--fk-font-size-xs); color: var(--fk-color-heading); }
+.board-brand-association > small,
+.board-brand-association-form > span { font-size: var(--fk-font-size-xs); color: var(--fk-color-muted); }
+.board-brand-association-form { display: grid; gap: var(--fk-space-2); border-top: 1px solid var(--fk-color-border); padding-top: var(--fk-space-2); }
+.board-brand-association-form.hidden { display: none; }
+.board-brand-association-form label { font-size: var(--fk-font-size-xs); font-weight: var(--fk-font-weight-bold); }
+.board-brand-association-form select { width: 100%; min-width: 0; padding: 8px; border: 1px solid var(--fk-color-border); border-radius: var(--fk-radius-sm); background: var(--fk-color-surface); }
+
 .sidebar nav {
   display: grid;
   gap: 4px;
@@ -639,6 +653,8 @@ body {
   margin-bottom: var(--fk-space-3);
   padding: 0;
 }
+
+.app-shell.sidebar-collapsed .board-brand-association { display: none; }
 
 .app-shell.sidebar-collapsed .brand-switcher-eyebrow,
 .app-shell.sidebar-collapsed .brand-switcher-copy,

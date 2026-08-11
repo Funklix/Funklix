@@ -141,6 +141,22 @@
             </div>
           </details>
         </section>
+        <section class="board-brand-association fk-card" id="board-brand-association" aria-labelledby="board-brand-association-title">
+          <span class="brand-switcher-eyebrow" id="board-brand-association-title">Current Board Brand</span>
+          <strong id="board-brand-association-current">No Board open</strong>
+          <small id="board-brand-association-detail">Board association is separate from Workspace selection.</small>
+          <button class="fk-btn fk-btn-secondary" id="board-brand-association-edit" type="button" disabled>Change Board Brand</button>
+          <form class="board-brand-association-form hidden" id="board-brand-association-form" aria-label="Edit Current Board Brand association" novalidate>
+            <label for="board-brand-association-choice">Canonical Brand</label>
+            <select id="board-brand-association-choice" aria-describedby="board-brand-association-feedback"></select>
+            <span id="board-brand-association-pending">This choice is not saved until you confirm.</span>
+            <span id="board-brand-association-feedback" role="status" aria-live="polite"></span>
+            <div class="brand-switcher-create-actions">
+              <button class="fk-btn fk-btn-primary" id="board-brand-association-save" type="submit">Save association</button>
+              <button class="fk-btn fk-btn-ghost" id="board-brand-association-cancel" type="button">Cancel</button>
+            </div>
+          </form>
+        </section>
         <nav aria-label="Workspace navigation">
           <span class="sidebar-nav-heading">Workspace</span>
           <button id="home-nav-btn" class="nav-item fk-btn" data-icon="🏠"><span class="nav-label">Home</span></button>

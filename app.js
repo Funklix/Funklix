@@ -116,6 +116,7 @@ const state = {
   ,boardsLibrary: []
   ,brandCatalog: { status: "idle", entries: [], requestId: 0, userEmail: "" }
   ,brandCreation: { status: "initial", requestId: 0, userEmail: "" }
+  ,boardBrandAssociation: { brandId: null, boardId: "", status: "idle", generation: 0, intendedBrandId: null, message: "" }
   ,contentPackLoadingById: {}
   ,contentPackErrorById: {}
   ,hashtagDraftByNode: {}
@@ -320,6 +321,14 @@ const el = {
   brandSwitcherCurrentAvatar: document.getElementById("brand-switcher-current-avatar"),
   brandSwitcherCurrentName: document.getElementById("brand-switcher-current-name"),
   brandSwitcherCurrentNote: document.getElementById("brand-switcher-current-note"),
+  boardBrandAssociationCurrent: document.getElementById("board-brand-association-current"),
+  boardBrandAssociationDetail: document.getElementById("board-brand-association-detail"),
+  boardBrandAssociationEdit: document.getElementById("board-brand-association-edit"),
+  boardBrandAssociationForm: document.getElementById("board-brand-association-form"),
+  boardBrandAssociationChoice: document.getElementById("board-brand-association-choice"),
+  boardBrandAssociationFeedback: document.getElementById("board-brand-association-feedback"),
+  boardBrandAssociationSave: document.getElementById("board-brand-association-save"),
+  boardBrandAssociationCancel: document.getElementById("board-brand-association-cancel"),
   brandSwitcherCreateOpen: document.getElementById("brand-switcher-create-open"),
   brandSwitcherCreateForm: document.getElementById("brand-switcher-create-form"),
   brandSwitcherCreateName: document.getElementById("brand-switcher-create-name"),
@@ -2616,6 +2625,12 @@ async function pollBoardForRemoteChanges() {
       applyBoardAccessFromServer(data?.access, "pollBoardForRemoteChanges");
       return;
     }
+    if (data?.brand_id === null || typeof data?.brand_id === "string") {
+      invalidateBoardBrandAssociation();
+      state.boardBrandAssociation.brandId = data.brand_id;
+      state.boardBrandAssociation.boardId = String(data?.id || boardId);
+      renderBoardBrandAssociation();
+    }
     const incomingCanvasState = data?.canvas_json || {};
     if (!isValidCanvasStatePayload(incomingCanvasState)) {
       applyBoardAccessFromServer(data?.access, "pollBoardForRemoteChanges");
@@ -2945,7 +2960,154 @@ async function loadCanonicalBrandCatalog() {
     if (requestId !== state.brandCatalog.requestId) return;
     state.brandCatalog.status = "error";
   }
-  if (requestId === state.brandCatalog.requestId) renderBrandCatalog();
+  if (requestId === state.brandCatalog.requestId) {
+    renderBrandCatalog();
+    renderBoardBrandAssociation();
+  }
+}
+
+function invalidateBoardBrandAssociation({ clearBoard = false } = {}) {
+  const current = state.boardBrandAssociation;
+  state.boardBrandAssociation = {
+    brandId: clearBoard ? null : current.brandId,
+    boardId: clearBoard ? "" : current.boardId,
+    status: "idle",
+    generation: current.generation + 1,
+    intendedBrandId: null,
+    message: ""
+  };
+  el.boardBrandAssociationForm?.classList.add("hidden");
+  renderBoardBrandAssociation();
+}
+
+function renderBoardBrandAssociation() {
+  const association = state.boardBrandAssociation;
+  const boardId = state.currentBoardId || getBoardIdFromPath() || "";
+  const hasBoard = Boolean(boardId && association.boardId === boardId);
+  const catalogBrand = association.brandId && state.brandCatalog.entries.find(({ id }) => id === association.brandId);
+  if (el.boardBrandAssociationCurrent) {
+    el.boardBrandAssociationCurrent.textContent = !hasBoard ? "No Board open" : association.brandId ? (catalogBrand?.name || "Associated Brand unavailable") : "Unbranded Board";
+  }
+  if (el.boardBrandAssociationDetail) {
+    el.boardBrandAssociationDetail.textContent = !hasBoard
+      ? "Open a Board to view its authoritative association."
+      : association.brandId && !catalogBrand
+        ? `The Board remains associated with Brand ${association.brandId}; it is not available in your catalog.`
+        : association.status === "saved"
+          ? `${association.message} Workspace Brand selection is unchanged.`
+          : "Board association is authoritative and separate from Workspace Brand selection.";
+  }
+  const canWrite = hasBoard && !!state.user?.email && state.boardAccess?.canEdit === true && !state.isBoardLoading;
+  if (el.boardBrandAssociationEdit) {
+    el.boardBrandAssociationEdit.disabled = !canWrite || association.status === "submitting";
+    el.boardBrandAssociationEdit.title = canWrite ? "" : "A signed-in Board editor is required to change this association.";
+  }
+  const editing = ["editing", "error", "validation", "submitting"].includes(association.status);
+  el.boardBrandAssociationForm?.classList.toggle("hidden", !editing);
+  if (editing && el.boardBrandAssociationChoice) {
+    const selected = association.intendedBrandId;
+    el.boardBrandAssociationChoice.replaceChildren();
+    const noBrand = document.createElement("option");
+    noBrand.value = "";
+    noBrand.textContent = "No Brand — remove association";
+    el.boardBrandAssociationChoice.appendChild(noBrand);
+    if (state.brandCatalog.status === "success") {
+      state.brandCatalog.entries.forEach((brand) => {
+        const option = document.createElement("option");
+        option.value = brand.id;
+        option.textContent = brand.name;
+        el.boardBrandAssociationChoice.appendChild(option);
+      });
+    }
+    el.boardBrandAssociationChoice.value = selected || "";
+    el.boardBrandAssociationChoice.disabled = association.status === "submitting" || state.brandCatalog.status !== "success";
+  }
+  if (el.boardBrandAssociationSave) el.boardBrandAssociationSave.disabled = association.status === "submitting" || state.brandCatalog.status !== "success";
+  if (el.boardBrandAssociationCancel) el.boardBrandAssociationCancel.disabled = association.status === "submitting";
+  if (el.boardBrandAssociationFeedback) el.boardBrandAssociationFeedback.textContent = association.message || (state.brandCatalog.status === "loading" && editing ? "Loading your authenticated Canonical Brand catalog…" : "");
+}
+
+function openBoardBrandAssociation() {
+  const boardId = state.currentBoardId || getBoardIdFromPath() || "";
+  if (!boardId || state.boardAccess?.canEdit !== true || !state.user?.email) return;
+  const workspaceCandidate = ephemeralBrandSwitcherSelection?.id;
+  const candidate = state.brandCatalog.entries.some(({ id }) => id === workspaceCandidate)
+    ? workspaceCandidate
+    : (state.brandCatalog.entries.some(({ id }) => id === state.boardBrandAssociation.brandId) ? state.boardBrandAssociation.brandId : null);
+  state.boardBrandAssociation.status = "editing";
+  state.boardBrandAssociation.intendedBrandId = candidate;
+  state.boardBrandAssociation.message = "Choose deliberately, then save. Workspace selection will not change.";
+  renderBoardBrandAssociation();
+  if (state.brandCatalog.status !== "success") void loadCanonicalBrandCatalog();
+  requestAnimationFrame(() => el.boardBrandAssociationChoice?.focus());
+}
+
+function boardBrandAssociationError(status) {
+  if (status === 401) return "Your session expired. Sign in before trying again.";
+  if (status === 403) return "You do not have permission to update this Board.";
+  if (status === 404) return "The Board or Canonical Brand is no longer accessible.";
+  if (status === 409) return "The Board changed. Review the current Board before trying again.";
+  if (status === 400 || status === 422) return "The association choice was not accepted.";
+  return "The Board Brand association could not be saved. Review your choice and retry deliberately.";
+}
+
+async function submitBoardBrandAssociation(event) {
+  event.preventDefault();
+  const association = state.boardBrandAssociation;
+  if (association.status === "submitting") return;
+  const boardId = state.currentBoardId || getBoardIdFromPath() || "";
+  const userEmail = (state.user?.email || "").trim().toLowerCase();
+  const targetBrandId = el.boardBrandAssociationChoice?.value || null;
+  if (!boardId || !userEmail || state.boardAccess?.canEdit !== true) return;
+  if (state.brandCatalog.status !== "success" || (targetBrandId && !state.brandCatalog.entries.some(({ id }) => id === targetBrandId))) {
+    association.status = "validation";
+    association.message = "Choose a Brand confirmed by your authenticated catalog.";
+    renderBoardBrandAssociation();
+    return;
+  }
+  const generation = association.generation + 1;
+  association.generation = generation;
+  association.status = "submitting";
+  association.intendedBrandId = targetBrandId;
+  association.message = targetBrandId ? "Saving Board association…" : "Removing Board association…";
+  renderBoardBrandAssociation();
+  try {
+    const response = await fetch(`/api/boards/${boardId}`, {
+      method: "PATCH",
+      headers: { Accept: "application/json", "Content-Type": "application/json" },
+      body: JSON.stringify({ brand_id: targetBrandId })
+    });
+    let data = null;
+    try { data = await response.json(); } catch (_error) { /* malformed response handled below */ }
+    const stillCurrent = association === state.boardBrandAssociation && generation === state.boardBrandAssociation.generation && boardId === (state.currentBoardId || getBoardIdFromPath() || "") && userEmail === (state.user?.email || "").trim().toLowerCase();
+    if (!stillCurrent) return;
+    if (!response.ok) {
+      association.status = "error";
+      association.message = boardBrandAssociationError(response.status);
+      renderBoardBrandAssociation();
+      return;
+    }
+    if (!data || String(data.id || "") !== String(boardId) || data.brand_id !== targetBrandId || !data.updated_at) {
+      association.status = "error";
+      association.message = "The server returned an unexpected response; the displayed association was not changed.";
+      renderBoardBrandAssociation();
+      return;
+    }
+    association.brandId = data.brand_id;
+    association.boardId = boardId;
+    association.status = "saved";
+    association.intendedBrandId = null;
+    association.message = data.brand_id ? "Board Brand association saved." : "Board Brand association removed.";
+    state.lastKnownUpdatedAt = data.updated_at;
+    applyBoardAccessFromServer(data.access, "boardBrandAssociation");
+    renderBoardBrandAssociation();
+    el.boardBrandAssociationEdit?.focus();
+  } catch (_error) {
+    if (association !== state.boardBrandAssociation || generation !== state.boardBrandAssociation.generation) return;
+    association.status = "error";
+    association.message = boardBrandAssociationError(0);
+    renderBoardBrandAssociation();
+  }
 }
 
 function renderAuthState() {
@@ -2992,6 +3154,7 @@ async function loadSessionUser() {
   const currentUserEmail = typeof state.user?.email === "string" ? state.user.email.trim().toLowerCase() : "";
   if (previousUserEmail !== currentUserEmail) clearEphemeralBrandSwitcherSelection();
   if (previousUserEmail !== currentUserEmail) resetCanonicalBrandCreation();
+  if (previousUserEmail !== currentUserEmail) invalidateBoardBrandAssociation({ clearBoard: true });
   state.brandCatalog = { status: currentUserEmail ? "idle" : "unauthenticated", entries: [], requestId: state.brandCatalog.requestId + 1, userEmail: "" };
   renderBrandCatalog();
   if (el.brandSwitcherDetails?.open) void loadCanonicalBrandCatalog();
@@ -6600,6 +6763,7 @@ async function loadBoardFromUrlIfPresent() {
   state.isBoardLoading = true;
   state.isBoardHydrating = true;
   state.currentBoardId = boardId;
+  invalidateBoardBrandAssociation({ clearBoard: true });
   syncRuntimeSessionFromLegacy("board-load-start");
   clearAutosaveTimer();
   resetBrandBrainForBoardHydration();
@@ -6617,6 +6781,10 @@ async function loadBoardFromUrlIfPresent() {
     syncRuntimeSessionFromLegacy("board-load");
     state.currentBoardName = data?.name || "";
     state.lastKnownUpdatedAt = data?.updated_at || null;
+    state.boardBrandAssociation.brandId = typeof data?.brand_id === "string" ? data.brand_id : null;
+    state.boardBrandAssociation.boardId = String(data?.id || boardId);
+    state.boardBrandAssociation.status = "idle";
+    renderBoardBrandAssociation();
     state.brandCore = snapshot ? normalizeBrandCoreState(snapshot, { restoration: true }) : normalizeBrandCoreState(defaultBrandCoreState(), { restoration: true });
     renderBrandCoreTiles();
     renderBrandCoreEditor();
@@ -14593,11 +14761,29 @@ el.brandSwitcherNoBrand?.addEventListener("click", () => clearEphemeralBrandSwit
 el.brandSwitcherCreateOpen?.addEventListener("click", openCanonicalBrandCreation);
 el.brandSwitcherCreateForm?.addEventListener("submit", submitCanonicalBrandCreation);
 el.brandSwitcherCreateCancel?.addEventListener("click", () => resetCanonicalBrandCreation({ focusTrigger: true }));
+el.boardBrandAssociationEdit?.addEventListener("click", openBoardBrandAssociation);
+el.boardBrandAssociationChoice?.addEventListener("change", () => {
+  state.boardBrandAssociation.intendedBrandId = el.boardBrandAssociationChoice.value || null;
+  state.boardBrandAssociation.message = "Pending choice — confirm Save association to update the Board.";
+  renderBoardBrandAssociation();
+});
+el.boardBrandAssociationForm?.addEventListener("submit", submitBoardBrandAssociation);
+el.boardBrandAssociationCancel?.addEventListener("click", () => {
+  invalidateBoardBrandAssociation();
+  el.boardBrandAssociationEdit?.focus();
+});
+el.boardBrandAssociationForm?.addEventListener("keydown", (event) => {
+  if (event.key !== "Escape" || state.boardBrandAssociation.status === "submitting") return;
+  event.preventDefault();
+  invalidateBoardBrandAssociation();
+  el.boardBrandAssociationEdit?.focus();
+});
 el.authSignoutButton?.addEventListener("click", async () => {
   state.documentSourceOperationByTileId.forEach((operation) => operation?.controller?.abort?.());
   state.documentSourceOperationByTileId.clear();
   state.documentSourceStateByTileId.clear();
   state.user = null;
+  invalidateBoardBrandAssociation({ clearBoard: true });
   state.brandCatalog = { status: "unauthenticated", entries: [], requestId: state.brandCatalog.requestId + 1, userEmail: "" };
   resetCanonicalBrandCreation();
   clearEphemeralBrandSwitcherSelection({ close: true });
