@@ -33,6 +33,8 @@ jobs:
         run: node scripts/check-bw5-board-brand-association.js
       - name: Check per-Board Brand association isolation
         run: node scripts/check-bw5-board-brand-isolation-regression.js
+      - name: Check Board Brand catalog resolution states
+        run: node scripts/check-bw5-board-brand-resolution-state.js
       - name: Check read-only Canonical Brand Workspace detail
         run: node scripts/check-bw6-brand-workspace-detail.js
       - name: Check explicit Canonical Brand editing

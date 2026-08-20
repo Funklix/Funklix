@@ -35,7 +35,7 @@ assert.match(load, /userEmail === \(state\.user\?\.email/, "Board loads must be 
 assert.match(poll, /loadGeneration === state\.boardLoadGeneration/, "polling must be Board-generation guarded");
 assert.match(poll, /String\(data\?\.id \|\| ""\) !== String\(boardId\)/, "polling must reject mismatched Board IDs");
 assert.match(render, /"Unbranded Board"/, "null association must render Unbranded Board");
-assert.match(render, /"Associated Brand unavailable"/, "catalog failure must not erase an authoritative ID");
+assert.match(render, /catalog\.status === "success"[\s\S]*"Associated Brand unavailable"/, "only a successful catalog miss may describe an authoritative ID as unavailable");
 assert.doesNotMatch(open, /ephemeralBrandSwitcherSelection/, "the association form must not default to Workspace Brand");
 assert.match(open, /candidate = state\.boardBrandAssociation\.brandId/, "the form must default to the authoritative association");
 assert.doesNotMatch(open, /fetch\(/, "opening the form must perform no write");
