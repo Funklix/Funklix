@@ -117,6 +117,7 @@ const state = {
   ,brandCatalog: { status: "idle", entries: [], requestId: 0, userEmail: "" }
   ,brandCreation: { status: "initial", requestId: 0, userEmail: "" }
   ,boardBrandAssociation: { brandId: null, boardId: "", status: "idle", generation: 0, intendedBrandId: null, message: "" }
+  ,boardLoadGeneration: 0
   ,contentPackLoadingById: {}
   ,contentPackErrorById: {}
   ,hashtagDraftByNode: {}
@@ -2627,14 +2628,19 @@ function mergeRemoteBoardState(remoteCanvasState, remoteUpdatedAt) {
 
 
 async function pollBoardForRemoteChanges() {
-  const boardId = state.currentBoardId || getBoardIdFromPath();
+  const boardId = getBoardIdFromPath() || state.currentBoardId;
   if (!boardId || state.boardRefreshInFlight || state.isSaving || state.conflictModalOpen || state.initialServerLoadInFlight) return;
+  const loadGeneration = state.boardLoadGeneration;
+  const userEmail = (state.user?.email || "").trim().toLowerCase();
   state.boardRefreshInFlight = true;
   try {
     const response = await fetch(`/api/boards/${encodeURIComponent(boardId)}`);
     const data = await response.json();
     if (!response.ok) throw new Error(data?.error || 'Failed to refresh board');
-    if ((state.currentBoardId || getBoardIdFromPath()) !== boardId) return;
+    const stillCurrent = boardId === (getBoardIdFromPath() || state.currentBoardId)
+      && loadGeneration === state.boardLoadGeneration
+      && userEmail === (state.user?.email || "").trim().toLowerCase();
+    if (!stillCurrent || String(data?.id || "") !== String(boardId) || !isValidBoardBrandId(data?.brand_id)) return;
     const remoteUpdatedAt = data?.updated_at || null;
     if (!remoteTimestampIsNewer(remoteUpdatedAt)) {
       applyBoardAccessFromServer(data?.access, "pollBoardForRemoteChanges");
@@ -2643,7 +2649,7 @@ async function pollBoardForRemoteChanges() {
     if (data?.brand_id === null || typeof data?.brand_id === "string") {
       invalidateBoardBrandAssociation();
       state.boardBrandAssociation.brandId = data.brand_id;
-      state.boardBrandAssociation.boardId = String(data?.id || boardId);
+      state.boardBrandAssociation.boardId = String(data.id);
       renderBoardBrandAssociation();
     }
     const incomingCanvasState = data?.canvas_json || {};
@@ -3253,12 +3259,12 @@ async function loadCanonicalBrandCatalog() {
   }
 }
 
-function invalidateBoardBrandAssociation({ clearBoard = false } = {}) {
+function invalidateBoardBrandAssociation({ clearBoard = false, loadingBoardId = "" } = {}) {
   const current = state.boardBrandAssociation;
   state.boardBrandAssociation = {
     brandId: clearBoard ? null : current.brandId,
-    boardId: clearBoard ? "" : current.boardId,
-    status: "idle",
+    boardId: loadingBoardId || (clearBoard ? "" : current.boardId),
+    status: loadingBoardId ? "loading" : "idle",
     generation: current.generation + 1,
     intendedBrandId: null,
     message: ""
@@ -3269,15 +3275,23 @@ function invalidateBoardBrandAssociation({ clearBoard = false } = {}) {
 
 function renderBoardBrandAssociation() {
   const association = state.boardBrandAssociation;
-  const boardId = state.currentBoardId || getBoardIdFromPath() || "";
+  const boardId = getBoardIdFromPath() || state.currentBoardId || "";
   const hasBoard = Boolean(boardId && association.boardId === boardId);
   const catalogBrand = association.brandId && state.brandCatalog.entries.find(({ id }) => id === association.brandId);
   if (el.boardBrandAssociationCurrent) {
-    el.boardBrandAssociationCurrent.textContent = !hasBoard ? "No Board open" : association.brandId ? (catalogBrand?.name || "Associated Brand unavailable") : "Unbranded Board";
+    el.boardBrandAssociationCurrent.textContent = association.status === "loading" && hasBoard
+      ? "Loading Board Brand…"
+      : association.status === "load-error" && hasBoard
+        ? "Board Brand unavailable"
+      : !hasBoard ? "No Board open" : association.brandId ? (catalogBrand?.name || "Associated Brand unavailable") : "Unbranded Board";
   }
   if (el.boardBrandAssociationDetail) {
     el.boardBrandAssociationDetail.textContent = !hasBoard
       ? "Open a Board to view its authoritative association."
+      : association.status === "loading"
+        ? "Loading this Board’s authoritative association…"
+      : association.status === "load-error"
+        ? association.message
       : association.brandId && !catalogBrand
         ? `The Board remains associated with Brand ${association.brandId}; it is not available in your catalog.`
         : association.status === "saved"
@@ -3298,6 +3312,12 @@ function renderBoardBrandAssociation() {
     noBrand.value = "";
     noBrand.textContent = "No Brand — remove association";
     el.boardBrandAssociationChoice.appendChild(noBrand);
+    if (selected && !state.brandCatalog.entries.some(({ id }) => id === selected)) {
+      const unavailableBrand = document.createElement("option");
+      unavailableBrand.value = selected;
+      unavailableBrand.textContent = "Current associated Brand (unavailable)";
+      el.boardBrandAssociationChoice.appendChild(unavailableBrand);
+    }
     if (state.brandCatalog.status === "success") {
       state.brandCatalog.entries.forEach((brand) => {
         const option = document.createElement("option");
@@ -3315,12 +3335,9 @@ function renderBoardBrandAssociation() {
 }
 
 function openBoardBrandAssociation() {
-  const boardId = state.currentBoardId || getBoardIdFromPath() || "";
-  if (!boardId || state.boardAccess?.canEdit !== true || !state.user?.email) return;
-  const workspaceCandidate = ephemeralBrandSwitcherSelection?.id;
-  const candidate = state.brandCatalog.entries.some(({ id }) => id === workspaceCandidate)
-    ? workspaceCandidate
-    : (state.brandCatalog.entries.some(({ id }) => id === state.boardBrandAssociation.brandId) ? state.boardBrandAssociation.brandId : null);
+  const boardId = getBoardIdFromPath() || state.currentBoardId || "";
+  if (!boardId || state.boardBrandAssociation.boardId !== boardId || state.boardBrandAssociation.status === "loading" || state.boardAccess?.canEdit !== true || !state.user?.email) return;
+  const candidate = state.boardBrandAssociation.brandId;
   state.boardBrandAssociation.status = "editing";
   state.boardBrandAssociation.intendedBrandId = candidate;
   state.boardBrandAssociation.message = "Choose deliberately, then save. Workspace selection will not change.";
@@ -3342,7 +3359,7 @@ async function submitBoardBrandAssociation(event) {
   event.preventDefault();
   const association = state.boardBrandAssociation;
   if (association.status === "submitting") return;
-  const boardId = state.currentBoardId || getBoardIdFromPath() || "";
+  const boardId = getBoardIdFromPath() || state.currentBoardId || "";
   const userEmail = (state.user?.email || "").trim().toLowerCase();
   const targetBrandId = el.boardBrandAssociationChoice?.value || null;
   if (!boardId || !userEmail || state.boardAccess?.canEdit !== true) return;
@@ -3366,7 +3383,7 @@ async function submitBoardBrandAssociation(event) {
     });
     let data = null;
     try { data = await response.json(); } catch (_error) { /* malformed response handled below */ }
-    const stillCurrent = association === state.boardBrandAssociation && generation === state.boardBrandAssociation.generation && boardId === (state.currentBoardId || getBoardIdFromPath() || "") && userEmail === (state.user?.email || "").trim().toLowerCase();
+    const stillCurrent = association === state.boardBrandAssociation && generation === state.boardBrandAssociation.generation && boardId === (getBoardIdFromPath() || state.currentBoardId || "") && association.boardId === boardId && userEmail === (state.user?.email || "").trim().toLowerCase();
     if (!stillCurrent) return;
     if (!response.ok) {
       association.status = "error";
@@ -4477,6 +4494,10 @@ function getBoardIdFromPath() {
   if (fromHref?.[1]) return decodeURIComponent(fromHref[1]);
 
   return null;
+}
+
+function isValidBoardBrandId(value) {
+  return value === null || (typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value));
 }
 
 function resolveExistingBoardId() {
@@ -7043,14 +7064,17 @@ async function saveBoardToServer(trigger = "manual") {
   }
 }
 
-async function loadBoardFromUrlIfPresent() {
-  const boardId = state.currentBoardId || getBoardIdFromPath();
+async function loadBoardFromUrlIfPresent(requestedBoardId = null) {
+  const boardId = requestedBoardId || getBoardIdFromPath() || state.currentBoardId;
   if (!boardId) return false;
+  const loadGeneration = state.boardLoadGeneration + 1;
+  state.boardLoadGeneration = loadGeneration;
+  const userEmail = (state.user?.email || "").trim().toLowerCase();
   state.initialServerLoadInFlight = true;
   state.isBoardLoading = true;
   state.isBoardHydrating = true;
   state.currentBoardId = boardId;
-  invalidateBoardBrandAssociation({ clearBoard: true });
+  invalidateBoardBrandAssociation({ clearBoard: true, loadingBoardId: boardId });
   syncRuntimeSessionFromLegacy("board-load-start");
   clearAutosaveTimer();
   resetBrandBrainForBoardHydration();
@@ -7061,15 +7085,25 @@ async function loadBoardFromUrlIfPresent() {
     const response = await fetch(`/api/boards/${boardId}`);
     const data = await response.json();
     if (!response.ok) throw new Error(data?.error || 'Failed to load board');
+    const stillCurrent = loadGeneration === state.boardLoadGeneration
+      && boardId === (getBoardIdFromPath() || state.currentBoardId)
+      && userEmail === (state.user?.email || "").trim().toLowerCase();
+    if (!stillCurrent) return false;
+    if (String(data?.id || "") !== String(boardId) || !isValidBoardBrandId(data?.brand_id)) {
+      state.boardBrandAssociation.status = "load-error";
+      state.boardBrandAssociation.message = "The Board API returned an invalid association response; no Brand was displayed.";
+      renderBoardBrandAssociation();
+      return false;
+    }
     const snapshot = data?.brand_core_snapshot && typeof data.brand_core_snapshot === "object" ? data.brand_core_snapshot : null;
     debugBrandBrainScope("board-snapshot-received", { boardId, hasSnapshot: Boolean(snapshot), ...brandDnaScopeSummary(snapshot || {}) });
     setPassiveBoardOwnershipDiagnostics(data, "board-load-response");
-    state.currentBoardId = data?.id || boardId;
+    state.currentBoardId = data.id;
     syncRuntimeSessionFromLegacy("board-load");
     state.currentBoardName = data?.name || "";
     state.lastKnownUpdatedAt = data?.updated_at || null;
-    state.boardBrandAssociation.brandId = typeof data?.brand_id === "string" ? data.brand_id : null;
-    state.boardBrandAssociation.boardId = String(data?.id || boardId);
+    state.boardBrandAssociation.brandId = data.brand_id;
+    state.boardBrandAssociation.boardId = String(data.id);
     state.boardBrandAssociation.status = "idle";
     renderBoardBrandAssociation();
     state.brandCore = snapshot ? normalizeBrandCoreState(snapshot, { restoration: true }) : normalizeBrandCoreState(defaultBrandCoreState(), { restoration: true });
@@ -7097,12 +7131,20 @@ async function loadBoardFromUrlIfPresent() {
     return true;
   } catch (error) {
     console.error(error);
+    if (loadGeneration === state.boardLoadGeneration && boardId === (getBoardIdFromPath() || state.currentBoardId)) {
+      state.boardBrandAssociation.status = "load-error";
+      state.boardBrandAssociation.message = "The authoritative Board Brand association could not be loaded.";
+      renderBoardBrandAssociation();
+    }
     setSaveStatus('Board not found or could not be loaded.');
     return false;
   } finally {
-    state.initialServerLoadInFlight = false;
-    state.isBoardLoading = false;
-    state.isBoardHydrating = false;
+    if (loadGeneration === state.boardLoadGeneration) {
+      state.initialServerLoadInFlight = false;
+      state.isBoardLoading = false;
+      state.isBoardHydrating = false;
+      renderBoardBrandAssociation();
+    }
   }
 }
 
