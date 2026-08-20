@@ -117,6 +117,7 @@ const state = {
   ,brandCatalog: { status: "idle", entries: [], requestId: 0, userEmail: "" }
   ,brandCreation: { status: "initial", requestId: 0, userEmail: "" }
   ,boardBrandAssociation: { brandId: null, boardId: "", status: "idle", generation: 0, intendedBrandId: null, message: "" }
+  ,authoritativeBoardBrandCore: { boardId: "", loadGeneration: 0, value: {} }
   ,boardLoadGeneration: 0
   ,contentPackLoadingById: {}
   ,contentPackErrorById: {}
@@ -345,6 +346,14 @@ const el = {
   boardBrandAssociationFeedback: document.getElementById("board-brand-association-feedback"),
   boardBrandAssociationSave: document.getElementById("board-brand-association-save"),
   boardBrandAssociationCancel: document.getElementById("board-brand-association-cancel"),
+  boardBrandCoreCompareOpen: document.getElementById("board-brand-core-compare-open"),
+  boardBrandCoreComparison: document.getElementById("board-brand-core-comparison"),
+  boardBrandCoreComparisonTitle: document.getElementById("board-brand-core-comparison-title"),
+  boardBrandCoreComparisonClose: document.getElementById("board-brand-core-comparison-close"),
+  boardBrandCoreComparisonStatus: document.getElementById("board-brand-core-comparison-status"),
+  boardBrandCoreComparisonContent: document.getElementById("board-brand-core-comparison-content"),
+  boardBrandCoreComparisonRetry: document.getElementById("board-brand-core-comparison-retry"),
+  boardBrandCoreComparisonUnsaved: document.getElementById("board-brand-core-comparison-unsaved"),
   brandSwitcherCreateOpen: document.getElementById("brand-switcher-create-open"),
   brandSwitcherCreateForm: document.getElementById("brand-switcher-create-form"),
   brandSwitcherCreateName: document.getElementById("brand-switcher-create-name"),
@@ -3259,7 +3268,161 @@ async function loadCanonicalBrandCatalog() {
   }
 }
 
+const BRAND_CORE_VALUE_PREVIEW_LIMIT = 360;
+let boardBrandCoreComparison = { status: "closed", requestId: 0, boardId: "", brandId: "", userEmail: "", boardLoadGeneration: 0, brandName: "", boardName: "", result: null, controller: null, returnFocus: null };
+
+function isPlainJsonObject(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+}
+
+function compareBrandCoreDocuments(canonical, board) {
+  const result = { canonicalOnly: [], boardOnly: [], different: [] };
+  const visit = (left, right, path) => {
+    if (Object.is(left, right)) return;
+    if (Array.isArray(left) && Array.isArray(right)) {
+      const length = Math.max(left.length, right.length);
+      for (let index = 0; index < length; index += 1) {
+        const nextPath = `${path}[${index}]`;
+        if (index >= right.length) result.canonicalOnly.push({ path: nextPath, value: left[index] });
+        else if (index >= left.length) result.boardOnly.push({ path: nextPath, value: right[index] });
+        else visit(left[index], right[index], nextPath);
+      }
+      return;
+    }
+    if (isPlainJsonObject(left) && isPlainJsonObject(right)) {
+      const keys = [...new Set([...Object.keys(left), ...Object.keys(right)])].sort();
+      keys.forEach((key) => {
+        const nextPath = path === "$" ? `$.${key}` : `${path}.${key}`;
+        if (!Object.prototype.hasOwnProperty.call(right, key)) result.canonicalOnly.push({ path: nextPath, value: left[key] });
+        else if (!Object.prototype.hasOwnProperty.call(left, key)) result.boardOnly.push({ path: nextPath, value: right[key] });
+        else visit(left[key], right[key], nextPath);
+      });
+      return;
+    }
+    result.different.push({ path, canonical: left, board: right });
+  };
+  visit(canonical, board, "$");
+  const canonicalEmpty = Object.keys(canonical).length === 0;
+  const boardEmpty = Object.keys(board).length === 0;
+  return { ...result, matches: !result.canonicalOnly.length && !result.boardOnly.length && !result.different.length, canonicalEmpty, boardEmpty };
+}
+window.compareBrandCoreDocuments = compareBrandCoreDocuments;
+
+function comparisonValueText(value) {
+  const rendered = JSON.stringify(value, null, 2);
+  return rendered === undefined ? String(value) : rendered;
+}
+
+function appendComparisonValue(parent, label, value) {
+  const textValue = comparisonValueText(value);
+  const wrapper = document.createElement("div"); wrapper.className = "brand-core-comparison-value";
+  if (textValue.length <= BRAND_CORE_VALUE_PREVIEW_LIMIT) wrapper.textContent = `${label}: ${textValue}`;
+  else {
+    const details = document.createElement("details");
+    const summary = document.createElement("summary"); summary.textContent = `${label}: ${textValue.slice(0, BRAND_CORE_VALUE_PREVIEW_LIMIT)}… Reveal complete value`;
+    const pre = document.createElement("pre"); pre.textContent = textValue;
+    details.append(summary, pre); wrapper.appendChild(details);
+  }
+  parent.appendChild(wrapper);
+}
+
+function renderBoardBrandCoreComparison() {
+  if (!el.boardBrandCoreComparisonStatus || !el.boardBrandCoreComparisonContent) return;
+  const comparison = boardBrandCoreComparison;
+  el.boardBrandCoreComparisonContent.replaceChildren();
+  el.boardBrandCoreComparisonContent.classList.toggle("hidden", comparison.status !== "ready");
+  el.boardBrandCoreComparisonRetry?.classList.toggle("hidden", !["unavailable", "malformed", "error"].includes(comparison.status));
+  el.boardBrandCoreComparisonUnsaved?.classList.toggle("hidden", !state.isDirty);
+  if (comparison.status === "loading") el.boardBrandCoreComparisonStatus.textContent = "Loading the associated Canonical Brand Core…";
+  else if (comparison.status === "unavailable") el.boardBrandCoreComparisonStatus.textContent = "The associated Canonical Brand is missing or unavailable to your account.";
+  else if (comparison.status === "unauthenticated") el.boardBrandCoreComparisonStatus.textContent = "Your session expired. Sign in to compare Brand Cores.";
+  else if (comparison.status === "malformed") el.boardBrandCoreComparisonStatus.textContent = "The Canonical Brand response was unexpected and has not been displayed.";
+  else if (comparison.status === "error") el.boardBrandCoreComparisonStatus.textContent = "The comparison could not be loaded. Retry deliberately when the network or server is available.";
+  else if (comparison.status !== "ready" || !comparison.result) { el.boardBrandCoreComparisonStatus.textContent = ""; return; }
+  const result = comparison.result;
+  let summary = result.matches ? "Matching" : "Differences found";
+  if (result.canonicalEmpty && result.boardEmpty) summary = "Both empty";
+  else if (result.canonicalEmpty) summary = "Canonical empty / Board populated";
+  else if (result.boardEmpty) summary = "Board empty / Canonical populated";
+  el.boardBrandCoreComparisonStatus.textContent = summary;
+  el.boardBrandCoreComparisonTitle.textContent = `${comparison.brandName} and ${comparison.boardName}`;
+  const explanation = document.createElement("p"); explanation.className = "brand-core-comparison-summary";
+  explanation.textContent = result.matches ? "These Brand Core records currently match." : "These Brand Core records currently differ. A difference is not automatically an error.";
+  el.boardBrandCoreComparisonContent.appendChild(explanation);
+  const groups = [["Only in Canonical Brand Core", result.canonicalOnly, "Canonical"], ["Only in Board Brand Core", result.boardOnly, "Board"], ["Different values", result.different, null]];
+  groups.forEach(([title, entries, side]) => {
+    if (!entries.length) return;
+    const section = document.createElement("section"); section.className = "brand-core-comparison-group";
+    const heading = document.createElement("h3"); heading.textContent = `${title} (${entries.length})`;
+    const list = document.createElement("ul"); list.className = "brand-core-comparison-list";
+    entries.forEach((entry) => {
+      const item = document.createElement("li"); item.className = "brand-core-comparison-item";
+      const path = document.createElement("code"); path.textContent = entry.path; item.appendChild(path);
+      if (side) appendComparisonValue(item, side, entry.value);
+      else { appendComparisonValue(item, "Canonical", entry.canonical); appendComparisonValue(item, "Board", entry.board); }
+      list.appendChild(item);
+    });
+    section.append(heading, list); el.boardBrandCoreComparisonContent.appendChild(section);
+  });
+}
+
+function closeBoardBrandCoreComparison({ restoreFocus = true } = {}) {
+  const previous = boardBrandCoreComparison;
+  previous.controller?.abort();
+  boardBrandCoreComparison = { status: "closed", requestId: previous.requestId + 1, boardId: "", brandId: "", userEmail: "", boardLoadGeneration: 0, brandName: "", boardName: "", result: null, controller: null, returnFocus: null };
+  if (el.boardBrandCoreComparison?.open) el.boardBrandCoreComparison.close();
+  if (el.boardBrandCoreComparisonTitle) el.boardBrandCoreComparisonTitle.textContent = "Compare Brand Cores";
+  renderBoardBrandCoreComparison();
+  if (restoreFocus && previous.returnFocus?.isConnected) previous.returnFocus.focus();
+}
+
+async function loadBoardBrandCoreComparison() {
+  const association = state.boardBrandAssociation;
+  const userEmail = (state.user?.email || "").trim().toLowerCase();
+  const boardId = getBoardIdFromPath() || state.currentBoardId || "";
+  const catalogBrand = state.brandCatalog.status === "success" && state.brandCatalog.userEmail === userEmail
+    ? state.brandCatalog.entries.find(({ id }) => id === association.brandId) : null;
+  const snapshot = state.authoritativeBoardBrandCore;
+  if (!userEmail || !boardId || !association.brandId || association.boardId !== boardId || !catalogBrand || snapshot.boardId !== boardId || !el.boardBrandCoreComparison?.open) return;
+  boardBrandCoreComparison.controller?.abort();
+  const requestId = boardBrandCoreComparison.requestId + 1;
+  const controller = new AbortController();
+  const brandId = association.brandId;
+  const loadGeneration = snapshot.loadGeneration;
+  boardBrandCoreComparison = { ...boardBrandCoreComparison, status: "loading", requestId, boardId, brandId, userEmail, boardLoadGeneration: loadGeneration, brandName: catalogBrand.name, boardName: state.currentBoardName || "Current Board", result: null, controller };
+  renderBoardBrandCoreComparison();
+  try {
+    const response = await fetch(`/api/brands/${encodeURIComponent(brandId)}`, { method: "GET", headers: { Accept: "application/json" }, signal: controller.signal });
+    const current = boardBrandCoreComparison;
+    const stillCurrent = current.requestId === requestId && current.controller === controller && current.userEmail === (state.user?.email || "").trim().toLowerCase()
+      && current.boardId === (getBoardIdFromPath() || state.currentBoardId || "") && current.brandId === state.boardBrandAssociation.brandId
+      && current.boardLoadGeneration === state.authoritativeBoardBrandCore.loadGeneration && el.boardBrandCoreComparison.open;
+    if (!stillCurrent) return;
+    current.controller = null;
+    if (!response.ok) { current.status = response.status === 401 ? "unauthenticated" : [403, 404].includes(response.status) ? "unavailable" : "error"; renderBoardBrandCoreComparison(); return; }
+    let brand = null; try { brand = await response.json(); } catch (_error) { /* malformed below */ }
+    if (current.requestId !== requestId || !el.boardBrandCoreComparison.open) return;
+    if (!brand || brand.id !== brandId || !isPlainJsonObject(brand.brand_core)) current.status = "malformed";
+    else { current.status = "ready"; current.result = compareBrandCoreDocuments(brand.brand_core, state.authoritativeBoardBrandCore.value); }
+    renderBoardBrandCoreComparison();
+  } catch (error) {
+    if (error?.name === "AbortError" || boardBrandCoreComparison.requestId !== requestId) return;
+    boardBrandCoreComparison.controller = null; boardBrandCoreComparison.status = "error"; renderBoardBrandCoreComparison();
+  }
+}
+
+function openBoardBrandCoreComparison() {
+  if (el.boardBrandCoreCompareOpen?.disabled || !el.boardBrandCoreComparison) return;
+  boardBrandCoreComparison.returnFocus = el.boardBrandCoreCompareOpen;
+  el.boardBrandCoreComparison.showModal();
+  el.boardBrandCoreComparisonTitle?.focus();
+  void loadBoardBrandCoreComparison();
+}
+
 function invalidateBoardBrandAssociation({ clearBoard = false, loadingBoardId = "" } = {}) {
+  closeBoardBrandCoreComparison({ restoreFocus: false });
   const current = state.boardBrandAssociation;
   state.boardBrandAssociation = {
     brandId: clearBoard ? null : current.brandId,
@@ -3325,6 +3488,13 @@ function renderBoardBrandAssociation() {
     el.boardBrandAssociationDetail.textContent = detail;
   }
   const canWrite = hasBoard && !!state.user?.email && catalog.status === "success" && state.boardAccess?.canEdit === true && !state.isBoardLoading;
+  const canCompare = hasBoard && hasAssociation && !!state.user?.email && catalog.status === "success" && !!catalogBrand
+    && catalog.userEmail === (state.user.email || "").trim().toLowerCase() && !state.isBoardLoading
+    && state.authoritativeBoardBrandCore.boardId === boardId;
+  if (el.boardBrandCoreCompareOpen) {
+    el.boardBrandCoreCompareOpen.disabled = !canCompare;
+    el.boardBrandCoreCompareOpen.title = canCompare ? "" : "Open a Board whose associated Brand is resolved through your authenticated catalog.";
+  }
   if (el.boardBrandAssociationEdit) {
     el.boardBrandAssociationEdit.disabled = !canWrite || association.status === "submitting";
     el.boardBrandAssociationEdit.title = canWrite ? "" : "A signed-in Board editor is required to change this association.";
@@ -3429,6 +3599,7 @@ async function submitBoardBrandAssociation(event) {
     association.status = "saved";
     association.intendedBrandId = null;
     association.message = data.brand_id ? "Board Brand association saved." : "Board Brand association removed.";
+    closeBoardBrandCoreComparison({ restoreFocus: false });
     state.lastKnownUpdatedAt = data.updated_at;
     applyBoardAccessFromServer(data.access, "boardBrandAssociation");
     renderBoardBrandAssociation();
@@ -7101,6 +7272,7 @@ async function loadBoardFromUrlIfPresent(requestedBoardId = null) {
   state.isBoardLoading = true;
   state.isBoardHydrating = true;
   state.currentBoardId = boardId;
+  state.authoritativeBoardBrandCore = { boardId: "", loadGeneration, value: {} };
   invalidateBoardBrandAssociation({ clearBoard: true, loadingBoardId: boardId });
   syncRuntimeSessionFromLegacy("board-load-start");
   clearAutosaveTimer();
@@ -7122,7 +7294,7 @@ async function loadBoardFromUrlIfPresent(requestedBoardId = null) {
       renderBoardBrandAssociation();
       return false;
     }
-    const snapshot = data?.brand_core_snapshot && typeof data.brand_core_snapshot === "object" ? data.brand_core_snapshot : null;
+    const snapshot = isPlainJsonObject(data?.brand_core_snapshot) ? data.brand_core_snapshot : null;
     debugBrandBrainScope("board-snapshot-received", { boardId, hasSnapshot: Boolean(snapshot), ...brandDnaScopeSummary(snapshot || {}) });
     setPassiveBoardOwnershipDiagnostics(data, "board-load-response");
     state.currentBoardId = data.id;
@@ -7132,6 +7304,7 @@ async function loadBoardFromUrlIfPresent(requestedBoardId = null) {
     state.boardBrandAssociation.brandId = data.brand_id;
     state.boardBrandAssociation.boardId = String(data.id);
     state.boardBrandAssociation.status = "idle";
+    state.authoritativeBoardBrandCore = { boardId: String(data.id), loadGeneration, value: clonePlainObject(snapshot || {}) };
     renderBoardBrandAssociation();
     state.brandCore = snapshot ? normalizeBrandCoreState(snapshot, { restoration: true }) : normalizeBrandCoreState(defaultBrandCoreState(), { restoration: true });
     renderBrandCoreTiles();
@@ -15129,6 +15302,10 @@ el.brandSwitcherCreateOpen?.addEventListener("click", openCanonicalBrandCreation
 el.brandSwitcherCreateForm?.addEventListener("submit", submitCanonicalBrandCreation);
 el.brandSwitcherCreateCancel?.addEventListener("click", () => resetCanonicalBrandCreation({ focusTrigger: true }));
 el.boardBrandAssociationEdit?.addEventListener("click", openBoardBrandAssociation);
+el.boardBrandCoreCompareOpen?.addEventListener("click", openBoardBrandCoreComparison);
+el.boardBrandCoreComparisonClose?.addEventListener("click", () => closeBoardBrandCoreComparison());
+el.boardBrandCoreComparisonRetry?.addEventListener("click", () => { void loadBoardBrandCoreComparison(); });
+el.boardBrandCoreComparison?.addEventListener("cancel", (event) => { event.preventDefault(); closeBoardBrandCoreComparison(); });
 el.boardBrandAssociationChoice?.addEventListener("change", () => {
   state.boardBrandAssociation.intendedBrandId = el.boardBrandAssociationChoice.value || null;
   state.boardBrandAssociation.message = "Pending choice — confirm Save association to update the Board.";

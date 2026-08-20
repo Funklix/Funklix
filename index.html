@@ -146,6 +146,7 @@
           <span class="brand-switcher-eyebrow" id="board-brand-association-title">Current Board Brand</span>
           <strong id="board-brand-association-current" role="status" aria-live="polite" aria-atomic="true">No Board open</strong>
           <small id="board-brand-association-detail">Board association is separate from Workspace selection.</small>
+          <button class="fk-btn fk-btn-secondary" id="board-brand-core-compare-open" type="button" disabled>Compare Brand Cores</button>
           <button class="fk-btn fk-btn-secondary" id="board-brand-association-edit" type="button" disabled>Change Board Brand</button>
           <form class="board-brand-association-form hidden" id="board-brand-association-form" aria-label="Edit Current Board Brand association" novalidate>
             <label for="board-brand-association-choice">Canonical Brand</label>
@@ -158,6 +159,17 @@
             </div>
           </form>
         </section>
+        <dialog class="brand-workspace-detail brand-core-comparison" id="board-brand-core-comparison" aria-labelledby="board-brand-core-comparison-title" aria-describedby="board-brand-core-comparison-context">
+          <div class="brand-workspace-detail-header">
+            <div><span class="brand-switcher-eyebrow">Current Board Brand</span><h2 id="board-brand-core-comparison-title" tabindex="-1">Compare Brand Cores</h2></div>
+            <button class="fk-btn fk-btn-ghost" id="board-brand-core-comparison-close" type="button">Close</button>
+          </div>
+          <p id="board-brand-core-comparison-context">Read-only visibility into two separate authoritative records. This comparison performs no copying, merging, or synchronization.</p>
+          <p class="brand-core-comparison-note hidden" id="board-brand-core-comparison-unsaved">The Board has unsaved changes. This comparison uses the last saved Board Brand Core snapshot loaded from the server.</p>
+          <div class="brand-workspace-detail-status" id="board-brand-core-comparison-status" role="status" aria-live="polite" aria-atomic="true"></div>
+          <div class="brand-workspace-detail-content hidden" id="board-brand-core-comparison-content"></div>
+          <button class="fk-btn fk-btn-secondary hidden" id="board-brand-core-comparison-retry" type="button">Retry comparison</button>
+        </dialog>
         <dialog class="brand-workspace-detail" id="brand-workspace-detail" aria-labelledby="brand-workspace-detail-title" aria-describedby="brand-workspace-detail-context">
           <div class="brand-workspace-detail-header">
             <div>
