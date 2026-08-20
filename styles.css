@@ -634,6 +634,16 @@ body {
 .board-brand-association-form.hidden { display: none; }
 .board-brand-association-form label { font-size: var(--fk-font-size-xs); font-weight: var(--fk-font-weight-bold); }
 .board-brand-association-form select { width: 100%; min-width: 0; padding: 8px; border: 1px solid var(--fk-color-border); border-radius: var(--fk-radius-sm); background: var(--fk-color-surface); }
+.brand-core-comparison-note { color: var(--fk-color-muted); font-size: var(--fk-font-size-sm); }
+.brand-core-comparison-note.hidden { display: none; }
+.brand-core-comparison-summary { margin: 0; color: var(--fk-color-heading); }
+.brand-core-comparison-group { display: grid; gap: var(--fk-space-2); }
+.brand-core-comparison-group h3 { margin: 0; font-size: var(--fk-font-size-md); }
+.brand-core-comparison-list { display: grid; gap: var(--fk-space-2); margin: 0; padding: 0; list-style: none; }
+.brand-core-comparison-item { padding: var(--fk-space-2); border-radius: var(--fk-radius-sm); background: var(--fk-color-background); overflow-wrap: anywhere; }
+.brand-core-comparison-item code { font-weight: var(--fk-font-weight-bold); }
+.brand-core-comparison-value { margin-top: 4px; white-space: pre-wrap; }
+.brand-core-comparison-value details > pre { max-height: 18rem; overflow: auto; white-space: pre-wrap; }
 
 .sidebar nav {
   display: grid;
