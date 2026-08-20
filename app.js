@@ -3277,28 +3277,54 @@ function renderBoardBrandAssociation() {
   const association = state.boardBrandAssociation;
   const boardId = getBoardIdFromPath() || state.currentBoardId || "";
   const hasBoard = Boolean(boardId && association.boardId === boardId);
-  const catalogBrand = association.brandId && state.brandCatalog.entries.find(({ id }) => id === association.brandId);
+  const catalog = state.brandCatalog;
+  const catalogBrand = association.brandId && catalog.status === "success"
+    ? catalog.entries.find(({ id }) => id === association.brandId)
+    : null;
+  const isBoardLoading = association.status === "loading" && hasBoard;
+  const hasAssociation = hasBoard && typeof association.brandId === "string" && association.brandId.length > 0;
+  const catalogFailed = ["error", "forbidden", "malformed"].includes(catalog.status);
+  const catalogUnauthenticated = catalog.status === "unauthenticated" || (catalog.status === "idle" && !state.user?.email);
+  let currentLabel = "No Board open";
+  let detail = "Open a Board to view its authoritative association.";
+
+  if (isBoardLoading) {
+    currentLabel = "Loading Board Brand…";
+    detail = "Loading this Board’s authoritative association…";
+  } else if (association.status === "load-error" && hasBoard) {
+    currentLabel = "Board Brand unavailable";
+    detail = association.message;
+  } else if (hasBoard && association.brandId === null) {
+    currentLabel = "Unbranded Board";
+    detail = association.status === "saved"
+      ? `${association.message} Workspace Brand selection is unchanged.`
+      : "Board association is authoritative and separate from Workspace Brand selection.";
+  } else if (hasAssociation && catalog.status === "success" && catalogBrand) {
+    currentLabel = catalogBrand.name;
+    detail = association.status === "saved"
+      ? `${association.message} Workspace Brand selection is unchanged.`
+      : "Board association is authoritative and separate from Workspace Brand selection.";
+  } else if (hasAssociation && catalog.status === "success") {
+    currentLabel = "Associated Brand unavailable";
+    detail = `The Board remains associated with Brand ${association.brandId}; the successfully loaded catalog does not contain it.`;
+  } else if (hasAssociation && catalogUnauthenticated) {
+    currentLabel = "Sign in to resolve Board Brand";
+    detail = `The Board remains associated with Brand ${association.brandId}; sign in to load its Canonical Brand name.`;
+  } else if (hasAssociation && catalogFailed) {
+    currentLabel = "Board Brand name unavailable";
+    detail = `The Board remains associated with Brand ${association.brandId}; the Brand catalog could not be loaded.`;
+  } else if (hasAssociation) {
+    currentLabel = "Loading associated Brand…";
+    detail = `The Board remains associated with Brand ${association.brandId} while its Canonical Brand name loads.`;
+  }
+
   if (el.boardBrandAssociationCurrent) {
-    el.boardBrandAssociationCurrent.textContent = association.status === "loading" && hasBoard
-      ? "Loading Board Brand…"
-      : association.status === "load-error" && hasBoard
-        ? "Board Brand unavailable"
-      : !hasBoard ? "No Board open" : association.brandId ? (catalogBrand?.name || "Associated Brand unavailable") : "Unbranded Board";
+    el.boardBrandAssociationCurrent.textContent = currentLabel;
   }
   if (el.boardBrandAssociationDetail) {
-    el.boardBrandAssociationDetail.textContent = !hasBoard
-      ? "Open a Board to view its authoritative association."
-      : association.status === "loading"
-        ? "Loading this Board’s authoritative association…"
-      : association.status === "load-error"
-        ? association.message
-      : association.brandId && !catalogBrand
-        ? `The Board remains associated with Brand ${association.brandId}; it is not available in your catalog.`
-        : association.status === "saved"
-          ? `${association.message} Workspace Brand selection is unchanged.`
-          : "Board association is authoritative and separate from Workspace Brand selection.";
+    el.boardBrandAssociationDetail.textContent = detail;
   }
-  const canWrite = hasBoard && !!state.user?.email && state.boardAccess?.canEdit === true && !state.isBoardLoading;
+  const canWrite = hasBoard && !!state.user?.email && catalog.status === "success" && state.boardAccess?.canEdit === true && !state.isBoardLoading;
   if (el.boardBrandAssociationEdit) {
     el.boardBrandAssociationEdit.disabled = !canWrite || association.status === "submitting";
     el.boardBrandAssociationEdit.title = canWrite ? "" : "A signed-in Board editor is required to change this association.";
@@ -3332,6 +3358,7 @@ function renderBoardBrandAssociation() {
   if (el.boardBrandAssociationSave) el.boardBrandAssociationSave.disabled = association.status === "submitting" || state.brandCatalog.status !== "success";
   if (el.boardBrandAssociationCancel) el.boardBrandAssociationCancel.disabled = association.status === "submitting";
   if (el.boardBrandAssociationFeedback) el.boardBrandAssociationFeedback.textContent = association.message || (state.brandCatalog.status === "loading" && editing ? "Loading your authenticated Canonical Brand catalog…" : "");
+  if (hasAssociation && catalog.status === "idle" && state.user?.email) void loadCanonicalBrandCatalog();
 }
 
 function openBoardBrandAssociation() {
