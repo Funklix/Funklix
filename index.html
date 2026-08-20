@@ -166,9 +166,25 @@
             </div>
             <button class="fk-btn fk-btn-ghost" id="brand-workspace-detail-close" type="button" aria-label="Close Canonical Brand detail">Close</button>
           </div>
-          <p id="brand-workspace-detail-context">Read-only Workspace Brand details. This is separate from Current Board Brand and is not Board content.</p>
+          <p id="brand-workspace-detail-context">Read-only Workspace Brand details. This is separate from Current Board Brand and is not Board content. Editing is explicit and also remains separate from Workspace selection and the Board Brand Core snapshot.</p>
           <div class="brand-workspace-detail-status" id="brand-workspace-detail-status" role="status" aria-live="polite"></div>
           <div class="brand-workspace-detail-content hidden" id="brand-workspace-detail-content"></div>
+          <form class="brand-workspace-edit hidden" id="brand-workspace-edit-form" novalidate>
+            <label for="brand-workspace-edit-name">Canonical Brand name</label>
+            <input id="brand-workspace-edit-name" type="text" maxlength="160" required aria-describedby="brand-workspace-edit-feedback">
+            <label for="brand-workspace-edit-core">Canonical Brand Core (JSON object)</label>
+            <textarea id="brand-workspace-edit-core" rows="12" spellcheck="false" aria-describedby="brand-workspace-edit-core-help brand-workspace-edit-feedback"></textarea>
+            <small id="brand-workspace-edit-core-help">Edit the complete JSON object. Unknown and forward-compatible fields remain intact unless you deliberately change or remove them here.</small>
+            <div id="brand-workspace-edit-feedback" role="alert" aria-live="assertive"></div>
+            <div class="brand-workspace-edit-actions">
+              <button class="fk-btn fk-btn-primary" id="brand-workspace-edit-save" type="submit">Save Canonical Brand</button>
+              <button class="fk-btn fk-btn-ghost" id="brand-workspace-edit-cancel" type="button">Cancel</button>
+            </div>
+          </form>
+          <div class="brand-workspace-detail-actions">
+            <button class="fk-btn fk-btn-primary hidden" id="brand-workspace-edit-open" type="button">Edit Canonical Brand</button>
+            <button class="fk-btn fk-btn-secondary hidden" id="brand-workspace-conflict-reload" type="button">Reload latest Brand</button>
+          </div>
           <button class="fk-btn fk-btn-secondary hidden" id="brand-workspace-detail-retry" type="button">Retry loading details</button>
         </dialog>
         <nav aria-label="Workspace navigation">
