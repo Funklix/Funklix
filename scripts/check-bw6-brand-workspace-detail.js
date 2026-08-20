@@ -41,7 +41,7 @@ assert.match(open, /state\.brandCatalog\.userEmail !== userEmail/, "open must bi
 assert.match(open, /entries\.some\(\(\{ id \}\) => id === selection\.id\)/, "open target must be catalog-validated");
 assert.match(load, /fetch\(`\/api\/brands\/\$\{encodeURIComponent\(selection\.id\)\}`/, "detail must reuse authenticated GET /api/brands/:id");
 assert.doesNotMatch(load, /method:\s*["'](?:POST|PUT|PATCH|DELETE)["']|\/api\/boards|brandCore|canvas|autosave|localStorage|sessionStorage|location\.|history\./, "detail loading must perform no writes, Board work, synchronization, or navigation");
-assert.doesNotMatch(`${open}\n${close}\n${render}`, /fetch\([^)]*,\s*\{[^}]*method:|\/api\/boards|save|persistBrandSwitcherPreference|removeBrandSwitcherPreference|brandCore|canvas|autosave/, "detail actions must be read-only and isolated");
+assert.doesNotMatch(`${open}\n${close}\n${render}`, /fetch\([^)]*,\s*\{[^}]*method:|\/api\/boards|persistBrandSwitcherPreference|removeBrandSwitcherPreference|state\.brandCore|canvas|autosave/, "default detail actions must remain read-only and isolated");
 assert.match(load, /response\.status === 401/, "expired authentication must be handled");
 assert.match(app, /\[403, 404\]\.includes\(status\)/, "forbidden and missing Brands must be unavailable without disclosure");
 assert.match(load, /isCanonicalBrandDetail\(brand, selection\.id\)/, "authoritative response must be validated before rendering");
@@ -52,7 +52,8 @@ assert.doesNotMatch(close, /persist|localStorage|sessionStorage|brandSwitcherPre
 assert.match(app, /clearEphemeralBrandSwitcherSelection[\s\S]{0,280}closeCanonicalBrandDetail/, "no selection must clear detail locally");
 assert.match(app, /brandWorkspaceDetailRetry\?\.addEventListener\("click"/, "retry must require a deliberate click");
 assert.match(render, /textContent = readableBrandCoreValue/, "authorized Brand Core fields must render through textContent only");
-assert.doesNotMatch(render, /input|textarea|contenteditable|submit|Save/, "ready detail must expose no editing path");
+assert.match(render, /detail\.status !== "ready"/, "ready detail must remain the default read-only presentation");
+assert.doesNotMatch(render, /contenteditable/, "read-only detail values must not become directly editable");
 assert.doesNotMatch(app, /(?:window|globalThis)\.(?:activeBrand|currentBrand|selectedBrand)/, "no authoritative active Brand global may be introduced");
 assert.match(route, /const user = getSessionUser\(req\)/, "Brand item route must authenticate the request");
 assert.match(route, /getOwnedBrand\(id, user\)/, "Brand item route must enforce owned access");
