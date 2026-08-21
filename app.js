@@ -354,6 +354,14 @@ const el = {
   boardBrandCoreComparisonContent: document.getElementById("board-brand-core-comparison-content"),
   boardBrandCoreComparisonRetry: document.getElementById("board-brand-core-comparison-retry"),
   boardBrandCoreComparisonUnsaved: document.getElementById("board-brand-core-comparison-unsaved"),
+  boardBrandCoreInitialization: document.getElementById("board-brand-core-initialization"),
+  boardBrandCoreInitializeOpen: document.getElementById("board-brand-core-initialize-open"),
+  boardBrandCoreInitializationConfirm: document.getElementById("board-brand-core-initialization-confirm"),
+  boardBrandCoreInitializationDescription: document.getElementById("board-brand-core-initialization-description"),
+  boardBrandCoreInitializationSubmit: document.getElementById("board-brand-core-initialization-confirm-submit"),
+  boardBrandCoreInitializationCancel: document.getElementById("board-brand-core-initialization-cancel"),
+  boardBrandCoreInitializationFeedback: document.getElementById("board-brand-core-initialization-feedback"),
+  boardBrandCoreInitializationReload: document.getElementById("board-brand-core-initialization-reload"),
   brandSwitcherCreateOpen: document.getElementById("brand-switcher-create-open"),
   brandSwitcherCreateForm: document.getElementById("brand-switcher-create-form"),
   brandSwitcherCreateName: document.getElementById("brand-switcher-create-name"),
@@ -3270,7 +3278,7 @@ async function loadCanonicalBrandCatalog() {
 
 const BRAND_CORE_VALUE_PREVIEW_LIMIT = 360;
 const BOARD_BRAND_CORE_COMPARISON_TIMEOUT_MS = 12000;
-let boardBrandCoreComparison = { status: "closed", requestId: 0, boardId: "", brandId: "", userEmail: "", boardLoadGeneration: 0, brandName: "", boardName: "", result: null, controller: null, timeoutId: null, returnFocus: null };
+let boardBrandCoreComparison = { status: "closed", requestId: 0, initializationId: 0, boardId: "", brandId: "", userEmail: "", boardLoadGeneration: 0, brandName: "", boardName: "", canonical: null, boardSnapshot: null, result: null, controller: null, initializationController: null, timeoutId: null, confirming: false, initializationMessage: "", requiresReload: false, returnFocus: null };
 
 function logBoardBrandCoreComparison(stage, details = {}) {
   console.info("[Brand Core comparison]", { stage, ...details });
@@ -3315,6 +3323,23 @@ function compareBrandCoreDocuments(canonical, board) {
 }
 window.compareBrandCoreDocuments = compareBrandCoreDocuments;
 
+function canonicalInitializationEligible(comparison = boardBrandCoreComparison) {
+  const association = state.boardBrandAssociation;
+  const snapshot = state.authoritativeBoardBrandCore;
+  const userEmail = (state.user?.email || "").trim().toLowerCase();
+  return comparison.status === "ready" && !comparison.requiresReload && isPlainJsonObject(comparison.canonical?.brand_core)
+    && Object.keys(comparison.canonical.brand_core).length === 0 && Number.isSafeInteger(comparison.canonical.revision) && comparison.canonical.revision >= 1
+    && isPlainJsonObject(comparison.boardSnapshot) && Object.keys(comparison.boardSnapshot).length > 0
+    && comparison.result?.canonicalEmpty === true && comparison.result?.boardEmpty === false
+    && userEmail && comparison.userEmail === userEmail && comparison.boardId === (getBoardIdFromPath() || state.currentBoardId || "")
+    && association.boardId === comparison.boardId && association.brandId === comparison.brandId
+    && snapshot.boardId === comparison.boardId && snapshot.loadGeneration === comparison.boardLoadGeneration
+    && comparison.boardLoadGeneration === state.boardLoadGeneration
+    && isPlainJsonObject(snapshot.value) && JSON.stringify(canonicalJson(snapshot.value)) === JSON.stringify(canonicalJson(comparison.boardSnapshot))
+    && state.brandCatalog.status === "success" && state.brandCatalog.userEmail === userEmail
+    && state.brandCatalog.entries.some(({ id }) => id === comparison.brandId) && el.boardBrandCoreComparison?.open;
+}
+
 function comparisonValueText(value) {
   const rendered = JSON.stringify(value, null, 2);
   return rendered === undefined ? String(value) : rendered;
@@ -3341,8 +3366,18 @@ function renderBoardBrandCoreComparison() {
     el.boardBrandCoreComparisonContent.classList.toggle("hidden", comparison.status !== "ready");
     el.boardBrandCoreComparisonRetry?.classList.toggle("hidden", !["unavailable", "malformed", "timeout", "invalidated", "error"].includes(comparison.status));
     el.boardBrandCoreComparisonUnsaved?.classList.toggle("hidden", !state.isDirty);
+    const eligible = canonicalInitializationEligible(comparison);
+    el.boardBrandCoreInitialization?.classList.toggle("hidden", !(eligible || comparison.confirming || comparison.initializationMessage || comparison.requiresReload));
+    el.boardBrandCoreInitializeOpen?.classList.toggle("hidden", !eligible || comparison.confirming);
+    el.boardBrandCoreInitializationConfirm?.classList.toggle("hidden", !comparison.confirming);
+    if (el.boardBrandCoreInitializationDescription) el.boardBrandCoreInitializationDescription.textContent = `Copy this saved Board Brand Core from “${comparison.boardName}” into the empty Canonical Brand Core for “${comparison.brandName}”?`;
+    if (el.boardBrandCoreInitializationFeedback) el.boardBrandCoreInitializationFeedback.textContent = comparison.initializationMessage || (comparison.status === "initializing" ? "Initializing Canonical Brand Core…" : "");
+    if (el.boardBrandCoreInitializationSubmit) el.boardBrandCoreInitializationSubmit.disabled = comparison.status === "initializing";
+    if (el.boardBrandCoreInitializationCancel) el.boardBrandCoreInitializationCancel.disabled = comparison.status === "initializing";
+    el.boardBrandCoreInitializationReload?.classList.toggle("hidden", !comparison.requiresReload);
     if (comparison.status === "validating") el.boardBrandCoreComparisonStatus.textContent = "Validating the current comparison context…";
     else if (comparison.status === "loading") el.boardBrandCoreComparisonStatus.textContent = "Loading the associated Canonical Brand Core…";
+    else if (comparison.status === "initializing") el.boardBrandCoreComparisonStatus.textContent = "Initialization is pending server confirmation.";
     else if (comparison.status === "unavailable") el.boardBrandCoreComparisonStatus.textContent = "The associated Canonical Brand or comparison context is unavailable.";
     else if (comparison.status === "unauthenticated") el.boardBrandCoreComparisonStatus.textContent = "Your session expired. Sign in to compare Brand Cores.";
     else if (comparison.status === "malformed") el.boardBrandCoreComparisonStatus.textContent = "The Canonical Brand response was unexpected and has not been displayed.";
@@ -3395,18 +3430,120 @@ function closeBoardBrandCoreComparison({ restoreFocus = true } = {}) {
   const previous = boardBrandCoreComparison;
   if (previous.timeoutId !== null) clearTimeout(previous.timeoutId);
   previous.controller?.abort();
-  boardBrandCoreComparison = { status: "closed", requestId: previous.requestId + 1, boardId: "", brandId: "", userEmail: "", boardLoadGeneration: 0, brandName: "", boardName: "", result: null, controller: null, timeoutId: null, returnFocus: null };
+  previous.initializationController?.abort();
+  boardBrandCoreComparison = { status: "closed", requestId: previous.requestId + 1, initializationId: previous.initializationId + 1, boardId: "", brandId: "", userEmail: "", boardLoadGeneration: 0, brandName: "", boardName: "", canonical: null, boardSnapshot: null, result: null, controller: null, initializationController: null, timeoutId: null, confirming: false, initializationMessage: "", requiresReload: false, returnFocus: null };
   if (el.boardBrandCoreComparison?.open) el.boardBrandCoreComparison.close();
   if (el.boardBrandCoreComparisonTitle) el.boardBrandCoreComparisonTitle.textContent = "Compare Brand Cores";
   renderBoardBrandCoreComparison();
   if (restoreFocus && previous.returnFocus?.isConnected) previous.returnFocus.focus();
 }
 
+function beginCanonicalBrandCoreInitialization() {
+  const comparison = boardBrandCoreComparison;
+  if (!canonicalInitializationEligible(comparison) || comparison.initializationController) return;
+  comparison.confirming = true;
+  comparison.initializationMessage = "";
+  renderBoardBrandCoreComparison();
+  el.boardBrandCoreInitializationConfirm?.focus();
+}
+
+function cancelCanonicalBrandCoreInitialization() {
+  const comparison = boardBrandCoreComparison;
+  if (!comparison.confirming || comparison.initializationController) return;
+  comparison.confirming = false;
+  comparison.initializationId += 1;
+  comparison.initializationMessage = "Initialization cancelled. No request was sent.";
+  renderBoardBrandCoreComparison();
+  el.boardBrandCoreInitializeOpen?.focus();
+}
+
+function initializationHttpMessage(status) {
+  if (status === 401) return "Your session expired. Sign in again; initialization was not confirmed.";
+  if ([403, 404].includes(status)) return "The Canonical Brand is no longer available to this account.";
+  if ([400, 422].includes(status)) return "The initialization values were rejected. Reload the authoritative Canonical Brand before trying again.";
+  return "The server did not confirm initialization. Reload the authoritative Canonical Brand before trying again.";
+}
+
+async function submitCanonicalBrandCoreInitialization() {
+  const comparison = boardBrandCoreComparison;
+  if (!comparison.confirming || comparison.initializationController || !canonicalInitializationEligible(comparison)) {
+    comparison.confirming = false;
+    comparison.initializationMessage = "Initialization is no longer available because the comparison context changed.";
+    renderBoardBrandCoreComparison();
+    return;
+  }
+  const canonical = comparison.canonical;
+  const submittedCore = JSON.parse(JSON.stringify(comparison.boardSnapshot));
+  const requestId = comparison.requestId;
+  const initializationId = comparison.initializationId + 1;
+  const controller = new AbortController();
+  comparison.initializationId = initializationId;
+  comparison.initializationController = controller;
+  comparison.status = "initializing";
+  comparison.initializationMessage = "Initializing Canonical Brand Core…";
+  renderBoardBrandCoreComparison();
+  try {
+    const response = await fetch(`/api/brands/${encodeURIComponent(comparison.brandId)}`, {
+      method: "PUT", headers: { Accept: "application/json", "Content-Type": "application/json" },
+      body: JSON.stringify({ name: canonical.name, brand_core: submittedCore, revision: canonical.revision }), signal: controller.signal
+    });
+    const current = boardBrandCoreComparison;
+    const stillCurrent = current === comparison && current.requestId === requestId && current.initializationId === initializationId
+      && current.initializationController === controller && current.userEmail === (state.user?.email || "").trim().toLowerCase()
+      && current.boardId === (getBoardIdFromPath() || state.currentBoardId || "") && current.brandId === state.boardBrandAssociation.brandId
+      && current.boardLoadGeneration === state.boardLoadGeneration && current.boardLoadGeneration === state.authoritativeBoardBrandCore.loadGeneration
+      && state.authoritativeBoardBrandCore.boardId === current.boardId && isPlainJsonObject(state.authoritativeBoardBrandCore.value)
+      && JSON.stringify(canonicalJson(state.authoritativeBoardBrandCore.value)) === JSON.stringify(canonicalJson(current.boardSnapshot))
+      && state.brandCatalog.status === "success" && state.brandCatalog.userEmail === current.userEmail
+      && state.brandCatalog.entries.some(({ id }) => id === current.brandId)
+      && el.boardBrandCoreComparison?.open;
+    if (!stillCurrent) return;
+    current.initializationController = null;
+    current.confirming = false;
+    if (response.status === 409) {
+      current.status = "ready"; current.requiresReload = true;
+      current.initializationMessage = "The Canonical Brand changed before initialization could be saved.";
+      renderBoardBrandCoreComparison(); el.boardBrandCoreInitializationReload?.focus(); return;
+    }
+    if (!response.ok) {
+      current.status = response.status === 401 ? "unauthenticated" : "ready"; current.requiresReload = true;
+      current.initializationMessage = initializationHttpMessage(response.status);
+      renderBoardBrandCoreComparison(); return;
+    }
+    let brand = null; try { brand = await response.json(); } catch (_error) { /* verified below */ }
+    const confirmed = brand && brand.id === current.brandId && brand.name === canonical.name
+      && brand.revision === canonical.revision + 1 && isPlainJsonObject(brand.brand_core)
+      && JSON.stringify(canonicalJson(brand.brand_core)) === JSON.stringify(canonicalJson(submittedCore));
+    if (!confirmed || current.requestId !== requestId || current.initializationId !== initializationId) {
+      current.status = "ready"; current.requiresReload = true;
+      current.initializationMessage = "The server response could not be verified. Reload the authoritative Canonical Brand before trying again.";
+      renderBoardBrandCoreComparison(); return;
+    }
+    current.canonical = (({ id, name, brand_core, revision, updated_at }) => ({ id, name, brand_core: JSON.parse(JSON.stringify(brand_core)), revision, updated_at }))(brand);
+    current.result = compareBrandCoreDocuments(current.canonical.brand_core, current.boardSnapshot);
+    current.status = "ready"; current.requiresReload = false;
+    current.initializationMessage = "Canonical Brand Core initialized from this Board.";
+    const entryIndex = state.brandCatalog.entries.findIndex(({ id }) => id === brand.id);
+    if (entryIndex >= 0) state.brandCatalog.entries.splice(entryIndex, 1, { ...state.brandCatalog.entries[entryIndex], revision: brand.revision, updated_at: brand.updated_at });
+    renderBrandCatalog(); renderBoardBrandCoreComparison(); el.boardBrandCoreComparisonClose?.focus();
+  } catch (error) {
+    if (error?.name === "AbortError" || boardBrandCoreComparison !== comparison || comparison.initializationId !== initializationId) return;
+    comparison.initializationController = null; comparison.confirming = false; comparison.status = "ready"; comparison.requiresReload = true;
+    comparison.initializationMessage = "The initialization outcome was not confirmed. Reload the authoritative Canonical Brand before another attempt.";
+    renderBoardBrandCoreComparison();
+  }
+}
+
+
 async function loadBoardBrandCoreComparison() {
   if (boardBrandCoreComparison.status === "loading") return;
   if (!el.boardBrandCoreComparison?.open) return;
   boardBrandCoreComparison.status = "validating";
   boardBrandCoreComparison.result = null;
+  boardBrandCoreComparison.canonical = null;
+  boardBrandCoreComparison.confirming = false;
+  boardBrandCoreComparison.initializationMessage = "";
+  boardBrandCoreComparison.requiresReload = false;
   renderBoardBrandCoreComparison();
   const association = state.boardBrandAssociation;
   const userEmail = (state.user?.email || "").trim().toLowerCase();
@@ -3436,7 +3573,7 @@ async function loadBoardBrandCoreComparison() {
   const controller = new AbortController();
   const brandId = association.brandId;
   const loadGeneration = snapshot.loadGeneration;
-  boardBrandCoreComparison = { ...boardBrandCoreComparison, status: "loading", requestId, boardId, brandId, userEmail, boardLoadGeneration: loadGeneration, brandName: catalogBrand.name, boardName: state.currentBoardName || "Current Board", result: null, controller, timeoutId: null };
+  boardBrandCoreComparison = { ...boardBrandCoreComparison, status: "loading", requestId, boardId, brandId, userEmail, boardLoadGeneration: loadGeneration, brandName: catalogBrand.name, boardName: state.currentBoardName || "Current Board", canonical: null, boardSnapshot: JSON.parse(JSON.stringify(snapshot.value)), result: null, controller, timeoutId: null };
   const timeoutId = setTimeout(() => {
     const current = boardBrandCoreComparison;
     if (current.requestId !== requestId || current.controller !== controller) return;
@@ -3466,7 +3603,11 @@ async function loadBoardBrandCoreComparison() {
     if (current.requestId !== requestId || current.controller !== controller || !el.boardBrandCoreComparison.open) return;
     if (!brand || brand.id !== brandId || !isPlainJsonObject(brand.brand_core)) current.status = "malformed";
     else {
-      try { current.result = compareBrandCoreDocuments(brand.brand_core, state.authoritativeBoardBrandCore.value); current.status = "ready"; }
+      try {
+        current.canonical = (({ id, name, brand_core, revision, updated_at }) => ({ id, name, brand_core: JSON.parse(JSON.stringify(brand_core)), revision, updated_at }))(brand);
+        current.brandName = typeof brand.name === "string" && brand.name ? brand.name : current.brandName;
+        current.result = compareBrandCoreDocuments(current.canonical.brand_core, current.boardSnapshot); current.status = "ready";
+      }
       catch (_error) { current.result = null; current.status = "error"; logBoardBrandCoreComparison("comparison", { boardId, brandId, requestGeneration: requestId, failure: "calculation" }); }
     }
     renderBoardBrandCoreComparison();
@@ -3490,6 +3631,7 @@ function openBoardBrandCoreComparison() {
   el.boardBrandCoreComparisonTitle?.focus();
   void loadBoardBrandCoreComparison();
 }
+
 
 function invalidateBoardBrandAssociation({ clearBoard = false, loadingBoardId = "" } = {}) {
   closeBoardBrandCoreComparison({ restoreFocus: false });
@@ -15375,7 +15517,15 @@ el.boardBrandAssociationEdit?.addEventListener("click", openBoardBrandAssociatio
 el.boardBrandCoreCompareOpen?.addEventListener("click", openBoardBrandCoreComparison);
 el.boardBrandCoreComparisonClose?.addEventListener("click", () => closeBoardBrandCoreComparison());
 el.boardBrandCoreComparisonRetry?.addEventListener("click", () => { void loadBoardBrandCoreComparison(); });
-el.boardBrandCoreComparison?.addEventListener("cancel", (event) => { event.preventDefault(); closeBoardBrandCoreComparison(); });
+el.boardBrandCoreInitializeOpen?.addEventListener("click", beginCanonicalBrandCoreInitialization);
+el.boardBrandCoreInitializationSubmit?.addEventListener("click", () => { void submitCanonicalBrandCoreInitialization(); });
+el.boardBrandCoreInitializationCancel?.addEventListener("click", cancelCanonicalBrandCoreInitialization);
+el.boardBrandCoreInitializationReload?.addEventListener("click", () => { void loadBoardBrandCoreComparison(); });
+el.boardBrandCoreComparison?.addEventListener("cancel", (event) => {
+  event.preventDefault();
+  if (boardBrandCoreComparison.confirming && !boardBrandCoreComparison.initializationController) cancelCanonicalBrandCoreInitialization();
+  else if (!boardBrandCoreComparison.initializationController) closeBoardBrandCoreComparison();
+});
 el.boardBrandAssociationChoice?.addEventListener("change", () => {
   state.boardBrandAssociation.intendedBrandId = el.boardBrandAssociationChoice.value || null;
   state.boardBrandAssociation.message = "Pending choice — confirm Save association to update the Board.";
