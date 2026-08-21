@@ -46,6 +46,13 @@ function serializeBoardListRow(row = {}) {
   };
 }
 
+function serializeBoardItem(row = {}) {
+  return {
+    ...row,
+    brand_core_source_revision: row.brand_core_source_revision == null ? null : Number(row.brand_core_source_revision)
+  };
+}
+
 module.exports = async function handler(req, res) {
   if (req.method !== 'POST' && req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -124,13 +131,15 @@ module.exports = async function handler(req, res) {
     const ownerEmail = normalizeEmail(user.email);
     let authoritativeSnapshot = brand_core_snapshot;
     let linkedBrandId = null;
+    let sourceRevision = null;
+    let sourceUpdatedAt = null;
     if (brand_id !== null && brand_id !== undefined && brand_id !== '') {
       if (typeof brand_id !== 'string') return res.status(400).json({ error: 'brand_id must be a string' });
       const requestedBrandId = brand_id.trim();
       if (!isBrandId(requestedBrandId)) return res.status(400).json({ error: 'brand_id must be a UUID' });
       let brand;
       try {
-        brand = await getOwnedBrand(requestedBrandId, user, { columns: 'id, brand_core' });
+        brand = await getOwnedBrand(requestedBrandId, user, { columns: 'id, brand_core, revision, updated_at' });
       } catch (error) {
         console.error('[BOARD_BRAND_LOOKUP_FAILURE]', {
           brandId: requestedBrandId,
@@ -143,13 +152,19 @@ module.exports = async function handler(req, res) {
       if (!brand) return res.status(404).json({ error: 'Brand not found' });
       linkedBrandId = brand.id;
       authoritativeSnapshot = brand.brand_core;
+      sourceRevision = brand.revision;
+      sourceUpdatedAt = brand.updated_at;
     }
     const result = await pool.query(
-      'INSERT INTO boards (name, canvas_json, brand_core_snapshot, brand_id, owner_id, owner_email, owner_name, owner_avatar, created_by) VALUES ($1, $2::jsonb, $3::jsonb, $4, $5, $6, $7, $8, $9) RETURNING id, name, canvas_json, brand_core_snapshot, brand_id, updated_at, owner_id, owner_email, owner_name, owner_avatar, created_by, created_at',
-      [name, JSON.stringify(canvas_json), JSON.stringify(authoritativeSnapshot || null), linkedBrandId, ownerEmail, ownerEmail, user?.name || null, user?.avatar || null, ownerEmail]
+      `INSERT INTO boards (name, canvas_json, brand_core_snapshot, brand_id, brand_core_source_revision, brand_core_source_updated_at,
+        brand_core_snapshot_copied_at, owner_id, owner_email, owner_name, owner_avatar, created_by)
+       VALUES ($1, $2::jsonb, $3::jsonb, $4, $5, $6, CASE WHEN $4::uuid IS NULL THEN NULL ELSE NOW() END, $7, $8, $9, $10, $11)
+       RETURNING id, name, canvas_json, brand_core_snapshot, brand_id, brand_core_source_revision, brand_core_source_updated_at,
+         brand_core_snapshot_copied_at, updated_at, owner_id, owner_email, owner_name, owner_avatar, created_by, created_at`,
+      [name, JSON.stringify(canvas_json), JSON.stringify(authoritativeSnapshot || null), linkedBrandId, sourceRevision, sourceUpdatedAt, ownerEmail, ownerEmail, user?.name || null, user?.avatar || null, ownerEmail]
     );
 
-    return res.status(200).json(result.rows[0]);
+    return res.status(200).json(serializeBoardItem(result.rows[0]));
   } catch (error) {
     return res.status(500).json({ error: req.method === 'GET' ? 'Failed to load boards' : 'Failed to save board' });
   }

@@ -5,7 +5,14 @@ const { ensureDocumentTables, pool: documentPool } = require('../_document-recor
 const { deletePrivate } = require('../_document-storage');
 const { getOwnedBrand, isBrandId } = require('../_brand-access');
 
-const BOARD_COLUMNS = 'id, name, canvas_json, brand_core_snapshot, brand_id, created_at, updated_at, order_index, owner_id, owner_email, owner_name, owner_avatar, created_by';
+const BOARD_COLUMNS = 'id, name, canvas_json, brand_core_snapshot, brand_id, brand_core_source_revision, brand_core_source_updated_at, brand_core_snapshot_copied_at, created_at, updated_at, order_index, owner_id, owner_email, owner_name, owner_avatar, created_by';
+
+function serializeBoardItem(row = {}) {
+  return {
+    ...row,
+    brand_core_source_revision: row.brand_core_source_revision == null ? null : Number(row.brand_core_source_revision)
+  };
+}
 
 module.exports = async function handler(req, res) {
   if (req.method !== 'GET' && req.method !== 'PUT' && req.method !== 'PATCH' && req.method !== 'DELETE') {
@@ -78,7 +85,7 @@ module.exports = async function handler(req, res) {
 
       if (updated.rowCount === 0) return res.status(404).json({ error: 'Board not found' });
       return res.status(200).json({
-        ...updated.rows[0],
+        ...serializeBoardItem(updated.rows[0]),
         access
       });
     }
@@ -104,11 +111,12 @@ module.exports = async function handler(req, res) {
           return res.status(404).json({ error: 'Canonical Brand not found' });
         }
         updated = await pool.query(
-          `UPDATE boards SET brand_id = $2, updated_at = NOW() WHERE id = $1 RETURNING ${BOARD_COLUMNS}`,
+          `UPDATE boards SET brand_id = $2, updated_at = NOW(), brand_core_source_revision = NULL,
+             brand_core_source_updated_at = NULL, brand_core_snapshot_copied_at = NULL WHERE id = $1 RETURNING ${BOARD_COLUMNS}`,
           [id, brandId]
         );
         if (updated.rowCount === 0) return res.status(404).json({ error: 'Board not found' });
-        return res.status(200).json({ ...updated.rows[0], access });
+        return res.status(200).json({ ...serializeBoardItem(updated.rows[0]), access });
       }
       if (claim && user?.email) {
         const boardLookup = await pool.query(
@@ -220,7 +228,7 @@ module.exports = async function handler(req, res) {
     });
 
     return res.status(200).json({
-      ...board,
+      ...serializeBoardItem(board),
       access
     });
   } catch (error) {

@@ -64,6 +64,17 @@ async function ensureBoardsTable() {
       await pool.query('ALTER TABLE boards ADD COLUMN IF NOT EXISTS owner_avatar TEXT;');
       await pool.query('ALTER TABLE boards ADD COLUMN IF NOT EXISTS created_by TEXT;');
       await pool.query('ALTER TABLE boards ADD COLUMN IF NOT EXISTS brand_id UUID;');
+      // Runtime compatibility only; a formal migration and RLS hardening remain separate future work.
+      await pool.query('ALTER TABLE boards ADD COLUMN IF NOT EXISTS brand_core_source_revision BIGINT;');
+      await pool.query('ALTER TABLE boards ADD COLUMN IF NOT EXISTS brand_core_source_updated_at TIMESTAMPTZ;');
+      await pool.query('ALTER TABLE boards ADD COLUMN IF NOT EXISTS brand_core_snapshot_copied_at TIMESTAMPTZ;');
+      await pool.query(`
+        DO $$ BEGIN
+          ALTER TABLE boards ADD CONSTRAINT boards_brand_core_source_revision_check
+            CHECK (brand_core_source_revision IS NULL OR brand_core_source_revision > 0);
+        EXCEPTION WHEN duplicate_object THEN NULL;
+        END $$;
+      `);
       await pool.query('CREATE INDEX IF NOT EXISTS boards_brand_id_idx ON boards (brand_id);');
 
       await pool.query(`

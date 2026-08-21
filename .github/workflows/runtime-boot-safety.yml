@@ -49,5 +49,7 @@ jobs:
         run: node scripts/check-bw10-brand-scoped-board-library.js
       - name: Check explicit Board creation from Canonical Brand
         run: node scripts/check-bw11-create-board-from-canonical-brand.js
+      - name: Check Canonical Brand snapshot provenance
+        run: node scripts/check-bw12-canonical-snapshot-provenance.js
       - name: Check Knowledge Module browser globals
         run: node scripts/check-knowledge-module-browser-globals.js

@@ -62,7 +62,7 @@ assert.match(html, /id="board-brand-core-comparison-retry"[^>]*>Retry comparison
 assert.match(close, /controller\?\.abort[\s\S]*requestId: previous\.requestId \+ 1/, "close aborts and invalidates pending responses");
 assert.match(app, /invalidateBoardBrandAssociation[\s\S]*closeBoardBrandCoreComparison/, "Board and association lifecycle invalidates comparison");
 assert.match(load, /userEmail === \(state\.user[\s\S]*current\.boardId ===[\s\S]*current\.brandId === state\.boardBrandAssociation\.brandId[\s\S]*boardLoadGeneration/, "late responses are account, Board, association, and Board-load guarded");
-assert.match(boardLoad, /authoritativeBoardBrandCore = \{ boardId: String\(data\.id\), loadGeneration, value: clonePlainObject\(snapshot \|\| \{\}\) \}/, "comparison retains the raw authoritative Board snapshot including unknown fields");
+assert.match(boardLoad, /authoritativeBoardBrandCore = \{ boardId: String\(data\.id\), loadGeneration, value: clonePlainObject\(snapshot \|\| \{\}\), provenance: normalizeBoardSnapshotProvenance\(data\) \}/, "comparison retains the raw authoritative Board snapshot including unknown fields and validated provenance");
 assert.match(html, /last saved Board Brand Core snapshot loaded from the server/, "unsaved Board edits are explicitly disclosed");
 assert.doesNotMatch(`${open}\n${load}\n${close}`, /ephemeralBrandSwitcherSelection|brandCatalog\.entries\s*=|brand_id\s*=|intendedBrandId|canonicalBrandDetail/, "comparison is isolated from Workspace, association candidates, and Canonical drafts");
 assert.doesNotMatch(html.match(/<dialog class="brand-workspace-detail brand-core-comparison"[\s\S]*?<\/dialog>/)[0], />\s*(Copy|Merge|Publish|Pull|Push|Synchronize|Reset)\b/i, "comparison offers no synchronization action");

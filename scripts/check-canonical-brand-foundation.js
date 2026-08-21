@@ -81,7 +81,7 @@ boardsStorage.pool.query = async (sql, params = []) => {
     return { rowCount: 1, rows: [{ ...row }] };
   }
   if (text.includes("INSERT INTO boards")) {
-    const row = { id: `board-created-${++boardSequence}`, name: params[0], canvas_json: JSON.parse(params[1]), brand_core_snapshot: JSON.parse(params[2]), brand_id: params[3], owner_id: params[4], owner_email: params[5], owner_name: params[6], owner_avatar: params[7], created_by: params[8], created_at: now, updated_at: now };
+    const row = { id: `board-created-${++boardSequence}`, name: params[0], canvas_json: JSON.parse(params[1]), brand_core_snapshot: JSON.parse(params[2]), brand_id: params[3], brand_core_source_revision: params[4], brand_core_source_updated_at: params[5], brand_core_snapshot_copied_at: params[3] ? now : null, owner_id: params[6], owner_email: params[7], owner_name: params[8], owner_avatar: params[9], created_by: params[10], created_at: now, updated_at: now };
     boards.set(row.id, row); return { rowCount: 1, rows: [row] };
   }
   if (text.includes("FROM boards WHERE id")) {

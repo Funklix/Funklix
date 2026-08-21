@@ -119,7 +119,7 @@ const state = {
   ,brandCreation: { status: "initial", requestId: 0, userEmail: "" }
   ,boardCreation: { status: "idle", generation: 0, lifecycle: 0, controller: null, overlay: null, retryName: "" }
   ,boardBrandAssociation: { brandId: null, boardId: "", status: "idle", generation: 0, intendedBrandId: null, message: "" }
-  ,authoritativeBoardBrandCore: { boardId: "", loadGeneration: 0, value: {} }
+  ,authoritativeBoardBrandCore: { boardId: "", loadGeneration: 0, value: {}, provenance: null }
   ,boardLoadGeneration: 0
   ,contentPackLoadingById: {}
   ,contentPackErrorById: {}
@@ -3289,7 +3289,7 @@ async function loadCanonicalBrandCatalog() {
 
 const BRAND_CORE_VALUE_PREVIEW_LIMIT = 360;
 const BOARD_BRAND_CORE_COMPARISON_TIMEOUT_MS = 12000;
-let boardBrandCoreComparison = { status: "closed", requestId: 0, initializationId: 0, boardId: "", brandId: "", userEmail: "", boardLoadGeneration: 0, brandName: "", boardName: "", canonical: null, boardSnapshot: null, result: null, controller: null, initializationController: null, timeoutId: null, confirming: false, initializationMessage: "", requiresReload: false, returnFocus: null };
+let boardBrandCoreComparison = { status: "closed", requestId: 0, initializationId: 0, boardId: "", brandId: "", userEmail: "", boardLoadGeneration: 0, brandName: "", boardName: "", canonical: null, boardSnapshot: null, provenance: null, result: null, controller: null, initializationController: null, timeoutId: null, confirming: false, initializationMessage: "", requiresReload: false, returnFocus: null };
 
 function logBoardBrandCoreComparison(stage, details = {}) {
   console.info("[Brand Core comparison]", { stage, ...details });
@@ -3299,6 +3299,17 @@ function isPlainJsonObject(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const prototype = Object.getPrototypeOf(value);
   return prototype === Object.prototype || prototype === null;
+}
+
+function normalizeBoardSnapshotProvenance(board) {
+  const revision = board?.brand_core_source_revision;
+  const sourceUpdatedAt = board?.brand_core_source_updated_at;
+  const copiedAt = board?.brand_core_snapshot_copied_at;
+  if (revision == null && sourceUpdatedAt == null && copiedAt == null) return null;
+  if (!Number.isSafeInteger(revision) || revision < 1) return null;
+  if (typeof sourceUpdatedAt !== "string" || Number.isNaN(Date.parse(sourceUpdatedAt))) return null;
+  if (typeof copiedAt !== "string" || Number.isNaN(Date.parse(copiedAt))) return null;
+  return { sourceRevision: revision, sourceUpdatedAt, copiedAt };
 }
 
 function compareBrandCoreDocuments(canonical, board) {
@@ -3406,6 +3417,19 @@ function renderBoardBrandCoreComparison() {
     else if (result.boardEmpty) summary = "Board empty / Canonical populated";
     el.boardBrandCoreComparisonStatus.textContent = summary;
     el.boardBrandCoreComparisonTitle.textContent = `${comparison.brandName} and ${comparison.boardName}`;
+    const provenanceSection = document.createElement("section"); provenanceSection.className = "brand-core-comparison-group brand-core-provenance";
+    const provenanceHeading = document.createElement("h3");
+    const provenanceText = document.createElement("p");
+    const provenance = comparison.provenance;
+    if (provenance) {
+      provenanceHeading.textContent = "Board snapshot origin";
+      provenanceText.textContent = `Initialized from Canonical revision ${provenance.sourceRevision} on ${new Date(provenance.copiedAt).toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric" })}. Canonical Brand is currently revision ${comparison.canonical.revision}.`;
+    } else {
+      provenanceHeading.textContent = "Snapshot origin unavailable";
+      provenanceText.textContent = "This Board does not contain verified Canonical snapshot provenance.";
+    }
+    provenanceSection.append(provenanceHeading, provenanceText);
+    el.boardBrandCoreComparisonContent.appendChild(provenanceSection);
     const explanation = document.createElement("p"); explanation.className = "brand-core-comparison-summary";
     explanation.textContent = result.matches ? "These Brand Core records currently match." : "These Brand Core records currently differ. A difference is not automatically an error.";
     el.boardBrandCoreComparisonContent.appendChild(explanation);
@@ -3442,7 +3466,7 @@ function closeBoardBrandCoreComparison({ restoreFocus = true } = {}) {
   if (previous.timeoutId !== null) clearTimeout(previous.timeoutId);
   previous.controller?.abort();
   previous.initializationController?.abort();
-  boardBrandCoreComparison = { status: "closed", requestId: previous.requestId + 1, initializationId: previous.initializationId + 1, boardId: "", brandId: "", userEmail: "", boardLoadGeneration: 0, brandName: "", boardName: "", canonical: null, boardSnapshot: null, result: null, controller: null, initializationController: null, timeoutId: null, confirming: false, initializationMessage: "", requiresReload: false, returnFocus: null };
+  boardBrandCoreComparison = { status: "closed", requestId: previous.requestId + 1, initializationId: previous.initializationId + 1, boardId: "", brandId: "", userEmail: "", boardLoadGeneration: 0, brandName: "", boardName: "", canonical: null, boardSnapshot: null, provenance: null, result: null, controller: null, initializationController: null, timeoutId: null, confirming: false, initializationMessage: "", requiresReload: false, returnFocus: null };
   if (el.boardBrandCoreComparison?.open) el.boardBrandCoreComparison.close();
   if (el.boardBrandCoreComparisonTitle) el.boardBrandCoreComparisonTitle.textContent = "Compare Brand Cores";
   renderBoardBrandCoreComparison();
@@ -3584,7 +3608,7 @@ async function loadBoardBrandCoreComparison() {
   const controller = new AbortController();
   const brandId = association.brandId;
   const loadGeneration = snapshot.loadGeneration;
-  boardBrandCoreComparison = { ...boardBrandCoreComparison, status: "loading", requestId, boardId, brandId, userEmail, boardLoadGeneration: loadGeneration, brandName: catalogBrand.name, boardName: state.currentBoardName || "Current Board", canonical: null, boardSnapshot: JSON.parse(JSON.stringify(snapshot.value)), result: null, controller, timeoutId: null };
+  boardBrandCoreComparison = { ...boardBrandCoreComparison, status: "loading", requestId, boardId, brandId, userEmail, boardLoadGeneration: loadGeneration, brandName: catalogBrand.name, boardName: state.currentBoardName || "Current Board", canonical: null, boardSnapshot: JSON.parse(JSON.stringify(snapshot.value)), provenance: snapshot.provenance ? { ...snapshot.provenance } : null, result: null, controller, timeoutId: null };
   const timeoutId = setTimeout(() => {
     const current = boardBrandCoreComparison;
     if (current.requestId !== requestId || current.controller !== controller) return;
@@ -3822,6 +3846,7 @@ async function submitBoardBrandAssociation(event) {
     association.status = "saved";
     association.intendedBrandId = null;
     association.message = data.brand_id ? "Board Brand association saved." : "Board Brand association removed.";
+    state.authoritativeBoardBrandCore.provenance = normalizeBoardSnapshotProvenance(data);
     closeBoardBrandCoreComparison({ restoreFocus: false });
     state.lastKnownUpdatedAt = data.updated_at;
     applyBoardAccessFromServer(data.access, "boardBrandAssociation");
@@ -7500,7 +7525,7 @@ async function loadBoardFromUrlIfPresent(requestedBoardId = null) {
   state.isBoardLoading = true;
   state.isBoardHydrating = true;
   state.currentBoardId = boardId;
-  state.authoritativeBoardBrandCore = { boardId: "", loadGeneration, value: {} };
+  state.authoritativeBoardBrandCore = { boardId: "", loadGeneration, value: {}, provenance: null };
   invalidateBoardBrandAssociation({ clearBoard: true, loadingBoardId: boardId });
   syncRuntimeSessionFromLegacy("board-load-start");
   clearAutosaveTimer();
@@ -7532,7 +7557,7 @@ async function loadBoardFromUrlIfPresent(requestedBoardId = null) {
     state.boardBrandAssociation.brandId = data.brand_id;
     state.boardBrandAssociation.boardId = String(data.id);
     state.boardBrandAssociation.status = "idle";
-    state.authoritativeBoardBrandCore = { boardId: String(data.id), loadGeneration, value: clonePlainObject(snapshot || {}) };
+    state.authoritativeBoardBrandCore = { boardId: String(data.id), loadGeneration, value: clonePlainObject(snapshot || {}), provenance: normalizeBoardSnapshotProvenance(data) };
     renderBoardBrandAssociation();
     state.brandCore = snapshot ? normalizeBrandCoreState(snapshot, { restoration: true }) : normalizeBrandCoreState(defaultBrandCoreState(), { restoration: true });
     renderBrandCoreTiles();
@@ -16567,14 +16592,17 @@ async function createNewBoardFlow() {
     if (response.status === 401) { setAuthMessage("Sign in with Google to create a board."); throw new Error("Authentication expired. The Board was not confirmed."); }
     if (response.status === 404 && choice.mode === "brand") throw new Error("The selected Canonical Brand is no longer accessible.");
     if (!response.ok) throw new Error(data?.error || `Board creation failed (${response.status}).`);
+    const provenance = normalizeBoardSnapshotProvenance(data);
     const validShape = data && isValidBoardBrandId(data.id) && data.id !== null && typeof data.name === "string" && isValidCanvasStatePayload(data.canvas_json)
       && data.canvas_json.nodes.length === 0 && data.canvas_json.edges.length === 0 && isPlainJsonObject(data.brand_core_snapshot)
       && typeof data.updated_at === "string" && !Number.isNaN(Date.parse(data.updated_at));
-    if (!validShape || (choice.mode === "brand" ? data.brand_id !== brandId : data.brand_id !== null)) throw new Error("The server returned an invalid or mismatched Board response.");
+    const validProvenance = choice.mode === "brand" ? provenance !== null
+      : data.brand_core_source_revision == null && data.brand_core_source_updated_at == null && data.brand_core_snapshot_copied_at == null;
+    if (!validShape || !validProvenance || (choice.mode === "brand" ? data.brand_id !== brandId : data.brand_id !== null)) throw new Error("The server returned an invalid or mismatched Board response.");
     creation.status = "success"; status.textContent = "Board created. Opening it now…";
     clearAutosaveTimer(); state.boardLoadGeneration += 1; state.currentBoardId = data.id; state.currentBoardName = data.name; state.lastKnownUpdatedAt = data.updated_at;
     state.boardBrandAssociation = { brandId: data.brand_id, boardId: data.id, status: "idle", generation: state.boardBrandAssociation.generation + 1, intendedBrandId: null, message: "" };
-    state.authoritativeBoardBrandCore = { boardId: data.id, loadGeneration: state.boardLoadGeneration, value: clonePlainObject(data.brand_core_snapshot) };
+    state.authoritativeBoardBrandCore = { boardId: data.id, loadGeneration: state.boardLoadGeneration, value: clonePlainObject(data.brand_core_snapshot), provenance };
     state.brandCore = normalizeBrandCoreState(data.brand_core_snapshot, { restoration: true });
     applyCampaignState(withBoardSchemaDefaults(data.canvas_json), "Created Board"); saveBrandBrainState({ markDirty: false }); state.isDirty = false; refreshLastSavedSnapshot(); renderBoardBrandAssociation();
     const nextPath = `/boards/${data.id}`; if (window.location.pathname !== nextPath) window.history.pushState({}, "", nextPath);
