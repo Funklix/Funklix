@@ -4,7 +4,54 @@ const assert = require("assert");
 const fs = require("fs");
 const { execFileSync } = require("child_process");
 process.env.AUTH_SECRET = "canonical-brand-foundation-test-secret";
-process.env.POSTGRES_URL = "postgres://test.invalid/funklix";
+// Handlers retain their production configuration guard; this sentinel is never
+// used by the mocked Pool and does not identify a reachable PostgreSQL server.
+process.env.POSTGRES_URL = "postgres://foundation-check.invalid/unused";
+
+function installPgMock() {
+  const Module = require("module");
+  const originalLoad = Module._load;
+  const originalResolveFilename = Module._resolveFilename;
+  const state = { poolConstructions: 0, unconfiguredQueries: 0, blobCalls: 0 };
+
+  class MockPool {
+    constructor() {
+      state.poolConstructions += 1;
+    }
+
+    async query() {
+      state.unconfiguredQueries += 1;
+      throw new Error("PostgreSQL mock query must be configured by the foundation check");
+    }
+  }
+
+  const unavailableBlobOperation = async () => {
+    state.blobCalls += 1;
+    throw new Error("Blob operations are outside the foundation check");
+  };
+  const blobMock = {
+    del: unavailableBlobOperation,
+    get: unavailableBlobOperation,
+    issueSignedToken: unavailableBlobOperation,
+    presignUrl: unavailableBlobOperation
+  };
+
+  // Make resolution of a real pg package an error while satisfying its import at
+  // the loader boundary. This keeps the check honest even when node_modules exists.
+  Module._resolveFilename = function resolveWithoutPg(request, ...args) {
+    if (request === "pg" || request === "@vercel/blob") throw new Error(`Real ${request} resolution is disabled by the foundation check`);
+    return originalResolveFilename.call(this, request, ...args);
+  };
+  Module._load = function loadWithPgMock(request, ...args) {
+    if (request === "pg") return { Pool: MockPool };
+    if (request === "@vercel/blob") return blobMock;
+    return originalLoad.call(this, request, ...args);
+  };
+
+  return state;
+}
+
+const pgMockState = installPgMock();
 
 const { createSessionToken } = require("../api/_auth-session");
 const boardsStorage = require("../api/_boards-storage");
@@ -14,12 +61,20 @@ const boardCollection = require("../api/boards/index");
 const boardItem = require("../api/boards/[id]");
 const { isBrandId } = require("../api/_brand-access");
 
+// Regression guard: storage loaded with a mocked Pool while real pg resolution
+// was deliberately unavailable, and no query/connection happened during import.
+assert.strictEqual(pgMockState.poolConstructions, 1);
+assert.strictEqual(pgMockState.unconfiguredQueries, 0);
+assert.strictEqual(pgMockState.blobCalls, 0);
+
 const owner = { email: "Owner@Example.com", name: "Owner" };
 const other = { email: "other@example.com", name: "Other" };
 const viewer = { email: "viewer@example.com", name: "Viewer" };
 const ownerEmail = "owner@example.com";
 const brandId = "11111111-1111-4111-8111-111111111111";
 const otherBrandId = "22222222-2222-4222-8222-222222222222";
+const linkedBoardId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+const legacyBoardId = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
 const canonicalCore = { brandCore: "CANONICAL PRIVATE KNOWLEDGE", customTiles: [] };
 const boardSnapshot = { brandCore: "Campaign baseline", customTiles: [] };
 const now = "2026-01-01T00:00:00.000Z";
@@ -29,10 +84,10 @@ const brands = new Map([
   [otherBrandId, { id: otherBrandId, owner_email: "other@example.com", name: "Other Brand", brand_core: { brandCore: "Other" }, revision: 1, created_at: now, updated_at: now }]
 ]);
 const boards = new Map([
-  ["board-linked", { id: "board-linked", name: "Linked", canvas_json: { nodes: [], edges: [] }, brand_core_snapshot: boardSnapshot, brand_id: brandId, owner_id: ownerEmail, owner_email: ownerEmail, created_at: now, updated_at: now }],
-  ["board-legacy", { id: "board-legacy", name: "Legacy", canvas_json: { nodes: [], edges: [] }, brand_core_snapshot: { brandCore: "Legacy knowledge" }, brand_id: null, owner_id: ownerEmail, owner_email: ownerEmail, created_at: now, updated_at: now }]
+  [linkedBoardId, { id: linkedBoardId, name: "Linked", canvas_json: { nodes: [], edges: [] }, brand_core_snapshot: boardSnapshot, brand_id: brandId, owner_id: ownerEmail, owner_email: ownerEmail, created_at: now, updated_at: now }],
+  [legacyBoardId, { id: legacyBoardId, name: "Legacy", canvas_json: { nodes: [], edges: [] }, brand_core_snapshot: { brandCore: "Legacy knowledge" }, brand_id: null, owner_id: ownerEmail, owner_email: ownerEmail, created_at: now, updated_at: now }]
 ]);
-const editors = new Set(["board-linked:viewer@example.com"]);
+const editors = new Set([`${linkedBoardId}:viewer@example.com`]);
 const queries = [];
 let injectedFailure = null;
 let boardSequence = 0;
@@ -101,6 +156,11 @@ boardsStorage.pool.query = async (sql, params = []) => {
 };
 
 async function call(route, request) { const response = res(); await route(request, response); return response; }
+
+function runIsolatedProbe(source) {
+  const mockPrelude = `(${installPgMock.toString()})();`;
+  execFileSync(process.execPath, ["-e", mockPrelude + source], { cwd: require("path").resolve(__dirname, ".."), stdio: "pipe" });
+}
 
 (async () => {
   // Authentication and validation contracts.
@@ -191,15 +251,15 @@ async function call(route, request) { const response = res(); await route(reques
   }
 
   // Legacy, linked, shared-read, save, restore, and immutable brand_id compatibility.
-  response = await call(boardItem, req("GET", owner, {}, { id: "board-legacy" }));
+  response = await call(boardItem, req("GET", owner, {}, { id: legacyBoardId }));
   assert.strictEqual(response.statusCode, 200); assert.strictEqual(response.body.brand_id, null);
   assert.deepStrictEqual(response.body.brand_core_snapshot, { brandCore: "Legacy knowledge" });
-  response = await call(boardItem, req("GET", viewer, {}, { id: "board-linked" }));
+  response = await call(boardItem, req("GET", viewer, {}, { id: linkedBoardId }));
   assert.strictEqual(response.statusCode, 200); assert.strictEqual(response.body.brand_id, brandId);
   assert.deepStrictEqual(response.body.brand_core_snapshot, boardSnapshot);
   assert(!JSON.stringify(response.body).includes("CANONICAL PRIVATE KNOWLEDGE"));
   for (const attemptedBrandId of [null, otherBrandId, "44444444-4444-4444-8444-444444444444"]) {
-    response = await call(boardItem, req("PUT", owner, { canvas_json: { nodes: [{ id: "restored" }], edges: [] }, brand_core_snapshot: boardSnapshot, brand_id: attemptedBrandId }, { id: "board-linked" }));
+    response = await call(boardItem, req("PUT", owner, { canvas_json: { nodes: [{ id: "restored" }], edges: [] }, brand_core_snapshot: boardSnapshot, brand_id: attemptedBrandId }, { id: linkedBoardId }));
     assert.strictEqual(response.statusCode, 200); assert.strictEqual(response.body.brand_id, brandId);
     assert.deepStrictEqual(response.body.brand_core_snapshot, boardSnapshot);
   }
@@ -218,41 +278,36 @@ async function call(route, request) { const response = res(); await route(reques
 
   // Retry behavior is checked in isolated processes because initialization promises are module-local caches.
   const retryProbe = `
-    process.env.POSTGRES_URL='postgres://test.invalid/funklix';
     const storage=require('./api/_boards-storage'); const brands=require('./api/_brands-storage');
     let brandCreates=0,fail=true; storage.pool.query=async(sql)=>{const text=String(sql);if(text.includes('CREATE TABLE IF NOT EXISTS brands')){brandCreates++;if(fail){fail=false;throw new Error('first failure')}}if(text.includes("to_regclass('boards')"))return {rows:[{boards_exist:false,brands_exist:true}]};return {rows:[]}};
     (async()=>{let rejected=false; try{await brands.ensureBrandsTable()}catch(e){rejected=true} if(!rejected)throw new Error('brand first call must fail'); await brands.ensureBrandsTable(); if(brandCreates!==2)throw new Error('brand retry missing'); await brands.ensureBrandsTable(); if(brandCreates!==2)throw new Error('brand initialization is not idempotent')})().catch(e=>{console.error(e);process.exit(1)});`;
-  execFileSync(process.execPath, ["-e", retryProbe], { cwd: require("path").resolve(__dirname, ".."), stdio: "pipe" });
+  runIsolatedProbe(retryProbe);
   const boardRetryProbe = `
-    process.env.POSTGRES_URL='postgres://test.invalid/funklix';
     const storage=require('./api/_boards-storage');
     let failed=false,boardCreates=0; storage.pool.query=async(sql)=>{const text=String(sql);if(text.includes('CREATE TABLE IF NOT EXISTS boards')){boardCreates++;if(!failed){failed=true;throw new Error('first board failure')}}if(text.includes("to_regclass('boards')"))return {rows:[{boards_exist:true,brands_exist:false}]};return {rows:[]}};
     (async()=>{let rejected=false;try{await storage.ensureBoardsTable()}catch(e){rejected=true}if(!rejected)throw new Error('board first call must fail');await storage.ensureBoardsTable();if(boardCreates!==2)throw new Error('board retry missing');const completedCalls=boardCreates;await storage.ensureBoardsTable();if(boardCreates!==completedCalls)throw new Error('board initialization is not idempotent')})().catch(e=>{console.error(e);process.exit(1)});`;
-  execFileSync(process.execPath, ["-e", boardRetryProbe], { cwd: require("path").resolve(__dirname, ".."), stdio: "pipe" });
+  runIsolatedProbe(boardRetryProbe);
 
   const brandFailureIsolationProbe = `
-    process.env.POSTGRES_URL='postgres://test.invalid/funklix';
     const storage=require('./api/_boards-storage');const brands=require('./api/_brands-storage');
     let boardCreates=0;
     storage.pool.query=async(sql)=>{const text=String(sql);if(text.includes('CREATE TABLE IF NOT EXISTS brands'))throw new Error('brand bootstrap failure');if(text.includes('CREATE TABLE IF NOT EXISTS boards'))boardCreates++;if(text.includes("to_regclass('boards')"))return {rows:[{boards_exist:true,brands_exist:false}]};return {rows:[]}};
     (async()=>{let brandRejected=false;try{await brands.ensureBrandsTable()}catch{brandRejected=true}if(!brandRejected)throw new Error('brand failure did not propagate');await storage.ensureBoardsTable();if(boardCreates!==1)throw new Error('brand failure blocked board initialization')})().catch(e=>{console.error(e);process.exit(1)});`;
-  execFileSync(process.execPath, ["-e", brandFailureIsolationProbe], { cwd: require("path").resolve(__dirname, ".."), stdio: "pipe" });
+  runIsolatedProbe(brandFailureIsolationProbe);
 
   const relationshipProbe = `
-    process.env.POSTGRES_URL='postgres://test.invalid/funklix';
     const storage=require('./api/_boards-storage');const brands=require('./api/_brands-storage');
     let boards=false,brand=false,relationAttempts=0,failRelation=true,boardCreates=0,brandCreates=0;
     storage.pool.query=async(sql)=>{const text=String(sql);if(text.includes('CREATE TABLE IF NOT EXISTS boards')){boards=true;boardCreates++}if(text.includes('CREATE TABLE IF NOT EXISTS brands')){brand=true;brandCreates++}if(text.includes("to_regclass('boards')"))return {rows:[{boards_exist:boards,brands_exist:brand}]};if(text.includes('ADD CONSTRAINT boards_brand_id_fkey')){relationAttempts++;if(failRelation){failRelation=false;throw new Error('relationship failure')}}return {rows:[]}};
     (async()=>{await storage.ensureBoardsTable();if(boardCreates!==1||relationAttempts!==0)throw new Error('boards-first availability failed');await brands.ensureBrandsTable();if(brandCreates!==1||relationAttempts!==1)throw new Error('boards-first reconciliation was not attempted');await storage.ensureBoardsTable();if(relationAttempts!==2)throw new Error('relationship retry missing');await storage.ensureBoardsTable();if(relationAttempts!==2)throw new Error('relationship reconciliation not idempotent')})().catch(e=>{console.error(e);process.exit(1)});`;
-  execFileSync(process.execPath, ["-e", relationshipProbe], { cwd: require("path").resolve(__dirname, ".."), stdio: "pipe" });
+  runIsolatedProbe(relationshipProbe);
 
   const brandsFirstProbe = `
-    process.env.POSTGRES_URL='postgres://test.invalid/funklix';
     const storage=require('./api/_boards-storage');const brands=require('./api/_brands-storage');
     let boards=false,brand=false,relations=0;
     storage.pool.query=async(sql)=>{const text=String(sql);if(text.includes('CREATE TABLE IF NOT EXISTS boards'))boards=true;if(text.includes('CREATE TABLE IF NOT EXISTS brands'))brand=true;if(text.includes("to_regclass('boards')"))return {rows:[{boards_exist:boards,brands_exist:brand}]};if(text.includes('ADD CONSTRAINT boards_brand_id_fkey'))relations++;return {rows:[]}};
     (async()=>{await brands.ensureBrandsTable();if(relations!==0)throw new Error('missing boards was not safe');await storage.ensureBoardsTable();if(relations!==1)throw new Error('brands-first relationship was not reconciled')})().catch(e=>{console.error(e);process.exit(1)});`;
-  execFileSync(process.execPath, ["-e", brandsFirstProbe], { cwd: require("path").resolve(__dirname, ".."), stdio: "pipe" });
+  runIsolatedProbe(brandsFirstProbe);
 
   console.log("Canonical Brand Phase 1A.1 hardening checks passed (mock/contract coverage; no live PostgreSQL integration)." );
 })().catch((error) => { console.error(error); process.exitCode = 1; }).finally(() => { boardsStorage.pool.query = originalQuery; });
