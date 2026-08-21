@@ -640,6 +640,7 @@ function boardAccessFromServer(access, fallback = state.boardAccess) {
   return {
     canView: access?.canView !== false,
     canEdit: access?.canEdit !== false,
+    canViewBoardBrandCore: access?.canViewBoardBrandCore === true,
     canManagePermissions: access?.canManagePermissions === true,
     canRename: access?.canRename === true,
     canDelete: access?.canDelete === true,
@@ -657,6 +658,12 @@ function applyBoardAccessFromServer(access, source = "server") {
     || state.boardAccess?.canRename !== nextAccess.canRename
     || state.boardAccess?.canDelete !== nextAccess.canDelete;
   state.boardAccess = nextAccess;
+  if (!nextAccess.canViewBoardBrandCore && nextAccess.canEdit === false) {
+    clearAutosaveTimer();
+    state.latestSaveRequestId += 1;
+    state.authoritativeBoardBrandCore = { boardId: "", loadGeneration: state.boardLoadGeneration, value: {}, provenance: null, provenanceValid: false, updatedAt: null, restoreAvailable: false, backupCreatedAt: null };
+    state.brandCore = normalizeBrandCoreState({}, { restoration: true });
+  }
   if (changed) console.debug("[Funklix Access] boardAccess", { source, access: state.boardAccess });
   updateReadOnlyNoticeVisibility();
   if (nextAccess.canManagePermissions) loadBoardEditors({ silent: true });
@@ -669,6 +676,7 @@ function boardAccessFromServer(access, fallback = state.boardAccess) {
   return {
     canView: access?.canView !== false,
     canEdit: access?.canEdit !== false,
+    canViewBoardBrandCore: access?.canViewBoardBrandCore === true,
     canManagePermissions: access?.canManagePermissions === true,
     canRename: access?.canRename === true,
     canDelete: access?.canDelete === true,
@@ -686,6 +694,12 @@ function applyBoardAccessFromServer(access, source = "server") {
     || state.boardAccess?.canRename !== nextAccess.canRename
     || state.boardAccess?.canDelete !== nextAccess.canDelete;
   state.boardAccess = nextAccess;
+  if (!nextAccess.canViewBoardBrandCore && nextAccess.canEdit === false) {
+    clearAutosaveTimer();
+    state.latestSaveRequestId += 1;
+    state.authoritativeBoardBrandCore = { boardId: "", loadGeneration: state.boardLoadGeneration, value: {}, provenance: null, provenanceValid: false, updatedAt: null, restoreAvailable: false, backupCreatedAt: null };
+    state.brandCore = normalizeBrandCoreState({}, { restoration: true });
+  }
   if (changed) console.debug("[Funklix Access] boardAccess", { source, access: state.boardAccess });
   updateReadOnlyNoticeVisibility();
   if (nextAccess.canManagePermissions) loadBoardEditors({ silent: true });
@@ -1069,6 +1083,7 @@ function permissionShareLines() {
   const role = state.boardAccess?.reason || "unknown";
   if (role === "owner") return ["Anyone with the link can view", "Editors can make changes to this board"];
   if (role === "editor") return ["You can edit this board", "Only the owner can manage access"];
+  if (role === "viewer") return ["Can view this Board. Cannot edit or access Board Brand Core.", "Only the owner can manage access"];
   if (role === "unowned") return ["Anyone with the link can view", "Sign in to claim this board"];
   return ["View-only board", "Duplicate to edit your own copy"];
 }
@@ -1104,16 +1119,18 @@ function buildShareEditorPanelHtml() {
       ? editors.map((editor) => {
         const normalizedEmail = typeof editor?.email === "string" ? editor.email.trim().toLowerCase() : "";
         const email = escapeHtml(normalizedEmail);
-        return `<div class="share-editor-row"><div class="share-editor-meta"><strong title="${email}">${email}</strong><span class="share-editor-role">Editor</span></div><button type="button" class="share-editor-remove" data-remove-editor="${email}" aria-label="Remove ${email}">Remove</button></div>`;
+        const role = editor?.role === "viewer" ? "viewer" : "editor";
+        return `<div class="share-editor-row"><div class="share-editor-meta"><strong title="${email}">${email}</strong><label>Board role <select data-member-role="${email}" aria-label="Board role for ${email}"><option value="viewer" ${role === "viewer" ? "selected" : ""}>Viewer</option><option value="editor" ${role === "editor" ? "selected" : ""}>Editor</option></select></label><span class="share-editor-role">${role === "viewer" ? "Can view this Board. Cannot edit or access Board Brand Core." : "Can edit this Board and its Board Brand Core. Does not receive access to the Canonical Brand or other Boards."}</span></div><button type="button" class="share-editor-remove" data-remove-editor="${email}" aria-label="Remove ${email}">Remove</button></div>`;
       }).join("")
       : '<div class="share-editor-empty">No editors yet</div>';
   const statusHtml = status.message
     ? `<div class="share-editor-status ${status.isError ? 'error' : 'success'}">${escapeHtml(status.message)}</div>`
     : '';
 
-  return `<div class="share-editor-heading"><strong>Invite editor by email</strong><span>Editors can make changes to this board.</span></div>
+  return `<div class="share-editor-heading"><strong>Board-specific permissions</strong><span>Add a Viewer or Editor for this Board only.</span></div>
     <form class="share-editor-form" data-share-editor-form>
-      <input type="email" data-share-editor-email placeholder="editor@example.com" autocomplete="email" aria-label="Editor email" />
+      <label>Email <input type="email" data-share-editor-email placeholder="member@example.com" autocomplete="email" /></label>
+      <label>Role <select data-share-editor-role><option value="viewer">Viewer</option><option value="editor">Editor</option></select></label>
       <button type="submit">Invite</button>
     </form>
     ${statusHtml}
@@ -1126,8 +1143,13 @@ function bindShareEditorPanel(panel) {
     event.preventDefault();
     const input = panel.querySelector("[data-share-editor-email]");
     const email = input?.value?.trim() || "";
-    await addBoardEditor(email, input);
+    const role = panel.querySelector("[data-share-editor-role]")?.value || "viewer";
+    await addBoardEditor(email, input, role);
   });
+  panel.querySelectorAll("[data-member-role]").forEach((select) => select.addEventListener("change", async () => {
+    if (select.value === "viewer" && !window.confirm("Reduce this member to Viewer? They will immediately lose edit and Board Brand Core access.")) { await loadBoardEditors({ silent: true }); return; }
+    await addBoardEditor(select.getAttribute("data-member-role") || "", null, select.value);
+  }));
   panel.querySelectorAll("[data-remove-editor]").forEach((button) => {
     button.addEventListener("click", async () => {
       const email = button.getAttribute("data-remove-editor") || "";
@@ -1161,7 +1183,7 @@ async function loadBoardEditors({ silent = false } = {}) {
   }
 }
 
-async function addBoardEditor(email, input = null) {
+async function addBoardEditor(email, input = null, role = "viewer") {
   const boardId = state.currentBoardId || getBoardIdFromPath();
   if (!boardId || !state.boardAccess?.canManagePermissions) return;
   const normalizedEmail = typeof email === "string" ? email.trim().toLowerCase() : "";
@@ -1174,13 +1196,13 @@ async function addBoardEditor(email, input = null) {
     const response = await fetch(`/api/boards/${encodeURIComponent(boardId)}/editors`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: normalizedEmail })
+      body: JSON.stringify({ email: normalizedEmail, role })
     });
     const data = await response.json();
     if (!response.ok) throw new Error(data?.error || "Could not add editor");
     state.boardEditors = Array.isArray(data?.editors) ? data.editors : state.boardEditors;
     if (input) input.value = "";
-    setBoardEditorsStatus(data?.alreadyExists ? "Editor already added." : "Editor added.", false);
+    setBoardEditorsStatus(`${role === "viewer" ? "Viewer" : "Editor"} permission saved.`, false);
   } catch (error) {
     setBoardEditorsStatus(permissionErrorMessage(error?.message || "Could not add editor"), true);
   }
@@ -1191,6 +1213,7 @@ async function removeBoardEditor(email) {
   if (!boardId || !state.boardAccess?.canManagePermissions) return;
   const normalizedEmail = typeof email === "string" ? email.trim().toLowerCase() : "";
   if (!normalizedEmail) return;
+  if (!window.confirm(`Remove ${normalizedEmail} from this Board?`)) return;
   setBoardEditorsStatus("Removing editor…", false);
   try {
     const response = await fetch(`/api/boards/${encodeURIComponent(boardId)}/editors/${encodeURIComponent(normalizedEmail)}`, { method: "DELETE" });
@@ -7672,27 +7695,28 @@ async function loadBoardFromUrlIfPresent(requestedBoardId = null) {
       && boardId === (getBoardIdFromPath() || state.currentBoardId)
       && userEmail === (state.user?.email || "").trim().toLowerCase();
     if (!stillCurrent) return false;
-    if (String(data?.id || "") !== String(boardId) || !isValidBoardBrandId(data?.brand_id)) {
+    if (String(data?.id || "") !== String(boardId) || (data?.brand_visibility !== "hidden" && !isValidBoardBrandId(data?.brand_id))) {
       state.boardBrandAssociation.status = "load-error";
       state.boardBrandAssociation.message = "The Board API returned an invalid association response; no Brand was displayed.";
       renderBoardBrandAssociation();
       return false;
     }
-    const snapshot = isPlainJsonObject(data?.brand_core_snapshot) ? data.brand_core_snapshot : null;
+    const canViewBoardBrandCore = data?.access?.canViewBoardBrandCore === true;
+    const snapshot = canViewBoardBrandCore && isPlainJsonObject(data?.brand_core_snapshot) ? data.brand_core_snapshot : null;
     debugBrandBrainScope("board-snapshot-received", { boardId, hasSnapshot: Boolean(snapshot), ...brandDnaScopeSummary(snapshot || {}) });
     setPassiveBoardOwnershipDiagnostics(data, "board-load-response");
     state.currentBoardId = data.id;
     syncRuntimeSessionFromLegacy("board-load");
     state.currentBoardName = data?.name || "";
     state.lastKnownUpdatedAt = data?.updated_at || null;
-    state.boardBrandAssociation.brandId = data.brand_id;
+    state.boardBrandAssociation.brandId = data?.brand_visibility === "hidden" ? null : data.brand_id;
     state.boardBrandAssociation.boardId = String(data.id);
     state.boardBrandAssociation.status = "idle";
     const backupCreatedAt = typeof data.brand_core_snapshot_backup_created_at === "string" && !Number.isNaN(Date.parse(data.brand_core_snapshot_backup_created_at)) ? data.brand_core_snapshot_backup_created_at : null;
     const restoreAvailable = data.brand_core_restore_available === true && !!backupCreatedAt;
     state.authoritativeBoardBrandCore = { boardId: String(data.id), loadGeneration, value: clonePlainObject(snapshot || {}), provenance: normalizeBoardSnapshotProvenance(data), provenanceValid: hasValidBoardSnapshotProvenance(data), updatedAt: data.updated_at, restoreAvailable, backupCreatedAt };
     renderBoardBrandAssociation();
-    state.brandCore = snapshot ? normalizeBrandCoreState(snapshot, { restoration: true }) : normalizeBrandCoreState(defaultBrandCoreState(), { restoration: true });
+    state.brandCore = snapshot ? normalizeBrandCoreState(snapshot, { restoration: true }) : normalizeBrandCoreState({}, { restoration: true });
     renderBrandCoreTiles();
     renderBrandCoreEditor();
     saveBrandBrainState({ markDirty: false });
@@ -17040,18 +17064,20 @@ function renderBoardsLibrary() {
     const accessRole = board.access_role || "";
     const isOwner = accessRole === "owner" || (!!userEmail && !!ownerEmail && ownerEmail === userEmail);
     const isEditor = accessRole === "editor";
+    const isViewer = accessRole === "viewer";
     const isShared = !!board.owner_email && !isOwner;
     const isCopy = /\(copy\)$/i.test(boardName.trim());
     const ownerBy = deriveOwnerDisplayName(board.owner_name || "", board.owner_email || "");
-    const roleChip = isOwner ? '<span class="board-row-chip owned fk-pill">Your Board</span>' : (isEditor ? '<span class="board-row-chip shared fk-pill">Editor</span>' : (isShared ? '<span class="board-row-chip shared fk-pill">Shared</span>' : '<span class="board-row-chip shared fk-pill">Open</span>'));
+    const roleChip = isOwner ? '<span class="board-row-chip owned fk-pill">Your Board</span>' : (isEditor ? '<span class="board-row-chip shared fk-pill">Editor</span>' : (isViewer ? '<span class="board-row-chip shared fk-pill">Viewer</span>' : (isShared ? '<span class="board-row-chip shared fk-pill">Shared</span>' : '<span class="board-row-chip shared fk-pill">Open</span>')));
     const copyChip = isCopy ? '<span class="board-row-chip copy fk-pill">Copy</span>' : '';
-    const ownerLine = isOwner ? 'You can edit this board.' : (isEditor ? `By ${ownerBy || 'another user'}` : (isShared ? `By ${ownerBy || 'another user'}` : 'No owner yet'));
+    const ownerLine = isOwner ? 'You can edit this board.' : (isEditor ? `By ${ownerBy || 'another user'}` : (isViewer ? 'Read-only Board access' : (isShared ? `By ${ownerBy || 'another user'}` : 'No owner yet')));
     const boardBrand = getBoardBrandDisplay(board, boardName);
     const boardAvatar = boardBrand.avatarUrl
       ? `<img src="${escapeHtml(boardBrand.avatarUrl)}" alt="${escapeHtml(boardBrand.name || boardName)} Brand Avatar" />`
       : `<span>${escapeHtml(boardBrand.initial)}</span>`;
     const brandLine = boardBrand.name ? `<div class="board-row-brand"><span>Brand</span><strong>${escapeHtml(boardBrand.name)}</strong></div>` : "";
-    row.innerHTML = `<div class="board-row-drag-handle" title="Drag to reorder" aria-hidden="true">⋮⋮</div><div class="board-row-content"><div class="board-row-avatar" aria-hidden="true">${boardAvatar}</div><div class="board-row-details"><div class="board-row-titleline"><strong class="board-row-title">${escapeHtml(boardName)}</strong>${roleChip}${copyChip}</div>${brandLine}<div class="board-row-meta"><span>Last edited</span><strong>${escapeHtml(savedAt)}</strong></div><div class="board-row-description">${escapeHtml(ownerLine)}</div><div class="board-rename hidden" data-rename-wrap="${escapeHtml(board.id)}"><input class="fk-input" data-rename-input="${escapeHtml(board.id)}" value="${escapeHtml(board.name || '')}" /><button class="fk-btn fk-btn-primary" data-rename-save="${escapeHtml(board.id)}" type="button">Save</button><button class="fk-btn fk-btn-ghost" data-rename-cancel="${escapeHtml(board.id)}" type="button">Cancel</button></div></div></div><div class="board-row-actions"><button class="board-action-btn fk-btn fk-btn-primary" data-open-board="${escapeHtml(board.id)}" title="Open" aria-label="Open board">Open</button><button class="board-action-btn fk-btn fk-btn-secondary" data-copy-board="${escapeHtml(board.id)}" title="Copy link" aria-label="Copy link">Copy Link</button><button class="board-action-btn board-action-tertiary fk-btn fk-btn-ghost" data-rename-board="${escapeHtml(board.id)}" title="Rename" aria-label="Rename board">Rename</button><button class="board-action-btn board-action-tertiary danger fk-btn fk-btn-ghost" data-delete-board="${escapeHtml(board.id)}" title="Delete" aria-label="Delete board">Delete</button><button class="board-action-btn board-action-tertiary fk-btn fk-btn-ghost" data-up-board="${escapeHtml(board.id)}" data-index="${sourceIndex}" title="Move up" aria-label="Move board up">Move Up</button><button class="board-action-btn board-action-tertiary fk-btn fk-btn-ghost" data-down-board="${escapeHtml(board.id)}" data-index="${sourceIndex}" title="Move down" aria-label="Move board down">Move Down</button>${state.user?.email && !board.owner_email ? `<button class="board-action-btn fk-btn fk-btn-secondary" data-claim-board="${escapeHtml(board.id)}" title="Claim">Claim</button>` : ""}</div>`;
+    const ownerActions = isOwner ? `<button class="board-action-btn board-action-tertiary fk-btn fk-btn-ghost" data-rename-board="${escapeHtml(board.id)}" title="Rename" aria-label="Rename board">Rename</button><button class="board-action-btn board-action-tertiary danger fk-btn fk-btn-ghost" data-delete-board="${escapeHtml(board.id)}" title="Delete" aria-label="Delete board">Delete</button>` : '';
+    row.innerHTML = `<div class="board-row-drag-handle" title="Drag to reorder" aria-hidden="true">⋮⋮</div><div class="board-row-content"><div class="board-row-avatar" aria-hidden="true">${boardAvatar}</div><div class="board-row-details"><div class="board-row-titleline"><strong class="board-row-title">${escapeHtml(boardName)}</strong>${roleChip}${copyChip}</div>${brandLine}<div class="board-row-meta"><span>Last edited</span><strong>${escapeHtml(savedAt)}</strong></div><div class="board-row-description">${escapeHtml(ownerLine)}</div></div></div><div class="board-row-actions"><button class="board-action-btn fk-btn fk-btn-primary" data-open-board="${escapeHtml(board.id)}" title="Open" aria-label="Open board">Open</button><button class="board-action-btn fk-btn fk-btn-secondary" data-copy-board="${escapeHtml(board.id)}" title="Copy link" aria-label="Copy link">Copy Link</button>${ownerActions}</div>`;
     if (request.scope === 'all') bindBoardRowDragHandlers(row);
     el.boardsLibraryList.appendChild(row);
   });

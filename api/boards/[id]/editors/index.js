@@ -44,9 +44,11 @@ module.exports = async function handler(req, res) {
     }
 
     const email = normalizeEmail(req.body?.email);
+    const role = req.body?.role;
     if (!email || !isValidEmail(email)) {
       return res.status(400).json({ error: 'Valid email is required' });
     }
+    if (role !== 'editor' && role !== 'viewer') return res.status(400).json({ error: 'Role must be editor or viewer' });
 
     const ownerEmail = normalizeEmail(board.owner_email || user.email);
     if (email === ownerEmail) {
@@ -56,7 +58,7 @@ module.exports = async function handler(req, res) {
     const existing = await pool.query(
       `SELECT email, role, name, avatar, created_at, created_by
        FROM board_editors
-       WHERE board_id = $1 AND email = $2 AND role = 'editor'
+       WHERE board_id = $1 AND email = $2
        LIMIT 1`,
       [id, email]
     );
@@ -65,16 +67,16 @@ module.exports = async function handler(req, res) {
 
     const upserted = await pool.query(
       `INSERT INTO board_editors (board_id, email, role, created_by)
-       VALUES ($1, $2, 'editor', $3)
+       VALUES ($1, $2, $3, $4)
        ON CONFLICT (board_id, email)
-       DO UPDATE SET role = 'editor'
+       DO UPDATE SET role = EXCLUDED.role
        RETURNING email, role, name, avatar, created_at, created_by`,
-      [id, email, createdBy]
+      [id, email, role, createdBy]
     );
 
     const editors = await listEditors(id);
     return res.status(alreadyExists ? 200 : 201).json({
-      editor: upserted.rows[0],
+      member: upserted.rows[0],
       editors,
       alreadyExists
     });

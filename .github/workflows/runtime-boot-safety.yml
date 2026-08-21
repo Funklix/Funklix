@@ -59,5 +59,7 @@ jobs:
         run: node scripts/check-bw15-read-only-db-inspector.js
       - name: Check timing-safe session signature verification
         run: node scripts/check-bw16-timing-safe-session-verification.js
+      - name: Check Board access roles and sensitive-data boundaries
+        run: node scripts/check-bw18-board-access-roles.js
       - name: Check Knowledge Module browser globals
         run: node scripts/check-knowledge-module-browser-globals.js
