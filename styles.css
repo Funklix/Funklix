@@ -6129,6 +6129,11 @@ button:active {
   overflow-x: hidden;
 }
 
+#boards-library-view .boards-library-filters { display: flex; flex-wrap: wrap; gap: var(--fk-space-2); margin-top: var(--fk-space-4); }
+#boards-library-view .boards-library-filters [aria-pressed="true"] { border-color: var(--fk-color-primary); background: var(--fk-color-primary-soft); color: var(--fk-color-heading); }
+#boards-library-view .boards-library-scope-status { min-height: 1.4em; margin: var(--fk-space-2) 0; color: var(--fk-color-muted); font-size: var(--fk-font-size-sm); }
+#boards-library-view .boards-filter-note { padding: var(--fk-space-3); color: var(--fk-color-muted); }
+
 #boards-library-view .board-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr);

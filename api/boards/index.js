@@ -59,9 +59,28 @@ module.exports = async function handler(req, res) {
     if (req.method === 'GET') {
       await ensureBoardsTable();
       const user = getSessionUser(req);
+      const rawScope = Array.isArray(req.query?.scope) ? req.query.scope[0] : req.query?.scope;
+      const scope = rawScope === undefined || rawScope === '' ? 'all' : rawScope;
+      if (!['all', 'brand', 'unbranded'].includes(scope)) {
+        return res.status(400).json({ error: 'Invalid board scope' });
+      }
+      const rawBrandId = Array.isArray(req.query?.brand_id) ? req.query.brand_id[0] : req.query?.brand_id;
+      if (scope !== 'brand' && rawBrandId !== undefined) {
+        return res.status(400).json({ error: 'brand_id is only valid with scope=brand' });
+      }
+      if (scope === 'brand') {
+        if (!user?.email) return res.status(401).json({ error: 'Authentication required' });
+        if (typeof rawBrandId !== 'string' || !isBrandId(rawBrandId.trim())) {
+          return res.status(400).json({ error: 'brand_id must be a UUID' });
+        }
+        const accessibleBrand = await getOwnedBrand(rawBrandId.trim(), user, { columns: 'id' });
+        if (!accessibleBrand) return res.status(404).json({ error: 'Brand not found' });
+      }
       let result;
       if (user?.email) {
         const email = normalizeEmail(user.email);
+        const brandCondition = scope === 'brand' ? 'AND b.brand_id = $2' : (scope === 'unbranded' ? 'AND b.brand_id IS NULL' : '');
+        const queryParameters = scope === 'brand' ? [email, rawBrandId.trim()] : [email];
         result = await pool.query(
           `SELECT b.id, b.name, b.updated_at, b.order_index, b.owner_id, b.owner_email, b.owner_name, b.owner_avatar, b.created_by, b.created_at, b.brand_id, b.brand_core_snapshot,
                   CASE
@@ -72,7 +91,8 @@ module.exports = async function handler(req, res) {
                   END AS access_role
            FROM boards b
            LEFT JOIN board_editors be ON be.board_id = b.id AND be.email = $1 AND be.role = 'editor'
-           WHERE LOWER(COALESCE(b.owner_email, '')) = $1 OR be.email IS NOT NULL OR (b.owner_email IS NULL AND b.owner_id IS NULL)
+           WHERE (LOWER(COALESCE(b.owner_email, '')) = $1 OR be.email IS NOT NULL OR (b.owner_email IS NULL AND b.owner_id IS NULL))
+           ${brandCondition}
            ORDER BY CASE
                       WHEN LOWER(COALESCE(b.owner_email, '')) = $1 THEN 0
                       WHEN be.email IS NOT NULL THEN 1
@@ -81,7 +101,7 @@ module.exports = async function handler(req, res) {
                     b.order_index ASC NULLS LAST,
                     b.updated_at DESC
            LIMIT 200`,
-          [email]
+          queryParameters
         );
       } else {
         result = { rows: [] };
@@ -131,6 +151,6 @@ module.exports = async function handler(req, res) {
 
     return res.status(200).json(result.rows[0]);
   } catch (error) {
-    return res.status(500).json({ error: error?.message || 'Failed to save board' });
+    return res.status(500).json({ error: req.method === 'GET' ? 'Failed to load boards' : 'Failed to save board' });
   }
 };
