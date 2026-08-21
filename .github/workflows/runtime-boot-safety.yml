@@ -43,5 +43,7 @@ jobs:
         run: node scripts/check-bw8-brand-core-comparison.js
       - name: Check Brand Core comparison lifecycle
         run: node scripts/check-bw8-brand-core-comparison-lifecycle.js
+      - name: Check explicit Canonical Brand Core initialization
+        run: node scripts/check-bw9-initialize-canonical-brand-core.js
       - name: Check Knowledge Module browser globals
         run: node scripts/check-knowledge-module-browser-globals.js

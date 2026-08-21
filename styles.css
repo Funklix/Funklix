@@ -644,6 +644,10 @@ body {
 .brand-core-comparison-item code { font-weight: var(--fk-font-weight-bold); }
 .brand-core-comparison-value { margin-top: 4px; white-space: pre-wrap; }
 .brand-core-comparison-value details > pre { max-height: 18rem; overflow: auto; white-space: pre-wrap; }
+.brand-core-initialization { display: grid; gap: var(--fk-space-3); padding-top: var(--fk-space-3); border-top: 1px solid var(--fk-color-border); }
+.brand-core-initialization.hidden, .brand-core-initialization-confirm.hidden { display: none; }
+.brand-core-initialization-confirm { display: grid; gap: var(--fk-space-2); padding: var(--fk-space-3); border-radius: var(--fk-radius-sm); background: var(--fk-color-background); }
+.brand-core-initialization-confirm h3, .brand-core-initialization-confirm p { margin: 0; }
 
 .sidebar nav {
   display: grid;

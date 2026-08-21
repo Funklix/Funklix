@@ -168,6 +168,20 @@
           <p class="brand-core-comparison-note hidden" id="board-brand-core-comparison-unsaved">The Board has unsaved changes. This comparison uses the last saved Board Brand Core snapshot loaded from the server.</p>
           <div class="brand-workspace-detail-status" id="board-brand-core-comparison-status" role="status" aria-live="polite" aria-atomic="true"></div>
           <div class="brand-workspace-detail-content hidden" id="board-brand-core-comparison-content"></div>
+          <div class="brand-core-initialization hidden" id="board-brand-core-initialization">
+            <button class="fk-btn fk-btn-primary" id="board-brand-core-initialize-open" type="button" aria-label="Initialize Canonical Brand Core from this Board">Initialize Canonical Brand Core from this Board</button>
+            <section class="brand-core-initialization-confirm hidden" id="board-brand-core-initialization-confirm" aria-labelledby="board-brand-core-initialization-title" tabindex="-1">
+              <h3 id="board-brand-core-initialization-title">Confirm Canonical Brand Core initialization</h3>
+              <p id="board-brand-core-initialization-description"></p>
+              <p>The Canonical Brand Core is currently empty. The last saved Board Brand Core snapshot will be copied. This Board and all other Boards will remain unchanged, and no ongoing synchronization will be created.</p>
+              <div class="brand-switcher-create-actions">
+                <button class="fk-btn fk-btn-primary" id="board-brand-core-initialization-confirm-submit" type="button">Confirm initialization</button>
+                <button class="fk-btn fk-btn-ghost" id="board-brand-core-initialization-cancel" type="button">Cancel</button>
+              </div>
+            </section>
+            <div id="board-brand-core-initialization-feedback" role="status" aria-live="assertive" aria-atomic="true"></div>
+            <button class="fk-btn fk-btn-secondary hidden" id="board-brand-core-initialization-reload" type="button">Reload latest Canonical Brand</button>
+          </div>
           <button class="fk-btn fk-btn-secondary hidden" id="board-brand-core-comparison-retry" type="button">Retry comparison</button>
         </dialog>
         <dialog class="brand-workspace-detail" id="brand-workspace-detail" aria-labelledby="brand-workspace-detail-title" aria-describedby="brand-workspace-detail-context">
