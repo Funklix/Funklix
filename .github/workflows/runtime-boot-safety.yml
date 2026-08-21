@@ -41,5 +41,7 @@ jobs:
         run: node scripts/check-bw7-canonical-brand-editing.js
       - name: Check read-only Brand Core comparison
         run: node scripts/check-bw8-brand-core-comparison.js
+      - name: Check Brand Core comparison lifecycle
+        run: node scripts/check-bw8-brand-core-comparison-lifecycle.js
       - name: Check Knowledge Module browser globals
         run: node scripts/check-knowledge-module-browser-globals.js
