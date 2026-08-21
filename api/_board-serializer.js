@@ -1,5 +1,5 @@
 function serializeBoardForAccess(board = {}, access = {}) {
-  const restricted = access.role === 'viewer' || access.role === 'anonymous_shared' || access.role === 'non_owner';
+  const restricted = access.role === 'viewer' || access.role === 'public_viewer';
   if (restricted) {
     return {
       id: board.id,

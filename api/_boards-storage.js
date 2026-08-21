@@ -57,6 +57,20 @@ async function ensureBoardsTable() {
     `);
       await pool.query('ALTER TABLE boards ADD COLUMN IF NOT EXISTS brand_core_snapshot JSONB;');
       await pool.query('ALTER TABLE boards ADD COLUMN IF NOT EXISTS order_index INTEGER;');
+      // BW-19 is an additive private-by-default transition. Existing rows receive FALSE/NULL;
+      // no token is generated or backfilled.
+      await pool.query('ALTER TABLE boards ADD COLUMN IF NOT EXISTS public_view_enabled BOOLEAN NOT NULL DEFAULT FALSE;');
+      await pool.query('ALTER TABLE boards ADD COLUMN IF NOT EXISTS public_view_token_hash TEXT;');
+      await pool.query('ALTER TABLE boards ADD COLUMN IF NOT EXISTS public_view_token_created_at TIMESTAMPTZ;');
+      await pool.query(`
+        DO $$ BEGIN
+          ALTER TABLE boards ADD CONSTRAINT boards_public_view_state_check CHECK (
+            (public_view_enabled = FALSE AND public_view_token_hash IS NULL AND public_view_token_created_at IS NULL)
+            OR (public_view_enabled = TRUE AND public_view_token_hash ~ '^[0-9a-f]{64}$' AND public_view_token_created_at IS NOT NULL)
+          );
+        EXCEPTION WHEN duplicate_object THEN NULL;
+        END $$;
+      `);
 
       await pool.query('ALTER TABLE boards ADD COLUMN IF NOT EXISTS owner_id TEXT;');
       await pool.query('ALTER TABLE boards ADD COLUMN IF NOT EXISTS owner_email TEXT;');

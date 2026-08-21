@@ -86,12 +86,13 @@ async function getBoardMembershipRole(boardId, user) {
 }
 
 function accessForRole(role) {
+  const canRead = !['non_owner', 'anonymous'].includes(role);
   const canEdit = role === 'owner' || role === 'editor' || role === 'unowned';
   const isOwner = role === 'owner';
   return {
     role,
-    canRead: true,
-    canView: true,
+    canRead,
+    canView: canRead,
     canEdit,
     canViewBoardBrandCore: canEdit,
     canManageMembers: isOwner,
@@ -101,7 +102,8 @@ function accessForRole(role) {
     canChangeBrandAssociation: canEdit,
     canRefreshFromCanonical: canEdit,
     canRestoreBrandCore: canEdit,
-    canViewPresence: role === 'owner' || role === 'editor' || role === 'viewer' || role === 'unowned'
+    canViewPresence: role === 'owner' || role === 'editor' || role === 'viewer' || role === 'unowned',
+    publicView: role === 'public_viewer'
   };
 }
 
@@ -122,7 +124,7 @@ async function getBoardAccess(boardId, user, { columns = '*' } = {}) {
   } else {
     const membershipRole = await getBoardMembershipRole(boardId, user);
     if (membershipRole) role = membershipRole;
-    else role = user?.email ? 'non_owner' : 'anonymous_shared';
+    else role = user?.email ? 'non_owner' : 'anonymous';
   }
 
   return { board, access: accessForRole(role) };

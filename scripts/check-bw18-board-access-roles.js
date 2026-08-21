@@ -15,7 +15,7 @@ assert.match(storage, /email = LOWER\(email\)/);
 assert.match(members, /role !== 'editor' && role !== 'viewer'/);
 assert.match(members, /email === ownerEmail/);
 assert.match(members, /ON CONFLICT \(board_id, email\)/);
-for (const role of ['owner', 'editor', 'viewer', 'unowned', 'non_owner', 'anonymous_shared']) assert(access.includes(role));
+for (const role of ['owner', 'editor', 'viewer', 'unowned', 'non_owner', 'anonymous']) assert(access.includes(role));
 for (const capability of ['canRead','canEdit','canViewBoardBrandCore','canManageMembers','canRename','canDelete','canChangeBrandAssociation','canRefreshFromCanonical','canRestoreBrandCore','canViewPresence']) assert(access.includes(capability));
 assert.match(list, /THEN be\.role/);
 assert.match(list, /row\.access_role === 'viewer'/);
