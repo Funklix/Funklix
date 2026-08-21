@@ -20,6 +20,8 @@ const viewer = { email: "viewer@example.com", name: "Viewer" };
 const ownerEmail = "owner@example.com";
 const brandId = "11111111-1111-4111-8111-111111111111";
 const otherBrandId = "22222222-2222-4222-8222-222222222222";
+const linkedBoardId = "55555555-5555-4555-8555-555555555555";
+const legacyBoardId = "66666666-6666-4666-8666-666666666666";
 const canonicalCore = { brandCore: "CANONICAL PRIVATE KNOWLEDGE", customTiles: [] };
 const boardSnapshot = { brandCore: "Campaign baseline", customTiles: [] };
 const now = "2026-01-01T00:00:00.000Z";
@@ -29,10 +31,10 @@ const brands = new Map([
   [otherBrandId, { id: otherBrandId, owner_email: "other@example.com", name: "Other Brand", brand_core: { brandCore: "Other" }, revision: 1, created_at: now, updated_at: now }]
 ]);
 const boards = new Map([
-  ["board-linked", { id: "board-linked", name: "Linked", canvas_json: { nodes: [], edges: [] }, brand_core_snapshot: boardSnapshot, brand_id: brandId, owner_id: ownerEmail, owner_email: ownerEmail, created_at: now, updated_at: now }],
-  ["board-legacy", { id: "board-legacy", name: "Legacy", canvas_json: { nodes: [], edges: [] }, brand_core_snapshot: { brandCore: "Legacy knowledge" }, brand_id: null, owner_id: ownerEmail, owner_email: ownerEmail, created_at: now, updated_at: now }]
+  [linkedBoardId, { id: linkedBoardId, name: "Linked", canvas_json: { nodes: [], edges: [] }, brand_core_snapshot: boardSnapshot, brand_id: brandId, owner_id: ownerEmail, owner_email: ownerEmail, created_at: now, updated_at: now }],
+  [legacyBoardId, { id: legacyBoardId, name: "Legacy", canvas_json: { nodes: [], edges: [] }, brand_core_snapshot: { brandCore: "Legacy knowledge" }, brand_id: null, owner_id: ownerEmail, owner_email: ownerEmail, created_at: now, updated_at: now }]
 ]);
-const editors = new Set(["board-linked:viewer@example.com"]);
+const editors = new Set([`${linkedBoardId}:viewer@example.com`]);
 const queries = [];
 let injectedFailure = null;
 let boardSequence = 0;
@@ -172,15 +174,23 @@ async function call(route, request) { const response = res(); await route(reques
   assert.strictEqual(response.statusCode, 200); assert.strictEqual(response.body.brand_id, brandId);
   assert.deepStrictEqual(response.body.brand_core_snapshot, brands.get(brandId).brand_core);
   assert.notDeepStrictEqual(response.body.brand_core_snapshot, forged);
+  assert.strictEqual(response.body.brand_core_source_revision, brands.get(brandId).revision);
+  assert.strictEqual(response.body.brand_core_source_updated_at, brands.get(brandId).updated_at);
+  assert.strictEqual(response.body.brand_core_snapshot_copied_at, now);
+  assert(!Object.keys(response.body).some((key) => key.includes("backup") || key === "brand_core_restore_available"));
   assert.strictEqual(response.body.owner_email, ownerEmail);
   let beforeInsert = insertCount();
   assert.strictEqual((await call(boardCollection, req("POST", other, { name: "No", canvas_json: {}, brand_id: brandId }))).statusCode, 404);
+  assert.strictEqual(insertCount(), beforeInsert);
   assert.strictEqual((await call(boardCollection, req("POST", owner, { name: "No", canvas_json: {}, brand_id: "invalid" }))).statusCode, 400);
+  assert.strictEqual(insertCount(), beforeInsert);
   injectedFailure = /FROM brands WHERE id/;
   response = await call(boardCollection, req("POST", owner, { name: "No", canvas_json: {}, brand_id: brandId }));
   assert.strictEqual(response.statusCode, 500); assert.deepStrictEqual(response.body, { error: "Failed to save board" });
   assert(!JSON.stringify(response.body).includes("postgres secret"));
   assert.strictEqual(insertCount(), beforeInsert);
+  assert.strictEqual(injectedFailure, null, "Board Brand lookup failure must be consumed by its intended request");
+  assert.match(queries.at(-1).text, /SELECT id, brand_core, revision, updated_at FROM brands WHERE id/);
 
   // Generic create/copy/save-as-new paths omit brand_id and preserve their supplied snapshot.
   for (const actor of [owner, other]) {
@@ -188,18 +198,22 @@ async function call(route, request) { const response = res(); await route(reques
     response = await call(boardCollection, req("POST", actor, { name: "Generic copy", canvas_json: { nodes: [], edges: [] }, brand_core_snapshot: copiedSnapshot }));
     assert.strictEqual(response.statusCode, 200); assert.strictEqual(response.body.brand_id, null);
     assert.deepStrictEqual(response.body.brand_core_snapshot, copiedSnapshot);
+    assert.strictEqual(response.body.brand_core_source_revision, null);
+    assert.strictEqual(response.body.brand_core_source_updated_at, null);
+    assert.strictEqual(response.body.brand_core_snapshot_copied_at, null);
   }
 
   // Legacy, linked, shared-read, save, restore, and immutable brand_id compatibility.
-  response = await call(boardItem, req("GET", owner, {}, { id: "board-legacy" }));
+  response = await call(boardItem, req("GET", owner, {}, { id: legacyBoardId }));
   assert.strictEqual(response.statusCode, 200); assert.strictEqual(response.body.brand_id, null);
   assert.deepStrictEqual(response.body.brand_core_snapshot, { brandCore: "Legacy knowledge" });
-  response = await call(boardItem, req("GET", viewer, {}, { id: "board-linked" }));
+  assert.strictEqual(response.body.brand_core_restore_available, false);
+  response = await call(boardItem, req("GET", viewer, {}, { id: linkedBoardId }));
   assert.strictEqual(response.statusCode, 200); assert.strictEqual(response.body.brand_id, brandId);
   assert.deepStrictEqual(response.body.brand_core_snapshot, boardSnapshot);
   assert(!JSON.stringify(response.body).includes("CANONICAL PRIVATE KNOWLEDGE"));
   for (const attemptedBrandId of [null, otherBrandId, "44444444-4444-4444-8444-444444444444"]) {
-    response = await call(boardItem, req("PUT", owner, { canvas_json: { nodes: [{ id: "restored" }], edges: [] }, brand_core_snapshot: boardSnapshot, brand_id: attemptedBrandId }, { id: "board-linked" }));
+    response = await call(boardItem, req("PUT", owner, { canvas_json: { nodes: [{ id: "restored" }], edges: [] }, brand_core_snapshot: boardSnapshot, brand_id: attemptedBrandId }, { id: linkedBoardId }));
     assert.strictEqual(response.statusCode, 200); assert.strictEqual(response.body.brand_id, brandId);
     assert.deepStrictEqual(response.body.brand_core_snapshot, boardSnapshot);
   }
