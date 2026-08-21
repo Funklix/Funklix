@@ -53,5 +53,7 @@ jobs:
         run: node scripts/check-bw12-canonical-snapshot-provenance.js
       - name: Check controlled Canonical-to-Board refresh
         run: node scripts/check-bw13-canonical-to-board-refresh.js
+      - name: Check sanitized read-only database inspector
+        run: node scripts/check-bw15-read-only-db-inspector.js
       - name: Check Knowledge Module browser globals
         run: node scripts/check-knowledge-module-browser-globals.js
