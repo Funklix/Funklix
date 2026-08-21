@@ -484,6 +484,12 @@
             </div>
             <button id="boards-create-btn" class="primary-add boards-create-btn fk-btn fk-btn-primary" type="button">Create New Board</button>
           </div>
+          <div class="boards-library-filters" role="group" aria-label="Filter Boards library">
+            <button id="boards-scope-all" class="fk-btn fk-btn-secondary" type="button" aria-pressed="true">All Boards</button>
+            <button id="boards-scope-brand" class="fk-btn fk-btn-secondary" type="button" aria-pressed="false">Selected Brand</button>
+            <button id="boards-scope-unbranded" class="fk-btn fk-btn-secondary" type="button" aria-pressed="false">Unbranded</button>
+          </div>
+          <p id="boards-library-scope-status" class="boards-library-scope-status" role="status" aria-live="polite"></p>
           <div id="boards-library-list" class="boards-library-panel"></div>
         </section>
         <section id="board-list-view" class="board-list-view hidden">

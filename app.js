@@ -114,6 +114,7 @@ const state = {
   ,brandFoundationTransitionInFlight: false
   ,appMode: "canvas"
   ,boardsLibrary: []
+  ,boardsLibraryRequest: { scope: "all", status: "idle", generation: 0, identity: "", controller: null }
   ,brandCatalog: { status: "idle", entries: [], requestId: 0, userEmail: "" }
   ,brandCreation: { status: "initial", requestId: 0, userEmail: "" }
   ,boardBrandAssociation: { brandId: null, boardId: "", status: "idle", generation: 0, intendedBrandId: null, message: "" }
@@ -317,6 +318,10 @@ const el = {
   boardsLibraryList: document.getElementById("boards-library-list"),
   boardsLibraryTitle: document.getElementById("boards-library-title"),
   boardsLibrarySubtitle: document.getElementById("boards-library-subtitle"),
+  boardsScopeAll: document.getElementById("boards-scope-all"),
+  boardsScopeBrand: document.getElementById("boards-scope-brand"),
+  boardsScopeUnbranded: document.getElementById("boards-scope-unbranded"),
+  boardsLibraryScopeStatus: document.getElementById("boards-library-scope-status"),
   brandSwitcherDetails: document.getElementById("brand-switcher-details"),
   brandSwitcherCatalog: document.getElementById("brand-switcher-catalog"),
   brandSwitcherNoBrand: document.getElementById("brand-switcher-no-brand"),
@@ -2703,8 +2708,8 @@ function isCanonicalBrandSummary(value) {
     && typeof value.updated_at === "string");
 }
 
-// Presentation-only state for this switcher. It is not an application Brand
-// context and must never be used by Boards or Canvas behavior.
+// Workspace-selection state for the switcher. It is not Canvas or Board-association
+// authority; BW-10 may read a catalog-resolved ID only after explicit list filtering.
 let ephemeralBrandSwitcherSelection = null;
 let brandSwitcherPreferenceGeneration = 0;
 const BRAND_SWITCHER_PREFERENCE_VERSION = 1;
@@ -2777,6 +2782,7 @@ async function restoreBrandSwitcherPreference(userEmail, entries, requestId, gen
     || state.brandCatalog.status !== "success") return;
   ephemeralBrandSwitcherSelection = { id: brand.id, name: brand.name.trim(), restored: true };
   renderEphemeralBrandSwitcherSelection();
+  handleWorkspaceBrandSelectionChange();
 }
 
 function renderEphemeralBrandSwitcherSelection() {
@@ -2799,6 +2805,7 @@ function clearEphemeralBrandSwitcherSelection({ close = false, persist = false }
   brandSwitcherPreferenceGeneration += 1;
   ephemeralBrandSwitcherSelection = null;
   renderEphemeralBrandSwitcherSelection();
+  handleWorkspaceBrandSelectionChange();
   if (persist && userEmail) void removeBrandSwitcherPreference(userEmail);
   if (close && el.brandSwitcherDetails) el.brandSwitcherDetails.open = false;
   return true;
@@ -2812,6 +2819,7 @@ function selectEphemeralBrandFromSwitcher(brand) {
   ephemeralBrandSwitcherSelection = { id: brand.id, name: brand.name.trim(), restored: false };
   void persistBrandSwitcherPreference(userEmail, brand.id, generation);
   renderEphemeralBrandSwitcherSelection();
+  handleWorkspaceBrandSelectionChange();
   renderBrandCatalog();
   if (el.brandSwitcherDetails) el.brandSwitcherDetails.open = false;
 }
@@ -3234,6 +3242,7 @@ async function loadCanonicalBrandCatalog() {
   const preferenceGeneration = brandSwitcherPreferenceGeneration;
   state.brandCatalog = { status: "loading", entries: [], requestId, userEmail };
   renderBrandCatalog();
+  handleWorkspaceBrandSelectionChange();
   try {
     const response = await fetch("/api/brands", { headers: { Accept: "application/json" } });
     if (requestId !== state.brandCatalog.requestId || userEmail !== (state.user?.email || "").trim().toLowerCase()) return;
@@ -3273,6 +3282,7 @@ async function loadCanonicalBrandCatalog() {
   if (requestId === state.brandCatalog.requestId) {
     renderBrandCatalog();
     renderBoardBrandAssociation();
+    handleWorkspaceBrandSelectionChange();
   }
 }
 
@@ -3866,6 +3876,11 @@ async function loadSessionUser() {
   updateBoardAccessState();
   renderAuthState();
   const currentUserEmail = typeof state.user?.email === "string" ? state.user.email.trim().toLowerCase() : "";
+  if (previousUserEmail !== currentUserEmail) {
+    state.boardsLibraryRequest.controller?.abort();
+    state.boardsLibraryRequest = { scope: "all", status: "idle", generation: state.boardsLibraryRequest.generation + 1, identity: "", controller: null };
+    state.boardsLibrary = [];
+  }
   if (previousUserEmail !== currentUserEmail) clearEphemeralBrandSwitcherSelection();
   if (previousUserEmail !== currentUserEmail) resetCanonicalBrandCreation();
   if (previousUserEmail !== currentUserEmail) invalidateBoardBrandAssociation({ clearBoard: true });
@@ -15548,6 +15563,9 @@ el.authSignoutButton?.addEventListener("click", async () => {
   state.documentSourceOperationByTileId.clear();
   state.documentSourceStateByTileId.clear();
   state.user = null;
+  state.boardsLibraryRequest.controller?.abort();
+  state.boardsLibraryRequest = { scope: "all", status: "idle", generation: state.boardsLibraryRequest.generation + 1, identity: "", controller: null };
+  state.boardsLibrary = [];
   invalidateBoardBrandAssociation({ clearBoard: true });
   state.brandCatalog = { status: "unauthenticated", entries: [], requestId: state.brandCatalog.requestId + 1, userEmail: "" };
   resetCanonicalBrandCreation();
@@ -16414,6 +16432,9 @@ el.saveBoardButton?.addEventListener("click", () => saveBoardToServer("manual"))
 el.duplicateBoardCtaButton?.addEventListener("click", () => duplicateCurrentBoard());
 el.newBoardButton?.addEventListener("click", createNewBoardFlow);
 el.boardsCreateButton?.addEventListener("click", createNewBoardFlow);
+el.boardsScopeAll?.addEventListener("click", () => setBoardsLibraryScope('all'));
+el.boardsScopeBrand?.addEventListener("click", () => setBoardsLibraryScope('brand'));
+el.boardsScopeUnbranded?.addEventListener("click", () => setBoardsLibraryScope('unbranded'));
 el.copyBoardLinkButton?.addEventListener("click", copyCurrentBoardLink);
 
 window.saveCampaignCanvasState = saveCampaignCanvasState;
@@ -16490,15 +16511,99 @@ async function createNewBoardFlow() {
   window.location.href = `/boards/${data.id}`;
 }
 
+function getResolvedWorkspaceBrand() {
+  const email = (state.user?.email || '').trim().toLowerCase();
+  if (!email || state.brandCatalog.status !== 'success' || state.brandCatalog.userEmail !== email) return null;
+  return state.brandCatalog.entries.find(({ id }) => id === ephemeralBrandSwitcherSelection?.id) || null;
+}
+
+function getBoardsLibraryIdentity(scope = state.boardsLibraryRequest.scope) {
+  const email = (state.user?.email || '').trim().toLowerCase();
+  const brandId = scope === 'brand' ? (getResolvedWorkspaceBrand()?.id || '') : '';
+  return `${email}|${scope}|${brandId}`;
+}
+
+function renderBoardsLibraryControls() {
+  const request = state.boardsLibraryRequest;
+  [['all', el.boardsScopeAll], ['brand', el.boardsScopeBrand], ['unbranded', el.boardsScopeUnbranded]].forEach(([scope, button]) => {
+    button?.setAttribute('aria-pressed', request.scope === scope ? 'true' : 'false');
+  });
+  const email = (state.user?.email || '').trim().toLowerCase();
+  const resolved = getResolvedWorkspaceBrand();
+  const unavailable = !email || state.brandCatalog.status !== 'success' || !resolved;
+  if (el.boardsScopeBrand) {
+    el.boardsScopeBrand.disabled = unavailable;
+    el.boardsScopeBrand.title = !email ? 'Sign in to filter by a selected Brand.'
+      : state.brandCatalog.status === 'loading' ? 'Your Brand catalog is loading.'
+      : !resolved ? 'Select an accessible Workspace Brand first.' : `Show Boards for ${resolved.name}`;
+  }
+  if (el.boardsLibraryScopeStatus) {
+    el.boardsLibraryScopeStatus.textContent = request.scope === 'brand' && resolved ? `Showing Boards for selected Brand: ${resolved.name}.`
+      : request.scope === 'unbranded' ? 'Showing Boards with no Brand association.'
+      : request.scope === 'brand' ? 'Selected Brand view unavailable. Select an accessible Workspace Brand.'
+      : 'Showing all accessible Boards.';
+  }
+}
+
+function setBoardsLibraryScope(scope) {
+  if (!['all', 'brand', 'unbranded'].includes(scope) || scope === state.boardsLibraryRequest.scope) return;
+  if (scope === 'brand' && !getResolvedWorkspaceBrand()) {
+    renderBoardsLibraryControls();
+    return;
+  }
+  state.boardsLibraryRequest.scope = scope;
+  void loadBoardsLibrary();
+}
+
+function handleWorkspaceBrandSelectionChange() {
+  renderBoardsLibraryControls();
+  if (state.boardsLibraryRequest.scope !== 'brand') return;
+  if (!getResolvedWorkspaceBrand()) {
+    state.boardsLibraryRequest.controller?.abort();
+    state.boardsLibraryRequest.generation += 1;
+    state.boardsLibraryRequest.status = 'unavailable';
+    state.boardsLibrary = [];
+    renderBoardsLibrary();
+    return;
+  }
+  if (state.boardsLibraryRequest.identity !== getBoardsLibraryIdentity('brand')) void loadBoardsLibrary();
+}
+
 async function loadBoardsLibrary() {
+  const request = state.boardsLibraryRequest;
+  const scope = request.scope;
+  const brand = scope === 'brand' ? getResolvedWorkspaceBrand() : null;
+  if (scope === 'brand' && !brand) {
+    request.status = 'unavailable';
+    state.boardsLibrary = [];
+    renderBoardsLibrary();
+    return;
+  }
+  const identity = getBoardsLibraryIdentity(scope);
+  if (request.status === 'loading' && request.identity === identity) return;
+  request.controller?.abort();
+  const controller = new AbortController();
+  const generation = ++request.generation;
+  request.controller = controller;
+  request.identity = identity;
+  request.status = 'loading';
+  renderBoardsLibrary();
+  const query = scope === 'brand' ? `?scope=brand&brand_id=${encodeURIComponent(brand.id)}` : (scope === 'unbranded' ? '?scope=unbranded' : '');
   try {
-    const response = await fetch('/api/boards');
-    const data = await response.json();
+    const response = await fetch(`/api/boards${query}`, { headers: { Accept: 'application/json' }, signal: controller.signal });
+    let data;
+    try { data = await response.json(); } catch (_error) { throw new Error('Malformed board-list response'); }
+    if (generation !== request.generation || identity !== getBoardsLibraryIdentity(scope) || scope !== request.scope) return;
     if (!response.ok) throw new Error(data?.error || 'Failed to load boards');
-    state.boardsLibrary = Array.isArray(data?.boards) ? data.boards : [];
+    if (!data || !Array.isArray(data.boards)) throw new Error('Malformed board-list response');
+    state.boardsLibrary = data.boards;
+    request.status = 'success';
     renderBoardsLibrary();
   } catch (error) {
-    if (el.boardsLibraryList) el.boardsLibraryList.innerHTML = '<div class="board-empty fk-card"><strong>Could not load boards.</strong><span>Please try again from the Boards navigation item.</span></div>';
+    if (error?.name === 'AbortError' || generation !== request.generation || identity !== getBoardsLibraryIdentity(scope)) return;
+    request.status = error?.message === 'Malformed board-list response' ? 'malformed' : 'error';
+    state.boardsLibrary = [];
+    renderBoardsLibrary();
   }
 }
 
@@ -16640,6 +16745,7 @@ function bindBoardsListDragHandlers() {
 function renderBoardsLibrary() {
   if (!el.boardsLibraryList) return;
   el.boardsLibraryList.innerHTML = '';
+  renderBoardsLibraryControls();
   if (state.user?.email) {
     if (el.boardsLibraryTitle) el.boardsLibraryTitle.textContent = 'My Boards';
     if (el.boardsLibrarySubtitle) el.boardsLibrarySubtitle.textContent = 'Your boards first, then shared boards.';
@@ -16647,16 +16753,39 @@ function renderBoardsLibrary() {
     if (el.boardsLibraryTitle) el.boardsLibraryTitle.textContent = 'Boards';
     if (el.boardsLibrarySubtitle) el.boardsLibrarySubtitle.textContent = 'Open a board or sign in to save one to your account.';
   }
+  const request = state.boardsLibraryRequest;
+  if (request.status === 'loading') {
+    el.boardsLibraryList.innerHTML = '<div class="board-empty fk-card"><strong>Loading Boards…</strong><span>The current list filter is being applied.</span></div>';
+    return;
+  }
+  if (request.status === 'unavailable') {
+    el.boardsLibraryList.innerHTML = '<div class="board-empty fk-card"><strong>Selected Brand unavailable</strong><span>Select an accessible Workspace Brand, then deliberately activate this view.</span></div>';
+    return;
+  }
+  if (request.status === 'malformed' || request.status === 'error') {
+    const title = request.status === 'malformed' ? 'Boards returned an unexpected response.' : 'Could not load boards.';
+    el.boardsLibraryList.innerHTML = `<div class="board-empty fk-card"><strong>${title}</strong><span>Please try again from the Boards navigation item.</span></div>`;
+    return;
+  }
   if (!state.boardsLibrary.length) {
-    el.boardsLibraryList.innerHTML = `<div class="board-empty fk-card"><span class="boards-empty-kicker fk-badge">No saved workspaces</span><strong>No boards yet</strong><span>Create your first board to start collaborating.</span><button type="button" class="fk-btn fk-btn-primary" data-empty-create-board>Create New Board</button></div>`;
+    const filteredEmpty = request.scope === 'brand' ? 'No Boards for the selected Brand.' : (request.scope === 'unbranded' ? 'No Unbranded Boards.' : 'No boards yet');
+    const detail = request.scope === 'all' ? 'Create your first board to start collaborating.' : 'The open Board, if any, remains open and unchanged.';
+    el.boardsLibraryList.innerHTML = `<div class="board-empty fk-card"><span class="boards-empty-kicker fk-badge">No matching workspaces</span><strong>${filteredEmpty}</strong><span>${detail}</span>${request.scope === 'all' ? '<button type="button" class="fk-btn fk-btn-primary" data-empty-create-board>Create New Board</button>' : ''}</div>`;
     return;
   }
   bindBoardsListDragHandlers();
+  const currentBoardId = String(state.currentBoardId || getBoardIdFromPath() || '');
+  if (request.scope !== 'all' && currentBoardId && !state.boardsLibrary.some((board) => String(board?.id || '') === currentBoardId)) {
+    const note = document.createElement('div');
+    note.className = 'boards-filter-note fk-card';
+    note.textContent = 'The open Board is outside the current Board list filter.';
+    el.boardsLibraryList.appendChild(note);
+  }
   getDisplayedBoards().forEach((board) => {
     const sourceIndex = state.boardsLibrary.indexOf(board);
     const row = document.createElement('div');
     row.className = 'board-row fk-card';
-    row.draggable = true;
+    row.draggable = request.scope === 'all';
     row.dataset.boardId = String(board.id || '');
     row.setAttribute('aria-grabbed', 'false');
     const savedAt = getBoardLastEdited(board);
@@ -16678,7 +16807,7 @@ function renderBoardsLibrary() {
       : `<span>${escapeHtml(boardBrand.initial)}</span>`;
     const brandLine = boardBrand.name ? `<div class="board-row-brand"><span>Brand</span><strong>${escapeHtml(boardBrand.name)}</strong></div>` : "";
     row.innerHTML = `<div class="board-row-drag-handle" title="Drag to reorder" aria-hidden="true">⋮⋮</div><div class="board-row-content"><div class="board-row-avatar" aria-hidden="true">${boardAvatar}</div><div class="board-row-details"><div class="board-row-titleline"><strong class="board-row-title">${escapeHtml(boardName)}</strong>${roleChip}${copyChip}</div>${brandLine}<div class="board-row-meta"><span>Last edited</span><strong>${escapeHtml(savedAt)}</strong></div><div class="board-row-description">${escapeHtml(ownerLine)}</div><div class="board-rename hidden" data-rename-wrap="${escapeHtml(board.id)}"><input class="fk-input" data-rename-input="${escapeHtml(board.id)}" value="${escapeHtml(board.name || '')}" /><button class="fk-btn fk-btn-primary" data-rename-save="${escapeHtml(board.id)}" type="button">Save</button><button class="fk-btn fk-btn-ghost" data-rename-cancel="${escapeHtml(board.id)}" type="button">Cancel</button></div></div></div><div class="board-row-actions"><button class="board-action-btn fk-btn fk-btn-primary" data-open-board="${escapeHtml(board.id)}" title="Open" aria-label="Open board">Open</button><button class="board-action-btn fk-btn fk-btn-secondary" data-copy-board="${escapeHtml(board.id)}" title="Copy link" aria-label="Copy link">Copy Link</button><button class="board-action-btn board-action-tertiary fk-btn fk-btn-ghost" data-rename-board="${escapeHtml(board.id)}" title="Rename" aria-label="Rename board">Rename</button><button class="board-action-btn board-action-tertiary danger fk-btn fk-btn-ghost" data-delete-board="${escapeHtml(board.id)}" title="Delete" aria-label="Delete board">Delete</button><button class="board-action-btn board-action-tertiary fk-btn fk-btn-ghost" data-up-board="${escapeHtml(board.id)}" data-index="${sourceIndex}" title="Move up" aria-label="Move board up">Move Up</button><button class="board-action-btn board-action-tertiary fk-btn fk-btn-ghost" data-down-board="${escapeHtml(board.id)}" data-index="${sourceIndex}" title="Move down" aria-label="Move board down">Move Down</button>${state.user?.email && !board.owner_email ? `<button class="board-action-btn fk-btn fk-btn-secondary" data-claim-board="${escapeHtml(board.id)}" title="Claim">Claim</button>` : ""}</div>`;
-    bindBoardRowDragHandlers(row);
+    if (request.scope === 'all') bindBoardRowDragHandlers(row);
     el.boardsLibraryList.appendChild(row);
   });
 }
