@@ -12,7 +12,7 @@ function installPgMock() {
   const Module = require("module");
   const originalLoad = Module._load;
   const originalResolveFilename = Module._resolveFilename;
-  const state = { poolConstructions: 0, unconfiguredQueries: 0, blobCalls: 0 };
+  const state = { poolConstructions: 0, unconfiguredQueries: 0 };
 
   class MockPool {
     constructor() {
@@ -23,28 +23,21 @@ function installPgMock() {
       state.unconfiguredQueries += 1;
       throw new Error("PostgreSQL mock query must be configured by the foundation check");
     }
-  }
 
-  const unavailableBlobOperation = async () => {
-    state.blobCalls += 1;
-    throw new Error("Blob operations are outside the foundation check");
-  };
-  const blobMock = {
-    del: unavailableBlobOperation,
-    get: unavailableBlobOperation,
-    issueSignedToken: unavailableBlobOperation,
-    presignUrl: unavailableBlobOperation
-  };
+    async connect() {
+      state.unconfiguredQueries += 1;
+      throw new Error("PostgreSQL mock connection must be configured by the foundation check");
+    }
+  }
 
   // Make resolution of a real pg package an error while satisfying its import at
   // the loader boundary. This keeps the check honest even when node_modules exists.
   Module._resolveFilename = function resolveWithoutPg(request, ...args) {
-    if (request === "pg" || request === "@vercel/blob") throw new Error(`Real ${request} resolution is disabled by the foundation check`);
+    if (request === "pg") throw new Error("Real pg resolution is disabled by the foundation check");
     return originalResolveFilename.call(this, request, ...args);
   };
   Module._load = function loadWithPgMock(request, ...args) {
     if (request === "pg") return { Pool: MockPool };
-    if (request === "@vercel/blob") return blobMock;
     return originalLoad.call(this, request, ...args);
   };
 
@@ -52,6 +45,17 @@ function installPgMock() {
 }
 
 const pgMockState = installPgMock();
+
+// Board item loading normally reaches optional document/blob storage. This check
+// never exercises document deletion, so provide that local dependency directly
+// without changing how the module loader handles any unrelated package.
+const documentStoragePath = require.resolve("../api/_document-storage");
+require.cache[documentStoragePath] = {
+  id: documentStoragePath,
+  filename: documentStoragePath,
+  loaded: true,
+  exports: { deletePrivate: async () => { throw new Error("Document deletion is outside the foundation check"); } }
+};
 
 const { createSessionToken } = require("../api/_auth-session");
 const boardsStorage = require("../api/_boards-storage");
@@ -65,7 +69,6 @@ const { isBrandId } = require("../api/_brand-access");
 // was deliberately unavailable, and no query/connection happened during import.
 assert.strictEqual(pgMockState.poolConstructions, 1);
 assert.strictEqual(pgMockState.unconfiguredQueries, 0);
-assert.strictEqual(pgMockState.blobCalls, 0);
 
 const owner = { email: "Owner@Example.com", name: "Owner" };
 const other = { email: "other@example.com", name: "Other" };
@@ -136,7 +139,8 @@ boardsStorage.pool.query = async (sql, params = []) => {
     return { rowCount: 1, rows: [{ ...row }] };
   }
   if (text.includes("INSERT INTO boards")) {
-    const row = { id: `board-created-${++boardSequence}`, name: params[0], canvas_json: JSON.parse(params[1]), brand_core_snapshot: JSON.parse(params[2]), brand_id: params[3], brand_core_source_revision: params[4], brand_core_source_updated_at: params[5], brand_core_snapshot_copied_at: params[3] ? now : null, owner_id: params[6], owner_email: params[7], owner_name: params[8], owner_avatar: params[9], created_by: params[10], created_at: now, updated_at: now };
+    const id = `cccccccc-cccc-4ccc-8ccc-${String(++boardSequence).padStart(12, "0")}`;
+    const row = { id, name: params[0], canvas_json: JSON.parse(params[1]), brand_core_snapshot: JSON.parse(params[2]), brand_id: params[3], brand_core_source_revision: params[4], brand_core_source_updated_at: params[5], brand_core_snapshot_copied_at: params[3] ? now : null, owner_id: params[6], owner_email: params[7], owner_name: params[8], owner_avatar: params[9], created_by: params[10], created_at: now, updated_at: now };
     boards.set(row.id, row); return { rowCount: 1, rows: [row] };
   }
   if (text.includes("FROM boards WHERE id")) {
