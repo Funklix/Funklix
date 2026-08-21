@@ -117,6 +117,7 @@ const state = {
   ,boardsLibraryRequest: { scope: "all", status: "idle", generation: 0, identity: "", controller: null }
   ,brandCatalog: { status: "idle", entries: [], requestId: 0, userEmail: "" }
   ,brandCreation: { status: "initial", requestId: 0, userEmail: "" }
+  ,boardCreation: { status: "idle", generation: 0, lifecycle: 0, controller: null, overlay: null, retryName: "" }
   ,boardBrandAssociation: { brandId: null, boardId: "", status: "idle", generation: 0, intendedBrandId: null, message: "" }
   ,authoritativeBoardBrandCore: { boardId: "", loadGeneration: 0, value: {} }
   ,boardLoadGeneration: 0
@@ -15558,6 +15559,7 @@ el.boardBrandAssociationForm?.addEventListener("keydown", (event) => {
   el.boardBrandAssociationEdit?.focus();
 });
 el.authSignoutButton?.addEventListener("click", async () => {
+  invalidateBoardCreationContext();
   if (["editing", "submitting", "conflict", "save-error"].includes(canonicalBrandDetail.status) && !confirmCanonicalBrandDiscard()) return;
   state.documentSourceOperationByTileId.forEach((operation) => operation?.controller?.abort?.());
   state.documentSourceOperationByTileId.clear();
@@ -16454,20 +16456,73 @@ function blankCanvasState() {
   return { nodes: [], edges: [], nodeCounter: 1, postitCounter: 1, zoom: 1, schemaVersion: 1, metadata: { createdAt: nowIso, updatedAt: nowIso } };
 }
 
+function isBoardCreationBrandEligible() {
+  const brand = getResolvedWorkspaceBrand();
+  return Boolean(state.user?.email && brand && isValidBoardBrandId(brand.id) && state.brandCatalog.status === "success" && state.boardCreation.status !== "pending");
+}
+
+function renderBoardCreationMode(overlay) {
+  if (!overlay?.isConnected) return;
+  const brand = getResolvedWorkspaceBrand();
+  const eligible = isBoardCreationBrandEligible();
+  const button = overlay.querySelector("#create-board-brand");
+  button.disabled = !eligible;
+  button.textContent = eligible ? `Create Board from ${brand.name}` : "Create Board from selected Brand";
+  overlay.querySelector("#create-board-brand-explanation").textContent = eligible
+    ? `This creates a new Board associated with ${brand.name} and initializes its Board Brand Core from the Brand’s current saved Core. Future changes remain separate.`
+    : "Select an accessible Workspace Brand after its catalog has loaded to use Brand-backed creation.";
+}
+
+function invalidateBoardCreationContext() {
+  const creation = state.boardCreation;
+  if (!creation.overlay?.isConnected) return;
+  creation.lifecycle += 1;
+  creation.status = creation.status === "pending" ? "invalidated" : "idle";
+  creation.overlay.querySelector("#create-board-status").textContent = creation.status === "invalidated"
+    ? "Creation could not be confirmed in this changed account or Brand context. Check the Board list before retrying."
+    : "The Workspace Brand changed. Review and explicitly choose the creation mode again.";
+  creation.overlay.querySelector("#create-board-confirm").disabled = true;
+  creation.overlay.querySelectorAll("[data-create-board-mode]").forEach((button) => button.setAttribute("aria-pressed", "false"));
+  if (creation.status === "invalidated") creation.overlay.querySelector("#create-board-retry").classList.remove("hidden");
+  renderBoardCreationMode(creation.overlay);
+}
+
 function showCreateBoardModal() {
   return new Promise((resolve) => {
-    const overlay = document.createElement('div');
-    overlay.className = 'brand-confirm-modal';
-    overlay.innerHTML = `<div class="brand-confirm-card"><h3>Create new board</h3><p>Give your new Campaign Canvas board a name.</p><input id="create-board-name" placeholder="Board name" /><div class="brand-confirm-actions"><button type="button" id="create-board-cancel">Cancel</button><button type="button" class="primary-add" id="create-board-confirm">Create</button></div></div>`;
+    const overlay = document.createElement("div");
+    overlay.className = "brand-confirm-modal";
+    overlay.setAttribute("role", "dialog"); overlay.setAttribute("aria-modal", "true"); overlay.setAttribute("aria-labelledby", "create-board-title");
+    overlay.innerHTML = `<div class="brand-confirm-card"><h3 id="create-board-title">Create new Board</h3><p>Give your new Campaign Canvas Board a name, then deliberately choose how it is created.</p><label for="create-board-name">Board name</label><input id="create-board-name" placeholder="Board name" autocomplete="off" /><div class="brand-confirm-actions" role="group" aria-label="Board creation mode"><button type="button" id="create-board-unbranded" data-create-board-mode="unbranded" aria-pressed="false">Create unbranded Board</button><button type="button" id="create-board-brand" data-create-board-mode="brand" aria-pressed="false">Create Board from selected Brand</button></div><p id="create-board-brand-explanation"></p><p id="create-board-status" role="status" aria-live="polite">Choose a creation mode.</p><div class="brand-confirm-actions"><button type="button" id="create-board-cancel">Cancel</button><button type="button" id="create-board-retry" class="hidden">Retry</button><button type="button" class="primary-add" id="create-board-confirm" disabled>Create</button></div></div>`;
     document.body.appendChild(overlay);
-    const close = (v) => { overlay.remove(); resolve(v); };
-    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(null); });
-    overlay.querySelector('#create-board-cancel').addEventListener('click', () => close(null));
-    overlay.querySelector('#create-board-confirm').addEventListener('click', () => {
-      const name = overlay.querySelector('#create-board-name')?.value?.trim();
-      if (!name) return;
-      close(name);
+    const lifecycle = ++state.boardCreation.lifecycle;
+    const retryName = state.boardCreation.retryName || "";
+    state.boardCreation = { status: "idle", generation: state.boardCreation.generation, lifecycle, controller: null, overlay, retryName: "" };
+    let mode = null, capturedBrand = null, settled = false;
+    const status = overlay.querySelector("#create-board-status"), confirm = overlay.querySelector("#create-board-confirm");
+    const close = (value) => { if (state.boardCreation.status === "pending") return; state.boardCreation.controller?.abort(); state.boardCreation.overlay = null; overlay.remove(); if (!settled) { settled = true; resolve(value); } };
+    const choose = (nextMode) => {
+      if (state.boardCreation.status === "pending" || (nextMode === "brand" && !isBoardCreationBrandEligible())) return;
+      mode = nextMode; capturedBrand = mode === "brand" ? getResolvedWorkspaceBrand() : null;
+      overlay.querySelectorAll("[data-create-board-mode]").forEach((button) => button.setAttribute("aria-pressed", button.dataset.createBoardMode === mode ? "true" : "false"));
+      confirm.disabled = false; confirm.textContent = mode === "brand" ? `Create Board from ${capturedBrand.name}` : "Create unbranded Board";
+      status.textContent = mode === "brand" ? `Confirm creation from Canonical Brand ${capturedBrand.name}.` : "Confirm creation without a Brand association.";
+    };
+    renderBoardCreationMode(overlay);
+    overlay.querySelector("#create-board-name").value = retryName;
+    overlay.addEventListener("click", (event) => { if (event.target === overlay) close(null); });
+    overlay.querySelector("#create-board-cancel").addEventListener("click", () => close(null));
+    overlay.querySelector("#create-board-unbranded").addEventListener("click", () => choose("unbranded"));
+    overlay.querySelector("#create-board-brand").addEventListener("click", () => choose("brand"));
+    overlay.querySelector("#create-board-retry").addEventListener("click", () => { state.boardCreation.retryName = overlay.querySelector("#create-board-name")?.value || ""; state.boardCreation.status = "idle"; state.boardCreation.overlay = null; overlay.remove(); setTimeout(() => { void createNewBoardFlow(); }, 0); });
+    confirm.addEventListener("click", () => {
+      const name = overlay.querySelector("#create-board-name")?.value?.trim();
+      if (!name) { status.textContent = "Enter a Board name before creating it."; return; }
+      if (!mode || state.boardCreation.status === "pending") return;
+      if (mode === "brand" && (!capturedBrand || getResolvedWorkspaceBrand()?.id !== capturedBrand.id || !isBoardCreationBrandEligible())) { invalidateBoardCreationContext(); return; }
+      if (!settled) { settled = true; resolve({ name, mode, brand: capturedBrand, lifecycle, overlay }); }
     });
+    overlay.addEventListener("keydown", (event) => { if (event.key === "Escape" && state.boardCreation.status !== "pending") close(null); });
+    overlay.querySelector("#create-board-name").focus();
   });
 }
 
@@ -16485,30 +16540,53 @@ function showUnsavedLeaveModal() {
 }
 
 async function createNewBoardFlow() {
-  if (!state.user?.email) {
-    setAuthMessage("Sign in with Google to create a board.");
-    setSaveStatus("Sign in with Google to create a board.");
-    return;
-  }
-  if (state.isDirty) {
-    const canLeave = await showUnsavedLeaveModal();
-    if (!canLeave) return;
-  }
-  const name = (await showCreateBoardModal())?.trim();
-  if (!name) return;
-  const response = await fetch('/api/boards', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name, canvas_json: blankCanvasState(), brand_core_snapshot: defaultBrandCoreState() })
-  });
-  const data = await response.json();
-  if (response.status === 401) {
-    setAuthMessage("Sign in with Google to create a board.");
-    setSaveStatus("Sign in with Google to create a board.");
-    return;
-  }
-  if (!response.ok || !data?.id) return;
-  window.location.href = `/boards/${data.id}`;
+  if (!state.user?.email) { setAuthMessage("Sign in with Google to create a board."); setSaveStatus("Sign in with Google to create a board."); return; }
+  if (state.boardCreation.status === "pending") return;
+  if (state.isDirty && !await showUnsavedLeaveModal()) return;
+  const choice = await showCreateBoardModal();
+  if (!choice) return;
+  const creation = state.boardCreation;
+  const userEmail = (state.user?.email || "").trim().toLowerCase();
+  const brandId = choice.mode === "brand" ? choice.brand?.id : null;
+  const catalogIdentity = choice.mode === "brand" ? `${state.brandCatalog.userEmail}|${choice.brand.id}|${choice.brand.name}` : "";
+  const generation = ++creation.generation, controller = new AbortController();
+  creation.controller = controller; creation.status = "pending";
+  const status = choice.overlay.querySelector("#create-board-status");
+  choice.overlay.querySelectorAll("button, input").forEach((control) => { control.disabled = true; });
+  status.textContent = "Creating Board…";
+  const payload = { name: choice.name, canvas_json: blankCanvasState() };
+  if (choice.mode === "brand") payload.brand_id = brandId;
+  else payload.brand_core_snapshot = defaultBrandCoreState();
+  try {
+    const response = await fetch("/api/boards", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload), signal: controller.signal });
+    let data; try { data = await response.json(); } catch (_error) { throw new Error("The server returned a malformed Board response."); }
+    const currentBrand = getResolvedWorkspaceBrand();
+    const brandContextCurrent = choice.mode !== "brand" || (currentBrand?.id === brandId && `${state.brandCatalog.userEmail}|${currentBrand.id}|${currentBrand.name}` === catalogIdentity);
+    const contextCurrent = generation === creation.generation && choice.lifecycle === creation.lifecycle && userEmail === (state.user?.email || "").trim().toLowerCase() && brandContextCurrent;
+    if (!contextCurrent || creation.status === "invalidated") throw new Error("Creation was invalidated because the account, Brand, mode, request, or dialog context changed.");
+    if (response.status === 401) { setAuthMessage("Sign in with Google to create a board."); throw new Error("Authentication expired. The Board was not confirmed."); }
+    if (response.status === 404 && choice.mode === "brand") throw new Error("The selected Canonical Brand is no longer accessible.");
+    if (!response.ok) throw new Error(data?.error || `Board creation failed (${response.status}).`);
+    const validShape = data && isValidBoardBrandId(data.id) && data.id !== null && typeof data.name === "string" && isValidCanvasStatePayload(data.canvas_json)
+      && data.canvas_json.nodes.length === 0 && data.canvas_json.edges.length === 0 && isPlainJsonObject(data.brand_core_snapshot)
+      && typeof data.updated_at === "string" && !Number.isNaN(Date.parse(data.updated_at));
+    if (!validShape || (choice.mode === "brand" ? data.brand_id !== brandId : data.brand_id !== null)) throw new Error("The server returned an invalid or mismatched Board response.");
+    creation.status = "success"; status.textContent = "Board created. Opening it now…";
+    clearAutosaveTimer(); state.boardLoadGeneration += 1; state.currentBoardId = data.id; state.currentBoardName = data.name; state.lastKnownUpdatedAt = data.updated_at;
+    state.boardBrandAssociation = { brandId: data.brand_id, boardId: data.id, status: "idle", generation: state.boardBrandAssociation.generation + 1, intendedBrandId: null, message: "" };
+    state.authoritativeBoardBrandCore = { boardId: data.id, loadGeneration: state.boardLoadGeneration, value: clonePlainObject(data.brand_core_snapshot) };
+    state.brandCore = normalizeBrandCoreState(data.brand_core_snapshot, { restoration: true });
+    applyCampaignState(withBoardSchemaDefaults(data.canvas_json), "Created Board"); saveBrandBrainState({ markDirty: false }); state.isDirty = false; refreshLastSavedSnapshot(); renderBoardBrandAssociation();
+    const nextPath = `/boards/${data.id}`; if (window.location.pathname !== nextPath) window.history.pushState({}, "", nextPath);
+    syncRuntimeSessionFromLegacy("create-board"); setSharePanelState(data.id, new Date(data.updated_at), data.owner_email || null, data.owner_name || null, data.owner_avatar || null);
+    choice.overlay.remove(); creation.overlay = null; setSaveStatus("Saved"); void loadBoardsLibrary();
+  } catch (error) {
+    if (generation !== creation.generation) return;
+    creation.status = "failed";
+    const uncertain = error?.name === "AbortError" || error instanceof TypeError || /invalidated|malformed|mismatched/i.test(error?.message || "");
+    status.textContent = uncertain ? `${error?.message || "Network failure."} Board creation was not confirmed; check the Board list before a deliberate retry.` : (error?.message || "Board creation failed.");
+    choice.overlay.querySelector("#create-board-retry").classList.remove("hidden"); choice.overlay.querySelector("#create-board-cancel").disabled = false;
+  } finally { if (generation === creation.generation) creation.controller = null; }
 }
 
 function getResolvedWorkspaceBrand() {
@@ -16556,6 +16634,7 @@ function setBoardsLibraryScope(scope) {
 }
 
 function handleWorkspaceBrandSelectionChange() {
+  invalidateBoardCreationContext();
   renderBoardsLibraryControls();
   if (state.boardsLibraryRequest.scope !== 'brand') return;
   if (!getResolvedWorkspaceBrand()) {
