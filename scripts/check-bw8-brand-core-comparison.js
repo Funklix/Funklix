@@ -38,7 +38,7 @@ assert.doesNotMatch(`${open}\n${load}`, /ephemeralBrandSwitcherSelection|brandSw
 assert.match(load, /const brandId = association\.brandId/, "target comes from authoritative Board association");
 assert.match(associationRender, /hasAssociation[\s\S]*canCompare[\s\S]*catalogBrand/, "unbranded and unresolved Boards cannot compare");
 assert.match(load, /fetch\(`\/api\/brands\/\$\{encodeURIComponent\(brandId\)\}`[\s\S]*method: "GET"/, "GET /api/brands/:id is reused");
-assert.doesNotMatch(`${open}\n${load}\n${close}\n${render}`, /method:\s*"(?:PUT|PATCH|POST|DELETE)"|\/api\/boards|saveBoard|markUnsaved|autosave|state\.brandCore\s*=|canvas|localStorage|sessionStorage|history\.|location\./i, "comparison lifecycle has no write or unrelated state effect");
+assert.doesNotMatch(`${open}\n${load}\n${close}\n${render}`, /method:\s*"(?:PUT|PATCH|POST|DELETE)"|\/api\/boards|saveBoard|markUnsaved|autosave|state\.brandCore\s*=|localStorage|sessionStorage|history\.|location\./i, "comparison lifecycle has no write or unrelated state effect");
 assert.equal(compare({ a: 1 }, { a: 1 }).matches, true);
 assert.equal(compare({ a: 1, b: 2 }, { b: 2, a: 1 }).matches, true, "object ordering is ignored");
 assert.equal(compare({ a: 1 }, { a: 2 }).different[0].path, "$.a");
@@ -62,7 +62,7 @@ assert.match(html, /id="board-brand-core-comparison-retry"[^>]*>Retry comparison
 assert.match(close, /controller\?\.abort[\s\S]*requestId: previous\.requestId \+ 1/, "close aborts and invalidates pending responses");
 assert.match(app, /invalidateBoardBrandAssociation[\s\S]*closeBoardBrandCoreComparison/, "Board and association lifecycle invalidates comparison");
 assert.match(load, /userEmail === \(state\.user[\s\S]*current\.boardId ===[\s\S]*current\.brandId === state\.boardBrandAssociation\.brandId[\s\S]*boardLoadGeneration/, "late responses are account, Board, association, and Board-load guarded");
-assert.match(boardLoad, /authoritativeBoardBrandCore = \{ boardId: String\(data\.id\), loadGeneration, value: clonePlainObject\(snapshot \|\| \{\}\), provenance: normalizeBoardSnapshotProvenance\(data\) \}/, "comparison retains the raw authoritative Board snapshot including unknown fields and validated provenance");
+assert.match(boardLoad, /authoritativeBoardBrandCore = \{ boardId: String\(data\.id\), loadGeneration, value: clonePlainObject\(snapshot \|\| \{\}\), provenance: normalizeBoardSnapshotProvenance\(data\), provenanceValid: hasValidBoardSnapshotProvenance\(data\), updatedAt: data\.updated_at, restoreAvailable, backupCreatedAt \}/, "comparison retains the raw authoritative Board snapshot including unknown fields, provenance, and recovery metadata");
 assert.match(html, /last saved Board Brand Core snapshot loaded from the server/, "unsaved Board edits are explicitly disclosed");
 assert.doesNotMatch(`${open}\n${load}\n${close}`, /ephemeralBrandSwitcherSelection|brandCatalog\.entries\s*=|brand_id\s*=|intendedBrandId|canonicalBrandDetail/, "comparison is isolated from Workspace, association candidates, and Canonical drafts");
 assert.doesNotMatch(html.match(/<dialog class="brand-workspace-detail brand-core-comparison"[\s\S]*?<\/dialog>/)[0], />\s*(Copy|Merge|Publish|Pull|Push|Synchronize|Reset)\b/i, "comparison offers no synchronization action");

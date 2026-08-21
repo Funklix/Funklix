@@ -182,6 +182,20 @@
             <div id="board-brand-core-initialization-feedback" role="status" aria-live="assertive" aria-atomic="true"></div>
             <button class="fk-btn fk-btn-secondary hidden" id="board-brand-core-initialization-reload" type="button">Reload latest Canonical Brand</button>
           </div>
+          <div class="brand-core-initialization hidden" id="board-brand-core-recovery">
+            <button class="fk-btn fk-btn-primary hidden" id="board-brand-core-refresh-open" type="button">Update Board Brand Core from Canonical</button>
+            <button class="fk-btn fk-btn-secondary hidden" id="board-brand-core-restore-open" type="button">Restore previous Board Brand Core</button>
+            <section class="brand-core-initialization-confirm hidden" id="board-brand-core-operation-confirm" aria-labelledby="board-brand-core-operation-title" tabindex="-1">
+              <h3 id="board-brand-core-operation-title"></h3>
+              <p id="board-brand-core-operation-description"></p>
+              <p id="board-brand-core-operation-isolation"></p>
+              <div class="brand-switcher-create-actions">
+                <button class="fk-btn fk-btn-primary" id="board-brand-core-operation-submit" type="button"></button>
+                <button class="fk-btn fk-btn-ghost" id="board-brand-core-operation-cancel" type="button">Cancel</button>
+              </div>
+            </section>
+            <div id="board-brand-core-operation-feedback" role="status" aria-live="polite" aria-atomic="true"></div>
+          </div>
           <button class="fk-btn fk-btn-secondary hidden" id="board-brand-core-comparison-retry" type="button">Retry comparison</button>
         </dialog>
         <dialog class="brand-workspace-detail" id="brand-workspace-detail" aria-labelledby="brand-workspace-detail-title" aria-describedby="brand-workspace-detail-context">
