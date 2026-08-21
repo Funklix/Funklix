@@ -119,7 +119,7 @@ const state = {
   ,brandCreation: { status: "initial", requestId: 0, userEmail: "" }
   ,boardCreation: { status: "idle", generation: 0, lifecycle: 0, controller: null, overlay: null, retryName: "" }
   ,boardBrandAssociation: { brandId: null, boardId: "", status: "idle", generation: 0, intendedBrandId: null, message: "" }
-  ,authoritativeBoardBrandCore: { boardId: "", loadGeneration: 0, value: {}, provenance: null }
+  ,authoritativeBoardBrandCore: { boardId: "", loadGeneration: 0, value: {}, provenance: null, provenanceValid: true, updatedAt: null, restoreAvailable: false, backupCreatedAt: null }
   ,boardLoadGeneration: 0
   ,contentPackLoadingById: {}
   ,contentPackErrorById: {}
@@ -368,6 +368,16 @@ const el = {
   boardBrandCoreInitializationCancel: document.getElementById("board-brand-core-initialization-cancel"),
   boardBrandCoreInitializationFeedback: document.getElementById("board-brand-core-initialization-feedback"),
   boardBrandCoreInitializationReload: document.getElementById("board-brand-core-initialization-reload"),
+  boardBrandCoreRecovery: document.getElementById("board-brand-core-recovery"),
+  boardBrandCoreRefreshOpen: document.getElementById("board-brand-core-refresh-open"),
+  boardBrandCoreRestoreOpen: document.getElementById("board-brand-core-restore-open"),
+  boardBrandCoreOperationConfirm: document.getElementById("board-brand-core-operation-confirm"),
+  boardBrandCoreOperationTitle: document.getElementById("board-brand-core-operation-title"),
+  boardBrandCoreOperationDescription: document.getElementById("board-brand-core-operation-description"),
+  boardBrandCoreOperationIsolation: document.getElementById("board-brand-core-operation-isolation"),
+  boardBrandCoreOperationSubmit: document.getElementById("board-brand-core-operation-submit"),
+  boardBrandCoreOperationCancel: document.getElementById("board-brand-core-operation-cancel"),
+  boardBrandCoreOperationFeedback: document.getElementById("board-brand-core-operation-feedback"),
   brandSwitcherCreateOpen: document.getElementById("brand-switcher-create-open"),
   brandSwitcherCreateForm: document.getElementById("brand-switcher-create-form"),
   brandSwitcherCreateName: document.getElementById("brand-switcher-create-name"),
@@ -3289,7 +3299,7 @@ async function loadCanonicalBrandCatalog() {
 
 const BRAND_CORE_VALUE_PREVIEW_LIMIT = 360;
 const BOARD_BRAND_CORE_COMPARISON_TIMEOUT_MS = 12000;
-let boardBrandCoreComparison = { status: "closed", requestId: 0, initializationId: 0, boardId: "", brandId: "", userEmail: "", boardLoadGeneration: 0, brandName: "", boardName: "", canonical: null, boardSnapshot: null, provenance: null, result: null, controller: null, initializationController: null, timeoutId: null, confirming: false, initializationMessage: "", requiresReload: false, returnFocus: null };
+let boardBrandCoreComparison = { status: "closed", requestId: 0, initializationId: 0, operationId: 0, boardId: "", brandId: "", userEmail: "", boardLoadGeneration: 0, brandName: "", boardName: "", canonical: null, boardSnapshot: null, provenance: null, result: null, controller: null, initializationController: null, operationController: null, timeoutId: null, confirming: false, operation: null, operationMessage: "", initializationMessage: "", requiresReload: false, returnFocus: null };
 
 function logBoardBrandCoreComparison(stage, details = {}) {
   console.info("[Brand Core comparison]", { stage, ...details });
@@ -3310,6 +3320,11 @@ function normalizeBoardSnapshotProvenance(board) {
   if (typeof sourceUpdatedAt !== "string" || Number.isNaN(Date.parse(sourceUpdatedAt))) return null;
   if (typeof copiedAt !== "string" || Number.isNaN(Date.parse(copiedAt))) return null;
   return { sourceRevision: revision, sourceUpdatedAt, copiedAt };
+}
+
+function hasValidBoardSnapshotProvenance(board) {
+  const values = [board?.brand_core_source_revision, board?.brand_core_source_updated_at, board?.brand_core_snapshot_copied_at];
+  return values.every((value) => value == null) || normalizeBoardSnapshotProvenance(board) !== null;
 }
 
 function compareBrandCoreDocuments(canonical, board) {
@@ -3362,6 +3377,27 @@ function canonicalInitializationEligible(comparison = boardBrandCoreComparison) 
     && state.brandCatalog.entries.some(({ id }) => id === comparison.brandId) && el.boardBrandCoreComparison?.open;
 }
 
+function boardBrandCoreOperationEligible(operation, comparison = boardBrandCoreComparison) {
+  const snapshot = state.authoritativeBoardBrandCore;
+  const account = (state.user?.email || "").trim().toLowerCase();
+  const common = comparison.status === "ready" && !comparison.requiresReload && !state.isDirty && !state.isBoardLoading
+    && !comparison.operationController && !comparison.initializationController && account && account === comparison.userEmail
+    && comparison.boardId === (getBoardIdFromPath() || state.currentBoardId || "") && comparison.boardId === snapshot.boardId
+    && comparison.brandId === state.boardBrandAssociation.brandId && comparison.boardLoadGeneration === state.boardLoadGeneration
+    && comparison.boardLoadGeneration === snapshot.loadGeneration && state.boardAccess?.canEdit === true
+    && snapshot.provenanceValid === true
+    && state.brandCatalog.status === "success" && state.brandCatalog.userEmail === account
+    && state.brandCatalog.entries.some(({ id }) => id === comparison.brandId)
+    && isPlainJsonObject(snapshot.value) && typeof snapshot.updatedAt === "string" && !Number.isNaN(Date.parse(snapshot.updatedAt))
+    && el.boardBrandCoreComparison?.open;
+  if (!common) return false;
+  if (operation === "refresh") return comparison.result?.matches === false && isPlainJsonObject(comparison.canonical?.brand_core)
+    && Number.isSafeInteger(comparison.canonical?.revision) && comparison.canonical.revision > 0
+    && JSON.stringify(canonicalJson(snapshot.value)) === JSON.stringify(canonicalJson(comparison.boardSnapshot));
+  return operation === "restore" && snapshot.restoreAvailable === true
+    && typeof snapshot.backupCreatedAt === "string" && !Number.isNaN(Date.parse(snapshot.backupCreatedAt));
+}
+
 function comparisonValueText(value) {
   const rendered = JSON.stringify(value, null, 2);
   return rendered === undefined ? String(value) : rendered;
@@ -3397,6 +3433,28 @@ function renderBoardBrandCoreComparison() {
     if (el.boardBrandCoreInitializationSubmit) el.boardBrandCoreInitializationSubmit.disabled = comparison.status === "initializing";
     if (el.boardBrandCoreInitializationCancel) el.boardBrandCoreInitializationCancel.disabled = comparison.status === "initializing";
     el.boardBrandCoreInitializationReload?.classList.toggle("hidden", !comparison.requiresReload);
+    const refreshEligible = boardBrandCoreOperationEligible("refresh", comparison);
+    const restoreEligible = boardBrandCoreOperationEligible("restore", comparison);
+    const operationVisible = refreshEligible || restoreEligible || comparison.operation || comparison.operationMessage;
+    el.boardBrandCoreRecovery?.classList.toggle("hidden", !operationVisible);
+    el.boardBrandCoreRefreshOpen?.classList.toggle("hidden", !refreshEligible || !!comparison.operation);
+    el.boardBrandCoreRestoreOpen?.classList.toggle("hidden", !restoreEligible || !!comparison.operation);
+    el.boardBrandCoreOperationConfirm?.classList.toggle("hidden", !comparison.operation);
+    if (el.boardBrandCoreOperationFeedback) el.boardBrandCoreOperationFeedback.textContent = comparison.operationMessage || "";
+    const operationPending = !!comparison.operationController;
+    if (el.boardBrandCoreOperationSubmit) el.boardBrandCoreOperationSubmit.disabled = operationPending;
+    if (el.boardBrandCoreOperationCancel) el.boardBrandCoreOperationCancel.disabled = operationPending;
+    if (comparison.operation && el.boardBrandCoreOperationTitle) {
+      const refresh = comparison.operation === "refresh";
+      el.boardBrandCoreOperationTitle.textContent = refresh ? "Update this Board from Canonical Brand Core?" : "Restore the previous Board Brand Core?";
+      el.boardBrandCoreOperationDescription.textContent = refresh
+        ? `This replaces the saved Brand Core for “${comparison.boardName}” with “${comparison.brandName}” Canonical revision ${comparison.canonical.revision}. The current Board Brand Core will remain available as the previous version for recovery.`
+        : `This replaces the current saved Brand Core for “${comparison.boardName}”. The current version will become the next recoverable previous version.`;
+      el.boardBrandCoreOperationIsolation.textContent = refresh
+        ? "Canvas content is unchanged and no ongoing synchronization is created."
+        : "Canvas and the Canonical Brand remain unchanged, and no synchronization is created.";
+      el.boardBrandCoreOperationSubmit.textContent = refresh ? "Update Board Brand Core" : "Restore previous Board Brand Core";
+    }
     if (comparison.status === "validating") el.boardBrandCoreComparisonStatus.textContent = "Validating the current comparison context…";
     else if (comparison.status === "loading") el.boardBrandCoreComparisonStatus.textContent = "Loading the associated Canonical Brand Core…";
     else if (comparison.status === "initializing") el.boardBrandCoreComparisonStatus.textContent = "Initialization is pending server confirmation.";
@@ -3431,7 +3489,7 @@ function renderBoardBrandCoreComparison() {
     provenanceSection.append(provenanceHeading, provenanceText);
     el.boardBrandCoreComparisonContent.appendChild(provenanceSection);
     const explanation = document.createElement("p"); explanation.className = "brand-core-comparison-summary";
-    explanation.textContent = result.matches ? "These Brand Core records currently match." : "These Brand Core records currently differ. A difference is not automatically an error.";
+    explanation.textContent = result.matches ? "The saved Board Brand Core already matches the current Canonical Brand Core." : "These Brand Core records currently differ. A difference is not automatically an error.";
     el.boardBrandCoreComparisonContent.appendChild(explanation);
     const groups = [["Only in Canonical Brand Core", result.canonicalOnly, "Canonical"], ["Only in Board Brand Core", result.boardOnly, "Board"], ["Different values", result.different, null]];
     groups.forEach(([title, entries, side]) => {
@@ -3466,11 +3524,79 @@ function closeBoardBrandCoreComparison({ restoreFocus = true } = {}) {
   if (previous.timeoutId !== null) clearTimeout(previous.timeoutId);
   previous.controller?.abort();
   previous.initializationController?.abort();
-  boardBrandCoreComparison = { status: "closed", requestId: previous.requestId + 1, initializationId: previous.initializationId + 1, boardId: "", brandId: "", userEmail: "", boardLoadGeneration: 0, brandName: "", boardName: "", canonical: null, boardSnapshot: null, provenance: null, result: null, controller: null, initializationController: null, timeoutId: null, confirming: false, initializationMessage: "", requiresReload: false, returnFocus: null };
+  previous.operationController?.abort();
+  boardBrandCoreComparison = { status: "closed", requestId: previous.requestId + 1, initializationId: previous.initializationId + 1, operationId: previous.operationId + 1, boardId: "", brandId: "", userEmail: "", boardLoadGeneration: 0, brandName: "", boardName: "", canonical: null, boardSnapshot: null, provenance: null, result: null, controller: null, initializationController: null, operationController: null, timeoutId: null, confirming: false, operation: null, operationMessage: "", initializationMessage: "", requiresReload: false, returnFocus: null };
   if (el.boardBrandCoreComparison?.open) el.boardBrandCoreComparison.close();
   if (el.boardBrandCoreComparisonTitle) el.boardBrandCoreComparisonTitle.textContent = "Compare Brand Cores";
   renderBoardBrandCoreComparison();
   if (restoreFocus && previous.returnFocus?.isConnected) previous.returnFocus.focus();
+}
+
+function beginBoardBrandCoreOperation(operation) {
+  if (!boardBrandCoreOperationEligible(operation) || boardBrandCoreComparison.operation) return;
+  boardBrandCoreComparison.operation = operation;
+  boardBrandCoreComparison.operationMessage = "";
+  renderBoardBrandCoreComparison();
+  el.boardBrandCoreOperationConfirm?.focus();
+}
+
+function cancelBoardBrandCoreOperation() {
+  if (!boardBrandCoreComparison.operation || boardBrandCoreComparison.operationController) return;
+  const trigger = boardBrandCoreComparison.operation === "refresh" ? el.boardBrandCoreRefreshOpen : el.boardBrandCoreRestoreOpen;
+  boardBrandCoreComparison.operation = null;
+  boardBrandCoreComparison.operationId += 1;
+  boardBrandCoreComparison.operationMessage = "Operation cancelled. No request was sent.";
+  renderBoardBrandCoreComparison();
+  trigger?.focus();
+}
+
+async function submitBoardBrandCoreOperation() {
+  const comparison = boardBrandCoreComparison;
+  const operation = comparison.operation;
+  if (!operation || comparison.operationController || !boardBrandCoreOperationEligible(operation, comparison)) {
+    comparison.operation = null; comparison.operationMessage = "The operation is no longer available. Reload the Board and compare again."; renderBoardBrandCoreComparison(); return;
+  }
+  const snapshot = state.authoritativeBoardBrandCore;
+  const operationId = comparison.operationId + 1;
+  const controller = new AbortController();
+  const payload = operation === "refresh"
+    ? { operation: "refresh_brand_core_from_canonical", brand_id: comparison.brandId, canonical_revision: comparison.canonical.revision, board_updated_at: snapshot.updatedAt }
+    : { operation: "restore_previous_brand_core_snapshot", board_updated_at: snapshot.updatedAt };
+  comparison.operationId = operationId; comparison.operationController = controller;
+  comparison.operationMessage = operation === "refresh" ? "Updating the saved Board Brand Core…" : "Restoring the previous Board Brand Core…";
+  renderBoardBrandCoreComparison();
+  try {
+    const response = await fetch(`/api/boards/${encodeURIComponent(comparison.boardId)}`, { method: "PATCH", headers: { Accept: "application/json", "Content-Type": "application/json" }, body: JSON.stringify(payload), signal: controller.signal });
+    const current = boardBrandCoreComparison;
+    const stillCurrent = current === comparison && current.operationId === operationId && current.operationController === controller
+      && current.userEmail === (state.user?.email || "").trim().toLowerCase() && current.boardId === (getBoardIdFromPath() || state.currentBoardId || "")
+      && current.brandId === state.boardBrandAssociation.brandId && current.boardLoadGeneration === state.boardLoadGeneration
+      && snapshot === state.authoritativeBoardBrandCore && el.boardBrandCoreComparison?.open;
+    if (!stillCurrent) return;
+    current.operationController = null; current.operation = null;
+    if (response.status === 409) { current.requiresReload = true; current.operationMessage = operation === "refresh" ? "The Board or Canonical Brand changed. Reload the Board and run a fresh comparison." : "The Board changed. Reload it before restoring."; renderBoardBrandCoreComparison(); return; }
+    if (!response.ok) { current.requiresReload = true; current.operationMessage = "The server did not confirm the operation. Reload the authoritative Board before trying again."; renderBoardBrandCoreComparison(); return; }
+    let board; try { board = await response.json(); } catch (_error) { board = null; }
+    const provenance = normalizeBoardSnapshotProvenance(board);
+    const valid = board && board.id === current.boardId && board.brand_id === current.brandId && isPlainJsonObject(board.brand_core_snapshot)
+      && typeof board.updated_at === "string" && !Number.isNaN(Date.parse(board.updated_at)) && board.brand_core_restore_available === true
+      && typeof board.brand_core_snapshot_backup_created_at === "string" && !Number.isNaN(Date.parse(board.brand_core_snapshot_backup_created_at))
+      && (operation !== "refresh" || (provenance?.sourceRevision === payload.canonical_revision
+        && JSON.stringify(canonicalJson(board.brand_core_snapshot)) === JSON.stringify(canonicalJson(current.canonical.brand_core))));
+    if (!valid) { current.requiresReload = true; current.operationMessage = "The operation outcome could not be verified. Reload the authoritative Board."; renderBoardBrandCoreComparison(); return; }
+    clearAutosaveTimer(); state.isDirty = false; state.lastKnownUpdatedAt = board.updated_at;
+    state.authoritativeBoardBrandCore = { boardId: board.id, loadGeneration: current.boardLoadGeneration, value: clonePlainObject(board.brand_core_snapshot), provenance, provenanceValid: true, updatedAt: board.updated_at, restoreAvailable: true, backupCreatedAt: board.brand_core_snapshot_backup_created_at };
+    state.brandCore = normalizeBrandCoreState(board.brand_core_snapshot, { restoration: true });
+    renderBrandCoreTiles(); renderBrandCoreEditor(); refreshLastSavedSnapshot();
+    current.boardSnapshot = clonePlainObject(board.brand_core_snapshot); current.provenance = provenance;
+    current.result = compareBrandCoreDocuments(current.canonical.brand_core, current.boardSnapshot);
+    current.operationMessage = operation === "refresh" ? `Board Brand Core updated from Canonical revision ${payload.canonical_revision}.` : "Previous Board Brand Core restored. The replaced version remains available for one-step recovery.";
+    renderBoardBrandCoreComparison();
+  } catch (error) {
+    if (error?.name === "AbortError" || boardBrandCoreComparison !== comparison || comparison.operationId !== operationId) return;
+    comparison.operationController = null; comparison.operation = null; comparison.requiresReload = true;
+    comparison.operationMessage = "The network outcome is uncertain. Reload the authoritative Board before any retry or restore."; renderBoardBrandCoreComparison();
+  }
 }
 
 function beginCanonicalBrandCoreInitialization() {
@@ -3577,6 +3703,8 @@ async function loadBoardBrandCoreComparison() {
   boardBrandCoreComparison.result = null;
   boardBrandCoreComparison.canonical = null;
   boardBrandCoreComparison.confirming = false;
+  boardBrandCoreComparison.operation = null;
+  boardBrandCoreComparison.operationMessage = "";
   boardBrandCoreComparison.initializationMessage = "";
   boardBrandCoreComparison.requiresReload = false;
   renderBoardBrandCoreComparison();
@@ -3847,6 +3975,9 @@ async function submitBoardBrandAssociation(event) {
     association.intendedBrandId = null;
     association.message = data.brand_id ? "Board Brand association saved." : "Board Brand association removed.";
     state.authoritativeBoardBrandCore.provenance = normalizeBoardSnapshotProvenance(data);
+    state.authoritativeBoardBrandCore.updatedAt = data.updated_at;
+    state.authoritativeBoardBrandCore.restoreAvailable = false;
+    state.authoritativeBoardBrandCore.backupCreatedAt = null;
     closeBoardBrandCoreComparison({ restoreFocus: false });
     state.lastKnownUpdatedAt = data.updated_at;
     applyBoardAccessFromServer(data.access, "boardBrandAssociation");
@@ -7525,7 +7656,7 @@ async function loadBoardFromUrlIfPresent(requestedBoardId = null) {
   state.isBoardLoading = true;
   state.isBoardHydrating = true;
   state.currentBoardId = boardId;
-  state.authoritativeBoardBrandCore = { boardId: "", loadGeneration, value: {}, provenance: null };
+    state.authoritativeBoardBrandCore = { boardId: "", loadGeneration, value: {}, provenance: null, provenanceValid: true, updatedAt: null, restoreAvailable: false, backupCreatedAt: null };
   invalidateBoardBrandAssociation({ clearBoard: true, loadingBoardId: boardId });
   syncRuntimeSessionFromLegacy("board-load-start");
   clearAutosaveTimer();
@@ -7557,7 +7688,9 @@ async function loadBoardFromUrlIfPresent(requestedBoardId = null) {
     state.boardBrandAssociation.brandId = data.brand_id;
     state.boardBrandAssociation.boardId = String(data.id);
     state.boardBrandAssociation.status = "idle";
-    state.authoritativeBoardBrandCore = { boardId: String(data.id), loadGeneration, value: clonePlainObject(snapshot || {}), provenance: normalizeBoardSnapshotProvenance(data) };
+    const backupCreatedAt = typeof data.brand_core_snapshot_backup_created_at === "string" && !Number.isNaN(Date.parse(data.brand_core_snapshot_backup_created_at)) ? data.brand_core_snapshot_backup_created_at : null;
+    const restoreAvailable = data.brand_core_restore_available === true && !!backupCreatedAt;
+    state.authoritativeBoardBrandCore = { boardId: String(data.id), loadGeneration, value: clonePlainObject(snapshot || {}), provenance: normalizeBoardSnapshotProvenance(data), provenanceValid: hasValidBoardSnapshotProvenance(data), updatedAt: data.updated_at, restoreAvailable, backupCreatedAt };
     renderBoardBrandAssociation();
     state.brandCore = snapshot ? normalizeBrandCoreState(snapshot, { restoration: true }) : normalizeBrandCoreState(defaultBrandCoreState(), { restoration: true });
     renderBrandCoreTiles();
@@ -15562,9 +15695,14 @@ el.boardBrandCoreInitializeOpen?.addEventListener("click", beginCanonicalBrandCo
 el.boardBrandCoreInitializationSubmit?.addEventListener("click", () => { void submitCanonicalBrandCoreInitialization(); });
 el.boardBrandCoreInitializationCancel?.addEventListener("click", cancelCanonicalBrandCoreInitialization);
 el.boardBrandCoreInitializationReload?.addEventListener("click", () => { void loadBoardBrandCoreComparison(); });
+el.boardBrandCoreRefreshOpen?.addEventListener("click", () => beginBoardBrandCoreOperation("refresh"));
+el.boardBrandCoreRestoreOpen?.addEventListener("click", () => beginBoardBrandCoreOperation("restore"));
+el.boardBrandCoreOperationSubmit?.addEventListener("click", () => { void submitBoardBrandCoreOperation(); });
+el.boardBrandCoreOperationCancel?.addEventListener("click", cancelBoardBrandCoreOperation);
 el.boardBrandCoreComparison?.addEventListener("cancel", (event) => {
   event.preventDefault();
-  if (boardBrandCoreComparison.confirming && !boardBrandCoreComparison.initializationController) cancelCanonicalBrandCoreInitialization();
+  if (boardBrandCoreComparison.operation && !boardBrandCoreComparison.operationController) cancelBoardBrandCoreOperation();
+  else if (boardBrandCoreComparison.confirming && !boardBrandCoreComparison.initializationController) cancelCanonicalBrandCoreInitialization();
   else if (!boardBrandCoreComparison.initializationController) closeBoardBrandCoreComparison();
 });
 el.boardBrandAssociationChoice?.addEventListener("change", () => {
@@ -16602,7 +16740,7 @@ async function createNewBoardFlow() {
     creation.status = "success"; status.textContent = "Board created. Opening it now…";
     clearAutosaveTimer(); state.boardLoadGeneration += 1; state.currentBoardId = data.id; state.currentBoardName = data.name; state.lastKnownUpdatedAt = data.updated_at;
     state.boardBrandAssociation = { brandId: data.brand_id, boardId: data.id, status: "idle", generation: state.boardBrandAssociation.generation + 1, intendedBrandId: null, message: "" };
-    state.authoritativeBoardBrandCore = { boardId: data.id, loadGeneration: state.boardLoadGeneration, value: clonePlainObject(data.brand_core_snapshot), provenance };
+    state.authoritativeBoardBrandCore = { boardId: data.id, loadGeneration: state.boardLoadGeneration, value: clonePlainObject(data.brand_core_snapshot), provenance, provenanceValid: hasValidBoardSnapshotProvenance(data), updatedAt: data.updated_at, restoreAvailable: data.brand_core_restore_available === true, backupCreatedAt: data.brand_core_snapshot_backup_created_at || null };
     state.brandCore = normalizeBrandCoreState(data.brand_core_snapshot, { restoration: true });
     applyCampaignState(withBoardSchemaDefaults(data.canvas_json), "Created Board"); saveBrandBrainState({ markDirty: false }); state.isDirty = false; refreshLastSavedSnapshot(); renderBoardBrandAssociation();
     const nextPath = `/boards/${data.id}`; if (window.location.pathname !== nextPath) window.history.pushState({}, "", nextPath);

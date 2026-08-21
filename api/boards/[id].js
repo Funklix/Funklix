@@ -5,13 +5,112 @@ const { ensureDocumentTables, pool: documentPool } = require('../_document-recor
 const { deletePrivate } = require('../_document-storage');
 const { getOwnedBrand, isBrandId } = require('../_brand-access');
 
-const BOARD_COLUMNS = 'id, name, canvas_json, brand_core_snapshot, brand_id, brand_core_source_revision, brand_core_source_updated_at, brand_core_snapshot_copied_at, created_at, updated_at, order_index, owner_id, owner_email, owner_name, owner_avatar, created_by';
+const BOARD_COLUMNS = 'id, name, canvas_json, brand_core_snapshot, brand_id, brand_core_source_revision, brand_core_source_updated_at, brand_core_snapshot_copied_at, brand_core_snapshot_backup, brand_core_backup_source_revision, brand_core_backup_source_updated_at, brand_core_backup_snapshot_copied_at, brand_core_snapshot_backup_created_at, created_at, updated_at, order_index, owner_id, owner_email, owner_name, owner_avatar, created_by';
 
 function serializeBoardItem(row = {}) {
+  const { brand_core_snapshot_backup, brand_core_backup_source_revision, brand_core_backup_source_updated_at,
+    brand_core_backup_snapshot_copied_at, ...safeRow } = row;
   return {
-    ...row,
+    ...safeRow,
+    brand_core_restore_available: isPlainObject(brand_core_snapshot_backup),
     brand_core_source_revision: row.brand_core_source_revision == null ? null : Number(row.brand_core_source_revision)
   };
+}
+
+function isPlainObject(value) {
+  return !!value && typeof value === 'object' && !Array.isArray(value);
+}
+
+function validTimestamp(value) {
+  return (typeof value === 'string' || value instanceof Date) && !Number.isNaN(new Date(value).getTime());
+}
+
+function validProvenance(revision, sourceUpdatedAt, copiedAt) {
+  if (revision == null && sourceUpdatedAt == null && copiedAt == null) return true;
+  const normalizedRevision = Number(revision);
+  return Number.isSafeInteger(normalizedRevision) && normalizedRevision > 0 && validTimestamp(sourceUpdatedAt) && validTimestamp(copiedAt);
+}
+
+async function performBrandCoreOperation(req, res, id, user) {
+  const body = req.body || {};
+  const operation = body.operation;
+  const contracts = {
+    refresh_brand_core_from_canonical: ['operation', 'brand_id', 'canonical_revision', 'board_updated_at'],
+    restore_previous_brand_core_snapshot: ['operation', 'board_updated_at']
+  };
+  if (!Object.prototype.hasOwnProperty.call(contracts, operation)) return res.status(400).json({ error: 'Unknown Board operation' });
+  const expectedKeys = contracts[operation];
+  if (Object.keys(body).length !== expectedKeys.length || Object.keys(body).some((key) => !expectedKeys.includes(key))) {
+    return res.status(400).json({ error: 'Invalid fields for Board operation' });
+  }
+  if (!validTimestamp(body.board_updated_at)) return res.status(400).json({ error: 'board_updated_at must be a valid timestamp' });
+  if (operation === 'refresh_brand_core_from_canonical'
+    && (!isBrandId(body.brand_id) || !Number.isSafeInteger(body.canonical_revision) || body.canonical_revision < 1)) {
+    return res.status(400).json({ error: 'Invalid Canonical Brand concurrency values' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const locked = await client.query(`SELECT ${BOARD_COLUMNS} FROM boards WHERE id = $1 FOR UPDATE`, [id]);
+    if (!locked.rowCount) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Board not found' }); }
+    const board = locked.rows[0];
+    const email = normalizeEmail(user.email);
+    const owns = (board.owner_email && normalizeEmail(board.owner_email) === email)
+      || (board.owner_id && (user.id || user.sub) && board.owner_id === (user.id || user.sub));
+    const unowned = !board.owner_email && !board.owner_id;
+    const editor = owns || unowned ? false : (await client.query("SELECT 1 FROM board_editors WHERE board_id = $1 AND email = $2 AND role = 'editor' LIMIT 1", [id, email])).rowCount > 0;
+    if (!owns && !unowned && !editor) { await client.query('ROLLBACK'); return res.status(403).json({ error: 'Forbidden' }); }
+    const access = { role: owns ? 'owner' : unowned ? 'unowned' : 'editor', canView: true, canEdit: true, canManagePermissions: owns, canRename: owns, canDelete: owns };
+    if (new Date(board.updated_at).getTime() !== new Date(body.board_updated_at).getTime()) {
+      await client.query('ROLLBACK'); return res.status(409).json({ error: 'Board update conflict' });
+    }
+
+    let updated;
+    if (operation === 'refresh_brand_core_from_canonical') {
+      if (!board.brand_id || board.brand_id !== body.brand_id) { await client.query('ROLLBACK'); return res.status(409).json({ error: 'Board Brand association changed' }); }
+      if (!isPlainObject(board.brand_core_snapshot) || !validProvenance(board.brand_core_source_revision, board.brand_core_source_updated_at, board.brand_core_snapshot_copied_at)) {
+        await client.query('ROLLBACK'); return res.status(422).json({ error: 'Saved Board Brand Core is invalid' });
+      }
+      const brandResult = await client.query('SELECT id, brand_core, revision, updated_at FROM brands WHERE id = $1 AND owner_email = $2 LIMIT 1', [board.brand_id, email]);
+      if (!brandResult.rowCount) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Canonical Brand not found' }); }
+      const brand = brandResult.rows[0];
+      if (Number(brand.revision) !== body.canonical_revision) { await client.query('ROLLBACK'); return res.status(409).json({ error: 'Canonical Brand revision conflict' }); }
+      if (!isPlainObject(brand.brand_core)) { await client.query('ROLLBACK'); return res.status(422).json({ error: 'Canonical Brand Core is invalid' }); }
+      updated = await client.query(`UPDATE boards SET
+          brand_core_snapshot_backup = brand_core_snapshot,
+          brand_core_backup_source_revision = brand_core_source_revision,
+          brand_core_backup_source_updated_at = brand_core_source_updated_at,
+          brand_core_backup_snapshot_copied_at = brand_core_snapshot_copied_at,
+          brand_core_snapshot_backup_created_at = NOW(),
+          brand_core_snapshot = $2::jsonb,
+          brand_core_source_revision = $3,
+          brand_core_source_updated_at = $4,
+          brand_core_snapshot_copied_at = NOW(), updated_at = NOW()
+        WHERE id = $1 RETURNING ${BOARD_COLUMNS}`, [id, JSON.stringify(brand.brand_core), brand.revision, brand.updated_at]);
+    } else {
+      if (!isPlainObject(board.brand_core_snapshot_backup) || !validTimestamp(board.brand_core_snapshot_backup_created_at)
+        || !validProvenance(board.brand_core_backup_source_revision, board.brand_core_backup_source_updated_at, board.brand_core_backup_snapshot_copied_at)) {
+        await client.query('ROLLBACK'); return res.status(409).json({ error: 'Previous Board Brand Core is unavailable' });
+      }
+      updated = await client.query(`UPDATE boards SET
+          brand_core_snapshot = brand_core_snapshot_backup,
+          brand_core_source_revision = brand_core_backup_source_revision,
+          brand_core_source_updated_at = brand_core_backup_source_updated_at,
+          brand_core_snapshot_copied_at = brand_core_backup_snapshot_copied_at,
+          brand_core_snapshot_backup = brand_core_snapshot,
+          brand_core_backup_source_revision = brand_core_source_revision,
+          brand_core_backup_source_updated_at = brand_core_source_updated_at,
+          brand_core_backup_snapshot_copied_at = brand_core_snapshot_copied_at,
+          brand_core_snapshot_backup_created_at = NOW(), updated_at = NOW()
+        WHERE id = $1 RETURNING ${BOARD_COLUMNS}`, [id]);
+    }
+    await client.query('COMMIT');
+    return res.status(200).json({ ...serializeBoardItem(updated.rows[0]), access });
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw error;
+  } finally { client.release(); }
 }
 
 module.exports = async function handler(req, res) {
@@ -27,6 +126,7 @@ module.exports = async function handler(req, res) {
   if (!id) {
     return res.status(400).json({ error: 'id is required' });
   }
+  if (!isBrandId(id)) return res.status(400).json({ error: 'id must be a UUID' });
 
   let requestUser = null;
   let requestAccess = null;
@@ -93,6 +193,10 @@ module.exports = async function handler(req, res) {
     if (req.method === 'PATCH') {
       const { name = null, order_index = null, claim = false } = req.body || {};
       const user = getSessionUser(req);
+      if (Object.prototype.hasOwnProperty.call(req.body || {}, 'operation')) {
+        if (!user?.email) return res.status(401).json({ error: 'Authentication required' });
+        return performBrandCoreOperation(req, res, id, user);
+      }
       let updated;
       const hasBrandAssociationUpdate = Object.prototype.hasOwnProperty.call(req.body || {}, 'brand_id');
       if (hasBrandAssociationUpdate) {
@@ -112,7 +216,10 @@ module.exports = async function handler(req, res) {
         }
         updated = await pool.query(
           `UPDATE boards SET brand_id = $2, updated_at = NOW(), brand_core_source_revision = NULL,
-             brand_core_source_updated_at = NULL, brand_core_snapshot_copied_at = NULL WHERE id = $1 RETURNING ${BOARD_COLUMNS}`,
+             brand_core_source_updated_at = NULL, brand_core_snapshot_copied_at = NULL,
+             brand_core_snapshot_backup = NULL, brand_core_backup_source_revision = NULL,
+             brand_core_backup_source_updated_at = NULL, brand_core_backup_snapshot_copied_at = NULL,
+             brand_core_snapshot_backup_created_at = NULL WHERE id = $1 RETURNING ${BOARD_COLUMNS}`,
           [id, brandId]
         );
         if (updated.rowCount === 0) return res.status(404).json({ error: 'Board not found' });
