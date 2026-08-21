@@ -98,11 +98,28 @@ async function ensureBoardsTable() {
           created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
           created_by TEXT,
           CHECK (email = LOWER(email)),
-          CHECK (role IN ('editor'))
+          CONSTRAINT board_editors_role_check CHECK (role IN ('editor', 'viewer'))
         );
       `);
       await pool.query('ALTER TABLE board_editors ADD COLUMN IF NOT EXISTS name TEXT;');
       await pool.query('ALTER TABLE board_editors ADD COLUMN IF NOT EXISTS avatar TEXT;');
+      // Runtime compatibility only. A versioned migration remains separate hardening work.
+      // Dropping/re-adding this metadata-only constraint preserves every invitation row.
+      await pool.query(`
+        DO $$ DECLARE constraint_name TEXT; BEGIN
+          SELECT conname INTO constraint_name FROM pg_constraint
+          WHERE conrelid = 'board_editors'::regclass AND contype = 'c'
+            AND pg_get_constraintdef(oid) LIKE '%role%';
+          IF constraint_name IS NOT NULL AND pg_get_constraintdef(
+            (SELECT oid FROM pg_constraint WHERE conrelid = 'board_editors'::regclass AND conname = constraint_name)
+          ) NOT LIKE '%viewer%' THEN
+            EXECUTE format('ALTER TABLE board_editors DROP CONSTRAINT %I', constraint_name);
+          END IF;
+          IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = 'board_editors'::regclass AND contype = 'c' AND pg_get_constraintdef(oid) LIKE '%role%' AND pg_get_constraintdef(oid) LIKE '%viewer%') THEN
+            ALTER TABLE board_editors ADD CONSTRAINT board_editors_role_check CHECK (role IN ('editor', 'viewer'));
+          END IF;
+        END $$;
+      `);
       await pool.query('CREATE UNIQUE INDEX IF NOT EXISTS board_editors_board_email_uidx ON board_editors (board_id, email);');
       await pool.query('CREATE INDEX IF NOT EXISTS board_editors_email_idx ON board_editors (email);');
       await pool.query('CREATE INDEX IF NOT EXISTS board_editors_board_id_idx ON board_editors (board_id);');

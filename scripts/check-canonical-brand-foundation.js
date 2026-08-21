@@ -147,7 +147,7 @@ boardsStorage.pool.query = async (sql, params = []) => {
     const row = boards.get(params[0]);
     return row ? { rowCount: 1, rows: [{ ...row }] } : { rowCount: 0, rows: [] };
   }
-  if (text.includes("FROM board_editors")) return { rowCount: editors.has(`${params[0]}:${params[1]}`) ? 1 : 0, rows: [] };
+  if (text.includes("FROM board_editors")) { const found = editors.has(`${params[0]}:${params[1]}`); return { rowCount: found ? 1 : 0, rows: found ? [{ role: "editor" }] : [] }; }
   if (text.includes("UPDATE board_editors")) return { rowCount: 0, rows: [] };
   if (text.includes("UPDATE boards") && text.includes("canvas_json")) {
     const row = boards.get(params[0]);

@@ -72,17 +72,17 @@ async function refreshOwnEditorIdentity(boardId, user, context = {}) {
   }
 }
 
-async function isBoardEditor(boardId, user) {
+async function getBoardMembershipRole(boardId, user) {
   const email = normalizeEmail(user?.email);
   if (!boardId || !email) return false;
   const result = await pool.query(
-    `SELECT 1
+    `SELECT role
      FROM board_editors
-     WHERE board_id = $1 AND email = $2 AND role = 'editor'
+     WHERE board_id = $1 AND email = $2 AND role IN ('editor', 'viewer')
      LIMIT 1`,
     [boardId, email]
   );
-  return result.rowCount > 0;
+  return result.rows[0]?.role || null;
 }
 
 function accessForRole(role) {
@@ -90,11 +90,18 @@ function accessForRole(role) {
   const isOwner = role === 'owner';
   return {
     role,
+    canRead: true,
     canView: true,
     canEdit,
+    canViewBoardBrandCore: canEdit,
+    canManageMembers: isOwner,
     canManagePermissions: isOwner,
     canRename: isOwner,
-    canDelete: isOwner
+    canDelete: isOwner,
+    canChangeBrandAssociation: canEdit,
+    canRefreshFromCanonical: canEdit,
+    canRestoreBrandCore: canEdit,
+    canViewPresence: role === 'owner' || role === 'editor' || role === 'viewer' || role === 'unowned'
   };
 }
 
@@ -112,10 +119,10 @@ async function getBoardAccess(boardId, user, { columns = '*' } = {}) {
     role = 'owner';
   } else if (isUnowned && user?.email) {
     role = 'unowned';
-  } else if (await isBoardEditor(boardId, user)) {
-    role = 'editor';
   } else {
-    role = user?.email ? 'non_owner' : 'anonymous_shared';
+    const membershipRole = await getBoardMembershipRole(boardId, user);
+    if (membershipRole) role = membershipRole;
+    else role = user?.email ? 'non_owner' : 'anonymous_shared';
   }
 
   return { board, access: accessForRole(role) };

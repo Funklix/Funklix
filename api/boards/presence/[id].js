@@ -1,6 +1,6 @@
 const { getSessionUser } = require('../../_auth-session');
 const { ensureBoardsTable } = require('../../_boards-storage');
-const { refreshOwnEditorIdentity, normalizeEmail } = require('../../_board-access');
+const { refreshOwnEditorIdentity, normalizeEmail, getBoardAccess } = require('../../_board-access');
 
 const PRESENCE_TTL_MS = 45 * 1000;
 const boardsPresence = global.__funklixBoardsPresence || new Map();
@@ -71,6 +71,11 @@ module.exports = async function handler(req, res) {
   if (!boardId) return res.status(400).json({ error: 'id is required' });
 
   const user = getSessionUser(req);
+  if (!process.env.POSTGRES_URL) return res.status(200).json({ viewers: [], count: 0, ttlMs: PRESENCE_TTL_MS });
+  await ensureBoardsTable();
+  const { board, access } = await getBoardAccess(boardId, user, { columns: 'id, owner_id, owner_email' });
+  if (!board) return res.status(404).json({ error: 'Board not found' });
+  if (!access?.canViewPresence) return res.status(200).json({ viewers: [], count: 0, ttlMs: PRESENCE_TTL_MS });
   const now = Date.now();
   cleanupBoard(boardId, now);
   const viewers = boardsPresence.get(boardId) || new Map();
@@ -87,7 +92,7 @@ module.exports = async function handler(req, res) {
     const safeViewportCenterY = safeNumber(viewportCenterY);
     const safeHoveredNodeId = safeString(hoveredNodeId);
 
-    if (user?.email) {
+    if (user?.email && ['owner', 'editor', 'viewer', 'unowned'].includes(access.role)) {
       await refreshPresenceEditorIdentity(boardId, user);
       const key = String(user.email).toLowerCase();
       viewers.set(key, {
@@ -129,4 +134,3 @@ module.exports = async function handler(req, res) {
 
   return res.status(200).json({ viewers: list, count: list.length, ttlMs: PRESENCE_TTL_MS });
 };
-

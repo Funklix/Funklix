@@ -40,6 +40,7 @@ function getBoardBrandDisplaySnapshot(board = {}) {
 
 function serializeBoardListRow(row = {}) {
   const { brand_core_snapshot, ...safeRow } = row;
+  if (row.access_role === 'viewer') return { id: row.id, name: row.name, updated_at: row.updated_at, order_index: row.order_index, created_at: row.created_at, access_role: 'viewer', brand_visibility: 'hidden' };
   return {
     ...safeRow,
     brand_display: getBoardBrandDisplaySnapshot({ brand_core_snapshot })
@@ -92,12 +93,12 @@ module.exports = async function handler(req, res) {
           `SELECT b.id, b.name, b.updated_at, b.order_index, b.owner_id, b.owner_email, b.owner_name, b.owner_avatar, b.created_by, b.created_at, b.brand_id, b.brand_core_snapshot,
                   CASE
                     WHEN LOWER(COALESCE(b.owner_email, '')) = $1 THEN 'owner'
-                    WHEN be.email IS NOT NULL THEN 'editor'
+                    WHEN be.email IS NOT NULL THEN be.role
                     WHEN b.owner_email IS NULL AND b.owner_id IS NULL THEN 'unowned'
                     ELSE 'non_owner'
                   END AS access_role
            FROM boards b
-           LEFT JOIN board_editors be ON be.board_id = b.id AND be.email = $1 AND be.role = 'editor'
+           LEFT JOIN board_editors be ON be.board_id = b.id AND be.email = $1 AND be.role IN ('editor', 'viewer')
            WHERE (LOWER(COALESCE(b.owner_email, '')) = $1 OR be.email IS NOT NULL OR (b.owner_email IS NULL AND b.owner_id IS NULL))
            ${brandCondition}
            ORDER BY CASE

@@ -4,6 +4,7 @@ const { getSessionUser } = require('../_auth-session');
 const { ensureDocumentTables, pool: documentPool } = require('../_document-records');
 const { deletePrivate } = require('../_document-storage');
 const { getOwnedBrand, isBrandId } = require('../_brand-access');
+const { serializeBoardForAccess } = require('../_board-serializer');
 
 const BOARD_COLUMNS = 'id, name, canvas_json, brand_core_snapshot, brand_id, brand_core_source_revision, brand_core_source_updated_at, brand_core_snapshot_copied_at, brand_core_snapshot_backup, brand_core_backup_source_revision, brand_core_backup_source_updated_at, brand_core_backup_snapshot_copied_at, brand_core_snapshot_backup_created_at, created_at, updated_at, order_index, owner_id, owner_email, owner_name, owner_avatar, created_by';
 
@@ -210,7 +211,7 @@ module.exports = async function handler(req, res) {
         }
         const { board, access } = await getBoardAccess(id, user, { columns: 'id, owner_id, owner_email' });
         if (!board) return res.status(404).json({ error: 'Board not found' });
-        if (!access?.canEdit) return res.status(403).json({ error: 'Forbidden' });
+        if (!access?.canChangeBrandAssociation) return res.status(403).json({ error: 'Forbidden' });
         if (brandId !== null && !(await getOwnedBrand(brandId, user, { columns: 'id' }))) {
           return res.status(404).json({ error: 'Canonical Brand not found' });
         }
@@ -334,10 +335,7 @@ module.exports = async function handler(req, res) {
       role: access?.role || null
     });
 
-    return res.status(200).json({
-      ...serializeBoardItem(board),
-      access
-    });
+    return res.status(200).json(serializeBoardForAccess(board, access));
   } catch (error) {
     if (req.method === 'GET') {
       console.error('[BOARD_GET_FAILURE]', {
