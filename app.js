@@ -140,6 +140,7 @@ const state = {
   ,boardEditorsStatus: { message: "", isError: false }
   ,lastEditorIdentityRefreshAt: 0
   ,shareToastTimer: null
+  ,shareToastOutsidePointerHandler: null
   ,presencePollTimer: null
   ,boardRefreshPollTimer: null
   ,boardRefreshInFlight: false
@@ -1106,8 +1107,23 @@ function setBoardEditorsStatus(message = "", isError = false) {
 function renderOpenShareEditorPanel() {
   const panel = document.querySelector("[data-share-editor-panel]");
   if (!panel) return;
+  const previousInput = panel.querySelector("[data-share-editor-email]");
+  const previousRole = panel.querySelector("[data-share-editor-role]");
+  const inputValue = previousInput?.value || "";
+  const roleValue = previousRole?.value || "viewer";
+  const restoreInputFocus = document.activeElement === previousInput;
+  const selectionStart = restoreInputFocus ? previousInput.selectionStart : null;
+  const selectionEnd = restoreInputFocus ? previousInput.selectionEnd : null;
   panel.innerHTML = buildShareEditorPanelHtml();
   bindShareEditorPanel(panel);
+  const input = panel.querySelector("[data-share-editor-email]");
+  const role = panel.querySelector("[data-share-editor-role]");
+  if (input) input.value = inputValue;
+  if (role && Array.from(role.options).some((option) => option.value === roleValue)) role.value = roleValue;
+  if (restoreInputFocus && input) {
+    input.focus();
+    if (selectionStart !== null && selectionEnd !== null) input.setSelectionRange(selectionStart, selectionEnd);
+  }
 }
 
 function buildShareEditorPanelHtml() {
@@ -1202,6 +1218,8 @@ async function addBoardEditor(email, input = null, role = "viewer") {
     if (!response.ok) throw new Error(data?.error || "Could not add editor");
     state.boardEditors = Array.isArray(data?.editors) ? data.editors : state.boardEditors;
     if (input) input.value = "";
+    const currentInput = document.querySelector("[data-share-editor-email]");
+    if (currentInput) currentInput.value = "";
     setBoardEditorsStatus(`${role === "viewer" ? "Viewer" : "Editor"} permission saved.`, false);
   } catch (error) {
     setBoardEditorsStatus(permissionErrorMessage(error?.message || "Could not add editor"), true);
@@ -1259,6 +1277,10 @@ async function copyCurrentBoardLink() {
 }
 
 function dismissShareLinkToast() {
+  if (state.shareToastOutsidePointerHandler) {
+    document.removeEventListener("pointerdown", state.shareToastOutsidePointerHandler, true);
+    state.shareToastOutsidePointerHandler = null;
+  }
   const existing = document.getElementById("share-link-toast");
   if (existing) existing.remove();
   if (state.shareToastTimer) {
@@ -1293,14 +1315,13 @@ function showShareLinkToast(copied = true) {
   const closeOnOutside = (event) => {
     if (!toast.contains(event.target) && event.target !== el.copyBoardLinkButton) {
       dismissShareLinkToast();
-      document.removeEventListener("pointerdown", closeOnOutside, true);
     }
   };
-  document.addEventListener("pointerdown", closeOnOutside, true);
+  state.shareToastOutsidePointerHandler = closeOnOutside;
+  document.addEventListener("pointerdown", state.shareToastOutsidePointerHandler, true);
   if (!showEditorManager) {
     state.shareToastTimer = setTimeout(() => {
       dismissShareLinkToast();
-      document.removeEventListener("pointerdown", closeOnOutside, true);
     }, copied ? 2200 : 1600);
   }
 }
