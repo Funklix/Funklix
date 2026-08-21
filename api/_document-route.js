@@ -24,7 +24,7 @@ async function authorize(req, res, { edit = false } = {}) {
   if (!boardId || !tileId || !records.SOURCE_TYPES.has(sourceType)) { errorResponse(res, 400, 'invalid_request', 'A valid board and document-source tile are required.'); return null; }
   const { board, access } = await getBoardAccess(boardId, user, { columns: 'id, brand_core_snapshot, owner_id, owner_email' });
   if (!board) { errorResponse(res, 404, 'board_not_found', 'Board not found.'); return null; }
-  if (!(edit ? access?.canEdit : access?.canView) || (!edit && ['anonymous_shared', 'non_owner'].includes(access?.role))) { errorResponse(res, 403, 'forbidden', 'You do not have permission to access this document.'); return null; }
+  if (!(edit ? access?.canEdit : access?.canView)) { errorResponse(res, 403, 'forbidden', 'You do not have permission to access this document.'); return null; }
   if (!records.verifySourceTile(board, tileId, sourceType)) { errorResponse(res, 409, 'source_tile_changed', 'The document-source tile changed. Reload and try again.'); return null; }
   return { user, board, access, boardId, tileId, sourceType };
 }

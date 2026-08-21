@@ -141,6 +141,8 @@ const state = {
   ,lastEditorIdentityRefreshAt: 0
   ,shareToastTimer: null
   ,shareToastOutsidePointerHandler: null
+  ,publicBoardToken: null
+  ,boardSharing: { status: "idle", enabled: false, createdAt: null, rawToken: null, generation: 0, lifecycle: 0, boardId: "", identity: "" }
   ,presencePollTimer: null
   ,boardRefreshPollTimer: null
   ,boardRefreshInFlight: false
@@ -643,6 +645,7 @@ function boardAccessFromServer(access, fallback = state.boardAccess) {
     canEdit: access?.canEdit !== false,
     canViewBoardBrandCore: access?.canViewBoardBrandCore === true,
     canManagePermissions: access?.canManagePermissions === true,
+    canViewPresence: access?.canViewPresence === true,
     canRename: access?.canRename === true,
     canDelete: access?.canDelete === true,
     reason: role
@@ -659,42 +662,7 @@ function applyBoardAccessFromServer(access, source = "server") {
     || state.boardAccess?.canRename !== nextAccess.canRename
     || state.boardAccess?.canDelete !== nextAccess.canDelete;
   state.boardAccess = nextAccess;
-  if (!nextAccess.canViewBoardBrandCore && nextAccess.canEdit === false) {
-    clearAutosaveTimer();
-    state.latestSaveRequestId += 1;
-    state.authoritativeBoardBrandCore = { boardId: "", loadGeneration: state.boardLoadGeneration, value: {}, provenance: null, provenanceValid: false, updatedAt: null, restoreAvailable: false, backupCreatedAt: null };
-    state.brandCore = normalizeBrandCoreState({}, { restoration: true });
-  }
-  if (changed) console.debug("[Funklix Access] boardAccess", { source, access: state.boardAccess });
-  updateReadOnlyNoticeVisibility();
-  if (nextAccess.canManagePermissions) loadBoardEditors({ silent: true });
-  else state.boardEditors = [];
-  return true;
-}
-
-function boardAccessFromServer(access, fallback = state.boardAccess) {
-  const role = typeof access?.role === "string" && access.role ? access.role : (fallback?.reason || "unknown");
-  return {
-    canView: access?.canView !== false,
-    canEdit: access?.canEdit !== false,
-    canViewBoardBrandCore: access?.canViewBoardBrandCore === true,
-    canManagePermissions: access?.canManagePermissions === true,
-    canRename: access?.canRename === true,
-    canDelete: access?.canDelete === true,
-    reason: role
-  };
-}
-
-function applyBoardAccessFromServer(access, source = "server") {
-  if (!access || typeof access !== "object" || typeof access.role !== "string") return false;
-  const nextAccess = boardAccessFromServer(access);
-  const changed = state.boardAccess?.reason !== nextAccess.reason
-    || state.boardAccess?.canView !== nextAccess.canView
-    || state.boardAccess?.canEdit !== nextAccess.canEdit
-    || state.boardAccess?.canManagePermissions !== nextAccess.canManagePermissions
-    || state.boardAccess?.canRename !== nextAccess.canRename
-    || state.boardAccess?.canDelete !== nextAccess.canDelete;
-  state.boardAccess = nextAccess;
+  document.body.classList.toggle("public-board-view", nextAccess.reason === "public_viewer");
   if (!nextAccess.canViewBoardBrandCore && nextAccess.canEdit === false) {
     clearAutosaveTimer();
     state.latestSaveRequestId += 1;
@@ -711,7 +679,10 @@ function applyBoardAccessFromServer(access, source = "server") {
 function updateReadOnlyNoticeVisibility() {
   const isReadOnly = state.boardAccess?.canEdit === false;
   const readOnlyActionTitle = "View-only board. This action is disabled.";
-  if (el.readonlyBoardNotice) el.readonlyBoardNotice.hidden = !isReadOnly;
+  if (el.readonlyBoardNotice) {
+    el.readonlyBoardNotice.hidden = !isReadOnly;
+    el.readonlyBoardNotice.textContent = state.boardAccess?.reason === "public_viewer" ? "Public view · Read-only Canvas" : "View-only board. Changes cannot be saved.";
+  }
   if (el.saveBoardButton) {
     el.saveBoardButton.disabled = isReadOnly;
     if (isReadOnly) el.saveBoardButton.title = "View-only board. Changes cannot be saved.";
@@ -1082,11 +1053,16 @@ function canManageBoardEditors() {
 
 function permissionShareLines() {
   const role = state.boardAccess?.reason || "unknown";
-  if (role === "owner") return ["Anyone with the link can view", "Editors can make changes to this board"];
+  if (role === "owner") return ["Boards are private by default", "Invited members use the normal Board link after sign-in"];
   if (role === "editor") return ["You can edit this board", "Only the owner can manage access"];
   if (role === "viewer") return ["Can view this Board. Cannot edit or access Board Brand Core.", "Only the owner can manage access"];
-  if (role === "unowned") return ["Anyone with the link can view", "Sign in to claim this board"];
-  return ["View-only board", "Duplicate to edit your own copy"];
+  if (role === "unowned") return ["Private Board", "Sign in to claim this board"];
+  if (role === "public_viewer") return ["Public view", "Read-only Canvas; Brand Core and members are private"];
+  return ["Private Board", "Sign in to request access"];
+}
+
+function clearGeneratedPublicToken() {
+  state.boardSharing.rawToken = null;
 }
 
 function permissionErrorMessage(errorMessage = "") {
@@ -1143,7 +1119,15 @@ function buildShareEditorPanelHtml() {
     ? `<div class="share-editor-status ${status.isError ? 'error' : 'success'}">${escapeHtml(status.message)}</div>`
     : '';
 
-  return `<div class="share-editor-heading"><strong>Board-specific permissions</strong><span>Add a Viewer or Editor for this Board only.</span></div>
+  const sharing = state.boardSharing;
+  const sharingBusy = sharing.status === "loading" || sharing.status === "writing";
+  const publicAction = sharing.enabled
+    ? `<button type="button" data-public-sharing-action="replace" ${sharingBusy ? "disabled" : ""}>Replace Public View Link</button><button type="button" data-public-sharing-action="disable" ${sharingBusy ? "disabled" : ""}>Disable Public View</button>`
+    : `<button type="button" data-public-sharing-action="create" ${sharingBusy ? "disabled" : ""}>Create Public View Link</button>`;
+  const generated = sharing.rawToken ? '<label>New public URL <input data-generated-public-url readonly /></label><button type="button" data-copy-public-url>Copy Public View Link</button><span>This token is shown only now. Closing or reloading requires replacing the link to copy it again.</span>' : '';
+  return `<div class="share-editor-heading"><strong>Board link</strong><span>Works for the owner and invited Viewers or Editors after sign-in.</span><button type="button" data-copy-normal-board-link>Copy Board Link</button></div>
+    <div class="share-editor-heading"><strong>${sharing.enabled ? "Public view is on" : "Public view is off"}</strong><span>People with a public view link can see a read-only Canvas. Brand Core and member information remain private.</span>${publicAction}${generated}${sharing.enabled ? '<span>Replacing the link immediately invalidates the previous public link.</span>' : ''}</div>
+    <div class="share-editor-heading"><strong>Board-specific permissions</strong><span>Add a Viewer or Editor for this Board only.</span></div>
     <form class="share-editor-form" data-share-editor-form>
       <label>Email <input type="email" data-share-editor-email placeholder="member@example.com" autocomplete="email" /></label>
       <label>Role <select data-share-editor-role><option value="viewer">Viewer</option><option value="editor">Editor</option></select></label>
@@ -1154,6 +1138,18 @@ function buildShareEditorPanelHtml() {
 }
 
 function bindShareEditorPanel(panel) {
+  const generatedInput = panel.querySelector("[data-generated-public-url]");
+  if (generatedInput && state.boardSharing.rawToken) generatedInput.value = publicBoardUrl(state.boardSharing.boardId, state.boardSharing.rawToken);
+  panel.querySelector("[data-copy-normal-board-link]")?.addEventListener("click", copyCurrentBoardLink);
+  panel.querySelector("[data-copy-public-url]")?.addEventListener("click", async () => {
+    if (state.boardSharing.rawToken) await navigator.clipboard.writeText(publicBoardUrl(state.boardSharing.boardId, state.boardSharing.rawToken));
+  });
+  panel.querySelectorAll("[data-public-sharing-action]").forEach((button) => button.addEventListener("click", async () => {
+    const action = button.getAttribute("data-public-sharing-action");
+    if (action === "replace" && !window.confirm("Replace public view link? The previous public link will stop working immediately.")) return;
+    if (action === "disable" && !window.confirm("Disable public view? Existing public links will stop working immediately. Invited Viewers and Editors keep their access.")) return;
+    await writeBoardSharing(action);
+  }));
   const form = panel.querySelector("[data-share-editor-form]");
   form?.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -1172,6 +1168,49 @@ function bindShareEditorPanel(panel) {
       await removeBoardEditor(email);
     });
   });
+}
+
+function publicBoardUrl(boardId, token) {
+  return `${window.location.origin}/boards/${boardId}#public=${token}`;
+}
+
+async function loadBoardSharingStatus() {
+  const boardId = state.currentBoardId || getBoardIdFromPath();
+  if (!boardId || state.boardAccess?.reason !== "owner") return;
+  const lifecycle = state.boardSharing.lifecycle;
+  const generation = ++state.boardSharing.generation;
+  const identity = (state.user?.email || "").trim().toLowerCase();
+  state.boardSharing = { ...state.boardSharing, status: "loading", boardId, identity, rawToken: null };
+  renderOpenShareEditorPanel();
+  try {
+    const response = await fetch(`/api/boards/${encodeURIComponent(boardId)}/sharing`, { headers: { Accept: "application/json" } });
+    const data = await response.json();
+    if (!response.ok) throw new Error("Sharing status unavailable");
+    if (generation !== state.boardSharing.generation || lifecycle !== state.boardSharing.lifecycle || boardId !== state.currentBoardId || identity !== (state.user?.email || "").trim().toLowerCase()) return;
+    state.boardSharing = { ...state.boardSharing, status: "ready", enabled: data.public_view_enabled === true, createdAt: data.public_view_token_created_at || null, rawToken: null };
+  } catch { if (generation === state.boardSharing.generation) state.boardSharing.status = "reload-required"; }
+  renderOpenShareEditorPanel();
+}
+
+async function writeBoardSharing(action) {
+  const boardId = state.currentBoardId;
+  if (!boardId || state.boardAccess?.reason !== "owner" || state.boardSharing.status === "writing") return;
+  const lifecycle = state.boardSharing.lifecycle;
+  const generation = ++state.boardSharing.generation;
+  const identity = (state.user?.email || "").trim().toLowerCase();
+  clearGeneratedPublicToken();
+  state.boardSharing.status = "writing";
+  renderOpenShareEditorPanel();
+  try {
+    const response = await fetch(`/api/boards/${encodeURIComponent(boardId)}/sharing`, action === "disable" ? { method: "DELETE" } : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ operation: "create_public_view_link" }) });
+    const data = await response.json();
+    if (!response.ok) throw new Error("Sharing write outcome uncertain");
+    if (generation !== state.boardSharing.generation || lifecycle !== state.boardSharing.lifecycle || boardId !== state.currentBoardId || identity !== (state.user?.email || "").trim().toLowerCase() || state.boardAccess?.reason !== "owner") return;
+    state.boardSharing = { ...state.boardSharing, status: "ready", enabled: data.public_view_enabled === true, createdAt: data.public_view_token_created_at || null, rawToken: action === "disable" ? null : data.public_view_token };
+  } catch {
+    if (generation === state.boardSharing.generation) state.boardSharing = { ...state.boardSharing, status: "reload-required", rawToken: null };
+  }
+  renderOpenShareEditorPanel();
 }
 
 async function loadBoardEditors({ silent = false } = {}) {
@@ -1277,6 +1316,8 @@ async function copyCurrentBoardLink() {
 }
 
 function dismissShareLinkToast() {
+  state.boardSharing.lifecycle += 1;
+  clearGeneratedPublicToken();
   if (state.shareToastOutsidePointerHandler) {
     document.removeEventListener("pointerdown", state.shareToastOutsidePointerHandler, true);
     state.shareToastOutsidePointerHandler = null;
@@ -1306,6 +1347,7 @@ function showShareLinkToast(copied = true) {
   if (showEditorManager) {
     renderOpenShareEditorPanel();
     loadBoardEditors({ silent: true });
+    loadBoardSharingStatus();
   }
   const rect = el.copyBoardLinkButton.getBoundingClientRect();
   const width = toast.offsetWidth || 220;
@@ -2564,6 +2606,12 @@ function bindEditingPresenceTracking() {
 }
 
 function startPresenceLite() {
+  if (state.boardAccess?.reason === "public_viewer" || state.boardAccess?.canViewPresence === false) {
+    stopPresenceLite();
+    state.presenceViewers = [];
+    renderPresenceLite();
+    return;
+  }
   stopPresenceLite();
   if (!state.user?.email) {
     state.presenceViewers = [];
@@ -2706,7 +2754,7 @@ function mergeRemoteBoardState(remoteCanvasState, remoteUpdatedAt) {
 
 async function pollBoardForRemoteChanges() {
   const boardId = getBoardIdFromPath() || state.currentBoardId;
-  if (!boardId || state.boardRefreshInFlight || state.isSaving || state.conflictModalOpen || state.initialServerLoadInFlight) return;
+  if (!boardId || state.boardAccess?.reason === "public_viewer" || state.boardRefreshInFlight || state.isSaving || state.conflictModalOpen || state.initialServerLoadInFlight) return;
   const loadGeneration = state.boardLoadGeneration;
   const userEmail = (state.user?.email || "").trim().toLowerCase();
   state.boardRefreshInFlight = true;
@@ -4078,6 +4126,10 @@ async function loadSessionUser() {
   renderAuthState();
   const currentUserEmail = typeof state.user?.email === "string" ? state.user.email.trim().toLowerCase() : "";
   if (previousUserEmail !== currentUserEmail) {
+    state.boardSharing.generation += 1;
+    state.boardSharing.lifecycle += 1;
+    clearGeneratedPublicToken();
+    dismissShareLinkToast();
     state.boardsLibraryRequest.controller?.abort();
     state.boardsLibraryRequest = { scope: "all", status: "idle", generation: state.boardsLibraryRequest.generation + 1, identity: "", controller: null };
     state.boardsLibrary = [];
@@ -5120,6 +5172,16 @@ function getBoardIdFromPath() {
   if (fromHref?.[1]) return decodeURIComponent(fromHref[1]);
 
   return null;
+}
+
+function getPublicBoardTokenFromFragment() {
+  const match = /^#public=([A-Za-z0-9_-]{43})$/.exec(window.location.hash || "");
+  return match ? match[1] : null;
+}
+
+function boardReadHeaders() {
+  const token = state.publicBoardToken;
+  return token ? { Accept: "application/json", "X-Board-Public-Token": token } : { Accept: "application/json" };
 }
 
 function isValidBoardBrandId(value) {
@@ -7700,6 +7762,8 @@ async function loadBoardFromUrlIfPresent(requestedBoardId = null) {
   state.isBoardLoading = true;
   state.isBoardHydrating = true;
   state.currentBoardId = boardId;
+  state.publicBoardToken = getPublicBoardTokenFromFragment();
+  clearGeneratedPublicToken();
     state.authoritativeBoardBrandCore = { boardId: "", loadGeneration, value: {}, provenance: null, provenanceValid: true, updatedAt: null, restoreAvailable: false, backupCreatedAt: null };
   invalidateBoardBrandAssociation({ clearBoard: true, loadingBoardId: boardId });
   syncRuntimeSessionFromLegacy("board-load-start");
@@ -7709,7 +7773,7 @@ async function loadBoardFromUrlIfPresent(requestedBoardId = null) {
   renderBrandCoreEditor();
   debugBrandBrainScope("board-load-start", { boardId, storageKey: brandBrainStorageKey(boardId) });
   try {
-    const response = await fetch(`/api/boards/${boardId}`);
+    const response = await fetch(`/api/boards/${boardId}`, { headers: boardReadHeaders() });
     const data = await response.json();
     if (!response.ok) throw new Error(data?.error || 'Failed to load board');
     const stillCurrent = loadGeneration === state.boardLoadGeneration
@@ -7755,19 +7819,28 @@ async function loadBoardFromUrlIfPresent(requestedBoardId = null) {
     const normalizedCanvasState = withBoardSchemaDefaults(incomingCanvasState);
     state.runtimeDiagnostics.canvasSource = "/boards/:id";
     applyCampaignState(normalizedCanvasState, `Loaded board ${boardId.slice(0, 8)}...`);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(normalizedCanvasState));
+    if (data?.access?.role !== "public_viewer") localStorage.setItem(STORAGE_KEY, JSON.stringify(normalizedCanvasState));
     startPresenceLite();
     startBoardRefreshPolling();
     refreshDashboardIfVisible();
     return true;
   } catch (error) {
-    console.error(error);
     if (loadGeneration === state.boardLoadGeneration && boardId === (getBoardIdFromPath() || state.currentBoardId)) {
+      stopPresenceLite();
+      stopBoardRefreshPolling();
+      state.presenceViewers = [];
+      state.nodes = []; state.edges = []; state.selectedIds.clear(); state.selectedPrimary = null;
+      el.zoomLayer.querySelectorAll(".node").forEach((node) => node.remove());
+      state.authoritativeBoardBrandCore = { boardId: "", loadGeneration, value: {}, provenance: null, provenanceValid: false, updatedAt: null, restoreAvailable: false, backupCreatedAt: null };
+      state.brandCore = normalizeBrandCoreState({}, { restoration: true });
+      invalidateBoardBrandAssociation({ clearBoard: true });
+      localStorage.removeItem(STORAGE_KEY);
+      setAuthMessage("This Board is private or the public link is no longer valid. Sign in or return to Home/Boards.");
       state.boardBrandAssociation.status = "load-error";
-      state.boardBrandAssociation.message = "The authoritative Board Brand association could not be loaded.";
+      state.boardBrandAssociation.message = "";
       renderBoardBrandAssociation();
     }
-    setSaveStatus('Board not found or could not be loaded.');
+    setSaveStatus('This Board is private or the public link is no longer valid.');
     return false;
   } finally {
     if (loadGeneration === state.boardLoadGeneration) {

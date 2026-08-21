@@ -5,8 +5,10 @@ const { ensureDocumentTables, pool: documentPool } = require('../_document-recor
 const { deletePrivate } = require('../_document-storage');
 const { getOwnedBrand, isBrandId } = require('../_brand-access');
 const { serializeBoardForAccess } = require('../_board-serializer');
+const { verifyPublicToken } = require('../_board-public-sharing');
 
 const BOARD_COLUMNS = 'id, name, canvas_json, brand_core_snapshot, brand_id, brand_core_source_revision, brand_core_source_updated_at, brand_core_snapshot_copied_at, brand_core_snapshot_backup, brand_core_backup_source_revision, brand_core_backup_source_updated_at, brand_core_backup_snapshot_copied_at, brand_core_snapshot_backup_created_at, created_at, updated_at, order_index, owner_id, owner_email, owner_name, owner_avatar, created_by';
+const BOARD_GET_COLUMNS = `${BOARD_COLUMNS}, public_view_enabled, public_view_token_hash`;
 
 function serializeBoardItem(row = {}) {
   const { brand_core_snapshot_backup, brand_core_backup_source_revision, brand_core_backup_source_updated_at,
@@ -115,6 +117,7 @@ async function performBrandCoreOperation(req, res, id, user) {
 }
 
 module.exports = async function handler(req, res) {
+  res.setHeader?.('Cache-Control', 'private, no-store');
   if (req.method !== 'GET' && req.method !== 'PUT' && req.method !== 'PATCH' && req.method !== 'DELETE') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -303,9 +306,26 @@ module.exports = async function handler(req, res) {
 
     const user = getSessionUser(req);
     requestUser = user;
-    const { board, access } = await getBoardAccess(id, user, { columns: BOARD_COLUMNS });
-    requestAccess = access;
+    const resolved = await getBoardAccess(id, user, { columns: BOARD_GET_COLUMNS });
+    const board = resolved.board;
+    let access = resolved.access;
     if (!board) return res.status(404).json({ error: 'Board not found' });
+    if (access?.role === 'non_owner' || access?.role === 'anonymous') {
+      const suppliedToken = req.headers?.['x-board-public-token'];
+      const exactlyOneToken = typeof suppliedToken === 'string';
+      if (!board.public_view_enabled || !exactlyOneToken || !verifyPublicToken(board.public_view_token_hash, suppliedToken)) {
+        requestAccess = access;
+        return res.status(404).json({ error: 'Board not found' });
+      }
+      access = {
+        role: 'public_viewer', canRead: true, canView: true, canEdit: false,
+        canViewBoardBrandCore: false, canManageMembers: false, canManagePermissions: false,
+        canRename: false, canDelete: false, canChangeBrandAssociation: false,
+        canRefreshFromCanonical: false, canRestoreBrandCore: false, canViewPresence: false,
+        publicView: true
+      };
+    }
+    requestAccess = access;
     if (access?.role === 'editor') {
       console.error('[BOARD_GET_EDITOR_IDENTITY_REFRESH_BEFORE]', {
         boardId: id,
@@ -335,7 +355,8 @@ module.exports = async function handler(req, res) {
       role: access?.role || null
     });
 
-    return res.status(200).json(serializeBoardForAccess(board, access));
+    const { public_view_enabled, public_view_token_hash, ...serializableBoard } = board;
+    return res.status(200).json(serializeBoardForAccess(serializableBoard, access));
   } catch (error) {
     if (req.method === 'GET') {
       console.error('[BOARD_GET_FAILURE]', {

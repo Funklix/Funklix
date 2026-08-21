@@ -63,5 +63,7 @@ jobs:
         run: node scripts/check-bw18-board-access-roles.js
       - name: Check Board permissions popover lifecycle
         run: node scripts/check-bw18-share-permissions-popover-lifecycle.js
+      - name: Check private Boards and revocable public view links
+        run: node scripts/check-bw19-private-public-board-sharing.js
       - name: Check Knowledge Module browser globals
         run: node scripts/check-knowledge-module-browser-globals.js

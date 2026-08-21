@@ -75,7 +75,7 @@ function response() { return { statusCode:200, body:null, status(code){ this.sta
   const app = fs.readFileSync(require.resolve('../app.js'),'utf8'); const route = fs.readFileSync(require.resolve('../api/_document-route.js'),'utf8'); const schema = fs.readFileSync(require.resolve('../api/_document-records.js'),'utf8');
   assert(app.includes('documentSourceOperationByTileId') && app.includes('active?.requestId !== requestId'));
   assert(app.includes('malwareScanStatus === "not_configured" ? "Not configured — not scanned"'));
-  assert(route.includes("access?.canEdit") && route.includes("['anonymous_shared', 'non_owner']"));
+  assert(route.includes("access?.canEdit") && route.includes("access?.canView"));
   assert(route.includes("row.id !== expected") && route.includes("current?.id || null) !== (upload.expected_document_id"));
   assert(schema.includes('storage_key TEXT NOT NULL UNIQUE') && schema.includes('brand_documents_active_tile_uidx'));
   assert(!app.includes('moduleData.documentImport =') && !app.includes('imageBase64: file'));

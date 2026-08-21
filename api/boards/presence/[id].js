@@ -63,6 +63,7 @@ async function refreshPresenceEditorIdentity(boardId, user) {
 }
 
 module.exports = async function handler(req, res) {
+  res.setHeader?.('Cache-Control', 'private, no-store');
   if (req.method !== 'GET' && req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
