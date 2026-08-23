@@ -3,6 +3,11 @@ const { buildBrandBrainContext } = require("./_brand-brain-context");
 const CAMPAIGN_CHAIN_TYPES = ["Idea", "Campaign Variation", "Content", "Social Media Posting", "Landing Page", "Email Campaign"];
 const ANGLE_FAMILIES = ["Emotional", "Rational", "Authority", "Community", "Transformation", "Opportunity", "Trust", "Contrarian"];
 const SOCIAL_PURPOSES = ["Hook", "Problem", "Story", "Objection", "CTA", "Proof", "Behind the scenes", "Educational", "Contrarian", "Community"];
+const CAMPAIGN_LANGUAGES = Object.freeze({ en: "English", de: "German", es: "Spanish" });
+
+function normalizeCampaignLanguage(value) {
+  return Object.prototype.hasOwnProperty.call(CAMPAIGN_LANGUAGES, value) ? value : "en";
+}
 
 function clampInteger(value, fallback, min, max) {
   const number = Number.parseInt(value, 10);
@@ -31,7 +36,8 @@ module.exports = async function handler(req, res) {
       postsPerVariation: rawPostsPerVariation = 5,
       includeLandingPage = true,
       includeEmailCampaign = true,
-      channel: rawChannel = "LinkedIn"
+      channel: rawChannel = "LinkedIn",
+      campaignLanguage: rawCampaignLanguage = "en"
     } = req.body || {};
     if (!campaignIdea.trim()) {
       return res.status(400).json({ error: "campaignIdea is required" });
@@ -40,6 +46,8 @@ module.exports = async function handler(req, res) {
     const variationCount = clampInteger(rawVariationCount, 3, 1, 10);
     const postsPerVariation = clampInteger(rawPostsPerVariation, 5, 1, 20);
     const channel = normalizeChannel(rawChannel);
+    const campaignLanguage = normalizeCampaignLanguage(rawCampaignLanguage);
+    const campaignLanguageName = CAMPAIGN_LANGUAGES[campaignLanguage];
     const shouldIncludeLandingPage = includeLandingPage !== false;
     const shouldIncludeEmailCampaign = includeEmailCampaign !== false;
     const brandBrainContext = buildBrandBrainContext(boardId, brandBrainData);
@@ -50,6 +58,11 @@ module.exports = async function handler(req, res) {
     const purposeGuidance = Array.from({ length: postsPerVariation }, (_, index) => `${index + 1}. ${SOCIAL_PURPOSES[index % SOCIAL_PURPOSES.length]}`).join("\n");
 
     const prompt = `You are a senior campaign team creating a Campaign Canvas plan that feels like an AI marketing employee building a real multi-angle campaign.
+
+Language contract:
+- Produce every user-facing campaign asset in ${campaignLanguageName}, including node titles, descriptions/content, campaign copy, calls to action, generated social content, image directions, landing-page copy, email copy, and all other generated user-facing text.
+- Keep structural JSON property names, node type values, status enums, validation codes, IDs, schema fields, and internal diagnostics exactly as specified in English.
+- Do not translate, rewrite, or mutate the supplied Brand Brain source data; use it only as source context.
 
 Context priority:
 1. Brand Brain / Brand DNA / Archetype guidance is the source of truth for the product, offer, service, experience, ICP, positioning, value proposition, messaging, tone, CTA style, and visual style.
@@ -475,6 +488,7 @@ Return ONLY strict JSON with this shape:
           includeLandingPage: shouldIncludeLandingPage,
           includeEmailCampaign: shouldIncludeEmailCampaign,
           channel,
+          campaignLanguage,
           expectedNodeCount,
           expectedEdgeCount
         }
@@ -486,3 +500,5 @@ Return ONLY strict JSON with this shape:
     return res.status(500).json({ error: error?.message || "Failed to generate campaign" });
   }
 };
+
+module.exports.normalizeCampaignLanguage = normalizeCampaignLanguage;
