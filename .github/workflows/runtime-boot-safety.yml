@@ -73,5 +73,7 @@ jobs:
         run: node scripts/check-bw21-language-separation.js
       - name: Check Campaign Canvas Inspector language coverage
         run: node scripts/check-bw21-1-inspector-language-coverage.js
+      - name: Check Language and Region Settings
+        run: node scripts/check-bw23-language-region-settings.js
       - name: Check Knowledge Module browser globals
         run: node scripts/check-knowledge-module-browser-globals.js

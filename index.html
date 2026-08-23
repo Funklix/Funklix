@@ -247,6 +247,42 @@
             <p class="activity-empty">Recent collaboration activity will appear here.</p>
           </div>
         </section>
+        <div class="sidebar-settings">
+          <button id="settings-open-btn" class="nav-item settings-nav-item fk-btn" type="button" data-icon="⚙️" data-i18n-aria-label="Settings" data-i18n-title="Settings" title="Settings">
+            <span class="nav-label" data-i18n="Settings">Settings</span>
+          </button>
+        </div>
+        <dialog class="settings-dialog" id="settings-dialog" aria-labelledby="settings-dialog-title" aria-describedby="settings-dialog-description">
+          <div class="settings-dialog-header">
+            <div>
+              <h2 id="settings-dialog-title" tabindex="-1" data-i18n="Settings">Settings</h2>
+              <p id="settings-dialog-description" data-i18n="Language & Region">Language &amp; Region</p>
+            </div>
+            <button class="fk-btn fk-btn-ghost" id="settings-close-btn" type="button" data-i18n="Close" data-i18n-aria-label="Close Settings">Close</button>
+          </div>
+          <section class="settings-category" aria-labelledby="language-region-heading">
+            <h3 id="language-region-heading" data-i18n="Language & Region">Language &amp; Region</h3>
+            <div class="settings-field">
+              <label for="ui-language-select" data-i18n="Interface language">Interface language</label>
+              <select id="ui-language-select" class="fk-select" aria-describedby="ui-language-help">
+                <option value="en" data-i18n="🇬🇧 English">🇬🇧 English</option>
+                <option value="de" data-i18n="🇩🇪 German">🇩🇪 Deutsch</option>
+              </select>
+              <small id="ui-language-help" data-i18n="Changes Funklix controls and messages.">Changes Funklix controls and messages.</small>
+            </div>
+            <div class="settings-field">
+              <label for="campaign-language-select" data-i18n="Campaign language">Campaign language</label>
+              <select id="campaign-language-select" class="fk-select" aria-describedby="campaign-language-help campaign-language-isolation">
+                <option value="en" data-i18n="🇬🇧 English">🇬🇧 English</option>
+                <option value="de" data-i18n="🇩🇪 German">🇩🇪 Deutsch</option>
+                <option value="es" data-i18n="🇪🇸 Spanish">🇪🇸 Español</option>
+              </select>
+              <small id="campaign-language-help" data-i18n="Used for newly generated campaign content.">Used for newly generated campaign content.</small>
+              <small id="campaign-language-isolation" data-i18n="Existing Boards and content are not translated automatically.">Existing Boards and content are not translated automatically.</small>
+            </div>
+            <p class="settings-status" id="language-preference-status" role="status" aria-live="polite" aria-atomic="true"></p>
+          </section>
+        </dialog>
       </aside>
 
       <main class="workspace-wrap">

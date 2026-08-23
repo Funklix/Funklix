@@ -53,7 +53,11 @@
     "We couldn’t finish this campaign": "Diese Kampagne konnte nicht fertiggestellt werden",
     "Something interrupted generation. You can retry with the same settings or close this window and try again later.": "Die Erstellung wurde unterbrochen. Du kannst es mit denselben Einstellungen erneut versuchen oder das Fenster schließen.",
     "Close": "Schließen", "Retry": "Erneut versuchen", "Campaign generated successfully.": "Kampagne erfolgreich erstellt.",
+    "Settings": "Einstellungen", "Close Settings": "Einstellungen schließen", "Language & Region": "Sprache & Region",
     "Interface language": "Oberflächensprache", "Campaign language": "Kampagnensprache",
+    "Changes Funklix controls and messages.": "Ändert die Bedienelemente und Meldungen in Funklix.",
+    "Used for newly generated campaign content.": "Wird für neu generierte Kampagneninhalte verwendet.",
+    "🇬🇧 English": "🇬🇧 Englisch", "🇩🇪 German": "🇩🇪 Deutsch", "🇪🇸 Spanish": "🇪🇸 Spanisch",
     "Interface language changes Funklix controls and messages.": "Die Oberflächensprache ändert Funklix-Steuerelemente und Meldungen.",
     "Campaign language is used for newly generated campaign content.": "Die Kampagnensprache wird für neu erstellte Kampagneninhalte verwendet.",
     "Existing Boards and content are not translated automatically.": "Bestehende Boards und Inhalte werden nicht automatisch übersetzt.",
@@ -112,12 +116,16 @@
   }
   function applyTranslations(container, language = preferences.uiLanguage) {
     if (!container || !container.querySelectorAll) return;
-    const nodes = [container, ...container.querySelectorAll("[data-i18n], [data-i18n-placeholder]")];
+    const nodes = [container, ...container.querySelectorAll("[data-i18n], [data-i18n-placeholder], [data-i18n-aria-label], [data-i18n-title]")];
     nodes.forEach((node) => {
       const key = node.getAttribute?.("data-i18n");
       const placeholder = node.getAttribute?.("data-i18n-placeholder");
+      const ariaLabel = node.getAttribute?.("data-i18n-aria-label");
+      const title = node.getAttribute?.("data-i18n-title");
       if (key) node.textContent = t(key, language);
       if (placeholder) node.setAttribute("placeholder", t(placeholder, language));
+      if (ariaLabel) node.setAttribute("aria-label", t(ariaLabel, language));
+      if (title) node.setAttribute("title", t(title, language));
     });
     if (container.ownerDocument) container.ownerDocument.documentElement.lang = language;
   }

@@ -784,6 +784,37 @@ body {
   box-shadow: none;
 }
 
+.sidebar-settings {
+  margin-top: auto;
+  padding-top: var(--fk-space-3);
+}
+
+.settings-nav-item { color: var(--fk-color-heading); }
+
+.settings-dialog {
+  width: min(560px, calc(100vw - 32px));
+  max-height: min(720px, calc(100vh - 32px));
+  overflow: auto;
+  padding: var(--fk-space-5);
+  border: 1px solid var(--fk-color-border);
+  border-radius: var(--fk-radius-xl);
+  background: var(--fk-color-surface);
+  box-shadow: var(--fk-shadow-lg);
+  color: var(--fk-color-text);
+}
+
+.settings-dialog::backdrop { background: rgba(20, 26, 52, 0.48); }
+.settings-dialog-header { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--fk-space-4); }
+.settings-dialog-header h2, .settings-dialog-header p, .settings-category h3 { margin: 0; }
+.settings-dialog-header p { margin-top: var(--fk-space-1); color: var(--fk-color-muted); }
+.settings-category { display: grid; gap: var(--fk-space-4); margin-top: var(--fk-space-5); }
+.settings-category h3 { padding-bottom: var(--fk-space-2); border-bottom: 1px solid var(--fk-color-border); }
+.settings-field { display: grid; gap: var(--fk-space-2); padding: var(--fk-space-3); border: 1px solid var(--fk-color-border); border-radius: var(--fk-radius-lg); background: var(--fk-color-surface-muted); }
+.settings-field label { color: var(--fk-color-heading); font-weight: var(--fk-font-weight-bold); }
+.settings-field select { width: 100%; padding: 10px 12px; border: 1px solid var(--fk-color-border); border-radius: var(--fk-radius-md); background: var(--fk-color-surface); color: inherit; }
+.settings-field small { color: var(--fk-color-muted); line-height: 1.45; }
+.settings-status { min-height: 1.25em; margin: 0; color: var(--fk-color-primary); font-size: var(--fk-font-size-sm); }
+
 .activity-toggle {
   width: 100%;
   min-height: 34px;
@@ -3077,6 +3108,13 @@ button:active {
   .inspector {
     display: none;
   }
+
+  .sidebar .settings-nav-item { display: flex; justify-content: center; padding: var(--fk-space-2); }
+  .sidebar .settings-nav-item .nav-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+}
+
+@media (max-width: 600px) {
+  .settings-dialog { width: 100vw; max-width: none; height: 100dvh; max-height: none; margin: 0; border: 0; border-radius: 0; padding: var(--fk-space-4); }
 }
 
 
