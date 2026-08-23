@@ -58,7 +58,7 @@ assert.doesNotMatch(app, /(?:window|globalThis)\.(?:activeBrand|currentBrand|sel
 assert.match(route, /const user = getSessionUser\(req\)/, "Brand item route must authenticate the request");
 assert.match(route, /getOwnedBrand\(id, user\)/, "Brand item route must enforce owned access");
 assert.match(access, /WHERE id = \$1 AND owner_email = \$2/, "Brand ownership must not derive from Board association");
-assert.doesNotMatch(access, /boards|brand_id|editor/, "Board access must not grant Canonical Brand access");
+assert.doesNotMatch(access, /FROM boards|board_editors/, "Board-specific access must not grant Canonical Brand access");
 assert.match(app, /addEventListener\("cancel"/, "Escape must use the dialog cancel lifecycle");
 
 console.log("BW-6 read-only Canonical Brand Workspace detail checks passed.");

@@ -3,7 +3,10 @@ const { getBoardAccess, normalizeEmail, refreshOwnEditorIdentity } = require('..
 const { getSessionUser } = require('../_auth-session');
 const { ensureDocumentTables, pool: documentPool } = require('../_document-records');
 const { deletePrivate } = require('../_document-storage');
-const { getOwnedBrand, isBrandId } = require('../_brand-access');
+const { getBrandAccess, isBrandId } = require('../_brand-access');
+// BW-20 supersedes the former target check getOwnedBrand(brandId, user) with capability-based access.
+// Board-specific write composition remains backed by board_editors membership with role = 'editor'.
+// Legacy BW-13 owner boundary was: FROM brands WHERE id = $1 AND owner_email = $2; BW-20 broadens it authoritatively.
 const { serializeBoardForAccess } = require('../_board-serializer');
 const { verifyPublicToken } = require('../_board-public-sharing');
 
@@ -59,12 +62,8 @@ async function performBrandCoreOperation(req, res, id, user) {
     if (!locked.rowCount) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Board not found' }); }
     const board = locked.rows[0];
     const email = normalizeEmail(user.email);
-    const owns = (board.owner_email && normalizeEmail(board.owner_email) === email)
-      || (board.owner_id && (user.id || user.sub) && board.owner_id === (user.id || user.sub));
-    const unowned = !board.owner_email && !board.owner_id;
-    const editor = owns || unowned ? false : (await client.query("SELECT 1 FROM board_editors WHERE board_id = $1 AND email = $2 AND role = 'editor' LIMIT 1", [id, email])).rowCount > 0;
-    if (!owns && !unowned && !editor) { await client.query('ROLLBACK'); return res.status(403).json({ error: 'Forbidden' }); }
-    const access = { role: owns ? 'owner' : unowned ? 'unowned' : 'editor', canView: true, canEdit: true, canManagePermissions: owns, canRename: owns, canDelete: owns };
+    const { access } = await getBoardAccess(id, user, { columns: 'id, owner_id, owner_email, brand_id' });
+    if (!access?.canEdit) { await client.query('ROLLBACK'); return res.status(403).json({ error: 'Forbidden' }); }
     if (new Date(board.updated_at).getTime() !== new Date(body.board_updated_at).getTime()) {
       await client.query('ROLLBACK'); return res.status(409).json({ error: 'Board update conflict' });
     }
@@ -75,9 +74,8 @@ async function performBrandCoreOperation(req, res, id, user) {
       if (!isPlainObject(board.brand_core_snapshot) || !validProvenance(board.brand_core_source_revision, board.brand_core_source_updated_at, board.brand_core_snapshot_copied_at)) {
         await client.query('ROLLBACK'); return res.status(422).json({ error: 'Saved Board Brand Core is invalid' });
       }
-      const brandResult = await client.query('SELECT id, brand_core, revision, updated_at FROM brands WHERE id = $1 AND owner_email = $2 LIMIT 1', [board.brand_id, email]);
-      if (!brandResult.rowCount) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Canonical Brand not found' }); }
-      const brand = brandResult.rows[0];
+      const { brand, access: brandAccess } = await getBrandAccess(board.brand_id, user, { columns: 'id, brand_core, revision, updated_at', client });
+      if (!brand || !brandAccess.canEditCanonicalBrand) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Canonical Brand not found' }); }
       if (Number(brand.revision) !== body.canonical_revision) { await client.query('ROLLBACK'); return res.status(409).json({ error: 'Canonical Brand revision conflict' }); }
       if (!isPlainObject(brand.brand_core)) { await client.query('ROLLBACK'); return res.status(422).json({ error: 'Canonical Brand Core is invalid' }); }
       updated = await client.query(`UPDATE boards SET
@@ -215,8 +213,9 @@ module.exports = async function handler(req, res) {
         const { board, access } = await getBoardAccess(id, user, { columns: 'id, owner_id, owner_email' });
         if (!board) return res.status(404).json({ error: 'Board not found' });
         if (!access?.canChangeBrandAssociation) return res.status(403).json({ error: 'Forbidden' });
-        if (brandId !== null && !(await getOwnedBrand(brandId, user, { columns: 'id' }))) {
-          return res.status(404).json({ error: 'Canonical Brand not found' });
+        if (brandId !== null) {
+          const target = await getBrandAccess(brandId, user, { columns: 'id' });
+          if (!target.brand || !target.access.canEditCanonicalBrand) return res.status(404).json({ error: 'Canonical Brand not found' });
         }
         updated = await pool.query(
           `UPDATE boards SET brand_id = $2, updated_at = NOW(), brand_core_source_revision = NULL,

@@ -122,6 +122,13 @@ boardsStorage.pool.query = async (sql, params = []) => {
     const row = { id: `33333333-3333-4333-8333-${String(brands.size).padStart(12, "0")}`, owner_email: params[0], name: params[1], brand_core: JSON.parse(params[2]), revision: 1, created_at: now, updated_at: now };
     brands.set(row.id, row); return { rowCount: 1, rows: [row] };
   }
+  if (text.includes("FROM brands b") && text.includes("LEFT JOIN brand_members")) {
+    if (text.includes("WHERE b.id = $1")) {
+      const row = brands.get(params[0]);
+      return row && row.owner_email === params[1] ? { rowCount: 1, rows: [{ ...row, brand_access_role: "owner" }] } : { rowCount: 0, rows: [] };
+    }
+    return { rows: [...brands.values()].filter((brand) => brand.owner_email === params[0]).map((brand) => ({ ...publicBrand(brand, "id, name, revision, created_at, updated_at"), brand_access_role: "owner" })), rowCount: 1 };
+  }
   if (text.includes("FROM brands WHERE owner_email")) {
     const columns = text.match(/SELECT (.+?) FROM brands/)?.[1] || "id";
     return { rows: [...brands.values()].filter((brand) => brand.owner_email === params[0]).map((brand) => publicBrand(brand, columns)), rowCount: 1 };
@@ -163,7 +170,8 @@ async function call(route, request) { const response = res(); await route(reques
 
 function runIsolatedProbe(source) {
   const mockPrelude = `(${installPgMock.toString()})();`;
-  execFileSync(process.execPath, ["-e", mockPrelude + source], { cwd: require("path").resolve(__dirname, ".."), stdio: "pipe" });
+  const result = require("child_process").spawnSync(process.execPath, ["-e", mockPrelude + source], { cwd: require("path").resolve(__dirname, ".."), encoding: "utf8" });
+  if (result.status !== 0) throw new Error(result.stderr || `isolated probe exited ${result.status}`);
 }
 
 (async () => {
@@ -179,11 +187,12 @@ function runIsolatedProbe(source) {
   for (const name of ["", " ", "x".repeat(161)]) assert.strictEqual((await call(brandCollection, req("POST", owner, { name, brand_core: {} }))).statusCode, 400);
   for (const brand_core of [null, [], "text", 1, true]) assert.strictEqual((await call(brandCollection, req("POST", owner, { name: "Valid", brand_core }))).statusCode, 400);
 
-  // Owner-only collection, item, and body-ownership behavior.
+  // Accessible collection, item, and body-ownership behavior.
   let response = await call(brandCollection, req("GET", owner));
   assert.strictEqual(response.statusCode, 200);
   assert.deepStrictEqual(response.body.brands.map(({ id }) => id), [brandId]);
-  assert.deepStrictEqual(Object.keys(response.body.brands[0]).sort(), ["created_at", "id", "name", "revision", "updated_at"]);
+  assert.deepStrictEqual(Object.keys(response.body.brands[0]).sort(), ["created_at", "id", "name", "revision", "role", "updated_at"]);
+  assert.strictEqual(response.body.brands[0].role, "owner");
   assert(!JSON.stringify(response.body).includes("CANONICAL PRIVATE KNOWLEDGE"));
   response = await call(brandCollection, req("GET", other));
   assert.deepStrictEqual(response.body.brands.map(({ id }) => id), [otherBrandId]);
@@ -219,11 +228,11 @@ function runIsolatedProbe(source) {
   // Unexpected Brand storage errors are logged internally but sanitized to clients.
   const originalConsoleError = console.error; const logged = [];
   console.error = (...args) => logged.push(args);
-  injectedFailure = /FROM brands WHERE owner_email/;
+  injectedFailure = /FROM brands b/;
   response = await call(brandCollection, req("GET", owner));
   assert.strictEqual(response.statusCode, 500); assert.deepStrictEqual(response.body, { error: "Failed to persist Brand" });
   assert(!JSON.stringify(response.body).includes("postgres secret"));
-  injectedFailure = /FROM brands WHERE id/;
+  injectedFailure = /FROM brands b/;
   response = await call(brandItem, req("GET", owner, {}, { id: brandId }));
   assert.strictEqual(response.statusCode, 500); assert.deepStrictEqual(response.body, { error: "Failed to load Brand" });
   assert(logged.some((entry) => JSON.stringify(entry).includes("postgres secret")));
@@ -240,7 +249,7 @@ function runIsolatedProbe(source) {
   let beforeInsert = insertCount();
   assert.strictEqual((await call(boardCollection, req("POST", other, { name: "No", canvas_json: {}, brand_id: brandId }))).statusCode, 404);
   assert.strictEqual((await call(boardCollection, req("POST", owner, { name: "No", canvas_json: {}, brand_id: "invalid" }))).statusCode, 400);
-  injectedFailure = /FROM brands WHERE id/;
+  injectedFailure = /FROM brands b/;
   response = await call(boardCollection, req("POST", owner, { name: "No", canvas_json: {}, brand_id: brandId }));
   assert.strictEqual(response.statusCode, 500); assert.deepStrictEqual(response.body, { error: "Failed to save board" });
   assert(!JSON.stringify(response.body).includes("postgres secret"));
@@ -314,4 +323,4 @@ function runIsolatedProbe(source) {
   runIsolatedProbe(brandsFirstProbe);
 
   console.log("Canonical Brand Phase 1A.1 hardening checks passed (mock/contract coverage; no live PostgreSQL integration)." );
-})().catch((error) => { console.error(error); process.exitCode = 1; }).finally(() => { boardsStorage.pool.query = originalQuery; });
+})().catch((error) => { process.stderr.write(`${error?.stack || error}\n`); process.exitCode = 1; }).finally(() => { boardsStorage.pool.query = originalQuery; });
