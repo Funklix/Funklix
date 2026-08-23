@@ -254,6 +254,12 @@ const el = {
   nodeSearchCount: document.getElementById("node-search-count"),
   filtersToggleButton: document.getElementById("filters-toggle-btn"),
   utilitiesToggleButton: document.getElementById("utilities-toggle-btn"),
+  settingsOpenButton: document.getElementById("settings-open-btn"),
+  settingsDialog: document.getElementById("settings-dialog"),
+  settingsCloseButton: document.getElementById("settings-close-btn"),
+  uiLanguageSelect: document.getElementById("ui-language-select"),
+  campaignLanguageSelect: document.getElementById("campaign-language-select"),
+  languagePreferenceStatus: document.getElementById("language-preference-status"),
   zoomLabel: document.getElementById("zoom-label"),
   nodeTemplate: document.getElementById("node-template"),
   postitTemplate: document.getElementById("postit-template"),
@@ -13492,16 +13498,7 @@ function buildUtilitiesPopoverHtml() {
     <button type="button" data-utility-action="compact-all">Compact All</button>
     <button type="button" data-utility-action="expand-all">Expand All</button>
   </div></div>
-  <div class="filter-group language-preferences" aria-labelledby="language-preferences-heading"><strong id="language-preferences-heading">Language preferences</strong>
-    <label for="ui-language-select">Interface language</label>
-    <select id="ui-language-select" class="fk-select"><option value="en">English</option><option value="de">German</option></select>
-    <small>Interface language changes Funklix controls and messages.</small>
-    <label for="campaign-language-select">Campaign language</label>
-    <select id="campaign-language-select" class="fk-select"><option value="en">English</option><option value="de">German</option><option value="es">Spanish</option></select>
-    <small>Campaign language is used for newly generated campaign content.</small>
-    <small>Existing Boards and content are not translated automatically.</small>
-    <span id="language-preference-status" role="status" aria-live="polite"></span>
-  </div>`;
+  `;
 }
 
 function closeUtilitiesPopover() {
@@ -15928,6 +15925,31 @@ el.sidebarToggleButton?.addEventListener("click", () => {
   const collapsed = !el.appShell.classList.contains("sidebar-collapsed");
   setSidebarCollapsed(collapsed);
 });
+el.settingsOpenButton?.addEventListener("click", () => {
+  if (!el.settingsDialog || el.settingsDialog.open) return;
+  const preferences = language?.getPreferences?.() || state;
+  if (el.uiLanguageSelect) el.uiLanguageSelect.value = preferences.uiLanguage;
+  if (el.campaignLanguageSelect) el.campaignLanguageSelect.value = preferences.campaignLanguage;
+  if (el.languagePreferenceStatus) el.languagePreferenceStatus.textContent = "";
+  el.settingsDialog.showModal();
+  document.getElementById("settings-dialog-title")?.focus();
+});
+el.settingsCloseButton?.addEventListener("click", () => el.settingsDialog?.close());
+el.settingsDialog?.addEventListener("cancel", (event) => {
+  event.preventDefault();
+  el.settingsDialog.close();
+});
+el.settingsDialog?.addEventListener("close", () => el.settingsOpenButton?.focus());
+el.uiLanguageSelect?.addEventListener("change", () => {
+  state.uiLanguage = language?.setUiLanguage?.(el.uiLanguageSelect.value) || "en";
+  translateInterface(document);
+  refreshOpenInspectorLanguage();
+  if (el.languagePreferenceStatus) el.languagePreferenceStatus.textContent = uiText("Interface language changed.");
+});
+el.campaignLanguageSelect?.addEventListener("change", () => {
+  state.campaignLanguage = language?.setCampaignLanguage?.(el.campaignLanguageSelect.value) || "en";
+  if (el.languagePreferenceStatus) el.languagePreferenceStatus.textContent = uiText("Campaign language changed.");
+});
 el.activityToggleButton?.addEventListener("click", () => {
   const wasCollapsed = state.activityCollapsed;
   const hadUnreadActivity = getUnreadActivityEntries().length > 0;
@@ -16600,24 +16622,6 @@ el.utilitiesToggleButton?.addEventListener("click", (event) => {
   popover.id = "floating-utilities-popover";
   popover.className = "floating-filter-popover";
   popover.innerHTML = buildUtilitiesPopoverHtml();
-  const uiLanguageSelect = popover.querySelector("#ui-language-select");
-  const campaignLanguageSelect = popover.querySelector("#campaign-language-select");
-  if (uiLanguageSelect) uiLanguageSelect.value = state.uiLanguage;
-  if (campaignLanguageSelect) campaignLanguageSelect.value = state.campaignLanguage;
-  const announceLanguageChange = (message) => {
-    const status = popover.querySelector("#language-preference-status");
-    if (status) status.textContent = uiText(message);
-  };
-  uiLanguageSelect?.addEventListener("change", () => {
-    state.uiLanguage = language?.setUiLanguage?.(uiLanguageSelect.value) || "en";
-    translateInterface(document);
-    refreshOpenInspectorLanguage();
-    announceLanguageChange("Interface language changed.");
-  });
-  campaignLanguageSelect?.addEventListener("change", () => {
-    state.campaignLanguage = language?.setCampaignLanguage?.(campaignLanguageSelect.value) || "en";
-    announceLanguageChange("Campaign language changed.");
-  });
   translateInterface(popover);
   const rect = el.utilitiesToggleButton.getBoundingClientRect();
   popover.style.top = `${rect.bottom + 8}px`;
