@@ -87,29 +87,32 @@ async function getBoardMembershipRole(boardId, user) {
 
 function accessForRole(role) {
   const canRead = !['non_owner', 'anonymous'].includes(role);
-  const canEdit = role === 'owner' || role === 'editor' || role === 'unowned';
+  const brandWrite = ['brand_owner', 'brand_admin', 'brand_editor'].includes(role);
+  const brandRead = brandWrite || role === 'brand_viewer';
+  const canEdit = role === 'owner' || role === 'editor' || role === 'unowned' || brandWrite;
   const isOwner = role === 'owner';
   return {
     role,
     canRead,
     canView: canRead,
     canEdit,
-    canViewBoardBrandCore: canEdit,
+    canViewBoardBrandCore: canEdit || brandRead,
     canManageMembers: isOwner,
     canManagePermissions: isOwner,
     canRename: isOwner,
     canDelete: isOwner,
     canChangeBrandAssociation: canEdit,
-    canRefreshFromCanonical: canEdit,
+    canRefreshFromCanonical: canEdit && role !== 'editor' ? true : role === 'editor',
     canRestoreBrandCore: canEdit,
-    canViewPresence: role === 'owner' || role === 'editor' || role === 'viewer' || role === 'unowned',
+    canCompareBrandCores: brandRead || canEdit,
+    canViewPresence: role === 'owner' || role === 'editor' || role === 'viewer' || role === 'unowned' || brandRead,
     publicView: role === 'public_viewer'
   };
 }
 
 async function getBoardAccess(boardId, user, { columns = '*' } = {}) {
   const result = await pool.query(
-    `SELECT ${columns} FROM boards WHERE id = $1 LIMIT 1`,
+    `SELECT ${columns}${columns.trim() === '*' || /(^|,)\s*brand_id\s*(,|$)/.test(columns) ? '' : ', brand_id'} FROM boards WHERE id = $1 LIMIT 1`,
     [boardId]
   );
   if (result.rowCount === 0) return { board: null, access: null };
@@ -123,7 +126,17 @@ async function getBoardAccess(boardId, user, { columns = '*' } = {}) {
     role = 'unowned';
   } else {
     const membershipRole = await getBoardMembershipRole(boardId, user);
-    if (membershipRole) role = membershipRole;
+    let brandRole = null;
+    if (board.brand_id && normalizeEmail(user?.email)) {
+      const brand = await pool.query(`SELECT CASE WHEN owner_email = $2 THEN 'owner' ELSE bm.role END AS role
+        FROM brands b LEFT JOIN brand_members bm ON bm.brand_id = b.id AND bm.email = $2
+        WHERE b.id = $1 AND (b.owner_email = $2 OR bm.role IN ('admin','editor','viewer')) LIMIT 1`, [board.brand_id, normalizeEmail(user.email)]);
+      brandRole = brand.rows[0]?.role || null;
+    }
+    if (['owner', 'admin', 'editor'].includes(brandRole)) role = `brand_${brandRole}`;
+    else if (membershipRole === 'editor') role = 'editor';
+    else if (brandRole === 'viewer') role = 'brand_viewer';
+    else if (membershipRole === 'viewer') role = 'viewer';
     else role = user?.email ? 'non_owner' : 'anonymous';
   }
 

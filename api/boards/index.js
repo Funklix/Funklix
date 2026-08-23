@@ -1,7 +1,9 @@
 const { pool, ensureBoardsTable } = require('../_boards-storage');
 const { getSessionUser } = require('../_auth-session');
 const { normalizeEmail } = require('../_board-access');
-const { getOwnedBrand, isBrandId } = require('../_brand-access');
+const { getBrandAccess, isBrandId } = require('../_brand-access');
+// BW-20 supersedes the former owner-only calls: getOwnedBrand(rawBrandId.trim(), user) and
+// getOwnedBrand(requestedBrandId, user, { columns: 'id, brand_core, revision, updated_at' }).
 
 function cleanBrandDisplayText(value) {
   return typeof value === 'string' ? value.trim() : '';
@@ -82,7 +84,7 @@ module.exports = async function handler(req, res) {
         if (typeof rawBrandId !== 'string' || !isBrandId(rawBrandId.trim())) {
           return res.status(400).json({ error: 'brand_id must be a UUID' });
         }
-        const accessibleBrand = await getOwnedBrand(rawBrandId.trim(), user, { columns: 'id' });
+        const { brand: accessibleBrand } = await getBrandAccess(rawBrandId.trim(), user, { columns: 'id' });
         if (!accessibleBrand) return res.status(404).json({ error: 'Brand not found' });
       }
       let result;
@@ -94,13 +96,20 @@ module.exports = async function handler(req, res) {
           `SELECT b.id, b.name, b.updated_at, b.order_index, b.owner_id, b.owner_email, b.owner_name, b.owner_avatar, b.created_by, b.created_at, b.brand_id, b.brand_core_snapshot,
                   CASE
                     WHEN LOWER(COALESCE(b.owner_email, '')) = $1 THEN 'owner'
+                    WHEN br.owner_email = $1 THEN 'brand_owner'
+                    WHEN bm.role = 'admin' THEN 'brand_admin'
+                    WHEN bm.role = 'editor' THEN 'brand_editor'
+                    WHEN be.role = 'editor' THEN 'editor'
+                    WHEN bm.role = 'viewer' THEN 'brand_viewer'
                     WHEN be.email IS NOT NULL THEN be.role
                     WHEN b.owner_email IS NULL AND b.owner_id IS NULL THEN 'unowned'
                     ELSE 'non_owner'
                   END AS access_role
            FROM boards b
            LEFT JOIN board_editors be ON be.board_id = b.id AND be.email = $1 AND be.role IN ('editor', 'viewer')
-           WHERE (LOWER(COALESCE(b.owner_email, '')) = $1 OR be.email IS NOT NULL OR (b.owner_email IS NULL AND b.owner_id IS NULL))
+           LEFT JOIN brands br ON br.id = b.brand_id
+           LEFT JOIN brand_members bm ON bm.brand_id = b.brand_id AND bm.email = $1 AND bm.role IN ('admin','editor','viewer')
+           WHERE (LOWER(COALESCE(b.owner_email, '')) = $1 OR be.email IS NOT NULL OR br.owner_email = $1 OR bm.email IS NOT NULL OR (b.owner_email IS NULL AND b.owner_id IS NULL))
            ${brandCondition}
            ORDER BY CASE
                       WHEN LOWER(COALESCE(b.owner_email, '')) = $1 THEN 0
@@ -141,7 +150,8 @@ module.exports = async function handler(req, res) {
       if (!isBrandId(requestedBrandId)) return res.status(400).json({ error: 'brand_id must be a UUID' });
       let brand;
       try {
-        brand = await getOwnedBrand(requestedBrandId, user, { columns: 'id, brand_core, revision, updated_at' });
+        const resolvedBrand = await getBrandAccess(requestedBrandId, user, { columns: 'id, brand_core, revision, updated_at' });
+        brand = resolvedBrand.access.canCreateBrandBoards ? resolvedBrand.brand : null;
       } catch (error) {
         console.error('[BOARD_BRAND_LOOKUP_FAILURE]', {
           brandId: requestedBrandId,

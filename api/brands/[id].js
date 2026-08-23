@@ -1,5 +1,6 @@
 const { getSessionUser } = require('../_auth-session');
-const { getBrandOwnerEmail, getOwnedBrand, isBrandId } = require('../_brand-access');
+const { getBrandOwnerEmail, getBrandAccess, isBrandId } = require('../_brand-access');
+// BW-20 supersedes the former owner-only item lookup: const brand = await getOwnedBrand(id, user).
 const { pool, BRAND_COLUMNS, MAX_BRAND_NAME_LENGTH, ensureBrandsTable, serializeBrand } = require('../_brands-storage');
 
 function validObject(value) {
@@ -23,9 +24,9 @@ module.exports = async function handler(req, res) {
   try {
     await ensureBrandsTable();
     if (req.method === 'GET') {
-      const brand = await getOwnedBrand(id, user);
+      const { brand, access } = await getBrandAccess(id, user);
       if (!brand) return res.status(404).json({ error: 'Brand not found' });
-      return res.status(200).json(serializeBrand(brand));
+      return res.status(200).json(serializeBrand(brand, access));
     }
 
     const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
@@ -35,18 +36,21 @@ module.exports = async function handler(req, res) {
     if (!validObject(brandCore)) return res.status(400).json({ error: 'brand_core must be an object' });
     if (!Number.isSafeInteger(revision) || revision < 1) return res.status(400).json({ error: 'revision must be a positive integer' });
 
+    const resolved = await getBrandAccess(id, user, { columns: 'id, revision, updated_at' });
+    if (!resolved.brand) return res.status(404).json({ error: 'Brand not found' });
+    if (!resolved.access.canEditCanonicalBrand) return res.status(404).json({ error: 'Brand not found' });
     const updated = await pool.query(
       `UPDATE brands SET name = $3, brand_core = $4::jsonb, revision = revision + 1, updated_at = NOW()
-       WHERE id = $1 AND owner_email = $2 AND revision = $5
+       WHERE id = $1 AND revision = $5
        RETURNING ${BRAND_COLUMNS}`,
       [id, ownerEmail, name, JSON.stringify(brandCore), revision]
     );
     if (updated.rowCount === 0) {
-      const current = await getOwnedBrand(id, user, { columns: 'id, revision, updated_at' });
+      const { brand: current } = await getBrandAccess(id, user, { columns: 'id, revision, updated_at' });
       if (!current) return res.status(404).json({ error: 'Brand not found' });
       return res.status(409).json({ error: 'Brand update conflict', id, revision: Number(current.revision), updated_at: current.updated_at });
     }
-    return res.status(200).json(serializeBrand(updated.rows[0]));
+    return res.status(200).json(serializeBrand(updated.rows[0], resolved.access));
   } catch (error) {
     console.error('[BRAND_ITEM_FAILURE]', {
       method: req.method,

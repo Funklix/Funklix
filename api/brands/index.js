@@ -26,7 +26,13 @@ module.exports = async function handler(req, res) {
     await ensureBrandsTable();
     if (req.method === 'GET') {
       const result = await pool.query(
-        `SELECT ${BRAND_SUMMARY_COLUMNS} FROM brands WHERE owner_email = $1 ORDER BY updated_at DESC, created_at DESC LIMIT 200`,
+        `SELECT b.id, b.name, b.revision, b.created_at, b.updated_at,
+                CASE WHEN b.owner_email = $1 THEN 'owner' ELSE bm.role END AS brand_access_role
+           FROM brands b
+           LEFT JOIN brand_members bm ON bm.brand_id = b.id AND bm.email = $1
+          WHERE b.owner_email = $1 OR bm.role IN ('admin', 'editor', 'viewer')
+          ORDER BY CASE WHEN b.owner_email = $1 THEN 0 ELSE 1 END, b.updated_at DESC, b.created_at DESC, b.id
+          LIMIT 200`,
         [ownerEmail]
       );
       return res.status(200).json({ brands: result.rows.map(serializeBrandSummary) });
@@ -41,7 +47,7 @@ module.exports = async function handler(req, res) {
       `INSERT INTO brands (owner_email, name, brand_core) VALUES ($1, $2, $3::jsonb) RETURNING ${BRAND_COLUMNS}`,
       [ownerEmail, name, JSON.stringify(brandCore)]
     );
-    return res.status(201).json(serializeBrand(result.rows[0]));
+    return res.status(201).json(serializeBrand(result.rows[0], require('../_brand-access').brandCapabilities('owner')));
   } catch (error) {
     console.error('[BRAND_COLLECTION_FAILURE]', {
       method: req.method,

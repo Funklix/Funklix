@@ -2808,7 +2808,8 @@ function isCanonicalBrandSummary(value) {
     && Number.isInteger(value.revision)
     && value.revision >= 1
     && typeof value.created_at === "string"
-    && typeof value.updated_at === "string");
+    && typeof value.updated_at === "string"
+    && ["owner", "admin", "editor", "viewer"].includes(value.role));
 }
 
 // Workspace-selection state for the switcher. It is not Canvas or Board-association
@@ -2936,7 +2937,9 @@ function isCanonicalBrandDetail(value, expectedId) {
     && Number.isSafeInteger(value.revision) && value.revision >= 1
     && typeof value.created_at === "string" && !Number.isNaN(Date.parse(value.created_at))
     && typeof value.updated_at === "string" && !Number.isNaN(Date.parse(value.updated_at))
-    && value.brand_core && typeof value.brand_core === "object" && !Array.isArray(value.brand_core);
+    && value.brand_core && typeof value.brand_core === "object" && !Array.isArray(value.brand_core)
+    && value.access && ["owner", "admin", "editor", "viewer"].includes(value.access.role)
+    && typeof value.access.canEditCanonicalBrand === "boolean" && typeof value.access.canManageBrandMembers === "boolean";
 }
 
 function canonicalJson(value) {
@@ -2963,7 +2966,7 @@ function renderCanonicalBrandDetail() {
   const editing = ["editing", "submitting", "conflict", "save-error"].includes(detail.status);
   el.brandWorkspaceDetailContent.classList.toggle("hidden", detail.status !== "ready");
   el.brandWorkspaceEditForm?.classList.toggle("hidden", !editing);
-  el.brandWorkspaceEditOpen?.classList.toggle("hidden", detail.status !== "ready");
+  el.brandWorkspaceEditOpen?.classList.toggle("hidden", detail.status !== "ready" || detail.brand?.access?.canEditCanonicalBrand !== true);
   el.brandWorkspaceConflictReload?.classList.toggle("hidden", detail.status !== "conflict");
   if (el.brandWorkspaceEditSave) el.brandWorkspaceEditSave.disabled = detail.status === "submitting";
   if (el.brandWorkspaceEditCancel) el.brandWorkspaceEditCancel.disabled = detail.status === "submitting";
@@ -2982,9 +2985,16 @@ function renderCanonicalBrandDetail() {
   if (detail.status !== "ready" || !detail.brand) return;
   const brand = detail.brand;
   el.brandWorkspaceDetailTitle.textContent = brand.name.trim();
+  const roleNames = { owner: "Brand Owner", admin: "Brand Admin", editor: "Brand Editor", viewer: "Brand Viewer" };
+  const roleDescriptions = {
+    admin: "Can edit this Canonical Brand and all associated Boards. Can manage Brand Editors and Viewers.",
+    editor: "Can edit this Canonical Brand and all associated Boards. Cannot manage Brand members.",
+    viewer: "Can view this Canonical Brand and all associated Boards. Cannot make changes.",
+    owner: "Can edit this Canonical Brand and all associated Boards. Has full Brand member management."
+  };
   const meta = document.createElement("dl");
   meta.className = "brand-workspace-detail-meta";
-  [["Record type", "Canonical Brand"], ["Revision", String(brand.revision)], ["Updated", new Date(brand.updated_at).toLocaleString()]].forEach(([label, value]) => {
+  [["Record type", "Canonical Brand"], ["Your role", roleNames[brand.access.role]], ["Permissions", roleDescriptions[brand.access.role]], ["Revision", String(brand.revision)], ["Updated", new Date(brand.updated_at).toLocaleString()]].forEach(([label, value]) => {
     const term = document.createElement("dt"); term.textContent = label;
     const description = document.createElement("dd"); description.textContent = value;
     meta.append(term, description);
@@ -3007,6 +3017,33 @@ function renderCanonicalBrandDetail() {
     core.appendChild(list);
   }
   el.brandWorkspaceDetailContent.append(meta, core);
+  if (brand.access.canManageBrandMembers) renderBrandTeamSection(el.brandWorkspaceDetailContent, brand);
+}
+
+async function renderBrandTeamSection(container, brand) {
+  const generation = canonicalBrandDetail.requestId;
+  const section = document.createElement("section"); section.className = "brand-workspace-core";
+  const heading = document.createElement("h3"); heading.textContent = "Brand Team";
+  const status = document.createElement("p"); status.setAttribute("role", "status"); status.setAttribute("aria-live", "polite"); status.textContent = "Loading Brand members…";
+  const list = document.createElement("div");
+  const form = document.createElement("form");
+  form.innerHTML = `<label>Member email <input name="email" type="email" autocomplete="email" required></label><label>Brand role <select name="role"><option value="viewer">Viewer</option><option value="editor">Editor</option>${brand.access.canManageBrandAdmins ? '<option value="admin">Admin</option>' : ''}</select></label><button type="submit">Add or update member</button>`;
+  section.append(heading, status, list, form); container.appendChild(section);
+  const current = () => canonicalBrandDetail.requestId === generation && canonicalBrandDetail.brandId === brand.id && canonicalBrandDetail.brand?.access?.role === brand.access.role && section.isConnected;
+  const load = async () => {
+    const response = await fetch(`/api/brands/${encodeURIComponent(brand.id)}/members`, { headers: { Accept: "application/json" } });
+    const data = await response.json().catch(() => null); if (!current()) return;
+    if (!response.ok || !Array.isArray(data?.members)) { status.textContent = "Brand members could not be loaded."; return; }
+    list.replaceChildren();
+    data.members.forEach((member) => {
+      const row = document.createElement("div"); const text = document.createElement("span"); text.textContent = `${member.email} — ${member.role}`; row.appendChild(text);
+      const manageable = brand.access.canManageBrandAdmins || member.role !== "admin";
+      if (manageable) { const remove = document.createElement("button"); remove.type = "button"; remove.textContent = "Remove"; remove.addEventListener("click", async () => { if (!window.confirm(`Remove ${member.email} from this Brand and its associated Boards?`)) return; remove.disabled = true; await fetch(`/api/brands/${encodeURIComponent(brand.id)}/members`, { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: member.email }) }); if (current()) await load(); }); row.appendChild(remove); }
+      list.appendChild(row);
+    }); status.textContent = `${data.members.length} Brand member${data.members.length === 1 ? "" : "s"}.`;
+  };
+  form.addEventListener("submit", async (event) => { event.preventDefault(); if (form.dataset.pending === "true") return; form.dataset.pending = "true"; form.querySelectorAll("button,input,select").forEach((control) => { control.disabled = true; }); status.textContent = "Saving Brand member…"; const email = form.elements.email.value; const role = form.elements.role.value; const response = await fetch(`/api/brands/${encodeURIComponent(brand.id)}/members`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, role }) }); if (current()) { form.dataset.pending = "false"; form.querySelectorAll("button,input,select").forEach((control) => { control.disabled = false; }); status.textContent = response.ok ? "Brand member saved." : "Brand member could not be saved."; if (response.ok) { form.reset(); await load(); form.elements.email.focus(); } } });
+  await load();
 }
 
 function canonicalBrandDraftDirty() {
@@ -3021,7 +3058,7 @@ function confirmCanonicalBrandDiscard() {
 
 function beginCanonicalBrandEditing() {
   const detail = canonicalBrandDetail;
-  if (detail.status !== "ready" || !detail.brand) return;
+  if (detail.status !== "ready" || !detail.brand || detail.brand.access?.canEditCanonicalBrand !== true) return;
   const initialCore = JSON.stringify(detail.brand.brand_core, null, 2);
   detail.draft = { initialName: detail.brand.name, initialCore, revision: detail.brand.revision };
   detail.status = "editing";
@@ -3091,7 +3128,7 @@ async function submitCanonicalBrandEditing(event) {
       || brand.name !== name || JSON.stringify(canonicalJson(brand.brand_core)) !== JSON.stringify(canonicalJson(brandCore))) {
       detail.status = "save-error"; el.brandWorkspaceEditFeedback.textContent = "The server response could not be verified. Your draft is retained."; renderCanonicalBrandDetail(); return;
     }
-    detail.brand = (({ id, name: confirmedName, brand_core, revision, created_at, updated_at }) => ({ id, name: confirmedName, brand_core, revision, created_at, updated_at }))(brand);
+    detail.brand = (({ id, name: confirmedName, brand_core, revision, created_at, updated_at, access }) => ({ id, name: confirmedName, brand_core, revision, created_at, updated_at, access }))(brand);
     const entryIndex = state.brandCatalog.entries.findIndex(({ id }) => id === brand.id);
     if (entryIndex >= 0) state.brandCatalog.entries.splice(entryIndex, 1, { ...state.brandCatalog.entries[entryIndex], name: brand.name, revision: brand.revision, updated_at: brand.updated_at });
     if (ephemeralBrandSwitcherSelection?.id === brand.id) ephemeralBrandSwitcherSelection = { ...ephemeralBrandSwitcherSelection, name: brand.name };
@@ -3168,7 +3205,7 @@ async function loadCanonicalBrandDetail() {
     if (!isCanonicalBrandDetail(brand, selection.id)) canonicalBrandDetail.status = "malformed";
     else {
       canonicalBrandDetail.status = retainedConflictDraft ? "conflict" : "ready";
-      canonicalBrandDetail.brand = (({ id, name, brand_core, revision, created_at, updated_at }) => ({ id, name, brand_core, revision, created_at, updated_at }))(brand);
+      canonicalBrandDetail.brand = (({ id, name, brand_core, revision, created_at, updated_at, access }) => ({ id, name, brand_core, revision, created_at, updated_at, access }))(brand);
       canonicalBrandDetail.draft = retainedConflictDraft;
     }
     renderCanonicalBrandDetail();
@@ -3278,7 +3315,7 @@ async function submitCanonicalBrandCreation(event) {
       void loadCanonicalBrandCatalog();
       return;
     }
-    const summary = (({ id, name: confirmedName, revision, created_at, updated_at }) => ({ id, name: confirmedName, revision, created_at, updated_at }))(brand);
+    const summary = (({ id, name: confirmedName, revision, created_at, updated_at }) => ({ id, name: confirmedName, revision, created_at, updated_at, role: "owner" }))(brand);
     const existing = state.brandCatalog.userEmail === userEmail ? state.brandCatalog.entries : [];
     state.brandCatalog = { status: "success", entries: [summary, ...existing.filter(({ id }) => id !== summary.id)], requestId: state.brandCatalog.requestId + 1, userEmail };
     resetCanonicalBrandCreation({ focusTrigger: true });
@@ -3325,7 +3362,8 @@ function renderBrandCatalog() {
     const name = document.createElement("strong");
     name.textContent = brand.name.trim();
     const note = document.createElement("small");
-    note.textContent = ephemeralBrandSwitcherSelection?.id === brand.id ? "Selected for this page only" : "Select for this page only";
+    const roleLabel = brand.role.charAt(0).toUpperCase() + brand.role.slice(1);
+    note.textContent = `${roleLabel} · ${ephemeralBrandSwitcherSelection?.id === brand.id ? "Selected for this page only" : "Select for this page only"}`;
     copy.append(name, note);
     entry.append(avatar, copy);
     entry.addEventListener("click", () => selectEphemeralBrandFromSwitcher(brand));
@@ -3366,7 +3404,7 @@ async function loadCanonicalBrandCatalog() {
         state.brandCatalog.status = "malformed";
       } else {
         state.brandCatalog.status = "success";
-        state.brandCatalog.entries = data.brands.map(({ id, name, revision, created_at, updated_at }) => ({ id, name, revision, created_at, updated_at }));
+        state.brandCatalog.entries = data.brands.map(({ id, name, revision, created_at, updated_at, role }) => ({ id, name, revision, created_at, updated_at, role }));
         const hadSelectionBeforeValidation = Boolean(ephemeralBrandSwitcherSelection);
         if (ephemeralBrandSwitcherSelection && !state.brandCatalog.entries.some(({ id }) => id === ephemeralBrandSwitcherSelection.id)) {
           const staleBrandId = ephemeralBrandSwitcherSelection.id;
@@ -3466,7 +3504,8 @@ function canonicalInitializationEligible(comparison = boardBrandCoreComparison) 
     && comparison.boardLoadGeneration === state.boardLoadGeneration
     && isPlainJsonObject(snapshot.value) && JSON.stringify(canonicalJson(snapshot.value)) === JSON.stringify(canonicalJson(comparison.boardSnapshot))
     && state.brandCatalog.status === "success" && state.brandCatalog.userEmail === userEmail
-    && state.brandCatalog.entries.some(({ id }) => id === comparison.brandId) && el.boardBrandCoreComparison?.open;
+    && state.brandCatalog.entries.some(({ id, role }) => id === comparison.brandId && ["owner", "admin", "editor"].includes(role))
+    && state.boardAccess?.canEdit === true && el.boardBrandCoreComparison?.open;
 }
 
 function boardBrandCoreOperationEligible(operation, comparison = boardBrandCoreComparison) {
@@ -3982,7 +4021,7 @@ function renderBoardBrandAssociation() {
       el.boardBrandAssociationChoice.appendChild(unavailableBrand);
     }
     if (state.brandCatalog.status === "success") {
-      state.brandCatalog.entries.forEach((brand) => {
+      state.brandCatalog.entries.filter((brand) => ["owner", "admin", "editor"].includes(brand.role)).forEach((brand) => {
         const option = document.createElement("option");
         option.value = brand.id;
         option.textContent = brand.name;
@@ -4027,7 +4066,8 @@ async function submitBoardBrandAssociation(event) {
   const userEmail = (state.user?.email || "").trim().toLowerCase();
   const targetBrandId = el.boardBrandAssociationChoice?.value || null;
   if (!boardId || !userEmail || state.boardAccess?.canEdit !== true) return;
-  if (state.brandCatalog.status !== "success" || (targetBrandId && !state.brandCatalog.entries.some(({ id }) => id === targetBrandId))) {
+  if (state.brandCatalog.status !== "success" || (targetBrandId && (!state.brandCatalog.entries.some(({ id }) => id === targetBrandId)
+    || !state.brandCatalog.entries.some(({ id, role }) => id === targetBrandId && ["owner", "admin", "editor"].includes(role))))) {
     association.status = "validation";
     association.message = "Choose a Brand confirmed by your authenticated catalog.";
     renderBoardBrandAssociation();
@@ -16739,7 +16779,7 @@ function blankCanvasState() {
 
 function isBoardCreationBrandEligible() {
   const brand = getResolvedWorkspaceBrand();
-  return Boolean(state.user?.email && brand && isValidBoardBrandId(brand.id) && state.brandCatalog.status === "success" && state.boardCreation.status !== "pending");
+  return Boolean(state.user?.email && brand && ["owner", "admin", "editor"].includes(brand.role) && isValidBoardBrandId(brand.id) && state.brandCatalog.status === "success" && state.boardCreation.status !== "pending");
 }
 
 function renderBoardCreationMode(overlay) {
