@@ -474,7 +474,7 @@
           <div id="context-menu" class="context-menu hidden">
             <button id="add-context-node-btn" type="button">New Node</button>
             <button id="add-postit-comment-btn" type="button">Add Post-It</button>
-            <button id="improve-context-node-btn" type="button" class="hidden">✨ Improve with AI</button>
+            <button id="improve-context-node-btn" type="button" class="hidden">✨ <span data-i18n="Improve with AI">Improve with AI</span></button>
             <div class="emoji-shortcuts">
               <button class="emoji-quick" data-emoji="🔥" type="button">🔥</button>
               <button class="emoji-quick" data-emoji="👍" type="button">👍</button>
@@ -564,16 +564,16 @@
 
       <aside class="inspector" id="inspector-panel">
         <div class="inspector-content">
-          <h2>Node Konfiguration</h2>
-          <div class="meta" id="inspector-meta">Wähle oder erstelle einen Node.</div>
+          <h2 data-i18n="Node Configuration">Node Configuration</h2>
+          <div class="meta" id="inspector-meta">Select or create a node.</div>
 
           <form id="node-form" class="node-form" autocomplete="off">
           <section class="inspector-section fk-card">
-            <h3 class="inspector-section-title">Basic</h3>
-            <label for="node-type">Typ</label>
+            <h3 class="inspector-section-title" data-i18n="Basic">Basic</h3>
+            <label for="node-type" data-i18n="Type">Type</label>
             <select id="node-type" class="fk-select" name="type"></select>
 
-            <label for="node-status">Status</label>
+            <label for="node-status" data-i18n="Status">Status</label>
             <select id="node-status" class="fk-select" name="status">
               <option value="Draft">Draft</option>
               <option value="In Review">In Review</option>
@@ -582,45 +582,45 @@
               <option value="Published">Published</option>
             </select>
 
-            <label for="node-title">Titel</label>
-            <input id="node-title" class="fk-input" name="title" placeholder="Node Titel" />
+            <label for="node-title" data-i18n="Title">Title</label>
+            <input id="node-title" class="fk-input" name="title" data-i18n-placeholder="Node title" placeholder="Node title" />
 
-            <label for="node-owner">Owner</label>
+            <label for="node-owner" data-i18n="Owner">Owner</label>
             <select id="node-owner" class="fk-select" name="owner">
               <option value="">Unassigned</option>
             </select>
 
-            <label for="node-content">Inhalt</label>
-            <textarea id="node-content" class="fk-textarea" name="content" rows="3" placeholder="Beschreibung, Prompt, Task ..."></textarea>
+            <label for="node-content" data-i18n="Content">Content</label>
+            <textarea id="node-content" class="fk-textarea" name="content" rows="3" data-i18n-placeholder="Description, prompt, task ..." placeholder="Description, prompt, task ..."></textarea>
             <div id="content-image-prompt-field" class="hidden">
-              <label for="node-image-prompt">Image Prompt</label>
-              <textarea id="node-image-prompt" class="fk-textarea" name="imagePrompt" rows="2" placeholder="Describe the visual style, scene, mood, and composition..."></textarea>
+              <label for="node-image-prompt" data-i18n="Image Prompt">Image Prompt</label>
+              <textarea id="node-image-prompt" class="fk-textarea" name="imagePrompt" rows="2" data-i18n-placeholder="Describe the visual style, scene, mood, and composition..." placeholder="Describe the visual style, scene, mood, and composition..."></textarea>
             </div>
             <div id="landing-page-fields" class="hidden">
-              <label for="lp-header-visual-prompt">Header visual prompt</label>
-              <textarea id="lp-header-visual-prompt" class="fk-textarea" rows="2" placeholder="Describe the 16:9 hero visual..."></textarea>
-              <button id="generate-header-visual-btn" class="fk-btn fk-btn-secondary" type="button">Generate Header Visual</button>
-              <label for="lp-header-claim">Header claim</label>
-              <input id="lp-header-claim" class="fk-input" placeholder="Main headline claim" />
-              <label for="lp-problem">Problem of ICP clearly stated</label>
+              <label for="lp-header-visual-prompt" data-i18n="Header visual prompt">Header visual prompt</label>
+              <textarea id="lp-header-visual-prompt" class="fk-textarea" rows="2" data-i18n-placeholder="Describe the 16:9 hero visual..." placeholder="Describe the 16:9 hero visual..."></textarea>
+              <button id="generate-header-visual-btn" class="fk-btn fk-btn-secondary" type="button" data-i18n="Generate Header Visual">Generate Header Visual</button>
+              <label for="lp-header-claim" data-i18n="Header claim">Header claim</label>
+              <input id="lp-header-claim" class="fk-input" data-i18n-placeholder="Main headline claim" placeholder="Main headline claim" />
+              <label for="lp-problem" data-i18n="Problem of ICP clearly stated">Problem of ICP clearly stated</label>
               <textarea id="lp-problem" class="fk-textarea" rows="2"></textarea>
-              <label for="lp-solution">Solution for ICP presented</label>
+              <label for="lp-solution" data-i18n="Solution for ICP presented">Solution for ICP presented</label>
               <textarea id="lp-solution" class="fk-textarea" rows="2"></textarea>
-              <label for="lp-trust">Building Trust</label>
+              <label for="lp-trust" data-i18n="Building Trust">Building Trust</label>
               <textarea id="lp-trust" class="fk-textarea" rows="2"></textarea>
-              <label for="lp-cta">Call to action for conversion</label>
-              <input id="lp-cta" class="fk-input" placeholder="Start free trial" />
+              <label for="lp-cta" data-i18n="Call to action for conversion">Call to action for conversion</label>
+              <input id="lp-cta" class="fk-input" data-i18n-placeholder="Start free trial" placeholder="Start free trial" />
             </div>
           </section>
 
           <section id="ai-workspace-section" class="inspector-section ai-workspace-section hidden">
-            <h3 class="inspector-section-title">AI Workspace</h3>
+            <h3 class="inspector-section-title" data-i18n="AI Workspace">AI Workspace</h3>
             <div id="ai-workspace-body" class="ai-workspace-body"></div>
           </section>
 
           <section id="social-fields" class="inspector-section social-fields hidden fk-card">
-            <h3 class="inspector-section-title">Social</h3>
-            <label for="node-platform">Plattform Preview</label>
+            <h3 class="inspector-section-title" data-i18n="Social">Social</h3>
+            <label for="node-platform" data-i18n="Platform Preview">Platform Preview</label>
             <select id="node-platform" class="fk-select" name="platform">
               <option>Instagram</option>
               <option>TikTok</option>
@@ -629,81 +629,81 @@
               <option>LinkedIn</option>
             </select>
 
-            <label for="node-caption">Caption</label>
-            <textarea id="node-caption" class="fk-textarea" name="caption" rows="2" placeholder="Social Caption"></textarea>
+            <label for="node-caption" data-i18n="Caption">Caption</label>
+            <textarea id="node-caption" class="fk-textarea" name="caption" rows="2" data-i18n-placeholder="Social Caption" placeholder="Social Caption"></textarea>
 
-            <label for="node-hashtags">Hashtags (Komma getrennt)</label>
+            <label for="node-hashtags" data-i18n="Hashtags (comma-separated)">Hashtags (comma-separated)</label>
             <input id="node-hashtags" class="fk-input" name="hashtags" placeholder="#solar, #greenenergy" />
 
           </section>
 
           <section class="inspector-section fk-card">
-            <h3 class="inspector-section-title">Images</h3>
+            <h3 class="inspector-section-title" data-i18n="Images">Images</h3>
             <div id="content-upload-fields" class="hidden">
-              <label for="node-image-upload">Bilder Upload (Content/Social)</label>
+              <label for="node-image-upload" data-i18n="Upload images (Content/Social)">Upload images (Content/Social)</label>
               <input id="node-image-upload" class="fk-input" type="file" accept="image/*" multiple />
               <div id="inspector-image-list" class="inspector-image-list"></div>
             </div>
 
             <div id="content-format-field" class="hidden">
-              <label for="node-content-format">Format</label>
+              <label for="node-content-format" data-i18n="Format">Format</label>
               <select id="node-content-format" class="fk-select">
                 <option value="1:1">1:1</option>
                 <option value="16:9">16:9</option>
                 <option value="9:16">9:16</option>
               </select>
             </div>
-            <button id="generate-image-btn" class="fk-btn fk-btn-secondary" type="button">🎨 Generate Image</button>
-            <button id="generate-posting-visual-btn" class="fk-btn fk-btn-secondary" type="button">🎨 Generate Posting Visual</button>
+            <button id="generate-image-btn" class="fk-btn fk-btn-secondary" type="button">🎨 <span data-i18n="Generate Image">Generate Image</span></button>
+            <button id="generate-posting-visual-btn" class="fk-btn fk-btn-secondary" type="button">🎨 <span data-i18n="Generate Posting Visual">Generate Posting Visual</span></button>
           </section>
 
           <section class="inspector-section fk-card">
-            <h3 class="inspector-section-title">Strategy</h3>
-            <label for="node-audience">Audience</label>
-            <input id="node-audience" class="fk-input" name="audience" placeholder="z. B. Eco-conscious homeowners" />
+            <h3 class="inspector-section-title" data-i18n="Strategy">Strategy</h3>
+            <label for="node-audience" data-i18n="Audience">Audience</label>
+            <input id="node-audience" class="fk-input" name="audience" data-i18n-placeholder="Example: Eco-conscious homeowners" placeholder="Example: Eco-conscious homeowners" />
 
-            <label for="node-goal">Goal</label>
+            <label for="node-goal" data-i18n="Goal">Goal</label>
             <select id="node-goal" class="fk-select" name="goal">
               <option value=""></option><option>Awareness</option><option>Lead Gen</option><option>Conversion</option><option>Community</option><option>Education</option>
             </select>
 
-            <label for="node-channel">Channel</label>
+            <label for="node-channel" data-i18n="Channel">Channel</label>
             <select id="node-channel" class="fk-select" name="channel">
               <option value=""></option><option>LinkedIn</option><option>X / Twitter</option><option>Instagram</option><option>TikTok</option><option>Email</option><option>Landing Page</option><option>Website</option><option>Blog</option><option>Campaign Strategy</option>
             </select>
-            <label for="node-funnel-stage">Funnel stage</label>
+            <label for="node-funnel-stage" data-i18n="Funnel stage">Funnel stage</label>
             <select id="node-funnel-stage" class="fk-select" name="funnelStage">
               <option value=""></option><option>Awareness</option><option>Interest</option><option>Consideration</option><option>Conversion</option><option>Retention</option>
             </select>
-            <label for="node-tone">Tone</label>
+            <label for="node-tone" data-i18n="Tone">Tone</label>
             <select id="node-tone" class="fk-select" name="tone">
               <option value=""></option><option>Professional</option><option>Emotional</option><option>Direct</option><option>Premium</option><option>Playful</option>
             </select>
           </section>
 
           <section class="inspector-section">
-            <h3 class="inspector-section-title">AI Actions</h3>
-            <label for="node-variants">A/B Varianten (Komma getrennt)</label>
+            <h3 class="inspector-section-title" data-i18n="AI Actions">AI Actions</h3>
+            <label for="node-variants" data-i18n="A/B variants (comma-separated)">A/B variants (comma-separated)</label>
             <input id="node-variants" name="variants" placeholder="A: Hook 1, B: Hook 2" />
-            <button id="improve-node-btn" type="button" class="primary-add fk-btn fk-btn-primary">✨ Improve with AI</button>
-            <button id="generate-next-step-inspector-btn" class="fk-btn fk-btn-secondary" type="button">🧠 Generate Next Step</button>
-            <button id="review-node-btn" class="fk-btn fk-btn-secondary" type="button">🔍 Review Node</button>
-            <button id="regenerate-node-btn" class="fk-btn fk-btn-ghost" type="button">🔄 Regenerate</button>
-            <button id="regenerate-platform-btn" class="fk-btn fk-btn-ghost" type="button">Regenerate for platform</button>
-            <button id="add-to-posting-calendar-btn" class="fk-btn fk-btn-secondary" type="button">Add to Posting Calendar</button>
+            <button id="improve-node-btn" type="button" class="primary-add fk-btn fk-btn-primary">✨ <span data-i18n="Improve with AI">Improve with AI</span></button>
+            <button id="generate-next-step-inspector-btn" class="fk-btn fk-btn-secondary" type="button">🧠 <span data-i18n="Generate Next Step">Generate Next Step</span></button>
+            <button id="review-node-btn" class="fk-btn fk-btn-secondary" type="button">🔍 <span data-i18n="Review Node">Review Node</span></button>
+            <button id="regenerate-node-btn" class="fk-btn fk-btn-ghost" type="button">🔄 <span data-i18n="Regenerate">Regenerate</span></button>
+            <button id="regenerate-platform-btn" class="fk-btn fk-btn-ghost" type="button" data-i18n="Regenerate for platform">Regenerate for platform</button>
+            <button id="add-to-posting-calendar-btn" class="fk-btn fk-btn-secondary" type="button" data-i18n="Add to Posting Calendar">Add to Posting Calendar</button>
             <small id="posting-schedule-meta" class="meta"></small>
-            <button id="generate-full-pack-btn" class="fk-btn fk-btn-secondary" type="button">Generate Full Content Pack</button>
+            <button id="generate-full-pack-btn" class="fk-btn fk-btn-secondary" type="button" data-i18n="Generate Full Content Pack">Generate Full Content Pack</button>
           </section>
 
           <section class="inspector-section">
-            <h3 class="inspector-section-title">Node Actions</h3>
-            <button id="disconnect-selected-btn" class="fk-btn fk-btn-secondary" type="button">Disconnect node</button>
-            <button id="propagate-descendants-btn" class="fk-btn fk-btn-secondary" type="button">Propagate to descendants</button>
-            <button id="delete-node-btn" type="button" class="danger fk-btn fk-btn-ghost inspector-danger-action">Delete node</button>
-            <button id="delete-selected-btn" type="button" class="danger fk-btn fk-btn-ghost inspector-danger-action">Delete selected nodes</button>
+            <h3 class="inspector-section-title" data-i18n="Node Actions">Node Actions</h3>
+            <button id="disconnect-selected-btn" class="fk-btn fk-btn-secondary" type="button" data-i18n="Disconnect node">Disconnect node</button>
+            <button id="propagate-descendants-btn" class="fk-btn fk-btn-secondary" type="button" data-i18n="Propagate to descendants">Propagate to descendants</button>
+            <button id="delete-node-btn" type="button" class="danger fk-btn fk-btn-ghost inspector-danger-action" data-i18n="Delete node">Delete node</button>
+            <button id="delete-selected-btn" type="button" class="danger fk-btn fk-btn-ghost inspector-danger-action" data-i18n="Delete selected nodes">Delete selected nodes</button>
           </section>
           <section class="inspector-section">
-            <h3 class="inspector-section-title">Connected Context</h3>
+            <h3 class="inspector-section-title" data-i18n="Connected Context">Connected Context</h3>
             <details id="connected-context-details">
               <summary id="connected-context-summary">Parents: 0 · Children: 0</summary>
               <div id="connected-context-body" class="meta"></div>
@@ -724,7 +724,7 @@
           </div>
           <div class="node-header-actions"></div>
         </div>
-        <h3 class="title" contenteditable="true" data-placeholder="Node Titel"></h3>
+        <h3 class="title" contenteditable="true" data-data-i18n-placeholder="Node title" placeholder="Node title"></h3>
         <p class="content" contenteditable="true" data-placeholder="Node Inhalt"></p>
         <p class="content-pack-status hidden"></p>
         <div class="image-strip"></div>
