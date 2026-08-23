@@ -28,6 +28,10 @@ const STORAGE_KEY = "campaignCanvasState";
 const language = typeof window !== "undefined" ? window.FunklixLanguage : null;
 const initialLanguagePreferences = language?.getPreferences?.() || { uiLanguage: "en", campaignLanguage: "en" };
 const uiText = (key) => language?.t?.(key) || key;
+const uiFormat = (key, values = {}) => Object.entries(values).reduce(
+  (text, [name, value]) => text.replaceAll(`{${name}}`, String(value)),
+  uiText(key)
+);
 function translateInterface(root = document) {
   language?.applyTranslations?.(root, state.uiLanguage);
   if (!root?.querySelectorAll) return;
@@ -549,8 +553,15 @@ Object.keys(NODE_TYPES).forEach((type) => {
   const option = document.createElement("option");
   option.value = type;
   option.textContent = type;
+  option.dataset.i18n = type;
   el.inputs.type.appendChild(option);
 });
+
+[
+  el.inputs.status, el.inputs.goal, el.inputs.channel, el.inputs.funnelStage, el.inputs.tone
+].forEach((select) => select?.querySelectorAll("option").forEach((option) => {
+  if (option.value) option.dataset.i18n = option.textContent.trim();
+}));
 
 
 
@@ -12521,17 +12532,17 @@ function updateInspectorActionVisibility() {
   el.propagateDescendantsButton.style.display = hasSingleNode ? "block" : "none";
   el.disconnectSelectedButton.style.display = selectedCount > 0 ? "block" : "none";
 
-  el.disconnectSelectedButton.textContent = hasSingleNode ? "Disconnect node" : "Disconnect selected";
+  el.disconnectSelectedButton.textContent = uiText(hasSingleNode ? "Disconnect node" : "Disconnect selected");
 
   el.deleteNodeButton.disabled = !hasSingleNode;
   el.deleteSelectedButton.disabled = !hasMultipleNodes;
   el.improveNodeButton.disabled = !hasSingleNode;
   el.generateNextStepInspectorButton.disabled = !canGenerateInspectorNextStep;
   el.generateNextStepInspectorButton.title = hasSingleNode
-    ? (inspectorNextStepType ? (isBoardReadOnly() ? "Read-only board" : `Generate ${inspectorNextStepType}`) : "No next step available")
-    : "Select a node";
+    ? (inspectorNextStepType ? (isBoardReadOnly() ? uiText("Read-only board") : `${uiText("Generate Next Step")}: ${uiText(inspectorNextStepType)}`) : uiText("No next step available"))
+    : uiText("Select a node");
   el.reviewNodeButton.disabled = !hasSingleNode || isBoardReadOnly();
-  el.reviewNodeButton.title = hasSingleNode ? (isBoardReadOnly() ? "Read-only board" : "Review selected node") : "Select a node";
+  el.reviewNodeButton.title = hasSingleNode ? uiText(isBoardReadOnly() ? "Read-only board" : "Review selected node") : uiText("Select a node");
   el.regenerateNodeButton.disabled = !hasSingleNode;
   el.regeneratePlatformButton.disabled = !(selectedNode?.type === "Social Media Posting");
   el.addToPostingCalendarButton.disabled = !(selectedNode?.type === "Social Media Posting");
@@ -13694,16 +13705,19 @@ function renderInspectorAiWorkspace(node) {
 
   const title = document.createElement("strong");
   title.className = "ai-workspace-heading";
-  title.textContent = "Suggested Fix";
+  title.textContent = uiText("Suggested Fix");
 
   const meta = document.createElement("div");
   meta.className = "ai-workspace-meta";
-  meta.innerHTML = `<span><strong>Target Field:</strong> ${preview.targetLabel || "Content"}</span>`;
+  const metaLabel = document.createElement("strong");
+  metaLabel.textContent = `${uiText("Target Field")}:`;
+  const metaValue = document.createTextNode(` ${uiText(preview.targetLabel || "Content")}`);
+  meta.append(metaLabel, metaValue);
 
   const improvement = document.createElement("div");
   improvement.className = "ai-workspace-improvement";
   const improvementLabel = document.createElement("strong");
-  improvementLabel.textContent = "Improvement:";
+  improvementLabel.textContent = `${uiText("Improvement")}:`;
   const improvementText = document.createElement("p");
   improvementText.textContent = preview.improvementText || "";
   improvement.append(improvementLabel, improvementText);
@@ -13713,7 +13727,7 @@ function renderInspectorAiWorkspace(node) {
   if (preview.status === "loading") {
     const loading = document.createElement("p");
     loading.className = "ai-workspace-status";
-    loading.textContent = "Generating suggested fix...";
+    loading.textContent = uiText("Generating suggested fix...");
     el.aiWorkspaceBody.appendChild(loading);
     return;
   }
@@ -13721,10 +13735,10 @@ function renderInspectorAiWorkspace(node) {
   if (preview.status === "error") {
     const error = document.createElement("p");
     error.className = "ai-workspace-error";
-    error.textContent = preview.error || "Could not generate a suggested fix.";
+    error.textContent = preview.error ? uiText(preview.error) : uiText("Could not generate a suggested fix.");
     const dismiss = document.createElement("button");
     dismiss.type = "button";
-    dismiss.textContent = "Dismiss";
+    dismiss.textContent = uiText("Dismiss");
     dismiss.addEventListener("click", () => dismissAiReviewFix(node));
     el.aiWorkspaceBody.append(error, dismiss);
     return;
@@ -13733,9 +13747,9 @@ function renderInspectorAiWorkspace(node) {
   const explanation = document.createElement("div");
   explanation.className = "ai-workspace-explanation";
   const explanationLabel = document.createElement("strong");
-  explanationLabel.textContent = "Explanation:";
+  explanationLabel.textContent = `${uiText("Explanation")}:`;
   const explanationText = document.createElement("p");
-  explanationText.textContent = preview.explanation || "No explanation provided.";
+  explanationText.textContent = preview.explanation || uiText("No explanation provided.");
   explanation.append(explanationLabel, explanationText);
 
   const actions = document.createElement("div");
@@ -13743,7 +13757,7 @@ function renderInspectorAiWorkspace(node) {
   const apply = document.createElement("button");
   apply.type = "button";
   apply.className = "primary-add";
-  apply.textContent = "Apply";
+  apply.textContent = uiText("Apply");
   apply.disabled = !preview.suggestedContent || isBoardReadOnly();
   apply.addEventListener("click", () => {
     if (isBoardReadOnly()) {
@@ -13754,14 +13768,14 @@ function renderInspectorAiWorkspace(node) {
   });
   const dismiss = document.createElement("button");
   dismiss.type = "button";
-  dismiss.textContent = "Dismiss";
+  dismiss.textContent = uiText("Dismiss");
   dismiss.addEventListener("click", () => dismissAiReviewFix(node));
   actions.append(apply, dismiss);
 
   el.aiWorkspaceBody.append(
     explanation,
-    createAiWorkspaceReadonlyText("Current Text", preview.currentText || ""),
-    createAiWorkspaceReadonlyText("Suggested Text", preview.suggestedContent || ""),
+    createAiWorkspaceReadonlyText(uiText("Current Text"), preview.currentText || ""),
+    createAiWorkspaceReadonlyText(uiText("Suggested Text"), preview.suggestedContent || ""),
     actions
   );
 }
@@ -14147,13 +14161,13 @@ function populateOwnerSelect(node) {
   select.innerHTML = "";
   const unassigned = document.createElement("option");
   unassigned.value = "";
-  unassigned.textContent = "Unassigned";
+  unassigned.textContent = uiText("Unassigned");
   select.appendChild(unassigned);
 
   options.forEach((owner) => {
     const option = document.createElement("option");
     option.value = owner.email;
-    option.textContent = `${owner.role || "Collaborator"}: ${owner.name || owner.email}`;
+    option.textContent = `${uiText(owner.role || "Collaborator")}: ${owner.name || owner.email}`;
     option.dataset.ownerName = owner.name || "";
     option.dataset.ownerAvatar = owner.avatar || "";
     select.appendChild(option);
@@ -14192,7 +14206,7 @@ function maybeRefreshEditorIdentitiesFromPresence() {
 
 function fillInspector(node) {
   if (!node) {
-    el.inspectorMeta.textContent = "Wähle oder erstelle einen Node.";
+    el.inspectorMeta.textContent = uiText("Select or create a node.");
     el.nodeForm.reset();
     el.socialFields.classList.add("hidden");
     el.contentUploadFields.classList.add("hidden");
@@ -14205,17 +14219,21 @@ function fillInspector(node) {
     el.inspectorImageList.innerHTML = "";
     if (el.inputs.status) el.inputs.status.disabled = true;
     if (el.inputs.owner) {
-      el.inputs.owner.innerHTML = '<option value="">Unassigned</option>';
+      el.inputs.owner.innerHTML = "";
+      const option = document.createElement("option");
+      option.value = "";
+      option.textContent = uiText("Unassigned");
+      el.inputs.owner.appendChild(option);
       el.inputs.owner.disabled = true;
     }
-    if (el.connectedContextSummary) el.connectedContextSummary.textContent = "Parents: 0 · Children: 0";
+    if (el.connectedContextSummary) el.connectedContextSummary.textContent = uiFormat("Parents: {count} · Children: {children}", { count: 0, children: 0 });
     if (el.connectedContextBody) el.connectedContextBody.textContent = "";
     renderInspectorAiWorkspace(null);
     updateInspectorActionVisibility();
     return;
   }
 
-  el.inspectorMeta.textContent = `Bearbeite ${node.id}`;
+  el.inspectorMeta.textContent = uiFormat("Editing {id}", { id: node.id });
   el.inputs.type.value = node.type;
   if (el.inputs.status) {
     el.inputs.status.value = normalizeNodeStatus(node.status);
@@ -14252,12 +14270,12 @@ function fillInspector(node) {
   el.generateHeaderVisualButton.style.display = node.type === "Landing Page" ? "block" : "none";
   if (el.addToPostingCalendarButton) {
     const isScheduled = node.type === "Social Media Posting" && node.social?.scheduledAt;
-    el.addToPostingCalendarButton.textContent = isScheduled ? "Scheduled" : "Add to Posting Calendar";
+    el.addToPostingCalendarButton.textContent = uiText(isScheduled ? "Scheduled" : "Add to Posting Calendar");
     el.addToPostingCalendarButton.classList.toggle("is-scheduled", !!isScheduled);
   }
   if (el.postingScheduleMeta) {
     const scheduleInfo = node.type === "Social Media Posting" ? formatScheduleMeta(node.social?.scheduledAt) : null;
-    el.postingScheduleMeta.textContent = scheduleInfo ? `Scheduled: ${scheduleInfo.dateLabel} • ${scheduleInfo.timeLabel}` : "";
+    el.postingScheduleMeta.textContent = scheduleInfo ? uiFormat("Scheduled: {date} • {time}", { date: scheduleInfo.dateLabel, time: scheduleInfo.timeLabel }) : "";
   }
   const variantsLabel = el.nodeForm.querySelector('label[for="node-variants"]');
   const hideVariants = node.type === "Content";
@@ -14266,16 +14284,62 @@ function fillInspector(node) {
   renderInspectorImages(node);
   const connected = getConnectedNodeContext(node.id);
   if (el.connectedContextSummary) {
-    el.connectedContextSummary.textContent = `Parents: ${connected.parentNodes.length} · Children: ${connected.childNodes.length}`;
+    el.connectedContextSummary.textContent = uiFormat("Parents: {count} · Children: {children}", { count: connected.parentNodes.length, children: connected.childNodes.length });
   }
   if (el.connectedContextBody) {
     const parents = connected.parentNodes.slice(0, 3).map((n) => n.title || n.type).join(", ") || "—";
     const children = connected.childNodes.slice(0, 3).map((n) => n.title || n.type).join(", ") || "—";
-    el.connectedContextBody.innerHTML = `<div><strong>Parent:</strong> ${parents}</div><div><strong>Child:</strong> ${children}</div>`;
+    el.connectedContextBody.innerHTML = "";
+    [["Parent", parents], ["Child", children]].forEach(([label, value]) => {
+      const row = document.createElement("div");
+      const strong = document.createElement("strong");
+      strong.textContent = `${uiText(label)}:`;
+      row.append(strong, document.createTextNode(` ${value}`));
+      el.connectedContextBody.appendChild(row);
+    });
   }
   renderInspectorAiWorkspace(node);
   updateInspectorActionVisibility();
   renderNodePresenceBadges();
+}
+
+// Language-only refresh: never writes form controls or dispatches input/change events.
+function refreshOpenInspectorLanguage() {
+  translateInterface(el.inspectorPanel);
+  const node = state.selectedPrimary ? getNode(state.selectedPrimary) : null;
+  if (!node) {
+    el.inspectorMeta.textContent = uiText("Select or create a node.");
+    if (el.connectedContextSummary) el.connectedContextSummary.textContent = uiFormat("Parents: {count} · Children: {children}", { count: 0, children: 0 });
+    updateInspectorActionVisibility();
+    return;
+  }
+  el.inspectorMeta.textContent = uiFormat("Editing {id}", { id: node.id });
+  populateOwnerSelect(node);
+  const connected = getConnectedNodeContext(node.id);
+  if (el.connectedContextSummary) el.connectedContextSummary.textContent = uiFormat("Parents: {count} · Children: {children}", { count: connected.parentNodes.length, children: connected.childNodes.length });
+  if (el.connectedContextBody) {
+    const values = [
+      ["Parent", connected.parentNodes.slice(0, 3).map((item) => item.title || item.type).join(", ") || "—"],
+      ["Child", connected.childNodes.slice(0, 3).map((item) => item.title || item.type).join(", ") || "—"]
+    ];
+    el.connectedContextBody.innerHTML = "";
+    values.forEach(([label, value]) => {
+      const row = document.createElement("div");
+      const strong = document.createElement("strong");
+      strong.textContent = `${uiText(label)}:`;
+      row.append(strong, document.createTextNode(` ${value}`));
+      el.connectedContextBody.appendChild(row);
+    });
+  }
+  const isScheduled = node.type === "Social Media Posting" && node.social?.scheduledAt;
+  if (el.addToPostingCalendarButton) el.addToPostingCalendarButton.textContent = uiText(isScheduled ? "Scheduled" : "Add to Posting Calendar");
+  if (el.postingScheduleMeta) {
+    const scheduleInfo = node.type === "Social Media Posting" ? formatScheduleMeta(node.social?.scheduledAt) : null;
+    el.postingScheduleMeta.textContent = scheduleInfo ? uiFormat("Scheduled: {date} • {time}", { date: scheduleInfo.dateLabel, time: scheduleInfo.timeLabel }) : "";
+  }
+  renderInspectorImages(node);
+  renderInspectorAiWorkspace(node);
+  updateInspectorActionVisibility();
 }
 
 function getConnectedSocialPostingNodes(contentNodeId) {
@@ -14337,7 +14401,7 @@ function renderInspectorImages(node) {
   if (!node.images.length) {
     const empty = document.createElement("p");
     empty.className = "inspector-image-name inspector-image-empty";
-    empty.textContent = "Keine Bilder hochgeladen.";
+    empty.textContent = uiText("No images uploaded.");
     el.inspectorImageList.appendChild(empty);
     return;
   }
@@ -14346,16 +14410,16 @@ function renderInspectorImages(node) {
     const card = document.createElement("div");
     const isFavorite = node.favoriteImageId === img.id;
     card.className = `inspector-image-item fk-card${isFavorite ? " is-favorite" : ""}`;
-    card.addEventListener("click", () => openLightbox(img.url, img.name || "Image preview"));
+    card.addEventListener("click", () => openLightbox(img.url, img.name || uiText("Image preview")));
 
     const thumb = document.createElement("img");
     thumb.className = "inspector-image-thumb";
     thumb.src = img.url;
-    thumb.alt = img.name || "Bild";
+    thumb.alt = img.name || uiText("Image");
     thumb.addEventListener("click", (event) => {
       event.preventDefault();
       event.stopPropagation();
-      openLightbox(img.url, img.name || "Image preview");
+      openLightbox(img.url, img.name || uiText("Image preview"));
     });
 
     const favoriteTag = document.createElement("span");
@@ -14369,7 +14433,8 @@ function renderInspectorImages(node) {
     favoriteBtn.type = "button";
     favoriteBtn.className = "inspector-image-action fk-btn fk-btn-ghost";
     favoriteBtn.textContent = "⭐";
-    favoriteBtn.title = "Set as favorite";
+    favoriteBtn.title = uiText("Set as favorite");
+    favoriteBtn.setAttribute("aria-label", uiText("Set as favorite"));
     favoriteBtn.addEventListener("click", (event) => {
       event.preventDefault();
       event.stopPropagation();
@@ -14387,7 +14452,8 @@ function renderInspectorImages(node) {
     downloadBtn.type = "button";
     downloadBtn.className = "inspector-image-action fk-btn fk-btn-ghost";
     downloadBtn.textContent = "⬇️";
-    downloadBtn.title = "Download";
+    downloadBtn.title = uiText("Download");
+    downloadBtn.setAttribute("aria-label", uiText("Download"));
     downloadBtn.addEventListener("click", (event) => {
       event.preventDefault();
       event.stopPropagation();
@@ -14398,7 +14464,8 @@ function renderInspectorImages(node) {
     deleteBtn.type = "button";
     deleteBtn.className = "inspector-image-action danger fk-btn fk-btn-ghost";
     deleteBtn.textContent = "❌";
-    deleteBtn.title = "Delete";
+    deleteBtn.title = uiText("Delete");
+    deleteBtn.setAttribute("aria-label", uiText("Delete"));
     deleteBtn.addEventListener("click", (event) => {
       event.preventDefault();
       event.stopPropagation();
@@ -14407,7 +14474,7 @@ function renderInspectorImages(node) {
 
     const name = document.createElement("span");
     name.className = "inspector-image-name";
-    name.textContent = img.name || "Bild";
+    name.textContent = img.name || uiText("Image");
 
     actions.append(favoriteBtn, downloadBtn, deleteBtn);
     card.append(thumb, favoriteTag, actions, name);
@@ -16544,6 +16611,7 @@ el.utilitiesToggleButton?.addEventListener("click", (event) => {
   uiLanguageSelect?.addEventListener("change", () => {
     state.uiLanguage = language?.setUiLanguage?.(uiLanguageSelect.value) || "en";
     translateInterface(document);
+    refreshOpenInspectorLanguage();
     announceLanguageChange("Interface language changed.");
   });
   campaignLanguageSelect?.addEventListener("change", () => {
