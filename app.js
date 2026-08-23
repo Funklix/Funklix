@@ -3022,26 +3022,96 @@ function renderCanonicalBrandDetail() {
 
 async function renderBrandTeamSection(container, brand) {
   const generation = canonicalBrandDetail.requestId;
+  const accountEmail = (state.user?.email || "").trim().toLowerCase();
+  let memberListGeneration = 0;
+  let requestGeneration = 0;
+  let uncertain = false;
   const section = document.createElement("section"); section.className = "brand-workspace-core";
   const heading = document.createElement("h3"); heading.textContent = "Brand Team";
   const status = document.createElement("p"); status.setAttribute("role", "status"); status.setAttribute("aria-live", "polite"); status.textContent = "Loading Brand members…";
-  const list = document.createElement("div");
+  const list = document.createElement("div"); list.className = "brand-team-list";
+  const reload = document.createElement("button"); reload.type = "button"; reload.className = "fk-btn fk-btn-secondary"; reload.textContent = "Reload member list";
   const form = document.createElement("form");
-  form.innerHTML = `<label>Member email <input name="email" type="email" autocomplete="email" required></label><label>Brand role <select name="role"><option value="viewer">Viewer</option><option value="editor">Editor</option>${brand.access.canManageBrandAdmins ? '<option value="admin">Admin</option>' : ''}</select></label><button type="submit">Add or update member</button>`;
-  section.append(heading, status, list, form); container.appendChild(section);
-  const current = () => canonicalBrandDetail.requestId === generation && canonicalBrandDetail.brandId === brand.id && canonicalBrandDetail.brand?.access?.role === brand.access.role && section.isConnected;
-  const load = async () => {
-    const response = await fetch(`/api/brands/${encodeURIComponent(brand.id)}/members`, { headers: { Accept: "application/json" } });
-    const data = await response.json().catch(() => null); if (!current()) return;
-    if (!response.ok || !Array.isArray(data?.members)) { status.textContent = "Brand members could not be loaded."; return; }
+  form.className = "brand-team-add";
+  form.innerHTML = `<label>Member email <input name="email" type="email" autocomplete="email" required></label><label>Brand role <select name="role"><option value="viewer">Viewer</option><option value="editor">Editor</option>${brand.access.canManageBrandAdmins ? '<option value="admin">Admin</option>' : ''}</select></label><button type="submit">Add member</button>`;
+  section.append(heading, status, list, reload, form); container.appendChild(section);
+  const current = () => canonicalBrandDetail.requestId === generation && canonicalBrandDetail.brandId === brand.id
+    && canonicalBrandDetail.userEmail === accountEmail && accountEmail === (state.user?.email || "").trim().toLowerCase()
+    && canonicalBrandDetail.brand?.access?.role === brand.access.role
+    && canonicalBrandDetail.brand?.access?.canManageBrandMembers === true
+    && canonicalBrandDetail.brand?.access?.canManageBrandAdmins === brand.access.canManageBrandAdmins
+    && el.brandWorkspaceDetail?.open && section.isConnected;
+  const validMember = (member) => member && typeof member.email === "string" && member.email.trim()
+    && ["admin", "editor", "viewer"].includes(member.role);
+  const canManage = (member) => current() && (brand.access.canManageBrandAdmins
+    || (member.role !== "admin" && member.email.trim().toLowerCase() !== accountEmail));
+  const setControlsDisabled = (row, disabled) => row.querySelectorAll("button,select").forEach((control) => { control.disabled = disabled; });
+  const renderMembers = (members, listId) => {
     list.replaceChildren();
-    data.members.forEach((member) => {
-      const row = document.createElement("div"); const text = document.createElement("span"); text.textContent = `${member.email} — ${member.role}`; row.appendChild(text);
-      const manageable = brand.access.canManageBrandAdmins || member.role !== "admin";
-      if (manageable) { const remove = document.createElement("button"); remove.type = "button"; remove.textContent = "Remove"; remove.addEventListener("click", async () => { if (!window.confirm(`Remove ${member.email} from this Brand and its associated Boards?`)) return; remove.disabled = true; await fetch(`/api/brands/${encodeURIComponent(brand.id)}/members`, { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: member.email }) }); if (current()) await load(); }); row.appendChild(remove); }
-      list.appendChild(row);
-    }); status.textContent = `${data.members.length} Brand member${data.members.length === 1 ? "" : "s"}.`;
+    members.filter(validMember).forEach((member) => {
+      const authoritativeRole = member.role;
+      const memberEmail = member.email.trim().toLowerCase();
+      const row = document.createElement("div"); row.className = "brand-team-row";
+      const email = document.createElement("span"); email.className = "brand-team-email"; email.textContent = member.email;
+      const rowStatus = document.createElement("span"); rowStatus.className = "brand-team-row-status"; rowStatus.setAttribute("role", "status"); rowStatus.setAttribute("aria-live", "polite");
+      row.append(email);
+      if (canManage(member)) {
+        const label = document.createElement("label"); label.textContent = "Role ";
+        const select = document.createElement("select"); select.setAttribute("aria-label", `Brand role for ${member.email}`);
+        ["viewer", "editor", ...(brand.access.canManageBrandAdmins ? ["admin"] : [])].forEach((role) => {
+          const option = document.createElement("option"); option.value = role; option.textContent = role[0].toUpperCase() + role.slice(1); option.selected = role === authoritativeRole; select.appendChild(option);
+        });
+        const update = document.createElement("button"); update.type = "button"; update.textContent = "Update"; update.disabled = true;
+        const cancel = document.createElement("button"); cancel.type = "button"; cancel.textContent = "Cancel"; cancel.className = "fk-btn fk-btn-ghost"; cancel.hidden = true;
+        const remove = document.createElement("button"); remove.type = "button"; remove.textContent = "Remove";
+        select.addEventListener("change", () => { const changed = select.value !== authoritativeRole; update.disabled = !changed || uncertain; cancel.hidden = !changed; rowStatus.textContent = changed ? "Role change not saved." : ""; });
+        cancel.addEventListener("click", () => { select.value = authoritativeRole; update.disabled = true; cancel.hidden = true; rowStatus.textContent = "Role change cancelled."; select.focus(); });
+        update.addEventListener("click", async () => {
+          if (row.dataset.pending === "true" || uncertain || select.value === authoritativeRole || !canManage(member)) return;
+          const submittedRole = select.value;
+          const reductions = { admin: 3, editor: 2, viewer: 1 };
+          if (reductions[submittedRole] < reductions[authoritativeRole]
+            && !window.confirm(`Reduce ${member.email} from ${authoritativeRole} to ${submittedRole}? Their Brand access will be reduced immediately.`)) { select.focus(); return; }
+          const operationId = ++requestGeneration;
+          row.dataset.pending = "true"; setControlsDisabled(row, true); rowStatus.textContent = "Updating role…";
+          try {
+            const response = await fetch(`/api/brands/${encodeURIComponent(brand.id)}/members`, { method: "POST", headers: { Accept: "application/json", "Content-Type": "application/json" }, body: JSON.stringify({ email: member.email, role: submittedRole }) });
+            const data = await response.json().catch(() => null);
+            if (!current() || operationId !== requestGeneration || listId !== memberListGeneration || memberEmail !== member.email.trim().toLowerCase()
+              || submittedRole !== select.value || !canManage(member)) return;
+            if (!response.ok || !validMember(data?.member) || data.member.email.trim().toLowerCase() !== memberEmail || data.member.role !== submittedRole) {
+              select.value = authoritativeRole; row.dataset.pending = "false"; setControlsDisabled(row, false); update.disabled = true; cancel.hidden = true;
+              rowStatus.textContent = response.ok ? "Role update failed: the server response was not authoritative." : "Role update failed. The previous role is retained.";
+              if ([401, 403, 404].includes(response.status)) { requestGeneration += 1; setControlsDisabled(row, true); await loadCanonicalBrandDetail(); return; }
+              select.focus(); return;
+            }
+            renderMembers(members.map((entry) => entry.email.trim().toLowerCase() === memberEmail ? data.member : entry), listId);
+            const confirmedRow = Array.from(list.children).find((item) => item.querySelector(".brand-team-email")?.textContent.trim().toLowerCase() === memberEmail);
+            const confirmedStatus = confirmedRow?.querySelector(".brand-team-row-status"); if (confirmedStatus) confirmedStatus.textContent = `Role updated to ${data.member.role}.`;
+            confirmedRow?.querySelector("select")?.focus();
+          } catch (_error) {
+            if (!current() || operationId !== requestGeneration || listId !== memberListGeneration) return;
+            uncertain = true; select.value = authoritativeRole; row.dataset.pending = "false"; setControlsDisabled(row, true); reload.disabled = false;
+            rowStatus.textContent = "Update outcome is uncertain. Reload the member list before trying again."; reload.focus();
+          }
+        });
+        remove.addEventListener("click", async () => { if (!window.confirm(`Remove ${member.email} from this Brand and its associated Boards?`)) { remove.focus(); return; } remove.disabled = true; await fetch(`/api/brands/${encodeURIComponent(brand.id)}/members`, { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: member.email }) }); if (current()) await load(); });
+        label.appendChild(select); row.append(label, update, cancel, remove);
+      } else { const role = document.createElement("span"); role.textContent = authoritativeRole; row.appendChild(role); }
+      row.appendChild(rowStatus); list.appendChild(row);
+    });
   };
+  const load = async () => {
+    const listId = ++memberListGeneration; requestGeneration += 1; uncertain = false; reload.disabled = true; status.textContent = "Loading Brand members…";
+    let response;
+    try { response = await fetch(`/api/brands/${encodeURIComponent(brand.id)}/members`, { headers: { Accept: "application/json" } }); }
+    catch (_error) { if (current() && listId === memberListGeneration) { reload.disabled = false; list.replaceChildren(); status.textContent = "Brand members could not be loaded. Reload the member list to try again."; } return; }
+    const data = await response.json().catch(() => null); if (!current() || listId !== memberListGeneration) return;
+    reload.disabled = false;
+    if (!response.ok || !Array.isArray(data?.members) || !data.members.every(validMember)) { list.replaceChildren(); status.textContent = "Brand members could not be loaded. Reload the member list to try again."; return; }
+    renderMembers(data.members, listId); status.textContent = `${data.members.length} Brand member${data.members.length === 1 ? "" : "s"}.`;
+  };
+  reload.addEventListener("click", load);
   form.addEventListener("submit", async (event) => { event.preventDefault(); if (form.dataset.pending === "true") return; form.dataset.pending = "true"; form.querySelectorAll("button,input,select").forEach((control) => { control.disabled = true; }); status.textContent = "Saving Brand member…"; const email = form.elements.email.value; const role = form.elements.role.value; const response = await fetch(`/api/brands/${encodeURIComponent(brand.id)}/members`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, role }) }); if (current()) { form.dataset.pending = "false"; form.querySelectorAll("button,input,select").forEach((control) => { control.disabled = false; }); status.textContent = response.ok ? "Brand member saved." : "Brand member could not be saved."; if (response.ok) { form.reset(); await load(); form.elements.email.focus(); } } });
   await load();
 }

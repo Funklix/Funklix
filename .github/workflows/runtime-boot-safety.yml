@@ -67,5 +67,7 @@ jobs:
         run: node scripts/check-bw19-private-public-board-sharing.js
       - name: Check Canonical Brand team roles
         run: node scripts/check-bw20-brand-team-roles.js
+      - name: Check inline Brand member role management
+        run: node scripts/check-bw20-1-inline-brand-role-management.js
       - name: Check Knowledge Module browser globals
         run: node scripts/check-knowledge-module-browser-globals.js
