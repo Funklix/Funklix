@@ -25,6 +25,21 @@ const NODE_OVERLAP_MAX_PASSES = 4;
 const BOARD_WIDTH = 20000;
 const BOARD_HEIGHT = 30000;
 const STORAGE_KEY = "campaignCanvasState";
+const language = typeof window !== "undefined" ? window.FunklixLanguage : null;
+const initialLanguagePreferences = language?.getPreferences?.() || { uiLanguage: "en", campaignLanguage: "en" };
+const uiText = (key) => language?.t?.(key) || key;
+function translateInterface(root = document) {
+  language?.applyTranslations?.(root, state.uiLanguage);
+  if (!root?.querySelectorAll) return;
+  if (root === document) return;
+  [root, ...root.querySelectorAll("*")].forEach((node) => {
+    if (node.children?.length || node.closest?.("[data-user-content]")) return;
+    const original = node.dataset?.i18nSource || node.textContent?.trim();
+    if (!original || !Object.prototype.hasOwnProperty.call(language?.dictionaries?.de || {}, original)) return;
+    node.dataset.i18nSource = original;
+    node.textContent = uiText(original);
+  });
+}
 const BRAND_CORE_STORAGE_KEY = "brandBrainState";
 const ACTIVITY_FEED_MAX_ENTRIES = 50;
 const ACTIVITY_FEED_VISIBLE_ENTRIES = 15;
@@ -44,6 +59,8 @@ let activeLightbox = null;
 let activeBrandDnaRecommendation = null;
 
 const state = {
+  uiLanguage: initialLanguagePreferences.uiLanguage,
+  campaignLanguage: initialLanguagePreferences.campaignLanguage,
   nodes: [],
   edges: [],
   selectedIds: new Set(),
@@ -9511,6 +9528,7 @@ function expectedCampaignNodeCount(setup = {}) {
 
 async function fetchGeneratedCampaignPlan(ideaText, contextText, setupOptions = {}) {
   const setup = normalizeCampaignSetupOptions(setupOptions);
+  const campaignLanguage = language?.generationInstruction?.(setupOptions.campaignLanguage || state.campaignLanguage)?.id || "en";
   const response = await fetch("/api/generate-campaign", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -9519,6 +9537,7 @@ async function fetchGeneratedCampaignPlan(ideaText, contextText, setupOptions = 
       additionalContext: contextText,
       boardId: getCurrentBrandBrainBoardId(),
       brandBrainData: state.brandCore,
+      campaignLanguage,
       ...setup
     })
   });
@@ -11286,6 +11305,7 @@ function buildCampaignV3NodeRepairPrompt({ node, nodeType, issues, campaignConte
     : "";
   return [
     "Repair exactly one Campaign V3 node. Do not regenerate the full campaign.",
+    `Write every user-facing campaign field in ${language?.generationInstruction?.(campaignContext?.setup?.campaignLanguage)?.name || "English"}. Keep JSON keys, node types, enums, IDs, and diagnostic codes unchanged.`,
     `Node type: ${nodeType}`,
     `Quality issue codes: ${issueCodes.join(", ")}`,
     `Current problematic node: ${JSON.stringify(campaignV3RepairNodeSummary(node))}`,
@@ -11597,7 +11617,9 @@ async function runCampaignV3AICompatibility(setupOverride = {}, options = {}) {
     return null;
   }
 
-  const setup = defaultCampaignV3AISetup(setupOverride);
+  const setup = { ...defaultCampaignV3AISetup(setupOverride), campaignLanguage: language?.generationInstruction?.(setupOverride.campaignLanguage || state.campaignLanguage)?.id || "en" };
+  const generationToken = options.generationToken || Symbol("campaign-generation");
+  if (!options.generationToken) state.activeCampaignGeneration = generationToken;
   const reportStatus = typeof options.onStatus === "function" ? options.onStatus : () => {};
   reportStatus("Analyzing Strategy...");
   logCampaignV3AIDiagnostics("Starting AI compatibility flow with Email, primary/social over-count, and Landing Page fallback normalization.", {
@@ -11608,6 +11630,7 @@ async function runCampaignV3AICompatibility(setupOverride = {}, options = {}) {
   try {
     reportStatus("Generating Campaign...");
     const apiPlan = await fetchGeneratedCampaignPlan(setup.campaignIdea, setup.additionalContext, setup);
+    if (state.activeCampaignGeneration !== generationToken) return { ok: false, stale: true };
     const rawNodes = Array.isArray(apiPlan?.nodes) ? apiPlan.nodes : [];
     const emailNormalization = normalizeCampaignV3AIEmailNodes(rawNodes, setup);
     const landingNormalization = normalizeCampaignV3AILandingNodes(emailNormalization.nodes);
@@ -11718,6 +11741,7 @@ async function runCampaignV3AICompatibility(setupOverride = {}, options = {}) {
     logCampaignV3AIDiagnostics("Actual AI counts grouped by subtype", diagnosticBase.actualCountsBySubtype);
     logCampaignV3AIDiagnostics("First 20 returned nodes", firstTwentyNodes);
 
+    if (state.activeCampaignGeneration !== generationToken) return { ok: false, stale: true };
     const planResult = campaignV3.buildCampaignV3PlanFromNodes(normalizedNodes, setup);
     const failedRules = planResult.ok ? [] : planResult.diagnostics.map((diagnostic) => diagnostic.code);
     const planDiagnostics = {
@@ -11744,6 +11768,7 @@ async function runCampaignV3AICompatibility(setupOverride = {}, options = {}) {
       return { ok: false, apiPlan, planResult, edges, layoutResult, diagnostics: layoutDiagnostics };
     }
 
+    if (state.activeCampaignGeneration !== generationToken) return { ok: false, stale: true };
     reportStatus("Building Canvas...");
     const adapter = createCampaignV3RealCanvasAdapter();
     const commitResult = campaignV3.commitCampaignV3PlanToCanvas(layoutResult, adapter);
@@ -11841,10 +11866,12 @@ function waitForCampaignV3ModalStep(ms = 900) {
 function campaignV3ProgressSummary(setup = {}) {
   const normalized = normalizeCampaignSetupOptions(setup);
   const extras = [
-    normalized.includeLandingPage ? "landing page" : null,
-    normalized.includeEmailCampaign ? "email campaign" : null
+    normalized.includeLandingPage ? (state.uiLanguage === "de" ? "Landingpage" : "landing page") : null,
+    normalized.includeEmailCampaign ? (state.uiLanguage === "de" ? "E-Mail-Kampagne" : "email campaign") : null
   ].filter(Boolean).join(" + ");
-  return `${normalized.variationCount} variations · ${normalized.postsPerVariation} posts each · ${normalized.channel}${extras ? ` · ${extras}` : ""}`;
+  const variations = state.uiLanguage === "de" ? "Varianten" : "variations";
+  const postsEach = state.uiLanguage === "de" ? "Posts je Variante" : "posts each";
+  return `${normalized.variationCount} ${variations} · ${normalized.postsPerVariation} ${postsEach} · ${normalized.channel}${extras ? ` · ${extras}` : ""}`;
 }
 
 function campaignV3AvatarMarkup({ complete = false } = {}) {
@@ -11930,6 +11957,7 @@ function renderCampaignV3CreationExperience(overlay, setup = {}) {
       </ol>
     </div>`;
   prepareCampaignV3ModalScrolling(overlay);
+  translateInterface(modal);
   updateCampaignV3CreationProgress(overlay, 0);
 }
 
@@ -11947,7 +11975,7 @@ function updateCampaignV3CreationProgress(overlay, activeIndex = 0) {
     if (marker) marker.textContent = done ? "✓" : "•";
   });
   const statusEl = overlay.querySelector("[data-campaign-v3-live-status]");
-  if (statusEl) statusEl.textContent = CAMPAIGN_V3_CREATION_STEPS[safeActiveIndex]?.status || "Almost ready...";
+  if (statusEl) statusEl.textContent = uiText(CAMPAIGN_V3_CREATION_STEPS[safeActiveIndex]?.status || "Almost ready...");
   scrollCampaignV3ActiveStepIntoView(overlay, activeItem);
 }
 
@@ -11979,6 +12007,7 @@ function renderCampaignV3ReadyState(overlay, result = null) {
     centerViewportOnCampaignV3Result(result);
     setSaveStatus("Campaign generated successfully.");
   });
+  translateInterface(modal);
 }
 
 function renderCampaignV3ErrorState(overlay, setup = {}, onRetry = null) {
@@ -12001,6 +12030,7 @@ function renderCampaignV3ErrorState(overlay, setup = {}, onRetry = null) {
   modal.querySelector("#campaign-v3-error-retry")?.addEventListener("click", () => {
     if (typeof onRetry === "function") onRetry(setup);
   });
+  translateInterface(modal);
 }
 
 function openCampaignV3Modal() {
@@ -12043,6 +12073,7 @@ function openCampaignV3Modal() {
     <div class="campaign-builder-actions"><button class="fk-btn fk-btn-ghost" type="button" id="campaign-v3-legacy">Use legacy generator</button><button class="fk-btn fk-btn-secondary" type="button" id="campaign-v3-cancel">Cancel</button><button class="fk-btn fk-btn-primary primary-add" type="button" id="campaign-v3-generate">Generate Campaign</button></div>
   </div>`;
   document.body.appendChild(overlay);
+  translateInterface(overlay);
 
   const errorEl = overlay.querySelector("[data-campaign-v3-error]");
   const closeModal = (force = false) => {
@@ -12057,13 +12088,15 @@ function openCampaignV3Modal() {
   overlay.addEventListener("click", (event) => { if (event.target === overlay) closeModal(); });
 
   overlay.querySelector("#campaign-v3-generate")?.addEventListener("click", async () => {
-    const setup = campaignV3ModalSetupFromInputs(overlay);
+    const setup = { ...campaignV3ModalSetupFromInputs(overlay), campaignLanguage: state.campaignLanguage };
     if (!setup.campaignIdea) {
-      errorEl.textContent = "Please enter a campaign idea.";
+      errorEl.textContent = uiText("Please enter a campaign idea.");
       return;
     }
 
     const runGeneration = async (activeSetup) => {
+      const generationToken = Symbol("campaign-generation");
+      state.activeCampaignGeneration = generationToken;
       renderCampaignV3CreationExperience(overlay, activeSetup);
       setCampaignV3ModalBusy(overlay, true);
       updateCampaignV3CreationProgress(overlay, 0);
@@ -12085,12 +12118,12 @@ function openCampaignV3Modal() {
       let result = null;
 
       try {
-        result = await runCampaignV3AICompatibility(activeSetup, {
+        result = await runCampaignV3AICompatibility(activeSetup, { generationToken,
           onStatus: (message) => {
             maxWorkingStepIndex = Math.max(maxWorkingStepIndex, campaignV3StepIndexForStatus(message));
             if (/building\s+canvas|canvas/i.test(message)) {
               const statusEl = overlay.querySelector("[data-campaign-v3-live-status]");
-              if (statusEl) statusEl.textContent = "Almost ready...";
+              if (statusEl) statusEl.textContent = uiText("Almost ready...");
             }
           }
         });
@@ -12100,6 +12133,7 @@ function openCampaignV3Modal() {
         stopSimulatedProgress();
       }
 
+      if (state.activeCampaignGeneration !== generationToken) return;
       if (result?.ok) {
         for (let index = activeStepIndex + 1; index < CAMPAIGN_V3_CREATION_STEPS.length; index += 1) {
           await waitForCampaignV3ModalStep(420);
@@ -12281,6 +12315,7 @@ function openCreateCampaignModal() {
   overlay.querySelector("#campaign-modal-cancel").addEventListener("click", () => overlay.remove());
   overlay.addEventListener("click", (event) => { if (event.target === overlay) overlay.remove(); });
   overlay.querySelector("#campaign-modal-generate").addEventListener("click", async () => {
+    const capturedCampaignLanguage = state.campaignLanguage;
     const ideaText = overlay.querySelector("#campaign-idea-input").value.trim() || "Campaign Idea";
     const contextText = overlay.querySelector("#campaign-context-input").value.trim();
     const setupOptions = normalizeCampaignSetupOptions({
@@ -12290,6 +12325,7 @@ function openCreateCampaignModal() {
       includeEmailCampaign: overlay.querySelector("#campaign-include-email").checked,
       channel: overlay.querySelector("#campaign-channel").value
     });
+    setupOptions.campaignLanguage = capturedCampaignLanguage;
     overlay.remove();
     setActiveView("board");
     toggleListMode(false);
@@ -12301,7 +12337,10 @@ function openCreateCampaignModal() {
       setCampaignLoadingStep(loadingOverlay, campaignLoadingStepForStatus(message));
     };
     try {
+      const generationToken = Symbol("campaign-generation");
+      state.activeCampaignGeneration = generationToken;
       const apiPlan = await fetchGeneratedCampaignPlan(ideaText, contextText, setupOptions);
+      if (state.activeCampaignGeneration !== generationToken) return;
       setWorkerStatus("✨ Campaign plan ready. AI teammate is entering the board...");
       await generateCampaignFromIdea(ideaText, contextText, apiPlan, {
         onStatus: setWorkerStatus,
@@ -12317,6 +12356,10 @@ function openCreateCampaignModal() {
     }
   });
 }
+
+// Language preferences are UI-only browser preferences. Applying them never enters
+// Board history, serialization, dirty tracking, autosave, Brand state, or Canvas data.
+translateInterface(document);
 
 function edgePath(fromPoint, toPoint) {
   const midY = (fromPoint.y + toPoint.y) / 2;
@@ -13437,7 +13480,17 @@ function buildUtilitiesPopoverHtml() {
     <button type="button" data-utility-action="auto-arrange">Auto Arrange</button>
     <button type="button" data-utility-action="compact-all">Compact All</button>
     <button type="button" data-utility-action="expand-all">Expand All</button>
-  </div></div>`;
+  </div></div>
+  <div class="filter-group language-preferences" aria-labelledby="language-preferences-heading"><strong id="language-preferences-heading">Language preferences</strong>
+    <label for="ui-language-select">Interface language</label>
+    <select id="ui-language-select" class="fk-select"><option value="en">English</option><option value="de">German</option></select>
+    <small>Interface language changes Funklix controls and messages.</small>
+    <label for="campaign-language-select">Campaign language</label>
+    <select id="campaign-language-select" class="fk-select"><option value="en">English</option><option value="de">German</option><option value="es">Spanish</option></select>
+    <small>Campaign language is used for newly generated campaign content.</small>
+    <small>Existing Boards and content are not translated automatically.</small>
+    <span id="language-preference-status" role="status" aria-live="polite"></span>
+  </div>`;
 }
 
 function closeUtilitiesPopover() {
@@ -16480,6 +16533,24 @@ el.utilitiesToggleButton?.addEventListener("click", (event) => {
   popover.id = "floating-utilities-popover";
   popover.className = "floating-filter-popover";
   popover.innerHTML = buildUtilitiesPopoverHtml();
+  const uiLanguageSelect = popover.querySelector("#ui-language-select");
+  const campaignLanguageSelect = popover.querySelector("#campaign-language-select");
+  if (uiLanguageSelect) uiLanguageSelect.value = state.uiLanguage;
+  if (campaignLanguageSelect) campaignLanguageSelect.value = state.campaignLanguage;
+  const announceLanguageChange = (message) => {
+    const status = popover.querySelector("#language-preference-status");
+    if (status) status.textContent = uiText(message);
+  };
+  uiLanguageSelect?.addEventListener("change", () => {
+    state.uiLanguage = language?.setUiLanguage?.(uiLanguageSelect.value) || "en";
+    translateInterface(document);
+    announceLanguageChange("Interface language changed.");
+  });
+  campaignLanguageSelect?.addEventListener("change", () => {
+    state.campaignLanguage = language?.setCampaignLanguage?.(campaignLanguageSelect.value) || "en";
+    announceLanguageChange("Campaign language changed.");
+  });
+  translateInterface(popover);
   const rect = el.utilitiesToggleButton.getBoundingClientRect();
   popover.style.top = `${rect.bottom + 8}px`;
   popover.style.left = `${Math.max(10, rect.right - 260)}px`;

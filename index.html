@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="de">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -230,18 +230,18 @@
         </dialog>
         <nav aria-label="Workspace navigation">
           <span class="sidebar-nav-heading">Workspace</span>
-          <button id="home-nav-btn" class="nav-item fk-btn" data-icon="🏠"><span class="nav-label">Home</span></button>
+          <button id="home-nav-btn" class="nav-item fk-btn" data-icon="🏠"><span class="nav-label" data-i18n="Home">Home</span></button>
           <span class="sidebar-nav-heading">Boards</span>
-          <button id="boards-nav-btn" class="nav-item fk-btn" data-icon="📚"><span class="nav-label">Boards</span></button>
-          <button id="campaign-canvas-nav-btn" class="nav-item nav-item-child fk-btn active" data-icon="🧩"><span class="nav-label">Campaign Canvas</span></button>
-          <button class="nav-item fk-btn" data-icon="🗂"><span class="nav-label">Content Workspace</span></button>
-          <button id="brand-core-nav-btn" class="nav-item nav-item-child fk-btn" data-icon="🧠"><span class="nav-label">Board Brand Core</span></button>
-          <button id="ai-brain-nav-btn" class="nav-item fk-btn" data-icon="✨"><span class="nav-label">AI Brain</span></button>
-          <button id="insights-nav-btn" class="nav-item fk-btn" data-icon="📈"><span class="nav-label">Insights</span></button>
+          <button id="boards-nav-btn" class="nav-item fk-btn" data-icon="📚"><span class="nav-label" data-i18n="Boards">Boards</span></button>
+          <button id="campaign-canvas-nav-btn" class="nav-item nav-item-child fk-btn active" data-icon="🧩"><span class="nav-label" data-i18n="Campaign Canvas">Campaign Canvas</span></button>
+          <button class="nav-item fk-btn" data-icon="🗂"><span class="nav-label" data-i18n="Content Workspace">Content Workspace</span></button>
+          <button id="brand-core-nav-btn" class="nav-item nav-item-child fk-btn" data-icon="🧠"><span class="nav-label" data-i18n="Board Brand Core">Board Brand Core</span></button>
+          <button id="ai-brain-nav-btn" class="nav-item fk-btn" data-icon="✨"><span class="nav-label" data-i18n="AI Brain">AI Brain</span></button>
+          <button id="insights-nav-btn" class="nav-item fk-btn" data-icon="📈"><span class="nav-label" data-i18n="Insights">Insights</span></button>
         </nav>
         <section class="activity-panel fk-section" id="activity-panel" aria-label="Board activity">
           <button class="activity-toggle fk-btn fk-btn-ghost" id="activity-toggle-btn" type="button" aria-expanded="true">
-            <span>Activity</span><span id="activity-count" class="activity-count fk-badge"></span>
+            <span data-i18n="Activity">Activity</span><span id="activity-count" class="activity-count fk-badge"></span>
           </button>
           <div class="activity-feed" id="activity-feed">
             <p class="activity-empty">Recent collaboration activity will appear here.</p>
@@ -258,21 +258,21 @@
           <div class="actions canvas-toolbar">
             <div class="canvas-toolbar-row primary">
               <div class="toolbar-group toolbar-group-left">
-                <button id="create-campaign-btn" class="create-campaign-btn fk-btn fk-btn-primary">Create campaign</button>
-                <button id="add-node-btn" class="fk-btn fk-btn-secondary">+ Add node</button>
+                <button id="create-campaign-btn" class="create-campaign-btn fk-btn fk-btn-primary" data-i18n="Create campaign">Create campaign</button>
+                <button id="add-node-btn" class="fk-btn fk-btn-secondary" data-i18n="+ Add node">+ Add node</button>
                 <button id="undo-btn" class="utility-muted fk-btn fk-btn-ghost" title="Rückgängig">↶</button>
               </div>
               <div class="toolbar-group toolbar-group-center">
-                <input id="node-search-input" class="fk-input toolbar-search-input" type="search" placeholder="Search nodes..." />
+                <input id="node-search-input" class="fk-input toolbar-search-input" type="search" placeholder="Search nodes..." data-i18n-placeholder="Search nodes..." />
               </div>
               <div class="toolbar-group toolbar-group-right">
                 <div id="auth-panel" class="auth-panel" aria-live="polite">
-                  <button id="google-signin-btn" type="button" class="auth-signin-btn fk-btn fk-btn-secondary">Sign in with Google</button>
+                  <button id="google-signin-btn" type="button" class="auth-signin-btn fk-btn fk-btn-secondary" data-i18n="Sign in with Google">Sign in with Google</button>
                   <div id="auth-user" class="auth-user hidden">
                     <img id="auth-avatar" class="auth-avatar" alt="User avatar" />
                     <span id="auth-avatar-fallback" class="auth-avatar-fallback hidden"></span>
                     <div class="auth-meta"><strong id="auth-name"></strong><span id="auth-email"></span></div>
-                    <button id="auth-signout-btn" type="button" class="auth-signout-btn utility-muted fk-btn fk-btn-ghost">Sign out</button>
+                    <button id="auth-signout-btn" type="button" class="auth-signout-btn utility-muted fk-btn fk-btn-ghost" data-i18n="Sign out">Sign out</button>
                   </div>
                 </div>
               </div>
@@ -280,12 +280,12 @@
             </div>
             <div class="canvas-toolbar-row secondary toolbar-secondary">
               <div class="toolbar-row2-left">
-                <button id="filters-toggle-btn" type="button" class="utility-muted fk-btn fk-btn-secondary">Filters</button>
-                <button id="utilities-toggle-btn" type="button" class="utility-muted fk-btn fk-btn-secondary">Utilities</button>
+                <button id="filters-toggle-btn" type="button" class="utility-muted fk-btn fk-btn-secondary" data-i18n="Filters">Filters</button>
+                <button id="utilities-toggle-btn" type="button" class="utility-muted fk-btn fk-btn-secondary" data-i18n="Utilities">Utilities</button>
               </div>
               <div class="toolbar-row2-spacer"></div>
               <div class="toolbar-row2-right">
-                <span id="readonly-board-notice" class="readonly-board-notice fk-badge fk-badge-warning" hidden>View-only board. Changes cannot be saved.</span>
+                <span id="readonly-board-notice" class="readonly-board-notice fk-badge fk-badge-warning" hidden data-i18n="View-only board. Changes cannot be saved.">View-only board. Changes cannot be saved.</span>
                 <button id="duplicate-board-cta-btn" type="button" class="utility-muted fk-btn fk-btn-secondary hidden">Duplicate to Edit</button>
                 <div id="board-access-cluster" class="board-access-cluster hidden" aria-live="polite">
                   <span id="board-access-chip-kind" class="board-access-chip fk-pill"></span>
@@ -296,7 +296,7 @@
                   <div id="presence-avatars" class="presence-avatars"></div>
                   <span id="presence-count" class="presence-count"></span>
                 </div>
-                <button id="copy-board-link-btn" type="button" class="utility-muted fk-btn fk-btn-ghost">Copy Link</button>
+                <button id="copy-board-link-btn" type="button" class="utility-muted fk-btn fk-btn-ghost" data-i18n="Copy Link">Copy Link</button>
               </div>
             </div>
           </div>
@@ -773,6 +773,7 @@
     </div>
 
 
+    <script src="/language.js"></script>
     <script src="/campaign-v3.js"></script>
     <script src="/knowledge-module-registry.js"></script>
     <script src="/knowledge-module-identity.js"></script>

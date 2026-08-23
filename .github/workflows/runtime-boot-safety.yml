@@ -69,5 +69,7 @@ jobs:
         run: node scripts/check-bw20-brand-team-roles.js
       - name: Check inline Brand member role management
         run: node scripts/check-bw20-1-inline-brand-role-management.js
+      - name: Check independent interface and campaign languages
+        run: node scripts/check-bw21-language-separation.js
       - name: Check Knowledge Module browser globals
         run: node scripts/check-knowledge-module-browser-globals.js
