@@ -2545,6 +2545,18 @@ button:active {
 .insight-step { font-size: 0.64rem; padding: 3px 7px; border-radius: 999px; border: 1px solid #e0e5ff; background: #f8f9ff; color: #626b90; }
 .insight-step.covered { background: #ecf5ff; border-color: #cde3ff; color: #2856a7; }
 .insight-step.missing { background: #fff2f4; border-color: #ffd6dc; color: #a24559; }
+.insights-boundary { display: grid; gap: 16px; }
+.insights-section { border: 1px solid #e1e5f4; border-radius: 18px; padding: 16px; background: #fff; }
+.insights-section h3 { margin: 0 0 6px; color: #2e3561; }
+.insights-section-heading { margin-bottom: 12px; }
+.insights-section-heading p { margin: 0; color: #5c668c; font-size: 0.8rem; line-height: 1.5; }
+.insights-measured-empty { background: #f7f8fc; border-style: dashed; }
+.insights-data-status { display: inline-flex; margin-top: 12px; border-radius: 999px; padding: 5px 9px; background: #eceef6; color: #515b7d; font-size: 0.7rem; font-weight: 700; }
+.insights-provenance { display: flex; flex-wrap: wrap; gap: 7px; margin: 10px 0 14px; }
+.insights-provenance span { border-radius: 999px; padding: 5px 9px; background: #eef1ff; color: #3d4d86; font-size: 0.68rem; font-weight: 650; }
+.insights-provenance .insights-canvas-state { background: #fff5dc; color: #765817; }
+.insights-diagnostic-state { border: 1px solid #e6e8f5; border-radius: 14px; padding: 14px; background: #fbfcff; color: #555f86; font-size: 0.8rem; }
+@media (max-width: 640px) { .insight-card.hero { grid-column: span 1; } .insights-section { padding: 12px; } }
 
 .ai-brain-wrap { display: grid; gap: 12px; }
 .ai-brain-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; border: 1px solid #e6e8f5; border-radius: 16px; padding: 12px; background: #fff; }
