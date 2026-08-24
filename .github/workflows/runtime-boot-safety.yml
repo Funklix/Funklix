@@ -75,5 +75,7 @@ jobs:
         run: node scripts/check-bw21-1-inspector-language-coverage.js
       - name: Check Language and Region Settings
         run: node scripts/check-bw23-language-region-settings.js
+      - name: Check honest AI Insights baseline
+        run: node scripts/check-bw25-honest-ai-insights-baseline.js
       - name: Check Knowledge Module browser globals
         run: node scripts/check-knowledge-module-browser-globals.js
