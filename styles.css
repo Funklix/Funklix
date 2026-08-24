@@ -3561,6 +3561,25 @@ button:active {
 
 .ai-brain-header button.is-loading { display: inline-flex; align-items: center; gap: 6px; }
 .ai-brain-header .spinner { width: 12px; height: 12px; border: 2px solid #cfd5ee; border-top-color: #5e4bf4; border-radius: 999px; animation: spin 0.8s linear infinite; }
+.ai-brain-conversation { max-width: 860px; margin: 0 auto; }
+.ai-brain-readonly { padding: 5px 9px; border-radius: 999px; background: #f0efff; color: #5143c7; font-size: .72rem; font-weight: 700; }
+.ai-brain-context { display: flex; flex-wrap: wrap; gap: 7px; }
+.ai-brain-context span { padding: 5px 9px; border: 1px solid #e4e6f2; border-radius: 999px; background: #fff; color: #596080; font-size: .72rem; }
+.ai-brain-context span.is-unsaved { border-color: #f1c879; background: #fff8e9; color: #82550b; }
+.ai-brain-transcript { display: grid; gap: 10px; min-height: 220px; max-height: 52vh; overflow: auto; padding: 16px; border: 1px solid #e6e8f5; border-radius: 16px; background: #f8f9fd; }
+.ai-brain-empty, .ai-brain-unavailable { padding: 28px; text-align: center; border: 1px solid #e6e8f5; border-radius: 16px; background: #fff; color: #626987; }
+.ai-brain-empty h4, .ai-brain-unavailable h4 { margin: 0 0 8px; color: #303653; }
+.ai-brain-message { max-width: 82%; padding: 12px 14px; border-radius: 14px; line-height: 1.5; color: #303653; background: #fff; border: 1px solid #e2e5f2; }
+.ai-brain-message.is-user { justify-self: end; background: #5e4bf4; border-color: #5e4bf4; color: #fff; }
+.ai-brain-message strong { display: block; margin-bottom: 5px; font-size: .73rem; }
+.ai-brain-message small { display: block; margin-top: 9px; color: #737b99; }
+.ai-brain-message.is-user small { color: #e5e2ff; }
+.ai-brain-composer { display: grid; gap: 8px; padding: 14px; border: 1px solid #e2e5f2; border-radius: 16px; background: #fff; }
+.ai-brain-composer label { font-size: .78rem; font-weight: 700; color: #3a4165; }
+.ai-brain-composer textarea { min-height: 92px; resize: vertical; padding: 11px; border: 1px solid #d7dbeb; border-radius: 10px; font: inherit; }
+.ai-brain-composer > div { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.ai-brain-composer small { color: #737b99; }
+.ai-brain-composer button { padding: 9px 14px; border: 0; border-radius: 9px; background: #5e4bf4; color: #fff; font-weight: 700; white-space: nowrap; }
 .ai-inline-error { color: #bb2f2f; margin-left: 6px; }
 @keyframes spin { to { transform: rotate(360deg); } }
 

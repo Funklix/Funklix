@@ -148,6 +148,7 @@ const state = {
   ,analysisRefreshing: false
   ,analysisLastUpdatedAt: null
   ,analysisError: ""
+  ,aiBrain: { status: "idle", messages: [], requestId: 0, controller: null, identity: "", error: "" }
   ,insightsDiagnosticSnapshot: null
   ,nodeSearchQuery: ""
   ,nodeFilters: { type: new Set(), platform: new Set(), state: new Set(), status: new Set(), owner: new Set() }
@@ -5203,42 +5204,72 @@ function renderCampaignIntelligence() {
     renderInsightsSurface();
     return;
   }
-  const suggestions = suggestNextNodes(a, state.nodes, state.edges, state.brandCore);
   captureInsightsDiagnostic(a);
   renderInsightsSurface();
-  if (el.aiBrainSummary) {
-    el.aiBrainSummary.innerHTML = `
-      <section class="ai-brain-wrap">
-        <header class="ai-brain-header"><h3>🧠 AI Brain</h3><p>Your AI strategist & creative partner<br/><small>Last updated: ${state.analysisLastUpdatedAt ? new Date(state.analysisLastUpdatedAt).toLocaleTimeString() : "—"}</small>${state.analysisError ? `<span class="ai-inline-error">${state.analysisError}</span>` : ""}</p><button type="button" id="refresh-ai-brain" class="${state.analysisRefreshing ? "is-loading" : ""}" ${state.analysisRefreshing ? "disabled" : ""}>${state.analysisRefreshing ? `<span class="spinner" aria-hidden="true"></span>Refreshing...` : "Refresh analysis"}</button></header>
-        <article class="ai-summary-card"><small>Campaign Summary</small><h2>${a.healthScore}<span>/100</span></h2><p>This campaign focuses on <strong>${a.funnel.coveredStages.join(", ") || "early-stage planning"}</strong>, with primary opportunities in <strong>${a.funnel.missingStages.join(", ") || "execution depth"}</strong>.</p></article>
-        <div class="ai-columns">
-          <article class="ai-list-card"><h4>Detected Issues</h4><ul>${(a.weaknesses.length ? a.weaknesses : ["No critical issues detected."]).map((w) => `<li>⚠️ ${w}</li>`).join("")}</ul></article>
-          <article class="ai-list-card"><h4>Suggestions</h4><ul>${a.suggestions.map((s) => `<li>💡 ${s}</li>`).join("")}</ul></article>
-        </div>
-        <article class="ai-list-card"><h4>Suggested Next Nodes</h4><div class="insight-suggestion-list">${suggestions.map((s) => `<div class="insight-suggestion-item"><div><strong>${s.title}</strong><small>${s.recommendedNodeType} · ${s.priority}</small><p>${s.reason}</p></div><button type="button" data-suggestion-id="${s.id}">Create node</button></div>`).join("") || "<p>No suggestions right now.</p>"}</div></article>
-        <article class="ai-actions-card"><h4>Quick Actions</h4><div class="ai-action-grid"><button type="button">Improve CTAs</button><button type="button">Generate Conversion Content</button><button type="button">Strengthen Trust Layer</button><button type="button">Create Platform Variations</button></div></article>
-      </section>
-    `;
-    el.aiBrainSummary.querySelector("#refresh-ai-brain")?.addEventListener("click", async () => {
-      state.analysisRefreshing = true;
-      state.analysisError = "";
-      renderCampaignIntelligence();
-      try {
-        await new Promise((r) => setTimeout(r, 500));
-        renderCampaignIntelligence();
-        state.analysisLastUpdatedAt = Date.now();
-      } catch (_error) {
-        state.analysisError = "Could not refresh analysis. Please try again.";
-      } finally {
-        state.analysisRefreshing = false;
-        renderCampaignIntelligence();
-      }
-    });
-    el.aiBrainSummary.querySelectorAll("[data-suggestion-id]").forEach((btn) => btn.addEventListener("click", async () => {
-      const suggestion = suggestions.find((s) => s.id === btn.getAttribute("data-suggestion-id"));
-      if (suggestion) await createSuggestedNodeFromAnalysis(suggestion);
-    }));
+  renderAiBrain();
+}
+
+function aiBrainIdentity() {
+  return `${state.user?.email || "anonymous"}|${state.currentBoardId || ""}|${state.boardLoadGeneration}`;
+}
+
+function aiBrainRequestContextIdentity() {
+  return `${aiBrainIdentity()}|${state.uiLanguage}|${state.selectedPrimary || ""}|${JSON.stringify(state.nodes.map((node) => [node.id, node.type, node.title, node.content, node.audience, node.goal, node.channel, node.funnelStage, node.tone, node.social, node.landingPage]))}|${JSON.stringify(state.edges)}`;
+}
+
+function invalidateAiBrainRequest() {
+  state.aiBrain.controller?.abort();
+  state.aiBrain = { status: "idle", messages: [], requestId: state.aiBrain.requestId + 1, controller: null, identity: aiBrainIdentity(), error: "" };
+}
+
+function renderAiBrain() {
+  if (!el.aiBrainSummary) return;
+  if (state.aiBrain.identity && state.aiBrain.identity !== aiBrainIdentity()) invalidateAiBrainRequest();
+  const canAsk = !!state.user?.email && !!state.currentBoardId && state.boardAccess?.canEdit === true;
+  const selected = state.selectedPrimary ? getNode(state.selectedPrimary) : null;
+  const unsaved = !!state.isDirty;
+  const messages = state.aiBrain.messages.map((message) => `<article class="ai-brain-message ${message.role === "user" ? "is-user" : "is-advisor"}"><strong>${message.role === "user" ? "You" : "AI Brain"}</strong><div>${escapeHtml(message.text).replace(/\n/g, "<br>")}</div>${message.meta ? `<small>${escapeHtml(message.meta)}</small>` : ""}</article>`).join("");
+  el.aiBrainSummary.innerHTML = `<section class="ai-brain-wrap ai-brain-conversation">
+    <header class="ai-brain-header"><div><h3>🧠 AI Brain</h3><p>Read-only Brand and campaign advisor</p></div><span class="ai-brain-readonly">Read-only</span></header>
+    <div class="ai-brain-context" aria-label="Advice context"><span>Board: ${escapeHtml(state.currentBoardName || "Current Board")}</span><span>${state.nodes.length} Canvas nodes</span>${selected ? `<span>Selected: ${escapeHtml(selected.title || selected.type || "Node")}</span>` : ""}<span class="${unsaved ? "is-unsaved" : ""}">${unsaved ? "Includes unsaved Canvas changes" : "Saved Canvas context"}</span></div>
+    ${canAsk ? `<div class="ai-brain-transcript" aria-live="polite">${messages || `<div class="ai-brain-empty"><h4>Ask about your Brand or campaign</h4><p>I can explain Canvas diagnostics, identify strategic gaps, compare context, and advise on positioning, messaging, channels, or next steps. I cannot edit or generate campaign assets.</p></div>`}</div>
+      <form id="ai-brain-form" class="ai-brain-composer"><label for="ai-brain-question">Your strategic question</label><textarea id="ai-brain-question" maxlength="2000" required placeholder="Where is this campaign weakest for our primary audience?"></textarea><div><small>AI advice is qualitative, not measured performance. No changes will be made.</small><button type="submit" ${state.aiBrain.status === "loading" ? "disabled" : ""}>${state.aiBrain.status === "loading" ? "Thinking…" : "Ask AI Brain"}</button></div>${state.aiBrain.error ? `<p class="ai-inline-error" role="alert">${escapeHtml(state.aiBrain.error)}</p>` : ""}</form>`
+      : `<div class="ai-brain-unavailable"><h4>AI Brain advice is unavailable</h4><p>New advice is available only to authenticated Board or Brand editors. Read-only and public access never sends Board, Canvas, or Brand context to the model.</p></div>`}
+  </section>`;
+  el.aiBrainSummary.querySelector("#ai-brain-form")?.addEventListener("submit", requestAiBrainAdvice);
+}
+
+async function requestAiBrainAdvice(event) {
+  event.preventDefault();
+  if (!state.user?.email || !state.currentBoardId || state.boardAccess?.canEdit !== true) return renderAiBrain();
+  const input = el.aiBrainSummary.querySelector("#ai-brain-question");
+  const question = input?.value.trim();
+  if (!question) return;
+  state.aiBrain.controller?.abort();
+  const controller = new AbortController();
+  const requestId = state.aiBrain.requestId + 1;
+  const identity = aiBrainIdentity();
+  const contextIdentity = aiBrainRequestContextIdentity();
+  const selectedNodeId = state.selectedPrimary || null;
+  const canvas = serializeState();
+  state.aiBrain = { ...state.aiBrain, status: "loading", requestId, controller, identity, error: "", messages: [...state.aiBrain.messages, { role: "user", text: question }] };
+  renderAiBrain();
+  try {
+    const response = await fetch("/api/ai-brain/advice", { method: "POST", headers: { "Content-Type": "application/json" }, signal: controller.signal, body: JSON.stringify({ board_id: state.currentBoardId, question, selected_node_id: selectedNodeId, canvas_context: { nodes: canvas.nodes, edges: canvas.edges }, response_language: state.uiLanguage }) });
+    const data = await response.json().catch(() => ({}));
+    if (state.aiBrain.requestId !== requestId || state.aiBrain.identity !== identity || aiBrainIdentity() !== identity) return;
+    if (aiBrainRequestContextIdentity() !== contextIdentity) {
+      state.aiBrain = { ...state.aiBrain, status: "idle", controller: null, error: "The Board, selection, or language changed. Ask again to use the current context." };
+      return renderAiBrain();
+    }
+    if (!response.ok) throw new Error(response.status === 403 ? "AI Brain is unavailable for this access level." : data.error || "AI Brain could not answer right now.");
+    const scope = [`Board Brand Core`, data.context?.canonicalBrandCore ? "Canonical Brand Core" : null, `${data.context?.canvasNodes || 0} Canvas nodes`, selectedNodeId ? "selected node" : null, state.isDirty ? "unsaved working context" : "saved context"].filter(Boolean).join(" · ");
+    state.aiBrain = { ...state.aiBrain, status: "success", controller: null, messages: [...state.aiBrain.messages, { role: "assistant", text: data.answer, meta: `${scope}. ${data.disclaimer}` }] };
+  } catch (error) {
+    if (error?.name === "AbortError" || state.aiBrain.requestId !== requestId) return;
+    state.aiBrain = { ...state.aiBrain, status: "error", controller: null, error: error?.message || "AI Brain could not answer right now." };
   }
+  renderAiBrain();
 }
 
 function currentInsightsIdentity() {
