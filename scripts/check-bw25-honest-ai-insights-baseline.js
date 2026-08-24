@@ -49,7 +49,7 @@ for (const forbidden of ["fetch(", "refineNodeWithAI", "createSuggestedNodeFromA
   assert(!insightsRenderer.includes(forbidden), `Insights renderer contains forbidden behavior/data: ${forbidden}`);
 }
 assert(!insightsRenderer.includes("data-suggestion-id"), "Insights duplicates AI Brain suggestions");
-assert(intelligenceRenderer.includes("aiBrainSummary") && intelligenceRenderer.includes("createSuggestedNodeFromAnalysis"), "legacy AI Brain behavior was not preserved");
+assert(intelligenceRenderer.includes("renderAiBrain()"), "AI Insights refresh no longer renders the separate AI Brain destination");
 assert(html.includes('id="ai-brain-view"') && html.includes('id="ai-brain-summary"'), "AI Brain DOM changed");
 
 // Preserve the canonical analyzer formula, codes/messages, and existing diagnostic infrastructure.

@@ -2,5 +2,8 @@
   "dependencies": {
     "@vercel/blob": "latest",
     "pg": "^8.13.1"
+  },
+  "scripts": {
+    "check:bw26": "node scripts/check-bw26-read-only-ai-brain.js"
   }
 }
