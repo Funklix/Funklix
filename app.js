@@ -5214,8 +5214,8 @@ function aiBrainIdentity() {
 }
 
 const AI_BRAIN_TEXT = Object.freeze({
-  en: { you: "You", pending: "Pending…", failed: "Failed", retry: "Retry", current: "Retry uses the current Canvas context.", malformed_canvas: "The Canvas context is malformed.", unsupported_canvas: "This Canvas structure is not supported.", canvas_too_large: "The Canvas exceeds the supported size.", invalid_selected_node: "The selected node is no longer available.", stale_canvas: "The Canvas context is stale. Retry with the current Canvas.", generic: "AI Brain could not answer right now.", changed: "The Board, account, access, selection, or Canvas changed. Retry with the current context." },
-  de: { you: "Du", pending: "Ausstehend…", failed: "Fehlgeschlagen", retry: "Erneut versuchen", current: "Beim erneuten Versuch wird der aktuelle Canvas-Kontext verwendet.", malformed_canvas: "Der Canvas-Kontext ist fehlerhaft.", unsupported_canvas: "Diese Canvas-Struktur wird nicht unterstützt.", canvas_too_large: "Der Canvas überschreitet die unterstützte Größe.", invalid_selected_node: "Der ausgewählte Knoten ist nicht mehr verfügbar.", stale_canvas: "Der Canvas-Kontext ist veraltet. Versuche es mit dem aktuellen Canvas erneut.", generic: "AI Brain kann gerade nicht antworten.", changed: "Board, Konto, Zugriff, Auswahl oder Canvas haben sich geändert. Versuche es mit dem aktuellen Kontext erneut." }
+  en: { you: "You", assumptions: "Assumptions", pending: "Pending…", failed: "Failed", retry: "Retry", current: "Retry uses the current Canvas context.", malformed_canvas: "The Canvas context is malformed.", unsupported_canvas: "This Canvas structure is not supported.", canvas_too_large: "The Canvas exceeds the supported size.", invalid_selected_node: "The selected node is no longer available.", stale_canvas: "The Canvas context is stale. Retry with the current Canvas.", generic: "AI Brain could not answer right now.", changed: "The Board, account, access, selection, or Canvas changed. Retry with the current context." },
+  de: { you: "Du", assumptions: "Annahmen", pending: "Ausstehend…", failed: "Fehlgeschlagen", retry: "Erneut versuchen", current: "Beim erneuten Versuch wird der aktuelle Canvas-Kontext verwendet.", malformed_canvas: "Der Canvas-Kontext ist fehlerhaft.", unsupported_canvas: "Diese Canvas-Struktur wird nicht unterstützt.", canvas_too_large: "Der Canvas überschreitet die unterstützte Größe.", invalid_selected_node: "Der ausgewählte Knoten ist nicht mehr verfügbar.", stale_canvas: "Der Canvas-Kontext ist veraltet. Versuche es mit dem aktuellen Canvas erneut.", generic: "AI Brain kann gerade nicht antworten.", changed: "Board, Konto, Zugriff, Auswahl oder Canvas haben sich geändert. Versuche es mit dem aktuellen Kontext erneut." }
 });
 function aiBrainText(key) { return (AI_BRAIN_TEXT[state.uiLanguage] || AI_BRAIN_TEXT.en)[key] || key; }
 function aiBrainRequestContextIdentity() {
@@ -5244,13 +5244,94 @@ function invalidateAiBrainRequest() {
   state.aiBrain.controller?.abort();
   state.aiBrain = { status: "idle", messages: [], requestId: state.aiBrain.requestId + 1, controller: null, identity: aiBrainIdentity(), error: "" };
 }
+
+// Model output is untrusted. This intentionally small formatter creates only
+// semantic, non-interactive elements and assigns every model string via textContent.
+function appendAiBrainInline(parent, value) {
+  const text = typeof value === "string" ? value : "";
+  const token = /(\*\*([^*\n]+)\*\*|`([^`\n]+)`)/g;
+  let cursor = 0; let match;
+  const appendText = (content) => { if (!content) return; const span = document.createElement("span"); span.textContent = content; parent.appendChild(span); };
+  while ((match = token.exec(text))) {
+    appendText(text.slice(cursor, match.index));
+    const element = document.createElement(match[2] !== undefined ? "strong" : "code");
+    element.textContent = match[2] !== undefined ? match[2] : match[3];
+    parent.appendChild(element); cursor = match.index + match[0].length;
+  }
+  appendText(text.slice(cursor));
+}
+function appendAiBrainLineBreaks(parent, value) {
+  String(value).split("\n").forEach((line, index) => { if (index) parent.appendChild(document.createElement("br")); appendAiBrainInline(parent, line); });
+}
+function renderAiBrainFormattedAnswer(container, answer) {
+  const lines = (typeof answer === "string" ? answer : "").replace(/\r\n?/g, "\n").split("\n");
+  let index = 0;
+  while (index < lines.length) {
+    if (!lines[index].trim()) { index += 1; continue; }
+    const heading = lines[index].match(/^ {0,3}(#{1,4})[ \t]+(.+?)\s*$/);
+    if (heading) {
+      const element = document.createElement(`h${Math.min(heading[1].length + 2, 6)}`); appendAiBrainInline(element, heading[2]); container.appendChild(element); index += 1; continue;
+    }
+    const unordered = lines[index].match(/^ {0,3}[-*+]\s+(.+)$/);
+    const ordered = lines[index].match(/^ {0,3}\d{1,3}\.\s+(.+)$/);
+    if (unordered || ordered) {
+      const list = document.createElement(unordered ? "ul" : "ol");
+      const pattern = unordered ? /^ {0,3}[-*+]\s+(.+)$/ : /^ {0,3}\d{1,3}\.\s+(.+)$/;
+      while (index < lines.length) {
+        const itemMatch = lines[index].match(pattern); if (!itemMatch) break;
+        const item = document.createElement("li"); appendAiBrainInline(item, itemMatch[1]); list.appendChild(item); index += 1;
+      }
+      container.appendChild(list); continue;
+    }
+    const paragraphLines = [];
+    while (index < lines.length && lines[index].trim()
+      && !/^ {0,3}#{1,4}[ \t]+.+/.test(lines[index])
+      && !/^ {0,3}(?:[-*+]\s+|\d{1,3}\.\s+).+/.test(lines[index])) paragraphLines.push(lines[index++]);
+    const paragraph = document.createElement("p"); appendAiBrainLineBreaks(paragraph, paragraphLines.join("\n")); container.appendChild(paragraph);
+  }
+}
+function renderAiBrainTranscript(transcript) {
+  transcript.textContent = "";
+  if (!state.aiBrain.messages.length) {
+    const empty = document.createElement("div"); empty.className = "ai-brain-empty";
+    const heading = document.createElement("h4"); heading.textContent = "Ask about your Brand or campaign";
+    const copy = document.createElement("p"); copy.textContent = "I can explain Canvas diagnostics and advise without changing it.";
+    empty.append(heading, copy); transcript.appendChild(empty); return;
+  }
+  state.aiBrain.messages.forEach((turn) => {
+    const user = document.createElement("article"); user.className = "ai-brain-message is-user"; user.dataset.turnId = turn.id;
+    const userLabel = document.createElement("strong"); userLabel.textContent = aiBrainText("you");
+    const question = document.createElement("div"); question.className = "ai-brain-question"; question.textContent = turn.question;
+    user.append(userLabel, question);
+    if (turn.status === "pending") { const pending = document.createElement("small"); pending.textContent = aiBrainText("pending"); user.appendChild(pending); }
+    if (turn.status === "failed") {
+      const failure = document.createElement("small"); failure.textContent = `${aiBrainText("failed")}: ${aiBrainText(turn.errorCode || "generic")}`;
+      const retry = document.createElement("button"); retry.type = "button"; retry.dataset.aiBrainRetry = turn.id; retry.textContent = aiBrainText("retry");
+      const current = document.createElement("small"); current.textContent = aiBrainText("current"); user.append(failure, retry, current);
+    }
+    transcript.appendChild(user);
+    if (!turn.answer) return;
+    const advisor = document.createElement("article"); advisor.className = "ai-brain-message is-advisor";
+    const advisorLabel = document.createElement("strong"); advisorLabel.className = "ai-brain-speaker"; advisorLabel.textContent = "AI Brain";
+    const formatted = document.createElement("div"); formatted.className = "ai-brain-formatted-answer"; renderAiBrainFormattedAnswer(formatted, turn.answer);
+    advisor.append(advisorLabel, formatted);
+    if (Array.isArray(turn.assumptions) && turn.assumptions.length) {
+      const section = document.createElement("section"); section.className = "ai-brain-assumptions";
+      const heading = document.createElement("h5"); heading.textContent = aiBrainText("assumptions");
+      const list = document.createElement("ul"); turn.assumptions.forEach((value) => { const item = document.createElement("li"); item.textContent = typeof value === "string" ? value : String(value); list.appendChild(item); });
+      section.append(heading, list); advisor.appendChild(section);
+    }
+    if (turn.meta) { const meta = document.createElement("small"); meta.textContent = turn.meta; advisor.appendChild(meta); }
+    transcript.appendChild(advisor);
+  });
+}
 function renderAiBrain() {
   if (!el.aiBrainSummary) return;
   if (state.aiBrain.identity && state.aiBrain.identity !== aiBrainIdentity()) invalidateAiBrainRequest();
   const canAsk = !!state.user?.email && !!state.currentBoardId && state.boardAccess?.canEdit === true;
   const selected = state.selectedPrimary ? getNode(state.selectedPrimary) : null; const unsaved = !!state.isDirty;
-  const messages = state.aiBrain.messages.map((turn) => `<article class="ai-brain-message is-user" data-turn-id="${escapeHtml(turn.id)}"><strong>${escapeHtml(aiBrainText("you"))}</strong><div>${escapeHtml(turn.question).replace(/\n/g, "<br>")}</div>${turn.status === "pending" ? `<small>${escapeHtml(aiBrainText("pending"))}</small>` : ""}${turn.status === "failed" ? `<small>${escapeHtml(aiBrainText("failed"))}: ${escapeHtml(aiBrainText(turn.errorCode || "generic"))}</small><button type="button" data-ai-brain-retry="${escapeHtml(turn.id)}">${escapeHtml(aiBrainText("retry"))}</button><small>${escapeHtml(aiBrainText("current"))}</small>` : ""}</article>${turn.answer ? `<article class="ai-brain-message is-advisor"><strong>AI Brain</strong><div>${escapeHtml(turn.answer).replace(/\n/g, "<br>")}</div>${turn.meta ? `<small>${escapeHtml(turn.meta)}</small>` : ""}</article>` : ""}`).join("");
-  el.aiBrainSummary.innerHTML = `<section class="ai-brain-wrap ai-brain-conversation"><header class="ai-brain-header"><div><h3>🧠 AI Brain</h3><p>Read-only Brand and campaign advisor</p></div><span class="ai-brain-readonly">Read-only</span></header><div class="ai-brain-context" aria-label="Advice context"><span>Board: ${escapeHtml(state.currentBoardName || "Current Board")}</span><span>${state.nodes.length} Canvas nodes</span>${selected ? `<span>Selected: ${escapeHtml(selected.title || selected.type || "Node")}</span>` : ""}<span class="${unsaved ? "is-unsaved" : ""}">${unsaved ? "Includes unsaved Canvas changes" : "Saved Canvas context"}</span></div>${canAsk ? `<div class="ai-brain-transcript" aria-live="polite">${messages || `<div class="ai-brain-empty"><h4>Ask about your Brand or campaign</h4><p>I can explain Canvas diagnostics and advise without changing it.</p></div>`}</div><form id="ai-brain-form" class="ai-brain-composer"><label for="ai-brain-question">Your strategic question</label><textarea id="ai-brain-question" maxlength="2000" required></textarea><div><small>AI advice is qualitative. No changes will be made.</small><button type="submit" ${state.aiBrain.status === "loading" ? "disabled" : ""}>${state.aiBrain.status === "loading" ? "Thinking…" : "Ask AI Brain"}</button></div></form>` : `<div class="ai-brain-unavailable"><h4>AI Brain advice is unavailable</h4><p>New advice is available only to authenticated editors.</p></div>`}</section>`;
+  el.aiBrainSummary.innerHTML = `<section class="ai-brain-wrap ai-brain-conversation"><header class="ai-brain-header"><div><h3>🧠 AI Brain</h3><p>Read-only Brand and campaign advisor</p></div><span class="ai-brain-readonly">Read-only</span></header><div class="ai-brain-context" aria-label="Advice context"><span>Board: ${escapeHtml(state.currentBoardName || "Current Board")}</span><span>${state.nodes.length} Canvas nodes</span>${selected ? `<span>Selected: ${escapeHtml(selected.title || selected.type || "Node")}</span>` : ""}<span class="${unsaved ? "is-unsaved" : ""}">${unsaved ? "Includes unsaved Canvas changes" : "Saved Canvas context"}</span></div>${canAsk ? `<div class="ai-brain-transcript" aria-live="polite"></div><form id="ai-brain-form" class="ai-brain-composer"><label for="ai-brain-question">Your strategic question</label><textarea id="ai-brain-question" maxlength="2000" required></textarea><div><small>AI advice is qualitative. No changes will be made.</small><button type="submit" ${state.aiBrain.status === "loading" ? "disabled" : ""}>${state.aiBrain.status === "loading" ? "Thinking…" : "Ask AI Brain"}</button></div></form>` : `<div class="ai-brain-unavailable"><h4>AI Brain advice is unavailable</h4><p>New advice is available only to authenticated editors.</p></div>`}</section>`;
+  const transcript = el.aiBrainSummary.querySelector(".ai-brain-transcript"); if (transcript) renderAiBrainTranscript(transcript);
   el.aiBrainSummary.querySelector("#ai-brain-form")?.addEventListener("submit", requestAiBrainAdvice);
   el.aiBrainSummary.querySelectorAll("[data-ai-brain-retry]").forEach((button) => button.addEventListener("click", () => requestAiBrainAdvice(null, button.dataset.aiBrainRetry)));
 }
@@ -5269,7 +5350,8 @@ async function requestAiBrainAdvice(event, retryTurnId = null) {
     if (aiBrainRequestContextIdentity() !== contextIdentity) { state.aiBrain = { ...state.aiBrain, status: "error", controller: null, messages: state.aiBrain.messages.map((item) => item.id === turn.id ? { ...item, status: "failed", errorCode: "changed" } : item) }; return renderAiBrain(); }
     if (!response.ok) { const error = new Error(data.error || "AI Brain failed"); error.code = data.code || "generic"; throw error; }
     const scope = [`Board Brand Core`, data.context?.canonicalBrandCore ? "Canonical Brand Core" : null, `${data.context?.canvasNodes || 0} Canvas nodes`].filter(Boolean).join(" · ");
-    state.aiBrain = { ...state.aiBrain, status: "success", controller: null, messages: state.aiBrain.messages.map((item) => item.id === turn.id ? { ...item, status: "success", answer: data.answer, meta: `${scope}. ${data.disclaimer}` } : item) };
+    const assumptions = Array.isArray(data.assumptions) ? data.assumptions.filter((value) => typeof value === "string").slice(0, 20) : [];
+    state.aiBrain = { ...state.aiBrain, status: "success", controller: null, messages: state.aiBrain.messages.map((item) => item.id === turn.id ? { ...item, status: "success", answer: data.answer, assumptions, meta: `${scope}. ${data.disclaimer}` } : item) };
   } catch (error) {
     if (error?.name === "AbortError" || state.aiBrain.requestId !== requestId) return;
     state.aiBrain = { ...state.aiBrain, status: "error", controller: null, messages: state.aiBrain.messages.map((item) => item.id === turn.id ? { ...item, status: "failed", errorCode: error.code || "generic" } : item) };

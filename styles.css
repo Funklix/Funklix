@@ -3569,11 +3569,26 @@ button:active {
 .ai-brain-transcript { display: grid; gap: 10px; min-height: 220px; max-height: 52vh; overflow: auto; padding: 16px; border: 1px solid #e6e8f5; border-radius: 16px; background: #f8f9fd; }
 .ai-brain-empty, .ai-brain-unavailable { padding: 28px; text-align: center; border: 1px solid #e6e8f5; border-radius: 16px; background: #fff; color: #626987; }
 .ai-brain-empty h4, .ai-brain-unavailable h4 { margin: 0 0 8px; color: #303653; }
-.ai-brain-message { max-width: 82%; padding: 12px 14px; border-radius: 14px; line-height: 1.5; color: #303653; background: #fff; border: 1px solid #e2e5f2; }
+.ai-brain-message { max-width: 82%; min-width: 0; padding: 12px 14px; border-radius: 14px; line-height: 1.55; overflow-wrap: anywhere; color: #303653; background: #fff; border: 1px solid #e2e5f2; }
 .ai-brain-message.is-user { justify-self: end; background: #5e4bf4; border-color: #5e4bf4; color: #fff; }
 .ai-brain-message strong { display: block; margin-bottom: 5px; font-size: .73rem; }
 .ai-brain-message small { display: block; margin-top: 9px; color: #737b99; }
 .ai-brain-message.is-user small { color: #e5e2ff; }
+.ai-brain-question { white-space: pre-wrap; }
+.ai-brain-formatted-answer { min-width: 0; }
+.ai-brain-formatted-answer :is(h3, h4, h5, h6) { margin: 16px 0 6px; line-height: 1.25; color: #303653; }
+.ai-brain-formatted-answer h3 { font-size: 1.05rem; }
+.ai-brain-formatted-answer :is(h4, h5, h6) { font-size: .95rem; }
+.ai-brain-formatted-answer > :first-child { margin-top: 0; }
+.ai-brain-formatted-answer p { margin: 0 0 10px; }
+.ai-brain-formatted-answer p:last-child { margin-bottom: 0; }
+.ai-brain-formatted-answer :is(ul, ol), .ai-brain-assumptions ul { margin: 6px 0 10px; padding-inline-start: 24px; }
+.ai-brain-formatted-answer li + li, .ai-brain-assumptions li + li { margin-top: 4px; }
+.ai-brain-formatted-answer strong { display: inline; margin: 0; font-size: inherit; }
+.ai-brain-formatted-answer code { padding: 1px 4px; border-radius: 4px; background: #f0f1f8; font: .9em ui-monospace, monospace; }
+.ai-brain-assumptions { margin-top: 14px; padding-top: 12px; border-top: 1px solid #e2e5f2; }
+.ai-brain-assumptions h5 { margin: 0; font-size: .82rem; }
+@media (max-width: 640px) { .ai-brain-message { max-width: 94%; } }
 .ai-brain-composer { display: grid; gap: 8px; padding: 14px; border: 1px solid #e2e5f2; border-radius: 16px; background: #fff; }
 .ai-brain-composer label { font-size: .78rem; font-weight: 700; color: #3a4165; }
 .ai-brain-composer textarea { min-height: 92px; resize: vertical; padding: 11px; border: 1px solid #d7dbeb; border-radius: 10px; font: inherit; }

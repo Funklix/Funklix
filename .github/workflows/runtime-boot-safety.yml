@@ -81,6 +81,8 @@ jobs:
         run: node scripts/check-bw26-read-only-ai-brain.js
       - name: Check real Canvas context and turn lifecycle
         run: node scripts/check-bw26-1-real-canvas-context-and-turn-lifecycle.js
+      - name: Check safe AI Brain response formatting
+        run: node scripts/check-bw26-2-safe-brain-response-formatting.js
       - name: Check dynamic AI Insights translations
         run: node scripts/check-bw25-1-dynamic-insights-translations.js
       - name: Check Knowledge Module browser globals
