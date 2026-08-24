@@ -5252,6 +5252,26 @@ function captureInsightsDiagnostic(analysis) {
     : null;
 }
 
+// analyzeCampaign keeps English diagnostic values canonical because they are also
+// consumed by AI Brain. Insights translates only this closed, system-owned set at
+// render time; anything else (including Canvas-authored audience values) is shown
+// unchanged rather than being guessed at or treated as a translation key.
+const INSIGHTS_DIAGNOSTIC_MESSAGES = Object.freeze({
+  CTA_MISSING: "Missing CTA",
+  CTA_VARIATIONS_MISSING: "Add CTA variations for different stages.",
+  TONE_SHIFTS_HIGH: "Tone shifts across nodes are high.",
+  TRUST_PROOF_MISSING: "Add trust-building proof in Landing Page nodes."
+});
+const INSIGHTS_DIAGNOSTIC_MESSAGE_KEYS = Object.freeze(Object.fromEntries(
+  Object.values(INSIGHTS_DIAGNOSTIC_MESSAGES).map((message) => [message, message])
+));
+
+function insightsDiagnosticText(value) {
+  if (typeof value !== "string") return "";
+  const key = INSIGHTS_DIAGNOSTIC_MESSAGE_KEYS[value];
+  return key ? uiText(key) : value;
+}
+
 function renderInsightsSurface() {
   if (!el.insightsCards) return;
   const t = uiText;
@@ -5276,10 +5296,10 @@ function renderInsightsSurface() {
       <article class="insight-card hero"><small>${t("Canvas readiness")}</small><h3>${a.healthScore}<span>/100</span></h3><p>${t("Diagnostic score")}</p></article>
       <article class="insight-card"><small>${t("Funnel-stage coverage")}</small><div class="insight-funnel">${funnelSteps}</div><p>${t("Covered")}: ${a.funnel.coveredStages.map(uiText).join(", ") || t("No stages covered")} · ${t("Missing")}: ${a.funnel.missingStages.map(uiText).join(", ") || t("No stages missing")}</p></article>
       <article class="insight-card"><small>${t("Canvas nodes by platform")}</small><h4>${Object.values(a.platformDistribution.counts).reduce((sum, count) => sum + count, 0)}</h4><p>${Object.entries(a.platformDistribution.counts).map(([platform, count]) => `${platform}: ${count}`).join(" · ") || t("No platform nodes")}</p></article>
-      ${diagnosticCard(t("CTA structure"), a.cta.qualityScore, `${t("Issues")}: ${[...a.cta.warnings, ...a.cta.suggestions].join(" · ") || t("None detected")}`)}
+      ${diagnosticCard(t("CTA structure"), a.cta.qualityScore, `${t("Issues")}: ${[...a.cta.warnings, ...a.cta.suggestions].map(insightsDiagnosticText).join(" · ") || t("None detected")}`)}
       ${diagnosticCard(t("ICP consistency"), a.icp.consistencyScore, `${t("Issues")}: ${a.icp.inconsistencies.join(" · ") || t("None detected")}`)}
-      ${diagnosticCard(t("Tone consistency"), a.tone.consistencyScore, `${t("Issues")}: ${a.tone.warnings.join(" · ") || t("None detected")}`)}
-      ${diagnosticCard(t("Trust-layer coverage"), a.trust.score, `${t("Issues")}: ${a.trust.suggestions.join(" · ") || t("None detected")}`)}
+      ${diagnosticCard(t("Tone consistency"), a.tone.consistencyScore, `${t("Issues")}: ${a.tone.warnings.map(insightsDiagnosticText).join(" · ") || t("None detected")}`)}
+      ${diagnosticCard(t("Trust-layer coverage"), a.trust.score, `${t("Issues")}: ${a.trust.suggestions.map(insightsDiagnosticText).join(" · ") || t("None detected")}`)}
     </div>`;
   }
   const canvasDisclosure = state.currentBoardId && !state.isBoardLoading && state.boardAccess?.canView !== false
