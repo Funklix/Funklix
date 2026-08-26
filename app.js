@@ -5240,6 +5240,18 @@ function aiBrainCanvasProjection() {
     : { ...(edge.id ? { id: string(edge.id, 160) } : {}), source: string(edge.source || edge.from || edge.fromId, 160), target: string(edge.target || edge.to || edge.toId, 160), ...(edge.type ? { type: string(edge.type, 100) } : {}) });
   return { nodes, edges };
 }
+function aiBrainConversationHistory(excludedTurnId = null) {
+  const limits = { turns: 4, user: 2000, assistant: 12000, characters: 28000 };
+  const successful = state.aiBrain.messages.filter((turn) => turn.id !== excludedTurnId && turn.status === "success" && typeof turn.question === "string" && typeof turn.answer === "string");
+  const history = []; let characters = 0;
+  for (const turn of successful.slice().reverse()) {
+    const exchange = { user: turn.question.slice(0, limits.user), assistant: turn.answer.slice(0, limits.assistant) };
+    const size = exchange.user.length + exchange.assistant.length;
+    if (history.length >= limits.turns || characters + size > limits.characters) continue;
+    history.unshift(exchange); characters += size;
+  }
+  return history;
+}
 function invalidateAiBrainRequest() {
   state.aiBrain.controller?.abort();
   state.aiBrain = { status: "idle", messages: [], requestId: state.aiBrain.requestId + 1, controller: null, identity: aiBrainIdentity(), error: "" };
@@ -5340,11 +5352,11 @@ async function requestAiBrainAdvice(event, retryTurnId = null) {
   if (state.aiBrain.status === "loading" || !state.user?.email || !state.currentBoardId || state.boardAccess?.canEdit !== true) return renderAiBrain();
   const existing = retryTurnId ? state.aiBrain.messages.find((turn) => turn.id === retryTurnId && turn.status === "failed") : null;
   const input = el.aiBrainSummary.querySelector("#ai-brain-question"); const question = existing?.question || input?.value.trim(); if (!question) return;
-  const controller = new AbortController(); const requestId = state.aiBrain.requestId + 1; const identity = aiBrainIdentity(); const contextIdentity = aiBrainRequestContextIdentity(); const selectedNodeId = state.selectedPrimary || null; const canvas = aiBrainCanvasProjection();
+  const controller = new AbortController(); const requestId = state.aiBrain.requestId + 1; const identity = aiBrainIdentity(); const contextIdentity = aiBrainRequestContextIdentity(); const selectedNodeId = state.selectedPrimary || null; const canvas = aiBrainCanvasProjection(); const conversationHistory = aiBrainConversationHistory(existing?.id || null);
   const turn = existing || { id: `turn-${requestId}`, question }; const messages = existing ? state.aiBrain.messages.map((item) => item.id === turn.id ? { ...item, status: "pending", errorCode: "", answer: "" } : item) : [...state.aiBrain.messages, { ...turn, status: "pending" }];
   state.aiBrain = { ...state.aiBrain, status: "loading", requestId, controller, identity, error: "", messages }; renderAiBrain();
   try {
-    const response = await fetch("/api/ai-brain/advice", { method: "POST", headers: { "Content-Type": "application/json", "X-AI-Brain-Generation": String(requestId) }, signal: controller.signal, body: JSON.stringify({ board_id: state.currentBoardId, question, selected_node_id: selectedNodeId, canvas_context: canvas, response_language: state.uiLanguage }) });
+    const response = await fetch("/api/ai-brain/advice", { method: "POST", headers: { "Content-Type": "application/json", "X-AI-Brain-Generation": String(requestId) }, signal: controller.signal, body: JSON.stringify({ board_id: state.currentBoardId, question, selected_node_id: selectedNodeId, canvas_context: canvas, response_language: state.uiLanguage, conversation_history: conversationHistory }) });
     const data = await response.json().catch(() => ({}));
     if (state.aiBrain.requestId !== requestId || state.aiBrain.identity !== identity || aiBrainIdentity() !== identity) return;
     if (aiBrainRequestContextIdentity() !== contextIdentity) { state.aiBrain = { ...state.aiBrain, status: "error", controller: null, messages: state.aiBrain.messages.map((item) => item.id === turn.id ? { ...item, status: "failed", errorCode: "changed" } : item) }; return renderAiBrain(); }

@@ -4,6 +4,7 @@
     "pg": "^8.13.1"
   },
   "scripts": {
-    "check:bw26": "node scripts/check-bw26-read-only-ai-brain.js"
+    "check:bw26": "node scripts/check-bw26-read-only-ai-brain.js",
+    "check:bw26.3": "node scripts/check-bw26-3-bounded-conversation-memory.js"
   }
 }
