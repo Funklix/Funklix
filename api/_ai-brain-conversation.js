@@ -2,6 +2,11 @@
 
 const CONVERSATION_LIMITS = Object.freeze({ turns: 4, user: 2000, assistant: 12000, characters: 28000 });
 
+// Deliberately limited to conversational deixis. This is not used to interpret
+// the question; it only prevents the server from pretending that an omitted
+// exchange is sufficient grounding for an obvious follow-up.
+const REFERENCE_PATTERN = /\b(?:the\s+(?:first|second|third|last|previous)\s+(?:idea|option|suggestion|one)|expand\s+on\s+that|make\s+it\s+shorter|rewrite\s+the\s+previous\s+one|what\s+did\s+you\s+mean\s+by\s+this|(?:die|der|das)\s+(?:erste|zweite|dritte|letzte|vorherige)\s+(?:idee|option|vorschlag|variante)|der\s+letzte\s+vorschlag|diese\s+variante)\b/i;
+
 function plainObject(value) { return !!value && typeof value === 'object' && !Array.isArray(value); }
 
 function validateConversationHistory(value) {
@@ -25,4 +30,8 @@ function validateConversationHistory(value) {
   return { ok: true, history };
 }
 
-module.exports = { CONVERSATION_LIMITS, validateConversationHistory };
+function hasConversationalReference(value) {
+  return typeof value === 'string' && REFERENCE_PATTERN.test(value);
+}
+
+module.exports = { CONVERSATION_LIMITS, hasConversationalReference, validateConversationHistory };
