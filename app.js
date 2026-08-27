@@ -5214,10 +5214,11 @@ function aiBrainIdentity() {
 }
 
 const AI_BRAIN_TEXT = Object.freeze({
-  en: { you: "You", assumptions: "Assumptions", pending: "Pending…", failed: "Failed", retry: "Retry", current: "Retry uses the current Canvas context.", malformed_canvas: "The Canvas context is malformed.", unsupported_canvas: "This Canvas structure is not supported.", canvas_too_large: "The Canvas exceeds the supported size.", invalid_selected_node: "The selected node is no longer available.", stale_canvas: "The Canvas context is stale. Retry with the current Canvas.", generic: "AI Brain could not answer right now.", changed: "The Board, account, access, selection, or Canvas changed. Retry with the current context." },
-  de: { you: "Du", assumptions: "Annahmen", pending: "Ausstehend…", failed: "Fehlgeschlagen", retry: "Erneut versuchen", current: "Beim erneuten Versuch wird der aktuelle Canvas-Kontext verwendet.", malformed_canvas: "Der Canvas-Kontext ist fehlerhaft.", unsupported_canvas: "Diese Canvas-Struktur wird nicht unterstützt.", canvas_too_large: "Der Canvas überschreitet die unterstützte Größe.", invalid_selected_node: "Der ausgewählte Knoten ist nicht mehr verfügbar.", stale_canvas: "Der Canvas-Kontext ist veraltet. Versuche es mit dem aktuellen Canvas erneut.", generic: "AI Brain kann gerade nicht antworten.", changed: "Board, Konto, Zugriff, Auswahl oder Canvas haben sich geändert. Versuche es mit dem aktuellen Kontext erneut." }
+  en: { you: "You", assumptions: "Assumptions", pending: "Pending…", failed: "Failed", retry: "Retry", current: "Retry uses the current Canvas context.", responseLanguage: "Response language: English", response_language_mismatch: "AI Brain answered in a different language. Please retry.", malformed_canvas: "The Canvas context is malformed.", unsupported_canvas: "This Canvas structure is not supported.", canvas_too_large: "The Canvas exceeds the supported size.", invalid_selected_node: "The selected node is no longer available.", stale_canvas: "The Canvas context is stale. Retry with the current Canvas.", generic: "AI Brain could not answer right now.", changed: "The Board, account, access, selection, or Canvas changed. Retry with the current context." },
+  de: { you: "Du", assumptions: "Annahmen", pending: "Ausstehend…", failed: "Fehlgeschlagen", retry: "Erneut versuchen", current: "Beim erneuten Versuch wird der aktuelle Canvas-Kontext verwendet.", responseLanguage: "Antwortsprache: Deutsch", response_language_mismatch: "AI Brain hat in einer anderen Sprache geantwortet. Bitte versuche es erneut.", malformed_canvas: "Der Canvas-Kontext ist fehlerhaft.", unsupported_canvas: "Diese Canvas-Struktur wird nicht unterstützt.", canvas_too_large: "Der Canvas überschreitet die unterstützte Größe.", invalid_selected_node: "Der ausgewählte Knoten ist nicht mehr verfügbar.", stale_canvas: "Der Canvas-Kontext ist veraltet. Versuche es mit dem aktuellen Canvas erneut.", generic: "AI Brain kann gerade nicht antworten.", changed: "Board, Konto, Zugriff, Auswahl oder Canvas haben sich geändert. Versuche es mit dem aktuellen Kontext erneut." }
 });
 function aiBrainText(key) { return (AI_BRAIN_TEXT[state.uiLanguage] || AI_BRAIN_TEXT.en)[key] || key; }
+function aiBrainTurnText(turn, key) { return (AI_BRAIN_TEXT[turn?.responseLanguage] || AI_BRAIN_TEXT[state.uiLanguage] || AI_BRAIN_TEXT.en)[key] || key; }
 function aiBrainRequestContextIdentity() {
   return `${aiBrainIdentity()}|${state.boardAccess?.canEdit === true}|${state.selectedPrimary || ""}|${JSON.stringify(state.nodes.map((node) => [node.id, node.type, node.title, node.content, node.status, node.audience, node.channel, node.funnelStage, node.tone, node.social, node.landingPage]))}|${JSON.stringify(state.edges)}`;
 }
@@ -5318,7 +5319,7 @@ function renderAiBrainTranscript(transcript) {
     user.append(userLabel, question);
     if (turn.status === "pending") { const pending = document.createElement("small"); pending.textContent = aiBrainText("pending"); user.appendChild(pending); }
     if (turn.status === "failed") {
-      const failure = document.createElement("small"); failure.textContent = `${aiBrainText("failed")}: ${aiBrainText(turn.errorCode || "generic")}`;
+      const failure = document.createElement("small"); failure.textContent = `${aiBrainTurnText(turn, "failed")}: ${aiBrainTurnText(turn, turn.errorCode || "generic")}`;
       const retry = document.createElement("button"); retry.type = "button"; retry.dataset.aiBrainRetry = turn.id; retry.textContent = aiBrainText("retry");
       const current = document.createElement("small"); current.textContent = aiBrainText("current"); user.append(failure, retry, current);
     }
@@ -5328,6 +5329,7 @@ function renderAiBrainTranscript(transcript) {
     const advisorLabel = document.createElement("strong"); advisorLabel.className = "ai-brain-speaker"; advisorLabel.textContent = "AI Brain";
     const formatted = document.createElement("div"); formatted.className = "ai-brain-formatted-answer"; renderAiBrainFormattedAnswer(formatted, turn.answer);
     advisor.append(advisorLabel, formatted);
+    if (turn.responseLanguage) { const disclosure = document.createElement("small"); disclosure.className = "ai-brain-response-language"; disclosure.textContent = AI_BRAIN_TEXT[turn.responseLanguage]?.responseLanguage || AI_BRAIN_TEXT.en.responseLanguage; advisor.appendChild(disclosure); }
     if (Array.isArray(turn.assumptions) && turn.assumptions.length) {
       const section = document.createElement("section"); section.className = "ai-brain-assumptions";
       const heading = document.createElement("h5"); heading.textContent = aiBrainText("assumptions");
@@ -5353,18 +5355,19 @@ async function requestAiBrainAdvice(event, retryTurnId = null) {
   if (state.aiBrain.status === "loading" || !state.user?.email || !state.currentBoardId || state.boardAccess?.canEdit !== true) return renderAiBrain();
   const existing = retryTurnId ? state.aiBrain.messages.find((turn) => turn.id === retryTurnId && turn.status === "failed") : null;
   const input = el.aiBrainSummary.querySelector("#ai-brain-question"); const question = existing?.question || input?.value.trim(); if (!question) return;
-  const controller = new AbortController(); const requestId = state.aiBrain.requestId + 1; const identity = aiBrainIdentity(); const contextIdentity = aiBrainRequestContextIdentity(); const selectedNodeId = state.selectedPrimary || null; const canvas = aiBrainCanvasProjection(); const conversationHistory = aiBrainConversationHistory(existing?.id || null);
-  const turn = existing || { id: `turn-${requestId}`, question }; const messages = existing ? state.aiBrain.messages.map((item) => item.id === turn.id ? { ...item, status: "pending", errorCode: "", answer: "" } : item) : [...state.aiBrain.messages, { ...turn, status: "pending" }];
+  const responseLanguage = state.uiLanguage === "de" ? "de" : "en"; const controller = new AbortController(); const requestId = state.aiBrain.requestId + 1; const identity = aiBrainIdentity(); const contextIdentity = aiBrainRequestContextIdentity(); const selectedNodeId = state.selectedPrimary || null; const canvas = aiBrainCanvasProjection(); const conversationHistory = aiBrainConversationHistory(existing?.id || null);
+  const turn = existing || { id: `turn-${requestId}`, question }; const messages = existing ? state.aiBrain.messages.map((item) => item.id === turn.id ? { ...item, status: "pending", responseLanguage, errorCode: "", answer: "" } : item) : [...state.aiBrain.messages, { ...turn, status: "pending", responseLanguage }];
   state.aiBrain = { ...state.aiBrain, status: "loading", requestId, controller, identity, error: "", messages }; renderAiBrain();
   try {
-    const response = await fetch("/api/ai-brain/advice", { method: "POST", headers: { "Content-Type": "application/json", "X-AI-Brain-Generation": String(requestId) }, signal: controller.signal, body: JSON.stringify({ board_id: state.currentBoardId, question, selected_node_id: selectedNodeId, canvas_context: canvas, response_language: state.uiLanguage, conversation_history: conversationHistory.exchanges, conversation_history_truncated: conversationHistory.truncated }) });
+    const response = await fetch("/api/ai-brain/advice", { method: "POST", headers: { "Content-Type": "application/json", "X-AI-Brain-Generation": String(requestId) }, signal: controller.signal, body: JSON.stringify({ board_id: state.currentBoardId, question, selected_node_id: selectedNodeId, canvas_context: canvas, response_language: responseLanguage, conversation_history: conversationHistory.exchanges, conversation_history_truncated: conversationHistory.truncated }) });
     const data = await response.json().catch(() => ({}));
     if (state.aiBrain.requestId !== requestId || state.aiBrain.identity !== identity || aiBrainIdentity() !== identity) return;
     if (aiBrainRequestContextIdentity() !== contextIdentity) { state.aiBrain = { ...state.aiBrain, status: "error", controller: null, messages: state.aiBrain.messages.map((item) => item.id === turn.id ? { ...item, status: "failed", errorCode: "changed" } : item) }; return renderAiBrain(); }
     if (!response.ok) { const error = new Error(data.error || "AI Brain failed"); error.code = data.code || "generic"; throw error; }
+    if (data.context?.response_language !== responseLanguage) { const error = new Error("AI Brain response language identity mismatch"); error.code = "response_language_mismatch"; throw error; }
     const scope = [`Board Brand Core`, data.context?.canonicalBrandCore ? "Canonical Brand Core" : null, `${data.context?.canvasNodes || 0} Canvas nodes`].filter(Boolean).join(" · ");
     const assumptions = Array.isArray(data.assumptions) ? data.assumptions.filter((value) => typeof value === "string").slice(0, 20) : [];
-    state.aiBrain = { ...state.aiBrain, status: "success", controller: null, messages: state.aiBrain.messages.map((item) => item.id === turn.id ? { ...item, status: "success", answer: data.answer, assumptions, meta: `${scope}. ${data.disclaimer}` } : item) };
+    state.aiBrain = { ...state.aiBrain, status: "success", controller: null, messages: state.aiBrain.messages.map((item) => item.id === turn.id ? { ...item, status: "success", answer: data.answer, responseLanguage, assumptions, meta: `${scope}. ${data.disclaimer}` } : item) };
   } catch (error) {
     if (error?.name === "AbortError" || state.aiBrain.requestId !== requestId) return;
     state.aiBrain = { ...state.aiBrain, status: "error", controller: null, messages: state.aiBrain.messages.map((item) => item.id === turn.id ? { ...item, status: "failed", errorCode: error.code || "generic" } : item) };
