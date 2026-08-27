@@ -41,7 +41,7 @@ const invoke = async (extra = {}) => {
   try {
     const result = await invoke();
     assert.strictEqual(result.status, 200);
-    assert.deepStrictEqual(providerInput.map((message) => message.role), ['system', 'system', 'user', 'assistant', 'user']);
+    assert.deepStrictEqual(providerInput.map((message) => message.role), ['system', 'system', 'user', 'assistant', 'system', 'user']);
     assert(providerInput[0].content.includes('primary source for conversational reference resolution'));
     assert(providerInput[0].content.includes('current Board and Canvas context to validate and enrich'));
     assert(providerInput[1].content.startsWith('Current authoritative Board, Brand, Canvas'));
@@ -49,7 +49,8 @@ const invoke = async (extra = {}) => {
     assert.strictEqual(providerInput[3].content, previousAnswer, 'the full numbered answer reaches the provider');
     assert(providerInput[3].content.includes('1. Emotional Safety Focus'));
     assert(providerInput[3].content.includes('2. Spotlight on Compliance and Innovative Solutions'));
-    assert.strictEqual(providerInput[4].content, 'please expand on the second idea');
+    assert(providerInput[4].content.startsWith('Response language for this turn: English.'));
+    assert.strictEqual(providerInput[5].content, 'please expand on the second idea');
     assert.deepStrictEqual(result.body.context.conversation_exchanges_used, 1);
     assert.strictEqual(result.body.context.reference_resolution, 'conversation_history');
 

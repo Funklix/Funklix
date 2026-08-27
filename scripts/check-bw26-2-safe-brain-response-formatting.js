@@ -50,7 +50,7 @@ assert(route.includes('short Markdown headings') && route.includes('Do not retur
 const lifecycle = app.slice(app.indexOf('function invalidateAiBrainRequest'), app.indexOf('function currentInsightsIdentity'));
 assert(lifecycle.includes('messages: []') && lifecycle.includes('controller?.abort()'), 'BW-26 ephemeral clearing remains');
 assert(lifecycle.includes('item.id === turn.id ? { ...item, status: "pending"') && lifecycle.includes('state.aiBrain.requestId !== requestId'), 'retry de-duplicates and stale responses are rejected');
-assert(lifecycle.includes('response_language: state.uiLanguage') && !lifecycle.includes('addEventListener("language'), 'language is captured only when requesting');
+assert(lifecycle.includes('const responseLanguage = state.uiLanguage === "de" ? "de" : "en"') && lifecycle.includes('response_language: responseLanguage'), 'authoritative interface language is captured once when requesting');
 for (const mutation of ['saveCampaignCanvasState', 'setDirty', 'autosave', 'generateCampaign', 'repair', 'localStorage', 'sessionStorage']) assert(!lifecycle.includes(mutation), `AI Brain lifecycle must not invoke ${mutation}`);
 assert(workflow.indexOf('check-bw26-1-real-canvas-context-and-turn-lifecycle.js') < workflow.indexOf('check-bw26-2-safe-brain-response-formatting.js'));
 assert(app.includes('renderAiBrainFormattedAnswer(formatted, turn.answer)'));
