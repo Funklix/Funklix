@@ -5353,15 +5353,18 @@ async function requestAiBrainAdvice(event, retryTurnId = null) {
   if (state.aiBrain.status === "loading" || !state.user?.email || !state.currentBoardId || state.boardAccess?.canEdit !== true) return renderAiBrain();
   const existing = retryTurnId ? state.aiBrain.messages.find((turn) => turn.id === retryTurnId && turn.status === "failed") : null;
   const input = el.aiBrainSummary.querySelector("#ai-brain-question"); const question = existing?.question || input?.value.trim(); if (!question) return;
-  const controller = new AbortController(); const requestId = state.aiBrain.requestId + 1; const identity = aiBrainIdentity(); const contextIdentity = aiBrainRequestContextIdentity(); const selectedNodeId = state.selectedPrimary || null; const canvas = aiBrainCanvasProjection(); const conversationHistory = aiBrainConversationHistory(existing?.id || null);
+  // Capture the authoritative Interface language once. A later preference change
+  // may rerender chrome, but must not reinterpret this request or its response.
+  const responseLanguage = ["en", "de"].includes(state.uiLanguage) ? state.uiLanguage : "en";
+  const controller = new AbortController(); const requestId = state.aiBrain.requestId + 1; const identity = aiBrainIdentity(); const requestIdentity = `${identity}|${responseLanguage}|${requestId}`; const contextIdentity = aiBrainRequestContextIdentity(); const selectedNodeId = state.selectedPrimary || null; const canvas = aiBrainCanvasProjection(); const conversationHistory = aiBrainConversationHistory(existing?.id || null);
   const turn = existing || { id: `turn-${requestId}`, question }; const messages = existing ? state.aiBrain.messages.map((item) => item.id === turn.id ? { ...item, status: "pending", errorCode: "", answer: "" } : item) : [...state.aiBrain.messages, { ...turn, status: "pending" }];
-  state.aiBrain = { ...state.aiBrain, status: "loading", requestId, controller, identity, error: "", messages }; renderAiBrain();
+  state.aiBrain = { ...state.aiBrain, status: "loading", requestId, requestIdentity, controller, identity, error: "", messages }; renderAiBrain();
   try {
-    const response = await fetch("/api/ai-brain/advice", { method: "POST", headers: { "Content-Type": "application/json", "X-AI-Brain-Generation": String(requestId) }, signal: controller.signal, body: JSON.stringify({ board_id: state.currentBoardId, question, selected_node_id: selectedNodeId, canvas_context: canvas, response_language: state.uiLanguage, conversation_history: conversationHistory.exchanges, conversation_history_truncated: conversationHistory.truncated }) });
+    const response = await fetch("/api/ai-brain/advice", { method: "POST", headers: { "Content-Type": "application/json", "X-AI-Brain-Generation": String(requestId) }, signal: controller.signal, body: JSON.stringify({ board_id: state.currentBoardId, question, selected_node_id: selectedNodeId, canvas_context: canvas, response_language: responseLanguage, conversation_history: conversationHistory.exchanges, conversation_history_truncated: conversationHistory.truncated }) });
     const data = await response.json().catch(() => ({}));
     if (state.aiBrain.requestId !== requestId || state.aiBrain.identity !== identity || aiBrainIdentity() !== identity) return;
     if (aiBrainRequestContextIdentity() !== contextIdentity) { state.aiBrain = { ...state.aiBrain, status: "error", controller: null, messages: state.aiBrain.messages.map((item) => item.id === turn.id ? { ...item, status: "failed", errorCode: "changed" } : item) }; return renderAiBrain(); }
-    if (!response.ok) { const error = new Error(data.error || "AI Brain failed"); error.code = data.code || "generic"; throw error; }
+    if (!response.ok || data.context?.response_language !== responseLanguage || state.aiBrain.requestIdentity !== requestIdentity) { const error = new Error(data.error || "AI Brain failed"); error.code = data.code || "generic"; throw error; }
     const scope = [`Board Brand Core`, data.context?.canonicalBrandCore ? "Canonical Brand Core" : null, `${data.context?.canvasNodes || 0} Canvas nodes`].filter(Boolean).join(" · ");
     const assumptions = Array.isArray(data.assumptions) ? data.assumptions.filter((value) => typeof value === "string").slice(0, 20) : [];
     state.aiBrain = { ...state.aiBrain, status: "success", controller: null, messages: state.aiBrain.messages.map((item) => item.id === turn.id ? { ...item, status: "success", answer: data.answer, assumptions, meta: `${scope}. ${data.disclaimer}` } : item) };
