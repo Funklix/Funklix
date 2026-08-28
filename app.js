@@ -5218,8 +5218,8 @@ const AI_BRAIN_TEXT = Object.freeze({
   de: { you: "Du", assumptions: "Annahmen", pending: "Ausstehend…", failed: "Fehlgeschlagen", retry: "Erneut versuchen", current: "Beim erneuten Versuch wird der aktuelle Canvas-Kontext verwendet.", responseLanguage: "Antwortsprache: Deutsch", response_language_mismatch: "AI Brain hat in einer anderen Sprache geantwortet. Bitte versuche es erneut.", malformed_canvas: "Der Canvas-Kontext ist fehlerhaft.", unsupported_canvas: "Diese Canvas-Struktur wird nicht unterstützt.", canvas_too_large: "Der Canvas überschreitet die unterstützte Größe.", invalid_selected_node: "Der ausgewählte Knoten ist nicht mehr verfügbar.", stale_canvas: "Der Canvas-Kontext ist veraltet. Versuche es mit dem aktuellen Canvas erneut.", generic: "AI Brain kann gerade nicht antworten.", changed: "Board, Konto, Zugriff, Auswahl oder Canvas haben sich geändert. Versuche es mit dem aktuellen Kontext erneut." }
 });
 const AI_BRAIN_PROPOSAL_TEXT = Object.freeze({
-  en: { prepare: "Prepare as Content node", preview: "Content node preview", type: "Content node", title: "Title", content: "Content", rationale: "Why this node", create: "Create node", cancel: "Cancel", preparing: "Preparing node…", created: "Node created.", invalid: "This proposal is no longer valid.", board: "Your Board changed. Prepare the node again.", canvas: "Your Canvas changed. Prepare the node again.", permission: "You no longer have permission to create this node.", prepareFailed: "The node proposal could not be prepared.", proposal_route_unavailable: "The node proposal service is unavailable.", proposal_unauthorized: "Please sign in again to prepare this node.", proposal_forbidden: "You no longer have permission to create this node.", proposal_request_invalid: "The node proposal request was invalid.", proposal_source_invalid: "The source answer cannot be used for a node proposal.", proposal_canvas_invalid: "The current Canvas cannot be used for this proposal.", proposal_context_changed: "Your Board or Canvas changed. Prepare the node again.", proposal_provider_failed: "The node proposal service could not respond.", proposal_response_invalid: "The node proposal response was invalid.", proposal_language_mismatch: "The node proposal used a different language. Please retry.", proposal_network_failed: "The node proposal could not be reached. Please retry.", proposal_generic_failed: "The node proposal could not be prepared.", createFailed: "The node could not be created.", applied: "This node has already been created.", retry: "Retry preparing node" },
-  de: { prepare: "Als Content-Node vorbereiten", preview: "Vorschau des Content-Nodes", type: "Content-Node", title: "Titel", content: "Inhalt", rationale: "Warum dieser Node", create: "Node erstellen", cancel: "Abbrechen", preparing: "Node wird vorbereitet…", created: "Node wurde erstellt.", invalid: "Dieser Vorschlag ist nicht mehr gültig.", board: "Dein Board hat sich geändert. Bereite den Node erneut vor.", canvas: "Dein Canvas hat sich geändert. Bereite den Node erneut vor.", permission: "Du hast keine Berechtigung mehr, diesen Node zu erstellen.", prepareFailed: "Der Node-Vorschlag konnte nicht vorbereitet werden.", proposal_route_unavailable: "Der Dienst für Node-Vorschläge ist nicht verfügbar.", proposal_unauthorized: "Bitte melde dich erneut an, um diesen Node vorzubereiten.", proposal_forbidden: "Du hast keine Berechtigung mehr, diesen Node zu erstellen.", proposal_request_invalid: "Die Anfrage für den Node-Vorschlag war ungültig.", proposal_source_invalid: "Die Quellantwort kann nicht für einen Node-Vorschlag verwendet werden.", proposal_canvas_invalid: "Der aktuelle Canvas kann nicht für diesen Vorschlag verwendet werden.", proposal_context_changed: "Board oder Canvas haben sich geändert. Bereite den Node erneut vor.", proposal_provider_failed: "Der Dienst für Node-Vorschläge konnte nicht antworten.", proposal_response_invalid: "Die Antwort für den Node-Vorschlag war ungültig.", proposal_language_mismatch: "Der Node-Vorschlag verwendet eine andere Sprache. Bitte versuche es erneut.", proposal_network_failed: "Der Dienst für Node-Vorschläge ist nicht erreichbar. Bitte versuche es erneut.", proposal_generic_failed: "Der Node-Vorschlag konnte nicht vorbereitet werden.", createFailed: "Der Node konnte nicht erstellt werden.", applied: "Dieser Node wurde bereits erstellt.", retry: "Node erneut vorbereiten" }
+  en: { prepare: "Prepare as Content node", preview: "Content node preview", type: "Content node", title: "Title", content: "Content", rationale: "Why this node", create: "Create node", cancel: "Cancel", preparing: "Preparing node…", created: "Node created.", creationAnnouncement: "Content node created.", advisor: "Advisor", invalid: "This proposal is no longer valid.", board: "Your Board changed. Prepare the node again.", canvas: "Your Canvas changed. Prepare the node again.", permission: "You no longer have permission to create this node.", prepareFailed: "The node proposal could not be prepared.", proposal_route_unavailable: "The node proposal service is unavailable.", proposal_unauthorized: "Please sign in again to prepare this node.", proposal_forbidden: "You no longer have permission to create this node.", proposal_request_invalid: "The node proposal request was invalid.", proposal_source_invalid: "The source answer cannot be used for a node proposal.", proposal_canvas_invalid: "The current Canvas cannot be used for this proposal.", proposal_context_changed: "Your Board or Canvas changed. Prepare the node again.", proposal_provider_failed: "The node proposal service could not respond.", proposal_response_invalid: "The node proposal response was invalid.", proposal_language_mismatch: "The node proposal used a different language. Please retry.", proposal_network_failed: "The node proposal could not be reached. Please retry.", proposal_generic_failed: "The node proposal could not be prepared.", createFailed: "The node could not be created.", applied: "This node has already been created.", retry: "Retry preparing node" },
+  de: { prepare: "Als Content-Node vorbereiten", preview: "Vorschau des Content-Nodes", type: "Content-Node", title: "Titel", content: "Inhalt", rationale: "Warum dieser Node", create: "Node erstellen", cancel: "Abbrechen", preparing: "Node wird vorbereitet…", created: "Node wurde erstellt.", creationAnnouncement: "Content-Node wurde erstellt.", advisor: "Berater", invalid: "Dieser Vorschlag ist nicht mehr gültig.", board: "Dein Board hat sich geändert. Bereite den Node erneut vor.", canvas: "Dein Canvas hat sich geändert. Bereite den Node erneut vor.", permission: "Du hast keine Berechtigung mehr, diesen Node zu erstellen.", prepareFailed: "Der Node-Vorschlag konnte nicht vorbereitet werden.", proposal_route_unavailable: "Der Dienst für Node-Vorschläge ist nicht verfügbar.", proposal_unauthorized: "Bitte melde dich erneut an, um diesen Node vorzubereiten.", proposal_forbidden: "Du hast keine Berechtigung mehr, diesen Node zu erstellen.", proposal_request_invalid: "Die Anfrage für den Node-Vorschlag war ungültig.", proposal_source_invalid: "Die Quellantwort kann nicht für einen Node-Vorschlag verwendet werden.", proposal_canvas_invalid: "Der aktuelle Canvas kann nicht für diesen Vorschlag verwendet werden.", proposal_context_changed: "Board oder Canvas haben sich geändert. Bereite den Node erneut vor.", proposal_provider_failed: "Der Dienst für Node-Vorschläge konnte nicht antworten.", proposal_response_invalid: "Die Antwort für den Node-Vorschlag war ungültig.", proposal_language_mismatch: "Der Node-Vorschlag verwendet eine andere Sprache. Bitte versuche es erneut.", proposal_network_failed: "Der Dienst für Node-Vorschläge ist nicht erreichbar. Bitte versuche es erneut.", proposal_generic_failed: "Der Node-Vorschlag konnte nicht vorbereitet werden.", createFailed: "Der Node konnte nicht erstellt werden.", applied: "Dieser Node wurde bereits erstellt.", retry: "Node erneut vorbereiten" }
 });
 const AI_BRAIN_PROPOSAL_LIMITS = Object.freeze({ id: 80, title: 120, body: 4000, rationale: 500 });
 const AI_BRAIN_PROPOSAL_ERROR_CODES = new Set(["proposal_route_unavailable", "proposal_unauthorized", "proposal_forbidden", "proposal_request_invalid", "proposal_source_invalid", "proposal_canvas_invalid", "proposal_context_changed", "proposal_provider_failed", "proposal_response_invalid", "proposal_language_mismatch", "proposal_network_failed", "proposal_generic_failed"]);
@@ -5418,7 +5418,7 @@ function renderAiBrain() {
   if (state.aiBrain.identity && state.aiBrain.identity !== aiBrainIdentity()) invalidateAiBrainRequest();
   const canAsk = !!state.user?.email && !!state.currentBoardId && state.boardAccess?.canEdit === true;
   const selected = state.selectedPrimary ? getNode(state.selectedPrimary) : null; const unsaved = !!state.isDirty;
-  el.aiBrainSummary.innerHTML = `<section class="ai-brain-wrap ai-brain-conversation"><header class="ai-brain-header"><div><h3>🧠 AI Brain</h3><p>Read-only Brand and campaign advisor</p></div><span class="ai-brain-readonly">Read-only</span></header><div class="ai-brain-context" aria-label="Advice context"><span>Board: ${escapeHtml(state.currentBoardName || "Current Board")}</span><span>${state.nodes.length} Canvas nodes</span>${selected ? `<span>Selected: ${escapeHtml(selected.title || selected.type || "Node")}</span>` : ""}<span class="${unsaved ? "is-unsaved" : ""}">${unsaved ? "Includes unsaved Canvas changes" : "Saved Canvas context"}</span></div>${canAsk ? `<div class="ai-brain-transcript" aria-live="polite"></div><form id="ai-brain-form" class="ai-brain-composer"><label for="ai-brain-question">Your strategic question</label><textarea id="ai-brain-question" maxlength="2000" required></textarea><div><small>AI advice is qualitative. No changes will be made.</small><button type="submit" ${state.aiBrain.status === "loading" ? "disabled" : ""}>${state.aiBrain.status === "loading" ? "Thinking…" : "Ask AI Brain"}</button></div></form>` : `<div class="ai-brain-unavailable"><h4>AI Brain advice is unavailable</h4><p>New advice is available only to authenticated editors.</p></div>`}</section>`;
+  el.aiBrainSummary.innerHTML = `<section class="ai-brain-wrap ai-brain-conversation"><header class="ai-brain-header"><div><h3>🧠 AI Brain</h3><p>Read-only Brand and campaign advisor</p></div><span class="ai-brain-readonly">${aiBrainProposalText("advisor")}</span></header><div class="ai-brain-context" aria-label="Advice context"><span>Board: ${escapeHtml(state.currentBoardName || "Current Board")}</span><span>${state.nodes.length} Canvas nodes</span>${selected ? `<span>Selected: ${escapeHtml(selected.title || selected.type || "Node")}</span>` : ""}<span class="${unsaved ? "is-unsaved" : ""}">${unsaved ? "Includes unsaved Canvas changes" : "Saved Canvas context"}</span></div>${canAsk ? `<div class="ai-brain-transcript" aria-live="polite"></div><form id="ai-brain-form" class="ai-brain-composer"><label for="ai-brain-question">Your strategic question</label><textarea id="ai-brain-question" maxlength="2000" required></textarea><div><small>AI advice is qualitative. No changes will be made.</small><button type="submit" ${state.aiBrain.status === "loading" ? "disabled" : ""}>${state.aiBrain.status === "loading" ? "Thinking…" : "Ask AI Brain"}</button></div></form>` : `<div class="ai-brain-unavailable"><h4>AI Brain advice is unavailable</h4><p>New advice is available only to authenticated editors.</p></div>`}</section>`;
   const transcript = el.aiBrainSummary.querySelector(".ai-brain-transcript"); if (transcript) renderAiBrainTranscript(transcript);
   el.aiBrainSummary.querySelector("#ai-brain-form")?.addEventListener("submit", requestAiBrainAdvice);
   el.aiBrainSummary.querySelectorAll("[data-ai-brain-retry]").forEach((button) => button.addEventListener("click", () => requestAiBrainAdvice(null, button.dataset.aiBrainRetry)));
@@ -5460,6 +5460,48 @@ function aiBrainNodePlacement() {
   }
   return clampNodePosition(defaultGridPosition().x, defaultGridPosition().y);
 }
+function revealAiBrainCreatedNode(nodeId) {
+  const node = getNode(nodeId); const nodeEl = node ? el.zoomLayer.querySelector(`[data-id='${nodeId}']`) : null;
+  if (!node || !nodeEl || !el.canvas) return false;
+
+  // Measure only after the canonical navigation has closed AI Brain and the
+  // inspector has taken its final width. The Canvas rect also starts below the
+  // toolbar, so these bounds describe the workspace the user can really see.
+  const canvasRect = el.canvas.getBoundingClientRect();
+  const inspectorRect = el.inspectorPanel?.classList.contains("hidden") ? null : el.inspectorPanel?.getBoundingClientRect();
+  const toolbarRect = el.canvasTopbar?.classList.contains("hidden") ? null : el.canvasTopbar?.getBoundingClientRect();
+  const visible = {
+    left: canvasRect.left,
+    right: inspectorRect && inspectorRect.left < canvasRect.right ? Math.min(canvasRect.right, inspectorRect.left) : canvasRect.right,
+    top: toolbarRect && toolbarRect.bottom > canvasRect.top ? Math.max(canvasRect.top, toolbarRect.bottom) : canvasRect.top,
+    bottom: canvasRect.bottom
+  };
+  const nodeRect = nodeEl.getBoundingClientRect(); const margin = 24;
+  let deltaX = 0; let deltaY = 0;
+  if (nodeRect.left < visible.left + margin) deltaX = nodeRect.left - visible.left - margin;
+  else if (nodeRect.right > visible.right - margin) deltaX = nodeRect.right - visible.right + margin;
+  if (nodeRect.top < visible.top + margin) deltaY = nodeRect.top - visible.top - margin;
+  else if (nodeRect.bottom > visible.bottom - margin) deltaY = nodeRect.bottom - visible.bottom + margin;
+  if (deltaX || deltaY) el.canvas.scrollTo({ left: Math.max(0, el.canvas.scrollLeft + deltaX), top: Math.max(0, el.canvas.scrollTop + deltaY), behavior: "smooth" });
+  return true;
+}
+
+function completeAiBrainNodeCreation(nodeId, languageCode) {
+  // Use the same navigation lifecycle as the Canvas sidebar control. Navigation
+  // intentionally leaves the ephemeral AI Brain transcript untouched.
+  el.campaignCanvasNavButton?.click();
+  const selectCreatedNode = () => {
+    const node = getNode(nodeId); if (!node) return false;
+    state.selectedIds.clear(); state.selectedIds.add(nodeId); state.selectedPrimary = nodeId;
+    updateSelectionClasses(); fillInspector(node);
+    revealAiBrainCreatedNode(nodeId);
+    setSaveStatus(aiBrainProposalText("creationAnnouncement", languageCode));
+    (el.inputs?.title || el.inspectorPanel)?.focus?.({ preventScroll: true });
+    return true;
+  };
+  requestAnimationFrame(selectCreatedNode);
+}
+
 function applyAiBrainNodeProposal(turnId) {
   const turn = state.aiBrain.messages.find((item) => item.id === turnId); const proposal = turn?.proposal;
   if (!turn || turn.status !== "success" || proposal?.status !== "ready") return renderAiBrain();
@@ -5475,10 +5517,14 @@ function applyAiBrainNodeProposal(turnId) {
     node = createNode({ type: "Content", position: aiBrainNodePlacement(), initial: { title: validated.title, content: validated.body } });
     if (!node) throw new Error("creation_rejected");
     markUnsaved();
-    setTurnProposal(turnId, () => ({ ...proposal, status: "applied", data: null, controller: null })); renderAiBrain();
+    const createdNodeId = node.id; const proposalLanguage = proposal.uiLanguage;
+    setTurnProposal(turnId, () => ({ ...proposal, status: "applied", data: null, controller: null, createdNodeId }));
+    completeAiBrainNodeCreation(createdNodeId, proposalLanguage);
   } catch (_error) {
     if (node || state.nodes.some((item) => !nodeIdsBefore.has(item.id))) {
-      setTurnProposal(turnId, () => ({ ...proposal, status: "applied", data: null, errorCode: "createFailed" }));
+      const createdNode = node || state.nodes.find((item) => !nodeIdsBefore.has(item.id));
+      setTurnProposal(turnId, () => ({ ...proposal, status: "applied", data: null, errorCode: "createFailed", createdNodeId: createdNode?.id || null }));
+      if (createdNode) completeAiBrainNodeCreation(createdNode.id, proposal.uiLanguage);
     } else {
       state.aiBrain.appliedProposalIds.delete(validated.proposal_id); state.history.length = historyLength;
       setTurnProposal(turnId, () => ({ ...proposal, status: "failed", errorCode: "createFailed" }));
