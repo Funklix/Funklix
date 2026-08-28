@@ -89,6 +89,8 @@ jobs:
         run: node scripts/check-bw26-4-reference-resolution.js
       - name: Check AI Brain response-language adherence
         run: node scripts/check-bw26-5-response-language-adherence.js
+      - name: Check controlled AI Brain Content-node creation
+        run: node scripts/check-bw26-6-controlled-ai-brain-node-creation.js
       - name: Check dynamic AI Insights translations
         run: node scripts/check-bw25-1-dynamic-insights-translations.js
       - name: Check Knowledge Module browser globals

@@ -148,7 +148,7 @@ const state = {
   ,analysisRefreshing: false
   ,analysisLastUpdatedAt: null
   ,analysisError: ""
-  ,aiBrain: { status: "idle", messages: [], requestId: 0, controller: null, identity: "", error: "" }
+  ,aiBrain: { status: "idle", messages: [], requestId: 0, controller: null, identity: "", error: "", appliedProposalIds: new Set() }
   ,insightsDiagnosticSnapshot: null
   ,nodeSearchQuery: ""
   ,nodeFilters: { type: new Set(), platform: new Set(), state: new Set(), status: new Set(), owner: new Set() }
@@ -5217,6 +5217,12 @@ const AI_BRAIN_TEXT = Object.freeze({
   en: { you: "You", assumptions: "Assumptions", pending: "Pending…", failed: "Failed", retry: "Retry", current: "Retry uses the current Canvas context.", responseLanguage: "Response language: English", response_language_mismatch: "AI Brain answered in a different language. Please retry.", malformed_canvas: "The Canvas context is malformed.", unsupported_canvas: "This Canvas structure is not supported.", canvas_too_large: "The Canvas exceeds the supported size.", invalid_selected_node: "The selected node is no longer available.", stale_canvas: "The Canvas context is stale. Retry with the current Canvas.", generic: "AI Brain could not answer right now.", changed: "The Board, account, access, selection, or Canvas changed. Retry with the current context." },
   de: { you: "Du", assumptions: "Annahmen", pending: "Ausstehend…", failed: "Fehlgeschlagen", retry: "Erneut versuchen", current: "Beim erneuten Versuch wird der aktuelle Canvas-Kontext verwendet.", responseLanguage: "Antwortsprache: Deutsch", response_language_mismatch: "AI Brain hat in einer anderen Sprache geantwortet. Bitte versuche es erneut.", malformed_canvas: "Der Canvas-Kontext ist fehlerhaft.", unsupported_canvas: "Diese Canvas-Struktur wird nicht unterstützt.", canvas_too_large: "Der Canvas überschreitet die unterstützte Größe.", invalid_selected_node: "Der ausgewählte Knoten ist nicht mehr verfügbar.", stale_canvas: "Der Canvas-Kontext ist veraltet. Versuche es mit dem aktuellen Canvas erneut.", generic: "AI Brain kann gerade nicht antworten.", changed: "Board, Konto, Zugriff, Auswahl oder Canvas haben sich geändert. Versuche es mit dem aktuellen Kontext erneut." }
 });
+const AI_BRAIN_PROPOSAL_TEXT = Object.freeze({
+  en: { prepare: "Prepare as Content node", preview: "Content node preview", type: "Content node", title: "Title", content: "Content", rationale: "Why this node", create: "Create node", cancel: "Cancel", preparing: "Preparing node…", created: "Node created.", invalid: "This proposal is no longer valid.", board: "Your Board changed. Prepare the node again.", canvas: "Your Canvas changed. Prepare the node again.", permission: "You no longer have permission to create this node.", prepareFailed: "The node proposal could not be prepared.", createFailed: "The node could not be created.", applied: "This node has already been created.", retry: "Retry preparing node" },
+  de: { prepare: "Als Content-Node vorbereiten", preview: "Vorschau des Content-Nodes", type: "Content-Node", title: "Titel", content: "Inhalt", rationale: "Warum dieser Node", create: "Node erstellen", cancel: "Abbrechen", preparing: "Node wird vorbereitet…", created: "Node wurde erstellt.", invalid: "Dieser Vorschlag ist nicht mehr gültig.", board: "Dein Board hat sich geändert. Bereite den Node erneut vor.", canvas: "Dein Canvas hat sich geändert. Bereite den Node erneut vor.", permission: "Du hast keine Berechtigung mehr, diesen Node zu erstellen.", prepareFailed: "Der Node-Vorschlag konnte nicht vorbereitet werden.", createFailed: "Der Node konnte nicht erstellt werden.", applied: "Dieser Node wurde bereits erstellt.", retry: "Node erneut vorbereiten" }
+});
+const AI_BRAIN_PROPOSAL_LIMITS = Object.freeze({ id: 80, title: 120, body: 4000, rationale: 500 });
+function aiBrainProposalText(key, languageCode = state.uiLanguage) { return (AI_BRAIN_PROPOSAL_TEXT[languageCode] || AI_BRAIN_PROPOSAL_TEXT.en)[key] || key; }
 function aiBrainText(key) { return (AI_BRAIN_TEXT[state.uiLanguage] || AI_BRAIN_TEXT.en)[key] || key; }
 function aiBrainTurnText(turn, key) { return (AI_BRAIN_TEXT[turn?.responseLanguage] || AI_BRAIN_TEXT[state.uiLanguage] || AI_BRAIN_TEXT.en)[key] || key; }
 function aiBrainRequestContextIdentity() {
@@ -5256,7 +5262,54 @@ function aiBrainConversationHistory(excludedTurnId = null) {
 }
 function invalidateAiBrainRequest() {
   state.aiBrain.controller?.abort();
-  state.aiBrain = { status: "idle", messages: [], requestId: state.aiBrain.requestId + 1, controller: null, identity: aiBrainIdentity(), error: "" };
+  state.aiBrain.messages.forEach((turn) => turn.proposal?.controller?.abort?.());
+  state.aiBrain = { status: "idle", messages: [], requestId: state.aiBrain.requestId + 1, controller: null, identity: aiBrainIdentity(), error: "", appliedProposalIds: new Set() };
+}
+
+function validateAiBrainNodeProposal(input, sourceTurnId) {
+  if (!input || typeof input !== "object" || Array.isArray(input) || ![Object.prototype, null].includes(Object.getPrototypeOf(input))) return null;
+  const allowed = ["proposal_id", "source_turn_id", "node_type", "title", "body", "rationale"];
+  const keys = Object.keys(input); const required = allowed.slice(0, 5);
+  if (!keys.every((key) => allowed.includes(key) && !["__proto__", "prototype", "constructor"].includes(key)) || !required.every((key) => Object.prototype.hasOwnProperty.call(input, key))) return null;
+  const clean = (value, max, multiline = false) => {
+    if (typeof value !== "string") return null; const normalized = value.replace(/\r\n?/g, "\n").trim();
+    const controls = multiline ? /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/ : /[\u0000-\u001f\u007f]/;
+    return normalized && normalized.length <= max && !controls.test(normalized) ? normalized : null;
+  };
+  const proposalId = clean(input.proposal_id, AI_BRAIN_PROPOSAL_LIMITS.id); const turnId = clean(input.source_turn_id, AI_BRAIN_PROPOSAL_LIMITS.id);
+  const title = clean(input.title, AI_BRAIN_PROPOSAL_LIMITS.title); const body = clean(input.body, AI_BRAIN_PROPOSAL_LIMITS.body, true);
+  const rationale = input.rationale === undefined || input.rationale === "" ? "" : clean(input.rationale, AI_BRAIN_PROPOSAL_LIMITS.rationale, true);
+  if (!proposalId || !turnId || turnId !== sourceTurnId || input.node_type !== "Content" || !title || !body || rationale === null) return null;
+  return Object.assign(Object.create(null), { proposal_id: proposalId, source_turn_id: turnId, node_type: "Content", title, body, ...(rationale ? { rationale } : {}) });
+}
+function canUseAiBrainProposal() { return !!state.user?.email && !!state.currentBoardId && state.boardAccess?.canEdit === true && !state.publicBoardToken; }
+function setTurnProposal(turnId, updater) {
+  state.aiBrain.messages = state.aiBrain.messages.map((turn) => turn.id === turnId ? { ...turn, proposal: updater(turn.proposal) } : turn);
+}
+function cancelAiBrainNodeProposal(turnId) {
+  const turn = state.aiBrain.messages.find((item) => item.id === turnId); if (!turn?.proposal || turn.proposal.status === "applied") return;
+  setTurnProposal(turnId, () => ({ status: "cancelled" })); renderAiBrain();
+}
+async function requestAiBrainNodeProposal(turnId) {
+  const turn = state.aiBrain.messages.find((item) => item.id === turnId && item.status === "success" && item.answer && item.referenceResolution !== "clarification");
+  if (!turn || !canUseAiBrainProposal() || turn.proposal?.status === "requesting" || turn.proposal?.status === "applying" || turn.proposal?.status === "applied") return renderAiBrain();
+  const uiLanguage = state.uiLanguage === "de" ? "de" : "en"; const contentLanguage = state.campaignLanguage === "de" ? "de" : "en";
+  const boardId = state.currentBoardId; const accountIdentity = state.user.email; const contextIdentity = aiBrainRequestContextIdentity(); const lifecycle = state.boardLoadGeneration;
+  const controller = new AbortController(); setTurnProposal(turnId, () => ({ status: "requesting", uiLanguage, contentLanguage, boardId, accountIdentity, contextIdentity, lifecycle, controller })); renderAiBrain();
+  try {
+    const response = await fetch("/api/ai-brain/propose-node", { method: "POST", headers: { "Content-Type": "application/json", "X-AI-Brain-Generation": String(state.aiBrain.requestId) }, signal: controller.signal, body: JSON.stringify({ action: "propose_content_node", board_id: boardId, source_turn_id: turn.id, source_answer: turn.answer, selected_node_id: state.selectedPrimary || null, canvas_context: aiBrainCanvasProjection(), response_language: uiLanguage, content_language: contentLanguage }) });
+    const data = await response.json().catch(() => ({})); const current = state.aiBrain.messages.find((item) => item.id === turnId)?.proposal;
+    if (current?.controller !== controller) return;
+    if (!canUseAiBrainProposal() || state.currentBoardId !== boardId || state.user.email !== accountIdentity || state.boardLoadGeneration !== lifecycle) return setTurnProposal(turnId, () => ({ status: "stale", errorCode: "board", uiLanguage })), renderAiBrain();
+    if (aiBrainRequestContextIdentity() !== contextIdentity) return setTurnProposal(turnId, () => ({ status: "stale", errorCode: "canvas", uiLanguage })), renderAiBrain();
+    if (!response.ok || data.action !== "propose_content_node" || data.context?.board_id !== boardId || data.context?.response_language !== uiLanguage || data.context?.content_language !== contentLanguage) throw new Error("invalid");
+    const proposal = validateAiBrainNodeProposal(data.node_proposal, turn.id); if (!proposal || state.aiBrain.appliedProposalIds.has(proposal.proposal_id)) throw new Error("invalid");
+    setTurnProposal(turnId, () => ({ status: "ready", data: proposal, uiLanguage, contentLanguage, boardId, accountIdentity, contextIdentity, lifecycle })); renderAiBrain();
+    el.aiBrainSummary.querySelector(`[data-ai-brain-cancel='${turnId}']`)?.focus();
+  } catch (error) {
+    if (error?.name === "AbortError") return;
+    setTurnProposal(turnId, () => ({ status: "failed", errorCode: "prepareFailed", uiLanguage })); renderAiBrain();
+  }
 }
 
 // Model output is untrusted. This intentionally small formatter creates only
@@ -5337,6 +5390,24 @@ function renderAiBrainTranscript(transcript) {
       section.append(heading, list); advisor.appendChild(section);
     }
     if (turn.meta) { const meta = document.createElement("small"); meta.textContent = turn.meta; advisor.appendChild(meta); }
+    const proposal = turn.proposal; const eligible = turn.status === "success" && turn.referenceResolution !== "clarification" && canUseAiBrainProposal() && proposal?.status !== "applied";
+    if (eligible && (!proposal || ["cancelled", "failed", "stale"].includes(proposal.status))) {
+      const prepare = document.createElement("button"); prepare.type = "button"; prepare.className = "ai-brain-proposal-prepare"; prepare.dataset.aiBrainPrepare = turn.id;
+      prepare.textContent = proposal?.status === "failed" ? aiBrainProposalText("retry") : aiBrainProposalText("prepare"); advisor.appendChild(prepare);
+    }
+    if (proposal?.status === "requesting") { const status = document.createElement("div"); status.className = "ai-brain-proposal-status"; status.setAttribute("role", "status"); status.textContent = aiBrainProposalText("preparing", proposal.uiLanguage); advisor.appendChild(status); }
+    if (["failed", "stale"].includes(proposal?.status)) { const status = document.createElement("div"); status.className = "ai-brain-proposal-status is-error"; status.setAttribute("role", "alert"); status.textContent = aiBrainProposalText(proposal.errorCode || "invalid", proposal.uiLanguage); advisor.appendChild(status); }
+    if (["ready", "applying"].includes(proposal?.status) && canUseAiBrainProposal() && proposal.boardId === state.currentBoardId && proposal.accountIdentity === state.user?.email) {
+      const preview = document.createElement("section"); preview.className = "ai-brain-node-preview"; preview.setAttribute("aria-label", aiBrainProposalText("preview"));
+      const heading = document.createElement("h4"); heading.textContent = aiBrainProposalText("preview");
+      const type = document.createElement("span"); type.className = "ai-brain-node-type"; type.textContent = aiBrainProposalText("type"); preview.append(heading, type);
+      [["title", proposal.data.title], ["content", proposal.data.body], ...(proposal.data.rationale ? [["rationale", proposal.data.rationale]] : [])].forEach(([key, value]) => { const section = document.createElement("div"); const label = document.createElement("strong"); label.textContent = aiBrainProposalText(key); const copy = document.createElement("div"); copy.className = "ai-brain-proposal-copy"; copy.dataset.userContent = "true"; copy.textContent = value; section.append(label, copy); preview.appendChild(section); });
+      const actions = document.createElement("div"); actions.className = "ai-brain-proposal-actions";
+      const cancel = document.createElement("button"); cancel.type = "button"; cancel.dataset.aiBrainCancel = turn.id; cancel.textContent = aiBrainProposalText("cancel");
+      const create = document.createElement("button"); create.type = "button"; create.dataset.aiBrainCreate = turn.id; create.textContent = aiBrainProposalText("create"); create.disabled = proposal.status === "applying";
+      actions.append(cancel, create); preview.appendChild(actions); advisor.appendChild(preview);
+    }
+    if (proposal?.status === "applied") { const status = document.createElement("div"); status.className = "ai-brain-proposal-status is-success"; status.setAttribute("role", "status"); status.textContent = aiBrainProposalText("created", proposal.uiLanguage); advisor.appendChild(status); }
     transcript.appendChild(advisor);
   });
 }
@@ -5349,6 +5420,9 @@ function renderAiBrain() {
   const transcript = el.aiBrainSummary.querySelector(".ai-brain-transcript"); if (transcript) renderAiBrainTranscript(transcript);
   el.aiBrainSummary.querySelector("#ai-brain-form")?.addEventListener("submit", requestAiBrainAdvice);
   el.aiBrainSummary.querySelectorAll("[data-ai-brain-retry]").forEach((button) => button.addEventListener("click", () => requestAiBrainAdvice(null, button.dataset.aiBrainRetry)));
+  el.aiBrainSummary.querySelectorAll("[data-ai-brain-prepare]").forEach((button) => button.addEventListener("click", () => requestAiBrainNodeProposal(button.dataset.aiBrainPrepare)));
+  el.aiBrainSummary.querySelectorAll("[data-ai-brain-cancel]").forEach((button) => button.addEventListener("click", () => cancelAiBrainNodeProposal(button.dataset.aiBrainCancel)));
+  el.aiBrainSummary.querySelectorAll("[data-ai-brain-create]").forEach((button) => button.addEventListener("click", () => applyAiBrainNodeProposal(button.dataset.aiBrainCreate)));
 }
 async function requestAiBrainAdvice(event, retryTurnId = null) {
   event?.preventDefault();
@@ -5367,12 +5441,48 @@ async function requestAiBrainAdvice(event, retryTurnId = null) {
     if (data.context?.response_language !== responseLanguage) { const error = new Error("AI Brain response language identity mismatch"); error.code = "response_language_mismatch"; throw error; }
     const scope = [`Board Brand Core`, data.context?.canonicalBrandCore ? "Canonical Brand Core" : null, `${data.context?.canvasNodes || 0} Canvas nodes`].filter(Boolean).join(" · ");
     const assumptions = Array.isArray(data.assumptions) ? data.assumptions.filter((value) => typeof value === "string").slice(0, 20) : [];
-    state.aiBrain = { ...state.aiBrain, status: "success", controller: null, messages: state.aiBrain.messages.map((item) => item.id === turn.id ? { ...item, status: "success", answer: data.answer, responseLanguage, assumptions, meta: `${scope}. ${data.disclaimer}` } : item) };
+    state.aiBrain = { ...state.aiBrain, status: "success", controller: null, messages: state.aiBrain.messages.map((item) => item.id === turn.id ? { ...item, status: "success", answer: data.answer, responseLanguage, assumptions, referenceResolution: data.context?.reference_resolution || "none", proposal: null, meta: `${scope}. ${data.disclaimer}` } : item) };
   } catch (error) {
     if (error?.name === "AbortError" || state.aiBrain.requestId !== requestId) return;
     state.aiBrain = { ...state.aiBrain, status: "error", controller: null, messages: state.aiBrain.messages.map((item) => item.id === turn.id ? { ...item, status: "failed", errorCode: error.code || "generic" } : item) };
   }
   renderAiBrain();
+}
+
+function aiBrainNodePlacement() {
+  const bounds = visibleBoardBounds(); const origin = clampNodePosition(bounds.left + Math.max(40, (bounds.width - NODE_WIDTH) / 2), bounds.top + Math.max(40, (bounds.height - NODE_HEIGHT) / 2));
+  const overlaps = (position) => state.nodes.some((node) => Math.abs((node.position?.x || 0) - position.x) < NODE_WIDTH + NODE_OVERLAP_MARGIN && Math.abs((node.position?.y || 0) - position.y) < NODE_HEIGHT + NODE_OVERLAP_MARGIN);
+  for (let index = 0; index < 48; index += 1) {
+    const column = index % 6; const row = Math.floor(index / 6); const candidate = clampNodePosition(origin.x + column * (NODE_WIDTH + NODE_OVERLAP_MARGIN), origin.y + row * (NODE_HEIGHT + NODE_OVERLAP_MARGIN));
+    if (!overlaps(candidate)) return candidate;
+  }
+  return clampNodePosition(defaultGridPosition().x, defaultGridPosition().y);
+}
+function applyAiBrainNodeProposal(turnId) {
+  const turn = state.aiBrain.messages.find((item) => item.id === turnId); const proposal = turn?.proposal;
+  if (!turn || turn.status !== "success" || proposal?.status !== "ready") return renderAiBrain();
+  if (!canUseAiBrainProposal()) { setTurnProposal(turnId, () => ({ ...proposal, status: "stale", errorCode: "permission" })); return renderAiBrain(); }
+  if (proposal.boardId !== state.currentBoardId || proposal.accountIdentity !== state.user?.email || proposal.lifecycle !== state.boardLoadGeneration) { setTurnProposal(turnId, () => ({ ...proposal, status: "stale", errorCode: "board" })); return renderAiBrain(); }
+  if (proposal.contextIdentity !== aiBrainRequestContextIdentity()) { setTurnProposal(turnId, () => ({ ...proposal, status: "stale", errorCode: "canvas" })); return renderAiBrain(); }
+  const validated = validateAiBrainNodeProposal(proposal.data, turn.id); if (!validated) { setTurnProposal(turnId, () => ({ ...proposal, status: "failed", errorCode: "invalid" })); return renderAiBrain(); }
+  if (state.aiBrain.appliedProposalIds.has(validated.proposal_id)) { setTurnProposal(turnId, () => ({ ...proposal, status: "applied" })); return renderAiBrain(); }
+  proposal.status = "applying"; state.aiBrain.appliedProposalIds.add(validated.proposal_id); renderAiBrain();
+  const historyLength = state.history.length; const nodeIdsBefore = new Set(state.nodes.map((item) => item.id)); let node = null;
+  try {
+    pushHistorySnapshot();
+    node = createNode({ type: "Content", position: aiBrainNodePlacement(), initial: { title: validated.title, content: validated.body } });
+    if (!node) throw new Error("creation_rejected");
+    markUnsaved();
+    setTurnProposal(turnId, () => ({ ...proposal, status: "applied", data: null, controller: null })); renderAiBrain();
+  } catch (_error) {
+    if (node || state.nodes.some((item) => !nodeIdsBefore.has(item.id))) {
+      setTurnProposal(turnId, () => ({ ...proposal, status: "applied", data: null, errorCode: "createFailed" }));
+    } else {
+      state.aiBrain.appliedProposalIds.delete(validated.proposal_id); state.history.length = historyLength;
+      setTurnProposal(turnId, () => ({ ...proposal, status: "failed", errorCode: "createFailed" }));
+    }
+    renderAiBrain();
+  }
 }
 
 function currentInsightsIdentity() {
@@ -9458,7 +9568,7 @@ function applyInherited(source, target) {
   if (!target.channel && source.channel) target.channel = source.channel;
 }
 
-function createNode({ type = "Idea", parentId = null, position = null, images = [] } = {}) {
+function createNode({ type = "Idea", parentId = null, position = null, images = [], initial = null } = {}) {
   if (state.boardAccess?.canEdit === false) {
     setSaveStatus("Read-only board");
     return null;
@@ -9498,6 +9608,10 @@ function createNode({ type = "Idea", parentId = null, position = null, images = 
     justConnectedAt: null,
     position: safePos
   };
+  if (initial && typeof initial === "object" && !Array.isArray(initial)) {
+    if (typeof initial.title === "string") node.title = initial.title;
+    if (typeof initial.content === "string") node.content = initial.content;
+  }
 
   if (parent) {
     applyInherited(parent, node);
