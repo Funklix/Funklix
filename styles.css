@@ -6264,15 +6264,21 @@ button:active {
   align-items: stretch;
   margin: 0 0 var(--fk-space-3);
   padding: var(--fk-space-4);
-  border-color: rgba(218, 224, 245, 0.95);
-  background: rgba(255, 255, 255, 0.92);
-  box-shadow: var(--fk-shadow-sm);
+  border-color: var(--fk-color-border-default);
+  background: var(--fk-color-surface-card);
+  color: var(--fk-color-text-primary);
+  box-shadow: var(--fk-shadow-card);
 }
 
 #boards-library-view .board-row:hover {
-  border-color: rgba(107, 91, 255, 0.34);
-  background: var(--fk-color-surface);
-  box-shadow: var(--fk-shadow-md);
+  border-color: var(--fk-color-border-strong);
+  background: var(--fk-color-surface-hover);
+  box-shadow: var(--fk-shadow-panel);
+}
+
+#boards-library-view .board-row:focus-within {
+  border-color: var(--fk-color-focus-ring);
+  box-shadow: 0 0 0 2px var(--fk-color-selection), var(--fk-shadow-card);
 }
 
 #boards-library-view .board-row-content {
@@ -6298,7 +6304,7 @@ button:active {
   color: var(--fk-color-primary);
   font-size: 1.2rem;
   font-weight: var(--fk-font-weight-bold);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.72);
+  box-shadow: inset 0 0 0 1px var(--fk-color-border-default);
 }
 
 #boards-library-view .board-row-avatar img {
@@ -6324,7 +6330,7 @@ button:active {
 
 #boards-library-view .board-row-title {
   min-width: min(100%, 220px);
-  color: var(--fk-color-heading);
+  color: var(--fk-color-text-primary);
   font-size: 1.05rem;
   font-weight: var(--fk-font-weight-bold);
   letter-spacing: -0.02em;
@@ -6335,14 +6341,14 @@ button:active {
 #boards-library-view .board-row-meta {
   display: grid;
   gap: 2px;
-  color: var(--fk-color-muted);
+  color: var(--fk-color-text-muted);
   font-size: var(--fk-font-size-xs);
   line-height: 1.35;
 }
 
 #boards-library-view .board-row-brand span,
 #boards-library-view .board-row-meta span {
-  color: var(--fk-color-muted);
+  color: var(--fk-color-text-muted);
   font-size: 0.66rem;
   font-weight: var(--fk-font-weight-bold);
   letter-spacing: 0.08em;
@@ -6351,12 +6357,12 @@ button:active {
 
 #boards-library-view .board-row-brand strong,
 #boards-library-view .board-row-meta strong {
-  color: var(--fk-color-heading);
+  color: var(--fk-color-text-secondary);
   font-size: var(--fk-font-size-sm);
 }
 
 #boards-library-view .board-row-description {
-  color: var(--fk-color-muted);
+  color: var(--fk-color-text-muted);
   font-size: var(--fk-font-size-sm);
   line-height: 1.45;
 }
@@ -6392,7 +6398,7 @@ button:active {
   gap: var(--fk-space-2);
   flex-wrap: wrap;
   padding-top: var(--fk-space-3);
-  border-top: 1px solid rgba(218, 224, 245, 0.72);
+  border-top: 1px solid var(--fk-color-divider);
 }
 
 #boards-library-view .board-action-btn.fk-btn {
@@ -6411,13 +6417,15 @@ button:active {
 }
 
 #boards-library-view .board-action-btn.danger {
+  border-color: var(--fk-color-danger);
+  background: var(--fk-color-danger-subtle);
   color: var(--fk-color-danger);
 }
 
 #boards-library-view .board-action-btn.danger:hover,
 #boards-library-view .board-action-btn.danger:focus-visible {
-  border-color: rgba(201, 74, 74, 0.34);
-  background: rgba(201, 74, 74, 0.09);
+  border-color: var(--fk-color-danger);
+  background: var(--fk-color-danger-subtle);
   color: var(--fk-color-danger);
 }
 
@@ -6567,7 +6575,7 @@ button:active {
   align-items: center;
   justify-content: center;
   color: var(--fk-color-muted);
-  background: rgba(255, 255, 255, 0.72);
+  background: var(--fk-color-surface-secondary);
   font-size: 0.82rem;
   letter-spacing: -0.25em;
   cursor: grab;
@@ -7072,7 +7080,10 @@ html[data-theme] #links path:hover { stroke:var(--fk-color-canvas-edge-hover); }
 html[data-theme] .postit { border-color:var(--fk-color-border-strong);color:#29261d; }
 html[data-theme="dark"] .postit { box-shadow:inset 0 0 0 999px rgba(255,255,255,.08),var(--fk-shadow-card); }
 html[data-theme] .ai-review-card { background:var(--fk-color-ai-review-surface);border-color:var(--fk-color-border-default);color:var(--fk-color-text-primary); }
-html[data-theme] .ai-brain-transcript,html[data-theme] .ai-brain-message,html[data-theme] .ai-brain-context span,html[data-theme] .insights-diagnostic-state { background:var(--fk-color-surface-secondary);border-color:var(--fk-color-border-default);color:var(--fk-color-text-primary); }
+html[data-theme] .ai-brain-transcript,html[data-theme] .ai-brain-message,html[data-theme] .ai-brain-context span,html[data-theme] .ai-brain-node-preview,html[data-theme] .ai-brain-composer,html[data-theme] .insights-diagnostic-state { background:var(--fk-color-surface-secondary);border-color:var(--fk-color-border-default);color:var(--fk-color-text-primary); }
+html[data-theme] .ai-brain-node-preview h4,html[data-theme] .ai-brain-proposal-copy,html[data-theme] .ai-brain-composer label { color:var(--fk-color-text-primary); }
+html[data-theme] .ai-brain-message small,html[data-theme] .ai-brain-composer small { color:var(--fk-color-text-muted); }
+html[data-theme] .ai-brain-proposal-actions button { background:var(--fk-color-surface-elevated);border-color:var(--fk-color-border-control);color:var(--fk-color-text-primary); }
 html[data-theme] .ai-brain-message.is-user { background:var(--fk-color-primary-action);border-color:var(--fk-color-primary-action);color:#fff; }
 html[data-theme] dialog,html[data-theme] .context-menu,html[data-theme] .filter-popover,html[data-theme] .tools-menu,html[data-theme] .theme-quick-menu { background:var(--fk-color-surface-elevated);border-color:var(--fk-color-border-default);color:var(--fk-color-text-primary);box-shadow:var(--fk-shadow-modal); }
 html[data-theme] dialog::backdrop { background:var(--fk-color-overlay-backdrop); }

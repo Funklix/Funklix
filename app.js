@@ -15413,7 +15413,7 @@ async function runImproveNodeFlow(node) {
 
   const overlay = document.createElement("div");
   overlay.style.cssText = "position:fixed;inset:0;background:rgba(10,10,14,.45);z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px";
-  overlay.innerHTML = `<div style="width:min(560px,95vw);background:#fff;border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:12px">
+  overlay.innerHTML = `<div style="width:min(560px,95vw);background:var(--fk-color-surface-elevated);color:var(--fk-color-text-primary);border:1px solid var(--fk-color-border-default);box-shadow:var(--fk-shadow-modal);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:12px">
     <h3 style="margin:0">✨ Improve with AI</h3>
     <div id="improve-ai-options" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px">
       <button type="button" data-preset="Emotional">Emotional</button>
@@ -15423,7 +15423,7 @@ async function runImproveNodeFlow(node) {
       <button type="button" data-preset="Custom" style="grid-column:1/-1">Custom</button>
     </div>
     <input id="improve-ai-custom" class="hidden" placeholder="Enter your instruction..." />
-    <div id="improve-ai-loader" class="hidden" style="border:1px solid #ececf4;border-radius:10px;padding:10px;background:#fafaff">
+    <div id="improve-ai-loader" class="hidden" style="border:1px solid var(--fk-color-border-default);border-radius:10px;padding:10px;background:var(--fk-color-surface-secondary);color:var(--fk-color-text-secondary)">
       <strong>✨ Improving content<span id="improve-ai-dots"></span></strong>
       <p id="improve-ai-subtext" style="margin:6px 0 0;color:#5f6174">Analyzing brand voice...</p>
     </div>
