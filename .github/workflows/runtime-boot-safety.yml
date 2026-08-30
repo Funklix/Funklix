@@ -95,6 +95,8 @@ jobs:
         run: node scripts/check-bw26-6-1-node-proposal-production-failure.js
       - name: Check AI Brain post-creation Canvas transition
         run: node scripts/check-bw26-6-2-node-creation-ui-transition.js
+      - name: Check BW-27 design system and Dark Mode
+        run: node scripts/check-bw27-design-system-dark-mode.js
       - name: Check dynamic AI Insights translations
         run: node scripts/check-bw25-1-dynamic-insights-translations.js
       - name: Check Knowledge Module browser globals

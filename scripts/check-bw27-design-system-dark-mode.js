@@ -1,0 +1,58 @@
+#!/usr/bin/env node
+"use strict";
+const assert = require("assert");
+const fs = require("fs");
+const path = require("path");
+const vm = require("vm");
+const root = path.resolve(__dirname, "..");
+const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
+const html = read("index.html");
+const css = read("styles.css");
+const app = read("app.js");
+const bootstrap = read("theme-bootstrap.js");
+const themeSource = read("theme.js");
+const workflow = read(".github/workflows/runtime-boot-safety.yml");
+const packageJson = JSON.parse(read("package.json"));
+function has(source, value, note) { assert(source.includes(value), note || `Missing ${value}`); }
+
+const storageData = new Map();
+const listeners = {};
+const rootElement = { dataset: {}, style: {} };
+const media = { matches: true, addEventListener(type, fn) { listeners[type] = fn; }, addListener() {} };
+const windowStub = { localStorage: { getItem:key => storageData.get(key) || null, setItem:(key,value) => storageData.set(key,value) }, matchMedia:() => media, document:{ documentElement:rootElement, readyState:"loading", addEventListener(){}, getElementById(){ return null; }, querySelectorAll(){ return []; } }, addEventListener(){}, dispatchEvent(){} };
+const sandbox = { window:windowStub, document:windowStub.document, module:{ exports:{} }, CustomEvent:function(type, init){ this.type=type;this.detail=init.detail; } };
+vm.runInNewContext(themeSource, sandbox, { filename:"theme.js" });
+const theme = sandbox.module.exports;
+assert.deepStrictEqual(Array.from(theme.VALID_PREFERENCES), ["system","light","dark"]);
+assert.strictEqual(theme.DEFAULT_PREFERENCE, "system");
+assert.strictEqual(theme.resolveTheme("system", true), "dark");
+assert.strictEqual(theme.resolveTheme("system", false), "light");
+assert.strictEqual(theme.resolveTheme("invalid", false), "light");
+assert.strictEqual(theme.resolveTheme("light", true), "light");
+assert.strictEqual(theme.resolveTheme("dark", false), "dark");
+theme.setPreference("dark"); assert.strictEqual(rootElement.dataset.theme, "dark");
+theme.setPreference("light"); assert.strictEqual(rootElement.dataset.theme, "light");
+assert.strictEqual(storageData.get(theme.STORAGE_KEY), "light");
+
+has(bootstrap, "funklix.themePreference.v1", "Prepaint key mismatch");
+has(themeSource, "funklix.themePreference.v1", "Runtime key missing");
+assert(html.indexOf("theme-bootstrap.js") < html.indexOf("styles.css"), "Bootstrap must precede stylesheet");
+has(themeSource, "documentElement.dataset.theme"); has(themeSource, "preference === \"system\""); has(themeSource, "addEventListener?.(\"change\"");
+has(themeSource, "event.key === \"Escape\""); has(themeSource, "closest(\"#theme-quick-control\")"); has(html, "role=\"menuitemradio\"", "Theme menu roles missing");
+["theme-preference-select","theme-quick-button","theme-quick-menu"].forEach(id => has(html, `id="${id}"`));
+["system","light","dark"].forEach(value => { has(html, `value="${value}"`);has(html, `data-theme-choice="${value}"`); });
+["Appearance","Theme","Use your device appearance","Light appearance","Dark appearance","Change theme"].forEach(text => has(read("language.js"), `"${text}"`));
+["--fk-color-app-bg","--fk-color-canvas-bg","--fk-color-surface-elevated","--fk-color-overlay-backdrop","--fk-color-primary-action","--fk-color-focus-ring","--fk-color-text-primary","--fk-color-text-muted","--fk-color-border-default","--fk-shadow-card","--fk-shadow-modal","--fk-color-success","--fk-color-warning","--fk-color-danger","--fk-color-information","--fk-color-canvas-grid","--fk-color-canvas-edge","--fk-color-node-selection","--fk-color-comment-surface","--fk-color-ai-review-surface","--fk-color-scrollbar-thumb","--fk-color-skeleton","--fk-color-surface-disabled"].forEach(token => has(css, token));
+has(css, 'html[data-theme="light"]'); has(css, 'html[data-theme="dark"]');
+["--bg:","--panel:","--text:","--muted:","--primary:","--border:","--fk-color-bg:"].forEach(alias => has(css, alias));
+[".fk-btn-primary",".fk-btn-secondary",".fk-btn-subtle",".fk-btn-ghost",".fk-btn-icon",".fk-btn-destructive"].forEach(selector => has(css, selector));
+has(css, ":focus-visible"); has(css, "button:disabled"); has(css, "color-scheme:dark"); has(css, ".node.selected"); has(css, ".postit"); has(css, ".ai-review-card"); has(css, ".inspector-section");has(css, ".ai-brain-transcript");has(css, ".insights-section");has(css, "dialog::backdrop");has(css, "prefers-reduced-motion:reduce");has(css, "@media (max-width:720px)");
+["--fk-color-role-idea-surface","--fk-color-role-variation-surface","--fk-color-role-content-surface","--fk-color-role-social-surface","--fk-color-role-landing-surface","--fk-color-role-email-surface"].forEach(token => assert(css.split(token).length >= 3, `${token} needs Light and Dark values`));
+assert(!/themePreference\s*[:=].{0,80}(serializeState|campaignCanvasState|brandBrainState)/s.test(app), "Theme leaked into persisted product state");
+const handlerStart = app.indexOf('window.addEventListener("funklix:themechange"');
+const handler = app.slice(handlerStart, app.indexOf("});", handlerStart) + 3);
+["saveCampaignCanvasState","markBoardDirty","createNode(","generateCampaign","repair","reviewNode","renderNodes","drawLinks"].forEach(call => assert(!handler.includes(call), `Theme handler invokes ${call}`));
+["uiLanguage","campaignLanguage","aiBrain"].forEach(field => assert(!handler.includes(`state.${field} =`), `Theme handler mutates ${field}`));
+has(workflow, "node scripts/check-bw27-design-system-dark-mode.js");
+assert.strictEqual(packageJson.scripts["check:bw27"], "node scripts/check-bw27-design-system-dark-mode.js");
+console.log("BW-27 design-system and Dark Mode checks passed (71 contracts covered).");

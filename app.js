@@ -65,6 +65,8 @@ let activeBrandDnaRecommendation = null;
 const state = {
   uiLanguage: initialLanguagePreferences.uiLanguage,
   campaignLanguage: initialLanguagePreferences.campaignLanguage,
+  themePreference: window.FunklixTheme?.getState?.().themePreference || "system",
+  resolvedTheme: window.FunklixTheme?.getState?.().resolvedTheme || "light",
   nodes: [],
   edges: [],
   selectedIds: new Set(),
@@ -16313,8 +16315,13 @@ el.uiLanguageSelect?.addEventListener("change", () => {
   state.uiLanguage = language?.setUiLanguage?.(el.uiLanguageSelect.value) || "en";
   translateInterface(document);
   refreshOpenInspectorLanguage();
+  window.FunklixTheme?.syncControls?.();
   if (state.activeView === "insights") renderInsightsSurface();
   if (el.languagePreferenceStatus) el.languagePreferenceStatus.textContent = uiText("Interface language changed.");
+});
+window.addEventListener("funklix:themechange", (event) => {
+  state.themePreference = event.detail.themePreference;
+  state.resolvedTheme = event.detail.resolvedTheme;
 });
 el.campaignLanguageSelect?.addEventListener("change", () => {
   state.campaignLanguage = language?.setCampaignLanguage?.(el.campaignLanguageSelect.value) || "en";

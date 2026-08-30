@@ -10,6 +10,7 @@
     "check:bw26.5": "node scripts/check-bw26-5-response-language-adherence.js",
     "check:bw26.6": "node scripts/check-bw26-6-controlled-ai-brain-node-creation.js",
     "check:bw26.6.1": "node scripts/check-bw26-6-1-node-proposal-production-failure.js",
-    "check:bw26.6.2": "node scripts/check-bw26-6-2-node-creation-ui-transition.js"
+    "check:bw26.6.2": "node scripts/check-bw26-6-2-node-creation-ui-transition.js",
+    "check:bw27": "node scripts/check-bw27-design-system-dark-mode.js"
   }
 }
