@@ -15647,6 +15647,10 @@ function updateListView() {
 function renderNode(node) {
   const nodeEl = el.nodeTemplate.content.firstElementChild.cloneNode(true);
   nodeEl.dataset.id = node.id;
+  nodeEl.dataset.nodeRole = String(node.type || "content")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
 
   nodeEl.addEventListener("click", (event) => {
     collapseExpandedNodes(node.id);
