@@ -12,6 +12,7 @@
     "check:bw26.6.1": "node scripts/check-bw26-6-1-node-proposal-production-failure.js",
     "check:bw26.6.2": "node scripts/check-bw26-6-2-node-creation-ui-transition.js",
     "check:bw27": "node scripts/check-bw27-design-system-dark-mode.js",
-    "check:bw27.1": "node scripts/check-bw27-1-dark-mode-surface-contrast.js"
+    "check:bw27.1": "node scripts/check-bw27-1-dark-mode-surface-contrast.js",
+    "check:bw27.2": "node scripts/check-bw27-2-premium-dark-mode.js"
   }
 }

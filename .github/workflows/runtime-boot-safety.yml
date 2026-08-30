@@ -99,6 +99,8 @@ jobs:
         run: node scripts/check-bw27-design-system-dark-mode.js
       - name: Check BW-27.1 Dark Mode surface contrast
         run: node scripts/check-bw27-1-dark-mode-surface-contrast.js
+      - name: Check BW-27.2 premium Dark Mode visual system
+        run: node scripts/check-bw27-2-premium-dark-mode.js
       - name: Check dynamic AI Insights translations
         run: node scripts/check-bw25-1-dynamic-insights-translations.js
       - name: Check Knowledge Module browser globals
