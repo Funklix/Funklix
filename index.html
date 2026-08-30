@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Campaign Canvas MVP</title>
+    <script src="/theme-bootstrap.js"></script>
     <link rel="stylesheet" href="/styles.css" />
     <style>
       .canvas-toolbar { display: grid; grid-template-rows: auto auto; gap: 8px; width: 100%; min-width: 0; box-sizing: border-box; overflow: visible; }
@@ -282,6 +283,18 @@
             </div>
             <p class="settings-status" id="language-preference-status" role="status" aria-live="polite" aria-atomic="true"></p>
           </section>
+          <section class="settings-category" aria-labelledby="appearance-heading">
+            <h3 id="appearance-heading" data-i18n="Appearance">Appearance</h3>
+            <div class="settings-field">
+              <label for="theme-preference-select" data-i18n="Theme">Theme</label>
+              <select id="theme-preference-select" class="fk-select" aria-describedby="theme-preference-help">
+                <option value="system" data-i18n="System">System</option>
+                <option value="light" data-i18n="Light">Light</option>
+                <option value="dark" data-i18n="Dark">Dark</option>
+              </select>
+              <small id="theme-preference-help" data-i18n="Use your device appearance">Use your device appearance</small>
+            </div>
+          </section>
         </dialog>
       </aside>
 
@@ -302,6 +315,14 @@
                 <input id="node-search-input" class="fk-input toolbar-search-input" type="search" placeholder="Search nodes..." data-i18n-placeholder="Search nodes..." />
               </div>
               <div class="toolbar-group toolbar-group-right">
+                <div id="theme-quick-control" class="theme-quick-control">
+                  <button id="theme-quick-button" class="fk-btn fk-btn-icon fk-btn-ghost" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="theme-quick-menu" aria-label="Change theme" title="Change theme">◐</button>
+                  <div id="theme-quick-menu" class="theme-quick-menu" role="menu" hidden>
+                    <button type="button" role="menuitemradio" aria-checked="false" data-theme-choice="system"><span data-i18n="System">System</span><small data-i18n="Use your device appearance">Use your device appearance</small></button>
+                    <button type="button" role="menuitemradio" aria-checked="false" data-theme-choice="light"><span data-i18n="Light">Light</span><small data-i18n="Light appearance">Light appearance</small></button>
+                    <button type="button" role="menuitemradio" aria-checked="false" data-theme-choice="dark"><span data-i18n="Dark">Dark</span><small data-i18n="Dark appearance">Dark appearance</small></button>
+                  </div>
+                </div>
                 <div id="auth-panel" class="auth-panel" aria-live="polite">
                   <button id="google-signin-btn" type="button" class="auth-signin-btn fk-btn fk-btn-secondary" data-i18n="Sign in with Google">Sign in with Google</button>
                   <div id="auth-user" class="auth-user hidden">
@@ -809,6 +830,7 @@
     </div>
 
 
+    <script src="/theme.js"></script>
     <script src="/language.js"></script>
     <script src="/campaign-v3.js"></script>
     <script src="/knowledge-module-registry.js"></script>
