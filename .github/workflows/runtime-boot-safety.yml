@@ -103,6 +103,8 @@ jobs:
         run: node scripts/check-bw27-2-premium-dark-mode.js
       - name: Check BW-27.3 final Dark Mode visual polish
         run: node scripts/check-bw27-3-final-dark-mode-polish.js
+      - name: Check BW-27.4 Canvas component polish
+        run: node scripts/check-bw27-4-canvas-component-polish.js
       - name: Check dynamic AI Insights translations
         run: node scripts/check-bw25-1-dynamic-insights-translations.js
       - name: Check Knowledge Module browser globals
