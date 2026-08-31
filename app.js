@@ -5539,10 +5539,14 @@ function currentInsightsIdentity() {
   return `${state.user?.email || "anonymous"}|${state.currentBoardId || ""}|${state.boardLoadGeneration}|${state.boardAccess?.canView === false ? "denied" : state.boardAccess?.reason || "unknown"}`;
 }
 
+function currentInsightsCanvasIdentity() {
+  return JSON.stringify(state.nodes.map((node) => [node.id, node.type, node.title, node.content, node.audience, node.tone, node.funnelStage, node.social?.platform, node.social?.preview, node.landingPage?.cta, node.landingPage?.trust]));
+}
+
 function captureInsightsDiagnostic(analysis) {
   const available = !!state.currentBoardId && !state.isBoardLoading && state.boardAccess?.canView !== false && state.nodes.length > 0;
   state.insightsDiagnosticSnapshot = available
-    ? { identity: currentInsightsIdentity(), analysis }
+    ? { identity: currentInsightsIdentity(), canvasIdentity: currentInsightsCanvasIdentity(), canvasState: state.isDirty ? "live_unsaved" : "loaded_saved", analyzedAt: new Date().toISOString(), analysis, findings: buildInsightsFindings(analysis) }
     : null;
 }
 
@@ -5566,49 +5570,79 @@ function insightsDiagnosticText(value) {
   return key ? uiText(key) : value;
 }
 
+const INSIGHTS_PROVENANCE_CLASSIFICATIONS = Object.freeze(["measured", "deterministic_diagnostic", "inferred", "simulated", "user_entered", "unavailable"]);
+const INSIGHTS_SEVERITY_RANK = Object.freeze({ critical: 0, important: 1, opportunity: 2, information: 3 });
+const INSIGHTS_CATEGORY_RANK = Object.freeze({ structure: 0, funnel: 1, strategy: 2, content: 3 });
+
+function normalizeInsightsProvenance(input = {}) {
+  const classification = INSIGHTS_PROVENANCE_CLASSIFICATIONS.includes(input.classification) ? input.classification : "unavailable";
+  const affectedNodeIds = [...new Set((Array.isArray(input.affectedNodeIds) ? input.affectedNodeIds : []).filter((id) => typeof id === "string" && state.nodes.some((node) => node.id === id)))].sort();
+  return Object.freeze({ classification, source: input.source || "Current Canvas", scope: input.scope || "Current Board", boardId: state.currentBoardId || null, canvasState: input.canvasState || "not_applicable", analyzedAt: input.analyzedAt || null, method: input.method || "Availability check", assumptions: Array.isArray(input.assumptions) ? input.assumptions.slice(0, 5) : [], quality: input.quality || (classification === "unavailable" ? "unavailable" : "bounded"), affectedNodeIds });
+}
+
+function buildInsightsFindings(analysis) {
+  const findings = []; const ids = (nodes) => nodes.map((node) => node.id).filter((id) => typeof id === "string").sort();
+  const add = (finding) => findings.push(Object.freeze({ ...finding, affectedNodeIds: Object.freeze(ids(finding.nodes || [])) }));
+  const ctaNodes = state.nodes.filter((node) => ["Landing Page", "Social Media Posting"].includes(node.type));
+  const missingCta = ctaNodes.filter((node) => !(node.type === "Landing Page" ? node.landingPage?.cta : node.social?.preview || node.social?.cta || "").trim());
+  if (missingCta.length) add({ code: "CTA_MISSING", title: "CTA structure needs attention", description: "One or more eligible Canvas nodes do not contain a clear CTA.", severity: "important", category: "content", structuralRelevance: 3, weight: 3, nodes: missingCta });
+  if (analysis.funnel.missingStages.length) add({ code: "FUNNEL_STAGE_GAPS", title: "Funnel-stage gaps remain", description: "The current deterministic stage mapping leaves one or more campaign stages uncovered.", severity: analysis.funnel.missingStages.length >= 3 ? "important" : "opportunity", category: "funnel", structuralRelevance: 4, weight: analysis.funnel.missingStages.length, nodes: [] });
+  const landingMissingTrust = state.nodes.filter((node) => node.type === "Landing Page" && !(node.landingPage?.trust || "").trim());
+  if (analysis.trust.suggestions.length) add({ code: "TRUST_PROOF_MISSING", title: "Trust-layer coverage is incomplete", description: "Landing Page trust evidence is absent from the current Canvas.", severity: "opportunity", category: "strategy", structuralRelevance: 2, weight: 2, nodes: landingMissingTrust });
+  const audienceNodes = state.nodes.filter((node) => (node.audience || "").trim());
+  if (analysis.icp.inconsistencies.length) add({ code: "ICP_VARIATION", title: "ICP consistency needs review", description: "Multiple audience labels are present across the current Canvas.", severity: "opportunity", category: "strategy", structuralRelevance: 2, weight: 2, nodes: audienceNodes });
+  const toneNodes = state.nodes.filter((node) => (node.tone || "").trim());
+  if (analysis.tone.warnings.length) add({ code: "TONE_SHIFTS_HIGH", title: "Tone consistency needs review", description: "More than two tone values are present across the current Canvas.", severity: "opportunity", category: "strategy", structuralRelevance: 1, weight: 1, nodes: toneNodes });
+  if (analysis.cta.suggestions.length && !missingCta.length) add({ code: "CTA_VARIATIONS_MISSING", title: "CTA variation is limited", description: "The current Canvas contains fewer than two distinct CTA values.", severity: "opportunity", category: "content", structuralRelevance: 2, weight: 1, nodes: ctaNodes });
+  return findings.sort((left, right) => INSIGHTS_SEVERITY_RANK[left.severity] - INSIGHTS_SEVERITY_RANK[right.severity] || right.structuralRelevance - left.structuralRelevance || right.affectedNodeIds.length - left.affectedNodeIds.length || right.weight - left.weight || INSIGHTS_CATEGORY_RANK[left.category] - INSIGHTS_CATEGORY_RANK[right.category] || left.code.localeCompare(right.code) || (left.affectedNodeIds[0] || "").localeCompare(right.affectedNodeIds[0] || "")).slice(0, 5);
+}
+
+function isCurrentInsightsSnapshot(snapshot) {
+  return !!snapshot && snapshot.identity === currentInsightsIdentity() && snapshot.canvasIdentity === currentInsightsCanvasIdentity();
+}
+
+function showInsightsFindingOnCanvas(code) {
+  const snapshot = state.insightsDiagnosticSnapshot; const finding = snapshot?.findings?.find((item) => item.code === code);
+  if (!state.currentBoardId || state.boardAccess?.canView === false || !isCurrentInsightsSnapshot(snapshot) || !finding) return setSaveStatus(uiText("This insight is no longer current. Refresh AI Insights."));
+  const nodeId = finding.affectedNodeIds.find((id) => state.nodes.some((node) => node.id === id));
+  if (!nodeId) return setSaveStatus(uiText("Affected nodes could not be identified reliably."));
+  focusNodeInCanvas(nodeId, { behavior: window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ? "auto" : "smooth", select: true, pulse: true });
+}
+
+function askAiBrainAboutFinding(code) {
+  const snapshot = state.insightsDiagnosticSnapshot; const finding = snapshot?.findings?.find((item) => item.code === code);
+  if (!state.user?.email || !state.currentBoardId || state.boardAccess?.canEdit !== true || state.publicBoardToken || !isCurrentInsightsSnapshot(snapshot) || !finding) return setSaveStatus(uiText("This insight is no longer current. Refresh AI Insights."));
+  const count = finding.affectedNodeIds.length; const severity = uiText(finding.severity === "important" ? "Important" : finding.severity === "opportunity" ? "Opportunity" : finding.severity === "critical" ? "Critical" : "Information");
+  const question = state.uiLanguage === "de" ? `Hilf mir, diese Canvas-Erkenntnis zu verstehen und zu verbessern: „${uiText(finding.title)}“. Sie ist als ${severity} eingestuft und betrifft ${count} Node(s). Bitte erkläre, warum sie wichtig ist, und empfehle praktische nächste Schritte anhand des aktuell autorisierten Canvas.` : `Help me understand and improve this Canvas finding: “${finding.title}”. It is classified as ${severity} and affects ${count} node(s). Please explain why it matters and recommend practical next steps using the current authorized Canvas.`;
+  setActiveView("ai_brain"); const input = el.aiBrainSummary?.querySelector("#ai-brain-question"); if (input) { input.value = question.slice(0, 2000); input.focus(); }
+}
+
 function renderInsightsSurface() {
   if (!el.insightsCards) return;
-  const t = uiText;
-  let diagnosticBody = "";
-  const snapshot = state.insightsDiagnosticSnapshot?.identity === currentInsightsIdentity() ? state.insightsDiagnosticSnapshot : null;
-  if (state.isBoardLoading || state.initialServerLoadInFlight) {
-    diagnosticBody = `<div class="insights-diagnostic-state">${t("Board is loading. Canvas diagnostics will appear when the authorized Canvas is ready.")}</div>`;
-  } else if (!state.currentBoardId) {
-    diagnosticBody = `<div class="insights-diagnostic-state">${t("No Board is open. Open an authorized Board to view Canvas diagnostics.")}</div>`;
-  } else if (state.boardAccess?.canView === false) {
-    diagnosticBody = `<div class="insights-diagnostic-state">${t("Canvas diagnostics are unavailable for this Board.")}</div>`;
-  } else if (!state.nodes.length) {
-    diagnosticBody = `<div class="insights-diagnostic-state">${t("This Canvas is empty. Add campaign content to make deterministic diagnostics available.")}</div>`;
-  } else if (!snapshot || !isValidInsightsDiagnostic(snapshot.analysis)) {
-    diagnosticBody = `<div class="insights-diagnostic-state">${t("Canvas diagnostics could not be calculated. No diagnostic result is shown.")}</div>`;
-  } else {
-    const a = snapshot.analysis;
-    const stages = ["Awareness", "Interest", "Consideration", "Conversion", "Retention"];
-    const funnelSteps = stages.map((step) => `<span class="insight-step ${a.funnel.coveredStages.includes(step) ? "covered" : "missing"}">${uiText(step)}</span>`).join("");
-    const diagnosticCard = (label, score, detail) => `<article class="insight-card"><small>${label}</small><h4>${t("Diagnostic score")}: ${score}/100</h4><p>${detail}</p></article>`;
-    diagnosticBody = `<div class="insights-grid">
-      <article class="insight-card hero"><small>${t("Canvas readiness")}</small><h3>${a.healthScore}<span>/100</span></h3><p>${t("Diagnostic score")}</p></article>
-      <article class="insight-card"><small>${t("Funnel-stage coverage")}</small><div class="insight-funnel">${funnelSteps}</div><p>${t("Covered")}: ${a.funnel.coveredStages.map(uiText).join(", ") || t("No stages covered")} · ${t("Missing")}: ${a.funnel.missingStages.map(uiText).join(", ") || t("No stages missing")}</p></article>
-      <article class="insight-card"><small>${t("Canvas nodes by platform")}</small><h4>${Object.values(a.platformDistribution.counts).reduce((sum, count) => sum + count, 0)}</h4><p>${Object.entries(a.platformDistribution.counts).map(([platform, count]) => `${platform}: ${count}`).join(" · ") || t("No platform nodes")}</p></article>
-      ${diagnosticCard(t("CTA structure"), a.cta.qualityScore, `${t("Issues")}: ${[...a.cta.warnings, ...a.cta.suggestions].map(insightsDiagnosticText).join(" · ") || t("None detected")}`)}
-      ${diagnosticCard(t("ICP consistency"), a.icp.consistencyScore, `${t("Issues")}: ${a.icp.inconsistencies.join(" · ") || t("None detected")}`)}
-      ${diagnosticCard(t("Tone consistency"), a.tone.consistencyScore, `${t("Issues")}: ${a.tone.warnings.map(insightsDiagnosticText).join(" · ") || t("None detected")}`)}
-      ${diagnosticCard(t("Trust-layer coverage"), a.trust.score, `${t("Issues")}: ${a.trust.suggestions.map(insightsDiagnosticText).join(" · ") || t("None detected")}`)}
-    </div>`;
+  const t = uiText; const snapshot = isCurrentInsightsSnapshot(state.insightsDiagnosticSnapshot) ? state.insightsDiagnosticSnapshot : null;
+  const element = (tag, className, text) => { const node = document.createElement(tag); if (className) node.className = className; if (text !== undefined) node.textContent = text; return node; };
+  const root = element("div", "insights-boundary"); el.insightsCards.textContent = ""; el.insightsCards.appendChild(root);
+  const sourceState = snapshot?.canvasState === "live_unsaved" ? t("Includes unsaved Canvas changes") : t("Based on the currently loaded saved Canvas");
+  const provenance = (classification = "deterministic_diagnostic", method = "Structural checks", affectedNodeIds = []) => normalizeInsightsProvenance({ classification, source: "Current Canvas", scope: "Current Board", canvasState: snapshot?.canvasState || "not_applicable", analyzedAt: snapshot?.analyzedAt || null, method, affectedNodeIds });
+  const chips = (parent, meta) => { const row = element("div", "insights-provenance"); row.setAttribute("aria-label", t("Provenance")); [t(meta.classification === "unavailable" ? "Unavailable" : "Deterministic diagnostic"), t("Current Canvas"), meta.canvasState === "live_unsaved" ? t("Includes unsaved Canvas changes") : meta.canvasState === "loaded_saved" ? t("Based on the currently loaded saved Canvas") : t("Unavailable")].forEach((value) => row.appendChild(element("span", "", value))); parent.appendChild(row); };
+  const section = (id, title, description, extra = "") => { const node = element("section", `insights-section ${extra}`.trim()); node.setAttribute("aria-labelledby", id); const heading = element("div", "insights-section-heading"); const h = element("h3", "", t(title)); h.id = id; heading.append(h); if (description) heading.append(element("p", "", t(description))); node.append(heading); root.append(node); return node; };
+  const header = element("header", "insights-page-header"); header.append(element("p", "insights-eyebrow", t("Evidence from your campaign Canvas")), element("p", "insights-lede", t("Understand what the current Canvas contains, where structural gaps remain, and which areas deserve attention.")));
+  const context = element("div", "insights-context"); [state.currentBoardName || t("Current Board"), `${state.nodes.length} ${t("Canvas nodes")}`, t("Current Canvas"), sourceState, t("Deterministic diagnostic"), snapshot?.analyzedAt ? `${t("Last analyzed")}: ${new Intl.DateTimeFormat(state.uiLanguage === "de" ? "de-DE" : "en", { dateStyle: "medium", timeStyle: "short" }).format(new Date(snapshot.analyzedAt))}` : ""].filter(Boolean).forEach((value) => context.append(element("span", "", value)));
+  const refresh = element("button", "fk-btn fk-btn-secondary insights-refresh", t("Refresh insights")); refresh.type = "button"; refresh.addEventListener("click", renderCampaignIntelligence); header.append(context, refresh); root.append(header);
+  const unavailableReason = state.isBoardLoading || state.initialServerLoadInFlight ? "Board is loading. Canvas diagnostics will appear when the authorized Canvas is ready." : !state.currentBoardId ? "No Board is open. Open an authorized Board to view Canvas diagnostics." : state.boardAccess?.canView === false ? "Canvas diagnostics are unavailable for this Board." : !state.nodes.length ? "Your Canvas does not contain enough campaign structure for diagnostics yet." : !snapshot || !isValidInsightsDiagnostic(snapshot.analysis) ? "AI Insights could not analyze the current Canvas." : "";
+  const overview = section("insights-overview-title", "Overview", "A truthful summary of the structure and content in the current Canvas.");
+  if (unavailableReason) { const status = element("div", "insights-diagnostic-state", t(unavailableReason)); status.setAttribute("role", "status"); status.append(element("p", "", t(!state.nodes.length && state.currentBoardId ? "Add or generate campaign nodes, then return to AI Insights." : "Your campaign data was not changed. Refresh the insights or return to the Canvas."))); overview.append(status); }
+  else {
+    const a = snapshot.analysis; const grid = element("div", "insights-grid");
+    const card = (title, value, description, method) => { const item = element("article", "insight-card"); item.append(element("h4", "", t(title)), element("div", "insight-value", value), element("p", "", t(description))); chips(item, provenance("deterministic_diagnostic", method)); return item; };
+    grid.append(card("Canvas readiness", `${a.healthScore}/100`, "A Board-level diagnostic of structural coverage and consistency; it is not measured performance.", "Canvas readiness formula"), card("Priority findings", String(snapshot.findings.length), snapshot.findings.length ? `Highest severity: ${t(snapshot.findings[0].severity === "important" ? "Important" : "Opportunity")}` : t("No current findings"), "Deterministic finding ordering"), card("Funnel-stage coverage", `${a.funnel.coveredStages.length} ${t("covered")} · ${a.funnel.missingStages.length} ${t("missing")}`, "Five-stage mapping from explicit fields and supported node roles.", "Funnel-stage mapping"), card("Channel coverage", Object.keys(a.platformDistribution.counts).length ? Object.entries(a.platformDistribution.counts).map(([name,count]) => `${name}: ${count}`).join(" · ") : t("No platform nodes"), "Counts Social Media Posting nodes by their current platform value.", "Platform counting")); overview.append(grid);
   }
-  const canvasDisclosure = state.currentBoardId && !state.isBoardLoading && state.boardAccess?.canView !== false
-    ? (state.isDirty ? t("Includes unsaved Canvas changes.") : t("Based on the currently loaded saved Canvas."))
-    : "";
-  el.insightsCards.innerHTML = `<div class="insights-boundary">
-    <section class="insights-section insights-measured-empty" aria-labelledby="measured-performance-title">
-      <div class="insights-section-heading"><h3 id="measured-performance-title">${t("Measured performance")}</h3><p><strong>${t("No campaign analytics are connected yet.")}</strong><br>${t("Reach, engagement, conversions, attribution, revenue, and channel performance will appear here only when they are supplied by a verified data source.")}</p><span class="insights-data-status">${t("Data status: No analytics connected")}</span></div>
-    </section>
-    <section class="insights-section" aria-labelledby="canvas-diagnostics-title">
-      <div class="insights-section-heading"><h3 id="canvas-diagnostics-title">${t("Canvas diagnostics")}</h3><p>${t("These checks evaluate campaign structure and content. They are not measured campaign results.")}</p></div>
-      <div class="insights-provenance"><span>${t("Source: Current Canvas")}</span><span>${t("Analysis type: Deterministic diagnostic")}</span>${canvasDisclosure ? `<span class="insights-canvas-state">${canvasDisclosure}</span>` : ""}</div>
-      ${diagnosticBody}
-    </section>
-  </div>`;
+  const measured = section("measured-performance-title", "Measured Performance", "No analytics data connected", "insights-measured-empty"); measured.append(element("p", "", t("Funklix is not currently receiving verified reach, engagement, conversion, revenue, spend, or attribution data for this campaign.")), element("p", "", t("Canvas diagnostics remain available below and evaluate campaign structure and content only.")), element("span", "insights-data-status", t("Data status: Unavailable")), element("p", "insights-future-note", t("Verified performance data will appear here after a supported data source or import workflow is added.")), element("small", "", t("Data connections are planned."))); chips(measured, provenance("unavailable", "Availability check"));
+  const diagnostics = section("canvas-diagnostics-title", "Canvas Diagnostics", "These checks evaluate campaign structure and content. They are not measured campaign results.");
+  if (!unavailableReason) { const a = snapshot.analysis; const groups = [["Structure and readiness", [["Canvas readiness", `${a.healthScore}/100`, "Canvas readiness formula"]]], ["Funnel coverage", [["Funnel-stage coverage", `${a.funnel.coveredStages.length}/5`, "Funnel-stage mapping"]]], ["Strategy and consistency", [["ICP consistency", `${a.icp.consistencyScore}/100`, "Distinct audience labels"], ["Tone consistency", `${a.tone.consistencyScore}/100`, "Distinct tone labels"], ["Trust-layer coverage", `${a.trust.score}/100`, "Landing Page trust-field presence"]]], ["Content and channels", [["CTA structure", `${a.cta.qualityScore}/100`, "CTA variation check"], ["Channel coverage", Object.entries(a.platformDistribution.counts).map(([name,count]) => `${name}: ${count}`).join(" · ") || t("No platform nodes"), "Platform counting"]]]]; const grid = element("div", "insights-diagnostic-groups"); groups.forEach(([name, values]) => { const group = element("section", "insights-diagnostic-group"); group.append(element("h4", "", t(name))); values.forEach(([name,value,method]) => { const card = element("article", "insight-card"); card.append(element("h5", "", t(name)), element("div", "insight-value", value), element("p", "", `${t("Scope")}: ${t("Current Board")} · ${t("Method")}: ${t(method)}`)); chips(card, provenance("deterministic_diagnostic", method)); group.append(card); }); grid.append(group); }); diagnostics.append(grid); }
+  const opportunities = section("insights-opportunities-title", "Opportunities", "Deterministically prioritized findings from the current Canvas.");
+  if (!unavailableReason) { if (!snapshot.findings.length) opportunities.append(element("p", "insights-diagnostic-state", t("No current findings"))); snapshot.findings.forEach((finding) => { const item = element("article", `insights-finding severity-${finding.severity}`); const severity = t(finding.severity === "important" ? "Important" : finding.severity === "opportunity" ? "Opportunity" : finding.severity === "critical" ? "Critical" : "Information"); item.append(element("span", "insights-severity", `${t("Severity")}: ${severity}`), element("h4", "", t(finding.title)), element("p", "", t(finding.description)), element("p", "", `${t("Category")}: ${t(finding.category)} · ${t("Affected nodes")}: ${finding.affectedNodeIds.length}`)); const list = element("ul", "insights-node-list"); finding.affectedNodeIds.slice(0, 3).forEach((id) => { const node = state.nodes.find((entry) => entry.id === id); if (node) list.append(element("li", "", node.title || node.type || t("Node"))); }); if (finding.affectedNodeIds.length > 3) list.append(element("li", "", `+${finding.affectedNodeIds.length - 3} ${t("more")}`)); if (!finding.affectedNodeIds.length) item.append(element("p", "", t("Affected nodes could not be identified reliably."))); else item.append(list); chips(item, provenance("deterministic_diagnostic", "Deterministic finding ordering", finding.affectedNodeIds)); const actions = element("div", "insights-actions"); if (finding.affectedNodeIds.length) { const show = element("button", "fk-btn fk-btn-secondary", t("Show on Canvas")); show.type = "button"; show.setAttribute("aria-label", `${t("Show on Canvas")}: ${t(finding.title)}`); show.addEventListener("click", () => showInsightsFindingOnCanvas(finding.code)); actions.append(show); } if (state.user?.email && state.boardAccess?.canEdit === true && !state.publicBoardToken) { const ask = element("button", "fk-btn fk-btn-primary", t("Ask AI Brain")); ask.type = "button"; ask.addEventListener("click", () => askAiBrainAboutFinding(finding.code)); actions.append(ask); } item.append(actions); opportunities.append(item); }); }
+  const methodology = section("insights-methodology-title", "Data and Methodology", "How to interpret these current-Canvas diagnostics."); const details = element("details", "insights-methodology"); const summary = element("summary", "", t("View data classifications, methods, and limitations")); details.append(summary); const classifications = element("dl", "insights-classifications"); [["Measured", "Verified observations from a supported data source."], ["Deterministic diagnostic", "Repeatable rules applied to the current Canvas."], ["Inferred", "A conclusion derived from disclosed Canvas rules."], ["Simulated", "An assumption-based scenario, not a measurement."], ["User-entered", "Information supplied directly by a user."], ["Unavailable", "No reliable value is currently available."]].forEach(([term,definition]) => { classifications.append(element("dt", "", t(term)), element("dd", "", t(definition))); }); details.append(classifications, element("h4", "", t("Current source")), element("p", "", `${state.currentBoardName || t("Current Board")} · ${state.nodes.length} ${t("Canvas nodes")} · ${sourceState}${snapshot?.analyzedAt ? ` · ${t("Last analyzed")}: ${new Date(snapshot.analyzedAt).toLocaleString()}` : ""}`), element("h4", "", t("Diagnostic methods")), element("p", "", t("Structural checks, funnel-stage mapping, platform counting, CTA checks, ICP similarity, tone consistency, trust-layer coverage, and title/body or social diagnostics are shown only when supported by current calculations.")), element("h4", "", t("Limitations")), element("p", "", t("Canvas diagnostics evaluate the structure and content currently available in Funklix. They do not measure audience response, media delivery, conversions, revenue, or business impact."))); methodology.append(details);
 }
 
 function isValidInsightsDiagnostic(analysis) {

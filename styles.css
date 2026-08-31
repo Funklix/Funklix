@@ -2579,6 +2579,37 @@ button:active {
 .insights-diagnostic-state { border: 1px solid #e6e8f5; border-radius: 14px; padding: 14px; background: #fbfcff; color: #555f86; font-size: 0.8rem; }
 @media (max-width: 640px) { .insight-card.hero { grid-column: span 1; } .insights-section { padding: 12px; } }
 
+.insights-page-header { display:grid;grid-template-columns:1fr auto;gap:10px;align-items:end;padding:4px 2px; }
+.insights-eyebrow { margin:0;font-weight:750;color:var(--fk-color-text-primary,#2e3561); }
+.insights-lede { grid-column:1;margin:2px 0 0;color:var(--fk-color-text-secondary,#5c668c);font-size:.82rem;line-height:1.5; }
+.insights-context { grid-column:1/-1;display:flex;flex-wrap:wrap;gap:7px; }
+.insights-context span { max-width:100%;overflow-wrap:anywhere;border:1px solid var(--fk-color-border-default,#e1e5f4);border-radius:999px;padding:5px 9px;background:var(--fk-color-surface-card,#fff);color:var(--fk-color-text-secondary,#515b7d);font-size:.68rem; }
+.insights-refresh { grid-column:2;grid-row:1/3;min-height:44px; }
+.insight-value { margin:7px 0;font-size:1.12rem;font-weight:750;color:var(--fk-color-text-primary,#2e3561);overflow-wrap:anywhere; }
+.insights-diagnostic-groups { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px; }
+.insights-diagnostic-group { min-width:0;border:1px solid var(--fk-color-divider,#e6e8f5);border-radius:14px;padding:12px;background:var(--fk-color-surface-panel,#f9faff); }
+.insights-diagnostic-group h4 { margin:0 0 10px;color:var(--fk-color-text-primary,#2e3561); }
+.insights-diagnostic-group .insight-card + .insight-card { margin-top:8px; }
+.insight-card h5 { margin:0;color:var(--fk-color-text-primary,#2e3561);font-size:.8rem; }
+.insights-future-note { margin-top:12px; }
+.insights-finding { border:1px solid var(--fk-color-divider,#e1e5f4);border-left:4px solid var(--fk-color-information,#64748b);border-radius:14px;padding:14px;background:var(--fk-color-surface-card,#fff); }
+.insights-finding + .insights-finding { margin-top:10px; }
+.insights-finding.severity-important { border-left-color:var(--fk-color-warning,#b7791f); }
+.insights-finding.severity-opportunity { border-left-color:var(--fk-color-primary-action,#6d5ce7); }
+.insights-finding h4 { margin:6px 0;color:var(--fk-color-text-primary,#2e3561); }
+.insights-finding p,.insights-node-list { color:var(--fk-color-text-secondary,#555f86);font-size:.78rem;line-height:1.5; }
+.insights-severity { font-size:.7rem;font-weight:750; }
+.insights-node-list { margin:6px 0;padding-left:20px;overflow-wrap:anywhere; }
+.insights-actions { display:flex;flex-wrap:wrap;gap:8px;margin-top:10px; }
+.insights-actions .fk-btn { min-height:44px; }
+.insights-methodology summary { cursor:pointer;min-height:44px;padding:10px 0;font-weight:700;color:var(--fk-color-text-primary,#2e3561); }
+.insights-classifications { display:grid;grid-template-columns:minmax(120px,.3fr) 1fr;gap:7px 12px; }
+.insights-classifications dt { font-weight:700;color:var(--fk-color-text-primary,#2e3561); }
+.insights-classifications dd { margin:0;color:var(--fk-color-text-secondary,#555f86); }
+html[data-theme="dark"] :is(.insights-page-header,.insights-diagnostic-group,.insights-finding) { color:var(--fk-color-text-primary); }
+html[data-theme="dark"] :is(.insights-context span,.insights-diagnostic-group,.insights-finding) { background:var(--fk-color-surface-card);border-color:var(--fk-color-divider); }
+@media (max-width:760px) { .insights-diagnostic-groups { grid-template-columns:1fr; }.insights-page-header { grid-template-columns:1fr; }.insights-refresh { grid-column:1;grid-row:auto;width:100%; }.insights-actions { flex-direction:column; }.insights-actions .fk-btn { width:100%; }.insights-classifications { grid-template-columns:1fr; }.insights-classifications dd { margin-bottom:8px; } }
+
 .ai-brain-wrap { display: grid; gap: 12px; }
 .ai-brain-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; border: 1px solid #e6e8f5; border-radius: 16px; padding: 12px; background: #fff; }
 .ai-brain-header h3 { margin: 0; color: #2f3561; }
