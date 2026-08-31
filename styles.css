@@ -7119,6 +7119,15 @@ html[data-theme="dark"] .topbar { background:var(--fk-color-nav-bg); }
 html[data-theme="dark"] :is(.dashboard-view,.boards-library-page,.board-list-view,.brand-core-workspace) {
   background:var(--fk-color-page-bg);color:var(--fk-color-text-secondary);
 }
+/* BW-27.3: the dashboard owns the Start Screen atmosphere.  This replaces the
+   light-mode page gradient at its authoritative page selector without changing
+   the light composition above. */
+html[data-theme="dark"] #dashboard-view.dashboard-view {
+  background:
+    radial-gradient(circle at 14% 0,rgba(124,92,255,.18),transparent 58%),
+    radial-gradient(circle at 66% 18%,rgba(78,92,190,.10),transparent 66%),
+    var(--fk-color-app-bg);
+}
 html[data-theme="dark"] :is(.dashboard-view,.boards-library-page,.board-list-view,.brand-core-workspace) > h1,
 html[data-theme="dark"] :is(.dashboard-view,.boards-library-page,.board-list-view,.brand-core-workspace) > h2 { color:var(--fk-color-text-primary); }
 
@@ -7132,9 +7141,9 @@ html[data-theme="dark"] #links path:hover { stroke:var(--fk-color-canvas-edge-ho
 html[data-theme="dark"] .node {
   background:linear-gradient(180deg,var(--node-role-tint,var(--fk-color-role-idea-surface)),transparent 58px),var(--fk-color-node-surface);
   border-color:var(--fk-color-node-border);border-top:2px solid var(--node-role-accent,var(--fk-color-role-idea-accent));
-  box-shadow:0 10px 28px rgba(0,0,0,.22),0 0 18px color-mix(in srgb,var(--node-role-accent,var(--fk-color-role-idea-accent)) 8%,transparent);
+  box-shadow:0 10px 28px rgba(0,0,0,.22),0 0 12px color-mix(in srgb,var(--node-role-accent,var(--fk-color-role-idea-accent)) 5%,transparent);
 }
-html[data-theme="dark"] .node:hover { box-shadow:0 14px 34px rgba(0,0,0,.28),0 0 20px color-mix(in srgb,var(--node-role-accent,var(--fk-color-role-idea-accent)) 10%,transparent); }
+html[data-theme="dark"] .node:hover { box-shadow:0 14px 34px rgba(0,0,0,.28),0 0 14px color-mix(in srgb,var(--node-role-accent,var(--fk-color-role-idea-accent)) 7%,transparent); }
 html[data-theme="dark"] .node[data-node-role="campaign-variation"] { --node-role-accent:var(--fk-color-role-variation-accent);--node-role-tint:var(--fk-color-role-variation-surface); }
 html[data-theme="dark"] .node[data-node-role="content"] { --node-role-accent:var(--fk-color-role-content-accent);--node-role-tint:var(--fk-color-role-content-surface); }
 html[data-theme="dark"] .node[data-node-role="social-media-posting"] { --node-role-accent:var(--fk-color-role-social-accent);--node-role-tint:var(--fk-color-role-social-surface); }
@@ -7147,10 +7156,17 @@ html[data-theme="dark"] .node :is(.type,.compact-meta span,.tag,.variant,.node-o
 html[data-theme="dark"] .node :is(.control-btn,.node-compact-toggle,.node-ai-toolbar button,.connector-handle,.connector-link-handle) { background:var(--fk-color-surface-input);border-color:var(--fk-color-border-default);color:var(--fk-color-text-secondary); }
 html[data-theme="dark"] .node :is(.control-btn,.node-compact-toggle,.node-ai-toolbar button):hover { background:var(--fk-color-surface-hover);color:var(--fk-color-text-primary); }
 html[data-theme="dark"] .node.selected { outline-color:var(--fk-color-node-selection);box-shadow:0 0 0 3px var(--fk-color-selection),var(--fk-shadow-panel); }
-html[data-theme="dark"] .ai-review-card { background:var(--fk-color-ai-review-surface);border-color:var(--fk-color-divider);box-shadow:none;color:var(--fk-color-text-secondary); }
+html[data-theme="dark"] .node :is(.node-header,.node-footer,.node-summary,.expanded-content,.node-details) { border-color:var(--fk-color-divider); }
+html[data-theme="dark"] .node :is(.expanded-content,.node-details) { background:var(--fk-color-node-surface);color:var(--fk-color-text-secondary); }
+html[data-theme="dark"] .ai-review-postit { background:var(--fk-color-ai-review-surface);border-color:var(--fk-color-primary-border);color:var(--fk-color-text-secondary); }
+html[data-theme="dark"] .ai-review-postit :is(button,textarea) { color:var(--fk-color-text-secondary); }
+html[data-theme="dark"] .ai-review-card { background:var(--fk-color-ai-review-surface);border:1px solid var(--fk-color-divider);border-radius:var(--fk-radius-md);box-shadow:none;color:var(--fk-color-text-secondary);padding:8px; }
 html[data-theme="dark"] .ai-review-card-heading strong { color:var(--fk-color-text-primary); }
 html[data-theme="dark"] .ai-review-score { background:var(--fk-color-primary-subtle);color:#c3b7ff; }
 html[data-theme="dark"] .ai-review-section { border-color:var(--fk-color-divider);background:var(--fk-color-surface-card); }
+html[data-theme="dark"] .ai-review-section summary { color:var(--fk-color-text-primary); }
+html[data-theme="dark"] .ai-review-section-body { color:var(--fk-color-text-secondary); }
+html[data-theme="dark"] .ai-review-card :is(time,small,.meta,.metadata) { color:var(--fk-color-text-muted); }
 html[data-theme="dark"] .ai-review-section-summary { background:var(--fk-color-information-subtle); }
 html[data-theme="dark"] .ai-review-section-strengths { background:var(--fk-color-success-subtle); }
 html[data-theme="dark"] .ai-review-section-improvements { background:var(--fk-color-warning-subtle); }
@@ -7158,6 +7174,11 @@ html[data-theme="dark"] .ai-review-section-rewrite { background:var(--fk-color-p
 html[data-theme="dark"] .ai-review-improvement-row strong { color:var(--fk-color-warning); }
 html[data-theme="dark"] .postit { background:var(--fk-color-comment-surface);color:#242014;box-shadow:0 10px 28px rgba(0,0,0,.24); }
 html[data-theme="dark"] .postit :is(button,textarea) { color:#242014; }
+html[data-theme="dark"] .floating-zoom-control { background:var(--fk-color-surface-elevated);border-color:var(--fk-color-border-default);box-shadow:var(--fk-shadow-panel);color:var(--fk-color-text-primary); }
+html[data-theme="dark"] .floating-zoom-control button { background:var(--fk-color-surface-input);border-color:var(--fk-color-border-control);color:var(--fk-color-text-primary); }
+html[data-theme="dark"] .floating-zoom-control button:hover { background:var(--fk-color-surface-hover); }
+html[data-theme="dark"] .floating-zoom-control button:focus-visible { outline:0;box-shadow:var(--fk-focus-shadow); }
+html[data-theme="dark"] .floating-zoom-control #zoom-label { color:var(--fk-color-text-secondary); }
 
 /* Inspector: a level-two panel with level-three sections and level-four controls. */
 html[data-theme="dark"] .inspector { background:var(--fk-color-surface-panel);border-color:var(--fk-color-divider); }
@@ -7187,9 +7208,29 @@ html[data-theme="dark"] .brand-workspace-readiness strong { color:var(--fk-color
 html[data-theme="dark"] .brand-workspace-readiness small { color:var(--fk-color-text-secondary); }
 html[data-theme="dark"] .brand-core-workspace :is(.brand-workspace-group,.brand-core-side) { background:var(--fk-color-surface-panel);border-color:var(--fk-color-border-default); }
 html[data-theme="dark"] .brand-core-workspace :is(.bc-node,.bc-main,.brand-core-card,.brand-workspace-missing-knowledge,.strategy-module-section,.strategy-accepted-summary) { background:var(--fk-color-surface-card);border-color:var(--fk-color-divider);color:var(--fk-color-text-secondary); }
-html[data-theme="dark"] .brand-core-workspace :is(.bc-node h3,.bc-node h4,.brand-core-card h3,.brand-workspace-missing-knowledge strong) { color:var(--fk-color-text-primary); }
+html[data-theme="dark"] .brand-core-workspace :is(.bc-title,.bc-node h3,.bc-node h4,.bc-preview strong,.brand-core-card h3,.brand-workspace-missing-knowledge strong) { color:var(--fk-color-text-primary); }
+html[data-theme="dark"] .brand-core-workspace :is(.bc-preview,.bc-preview p,.bc-preview li,.bc-preview small,.bc-assets-preview) { color:var(--fk-color-text-secondary); }
+html[data-theme="dark"] .brand-core-workspace .bc-preview li::marker { color:var(--fk-color-primary-action); }
+html[data-theme="dark"] .brand-core-workspace :is(.bc-tags span,.bc-count,.bc-badge) { background:var(--fk-color-surface-elevated);color:var(--fk-color-text-muted); }
 html[data-theme="dark"] .brand-core-workspace :is(input,textarea,select) { background:var(--fk-color-surface-input);border-color:var(--fk-color-border-control);color:var(--fk-color-text-primary); }
+html[data-theme="dark"] .brand-core-workspace .brand-core-side :is(label,.bc-helper) { color:var(--fk-color-text-secondary); }
+html[data-theme="dark"] .brand-core-workspace :is(input,textarea,select):focus-visible { border-color:var(--fk-color-primary-action);outline:0;box-shadow:var(--fk-focus-shadow); }
 html[data-theme="dark"] .brand-workspace-hero #reset-brand-core-btn { background:var(--fk-color-danger-subtle);border-color:color-mix(in srgb,var(--fk-color-danger) 40%,transparent);color:var(--fk-color-danger); }
+
+/* Brand DNA is application UI: every nested result remains in the workspace
+   surface hierarchy rather than retaining its light document presentation. */
+html[data-theme="dark"] .brand-core-workspace .brand-dna-card { background:linear-gradient(145deg,var(--fk-color-surface-elevated),var(--fk-color-surface-panel));border-color:var(--fk-color-primary-border);box-shadow:var(--fk-shadow-card);color:var(--fk-color-text-secondary); }
+html[data-theme="dark"] .brand-core-workspace .brand-dna-eyebrow { background:var(--fk-color-primary-subtle);color:#c3b7ff; }
+html[data-theme="dark"] .brand-core-workspace .brand-dna-header h2,
+html[data-theme="dark"] .brand-core-workspace :is(.brand-dna-score strong,.brand-dna-block h4,.brand-dna-signals h5,.brand-dna-avatar-copy h3,.brand-dna-avatar-details strong) { color:var(--fk-color-text-primary); }
+html[data-theme="dark"] .brand-core-workspace :is(.brand-dna-header p,.brand-dna-empty,.brand-dna-block p,.brand-dna-signals p,.brand-dna-signals ul,.brand-dna-alternatives,.brand-dna-alternatives span,.brand-dna-avatar-copy p,.brand-dna-avatar-details) { color:var(--fk-color-text-secondary); }
+html[data-theme="dark"] .brand-core-workspace :is(.brand-dna-loading,.brand-dna-empty,.brand-dna-score,.brand-dna-block,.brand-dna-signals>div,.brand-dna-avatar-section,.brand-dna-avatar-details details) { background:var(--fk-color-surface-card);border-color:var(--fk-color-divider);box-shadow:none; }
+html[data-theme="dark"] .brand-core-workspace .brand-dna-score.primary { border-color:var(--fk-color-primary-border);box-shadow:inset 3px 0 0 var(--fk-color-primary-action); }
+html[data-theme="dark"] .brand-core-workspace .brand-dna-score span { color:var(--fk-color-text-muted); }
+html[data-theme="dark"] .brand-core-workspace .brand-dna-score em,
+html[data-theme="dark"] .brand-core-workspace .brand-dna-loading { color:#c3b7ff; }
+html[data-theme="dark"] .brand-core-workspace :is(.brand-dna-signals li,.brand-dna-alternatives li)::marker { color:var(--fk-color-primary-action); }
+html[data-theme="dark"] .brand-core-workspace .brand-dna-avatar-image { background:var(--fk-color-surface-input);border-color:var(--fk-color-primary-border);box-shadow:var(--fk-shadow-card); }
 
 /* AI Brain: continuous page, readable transcript, and nested composer. */
 html[data-theme="dark"] #ai-brain-view { min-height:100%; }
