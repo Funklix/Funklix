@@ -7180,6 +7180,118 @@ html[data-theme="dark"] .floating-zoom-control button:hover { background:var(--f
 html[data-theme="dark"] .floating-zoom-control button:focus-visible { outline:0;box-shadow:var(--fk-focus-shadow); }
 html[data-theme="dark"] .floating-zoom-control #zoom-label { color:var(--fk-color-text-secondary); }
 
+/* BW-27.4 Canvas component polish. These component-owned tokens deliberately
+   sit after the general Canvas migration rules so Post-its, attached reviews,
+   and social previews do not inherit generic dark input or light legacy chrome. */
+html[data-theme="dark"] .postit:not(.ai-review-postit) {
+  --postit-surface:#e7c968;
+  --postit-body:#f0d77d;
+  --postit-secondary:#ddbd5d;
+  --postit-text:#282313;
+  --postit-text-secondary:#574c26;
+  --postit-text-muted:#746637;
+  --postit-border:rgba(105,82,18,.32);
+  --postit-hover:rgba(255,248,202,.32);
+  background:var(--postit-surface) !important;
+  border-color:var(--postit-border);
+  color:var(--postit-text);
+  box-shadow:0 10px 24px rgba(0,0,0,.24);
+}
+html[data-theme="dark"] .postit:not(.ai-review-postit) header {
+  border-bottom:1px solid var(--postit-border);
+  color:var(--postit-text-secondary);
+  padding-bottom:6px;
+}
+html[data-theme="dark"] .postit:not(.ai-review-postit) :is(.postit-text,.postit-reply-input) {
+  background:var(--postit-body);
+  border:1px solid var(--postit-border);
+  border-radius:6px;
+  color:var(--postit-text);
+  caret-color:var(--postit-text);
+  padding:6px;
+}
+html[data-theme="dark"] .postit:not(.ai-review-postit) :is(.postit-text,.postit-reply-input)::placeholder { color:var(--postit-text-muted);opacity:1; }
+html[data-theme="dark"] .postit:not(.ai-review-postit) :is(.postit-text,.postit-reply-input):focus-visible {
+  border-color:#6f5bff;outline:2px solid rgba(111,91,255,.38);outline-offset:1px;
+}
+html[data-theme="dark"] .postit:not(.ai-review-postit) :is(.postit-replies,.postit-reply-editor,.postit-resolved-summary) { border-color:var(--postit-border); }
+html[data-theme="dark"] .postit:not(.ai-review-postit) .postit-reply { color:var(--postit-text-secondary); }
+html[data-theme="dark"] .postit:not(.ai-review-postit) :is(.postit-time,.postit-reply-meta,.postit-resolved-summary) { color:var(--postit-text-muted);opacity:1; }
+html[data-theme="dark"] .postit:not(.ai-review-postit) :is(.postit-resolve,.postit-reply-button,.postit-delete) {
+  background:var(--postit-secondary);border-color:var(--postit-border);color:var(--postit-text);opacity:1;
+}
+html[data-theme="dark"] .postit:not(.ai-review-postit) :is(.postit-resolve,.postit-reply-button,.postit-delete):hover { background:var(--postit-hover); }
+html[data-theme="dark"] .postit:not(.ai-review-postit) :is(.postit-resolve,.postit-reply-button,.postit-delete):focus-visible { outline:2px solid #6f5bff;outline-offset:1px; }
+html[data-theme="dark"] .postit:not(.ai-review-postit) .postit-color { background:transparent;color-scheme:light; }
+html[data-theme="dark"] .postit:not(.ai-review-postit) .postit-text::-webkit-resizer { background:linear-gradient(135deg,transparent 50%,var(--postit-text-secondary) 51%); }
+html[data-theme="dark"] .postit:not(.ai-review-postit).is-resolved { background:var(--postit-secondary) !important; }
+
+html[data-theme="dark"] .ai-review-postit {
+  --review-shell:#182239;
+  --review-elevated:#202b46;
+  --review-nested:#141d31;
+  background:var(--review-shell) !important;
+  border-color:var(--fk-color-primary-border);
+  color:var(--fk-color-text-secondary);
+  box-shadow:0 10px 24px rgba(0,0,0,.28);
+  padding:0;
+  overflow:hidden;
+}
+html[data-theme="dark"] .ai-review-postit > header {
+  background:var(--review-elevated);border-bottom:1px solid var(--fk-color-divider);color:var(--fk-color-text-secondary);margin:0;padding:8px;
+}
+html[data-theme="dark"] .ai-review-postit :is(.postit-time,.postit-reply-meta,.postit-resolved-summary) { color:var(--fk-color-text-muted);opacity:1; }
+html[data-theme="dark"] .ai-review-postit :is(.postit-resolve,.postit-reply-button,.postit-delete,.ai-review-apply-fix) {
+  background:var(--fk-color-surface-input);border:1px solid var(--fk-color-border-control);color:var(--fk-color-text-primary);
+}
+html[data-theme="dark"] .ai-review-postit :is(.postit-resolve,.postit-reply-button,.postit-delete,.ai-review-apply-fix):hover { background:var(--fk-color-surface-hover); }
+html[data-theme="dark"] .ai-review-postit :is(button,summary):focus-visible { outline:0;box-shadow:var(--fk-focus-shadow); }
+html[data-theme="dark"] .ai-review-card { background:var(--review-shell);border:0;border-radius:0;box-shadow:none;padding:8px; }
+html[data-theme="dark"] .ai-review-card-heading { background:var(--review-elevated);border-bottom:1px solid var(--fk-color-divider);border-radius:8px;padding:7px 8px; }
+html[data-theme="dark"] .ai-review-section { border-color:var(--fk-color-divider); }
+html[data-theme="dark"] .ai-review-section-summary { background:var(--review-elevated); }
+html[data-theme="dark"] .ai-review-section-strengths { background:#162d2b; }
+html[data-theme="dark"] .ai-review-section-improvements { background:#30291c; }
+html[data-theme="dark"] .ai-review-section-rewrite { background:#27223d; }
+html[data-theme="dark"] .ai-review-section-body { color:var(--fk-color-text-secondary); }
+html[data-theme="dark"] .ai-review-postit > :is(.postit-replies,.postit-reply-editor,.postit-reply-button,.postit-resolved-summary) { margin-left:8px;margin-right:8px; }
+html[data-theme="dark"] .ai-review-postit .postit-replies { background:var(--review-nested);border:1px solid var(--fk-color-divider);border-radius:8px;padding:7px; }
+html[data-theme="dark"] .ai-review-postit .postit-reply { color:var(--fk-color-text-secondary); }
+html[data-theme="dark"] .ai-review-postit .postit-reply-editor { background:var(--review-nested);border-color:var(--fk-color-divider);padding:7px; }
+html[data-theme="dark"] .ai-review-postit .postit-reply-input { background:var(--fk-color-surface-input);border-color:var(--fk-color-border-control);color:var(--fk-color-text-primary); }
+html[data-theme="dark"] .ai-review-postit .postit-reply-input::placeholder { color:var(--fk-color-text-muted);opacity:1; }
+html[data-theme="dark"] .ai-review-postit > .postit-reply-button { margin-bottom:8px; }
+
+html[data-theme="dark"] .node[data-node-role="social-media-posting"] {
+  border-color:var(--fk-color-node-border) !important;border-top-color:var(--fk-color-role-social-accent) !important;
+  box-shadow:0 10px 24px rgba(0,0,0,.24),0 0 10px color-mix(in srgb,var(--fk-color-role-social-accent) 4%,transparent) !important;
+}
+html[data-theme="dark"] .node[data-node-role="social-media-posting"].selected { box-shadow:0 0 0 3px var(--fk-color-selection),var(--fk-shadow-panel) !important; }
+html[data-theme="dark"] .node[data-node-role="social-media-posting"] .social-preview { background:var(--fk-color-surface-elevated);border-color:var(--fk-color-divider);box-shadow:inset 3px 0 0 var(--fk-color-role-social-accent); }
+html[data-theme="dark"] .node[data-node-role="social-media-posting"] .social-card { gap:7px; }
+html[data-theme="dark"] .node[data-node-role="social-media-posting"] :is(.social-platform-select,.social-platform-regen,.social-actions-row button) { background:var(--fk-color-surface-input);border-color:var(--fk-color-border-control);color:var(--fk-color-text-primary); }
+html[data-theme="dark"] .node[data-node-role="social-media-posting"] .social-platform-select { color-scheme:dark; }
+html[data-theme="dark"] .node[data-node-role="social-media-posting"] .social-status-badge { background:var(--fk-color-success-subtle);border:1px solid color-mix(in srgb,var(--fk-color-success) 35%,transparent);color:var(--fk-color-success);font-weight:700; }
+html[data-theme="dark"] .node[data-node-role="social-media-posting"] .social-char-count { color:var(--fk-color-text-muted); }
+html[data-theme="dark"] .node[data-node-role="social-media-posting"] .social-char-count.warning { color:var(--fk-color-warning); }
+html[data-theme="dark"] .node[data-node-role="social-media-posting"] :is(.social-caption,.social-cta,.social-hashtags,.social-schedule-meta) { background:var(--fk-color-surface-card);border-color:var(--fk-color-divider);color:var(--fk-color-text-secondary); }
+html[data-theme="dark"] .node[data-node-role="social-media-posting"] .social-caption:not(:focus) {
+  display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:6;line-clamp:6;overflow:hidden;max-height:calc(6 * 1.35em + 12px);
+}
+html[data-theme="dark"] .node[data-node-role="social-media-posting"] .social-caption:focus { display:block;max-height:11em;overflow-y:auto; }
+html[data-theme="dark"] .node[data-node-role="social-media-posting"] :is(.social-caption,.social-cta,.social-hashtags):focus-visible { border-color:var(--fk-color-primary-action);outline:0;box-shadow:var(--fk-focus-shadow); }
+html[data-theme="dark"] .node[data-node-role="social-media-posting"] .social-cta { color:var(--fk-color-text-primary); }
+html[data-theme="dark"] .node[data-node-role="social-media-posting"] .social-hashtags { max-height:4.6em;overflow:auto;color:var(--fk-color-information); }
+html[data-theme="dark"] .node[data-node-role="social-media-posting"] .social-schedule-meta :is(small,strong) { color:var(--fk-color-text-secondary); }
+html[data-theme="dark"] .node[data-node-role="social-media-posting"] .social-image-frame { background:var(--fk-color-surface-input);border-color:var(--fk-color-divider);min-height:0; }
+html[data-theme="dark"] .node[data-node-role="social-media-posting"] .social-image-frame:empty { display:none; }
+html[data-theme="dark"] .node[data-node-role="social-media-posting"] .social-image-frame img { width:100%;height:auto;max-height:140px;object-fit:contain;background:var(--fk-color-surface-input); }
+html[data-theme="dark"] .node[data-node-role="social-media-posting"] .social-actions-row { border-top:1px solid var(--fk-color-divider);padding-top:7px; }
+html[data-theme="dark"] .node[data-node-role="social-media-posting"] .social-actions-row button { min-height:24px;line-height:1.2;padding:4px 7px; }
+html[data-theme="dark"] .node[data-node-role="social-media-posting"] :is(.social-platform-regen,.social-actions-row button):hover { background:var(--fk-color-surface-hover); }
+html[data-theme="dark"] .node[data-node-role="social-media-posting"] :is(.social-platform-select,.social-platform-regen,.social-actions-row button):focus-visible { outline:0;box-shadow:var(--fk-focus-shadow); }
+html[data-theme="dark"] .node[data-node-role="social-media-posting"] .social-actions-row button:disabled { background:var(--fk-color-surface-disabled);color:var(--fk-color-text-disabled); }
+
 /* Inspector: a level-two panel with level-three sections and level-four controls. */
 html[data-theme="dark"] .inspector { background:var(--fk-color-surface-panel);border-color:var(--fk-color-divider); }
 html[data-theme="dark"] .inspector :is(h2,.inspector-section-title) { color:var(--fk-color-text-primary); }
