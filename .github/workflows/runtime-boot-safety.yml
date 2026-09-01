@@ -131,6 +131,8 @@ jobs:
         run: npm run check:bw29.3.5
       - name: Check BW-29.4.1 production boundary diagnostics
         run: npm run check:bw29.4.1
+      - name: Check BW-29.4.2 Canvas-context boundary
+        run: npm run check:bw29.4.2
       - name: Check dynamic AI Insights translations
         run: node scripts/check-bw25-1-dynamic-insights-translations.js
       - name: Check Knowledge Module browser globals
