@@ -16346,6 +16346,16 @@ function renderFunnelSimulator() {
     canvasRevision: `${state.boardLoadGeneration}:${state.lastKnownUpdatedAt || "local"}:${state.isDirty ? "dirty" : "clean"}`,
     savedState: state.isDirty ? "unsaved" : "saved",
     canRun: !!state.user?.email && !!state.currentBoardId && state.boardAccess?.canEdit === true && !state.publicBoardToken,
+    getRunContext() {
+      const currentNodes = state.nodes.map((node) => {
+        const projected = {};
+        ["id", "type", "title", "content", "status", "funnelStage", "audience", "tone", "cta", "channel"].forEach((key) => { if (typeof node[key] === "string") projected[key] = node[key]; });
+        if (node.social && typeof node.social === "object") { projected.social = {}; ["caption", "hashtags", "platform", "preview", "cta"].forEach((key) => { if (typeof node.social[key] === "string" || (key === "hashtags" && Array.isArray(node.social[key]))) projected.social[key] = node.social[key]; }); }
+        if (node.landingPage && typeof node.landingPage === "object") { projected.landingPage = {}; ["headerClaim", "problem", "solution", "trust", "cta"].forEach((key) => { if (typeof node.landingPage[key] === "string") projected.landingPage[key] = node.landingPage[key]; }); }
+        return projected;
+      });
+      return { language: state.uiLanguage, identity: `${state.user?.email || "anonymous"}|${state.currentBoardId || ""}|${state.boardLoadGeneration}|${state.boardAccess?.canView !== false}|${state.publicBoardToken || ""}`, boardId: state.currentBoardId || "", boardRevision: state.lastKnownUpdatedAt || "local", brandCore: state.authoritativeBoardBrandCore?.value || state.brandCore, brandCoreRevision: state.authoritativeBoardBrandCore?.provenance?.revision || state.authoritativeBoardBrandCore?.updatedAt || state.lastKnownUpdatedAt || "0", canvasContext: { nodes: currentNodes, edges: canvasEdges }, canvasRevision: `${state.boardLoadGeneration}:${state.lastKnownUpdatedAt || "local"}:${state.isDirty ? "dirty" : "clean"}`, savedState: state.isDirty ? "unsaved" : "saved", canRun: !!state.user?.email && !!state.currentBoardId && state.boardAccess?.canEdit === true && !state.publicBoardToken };
+    },
     canHandoff: !!state.user?.email && state.boardAccess?.canEdit === true && !state.publicBoardToken,
     mountCalculator(host) { window.FunklixFunnelSimulator.mount(host, { language: state.uiLanguage, identity, boardName: state.currentBoardName || uiText("Current Board"), nodeCount: state.nodes.length, ...context, canHandoff: !!state.user?.email && state.boardAccess?.canEdit === true && !state.publicBoardToken, onHandoff(prompt) { setActiveView("ai_brain"); const input = el.aiBrainSummary?.querySelector("#ai-brain-question"); if (input) { input.value = prompt; input.focus(); } } }); },
     onShowCanvas(nodeId) { setActiveView("board"); focusNodeInCanvas(nodeId, { behavior: "smooth", select: true, pulse: true }); },

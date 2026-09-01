@@ -23,6 +23,11 @@ function list(value, maxItems, itemMax) {
   return input.slice(0, maxItems).map((item) => text(item, itemMax, true)).filter(Boolean);
 }
 function digest(value) { let hash = 2166136261; for (const char of String(value)) hash = Math.imul(hash ^ char.charCodeAt(0), 16777619); return (hash >>> 0).toString(16).padStart(8, '0').repeat(2); }
+function canonical(value) {
+  if (Array.isArray(value)) return value.map(canonical);
+  if (plain(value)) return Object.keys(value).sort().reduce((result, key) => { result[key] = canonical(value[key]); return result; }, {});
+  return value === undefined ? null : value;
+}
 function projectTargetGroups(brandCore, revision = '0') {
   const personas = Array.isArray(brandCore?.personas) ? brandCore.personas : [];
   const projected = [];
@@ -32,7 +37,8 @@ function projectTargetGroups(brandCore, revision = '0') {
     const name = text(source.name || source.category, 80, true);
     if (!name) return;
     const description = text(source.description || source.note || '', 500) || '';
-    projected.push({ source_id: `board-persona:${digest(revision)}:${index}`, source: 'board_brand_core', name, description, needs: list(source.needs, 5, 120), motivations: list(source.motivations, 5, 120), additional_context: [] });
+    const bounded = { name, description, needs: list(source.needs, 5, 120), motivations: list(source.motivations, 5, 120) };
+    projected.push({ source_id: `board-persona:${digest(JSON.stringify(canonical(bounded))) }:${index}`, source: 'board_brand_core', ...bounded, additional_context: [] });
   });
   return projected;
 }
@@ -53,6 +59,34 @@ function projectNode(node) {
   const previewSource = node.content || node.social?.caption || node.landingPage?.headerClaim || node.title || '';
   return { id, title: text(node.title || role, 120) || role, role, stage, platform: text(node.social?.platform || node.channel || '', 60) || '', status: text(node.status || '', 40) || '', preview: text(previewSource, 1200) || '' };
 }
+function assetReadiness(node) {
+  const projected = projectNode(node);
+  if (!projected) return { state: 'incomplete', issues: ['Invalid role or stage'] };
+  const content = text(node?.content || '', 8000) || '';
+  const socialCaption = text(node?.social?.caption || node?.social?.preview || '', 3000) || '';
+  const platform = text(node?.social?.platform || node?.channel || '', 60) || '';
+  const landing = [node?.landingPage?.headerClaim, node?.landingPage?.problem, node?.landingPage?.solution].map((part) => text(part || '', 3000) || '').filter(Boolean);
+  const subject = text(node?.subject || node?.email?.subject || node?.title || '', 300) || '';
+  const issues = [];
+  if (projected.role === 'Social Media Posting') { if (!socialCaption && !content) issues.push('Missing caption'); if (!platform) issues.push('Missing platform'); }
+  else if (projected.role === 'Landing Page') { if (!content && !landing.length) issues.push('Missing Landing Page content'); }
+  else if (projected.role === 'Email Campaign') { if (!subject) issues.push('Missing subject'); if (!content) issues.push('Content is empty'); }
+  else if (projected.role === 'Visual Concept') { if (!content) issues.push('Missing visual concept'); }
+  else if (!content) issues.push('Content is empty');
+  if (issues.length) return { state: 'incomplete', issues: issues.slice(0, 2) };
+  const attention = [];
+  const cta = text(node?.cta || node?.social?.cta || node?.landingPage?.cta || '', 300) || '';
+  if (['Landing Page', 'Social Media Posting', 'Email Campaign'].includes(projected.role) && !cta) attention.push('No usable CTA');
+  return { state: attention.length ? 'attention' : 'ready', issues: attention.slice(0, 2) };
+}
+function selectedContentProjection(groups, stages, nodeMap, savedState) {
+  return canonical({
+    saved_state: savedState,
+    target_groups: groups.map(({ source_id, name, description, needs, motivations, kind, client_id }) => ({ source_id, client_id, kind, name, description, needs, motivations })).sort((a, b) => String(a.source_id || a.client_id).localeCompare(String(b.source_id || b.client_id))),
+    stages: stages.map((stage) => ({ stage: stage.stage, mode: stage.mode, nodes: [...stage.node_ids].sort().map((id) => { const node = nodeMap.get(id); return node ? { ...node, readiness: assetReadiness(node) } : { id, missing: true }; }) }))
+  });
+}
+function selectedContentIdentity(groups, stages, nodeMap, savedState) { return digest(JSON.stringify(selectedContentProjection(groups, stages, nodeMap, savedState))); }
 function validateRequest(body) {
   if (!keys(body, BODY_KEYS) || Object.keys(body).length !== BODY_KEYS.size) return { ok: false, code: 'invalid_request' };
   if (!text(body.board_id, 80, true) || !['en', 'de'].includes(body.response_language) || !['string', 'number'].includes(typeof body.board_revision)
@@ -94,4 +128,4 @@ function aggregateRanges(journeys, selectedStages) {
   });
 }
 
-module.exports = { STAGES, ELIGIBLE_ROLES, BANDS, LIMITS, text, digest, projectTargetGroups, mapNodeStage, projectNode, validateRequest, aggregateRanges };
+module.exports = { STAGES, ELIGIBLE_ROLES, BANDS, LIMITS, text, digest, canonical, projectTargetGroups, mapNodeStage, projectNode, assetReadiness, selectedContentProjection, selectedContentIdentity, validateRequest, aggregateRanges };
