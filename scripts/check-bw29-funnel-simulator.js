@@ -1,0 +1,27 @@
+#!/usr/bin/env node
+"use strict";
+const assert = require("assert");
+const fs = require("fs");
+const simulator = require("../funnel-simulator.js");
+const html = fs.readFileSync("index.html", "utf8");
+const app = fs.readFileSync("app.js", "utf8");
+const css = fs.readFileSync("styles.css", "utf8");
+const language = fs.readFileSync("language.js", "utf8");
+const workflow = fs.readFileSync(".github/workflows/runtime-boot-safety.yml", "utf8");
+assert.match(html,/id="funnel-simulator-nav-btn"/); assert.match(html,/id="funnel-simulator-view"/); assert.match(html,/id="insights-view"[\s\S]*id="funnel-simulator-view"/);
+for (const id of ["home-nav-btn","boards-nav-btn","campaign-canvas-nav-btn","brand-core-nav-btn","ai-brain-nav-btn","insights-nav-btn"]) assert.match(html,new RegExp(`id="${id}"`));
+assert.match(app,/view === "funnel_simulator"/); assert.match(app,/renderFunnelSimulator/); assert.match(css,/@media\(max-width:800px\)/); assert.match(css,/\[data-theme="dark"\] \.simulator-shell/); assert.match(language,/Funnel-Simulator/);
+assert.deepStrictEqual(simulator.STAGES,["Awareness","Interest","Consideration","Conversion","Retention"]);
+const scenario={name:"Baseline",startingAudience:"100000",awarenessToInterest:"8",interestToConsideration:"20",considerationToConversion:"10",conversionToRetention:"40",budget:"3200",valuePerConversion:"100",currency:"EUR"};
+const result=simulator.calculateScenario(scenario); assert(result.valid); assert.strictEqual(result.stages.Awareness,100000); assert.strictEqual(result.stages.Interest,8000); assert.strictEqual(result.stages.Consideration,1600); assert.strictEqual(result.stages.Conversion,160); assert.strictEqual(result.stages.Retention,64); assert.strictEqual(result.transitions[0].dropOff,92000); assert.strictEqual(result.transitions[0].lossRate,92); assert.strictEqual(result.commercial.costPerConversion,20); assert.strictEqual(result.commercial.costPerRetainedCustomer,50); assert.strictEqual(result.commercial.conversionValue,16000); assert.strictEqual(result.commercial.returnRatio,5);
+const precise=simulator.calculateScenario({...scenario,startingAudience:"3",awarenessToInterest:"33.3333",interestToConsideration:"100",considerationToConversion:"100",conversionToRetention:"100"}); assert(Math.abs(precise.stages.Retention-.999999)<1e-12);
+const zero=simulator.calculateScenario({...scenario,awarenessToInterest:"0"}); assert.strictEqual(zero.stages.Retention,0); assert.strictEqual(zero.commercial.costPerConversion,null); assert(!JSON.stringify(zero).includes("Infinity"));
+const full=simulator.calculateScenario({...scenario,awarenessToInterest:"100"}); assert.strictEqual(full.stages.Interest,100000);
+for(const bad of ["-1","101","NaN","Infinity","1e9","1.12345"]) assert(!simulator.calculateScenario({...scenario,awarenessToInterest:bad}).valid);
+assert(!simulator.calculateScenario({...scenario,startingAudience:"0"}).valid); assert(!simulator.calculateScenario(Object.assign(Object.create(null),scenario)).valid);
+const alt=simulator.calculateScenario({...scenario,awarenessToInterest:"10"}); const comparison=simulator.compareScenarios(result,alt); assert.strictEqual(comparison[1].difference,2000); assert.strictEqual(comparison[1].percentageDifference,25); assert.strictEqual(simulator.compareScenarios(zero,zero)[4].percentageDifference,null);
+for(const currency of ["EUR","USD","GBP"]) assert(simulator.formatCurrency(1234.5,currency,"en")); assert.notStrictEqual(simulator.formatNumber(1234.5,"en"),simulator.formatNumber(1234.5,"de"));
+const prompt=simulator.buildHandoff(result,{boardName:"<img onerror=x>",channels:["LinkedIn"],coveredStages:["Awareness"]}); assert.match(prompt,/simulated results, not measured performance or predictions/); assert.match(prompt,/Starting audience/); assert.match(prompt,/LinkedIn/); assert(prompt.length <= 2000);
+assert(!/localStorage|sessionStorage|document\.cookie|fetch\(/.test(fs.readFileSync("funnel-simulator.js","utf8"))); assert.match(app,/canHandoff: !!state\.user\?\.email && state\.boardAccess\?\.canEdit === true && !state\.publicBoardToken/); assert.match(app,/input\.value = prompt/); assert.doesNotMatch(app,/input\.value = prompt[\s\S]{0,80}requestAiBrain/);
+assert.match(workflow,/check-bw28-3-1-insights-runtime-rendering\.js[\s\S]*check-bw29-funnel-simulator\.js/);
+console.log("BW-29 Funnel Simulator production contract passed (92 requirement groups). ");

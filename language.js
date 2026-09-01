@@ -14,7 +14,7 @@
   const german = {
     "Home": "Startseite", "Boards": "Boards", "Campaign Canvas": "Kampagnen-Canvas",
     "Content Workspace": "Content-Arbeitsbereich", "Board Brand Core": "Board Brand Core",
-    "AI Brain": "KI-Brain", "Insights": "Einblicke", "Activity": "Aktivität",
+    "AI Brain": "KI-Brain", "Insights": "Einblicke", "Funnel Simulator": "Funnel-Simulator", "Activity": "Aktivität",
     "AI Insights": "KI-Einblicke", "Measured performance": "Gemessene Performance",
     "See what is ready, what needs attention, and where to focus next.": "Sieh, was bereit ist, was Aufmerksamkeit benötigt und worauf du dich als Nächstes konzentrieren solltest.",
     "Executive health overview": "Überblick zur Kampagnengesundheit", "A compact view of current Canvas readiness.": "Ein kompakter Überblick über die aktuelle Canvas-Bereitschaft.",
