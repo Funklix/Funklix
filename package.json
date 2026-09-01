@@ -27,6 +27,7 @@
     "check:bw29.3.2": "node scripts/check-bw29-3-2-execution-and-compact-ux.js",
     "check:bw29.3.3": "node scripts/check-bw29-3-3-reliable-persona-simulation.js",
     "check:bw29.3.4": "node scripts/check-bw29-3-4-simple-execution-path.js",
-    "check:bw29.3.5": "node scripts/check-bw29-3-5-live-request-parity.js"
+    "check:bw29.3.5": "node scripts/check-bw29-3-5-live-request-parity.js",
+    "check:bw29.4.1": "node scripts/check-bw29-4-1-production-boundary-diagnostics.js"
   }
 }
