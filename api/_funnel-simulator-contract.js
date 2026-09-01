@@ -4,11 +4,14 @@ const STAGES = Object.freeze(['Awareness', 'Interest', 'Consideration', 'Convers
 const ELIGIBLE_ROLES = new Set(['Idea', 'Campaign Variation', 'Content', 'Social Media Posting', 'Landing Page', 'Email Campaign', 'Visual Concept']);
 const BANDS = Object.freeze({ very_low: [10, 30], low: [25, 45], moderate: [45, 65], high: [65, 85], very_high: [80, 95] });
 const LIMITS = Object.freeze({ groups: 3, personas: 6, personasPerGroup: 2, stages: 5, nodesPerStage: 2, nodes: 8, reactions: 60, bodyBytes: 65536, outputBytes: 98304 });
-const BODY_KEYS = new Set(['board_id', 'response_language', 'board_revision', 'canvas_context', 'configuration', 'client_run_id', 'client_request_id', 'configuration_fingerprint', 'stage_mapping_version']);
-const CANVAS_KEYS = new Set(['revision', 'saved_state', 'nodes', 'edges']);
-const CONFIG_KEYS = new Set(['target_groups', 'stages']);
-const GROUP_KEYS = { brand_core: new Set(['kind', 'source_id']), custom: new Set(['kind', 'client_id', 'name', 'description']) };
-const STAGE_KEYS = new Set(['stage', 'mode', 'node_ids']);
+const REQUEST_VERSION = 'persona_journey_run_v2';
+const BODY_KEYS = new Set(['version', 'client_request_id', 'board_id', 'canvas_state', 'target_groups', 'stages', 'gaps', 'stage_assets', 'persona_count', 'response_language', 'unsaved_context']);
+const TARGET_KEYS = new Set(['source', 'source_id']);
+const ASSET_KEYS = new Set(['stage', 'node_id']);
+const UNSAVED_KEYS = new Set(['version', 'nodes']);
+const UNSAVED_NODE_KEYS = new Set(['id', 'type', 'stage', 'title', 'content', 'status', 'audience', 'tone', 'cta', 'channel', 'social', 'landingPage']);
+const SOCIAL_KEYS = new Set(['caption', 'hashtags', 'platform', 'preview', 'cta']);
+const LANDING_KEYS = new Set(['headerClaim', 'problem', 'solution', 'trust', 'cta']);
 
 function plain(value) { return !!value && typeof value === 'object' && !Array.isArray(value) && Object.getPrototypeOf(value) === Object.prototype; }
 function keys(value, allowed) { return plain(value) && Object.keys(value).every((key) => allowed.has(key)); }
@@ -104,30 +107,37 @@ function selectedContentProjection(groups, stages, nodeMap, savedState) {
   });
 }
 function selectedContentIdentity(groups, stages, nodeMap, savedState) { return digest(JSON.stringify(selectedContentProjection(groups, stages, nodeMap, savedState))); }
+function validateUnsavedContext(value, selectedAssets) {
+  if (!keys(value, UNSAVED_KEYS) || Object.keys(value).length !== UNSAVED_KEYS.size || value.version !== 'persona_journey_unsaved_context_v1' || !Array.isArray(value.nodes) || value.nodes.length > LIMITS.nodes) return false;
+  const expected = new Map(selectedAssets.map((asset) => [asset.node_id, asset.stage])); const ids = new Set();
+  for (const node of value.nodes) {
+    if (!keys(node, UNSAVED_NODE_KEYS) || !text(node.id, 160, true) || ids.has(node.id) || expected.get(node.id) !== node.stage || !STAGES.includes(node.stage) || !text(node.type, 80, true)) return false;
+    ids.add(node.id);
+    for (const key of ['title','status','audience','tone','cta','channel']) if (node[key] !== undefined && text(node[key], key === 'title' ? 120 : 1000) === null) return false;
+    if (node.content !== undefined && text(node.content, 8000) === null) return false;
+    for (const [key, allowed] of [['social', SOCIAL_KEYS], ['landingPage', LANDING_KEYS]]) if (node[key] !== undefined && (!keys(node[key], allowed) || Object.values(node[key]).some((entry) => Array.isArray(entry) ? entry.length > 20 || entry.some((item) => text(item,100,true) === null) : text(entry,3000) === null))) return false;
+  }
+  return ids.size === expected.size && [...expected.keys()].every((id) => ids.has(id));
+}
+function requestConfiguration(body) {
+  const assetsByStage = new Map(body.stages.map((stage) => [stage, []]));
+  body.stage_assets.forEach(({ stage, node_id }) => assetsByStage.get(stage).push(node_id));
+  return { target_groups: body.target_groups.map(({ source_id }) => ({ kind: 'brand_core', source_id })), stages: body.stages.map((stage) => ({ stage, mode: body.gaps.includes(stage) ? 'explicit_gap' : 'assets', node_ids: assetsByStage.get(stage) })) };
+}
 function validateRequest(body) {
-  if (!keys(body, BODY_KEYS) || ![BODY_KEYS.size, BODY_KEYS.size - 1].includes(Object.keys(body).length) || (Object.keys(body).length === BODY_KEYS.size - 1 && Object.hasOwn(body, 'client_request_id'))) return { ok: false, code: 'invalid_request' };
-  if (!text(body.board_id, 80, true) || (body.client_request_id !== undefined && !/^[A-Z0-9]{6,16}$/.test(body.client_request_id)) || !['en', 'de'].includes(body.response_language) || !['string', 'number'].includes(typeof body.board_revision)
-    || body.stage_mapping_version !== 'bw28-v1' || !/^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(body.client_run_id || '') || !text(body.configuration_fingerprint, 128, true)
-    || !keys(body.canvas_context, CANVAS_KEYS) || !['saved', 'unsaved'].includes(body.canvas_context.saved_state) || !['string', 'number'].includes(typeof body.canvas_context.revision)
-    || !Array.isArray(body.canvas_context.nodes) || !Array.isArray(body.canvas_context.edges) || !keys(body.configuration, CONFIG_KEYS)) return { ok: false, code: 'invalid_request' };
-  const groups = body.configuration.target_groups; const stages = body.configuration.stages;
-  if (!Array.isArray(groups) || groups.length < 1 || groups.length > LIMITS.groups || !Array.isArray(stages) || stages.length < 2 || stages.length > LIMITS.stages) return { ok: false, code: 'invalid_request' };
-  let custom = 0; const groupIds = new Set();
-  for (const group of groups) {
-    if (!plain(group) || !GROUP_KEYS[group.kind] || !keys(group, GROUP_KEYS[group.kind]) || Object.keys(group).length !== GROUP_KEYS[group.kind].size) return { ok: false, code: 'invalid_request' };
-    const id = group.kind === 'brand_core' ? text(group.source_id, 120, true) : text(group.client_id, 40, true);
-    if (!id || groupIds.has(id)) return { ok: false, code: 'invalid_request' }; groupIds.add(id);
-    if (group.kind === 'custom' && (++custom > 1 || group.client_id !== 'custom-1' || !text(group.name, 80, true) || text(group.description, 500, true) === null)) return { ok: false, code: 'invalid_request' };
-  }
-  const nodeIds = new Set(); let previous = -1;
-  for (const stage of stages) {
-    if (!keys(stage, STAGE_KEYS) || Object.keys(stage).length !== STAGE_KEYS.size || !STAGES.includes(stage.stage) || STAGES.indexOf(stage.stage) <= previous || !['assets', 'explicit_gap'].includes(stage.mode) || !Array.isArray(stage.node_ids)) return { ok: false, code: 'invalid_request' };
-    previous = STAGES.indexOf(stage.stage);
-    if ((stage.mode === 'assets' && (stage.node_ids.length < 1 || stage.node_ids.length > LIMITS.nodesPerStage)) || (stage.mode === 'explicit_gap' && stage.node_ids.length)) return { ok: false, code: 'invalid_request' };
-    for (const idValue of stage.node_ids) { const id = text(idValue, 160, true); if (!id || nodeIds.has(id)) return { ok: false, code: 'invalid_request' }; nodeIds.add(id); }
-  }
-  if (nodeIds.size > LIMITS.nodes) return { ok: false, code: 'invalid_request' };
-  return { ok: true };
+  if (!keys(body, BODY_KEYS) || body.version !== REQUEST_VERSION || !/^[A-Z0-9]{6,16}$/.test(body.client_request_id || '') || !text(body.board_id,80,true) || !['saved','unsaved'].includes(body.canvas_state) || !['en','de'].includes(body.response_language)) return { ok:false, code:'invalid_request' };
+  const required = body.canvas_state === 'saved' ? BODY_KEYS.size - 1 : BODY_KEYS.size;
+  if (Object.keys(body).length !== required || (body.canvas_state === 'saved' && Object.hasOwn(body,'unsaved_context')) || !Number.isInteger(body.persona_count) || body.persona_count < 2 || body.persona_count > LIMITS.personas) return { ok:false, code:'invalid_request' };
+  if (!Array.isArray(body.target_groups) || body.target_groups.length < 1 || body.target_groups.length > LIMITS.groups || !Array.isArray(body.stages) || body.stages.length < 2 || body.stages.length > LIMITS.stages || !Array.isArray(body.gaps) || !Array.isArray(body.stage_assets)) return { ok:false, code:'invalid_request' };
+  const groupIds=new Set(); for(const group of body.target_groups){if(!keys(group,TARGET_KEYS)||Object.keys(group).length!==2||group.source!=='board_brand_core'||!text(group.source_id,120,true)||groupIds.has(group.source_id))return{ok:false,code:'invalid_request'};groupIds.add(group.source_id);}
+  let previous=-1;const stageSet=new Set();for(const stage of body.stages){const position=STAGES.indexOf(stage);if(position<=previous)return{ok:false,code:'invalid_request'};previous=position;stageSet.add(stage);}const gapSet=new Set();for(const gap of body.gaps){if(!stageSet.has(gap)||gapSet.has(gap))return{ok:false,code:'invalid_request'};gapSet.add(gap);}
+  const nodeIds=new Set(),counts=new Map();for(const asset of body.stage_assets){if(!keys(asset,ASSET_KEYS)||Object.keys(asset).length!==2||!stageSet.has(asset.stage)||gapSet.has(asset.stage)||!text(asset.node_id,160,true)||nodeIds.has(asset.node_id))return{ok:false,code:'invalid_request'};nodeIds.add(asset.node_id);counts.set(asset.stage,(counts.get(asset.stage)||0)+1);if(counts.get(asset.stage)>LIMITS.nodesPerStage)return{ok:false,code:'invalid_request'};}
+  if(nodeIds.size>LIMITS.nodes||body.stages.some(stage=>!gapSet.has(stage)&&!counts.has(stage))||body.persona_count!==body.target_groups.length*LIMITS.personasPerGroup)return{ok:false,code:'invalid_request'};
+  if(body.canvas_state==='unsaved'&&!validateUnsavedContext(body.unsaved_context,body.stage_assets))return{ok:false,code:'invalid_request'};
+  const configuration=requestConfiguration(body);
+  // Internal compatibility view for evaluators; it is deliberately non-enumerable and never crosses JSON.
+  if(Object.isExtensible(body))Object.defineProperty(body,'configuration',{value:configuration,configurable:true});
+  return {ok:true,configuration};
 }
 function roundedRange(low, high) { return [Math.max(0, Math.floor(low / 5) * 5), Math.min(100, Math.ceil(high / 5) * 5)]; }
 function aggregateRanges(journeys, selectedStages) {
@@ -145,4 +155,4 @@ function aggregateRanges(journeys, selectedStages) {
   });
 }
 
-module.exports = { STAGES, ELIGIBLE_ROLES, BANDS, LIMITS, text, digest, canonical, projectTargetGroups, targetGroupDigest, resolveTargetGroup, evaluateConfiguration, mapNodeStage, projectNode, assetReadiness, selectedContentProjection, selectedContentIdentity, validateRequest, aggregateRanges };
+module.exports = { REQUEST_VERSION, STAGES, ELIGIBLE_ROLES, BANDS, LIMITS, text, digest, canonical, projectTargetGroups, targetGroupDigest, resolveTargetGroup, evaluateConfiguration, mapNodeStage, projectNode, assetReadiness, selectedContentProjection, selectedContentIdentity, validateUnsavedContext, requestConfiguration, validateRequest, aggregateRanges };
