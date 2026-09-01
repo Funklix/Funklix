@@ -37,10 +37,27 @@ function projectTargetGroups(brandCore, revision = '0') {
     const name = text(source.name || source.category, 80, true);
     if (!name) return;
     const description = text(source.description || source.note || '', 500) || '';
-    const bounded = { name, description, needs: list(source.needs, 5, 120), motivations: list(source.motivations, 5, 120) };
-    projected.push({ source_id: `board-persona:${digest(JSON.stringify(canonical(bounded))) }:${index}`, source: 'board_brand_core', ...bounded, additional_context: [] });
+    const bounded = { name, description, needs: list(source.needs, 5, 120).sort(), motivations: list(source.motivations, 5, 120).sort() };
+    projected.push({ source_id: `board-persona:${digest(JSON.stringify(canonical(bounded)))}`, source: 'board_brand_core', ...bounded, additional_context: [] });
   });
   return projected;
+}
+function targetGroupDigest(reference) { const match = /^board-persona:([0-9a-f]{16})(?::\d+)?$/i.exec(text(reference, 120) || ''); return match?.[1]?.toLowerCase() || null; }
+function resolveTargetGroup(reference, available) {
+  const exact = available.find((group) => group.source_id === reference); if (exact) return exact;
+  const wanted = targetGroupDigest(reference); return wanted ? available.find((group) => targetGroupDigest(group.source_id) === wanted) || null : null;
+}
+function evaluateConfiguration(configuration, availableGroups, rawNodes) {
+  const issues=[], normalizedTargetGroups=[], normalizedOrderedStages=[];
+  for (const selected of configuration?.target_groups || []) {
+    if (selected.kind === 'custom') normalizedTargetGroups.push({ id:selected.client_id, kind:'custom', name:text(selected.name,80,true), description:text(selected.description,500,true) });
+    else { const group=resolveTargetGroup(selected.source_id,availableGroups); if(group) normalizedTargetGroups.push({...group,id:group.source_id}); else issues.push({code:'target_group_missing',affected_step:'target-groups',target_group_reference:text(selected.source_id,120)||'invalid',field:'source_id',message_key:'journey.issue.target_group_missing',blocking:true}); }
+  }
+  const rawMap=new Map((rawNodes||[]).map(node=>[text(node?.id,160),node])); const resolvedSelectedAssets=[], readinessResults=[]; let previous=-1;
+  for (const stage of configuration?.stages || []) { const position=STAGES.indexOf(stage.stage); if(position<0||position<=previous){issues.push({code:'stage_order_invalid',affected_step:'stages',stage:text(stage.stage,40)||'invalid',field:'stage',blocking:true});continue;} previous=position; normalizedOrderedStages.push(stage);
+    for(const id of stage.node_ids||[]){const raw=rawMap.get(id),projected=projectNode(raw);if(!projected){issues.push({code:'asset_missing',affected_step:'assets',stage:stage.stage,node_id:id,field:'node_id',blocking:true});continue;}if(projected.stage!==stage.stage){issues.push({code:'asset_stage_mismatch',affected_step:'assets',stage:stage.stage,node_id:id,field:'stage',blocking:true});continue;}const readiness=assetReadiness(raw);readinessResults.push({node_id:id,state:readiness.state});if(readiness.state==='incomplete'){issues.push({code:'asset_incomplete',affected_step:'assets',stage:stage.stage,node_id:id,field:'readiness',blocking:true});continue;}resolvedSelectedAssets.push(projected);}
+  }
+  return {isRunnable:issues.length===0&&normalizedTargetGroups.length>0&&normalizedOrderedStages.length>=2,normalizedTargetGroups,normalizedOrderedStages,resolvedSelectedAssets,readinessResults,actionableIssues:issues};
 }
 function mapNodeStage(node) {
   const explicit = text(node?.funnelStage, 40);
@@ -128,4 +145,4 @@ function aggregateRanges(journeys, selectedStages) {
   });
 }
 
-module.exports = { STAGES, ELIGIBLE_ROLES, BANDS, LIMITS, text, digest, canonical, projectTargetGroups, mapNodeStage, projectNode, assetReadiness, selectedContentProjection, selectedContentIdentity, validateRequest, aggregateRanges };
+module.exports = { STAGES, ELIGIBLE_ROLES, BANDS, LIMITS, text, digest, canonical, projectTargetGroups, targetGroupDigest, resolveTargetGroup, evaluateConfiguration, mapNodeStage, projectNode, assetReadiness, selectedContentProjection, selectedContentIdentity, validateRequest, aggregateRanges };
