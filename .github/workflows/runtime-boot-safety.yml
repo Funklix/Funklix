@@ -105,6 +105,8 @@ jobs:
         run: node scripts/check-bw27-3-final-dark-mode-polish.js
       - name: Check BW-27.4 Canvas component polish
         run: node scripts/check-bw27-4-canvas-component-polish.js
+      - name: Check BW-27.5 Landing Page node Dark Mode readability
+        run: node scripts/check-bw27-5-landing-page-node-dark-mode.js
       - name: Check BW-28 trustworthy Canvas Intelligence
         run: node scripts/check-bw28-ai-insights-architecture.js
       - name: Check BW-28.1 Insights UX and AI Brain handoff
