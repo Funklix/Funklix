@@ -344,9 +344,12 @@ const el = {
   campaignCanvasNavButton: document.getElementById("campaign-canvas-nav-btn"),
   boardsNavButton: document.getElementById("boards-nav-btn"),
   insightsNavButton: document.getElementById("insights-nav-btn"),
+  funnelSimulatorNavButton: document.getElementById("funnel-simulator-nav-btn"),
   aiBrainNavButton: document.getElementById("ai-brain-nav-btn"),
   boardsLibraryView: document.getElementById("boards-library-view"),
   insightsView: document.getElementById("insights-view"),
+  funnelSimulatorView: document.getElementById("funnel-simulator-view"),
+  funnelSimulatorSurface: document.getElementById("funnel-simulator-surface"),
   aiBrainView: document.getElementById("ai-brain-view"),
   insightsCards: document.getElementById("insights-cards"),
   aiBrainSummary: document.getElementById("ai-brain-summary"),
@@ -16281,6 +16284,7 @@ function setActiveView(view) {
   el.calendarView.classList.toggle("hidden", view !== "calendar");
   el.boardsLibraryView?.classList.toggle("hidden", view !== "boards_library");
   el.insightsView?.classList.toggle("hidden", view !== "insights");
+  el.funnelSimulatorView?.classList.toggle("hidden", view !== "funnel_simulator");
   el.aiBrainView?.classList.toggle("hidden", view !== "ai_brain");
   el.brandCoreWorkspace.classList.toggle("hidden", !isBrandCore);
   el.homeNavButton?.classList.toggle("active", isHome);
@@ -16289,12 +16293,13 @@ function setActiveView(view) {
   el.brandCoreButton.classList.toggle("active", isBrandCore);
   el.aiBrainNavButton?.classList.toggle("active", view === "ai_brain");
   el.insightsNavButton?.classList.toggle("active", view === "insights");
+  el.funnelSimulatorNavButton?.classList.toggle("active", view === "funnel_simulator");
   if (state.appMode !== "brand") {
     el.canvasTopbar.classList.toggle("hidden", isHome);
     el.inspectorPanel.classList.toggle("hidden", isHome);
   }
   el.cycleViewButton.textContent =
-    view === "home" ? "Home" : view === "board" ? "Board View" : view === "list" ? "List View" : view === "calendar" ? "Calendar View" : view === "boards_library" ? "Boards" : view === "insights" ? "Insights" : view === "ai_brain" ? "AI Brain" : "Brand Core";
+    view === "home" ? "Home" : view === "board" ? "Board View" : view === "list" ? "List View" : view === "calendar" ? "Calendar View" : view === "boards_library" ? "Boards" : view === "insights" ? "Insights" : view === "funnel_simulator" ? "Funnel Simulator" : view === "ai_brain" ? "AI Brain" : "Brand Core";
   if (isHome) {
     renderDashboardHero();
     renderDashboardContinueWorking();
@@ -16305,6 +16310,27 @@ function setActiveView(view) {
   if (view === "list") updateListView();
   if (view === "calendar") renderCalendarView();
   if (view === "insights" || view === "ai_brain") renderCampaignIntelligence();
+  if (view === "funnel_simulator") renderFunnelSimulator();
+}
+
+
+function simulatorCanvasContext() {
+  const analysis = analyzeCampaign(state.nodes, state.edges, state.brandCore);
+  const channels = [...new Set(state.nodes.flatMap((node) => [node.channel, node.social?.platform]).filter((value) => typeof value === "string" && value.trim()).map((value) => value.trim()))].slice(0, 8);
+  const audiences = [...new Set(state.nodes.map((node) => node.audience).filter((value) => typeof value === "string" && value.trim()).map((value) => value.trim()))].slice(0, 5);
+  return { channels, audiences, coveredStages: analysis.funnel.coveredStages, missingStages: analysis.funnel.missingStages };
+}
+
+function renderFunnelSimulator() {
+  if (!window.FunklixFunnelSimulator || !el.funnelSimulatorSurface) return;
+  const context = simulatorCanvasContext();
+  window.FunklixFunnelSimulator.mount(el.funnelSimulatorSurface, {
+    language: state.uiLanguage,
+    identity: `${state.user?.email || "anonymous"}|${state.currentBoardId || ""}|${state.boardLoadGeneration}|${state.boardAccess?.canView !== false}|${state.publicBoardToken || ""}`,
+    boardName: state.currentBoardName || uiText("Current Board"), nodeCount: state.nodes.length, ...context,
+    canHandoff: !!state.user?.email && state.boardAccess?.canEdit === true && !state.publicBoardToken,
+    onHandoff(prompt) { setActiveView("ai_brain"); const input = el.aiBrainSummary?.querySelector("#ai-brain-question"); if (input) { input.value = prompt; input.focus(); } }
+  });
 }
 
 function setAppMode(mode) {
@@ -16383,6 +16409,7 @@ el.uiLanguageSelect?.addEventListener("change", () => {
   refreshOpenInspectorLanguage();
   window.FunklixTheme?.syncControls?.();
   if (state.activeView === "insights") renderInsightsSurface();
+  if (state.activeView === "funnel_simulator") renderFunnelSimulator();
   if (el.languagePreferenceStatus) el.languagePreferenceStatus.textContent = uiText("Interface language changed.");
 });
 window.addEventListener("funklix:themechange", (event) => {
@@ -17245,6 +17272,10 @@ el.boardsNavButton?.addEventListener("click", () => {
 el.insightsNavButton?.addEventListener("click", () => {
   setAppMode("canvas");
   setActiveView("insights");
+});
+el.funnelSimulatorNavButton?.addEventListener("click", () => {
+  setAppMode("canvas");
+  setActiveView("funnel_simulator");
 });
 el.aiBrainNavButton?.addEventListener("click", () => {
   setAppMode("canvas");

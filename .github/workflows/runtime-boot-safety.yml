@@ -115,6 +115,8 @@ jobs:
         run: node scripts/check-bw28-3-premium-insights-and-brand-avatar.js
       - name: Check BW-28.3.1 Insights runtime rendering
         run: node scripts/check-bw28-3-1-insights-runtime-rendering.js
+      - name: Check BW-29 assumption-based Funnel Simulator
+        run: node scripts/check-bw29-funnel-simulator.js
       - name: Check dynamic AI Insights translations
         run: node scripts/check-bw25-1-dynamic-insights-translations.js
       - name: Check Knowledge Module browser globals

@@ -239,6 +239,7 @@
           <button id="brand-core-nav-btn" class="nav-item nav-item-child fk-btn" data-icon="🧠"><span class="nav-label" data-i18n="Board Brand Core">Board Brand Core</span></button>
           <button id="ai-brain-nav-btn" class="nav-item fk-btn" data-icon="✨"><span class="nav-label" data-i18n="AI Brain">AI Brain</span></button>
           <button id="insights-nav-btn" class="nav-item fk-btn" data-icon="📈"><span class="nav-label" data-i18n="Insights">Insights</span></button>
+          <button id="funnel-simulator-nav-btn" class="nav-item fk-btn" data-icon="⏳"><span class="nav-label" data-i18n="Funnel Simulator">Funnel Simulator</span></button>
         </nav>
         <section class="activity-panel fk-section" id="activity-panel" aria-label="Board activity">
           <button class="activity-toggle fk-btn fk-btn-ghost" id="activity-toggle-btn" type="button" aria-expanded="true">
@@ -579,6 +580,9 @@
         <section id="insights-view" class="board-list-view hidden">
           <div id="insights-cards" class="boards-library-panel"></div>
         </section>
+        <section id="funnel-simulator-view" class="board-list-view hidden" aria-label="Funnel Simulator">
+          <div id="funnel-simulator-surface" class="boards-library-panel"></div>
+        </section>
         <section id="ai-brain-view" class="board-list-view hidden">
           <h2>AI Brain</h2>
           <div id="ai-brain-summary" class="boards-library-panel"></div>
@@ -837,6 +841,7 @@
     <script src="/knowledge-module-runtime-adapter.js"></script>
     <script src="/knowledge-module-dependency-engine.js"></script>
     <script src="/brand-dna-generation-preflight.js"></script>
+    <script src="/funnel-simulator.js"></script>
     <script src="/app.js"></script>
   </body>
 </html>
