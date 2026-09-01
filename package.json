@@ -22,6 +22,7 @@
     "check:bw28.3": "node scripts/check-bw28-3-premium-insights-and-brand-avatar.js",
     "check:bw28.3.1": "node scripts/check-bw28-3-1-insights-runtime-rendering.js",
     "check:bw29": "node scripts/check-bw29-funnel-simulator.js",
-    "check:bw29.1": "node scripts/check-bw29-1-simulator-ux-and-dark-mode.js"
+    "check:bw29.1": "node scripts/check-bw29-1-simulator-ux-and-dark-mode.js",
+    "check:bw29.3": "node scripts/check-bw29-3-persona-journey-simulator.js"
   }
 }
