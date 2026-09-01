@@ -108,7 +108,7 @@ function providerMessages(context, language) {
     { role: 'system', content: JSON.stringify({ target_groups: context.groups }) },
     { role: 'system', content: JSON.stringify({ selected_assets: context.nodes }) },
     { role: 'system', content: `Write generated prose in ${languageName}; set response_language to ${language}. Keep supplied asset titles unchanged.` },
-    { role: 'user', content: JSON.stringify({ task: 'Create exactly two personas per target group and one concise ordered record for every configured stage.', stages: context.stages }) }
+    { role: 'user', content: JSON.stringify({ task: 'Create two distinct synthetic people who plausibly belong to each selected target group. For each person, review the selected campaign assets in the provided funnel order. At every selected stage, describe what they see, their immediate reaction, what lands, what does not land, their main objection, whether they continue, why, and one concrete improvement. These are simulated audience reactions, not real customer research, measured performance, or predictions.', persona_count_per_target_group: 2, selected_stages: context.stages }) }
   ];
 }
 

@@ -94,7 +94,7 @@ function validateRequest(body) {
     || !keys(body.canvas_context, CANVAS_KEYS) || !['saved', 'unsaved'].includes(body.canvas_context.saved_state) || !['string', 'number'].includes(typeof body.canvas_context.revision)
     || !Array.isArray(body.canvas_context.nodes) || !Array.isArray(body.canvas_context.edges) || !keys(body.configuration, CONFIG_KEYS)) return { ok: false, code: 'invalid_request' };
   const groups = body.configuration.target_groups; const stages = body.configuration.stages;
-  if (!Array.isArray(groups) || groups.length < 1 || groups.length > LIMITS.groups || !Array.isArray(stages) || stages.length < 1 || stages.length > LIMITS.stages) return { ok: false, code: 'invalid_request' };
+  if (!Array.isArray(groups) || groups.length < 1 || groups.length > LIMITS.groups || !Array.isArray(stages) || stages.length < 2 || stages.length > LIMITS.stages) return { ok: false, code: 'invalid_request' };
   let custom = 0; const groupIds = new Set();
   for (const group of groups) {
     if (!plain(group) || !GROUP_KEYS[group.kind] || !keys(group, GROUP_KEYS[group.kind]) || Object.keys(group).length !== GROUP_KEYS[group.kind].size) return { ok: false, code: 'invalid_request' };
