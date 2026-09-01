@@ -121,6 +121,8 @@ jobs:
         run: node scripts/check-bw29-1-simulator-ux-and-dark-mode.js
       - name: Check BW-29.3 Persona Journey Simulator
         run: npm run check:bw29.3
+      - name: Check BW-29.3.2 execution and compact Simulator UX
+        run: npm run check:bw29.3.2
       - name: Check dynamic AI Insights translations
         run: node scripts/check-bw25-1-dynamic-insights-translations.js
       - name: Check Knowledge Module browser globals
