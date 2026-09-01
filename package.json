@@ -18,6 +18,7 @@
     "check:bw27.4": "node scripts/check-bw27-4-canvas-component-polish.js",
     "check:bw28": "node scripts/check-bw28-ai-insights-architecture.js",
     "check:bw28.1": "node scripts/check-bw28-1-insights-ux-and-brain-handoff.js",
-    "check:bw28.3": "node scripts/check-bw28-3-premium-insights-and-brand-avatar.js"
+    "check:bw28.3": "node scripts/check-bw28-3-premium-insights-and-brand-avatar.js",
+    "check:bw28.3.1": "node scripts/check-bw28-3-1-insights-runtime-rendering.js"
   }
 }

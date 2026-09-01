@@ -14,11 +14,13 @@ assert(css.includes("#insights-view { overflow-y: auto") && css.includes("#insig
 const order = ["insights-page-header", "insights-overview-title", "insights-journey-title", "insights-opportunities-title", "canvas-diagnostics-title", "measured-performance-title", "insights-methodology-title"].map(value => insights.indexOf(value));
 assert(order.every((value, index) => value >= 0 && (!index || value > order[index - 1])), "final section order");
 assert(insights.includes("insights-executive-panel") && !insights.includes("insights-overview-grid"), "composed overview");
-assert(insights.includes("snapshot.findings.filter") && insights.includes(".slice(0, 3)"), "bounded deterministic attention");
+assert(insights.includes("Array.isArray(snapshot.findings)") && insights.includes(".slice(0, 3)"), "bounded defensive deterministic attention");
+assert(insights.includes("const funnelStages =") && insights.includes("replaceChildren(root)"), "complete atomic runtime boundary");
+assert(insights.includes('[["Campaign readiness",a.healthScore') && insights.includes('[["Funnel-stage coverage",a.funnel.confidence'), "diagnostic group content cannot be shell-only");
 assert(insights.includes("entries.length===1?\"channel\":\"channels\"") && insights.includes("No supported channel content is present yet."), "channel labels and empty state");
 assert(insights.includes("insights-campaign-journey") && insights.includes("Missing content") && css.includes("grid-template-columns:1fr}.insights-campaign-journey"), "accessible responsive journey");
 assert(insights.includes("CTA variation among existing CTAs") && insights.includes("hasCtaOpportunity") && insights.includes("status=\"Good foundation\""), "CTA presentation consistency");
-assert(insights.includes("const validIds=finding.affectedNodeIds.filter") && insights.includes("if(validIds.length)"), "validated affected actions");
+assert(insights.includes("Array.isArray(finding.affectedNodeIds)") && insights.includes("if(validIds.length)"), "validated affected actions");
 assert((insights.match(/make\("details"/g) || []).length >= 3, "collapsed performance and methodology");
 assert(app.includes("captureAiBrainAdvisorIdentity") && app.includes("advisorIdentity") && app.includes("createAiBrainAdvisorAvatar(turn.advisorIdentity)"), "ephemeral per-turn advisor identity");
 assert(app.includes("getApprovedBrandAvatarUrl()") && app.includes("funklix-brain") && !between("function captureAiBrainAdvisorIdentity", "function createAiBrainAdvisorAvatar").includes("state.user"), "Brand avatar and non-account fallback");
