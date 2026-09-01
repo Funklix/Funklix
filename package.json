@@ -24,6 +24,7 @@
     "check:bw29": "node scripts/check-bw29-funnel-simulator.js",
     "check:bw29.1": "node scripts/check-bw29-1-simulator-ux-and-dark-mode.js",
     "check:bw29.3": "node scripts/check-bw29-3-persona-journey-simulator.js",
-    "check:bw29.3.2": "node scripts/check-bw29-3-2-execution-and-compact-ux.js"
+    "check:bw29.3.2": "node scripts/check-bw29-3-2-execution-and-compact-ux.js",
+    "check:bw29.3.3": "node scripts/check-bw29-3-3-reliable-persona-simulation.js"
   }
 }
