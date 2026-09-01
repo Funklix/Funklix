@@ -7343,6 +7343,64 @@ html[data-theme="dark"] .node[data-node-role="social-media-posting"] :is(.social
 html[data-theme="dark"] .node[data-node-role="social-media-posting"] :is(.social-platform-select,.social-platform-regen,.social-actions-row button):focus-visible { outline:0;box-shadow:var(--fk-focus-shadow); }
 html[data-theme="dark"] .node[data-node-role="social-media-posting"] .social-actions-row button:disabled { background:var(--fk-color-surface-disabled);color:var(--fk-color-text-disabled); }
 
+/* BW-27.5 Landing Page preview. The role scope is intentional: Landing Page
+   and Social nodes share .social-preview, whose legacy light surface remains
+   the Light Mode authority. Structured previews also carry legacy inline
+   colors, so the narrow !important declarations below are required to make
+   semantic Dark Mode tokens authoritative without changing their DOM/data. */
+html[data-theme="dark"] .node[data-node-role="landing-page"] .social-preview {
+  background:var(--fk-color-surface-elevated);
+  border-color:var(--fk-color-divider);
+  box-shadow:inset 3px 0 0 var(--fk-color-role-landing-accent);
+  color:var(--fk-color-text-secondary);
+}
+html[data-theme="dark"] .node[data-node-role="landing-page"] .landing-preview-card {
+  gap:0;
+  max-height:16.5em;
+  overflow:hidden;
+}
+html[data-theme="dark"] .node[data-node-role="landing-page"] .landing-preview-image {
+  margin-bottom:7px;
+  border-color:var(--fk-color-divider);
+}
+html[data-theme="dark"] .node[data-node-role="landing-page"] .landing-preview-line {
+  color:var(--fk-color-text-secondary) !important;
+  opacity:1;
+  overflow-wrap:anywhere;
+  padding:5px 2px;
+}
+html[data-theme="dark"] .node[data-node-role="landing-page"] .landing-preview-line + .landing-preview-line,
+html[data-theme="dark"] .node[data-node-role="landing-page"] .landing-preview-structured + .landing-preview-line,
+html[data-theme="dark"] .node[data-node-role="landing-page"] .landing-preview-line + .landing-preview-structured {
+  border-top:1px solid var(--fk-color-divider);
+}
+html[data-theme="dark"] .node[data-node-role="landing-page"] .landing-preview-line strong {
+  color:var(--fk-color-role-landing-accent);
+  font-size:.61rem;
+  letter-spacing:.035em;
+  text-transform:uppercase;
+}
+html[data-theme="dark"] .node[data-node-role="landing-page"] .landing-preview-structured {
+  border-color:var(--fk-color-divider);
+}
+html[data-theme="dark"] .node[data-node-role="landing-page"] .landing-preview-structured > .landing-preview-line:first-child {
+  color:var(--fk-color-text-primary) !important;
+}
+html[data-theme="dark"] .node[data-node-role="landing-page"] .landing-preview-structured > .landing-preview-line[style*="font-weight: 700"] {
+  color:var(--fk-color-role-landing-accent) !important;
+  font-size:.61rem;
+  letter-spacing:.035em;
+  text-transform:uppercase;
+}
+html[data-theme="dark"] .node[data-node-role="landing-page"] .landing-preview-line.is-cta {
+  background:var(--fk-color-primary-subtle) !important;
+  border:1px solid var(--fk-color-primary-border) !important;
+  border-radius:8px;
+  color:var(--fk-color-text-primary) !important;
+  margin-top:5px;
+  padding:5px 7px;
+}
+
 /* Inspector: a level-two panel with level-three sections and level-four controls. */
 html[data-theme="dark"] .inspector { background:var(--fk-color-surface-panel);border-color:var(--fk-color-divider); }
 html[data-theme="dark"] .inspector :is(h2,.inspector-section-title) { color:var(--fk-color-text-primary); }

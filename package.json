@@ -16,6 +16,7 @@
     "check:bw27.2": "node scripts/check-bw27-2-premium-dark-mode.js",
     "check:bw27.3": "node scripts/check-bw27-3-final-dark-mode-polish.js",
     "check:bw27.4": "node scripts/check-bw27-4-canvas-component-polish.js",
+    "check:bw27.5": "node scripts/check-bw27-5-landing-page-node-dark-mode.js",
     "check:bw28": "node scripts/check-bw28-ai-insights-architecture.js",
     "check:bw28.1": "node scripts/check-bw28-1-insights-ux-and-brain-handoff.js",
     "check:bw28.3": "node scripts/check-bw28-3-premium-insights-and-brand-avatar.js",
