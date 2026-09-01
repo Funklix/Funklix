@@ -4,7 +4,7 @@ const STAGES = Object.freeze(['Awareness', 'Interest', 'Consideration', 'Convers
 const ELIGIBLE_ROLES = new Set(['Idea', 'Campaign Variation', 'Content', 'Social Media Posting', 'Landing Page', 'Email Campaign', 'Visual Concept']);
 const BANDS = Object.freeze({ very_low: [10, 30], low: [25, 45], moderate: [45, 65], high: [65, 85], very_high: [80, 95] });
 const LIMITS = Object.freeze({ groups: 3, personas: 6, personasPerGroup: 2, stages: 5, nodesPerStage: 2, nodes: 8, reactions: 60, bodyBytes: 65536, outputBytes: 98304 });
-const BODY_KEYS = new Set(['board_id', 'response_language', 'board_revision', 'canvas_context', 'configuration', 'client_run_id', 'configuration_fingerprint', 'stage_mapping_version']);
+const BODY_KEYS = new Set(['board_id', 'response_language', 'board_revision', 'canvas_context', 'configuration', 'client_run_id', 'client_request_id', 'configuration_fingerprint', 'stage_mapping_version']);
 const CANVAS_KEYS = new Set(['revision', 'saved_state', 'nodes', 'edges']);
 const CONFIG_KEYS = new Set(['target_groups', 'stages']);
 const GROUP_KEYS = { brand_core: new Set(['kind', 'source_id']), custom: new Set(['kind', 'client_id', 'name', 'description']) };
@@ -105,8 +105,8 @@ function selectedContentProjection(groups, stages, nodeMap, savedState) {
 }
 function selectedContentIdentity(groups, stages, nodeMap, savedState) { return digest(JSON.stringify(selectedContentProjection(groups, stages, nodeMap, savedState))); }
 function validateRequest(body) {
-  if (!keys(body, BODY_KEYS) || Object.keys(body).length !== BODY_KEYS.size) return { ok: false, code: 'invalid_request' };
-  if (!text(body.board_id, 80, true) || !['en', 'de'].includes(body.response_language) || !['string', 'number'].includes(typeof body.board_revision)
+  if (!keys(body, BODY_KEYS) || ![BODY_KEYS.size, BODY_KEYS.size - 1].includes(Object.keys(body).length) || (Object.keys(body).length === BODY_KEYS.size - 1 && Object.hasOwn(body, 'client_request_id'))) return { ok: false, code: 'invalid_request' };
+  if (!text(body.board_id, 80, true) || (body.client_request_id !== undefined && !/^[A-Z0-9]{6,16}$/.test(body.client_request_id)) || !['en', 'de'].includes(body.response_language) || !['string', 'number'].includes(typeof body.board_revision)
     || body.stage_mapping_version !== 'bw28-v1' || !/^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(body.client_run_id || '') || !text(body.configuration_fingerprint, 128, true)
     || !keys(body.canvas_context, CANVAS_KEYS) || !['saved', 'unsaved'].includes(body.canvas_context.saved_state) || !['string', 'number'].includes(typeof body.canvas_context.revision)
     || !Array.isArray(body.canvas_context.nodes) || !Array.isArray(body.canvas_context.edges) || !keys(body.configuration, CONFIG_KEYS)) return { ok: false, code: 'invalid_request' };

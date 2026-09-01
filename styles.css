@@ -7594,3 +7594,6 @@ html[data-theme=dark] :is(.persona-timeline-row:not(:last-child)::after){backgro
 @media(max-width:768px){.journey-persona{padding:12px}.persona-timeline-row{margin-left:8px;padding-right:4px}.journey-run-footer{position:static}.journey-run-footer .journey-run{width:auto;align-self:flex-end}.journey-review-assets{overflow-wrap:anywhere}}
 
 .journey-error-support{display:block;margin-top:6px;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:11px;opacity:.82}
+.journey-copy-diagnostics{display:inline-flex;margin-top:7px;padding:4px 8px;border:1px solid currentColor;border-radius:7px;background:transparent;color:inherit;font:inherit;font-size:.72rem;cursor:pointer}
+.journey-copy-diagnostics:focus-visible{outline:2px solid var(--fk-color-focus-ring);outline-offset:2px}
+html[data-theme=dark] .journey-copy-diagnostics{color:var(--fk-color-text-primary)}
