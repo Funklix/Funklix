@@ -7597,3 +7597,72 @@ html[data-theme=dark] :is(.persona-timeline-row:not(:last-child)::after){backgro
 .journey-copy-diagnostics{display:inline-flex;margin-top:7px;padding:4px 8px;border:1px solid currentColor;border-radius:7px;background:transparent;color:inherit;font:inherit;font-size:.72rem;cursor:pointer}
 .journey-copy-diagnostics:focus-visible{outline:2px solid var(--fk-color-focus-ring);outline-offset:2px}
 html[data-theme=dark] .journey-copy-diagnostics{color:var(--fk-color-text-primary)}
+
+/* BW-27.6 — Campaign Canvas controls and overlays.  The legacy declarations
+   above use light literals for focused editable node bodies, floating filter
+   surfaces/chips, and the node picker.  These component-scoped rules follow
+   those declarations so Dark Mode wins without altering their Light Mode map. */
+html[data-theme="dark"] .node:is(.selected,.content-expanded) :is(.title,.content)[contenteditable],
+html[data-theme="dark"] .node :is(.title,.content)[contenteditable="true"] {
+  background:var(--fk-color-surface-input);
+  border:1px solid var(--fk-color-border-control);
+  color:var(--fk-color-text-primary);
+  caret-color:var(--fk-color-text-primary);
+}
+html[data-theme="dark"] .node :is(.title,.content)[contenteditable="true"]:hover { background:var(--fk-color-surface-elevated); }
+html[data-theme="dark"] .node :is(.title,.content)[contenteditable="true"]:focus {
+  background:var(--fk-color-surface-input);border-color:var(--fk-color-primary-action);color:var(--fk-color-text-primary);outline:0;box-shadow:var(--fk-focus-shadow);
+}
+html[data-theme="dark"] .node :is(.title,.content)[contenteditable="true"]:empty:not(:focus)::before { color:var(--fk-color-text-muted);opacity:1; }
+html[data-theme="dark"] .node :is(.title,.content)[contenteditable="false"] { background:var(--fk-color-surface-secondary);color:var(--fk-color-text-disabled); }
+html[data-theme="dark"] .node :is(.title,.content)[contenteditable]::selection {
+  background:rgba(124,92,255,.42);color:#fdfdff;
+}
+
+html[data-theme="dark"] .postit:not(.ai-review-postit).is-resolved { opacity:1;filter:saturate(.82); }
+html[data-theme="dark"] .postit:not(.ai-review-postit) { --postit-text-muted:#625526; }
+html[data-theme="dark"] .postit:not(.ai-review-postit) .postit-replies {
+  background:color-mix(in srgb,var(--postit-body) 72%,var(--postit-surface));border:1px solid var(--postit-border);border-radius:7px;padding:7px;
+}
+html[data-theme="dark"] .postit:not(.ai-review-postit) .postit-user,
+html[data-theme="dark"] .postit:not(.ai-review-postit) .postit-reply-meta strong { color:var(--postit-text);font-weight:800; }
+html[data-theme="dark"] .postit:not(.ai-review-postit) .postit-reply-body p { color:var(--postit-text-secondary); }
+html[data-theme="dark"] .postit:not(.ai-review-postit) .postit-reply-editor { border-color:var(--postit-border); }
+html[data-theme="dark"] .postit:not(.ai-review-postit) :is(.postit-resolve,.postit-reply-button,.postit-delete) { min-width:44px;min-height:44px; }
+html[data-theme="dark"] .postit:not(.ai-review-postit) :is(.postit-resolve,.postit-reply-button,.postit-delete):active { background:var(--postit-surface); }
+html[data-theme="dark"] .postit:not(.ai-review-postit) :is(.postit-resolve,.postit-reply-button,.postit-delete):disabled { background:var(--postit-secondary);color:var(--postit-text-muted);cursor:not-allowed; }
+
+html[data-theme="dark"] :is(#floating-filters-popover,#floating-utilities-popover).floating-filter-popover {
+  background:var(--fk-color-surface-panel);border-color:var(--fk-color-border-default);color:var(--fk-color-text-primary);box-shadow:var(--fk-shadow-modal);
+}
+html[data-theme="dark"] :is(#floating-filters-popover,#floating-utilities-popover) .filter-group + .filter-group { border-top:1px solid var(--fk-color-divider);padding-top:8px; }
+html[data-theme="dark"] :is(#floating-filters-popover,#floating-utilities-popover) .filter-group > strong { color:var(--fk-color-text-secondary); }
+html[data-theme="dark"] :is(#floating-filters-popover,#floating-utilities-popover) .node-filter-chips button {
+  min-height:44px;background:var(--fk-color-surface-input);border-color:var(--fk-color-border-control);color:var(--fk-color-text-primary);overflow-wrap:anywhere;
+}
+html[data-theme="dark"] :is(#floating-filters-popover,#floating-utilities-popover) .node-filter-chips button:hover { background:var(--fk-color-surface-hover); }
+html[data-theme="dark"] :is(#floating-filters-popover,#floating-utilities-popover) .node-filter-chips button:focus-visible { border-color:var(--fk-color-primary-action);outline:0;box-shadow:var(--fk-focus-shadow); }
+html[data-theme="dark"] #floating-filters-popover .node-filter-chips button.active {
+  background:var(--fk-color-primary-subtle);border-color:var(--fk-color-primary-action);color:#ddd6ff;font-weight:800;
+}
+html[data-theme="dark"] #floating-filters-popover .node-filter-chips button.active::before { content:"✓ "; }
+html[data-theme="dark"] :is(#floating-filters-popover,#floating-utilities-popover) .node-filter-chips button:disabled { background:var(--fk-color-surface-disabled);color:var(--fk-color-text-disabled); }
+html[data-theme="dark"] :is(#floating-filters-popover,#floating-utilities-popover) :is(.owner-filter-option,.board-row-meta) { color:var(--fk-color-text-muted);overflow-wrap:anywhere; }
+html[data-theme="dark"] :is(#floating-filters-popover,#floating-utilities-popover) .node-filter-owner-avatar { background:var(--fk-color-primary-subtle); }
+
+html[data-theme="dark"] #node-type-picker.node-type-picker { background:var(--fk-color-overlay-backdrop); }
+html[data-theme="dark"] #node-type-picker .picker-panel {
+  background:var(--fk-color-surface-elevated);border:1px solid var(--fk-color-border-default);color:var(--fk-color-text-primary);box-shadow:var(--fk-shadow-modal);
+}
+html[data-theme="dark"] #node-type-picker .picker-panel h3 { color:var(--fk-color-text-primary); }
+html[data-theme="dark"] #node-type-picker .picker-option {
+  min-height:44px;background:var(--fk-color-surface-input);color:var(--fk-color-text-primary);font-weight:750;box-shadow:inset 3px 0 0 currentColor;
+}
+html[data-theme="dark"] #node-type-picker .picker-option:hover { background:color-mix(in srgb,var(--fk-color-primary-action) 10%,var(--fk-color-surface-input)); }
+html[data-theme="dark"] #node-type-picker .picker-option:active { background:var(--fk-color-primary-subtle); }
+html[data-theme="dark"] #node-type-picker .picker-option:focus-visible { outline:0;box-shadow:inset 3px 0 0 currentColor,var(--fk-focus-shadow); }
+html[data-theme="dark"] #node-type-picker .picker-option:disabled { background:var(--fk-color-surface-disabled);color:var(--fk-color-text-disabled); }
+@media(max-width:480px) {
+  html[data-theme="dark"] #node-type-picker .picker-panel { width:min(92vw,580px);max-height:88vh;overflow:auto;padding:12px; }
+  html[data-theme="dark"] #node-type-picker .picker-options { grid-template-columns:1fr; }
+}
