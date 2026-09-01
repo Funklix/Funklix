@@ -109,6 +109,8 @@ jobs:
         run: node scripts/check-bw28-ai-insights-architecture.js
       - name: Check BW-28.1 Insights UX and AI Brain handoff
         run: node scripts/check-bw28-1-insights-ux-and-brain-handoff.js
+      - name: Check BW-28.3 premium Insights and Brand Avatar
+        run: node scripts/check-bw28-3-premium-insights-and-brand-avatar.js
       - name: Check dynamic AI Insights translations
         run: node scripts/check-bw25-1-dynamic-insights-translations.js
       - name: Check Knowledge Module browser globals
