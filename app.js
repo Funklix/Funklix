@@ -71,6 +71,8 @@ const state = {
   edges: [],
   selectedIds: new Set(),
   selectedPrimary: null,
+  inspectorDismissedNodeId: null,
+  inspectorSelectionSnapshot: null,
   zoom: 1,
   nodeCounter: 1,
   postitCounter: 1,
@@ -226,6 +228,7 @@ const el = {
   canvas: document.getElementById("canvas"),
   canvasTopbar: document.getElementById("canvas-topbar"),
   inspectorPanel: document.getElementById("inspector-panel"),
+  inspectorCloseButton: document.getElementById("inspector-close-btn"),
   canvasScrollSurface: document.getElementById("canvas-scroll-surface"),
   zoomLayer: document.getElementById("zoom-layer"),
   links: document.getElementById("links"),
@@ -12933,6 +12936,7 @@ function updateSelectionClasses() {
   if (!state.selectedPrimary || (state.presenceEditingNodeId && !state.selectedIds.has(state.presenceEditingNodeId))) clearLocalEditingPresence({ notifyDelayMs: 250 });
   renderNodePresenceBadges();
   notifyPresenceSelectionMaybe();
+  if (typeof synchronizeAppShell === "function") synchronizeAppShell();
 }
 
 function collapseExpandedNodes(exceptNodeId = null) {
@@ -14638,6 +14642,7 @@ function maybeRefreshEditorIdentitiesFromPresence() {
 }
 
 function fillInspector(node) {
+  if (typeof synchronizeAppShell === "function") synchronizeAppShell();
   if (!node) {
     el.inspectorMeta.textContent = uiText("Select or create a node.");
     el.nodeForm.reset();
@@ -16274,6 +16279,67 @@ function setSidebarCollapsed(collapsed) {
   }
 }
 
+const SHELL_LAYOUT_BY_VIEW = Object.freeze({
+  home: "full",
+  boards_library: "full",
+  board: "canvas",
+  list: "full",
+  calendar: "full",
+  content_workspace: "full",
+  "brand-core": "contained",
+  ai_brain: "contained",
+  insights: "reading",
+  funnel_simulator: "contained",
+  settings: "contained",
+  public_viewer: "full"
+});
+
+function inspectorResponsiveMode() {
+  return window.matchMedia?.("(min-width: 1024px)")?.matches ? "column" : "overlay";
+}
+
+function restoreInspectorFocus() {
+  const selected = state.selectedPrimary
+    ? [...(el.zoomLayer?.querySelectorAll?.(".node") || [])].find((node) => node.dataset.id === state.selectedPrimary)
+    : null;
+  (selected || el.canvas)?.focus?.({ preventScroll: true });
+}
+
+function synchronizeAppShell({ view = state.activeView, forceInspectorOpen = false } = {}) {
+  if (!el.appShell || !el.inspectorPanel) return;
+  const publicViewer = !!state.publicBoardToken || document.body.classList.contains("public-board-view");
+  const effectiveView = publicViewer ? "public_viewer" : view;
+  const selectedNode = state.selectedPrimary ? getNode(state.selectedPrimary) : null;
+  if (state.selectedPrimary !== state.inspectorSelectionSnapshot) {
+    state.inspectorSelectionSnapshot = state.selectedPrimary;
+    state.inspectorDismissedNodeId = null;
+  }
+  if (state.selectedPrimary && !selectedNode) {
+    state.selectedIds.delete(state.selectedPrimary);
+    state.selectedPrimary = null;
+    state.inspectorSelectionSnapshot = null;
+  }
+  const supported = effectiveView === "board" && state.appMode !== "brand";
+  const open = supported && !!selectedNode && (forceInspectorOpen || state.inspectorDismissedNodeId !== selectedNode.id);
+  const mode = open ? inspectorResponsiveMode() : "closed";
+
+  if (!open && el.inspectorPanel.contains(document.activeElement)) restoreInspectorFocus();
+  el.appShell.dataset.activeView = effectiveView;
+  el.appShell.dataset.layoutMode = SHELL_LAYOUT_BY_VIEW[effectiveView] || "full";
+  el.appShell.dataset.inspectorSupported = String(supported);
+  el.appShell.dataset.inspectorOpen = String(open);
+  el.appShell.dataset.inspectorMode = mode;
+  el.inspectorPanel.classList.toggle("hidden", !open);
+  el.inspectorPanel.setAttribute("aria-hidden", String(!open));
+  el.inspectorPanel.toggleAttribute("inert", !open);
+}
+
+function closeInspector({ restoreFocus = true } = {}) {
+  state.inspectorDismissedNodeId = state.selectedPrimary;
+  if (restoreFocus && el.inspectorPanel?.contains(document.activeElement)) restoreInspectorFocus();
+  synchronizeAppShell();
+}
+
 function setActiveView(view) {
   state.activeView = view;
   const isHome = view === "home";
@@ -16294,10 +16360,7 @@ function setActiveView(view) {
   el.aiBrainNavButton?.classList.toggle("active", view === "ai_brain");
   el.insightsNavButton?.classList.toggle("active", view === "insights");
   el.funnelSimulatorNavButton?.classList.toggle("active", view === "funnel_simulator");
-  if (state.appMode !== "brand") {
-    el.canvasTopbar.classList.toggle("hidden", isHome);
-    el.inspectorPanel.classList.toggle("hidden", isHome);
-  }
+  if (state.appMode !== "brand") el.canvasTopbar.classList.toggle("hidden", isHome);
   el.cycleViewButton.textContent =
     view === "home" ? "Home" : view === "board" ? "Board View" : view === "list" ? "List View" : view === "calendar" ? "Calendar View" : view === "boards_library" ? "Boards" : view === "insights" ? "Insights" : view === "funnel_simulator" ? "Funnel Simulator" : view === "ai_brain" ? "AI Brain" : "Brand Core";
   if (isHome) {
@@ -16311,6 +16374,7 @@ function setActiveView(view) {
   if (view === "calendar") renderCalendarView();
   if (view === "insights" || view === "ai_brain") renderCampaignIntelligence();
   if (view === "funnel_simulator") renderFunnelSimulator();
+  if (typeof synchronizeAppShell === "function") synchronizeAppShell({ view });
 }
 
 
@@ -16367,7 +16431,6 @@ function setAppMode(mode) {
   state.appMode = mode;
   const brand = mode === "brand";
   el.canvasTopbar.classList.toggle("hidden", brand);
-  el.inspectorPanel.classList.toggle("hidden", brand);
   el.workspaceWrap?.classList?.toggle("brand-mode", brand);
   if (brand) {
     setActiveView("brand-core");
@@ -16378,6 +16441,7 @@ function setAppMode(mode) {
     if (state.activeView === "brand-core") setActiveView("board");
     renderCampaignCanvasFromStateIfNeeded();
   }
+  synchronizeAppShell();
 }
 
 // Events
@@ -16412,8 +16476,11 @@ document.addEventListener("click", (e) => {
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") {
     closeLightbox();
+    if (el.appShell?.dataset.inspectorMode === "overlay" && el.appShell.dataset.inspectorOpen === "true") closeInspector();
   }
 });
+el.inspectorCloseButton?.addEventListener("click", () => closeInspector());
+window.matchMedia?.("(min-width: 1024px)")?.addEventListener?.("change", () => synchronizeAppShell());
 el.sidebarToggleButton?.addEventListener("click", () => {
   const collapsed = !el.appShell.classList.contains("sidebar-collapsed");
   setSidebarCollapsed(collapsed);
@@ -16425,6 +16492,7 @@ el.settingsOpenButton?.addEventListener("click", () => {
   if (el.campaignLanguageSelect) el.campaignLanguageSelect.value = preferences.campaignLanguage;
   if (el.languagePreferenceStatus) el.languagePreferenceStatus.textContent = "";
   el.settingsDialog.showModal();
+  synchronizeAppShell({ view: "settings" });
   document.getElementById("settings-dialog-title")?.focus();
 });
 el.settingsCloseButton?.addEventListener("click", () => el.settingsDialog?.close());
@@ -16432,7 +16500,10 @@ el.settingsDialog?.addEventListener("cancel", (event) => {
   event.preventDefault();
   el.settingsDialog.close();
 });
-el.settingsDialog?.addEventListener("close", () => el.settingsOpenButton?.focus());
+el.settingsDialog?.addEventListener("close", () => {
+  synchronizeAppShell();
+  el.settingsOpenButton?.focus();
+});
 el.uiLanguageSelect?.addEventListener("change", () => {
   state.uiLanguage = language?.setUiLanguage?.(el.uiLanguageSelect.value) || "en";
   translateInterface(document);
