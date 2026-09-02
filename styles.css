@@ -7742,3 +7742,7 @@ html[data-theme="dark"] #node-type-picker .picker-option:disabled { background:v
 [data-theme="dark"] .cw-dialog,.dark .cw-dialog{--fk-surface:#1a1e28;--fk-input-bg:#141821;--fk-border:#343b4b;--fk-text:#edf0f7;--fk-surface-muted:#252a36}
 @media(max-width:900px){.cw-overview{grid-template-columns:1fr}.cw-metric-group{grid-template-columns:repeat(4,1fr)}}
 @media(max-width:720px){.cw-metric-group,.cw-metric-group:last-child{grid-template-columns:repeat(2,1fr)}.cw-queue-list{grid-template-columns:1fr}.cw-dialog-backdrop{align-items:end;padding:0}.cw-dialog{width:100%;max-height:92vh;border-radius:18px 18px 0 0}.cw-dialog-actions .fk-btn{flex:1;min-height:48px}}
+
+/* BW-31.5.1 source-local operational feedback; no workspace geometry changes. */
+.content-operations-source-feedback{margin:8px 0 0;padding:8px 10px;max-width:36rem;border-radius:8px;border:1px solid var(--fk-warning,#8a5b00);background:var(--fk-surface,#fff);color:var(--fk-text,#202535);font-size:.8rem;line-height:1.4}
+[data-theme="dark"] .content-operations-source-feedback{background:var(--fk-surface,#202535);color:var(--fk-text,#f5f7ff)}
