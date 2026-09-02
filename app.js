@@ -9873,11 +9873,17 @@ function createCampaignSetup() {
   saveCampaignCanvasState();
 }
 
-function openSchedulePostModal(nodeId) {
-  const node = getNode(nodeId), workspace = window.FunklixContentWorkspace;
-  if (!node || !workspace) return;
+function openContentPlanning(nodeId, sourceContext = "canvas", trigger = document.activeElement) {
+  const workspace = window.FunklixContentWorkspace;
+  if (!workspace) return false;
   renderContentWorkspace();
-  workspace.openCalendarSchedule(nodeId, document.activeElement);
+  // openCalendarSchedule remains an API compatibility alias; every live source
+  // enters through the source-aware command below.
+  return workspace.openContentPlanning(nodeId, sourceContext, trigger);
+}
+
+function openSchedulePostModal(nodeId, sourceContext = "canvas") {
+  return openContentPlanning(nodeId, sourceContext, document.activeElement);
 }
 
 function closePostingPlanner() {
@@ -16381,6 +16387,52 @@ function contentWorkspaceIdentity() {
   return `${state.user?.email || "anonymous"}|${state.currentBoardId || ""}|${state.boardLoadGeneration}|${state.boardAccess?.canView !== false}|${state.boardAccess?.canEdit === true}|${state.publicBoardToken || ""}|${state.lastKnownUpdatedAt || "local"}|${canvasRevision}`;
 }
 
+// Content Operations intentionally resolves against authoritative current state.
+// Workspace render identities are presentation snapshots and never imply deletion.
+function resolveCurrentContentNode(nodeId, expectedContext = {}) {
+  const normalizedId = typeof nodeId === "string" ? nodeId.trim() : "";
+  const accountId = state.user?.email || "", boardId = state.currentBoardId || "";
+  const accessValid = state.boardAccess?.canView !== false && state.boardAccess?.canEdit === true && !state.publicBoardToken;
+  const accountValid = !expectedContext.accountId || expectedContext.accountId === accountId;
+  const boardValid = !expectedContext.boardId || expectedContext.boardId === boardId;
+  const node = normalizedId ? state.nodes.find(candidate => String(candidate?.id || "").trim() === normalizedId) || null : null;
+  const workspace = window.FunklixContentWorkspace;
+  const fingerprint = node && workspace ? workspace.materialFingerprint(node) : "";
+  const readiness = node && workspace ? workspace.calculateReadiness(node).level : "";
+  const status = node && workspace ? workspace.normalizedStatus(node.status) : "";
+  const schedule = node && workspace ? workspace.readPlanningSchedule(node) : null;
+  const scheduleRevision = schedule?.kind === "canonical" ? schedule.scheduleRevision : 0;
+  const contentChanged = !!(node && expectedContext.fingerprint && expectedContext.fingerprint !== fingerprint);
+  const statusChanged = !!(node && expectedContext.currentStatus && expectedContext.currentStatus !== status);
+  const readinessChanged = !!(node && expectedContext.readiness && expectedContext.readiness !== readiness);
+  const scheduleChanged = !!(node && expectedContext.scheduleRevision !== undefined && expectedContext.scheduleRevision !== scheduleRevision);
+  let reasonCode = "";
+  if (!accountValid || !accessValid) reasonCode = "ACCESS_REVOKED";
+  else if (!boardValid) reasonCode = "BOARD_CHANGED";
+  else if (!node) reasonCode = "NODE_MISSING";
+  else if (contentChanged) reasonCode = "CONTENT_CHANGED";
+  else if (statusChanged) reasonCode = "STATUS_CHANGED";
+  else if (readinessChanged) reasonCode = "READINESS_CHANGED";
+  else if (scheduleChanged) reasonCode = "SCHEDULE_CHANGED";
+  return { node, exists: !!node, accessValid: accountValid && accessValid, boardValid, lifecycleValid: accountValid && accessValid && boardValid,
+    contentChanged, statusChanged, readinessChanged, scheduleChanged, reasonCode, accountId, boardId, fingerprint, status, readiness, scheduleRevision };
+}
+
+let contentPlanningFeedbackAttempt = 0;
+function routeContentOperationsFeedback({ source, message, attempt }) {
+  if (attempt && attempt < contentPlanningFeedbackAttempt) return;
+  if (attempt) contentPlanningFeedbackAttempt = attempt;
+  document.querySelectorAll(".content-operations-source-feedback").forEach(node => node.remove());
+  if (!message) return;
+  const target = source === "inspector" ? el.addToPostingCalendarButton : document.activeElement;
+  const feedback = document.createElement("p");
+  feedback.className = `content-operations-source-feedback is-${source}`;
+  feedback.setAttribute("role", "status"); feedback.setAttribute("aria-live", "polite"); feedback.setAttribute("aria-atomic", "true");
+  feedback.textContent = message;
+  if ((source === "canvas" || source === "inspector") && target?.parentElement) target.insertAdjacentElement("afterend", feedback);
+  else { const host = el.contentWorkspaceSurface?.querySelector(".cw-feedback"); if (host) host.textContent = message; }
+}
+
 function renderContentWorkspace() {
   if (!window.FunklixContentWorkspace || !el.contentWorkspaceSurface) return;
   const identity = contentWorkspaceIdentity();
@@ -16400,13 +16452,15 @@ function renderContentWorkspace() {
     canOpenInspector: state.boardAccess?.canView !== false,
     canCopy: state.boardAccess?.canView !== false,
     dirty: !!state.isDirty,
-    getNode: id => contentWorkspaceIdentity() === identity ? getNode(id) : null,
+    getNode: id => getNode(id),
+    resolveCurrentContentNode,
     copyText: value => navigator.clipboard.writeText(value),
     onRefresh: () => renderContentWorkspace(),
     onCanvas: () => setActiveView("board"),
     onStale: message => { const feedback=el.contentWorkspaceSurface.querySelector(".cw-feedback"); if (feedback) feedback.textContent=message; },
     onTransition: applyContentWorkspaceTransition,
     onSchedule: applyContentWorkspaceSchedule,
+    onPlanningFeedback: routeContentOperationsFeedback,
     onOpenNode(nodeId, openInspector, actionIdentity) {
       if (actionIdentity !== contentWorkspaceIdentity() || state.boardAccess?.canView === false || !getNode(nodeId)) return renderContentWorkspace();
       setActiveView("board");
@@ -16422,13 +16476,17 @@ function applyContentWorkspaceSchedule(prepared = {}) {
   const workspace = window.FunklixContentWorkspace;
   const accountId = state.user?.email || "", boardId = state.currentBoardId || "";
   if (!workspace || state.boardAccess?.canEdit !== true || state.publicBoardToken || !accountId
-    || prepared.accountId !== accountId || prepared.boardId !== boardId
-    || prepared.accessGeneration !== state.boardLoadGeneration) return { ok: false, reason: "ACCESS_REVOKED" };
-  const node = getNode(prepared.nodeId);
-  if (!node) return { ok: false, reason: "NODE_DELETED" };
+    || prepared.accountId !== accountId) return { ok: false, reason: "ACCESS_REVOKED" };
+  const currentResolution = resolveCurrentContentNode(prepared.nodeId, prepared);
+  if (!currentResolution.boardValid) return { ok: false, reason: "BOARD_CHANGED" };
+  if (!currentResolution.accessValid) return { ok: false, reason: "ACCESS_REVOKED" };
+  if (!currentResolution.exists) return { ok: false, reason: "NODE_MISSING" };
+  if (currentResolution.contentChanged) return { ok: false, reason: "CONTENT_CHANGED" };
+  if (currentResolution.statusChanged) return { ok: false, reason: "STATUS_CHANGED" };
+  if (currentResolution.scheduleChanged) return { ok: false, reason: "SCHEDULE_CHANGED" };
+  const node = currentResolution.node;
   const readiness = workspace.calculateReadiness(node), fingerprint = workspace.materialFingerprint(node);
-  if (workspace.normalizedStatus(node.status) !== prepared.currentStatus || readiness.level !== prepared.readiness
-    || fingerprint !== prepared.fingerprint) return { ok: false, reason: "STALE_CONTENT" };
+  if (readiness.level !== prepared.readiness) return { ok: false, reason: "READINESS_CHANGED" };
   const current = workspace.readPlanningSchedule(node), revision = current?.kind === "canonical" ? current.scheduleRevision : 0;
   if (revision !== prepared.scheduleRevision) return { ok: false, reason: "STALE_SCHEDULE" };
   if (prepared.remove) {
@@ -16437,7 +16495,7 @@ function applyContentWorkspaceSchedule(prepared = {}) {
     const decision = workspace.evaluateScheduling({ node, readiness, accountId, boardId, canEdit: true, publicViewer: false,
       warningAccepted: prepared.warningAccepted, localDate: prepared.localDate, localTime: prepared.localTime,
       timeZone: prepared.timeZone, disambiguation: prepared.disambiguation });
-    if (!decision.eligible) return { ok: false, reason: decision.reasonCodes[0] };
+    if (!decision.canPlan) return { ok: false, reason: decision.planningBlockers[0] };
     const resolved = workspace.resolveLocalDateTime(prepared.localDate, prepared.localTime, prepared.timeZone, prepared.disambiguation);
     if (!resolved.ok || resolved.scheduledAtUtc !== prepared.scheduledAtUtc) return { ok: false, reason: "STALE_CONTENT" };
   }
@@ -16461,6 +16519,9 @@ function applyContentWorkspaceSchedule(prepared = {}) {
   return { ok: true, nodeId: node.id, planningSchedule: node.planningSchedule || null };
 }
 
+// BW-31.2 previously guarded `prepared.accessGeneration !== state.boardLoadGeneration`.
+// BW-31.5.1 deliberately replaces that render-generation comparison with live
+// account, Board and access resolution so harmless rerenders cannot mimic deletion.
 // BW-31.2's sole Content Workspace mutation boundary. The dialog's prepared
 // action is only a capability token; this path always resolves the live node,
 // permission and material revision again before changing canonical state.
@@ -16469,13 +16530,17 @@ function applyContentWorkspaceTransition(prepared = {}) {
   const accountId = state.user?.email || "";
   const boardId = state.currentBoardId || "";
   if (!workspace || state.boardAccess?.canEdit !== true || state.publicBoardToken || !accountId
-    || prepared.accountId !== accountId || prepared.boardId !== boardId
-    || prepared.accessGeneration !== state.boardLoadGeneration) return { ok: false, reason: "PERMISSION_DENIED" };
-  const node = getNode(prepared.nodeId);
-  if (!node) return { ok: false, reason: "NODE_DELETED" };
+    || prepared.accountId !== accountId) return { ok: false, reason: "PERMISSION_DENIED" };
+  const currentResolution = resolveCurrentContentNode(prepared.nodeId, prepared);
+  if (!currentResolution.boardValid) return { ok: false, reason: "BOARD_CHANGED" };
+  if (!currentResolution.accessValid) return { ok: false, reason: "PERMISSION_DENIED" };
+  if (!currentResolution.exists) return { ok: false, reason: "NODE_DELETED" };
+  if (currentResolution.contentChanged) return { ok: false, reason: "STALE_CONTENT" };
+  if (currentResolution.statusChanged) return { ok: false, reason: "INVALID_STATUS" };
+  const node = currentResolution.node;
   const readiness = workspace.calculateReadiness(node);
-  if (workspace.normalizedStatus(node.status) !== prepared.currentStatus) return { ok: false, reason: "INVALID_STATUS" };
-  if (workspace.materialFingerprint(node) !== prepared.fingerprint || readiness.level !== prepared.readiness) return { ok: false, reason: "STALE_CONTENT" };
+  if (workspace.materialFingerprint(node) !== prepared.fingerprint) return { ok: false, reason: "STALE_CONTENT" };
+  if (readiness.level !== prepared.readiness) return { ok: false, reason: "STALE_CONTENT" };
   const decision = workspace.evaluateTransition({ currentStatus: node.status, toStatus: prepared.toStatus,
     assetRole: node.type, readiness, canEdit: true, accountId, boardId, accessGeneration: state.boardLoadGeneration,
     owner: { email: node.ownerEmail || "", name: node.ownerName || "" }, nodeId: node.id, nodeExists: true,
@@ -17129,7 +17194,7 @@ el.regeneratePlatformButton.addEventListener("click", async () => {
 el.addToPostingCalendarButton.addEventListener("click", () => {
   const node = getNode(state.selectedPrimary);
   if (!node || node.type !== "Social Media Posting") return;
-  openSchedulePostModal(node.id);
+  openContentPlanning(node.id, "inspector", el.addToPostingCalendarButton);
 });
 el.generateImageButton.addEventListener("click", async () => {
   const node = getNode(state.selectedPrimary);
