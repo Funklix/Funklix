@@ -33,6 +33,7 @@
     "check:bw29.4.2": "node scripts/check-bw29-4-2-canvas-context-boundary.js",
     "check:bw30.1": "node scripts/check-bw30-1-app-shell-inspector-layout.js",
     "check:bw31.1": "node scripts/check-bw31-1-content-workspace-library.js",
-    "check:bw31.2": "node scripts/check-bw31-2-content-review-workflow.js"
+    "check:bw31.2": "node scripts/check-bw31-2-content-review-workflow.js",
+    "check:bw31.4": "node scripts/check-bw31-4-content-calendar.js"
   }
 }
