@@ -8700,35 +8700,87 @@ function showBrandSuggestionConfirmModal() {
   });
 }
 
+let brandDomainImportAttempt = 0;
+function brandDomainImportCopy(key) {
+  const german = String(state.uiLanguage || '').toLowerCase().startsWith('de');
+  const copy = {
+    required: ['Enter a website address first.', 'Bitte zuerst eine Website-Adresse eingeben.'],
+    connecting: ['Connecting to website', 'Verbindung zur Website wird hergestellt'],
+    reading: ['Reading brand content', 'Markeninhalte werden gelesen'],
+    extracting: ['Extracting brand identity', 'Markenidentität wird extrahiert'],
+    building: ['Building Brand Core', 'Brand Core wird erstellt'],
+    unavailable: ['The website is unavailable. Check the address or try another page.', 'Die Website ist nicht erreichbar. Adresse prüfen oder eine andere Seite versuchen.'],
+    blocked: ['The website blocked access. Try a specific About or Company page.', 'Die Website hat den Zugriff blockiert. Versuche eine Über-uns- oder Unternehmensseite.'],
+    unsupported: ['This page is not an HTML website. Enter another page from the same website.', 'Diese Seite ist keine HTML-Website. Gib eine andere Seite derselben Website ein.'],
+    tooLarge: ['This page exceeds the safe download boundary. Try a specific About or Company page, another page from this website, or continue manually.', 'Diese Seite überschreitet die sichere Download-Grenze. Versuche eine Über-uns- oder Unternehmensseite, eine andere Seite oder fahre manuell fort.'],
+    tooLittle: ['This page contains too little readable brand content. Try an About or Company page, or continue manually.', 'Diese Seite enthält zu wenig lesbare Markeninformationen. Versuche eine Über-uns- oder Unternehmensseite oder fahre manuell fort.'],
+    extraction: ['Brand content could not be extracted. Try another page or continue manually.', 'Markeninhalte konnten nicht extrahiert werden. Versuche eine andere Seite oder fahre manuell fort.'],
+    provider: ['Brand analysis is temporarily unavailable. Please try again later.', 'Die Markenanalyse ist vorübergehend nicht verfügbar. Bitte später erneut versuchen.'],
+    invalid: ['The analysis response could not be verified. Please try again.', 'Die Analyseantwort konnte nicht überprüft werden. Bitte erneut versuchen.'],
+    auth: ['Your access changed. Sign in again and retry.', 'Dein Zugriff hat sich geändert. Bitte erneut anmelden und wiederholen.']
+  };
+  return copy[key]?.[german ? 1 : 0] || copy.extraction[german ? 1 : 0];
+}
+function setBrandDomainImportStatus(message, kind = 'progress') {
+  const surface = el.brandEditorPanel?.querySelector('#bc-domain-import-status');
+  if (!surface) return;
+  surface.textContent = message || '';
+  surface.dataset.kind = kind;
+  surface.classList.toggle('hidden', !message);
+}
+function brandDomainErrorCopy(code, status) {
+  if (status === 401 || status === 403 || code === 'unauthenticated') return brandDomainImportCopy('auth');
+  if (code === 'unsupported_content_type') return brandDomainImportCopy('unsupported');
+  if (code === 'response_too_large' || code === 'decompressed_too_large') return brandDomainImportCopy('tooLarge');
+  if (code === 'empty_content') return brandDomainImportCopy('tooLittle');
+  if (code === 'provider_unavailable') return brandDomainImportCopy('provider');
+  if (code === 'invalid_analysis_response') return brandDomainImportCopy('invalid');
+  if (code === 'http_error') return brandDomainImportCopy('blocked');
+  if (['timeout', 'dns_failed', 'retrieval_failed'].includes(code)) return brandDomainImportCopy('unavailable');
+  return brandDomainImportCopy('extraction');
+}
 async function analyzeBrandDomainFromEditor() {
   const domainInput = el.brandEditorPanel.querySelector("#bc-domain");
   const analyzeButton = el.brandEditorPanel.querySelector("#bc-analyze-domain");
   const domainUrl = domainInput?.value?.trim();
   if (!domainUrl) {
-    alert("Please enter a domain URL first.");
+    setBrandDomainImportStatus(brandDomainImportCopy('required'), 'error');
     return;
   }
+
+  const normalizedUrl = /^https?:\/\//i.test(domainUrl) ? domainUrl : `https://${domainUrl}`;
+  const attempt = ++brandDomainImportAttempt;
+  const attemptContext = { account: (state.user?.email || '').trim().toLowerCase(), board: state.currentBoardId || getBoardIdFromPath() || '', access: state.boardAccess?.generation ?? state.boardAccess?.reason ?? '', normalizedUrl };
+  const isCurrent = () => attempt === brandDomainImportAttempt
+    && attemptContext.account === (state.user?.email || '').trim().toLowerCase()
+    && attemptContext.board === (state.currentBoardId || getBoardIdFromPath() || '')
+    && attemptContext.access === (state.boardAccess?.generation ?? state.boardAccess?.reason ?? '')
+    && normalizedUrl === (/^https?:\/\//i.test(domainInput?.value?.trim() || '') ? domainInput.value.trim() : `https://${domainInput?.value?.trim() || ''}`);
 
   const originalLabel = analyzeButton?.textContent || "Analyze Website";
   if (analyzeButton) {
     analyzeButton.disabled = true;
-    analyzeButton.textContent = "Analyzing website…";
+    analyzeButton.textContent = brandDomainImportCopy('connecting');
   }
+  setBrandDomainImportStatus(brandDomainImportCopy('connecting'));
 
   try {
     const response = await fetch("/api/analyze-brand-domain", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ domainUrl })
+      body: JSON.stringify({ domainUrl: normalizedUrl })
     });
+    if (isCurrent()) { setBrandDomainImportStatus(brandDomainImportCopy('reading')); if (analyzeButton) analyzeButton.textContent = brandDomainImportCopy('extracting'); }
     const payload = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(payload?.error || "Could not analyze website");
+    if (!response.ok) { const failure = new Error('brand_domain_import_failed'); failure.code = payload?.error?.code || 'extraction_failed'; failure.status = response.status; throw failure; }
+    if (!isCurrent()) return;
 
     const next = payload?.suggestions;
-    if (!next || typeof next !== "object") throw new Error("No brand suggestions returned");
+    if (!next || typeof next !== "object") { const failure = new Error('invalid_analysis_response'); failure.code = 'invalid_analysis_response'; throw failure; }
+    setBrandDomainImportStatus(brandDomainImportCopy('building'));
 
     const confirmReplace = await showBrandSuggestionConfirmModal();
-    if (!confirmReplace) return;
+    if (!confirmReplace || !isCurrent()) return;
 
     state.brandCore = {
       ...state.brandCore,
@@ -8741,10 +8793,11 @@ async function analyzeBrandDomainFromEditor() {
     await saveBoardToServer("brand-domain-analysis");
     renderBrandCoreTiles();
     renderBrandCoreEditor();
+    setBrandDomainImportStatus('', 'success');
   } catch (error) {
-    alert(error?.message || "Website analysis failed. Please try another domain.");
+    if (isCurrent()) setBrandDomainImportStatus(brandDomainErrorCopy(error?.code, error?.status), 'error');
   } finally {
-    if (analyzeButton) {
+    if (isCurrent() && analyzeButton) {
       analyzeButton.disabled = false;
       analyzeButton.textContent = originalLabel;
     }
@@ -9390,7 +9443,7 @@ function renderBrandCoreEditor() {
     ["bc-good","bc-avoid"].forEach((id) => el.brandEditorPanel.querySelector(`#${id}`).addEventListener("input", () => { value.good = el.brandEditorPanel.querySelector("#bc-good").value; value.avoid = el.brandEditorPanel.querySelector("#bc-avoid").value; saveBrandBrainState(); renderBrandCoreTiles(); }));
   } else if (key === "brandAssets") {
     const logoStatus = value.logoAsset?.status || (value.logo ? "persisted" : "not_found");
-    el.brandEditorPanel.insertAdjacentHTML("beforeend", `<label>Domain URL</label><input id="bc-domain" value="${escapeHtml(value.domain || "")}"/><button id="bc-analyze-domain" class="fk-btn fk-btn-primary" type="button">Analyze Website</button><label>Typography</label><input id="bc-typo" value="${escapeHtml(value.typography || "")}"/><label>Primary company logo</label>${value.logo ? `<img class="bc-primary-logo" src="${escapeHtml(value.logo)}" alt="Saved primary company logo"/>` : `<p class="bc-helper">No usable logo was found. You can add one now or continue.</p>`}<p class="bc-helper" data-logo-status>${escapeHtml(logoStatus.replace(/_/g, " "))}</p><div class="bc-logo-actions"><input id="bc-logo-upload" class="bc-logo-upload-input" type="file" accept="image/png,image/jpeg,image/webp,image/gif"/><label for="bc-logo-upload" class="bc-logo-upload-action fk-btn fk-btn-secondary">${value.logo ? "Replace logo" : "Upload logo"}</label><button type="button" id="bc-logo-remove" class="bc-logo-remove fk-btn fk-btn-ghost" ${value.logo ? "" : "disabled"}>Remove logo</button></div><label>Palette</label><div class="posting-actions bc-add-row"><input id="bc-color-add" placeholder="#AABBCC"/><input id="bc-color-picker" type="color" value="#6f5bff"/><button type="button" id="bc-color-plus" class="bc-editor-icon-action fk-btn fk-btn-primary" aria-label="Add color">+</button></div><div class="bc-tags">${(value.colors||[]).map((c,i)=>`<span data-i="${i}">${c}</span>`).join("")}</div>`);
+    el.brandEditorPanel.insertAdjacentHTML("beforeend", `<label>Domain URL</label><input id="bc-domain" value="${escapeHtml(value.domain || "")}"/><button id="bc-analyze-domain" class="fk-btn fk-btn-primary" type="button">Analyze Website</button><div id="bc-domain-import-status" class="bc-domain-import-status hidden" role="status" aria-live="polite" aria-atomic="true"></div><label>Typography</label><input id="bc-typo" value="${escapeHtml(value.typography || "")}"/><label>Primary company logo</label>${value.logo ? `<img class="bc-primary-logo" src="${escapeHtml(value.logo)}" alt="Saved primary company logo"/>` : `<p class="bc-helper">No usable logo was found. You can add one now or continue.</p>`}<p class="bc-helper" data-logo-status>${escapeHtml(logoStatus.replace(/_/g, " "))}</p><div class="bc-logo-actions"><input id="bc-logo-upload" class="bc-logo-upload-input" type="file" accept="image/png,image/jpeg,image/webp,image/gif"/><label for="bc-logo-upload" class="bc-logo-upload-action fk-btn fk-btn-secondary">${value.logo ? "Replace logo" : "Upload logo"}</label><button type="button" id="bc-logo-remove" class="bc-logo-remove fk-btn fk-btn-ghost" ${value.logo ? "" : "disabled"}>Remove logo</button></div><label>Palette</label><div class="posting-actions bc-add-row"><input id="bc-color-add" placeholder="#AABBCC"/><input id="bc-color-picker" type="color" value="#6f5bff"/><button type="button" id="bc-color-plus" class="bc-editor-icon-action fk-btn fk-btn-primary" aria-label="Add color">+</button></div><div class="bc-tags">${(value.colors||[]).map((c,i)=>`<span data-i="${i}">${c}</span>`).join("")}</div>`);
     ["bc-domain","bc-typo"].forEach((id) => el.brandEditorPanel.querySelector(`#${id}`).addEventListener("input", () => { value.domain = el.brandEditorPanel.querySelector("#bc-domain").value; value.typography = el.brandEditorPanel.querySelector("#bc-typo").value; saveBrandBrainState(); renderBrandCoreTiles(); }));
     el.brandEditorPanel.querySelector("#bc-logo-upload").addEventListener("change", (event) => replacePrimaryBrandLogo(event.target.files?.[0]));
     el.brandEditorPanel.querySelector("#bc-logo-remove").addEventListener("click", () => { value.logo = ""; value.logoAsset = { ...(value.logoAsset || {}), kind: "company_logo", role: "primary", status: "rejected", rejectedAt: new Date().toISOString() }; saveBrandBrainState(); renderBrandCoreTiles(); renderBrandCoreEditor(); });
