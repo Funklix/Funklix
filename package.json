@@ -31,6 +31,7 @@
     "check:bw29.3.5": "node scripts/check-bw29-3-5-live-request-parity.js",
     "check:bw29.4.1": "node scripts/check-bw29-4-1-production-boundary-diagnostics.js",
     "check:bw29.4.2": "node scripts/check-bw29-4-2-canvas-context-boundary.js",
-    "check:bw30.1": "node scripts/check-bw30-1-app-shell-inspector-layout.js"
+    "check:bw30.1": "node scripts/check-bw30-1-app-shell-inspector-layout.js",
+    "check:bw31.1": "node scripts/check-bw31-1-content-workspace-library.js"
   }
 }

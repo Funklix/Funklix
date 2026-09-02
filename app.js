@@ -236,6 +236,8 @@ const el = {
   nodeListView: document.getElementById("node-list-view"),
   boardListView: document.getElementById("board-list-view"),
   calendarView: document.getElementById("calendar-view"),
+  contentWorkspaceView: document.getElementById("content-workspace-view"),
+  contentWorkspaceSurface: document.getElementById("content-workspace-surface"),
   brandCoreWorkspace: document.getElementById("brand-core-workspace"),
   brandWorkspaceAvatar: document.getElementById("brand-workspace-avatar"),
   brandWorkspaceName: document.getElementById("brand-workspace-name"),
@@ -345,6 +347,7 @@ const el = {
   homeNavButton: document.getElementById("home-nav-btn"),
   brandCoreButton: document.getElementById("brand-core-nav-btn"),
   campaignCanvasNavButton: document.getElementById("campaign-canvas-nav-btn"),
+  contentWorkspaceNavButton: document.getElementById("content-workspace-nav-btn"),
   boardsNavButton: document.getElementById("boards-nav-btn"),
   insightsNavButton: document.getElementById("insights-nav-btn"),
   funnelSimulatorNavButton: document.getElementById("funnel-simulator-nav-btn"),
@@ -16348,6 +16351,7 @@ function setActiveView(view) {
   el.canvas.classList.toggle("hidden", view !== "board");
   el.boardListView.classList.toggle("hidden", view !== "list");
   el.calendarView.classList.toggle("hidden", view !== "calendar");
+  el.contentWorkspaceView?.classList.toggle("hidden", view !== "content_workspace");
   el.boardsLibraryView?.classList.toggle("hidden", view !== "boards_library");
   el.insightsView?.classList.toggle("hidden", view !== "insights");
   el.funnelSimulatorView?.classList.toggle("hidden", view !== "funnel_simulator");
@@ -16355,6 +16359,7 @@ function setActiveView(view) {
   el.brandCoreWorkspace.classList.toggle("hidden", !isBrandCore);
   el.homeNavButton?.classList.toggle("active", isHome);
   el.campaignCanvasNavButton.classList.toggle("active", view === "board" || view === "list" || view === "calendar");
+  el.contentWorkspaceNavButton?.classList.toggle("active", view === "content_workspace");
   el.boardsNavButton?.classList.toggle("active", view === "boards_library");
   el.brandCoreButton.classList.toggle("active", isBrandCore);
   el.aiBrainNavButton?.classList.toggle("active", view === "ai_brain");
@@ -16362,7 +16367,7 @@ function setActiveView(view) {
   el.funnelSimulatorNavButton?.classList.toggle("active", view === "funnel_simulator");
   if (state.appMode !== "brand") el.canvasTopbar.classList.toggle("hidden", isHome);
   el.cycleViewButton.textContent =
-    view === "home" ? "Home" : view === "board" ? "Board View" : view === "list" ? "List View" : view === "calendar" ? "Calendar View" : view === "boards_library" ? "Boards" : view === "insights" ? "Insights" : view === "funnel_simulator" ? "Funnel Simulator" : view === "ai_brain" ? "AI Brain" : "Brand Core";
+    view === "home" ? "Home" : view === "board" ? "Board View" : view === "list" ? "List View" : view === "calendar" ? "Calendar View" : view === "content_workspace" ? "Content Workspace" : view === "boards_library" ? "Boards" : view === "insights" ? "Insights" : view === "funnel_simulator" ? "Funnel Simulator" : view === "ai_brain" ? "AI Brain" : "Brand Core";
   if (isHome) {
     renderDashboardHero();
     renderDashboardContinueWorking();
@@ -16374,7 +16379,43 @@ function setActiveView(view) {
   if (view === "calendar") renderCalendarView();
   if (view === "insights" || view === "ai_brain") renderCampaignIntelligence();
   if (view === "funnel_simulator") renderFunnelSimulator();
+  if (view === "content_workspace") renderContentWorkspace();
   if (typeof synchronizeAppShell === "function") synchronizeAppShell({ view });
+}
+
+function contentWorkspaceIdentity() {
+  const canvasRevision = JSON.stringify(state.nodes.map(node => [node.id, node.type, node.title, node.content, node.status, node.channel, node.funnelStage, node.ownerEmail, node.social, node.landingPage, node.images, node.postits?.length, node.aiReview]));
+  return `${state.user?.email || "anonymous"}|${state.currentBoardId || ""}|${state.boardLoadGeneration}|${state.boardAccess?.canView !== false}|${state.boardAccess?.canEdit === true}|${state.publicBoardToken || ""}|${state.lastKnownUpdatedAt || "local"}|${canvasRevision}`;
+}
+
+function renderContentWorkspace() {
+  if (!window.FunklixContentWorkspace || !el.contentWorkspaceSurface) return;
+  const identity = contentWorkspaceIdentity();
+  window.FunklixContentWorkspace.render(el.contentWorkspaceSurface, {
+    language: state.uiLanguage,
+    identity,
+    boardId: state.currentBoardId || "",
+    boardName: state.currentBoardName || uiText("Current Board"),
+    nodes: state.nodes,
+    loading: !!state.isBoardLoading || !!state.initialServerLoadInFlight,
+    canView: state.boardAccess?.canView !== false,
+    readOnly: state.boardAccess?.canEdit === false || !!state.publicBoardToken,
+    publicViewer: !!state.publicBoardToken || state.boardAccess?.reason === "public_viewer",
+    canOpenInspector: state.boardAccess?.canView !== false,
+    canCopy: state.boardAccess?.canView !== false,
+    dirty: !!state.isDirty,
+    getNode: id => contentWorkspaceIdentity() === identity ? getNode(id) : null,
+    copyText: value => navigator.clipboard.writeText(value),
+    onRefresh: () => renderContentWorkspace(),
+    onCanvas: () => setActiveView("board"),
+    onStale: message => { const feedback=el.contentWorkspaceSurface.querySelector(".cw-feedback"); if (feedback) feedback.textContent=message; },
+    onOpenNode(nodeId, openInspector, actionIdentity) {
+      if (actionIdentity !== contentWorkspaceIdentity() || state.boardAccess?.canView === false || !getNode(nodeId)) return renderContentWorkspace();
+      setActiveView("board");
+      focusNodeInCanvas(nodeId, { behavior: "smooth", select: true, pulse: true });
+      if (openInspector) synchronizeAppShell({ view: "board", forceInspectorOpen: true });
+    }
+  });
 }
 
 
@@ -16511,6 +16552,7 @@ el.uiLanguageSelect?.addEventListener("change", () => {
   window.FunklixTheme?.syncControls?.();
   if (state.activeView === "insights") renderInsightsSurface();
   if (state.activeView === "funnel_simulator") renderFunnelSimulator();
+  if (state.activeView === "content_workspace") renderContentWorkspace();
   if (el.languagePreferenceStatus) el.languagePreferenceStatus.textContent = uiText("Interface language changed.");
 });
 window.addEventListener("funklix:themechange", (event) => {
@@ -17364,6 +17406,10 @@ el.campaignCanvasNavButton.addEventListener("click", () => {
   setAppMode("canvas");
   setActiveView("board");
   renderCampaignCanvasFromStateIfNeeded();
+});
+el.contentWorkspaceNavButton?.addEventListener("click", () => {
+  setAppMode("canvas");
+  setActiveView("content_workspace");
 });
 el.boardsNavButton?.addEventListener("click", () => {
   setAppMode("canvas");
