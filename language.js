@@ -13,7 +13,7 @@
   const LANGUAGE_NAMES = Object.freeze({ en: "English", de: "German", es: "Spanish" });
   const german = {
     "Home": "Startseite", "Boards": "Boards", "Campaign Canvas": "Kampagnen-Canvas",
-    "Content Workspace": "Content-Arbeitsbereich", "Content Library": "Inhaltsbibliothek", "Review Queue": "Prüfwarteschlange", "Calendar": "Kalender",
+    "Content Workspace": "Content-Arbeitsbereich", "More filters": "Weitere Filter", "Needs review": "Prüfung nötig", "Unscheduled": "Ungeplant", "Content Library": "Inhaltsbibliothek", "Review Queue": "Prüfwarteschlange", "Calendar": "Kalender",
     "Month": "Monat", "Agenda": "Agenda", "Today": "Heute", "Previous period": "Vorheriger Zeitraum", "Next period": "Nächster Zeitraum",
     "Schedule": "Planen", "Reschedule": "Neu planen", "Remove schedule": "Planung entfernen", "Timezone": "Zeitzone",
     "Internal planning is available before approval.": "Interne Planung ist bereits vor der Freigabe möglich.",
