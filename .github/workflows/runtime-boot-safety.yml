@@ -137,6 +137,8 @@ jobs:
         run: npm run check:bw29.4.2
       - name: Check BW-30.1 App Shell and Inspector layout
         run: npm run check:bw30.1
+      - name: Check BW-31.1 read-only Content Workspace library
+        run: npm run check:bw31.1
       - name: Check dynamic AI Insights translations
         run: node scripts/check-bw25-1-dynamic-insights-translations.js
       - name: Check Knowledge Module browser globals

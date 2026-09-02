@@ -235,7 +235,7 @@
           <span class="sidebar-nav-heading">Boards</span>
           <button id="boards-nav-btn" class="nav-item fk-btn" data-icon="📚"><span class="nav-label" data-i18n="Boards">Boards</span></button>
           <button id="campaign-canvas-nav-btn" class="nav-item nav-item-child fk-btn active" data-icon="🧩"><span class="nav-label" data-i18n="Campaign Canvas">Campaign Canvas</span></button>
-          <button class="nav-item fk-btn" data-icon="🗂"><span class="nav-label" data-i18n="Content Workspace">Content Workspace</span></button>
+          <button id="content-workspace-nav-btn" class="nav-item fk-btn" data-icon="🗂"><span class="nav-label" data-i18n="Content Workspace">Content Workspace</span></button>
           <button id="brand-core-nav-btn" class="nav-item nav-item-child fk-btn" data-icon="🧠"><span class="nav-label" data-i18n="Board Brand Core">Board Brand Core</span></button>
           <button id="ai-brain-nav-btn" class="nav-item fk-btn" data-icon="✨"><span class="nav-label" data-i18n="AI Brain">AI Brain</span></button>
           <button id="insights-nav-btn" class="nav-item fk-btn" data-icon="📈"><span class="nav-label" data-i18n="Insights">Insights</span></button>
@@ -577,6 +577,9 @@
           </div>
           <div id="calendar-grid" class="calendar-grid"></div>
         </section>
+        <section id="content-workspace-view" class="content-workspace-view hidden" aria-labelledby="content-workspace-title">
+          <div id="content-workspace-surface"></div>
+        </section>
         <section id="insights-view" class="board-list-view hidden">
           <div id="insights-cards" class="boards-library-panel"></div>
         </section>
@@ -844,6 +847,7 @@
     <script src="/brand-dna-generation-preflight.js"></script>
     <script src="/funnel-simulator.js"></script>
     <script src="/persona-journey-simulator.js"></script>
+    <script src="/content-workspace.js"></script>
     <script src="/app.js"></script>
   </body>
 </html>

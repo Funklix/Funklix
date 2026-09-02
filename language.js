@@ -182,6 +182,10 @@
     "Idea": "Idee", "Campaign Variation": "Kampagnenvariante", "Social Media Posting": "Social-Media-Posting", "Email Campaign": "E-Mail-Kampagne",
     "Visual Concept": "Visuelles Konzept", "Image Brief": "Bild-Briefing", "Lead Gen": "Leadgenerierung", "Community": "Community", "Education": "Bildung",
     "Campaign Strategy": "Kampagnenstrategie", "Interest": "Interesse", "Consideration": "Erwägung", "Retention": "Bindung",
+    "Content Library": "Inhaltsbibliothek", "Search content": "Inhalte durchsuchen", "Asset type": "Inhaltstyp", "Channel / platform": "Kanal / Plattform",
+    "Editorial status": "Redaktioneller Status", "Readiness": "Bereitschaft", "Owner": "Zuständig", "Content language": "Inhaltssprache",
+    "Clear filters": "Filter löschen", "Ready": "Bereit", "Incomplete": "Unvollständig", "Open Inspector": "Inspector öffnen", "Copy content": "Inhalt kopieren",
+    "How readiness is determined": "So wird die Bereitschaft bestimmt", "No assets match these filters.": "Keine Inhalte entsprechen diesen Filtern.",
     "Professional": "Professionell", "Emotional": "Emotional", "Direct": "Direkt", "Premium": "Premium", "Playful": "Verspielt",
     "Awareness": "Bekanntheit", "Conversion": "Conversion", "Collaborator": "Mitwirkende Person", "Current owner": "Aktuell zuständig"
   };
