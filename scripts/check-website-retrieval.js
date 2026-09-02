@@ -52,7 +52,7 @@ await assert.rejects(retrieveWebsiteText('https://example.com', { lookup: public
 await assert.rejects(retrieveWebsiteText('https://example.com', { lookup: publicLookup, maxResponseBytes: 5, requestImpl: fakeRequest([response(200, { 'content-type': 'text/html' }, ['123', '456'])]) }), (e) => e.code === 'response_too_large');
 await assert.rejects(retrieveWebsiteText('https://example.com', { lookup: publicLookup, requestImpl: fakeRequest([response(200, { 'content-type': 'image/png' }, ['binary'])]) }), (e) => e.code === 'unsupported_content_type');
 await assert.rejects(retrieveWebsiteText('https://example.com', { lookup: publicLookup, requestImpl: fakeRequest([response(500, { 'content-type': 'text/html' })]) }), (e) => e.code === 'http_error');
-await assert.rejects(retrieveWebsiteText('https://example.com', { lookup: publicLookup, requestImpl: fakeRequest([response(200, { 'content-type': 'text/html', 'content-encoding': 'gzip' }, ['x'])]) }), (e) => e.code === 'unsupported_encoding');
+await assert.rejects(retrieveWebsiteText('https://example.com', { lookup: publicLookup, requestImpl: fakeRequest([response(200, { 'content-type': 'text/html', 'content-encoding': 'gzip' }, ['x'])]) }), (e) => e.code === 'invalid_encoding');
 
 const never = (options) => { const req = new EventEmitter(); req.end = () => {}; options.signal.addEventListener('abort', () => { const error = new Error('aborted'); error.name = 'AbortError'; req.emit('error', error); }, { once: true }); return req; };
 await assert.rejects(retrieveWebsiteText('https://example.com', { lookup: publicLookup, requestImpl: never, timeoutMs: 5 }), (e) => e.code === 'timeout');

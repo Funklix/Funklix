@@ -1,10 +1,12 @@
 const http = require('http');
 const https = require('https');
+const zlib = require('zlib');
 const { validateWebsiteUrl, resolvePublicAddresses, WebsitePolicyError } = require('./_website-url-policy');
 const { extractHtmlText } = require('./_html-text-extractor');
 
 const MAX_REDIRECTS = 5;
-const MAX_RESPONSE_BYTES = 1024 * 1024;
+const MAX_RESPONSE_BYTES = 4 * 1024 * 1024;
+const MAX_DECOMPRESSED_BYTES = 6 * 1024 * 1024;
 const TIMEOUT_MS = 10000;
 const USER_AGENT = 'Funklix-Website-Text/1.0';
 const SAFE_NODE_ERROR_CODES = new Set([
@@ -66,7 +68,7 @@ function requestOnce(url, addresses, { signal, requestImpl, diagnostics = create
       port: url.port || undefined,
       path: `${url.pathname}${url.search}`,
       method: 'GET',
-      headers: { Accept: 'text/html, application/xhtml+xml', 'Accept-Encoding': 'identity', 'User-Agent': USER_AGENT, Host: url.host },
+      headers: { Accept: 'text/html, application/xhtml+xml', 'Accept-Encoding': 'gzip, deflate, br, identity', 'User-Agent': USER_AGENT, Host: url.host },
       lookup: (_hostname, lookupOptions, callback) => {
         const result = { address: selected.address, family: Number(selected.family) };
         if (lookupOptions && typeof lookupOptions === 'object' && lookupOptions.all) callback(null, [result]);
@@ -98,7 +100,7 @@ function requestOnce(url, addresses, { signal, requestImpl, diagnostics = create
   });
 }
 
-async function readBounded(response, maxBytes, diagnostics) {
+async function readBounded(response, maxBytes, maxDecompressedBytes, diagnostics) {
   diagnostics.stage = 'response_stream';
   const declared = Number(response.headers['content-length']);
   if (Number.isFinite(declared) && declared > maxBytes) { response.destroy(); throw new WebsiteRetrievalError('response_too_large', 'The webpage is too large to import.'); }
@@ -110,7 +112,22 @@ async function readBounded(response, maxBytes, diagnostics) {
     if (total > maxBytes) { response.destroy(); throw new WebsiteRetrievalError('response_too_large', 'The webpage is too large to import.'); }
     chunks.push(chunk);
   }
-  return Buffer.concat(chunks, total).toString('utf8');
+  const compressed = Buffer.concat(chunks, total);
+  const encoding = String(response.headers['content-encoding'] || 'identity').toLowerCase();
+  let decoded;
+  try {
+    if (encoding === 'identity') decoded = compressed;
+    else if (encoding === 'gzip') decoded = zlib.gunzipSync(compressed, { maxOutputLength: maxDecompressedBytes + 1 });
+    else if (encoding === 'deflate') decoded = zlib.inflateSync(compressed, { maxOutputLength: maxDecompressedBytes + 1 });
+    else if (encoding === 'br') decoded = zlib.brotliDecompressSync(compressed, { maxOutputLength: maxDecompressedBytes + 1 });
+    else throw new WebsiteRetrievalError('unsupported_encoding', 'The webpage uses an unsupported response encoding.');
+  } catch (error) {
+    if (error instanceof WebsiteRetrievalError) throw error;
+    throw new WebsiteRetrievalError(error?.code === 'ERR_BUFFER_TOO_LARGE' ? 'decompressed_too_large' : 'invalid_encoding', 'The webpage could not be decoded safely.');
+  }
+  if (decoded.length > maxDecompressedBytes) throw new WebsiteRetrievalError('decompressed_too_large', 'The webpage expands beyond the safe import boundary.');
+  diagnostics.decompressedBytes = decoded.length;
+  return decoded.toString('utf8');
 }
 
 async function retrieveWebsiteText(input, options = {}) {
@@ -150,11 +167,9 @@ async function retrieveWebsiteText(input, options = {}) {
         continue;
       }
       if (status < 200 || status >= 300) { response.destroy(); throw new WebsiteRetrievalError('http_error', 'The webpage did not return a successful response.'); }
-      const contentEncoding = String(response.headers['content-encoding'] || 'identity').toLowerCase();
-      if (contentEncoding !== 'identity') { response.destroy(); throw new WebsiteRetrievalError('unsupported_encoding', 'The webpage uses an unsupported response encoding.'); }
       const type = String(response.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
       if (!['text/html', 'application/xhtml+xml'].includes(type)) { response.destroy(); throw new WebsiteRetrievalError('unsupported_content_type', 'Only HTML webpages are supported.'); }
-      const html = await readBounded(response, options.maxResponseBytes ?? MAX_RESPONSE_BYTES, diagnostics);
+      const html = await readBounded(response, options.maxResponseBytes ?? MAX_RESPONSE_BYTES, options.maxDecompressedBytes ?? MAX_DECOMPRESSED_BYTES, diagnostics);
       diagnostics.stage = 'extraction';
       const extracted = extractHtmlText(html, options.extractionOptions);
       const result = { status: 'success', source: { url: url.href, title: extracted.title }, content: { text: extracted.text, truncated: extracted.truncated } };
@@ -183,4 +198,4 @@ async function retrieveWebsiteText(input, options = {}) {
   }
 }
 
-module.exports = { retrieveWebsiteText, requestOnce, WebsiteRetrievalError, MAX_REDIRECTS, MAX_RESPONSE_BYTES, TIMEOUT_MS };
+module.exports = { retrieveWebsiteText, requestOnce, readBounded, WebsiteRetrievalError, MAX_REDIRECTS, MAX_RESPONSE_BYTES, MAX_DECOMPRESSED_BYTES, TIMEOUT_MS };

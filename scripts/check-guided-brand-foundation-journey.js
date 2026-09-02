@@ -11,9 +11,9 @@ const registry = require('../knowledge-module-registry');
 const identity = require('../knowledge-module-identity');
 
 assert(app.includes('Start with Brand Assets: enter your company domain and Analyze Website.'));
-assert(analyzer.includes('retrieveWebsiteText(normalized, { includeHtml: true })'));
-assert(analyzer.includes('uploadImageBuffer') && analyzer.includes('status: "persisted"'));
-assert(analyzer.includes('Logo discovery is optional'));
+assert(analyzer.includes('retrieve(normalizeDomainUrl(domainUrl), { includeHtml: true })'));
+assert(analyzer.includes('uploadImageBuffer') && analyzer.includes("status: 'persisted'"));
+assert(analyzer.includes('Optional same-origin candidate failure'));
 assert(app.includes('id="bc-logo-upload"') && app.includes('id="bc-logo-remove"'));
 assert(app.includes('Do you already have a Founder Story?'));
 assert(app.includes('Generate Founder Story') && app.includes('apply.textContent = "Apply"'));
