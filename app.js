@@ -16396,9 +16396,12 @@ function renderContentWorkspace() {
     identity,
     boardId: state.currentBoardId || "",
     boardName: state.currentBoardName || uiText("Current Board"),
+    accountId: state.user?.email || "",
+    accessGeneration: state.boardLoadGeneration,
     nodes: state.nodes,
     loading: !!state.isBoardLoading || !!state.initialServerLoadInFlight,
     canView: state.boardAccess?.canView !== false,
+    canEdit: state.boardAccess?.canEdit === true && !state.publicBoardToken,
     readOnly: state.boardAccess?.canEdit === false || !!state.publicBoardToken,
     publicViewer: !!state.publicBoardToken || state.boardAccess?.reason === "public_viewer",
     canOpenInspector: state.boardAccess?.canView !== false,
@@ -16409,6 +16412,7 @@ function renderContentWorkspace() {
     onRefresh: () => renderContentWorkspace(),
     onCanvas: () => setActiveView("board"),
     onStale: message => { const feedback=el.contentWorkspaceSurface.querySelector(".cw-feedback"); if (feedback) feedback.textContent=message; },
+    onTransition: applyContentWorkspaceTransition,
     onOpenNode(nodeId, openInspector, actionIdentity) {
       if (actionIdentity !== contentWorkspaceIdentity() || state.boardAccess?.canView === false || !getNode(nodeId)) return renderContentWorkspace();
       setActiveView("board");
@@ -16416,6 +16420,45 @@ function renderContentWorkspace() {
       if (openInspector) synchronizeAppShell({ view: "board", forceInspectorOpen: true });
     }
   });
+}
+
+// BW-31.2's sole Content Workspace mutation boundary. The dialog's prepared
+// action is only a capability token; this path always resolves the live node,
+// permission and material revision again before changing canonical state.
+function applyContentWorkspaceTransition(prepared = {}) {
+  const workspace = window.FunklixContentWorkspace;
+  const accountId = state.user?.email || "";
+  const boardId = state.currentBoardId || "";
+  if (!workspace || state.boardAccess?.canEdit !== true || state.publicBoardToken || !accountId
+    || prepared.accountId !== accountId || prepared.boardId !== boardId
+    || prepared.accessGeneration !== state.boardLoadGeneration) return { ok: false, reason: "PERMISSION_DENIED" };
+  const node = getNode(prepared.nodeId);
+  if (!node) return { ok: false, reason: "NODE_DELETED" };
+  const readiness = workspace.calculateReadiness(node);
+  if (workspace.normalizedStatus(node.status) !== prepared.currentStatus) return { ok: false, reason: "INVALID_STATUS" };
+  if (workspace.materialFingerprint(node) !== prepared.fingerprint || readiness.level !== prepared.readiness) return { ok: false, reason: "STALE_CONTENT" };
+  const decision = workspace.evaluateTransition({ currentStatus: node.status, toStatus: prepared.toStatus,
+    assetRole: node.type, readiness, canEdit: true, accountId, boardId, accessGeneration: state.boardLoadGeneration,
+    owner: { email: node.ownerEmail || "", name: node.ownerName || "" }, nodeId: node.id, nodeExists: true,
+    fingerprint: prepared.fingerprint });
+  if (decision.blockingReasonCodes.length) return { ok: false, reason: decision.blockingReasonCodes[0] };
+  const note = typeof prepared.note === "string" ? prepared.note.trim() : "";
+  if (decision.note.required && (!note || note.length > workspace.NOTE_MAX)) return { ok: false, reason: "NOTE_REQUIRED" };
+  node.status = prepared.toStatus;
+  if (prepared.toStatus === "Needs Changes") {
+    const existing = Array.isArray(node.reviewNotes) ? node.reviewNotes.slice(-9) : [];
+    node.reviewNotes = [...existing, { note: note.slice(0, workspace.NOTE_MAX), authorName: state.user?.name || accountId,
+      authorEmail: accountId, timestamp: new Date().toISOString(), boardId, nodeId: node.id }];
+  }
+  if (prepared.toStatus === "Approved") node.approvedContentFingerprint = workspace.materialFingerprint(node);
+  else if (prepared.toStatus === "Draft") delete node.approvedContentFingerprint;
+  recordStatusChangedActivity(node, nodeStatusLabel(node.status));
+  updateNodeCard(node);
+  if (state.selectedPrimary === node.id) fillInspector(node);
+  updateListView();
+  markUnsaved();
+  renderContentWorkspace();
+  return { ok: true, nodeId: node.id, status: node.status };
 }
 
 

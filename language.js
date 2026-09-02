@@ -178,7 +178,7 @@
     "Suggested Fix": "Vorgeschlagene Korrektur", "Target Field": "Zielfeld", "Improvement": "Verbesserung", "Generating suggested fix...": "Vorgeschlagene Korrektur wird erstellt ...",
     "Could not generate a suggested fix.": "Vorgeschlagene Korrektur konnte nicht erstellt werden.", "Dismiss": "Verwerfen", "Explanation": "Erklärung",
     "No explanation provided.": "Keine Erklärung angegeben.", "Apply": "Anwenden", "Current Text": "Aktueller Text", "Suggested Text": "Vorgeschlagener Text",
-    "Draft": "Entwurf", "In Review": "In Prüfung", "Needs Changes": "Änderungen nötig", "Approved": "Freigegeben", "Published": "Veröffentlicht",
+    "Draft": "Entwurf", "In Review": "In Prüfung", "Needs Changes": "Änderungen erforderlich", "Changes requested": "Änderungen erforderlich", "Approved": "Freigegeben", "Published": "Veröffentlicht", "Submit for review": "Zur Prüfung einreichen", "Request changes": "Änderungen anfordern", "Reopen as Draft": "Als Entwurf öffnen",
     "Idea": "Idee", "Campaign Variation": "Kampagnenvariante", "Social Media Posting": "Social-Media-Posting", "Email Campaign": "E-Mail-Kampagne",
     "Visual Concept": "Visuelles Konzept", "Image Brief": "Bild-Briefing", "Lead Gen": "Leadgenerierung", "Community": "Community", "Education": "Bildung",
     "Campaign Strategy": "Kampagnenstrategie", "Interest": "Interesse", "Consideration": "Erwägung", "Retention": "Bindung",
