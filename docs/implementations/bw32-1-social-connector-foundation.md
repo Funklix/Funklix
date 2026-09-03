@@ -1,0 +1,19 @@
+# BW-32.1 Social Connector foundation
+
+## Existing architecture and dependency boundaries
+
+Funklix uses `pg.Pool` with `POSTGRES_URL`; server storage modules lazily run additive, idempotent `CREATE TABLE IF NOT EXISTS`, `ALTER`, and index statements. There is no migration runner or row-level security layer. Authentication is an HttpOnly, SameSite session cookie signed with HMAC-SHA256 from `AUTH_SECRET`/`SESSION_SECRET`; account identity is the session subject/id and normalized email. Board routes authenticate first and use `_board-access` to resolve ownership, direct editor/viewer membership, Brand roles, and read/edit capabilities.
+
+API handlers are CommonJS Vercel functions. They return bounded JSON and increasingly use opaque client/server request IDs and normalized safe classifications. Environment secrets are read only in `api/` server modules. Browser scripts are classic scripts loaded by `index.html` and must not import storage. Existing hashing uses Node `crypto` for sessions and public-view token hashes; no existing general encrypted-secret facility or managed KMS exists. Activity is stored in Board JSON and rendered by the browser rather than in a separate activity table. Board deletion removes Board-bound records through foreign keys or explicit cleanup; account identity has no canonical accounts table or central account-deletion transaction.
+
+Settings is the existing sidebar dialog with Language/Region and Appearance sections; its lifecycle is owned by `app.js`. Content Workspace and Calendar are browser projections over existing Canvas nodes and `planningSchedule`. They remain independent. Clean workflow runs rely on built-in Node modules for the connector contract tests: `schema.js` defers importing `_boards-storage`/`pg` until an actual database operation, and no provider SDK is imported.
+
+## Foundation and security boundary
+
+The additive schema defines connected accounts, encrypted token secrets, destinations, OAuth attempts, publish jobs, provider attempts, and external posts. Composite owner foreign keys prevent cross-account destination, token, job, and post linkage. Historical delivery provenance uses restrictive deletion; lifecycle plans revoke or cryptographically destroy credentials, disable destinations, cancel unpublished Board jobs, and retain bounded provenance. Performance snapshots are intentionally deferred. Rollback means dropping the seven new `social_*` tables in reverse dependency order; existing Board JSON and product tables are untouched.
+
+The replaceable token vault is an interim environment-backed AES-256-GCM boundary, not a managed KMS. Versioned 32-byte keys are supplied as base64 in `SOCIAL_CONNECTOR_ENCRYPTION_KEY_V<n>`. Ciphertext is bound to owner, platform, secret ID, format, and key version; nonces are random, payloads and envelopes are bounded, and errors are non-secret. Only safe token metadata has a projection.
+
+OAuth attempts are short-lived, random, server-owned, single-use records bound to account, platform, session fingerprint, and an allowlisted `/settings` return path. No authorization code or credential is stored. The adapter registry defines all future authorization, discovery, capability, publication, reconciliation, post, and performance operations. It is inert on import, normalizes unsupported behavior, accepts credentials only at invocation, and prohibits test adapters unless explicitly enabled.
+
+The Settings dialog shows a resilient four-platform informational projection and disabled setup/coming-soon controls in English and German. No OAuth route, authorization URL, provider implementation, network call, publish endpoint, external scheduling, analytics retrieval, or working connection/publishing action exists in this phase. Internal planning, approval, manual Published state, Canvas/Board schemas, autosave, Calendar, and Content Workspace behavior are unchanged.
