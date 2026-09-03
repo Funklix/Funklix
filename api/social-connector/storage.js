@@ -1,0 +1,25 @@
+'use strict';
+const { ensureSocialConnectorSchema }=require('./schema');
+const { boundedText, stableId, platform }=require('./contracts');
+const { connectorError }=require('./errors');
+function account(value){if(!boundedText(value,320))throw connectorError('authentication_required');return value;}
+function owned(row,owner){if(!row)throw connectorError('connection_missing');if(row.owner_account_id!==owner)throw connectorError('account_mismatch');return row;}
+function createStorage({pool,boardAuthorizer}={}){
+  async function db(){const selected=pool||require('../_boards-storage').pool;await ensureSocialConnectorSchema(selected);return selected;}
+  async function one(ownerAccountId,table,id){account(ownerAccountId);if(!stableId(id))throw connectorError('connector_contract_invalid');const result=await (await db()).query(`SELECT * FROM ${table} WHERE id=$1 AND owner_account_id=$2`,[id,ownerAccountId]);return owned(result.rows[0],ownerAccountId);}
+  return Object.freeze({
+    getConnectedAccount:(owner,id)=>one(owner,'social_connected_accounts',id), getDestination:(owner,id)=>one(owner,'social_publishing_destinations',id), getPublishJob:(owner,id)=>one(owner,'social_publish_jobs',id),
+    async listConnectionProjection(ownerAccountId){account(ownerAccountId);const result=await (await db()).query('SELECT id, platform, external_display_name, account_type, status, token_expires_at, last_validated_at, created_at, updated_at, disconnected_at, schema_version FROM social_connected_accounts WHERE owner_account_id=$1 ORDER BY created_at',[ownerAccountId]);return result.rows;},
+    async tokenSecretMetadata(ownerAccountId,id){const row=await one(ownerAccountId,'social_token_secrets',id);return {id:row.id,ownerAccountId:row.owner_account_id,platform:row.platform,keyVersion:row.encryption_key_version,createdAt:row.created_at,updatedAt:row.updated_at,rotatedAt:row.rotated_at,revokedAt:row.revoked_at};},
+    async revokeSecret(c){account(c.ownerAccountId);return (await db()).query('UPDATE social_token_secrets SET revoked_at=NOW(),updated_at=NOW() WHERE id=$1 AND owner_account_id=$2 AND platform=$3',[c.secretId,c.ownerAccountId,c.platform]);},
+    async deleteSecret(c){account(c.ownerAccountId);return (await db()).query('DELETE FROM social_token_secrets WHERE id=$1 AND owner_account_id=$2 AND platform=$3',[c.secretId,c.ownerAccountId,c.platform]);},
+    async consumeOAuthAttempt(ownerAccountId,id){return one(ownerAccountId,'social_oauth_attempts',id);},
+    async listProviderAttempts(ownerAccountId,jobId){await one(ownerAccountId,'social_publish_jobs',jobId);return (await db()).query('SELECT id,publish_job_id,adapter_platform,attempt_number,phase,status,safe_error_classification,ambiguous_outcome,provider_request_reference,started_at,completed_at FROM social_provider_attempts WHERE publish_job_id=$1 ORDER BY attempt_number',[jobId]);},
+    async listExternalPosts(ownerAccountId){account(ownerAccountId);return (await db()).query('SELECT id,platform,external_post_id,destination_id,publish_job_id,source_board_id,source_node_id,approved_fingerprint,published_snapshot_reference,external_url,published_at,delivery_state,deletion_state,last_synchronized_at,schema_version FROM social_external_posts WHERE owner_account_id=$1',[ownerAccountId]);},
+    async evaluatePublishJob(input){if(!input||account(input.ownerAccountId)!==input.authenticatedAccountId)throw connectorError('account_mismatch');if(typeof boardAuthorizer!=='function')throw connectorError('connector_not_configured');const access=await boardAuthorizer(input.boardId,input.actor);return Object.freeze({authenticated:!!input.authenticatedAccountId,boardEditAccess:!!access?.canEdit,nodeExists:!!input.nodeExists,socialMediaPostingRole:input.role==='social_media_posting',ready:input.readiness===true,approved:input.editorialStatus==='approved',approvalFingerprintMatches:input.approvedFingerprint===input.currentFingerprint,destinationOwned:input.destinationOwnerAccountId===input.ownerAccountId,capabilityAvailable:input.capabilityAvailable===true,publishingEnabled:false});}
+  });
+}
+async function disconnectConnection(storage,{ownerAccountId,connectionId},adapterResult={supported:false}){const connection=await storage.getConnectedAccount(ownerAccountId,connectionId);return Object.freeze({connectionId:connection.id,revokeProvider:adapterResult.supported===true,markDisconnected:true,revokeTokenSecret:true,disableDestinations:true,preventNewJobs:true,preserveExternalPostProvenance:true});}
+function accountDeletionPlan(ownerAccountId){account(ownerAccountId);return Object.freeze({ownerAccountId,cryptographicallyDestroyCredentials:true,deleteOAuthAttempts:true,preserveExternalPostProvenanceAccordingToAccountPolicy:true});}
+function boardDeletionPlan(boardId){if(!stableId(boardId))throw connectorError('connector_contract_invalid');return Object.freeze({boardId,retainPersonalConnections:true,cancelUnpublishedJobs:true,preserveDeliveredProvenance:true});}
+module.exports={createStorage,disconnectConnection,accountDeletionPlan,boardDeletionPlan};
