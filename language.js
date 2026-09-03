@@ -204,6 +204,53 @@
     "Professional": "Professionell", "Emotional": "Emotional", "Direct": "Direkt", "Premium": "Premium", "Playful": "Verspielt",
     "Awareness": "Bekanntheit", "Conversion": "Conversion", "Collaborator": "Mitwirkende Person", "Current owner": "Aktuell zuständig"
   };
+  Object.assign(german, {
+    "Daily Briefing": "Täglicher Überblick", "Continue Campaign": "Kampagne fortsetzen", "Talk to Brand": "Mit der Brand sprechen",
+    "Continue Working": "Weiterarbeiten", "No board selected": "Kein Board ausgewählt", "Select a board to continue your campaign work.": "Wähle ein Board aus, um an deiner Kampagne weiterzuarbeiten.",
+    "Campaign health overview": "Überblick zum Kampagnenstatus", "Status": "Status", "Content types": "Inhaltstypen", "Add or generate nodes to start building campaign health.": "Füge Nodes hinzu oder generiere sie, um den Kampagnenstatus aufzubauen.",
+    "Last updated": "Zuletzt aktualisiert", "Not available yet": "Noch nicht verfügbar", "Open Boards": "Boards öffnen", "Open Board": "Board öffnen",
+    "Brand Evolution": "Brand-Entwicklung", "Suggested Opportunities": "Empfohlene Chancen", "Prepared ideas to explore": "Vorbereitete Ideen zum Erkunden", "Today’s Focus": "Heutiger Fokus", "Node-level actions": "Aktionen auf Node-Ebene", "Live Campaigns": "Aktive Kampagnen", "Team Activity": "Teamaktivität", "Meaningful updates": "Wichtige Neuigkeiten",
+    "Campaign Summary": "Kampagnenübersicht", "Campaign board is ready.": "Das Kampagnen-Board ist bereit.", "Pick up this campaign where you left off.": "Setze diese Kampagne dort fort, wo du aufgehört hast.",
+    "Campaign health updates automatically as your campaign evolves.": "Der Kampagnenstatus wird automatisch aktualisiert, während sich deine Kampagne entwickelt.",
+    "My Boards": "Meine Boards", "Your boards first, then shared boards.": "Zuerst deine Boards, danach geteilte Boards.", "Open a board or sign in to save one to your account.": "Öffne ein Board oder melde dich an, um es in deinem Konto zu speichern.",
+    "Loading Boards…": "Boards werden geladen…", "The current list filter is being applied.": "Der aktuelle Listenfilter wird angewendet.", "Could not load boards.": "Boards konnten nicht geladen werden.", "Please try again from the Boards navigation item.": "Versuche es erneut über den Navigationspunkt Boards.",
+    "No boards yet": "Noch keine Boards", "No matching workspaces": "Keine passenden Arbeitsbereiche", "Create your first board to start collaborating.": "Erstelle dein erstes Board, um gemeinsam zu arbeiten.", "Create New Board": "Neues Board erstellen",
+    "Your Board": "Dein Board", "Editor": "Bearbeitung", "Viewer": "Leserechte", "Shared": "Geteilt", "Open": "Öffnen", "Copy": "Kopie", "Brand": "Brand", "Last edited": "Zuletzt bearbeitet", "You can edit this board.": "Du kannst dieses Board bearbeiten.", "Read-only Board access": "Board-Zugriff mit Leserechten", "No owner yet": "Noch keine zuständige Person", "Rename": "Umbenennen", "Delete": "Löschen", "Open board": "Board öffnen", "Copy link": "Link kopieren", "Copy Link": "Link kopieren", "Drag to reorder": "Zum Sortieren ziehen",
+    "Delete this board?": "Dieses Board löschen?", "This will permanently delete the board. This action cannot be undone.": "Das Board wird dauerhaft gelöscht. Diese Aktion kann nicht rückgängig gemacht werden.", "Cancel": "Abbrechen",
+    "Board knowledge snapshot": "Wissensstand des Boards", "Current board Brand": "Brand des aktuellen Boards", "Saved with the current Board. This snapshot supports its campaigns and AI without changing a Canonical Brand.": "Mit dem aktuellen Board gespeichert. Dieser Stand unterstützt seine Kampagnen und die KI, ohne eine kanonische Brand zu verändern.", "Brand readiness summary": "Übersicht zur Brand-Bereitschaft", "Brand signals pending": "Brand-Signale ausstehend", "Complete the sections below to strengthen future campaign recommendations.": "Vervollständige die folgenden Bereiche, um künftige Kampagnenempfehlungen zu verbessern.", "Reset Brand Core": "Brand Core zurücksetzen", "Brand knowledge sections": "Bereiche des Brand-Wissens", "Brand Core Details": "Brand-Core-Details", "Select a section to refine the Brand knowledge used by campaigns and AI.": "Wähle einen Bereich aus, um das Brand-Wissen für Kampagnen und KI zu verfeinern.",
+    "Read-only Brand and campaign advisor": "Brand- und Kampagnenberatung mit Lesezugriff", "Advisor": "Beratung", "Advice context": "Beratungskontext", "Current Board": "Aktuelles Board", "Canvas nodes": "Canvas-Nodes", "Selected": "Ausgewählt", "Includes unsaved Canvas changes": "Enthält ungespeicherte Canvas-Änderungen", "Saved Canvas context": "Gespeicherter Canvas-Kontext", "Your strategic question": "Deine strategische Frage", "AI advice is qualitative. No changes will be made.": "Die KI-Beratung ist qualitativ. Es werden keine Änderungen vorgenommen.", "Thinking…": "Denkt nach…", "Ask AI Brain": "KI-Brain fragen", "AI Brain advice is unavailable": "KI-Brain-Beratung ist nicht verfügbar", "New advice is available only to authenticated editors.": "Neue Beratung ist nur für angemeldete Personen mit Bearbeitungsrechten verfügbar.",
+    "Recent collaboration activity will appear here.": "Aktuelle gemeinsame Aktivitäten erscheinen hier.", "New": "Neu", "Jump to discussion": "Zur Diskussion springen", "Jump to node": "Zum Node springen", "Board activity": "Board-Aktivität", "new": "neu",
+    "Draft": "Entwurf", "In Review": "In Prüfung", "Needs Changes": "Änderungen erforderlich", "Approved": "Freigegeben", "Published": "Veröffentlicht",
+    "Board": "Board", "Selected": "Ausgewählt", "{count} Canvas node": "{count} Canvas-Node", "{count} Canvas nodes": "{count} Canvas-Nodes", "Ask about your Brand or campaign…": "Frage zu deiner Brand oder Kampagne…",
+    "Foundation": "Grundlagen", "Identity, mission, vision and values": "Identität, Mission, Vision und Werte", "Start with the core truth the rest of the Brand Workspace should support.": "Beginne mit der zentralen Wahrheit, die der restliche Brand-Arbeitsbereich unterstützen soll.",
+    "Strategy": "Strategie", "Positioning, ICP and messaging": "Positionierung, ICP und Botschaften", "Shape the market story, audience and value proposition that guide campaigns.": "Forme Marktgeschichte, Zielgruppe und Wertversprechen, die Kampagnen leiten.",
+    "Intelligence": "Wissen", "Brand DNA, Avatar, knowledge and website analysis": "Brand-DNA, Avatar, Wissen und Website-Analyse", "Use existing Brand Brain context to guide AI interpretation and review.": "Nutze vorhandenen Brand-Brain-Kontext, um die Interpretation und Prüfung durch die KI zu leiten.",
+    "Deployment": "Anwendung", "Assets, keywords, guidelines and voice examples": "Assets, Schlüsselwörter, Richtlinien und Sprachbeispiele", "Define the reusable rules and assets campaigns should follow.": "Definiere wiederverwendbare Regeln und Assets, denen Kampagnen folgen sollen.",
+    "Add": "Hinzufügen", "Edit": "Bearbeiten", "Save": "Speichern", "Remove": "Entfernen", "Upload": "Hochladen", "Generate": "Generieren", "Analyze": "Analysieren", "Retry": "Erneut versuchen", "Website analysis": "Website-Analyse", "Founder Story": "Gründungsgeschichte", "Custom knowledge": "Eigenes Wissen", "Keywords": "Schlüsselwörter", "Examples": "Beispiele", "Good": "Gut", "Avoid": "Vermeiden", "Do": "Empfohlen", "Don't": "Nicht empfohlen"
+  });
+
+  const DIAGNOSTIC_OWNERS = Object.freeze([
+    { owner: "Dashboard", selector: "#dashboard-view" }, { owner: "Boards", selector: "#boards-library-view" },
+    { owner: "Brand Core", selector: "#brand-core-workspace" }, { owner: "AI Brain", selector: "#ai-brain-view" },
+    { owner: "Activity", selector: "#activity-panel" }
+  ]);
+  function diagnoseInterface(rootNode, language = preferences.uiLanguage) {
+    if (language !== "de" || !rootNode?.querySelectorAll) return [];
+    const findings = [];
+    DIAGNOSTIC_OWNERS.forEach(({ owner, selector }) => {
+      const scope = rootNode.matches?.(selector) ? rootNode : rootNode.querySelector(selector);
+      if (!scope) return;
+      scope.querySelectorAll("[data-i18n], [data-i18n-placeholder], [data-i18n-aria-label], [data-i18n-title]").forEach((node) => {
+        if (node.closest("[data-user-content]")) return;
+        [["data-i18n", "textContent"], ["data-i18n-placeholder", "placeholder"], ["data-i18n-aria-label", "aria-label"], ["data-i18n-title", "title"]].forEach(([attribute, target]) => {
+          const key = node.getAttribute(attribute); if (!key || !Object.prototype.hasOwnProperty.call(german, key)) return;
+          const actual = target === "textContent" ? node.textContent.trim() : node.getAttribute(target);
+          if (actual === key) findings.push(Object.freeze({ owner, key, target }));
+        });
+      });
+    });
+    return findings;
+  }
   const dictionaries = Object.freeze({ en: Object.freeze({}), de: Object.freeze(german) });
   const allowed = (value, list, fallback) => list.includes(value) ? value : fallback;
   function restorePreferences(source = storage) {
@@ -239,5 +286,5 @@
     });
     if (container.ownerDocument) container.ownerDocument.documentElement.lang = language;
   }
-  return Object.freeze({ UI_LANGUAGES, CAMPAIGN_LANGUAGES, DEFAULT_UI_LANGUAGE, DEFAULT_CAMPAIGN_LANGUAGE, STORAGE_KEY, LANGUAGE_NAMES, dictionaries, restorePreferences, getPreferences, setUiLanguage, setCampaignLanguage, t, generationInstruction, applyTranslations });
+  return Object.freeze({ UI_LANGUAGES, CAMPAIGN_LANGUAGES, DEFAULT_UI_LANGUAGE, DEFAULT_CAMPAIGN_LANGUAGE, STORAGE_KEY, LANGUAGE_NAMES, dictionaries, restorePreferences, getPreferences, setUiLanguage, setCampaignLanguage, t, generationInstruction, applyTranslations, diagnoseInterface });
 });

@@ -4,6 +4,8 @@
     "pg": "^8.13.1"
   },
   "scripts": {
+    "check:bw25.1": "node scripts/check-bw25-1-dynamic-insights-translations.js",
+    "check:bw25.2": "node scripts/check-bw25-2-interface-localization.js",
     "check:bw26": "node scripts/check-bw26-read-only-ai-brain.js",
     "check:bw26.3": "node scripts/check-bw26-3-bounded-conversation-memory.js",
     "check:bw26.4": "node scripts/check-bw26-4-reference-resolution.js",

@@ -151,5 +151,7 @@ jobs:
         run: npm run check:bw31.5.2
       - name: Check dynamic AI Insights translations
         run: node scripts/check-bw25-1-dynamic-insights-translations.js
+      - name: Check scoped German interface localization
+        run: npm run check:bw25.2
       - name: Check Knowledge Module browser globals
         run: node scripts/check-knowledge-module-browser-globals.js

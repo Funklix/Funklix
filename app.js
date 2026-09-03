@@ -1703,46 +1703,28 @@ function recordNodeUpdatedActivity(node) {
 }
 
 function formatActivityAction(entry = {}) {
-  const title = entry.nodeTitle ? `“${entry.nodeTitle}”` : "a node";
-  const map = {
-    node_created: `created ${title}`,
-    node_updated: `edited ${title}`,
-    status_changed: `changed status to ${entry.statusLabel || "Draft"} on ${title}`,
-    owner_assigned: `assigned node to ${entry.ownerName || deriveOwnerDisplayName(entry.ownerName, entry.ownerEmail) || "someone"}`,
-    owner_unassigned: "unassigned node",
-    node_moved: `moved ${title}`,
-    node_deleted: `deleted ${title}`,
-    edge_connected: `connected ${title}`,
-    edge_disconnected: `disconnected ${title}`,
-    media_added: `added media to ${title}`,
-    media_removed: `removed media from ${title}`,
-    comment_added: `added a comment on ${title}`,
-    reply_added: `replied on ${title}`,
-    comment_resolved: `resolved a comment on ${title}`,
-    postit_added: `added a post-it on ${title}`,
-    generated_next_step: `generated next step from ${title}`,
-    ai_reviewed_node: `reviewed ${title}`,
-    generated_campaign_chain: `generated campaign chain from ${title}`,
-    schedule_created: `scheduled ${title} in the internal plan`,
-    schedule_rescheduled: `rescheduled ${title} in the internal plan`,
-    schedule_removed: `removed ${title} from the internal plan`,
-    auto_arranged: "auto-arranged the board"
+  const title = entry.nodeTitle ? `“${entry.nodeTitle}”` : (state.uiLanguage === "de" ? "einen Node" : "a node");
+  const status = uiText(entry.statusLabel || "Draft");
+  const owner = entry.ownerName || deriveOwnerDisplayName(entry.ownerName, entry.ownerEmail) || (state.uiLanguage === "de" ? "jemanden" : "someone");
+  const templates = state.uiLanguage === "de" ? {
+    node_created: `hat ${title} erstellt`, node_updated: `hat ${title} bearbeitet`, status_changed: `hat den Status von ${title} in „${status}“ geändert`,
+    owner_assigned: `hat ${title} ${owner} zugewiesen`, owner_unassigned: `hat die Zuweisung von ${title} aufgehoben`, node_moved: `hat ${title} verschoben`, node_deleted: `hat ${title} gelöscht`, edge_connected: `hat ${title} verbunden`, edge_disconnected: `hat die Verbindung zu ${title} getrennt`, media_added: `hat Medien zu ${title} hinzugefügt`, media_removed: `hat Medien aus ${title} entfernt`, comment_added: `hat ${title} kommentiert`, reply_added: `hat auf einen Kommentar zu ${title} geantwortet`, comment_resolved: `hat einen Kommentar zu ${title} erledigt`, postit_added: `hat eine Notiz zu ${title} hinzugefügt`, generated_next_step: `hat aus ${title} den nächsten Schritt generiert`, ai_reviewed_node: `hat ${title} geprüft`, generated_campaign_chain: `hat aus ${title} eine Kampagnenkette generiert`, schedule_created: `hat ${title} intern geplant`, schedule_rescheduled: `hat ${title} intern neu geplant`, schedule_removed: `hat die interne Planung von ${title} entfernt`, auto_arranged: "hat das Board automatisch angeordnet"
+  } : {
+    node_created: `created ${title}`, node_updated: `edited ${title}`, status_changed: `changed status to ${status} on ${title}`, owner_assigned: `assigned ${title} to ${owner}`, owner_unassigned: `unassigned ${title}`, node_moved: `moved ${title}`, node_deleted: `deleted ${title}`, edge_connected: `connected ${title}`, edge_disconnected: `disconnected ${title}`, media_added: `added media to ${title}`, media_removed: `removed media from ${title}`, comment_added: `added a comment on ${title}`, reply_added: `replied on ${title}`, comment_resolved: `resolved a comment on ${title}`, postit_added: `added a post-it on ${title}`, generated_next_step: `generated next step from ${title}`, ai_reviewed_node: `reviewed ${title}`, generated_campaign_chain: `generated campaign chain from ${title}`, schedule_created: `scheduled ${title} in the internal plan`, schedule_rescheduled: `rescheduled ${title} in the internal plan`, schedule_removed: `removed ${title} from the internal plan`, auto_arranged: "auto-arranged the board"
   };
-  return map[entry.type] || `updated ${title}`;
+  return templates[entry.type] || (state.uiLanguage === "de" ? `hat ${title} aktualisiert` : `updated ${title}`);
 }
 
 function relativeActivityTime(timestamp) {
   const then = Date.parse(timestamp || "");
-  if (!Number.isFinite(then)) return "just now";
+  const de = state.uiLanguage === "de";
+  if (!Number.isFinite(then)) return de ? "gerade eben" : "just now";
   const seconds = Math.max(0, Math.floor((Date.now() - then) / 1000));
-  if (seconds < 45) return "just now";
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes} min ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours} hr ago`;
-  const days = Math.floor(hours / 24);
-  if (days < 7) return `${days} day${days === 1 ? "" : "s"} ago`;
-  return new Date(then).toLocaleDateString();
+  if (seconds < 45) return de ? "gerade eben" : "just now";
+  const minutes = Math.floor(seconds / 60); if (minutes < 60) return de ? `vor ${minutes} Min.` : `${minutes} min ago`;
+  const hours = Math.floor(minutes / 60); if (hours < 24) return de ? `vor ${hours} Std.` : `${hours} hr ago`;
+  const days = Math.floor(hours / 24); if (days < 7) return de ? `vor ${days} ${days === 1 ? "Tag" : "Tagen"}` : `${days} day${days === 1 ? "" : "s"} ago`;
+  return new Date(then).toLocaleDateString(de ? "de-DE" : "en-US");
 }
 
 function currentBoardAwarenessKey() {
@@ -1801,7 +1783,7 @@ function latestActivityTimestamp(feed = state.activityFeed) {
 
 function updateActivityUnreadIndicator() {
   const unreadCount = getUnreadActivityEntries().length;
-  if (el.activityCount) el.activityCount.textContent = unreadCount ? `${Math.min(unreadCount, 99)} new` : "";
+  if (el.activityCount) el.activityCount.textContent = unreadCount ? `${Math.min(unreadCount, 99)} ${uiText("new")}` : "";
   el.activityPanel?.classList.toggle("has-unread", unreadCount > 0);
   el.activityToggleButton?.classList.toggle("has-unread", unreadCount > 0);
 }
@@ -1902,7 +1884,7 @@ function renderActivityFeed() {
   if (!entries.length) {
     const empty = document.createElement("p");
     empty.className = "activity-empty";
-    empty.textContent = "Recent collaboration activity will appear here.";
+    empty.textContent = uiText("Recent collaboration activity will appear here.");
     el.activityFeed.appendChild(empty);
     return;
   }
@@ -1916,7 +1898,7 @@ function renderActivityFeed() {
       row.classList.add("is-clickable");
       row.tabIndex = 0;
       row.setAttribute("role", "button");
-      row.title = isCommentActivityType(entry.type) ? "Jump to discussion" : "Jump to node";
+      row.title = uiText(isCommentActivityType(entry.type) ? "Jump to discussion" : "Jump to node");
       row.addEventListener("click", () => handleActivityEntryFocus(entry));
       row.addEventListener("keydown", (event) => {
         if (event.key !== "Enter" && event.key !== " ") return;
@@ -1931,7 +1913,7 @@ function renderActivityFeed() {
     if (user.avatar) {
       const img = document.createElement("img");
       img.src = user.avatar;
-      img.alt = `${name} avatar`;
+      img.alt = state.uiLanguage === "de" ? `Avatar von ${name}` : `${name} avatar`;
       avatar.appendChild(img);
     } else {
       avatar.textContent = getViewerInitials(user);
@@ -1949,7 +1931,7 @@ function renderActivityFeed() {
     if (isUnread) {
       const newLabel = document.createElement("span");
       newLabel.className = "activity-new-label";
-      newLabel.textContent = "New";
+      newLabel.textContent = uiText("New");
       body.appendChild(newLabel);
     }
     row.append(avatar, body);
@@ -5423,7 +5405,7 @@ function renderAiBrainTranscript(transcript) {
     if (turn.status === "pending") { const loading = document.createElement("article"); loading.className = "ai-brain-message is-advisor is-loading"; loading.setAttribute("role", "status"); loading.append(createAiBrainAdvisorAvatar(turn.advisorIdentity), document.createTextNode(aiBrainTurnText(turn, "pending"))); transcript.appendChild(loading); }
     if (!turn.answer) return;
     const advisor = document.createElement("article"); advisor.className = "ai-brain-message is-advisor";
-    const advisorLabel = document.createElement("strong"); advisorLabel.className = "ai-brain-speaker"; advisorLabel.textContent = "AI Brain";
+    const advisorLabel = document.createElement("strong"); advisorLabel.className = "ai-brain-speaker"; advisorLabel.textContent = uiText("AI Brain");
     const formatted = document.createElement("div"); formatted.className = "ai-brain-formatted-answer"; renderAiBrainFormattedAnswer(formatted, turn.answer);
     advisor.append(createAiBrainAdvisorAvatar(turn.advisorIdentity), advisorLabel, formatted);
     if (turn.responseLanguage) { const disclosure = document.createElement("small"); disclosure.className = "ai-brain-response-language"; disclosure.textContent = AI_BRAIN_TEXT[turn.responseLanguage]?.responseLanguage || AI_BRAIN_TEXT.en.responseLanguage; advisor.appendChild(disclosure); }
@@ -5457,17 +5439,20 @@ function renderAiBrainTranscript(transcript) {
 }
 function renderAiBrain() {
   if (!el.aiBrainSummary) return;
+  const preservedComposerValue = el.aiBrainSummary.querySelector("#ai-brain-question")?.value || "";
   if (state.aiBrain.identity && state.aiBrain.identity !== aiBrainIdentity()) invalidateAiBrainRequest();
   const canAsk = !!state.user?.email && !!state.currentBoardId && state.boardAccess?.canEdit === true;
   const selected = state.selectedPrimary ? getNode(state.selectedPrimary) : null; const unsaved = !!state.isDirty;
-  el.aiBrainSummary.innerHTML = `<section class="ai-brain-wrap ai-brain-conversation"><header class="ai-brain-header"><div><h3>${escapeHtml(uiText("AI Brain"))}</h3><p>${escapeHtml(uiText("Read-only Brand and campaign advisor"))}</p></div><span class="ai-brain-readonly">${aiBrainProposalText("advisor")}</span></header><div class="ai-brain-context" aria-label="Advice context"><span>Board: ${escapeHtml(state.currentBoardName || "Current Board")}</span><span>${state.nodes.length} Canvas nodes</span>${selected ? `<span>Selected: ${escapeHtml(selected.title || selected.type || "Node")}</span>` : ""}<span class="${unsaved ? "is-unsaved" : ""}">${unsaved ? "Includes unsaved Canvas changes" : "Saved Canvas context"}</span></div>${canAsk ? `<div class="ai-brain-transcript" aria-live="polite"></div><form id="ai-brain-form" class="ai-brain-composer"><label for="ai-brain-question">Your strategic question</label><textarea id="ai-brain-question" maxlength="2000" required></textarea><div><small>AI advice is qualitative. No changes will be made.</small><button type="submit" ${state.aiBrain.status === "loading" ? "disabled" : ""}>${state.aiBrain.status === "loading" ? "Thinking…" : "Ask AI Brain"}</button></div></form>` : `<div class="ai-brain-unavailable"><h4>AI Brain advice is unavailable</h4><p>New advice is available only to authenticated editors.</p></div>`}</section>`;
+  el.aiBrainSummary.innerHTML = `<section class="ai-brain-wrap ai-brain-conversation"><header class="ai-brain-header"><div><h3>${escapeHtml(uiText("AI Brain"))}</h3><p>${escapeHtml(uiText("Read-only Brand and campaign advisor"))}</p></div><span class="ai-brain-readonly">${aiBrainProposalText("advisor")}</span></header><div class="ai-brain-context" aria-label="${escapeHtml(uiText("Advice context"))}"><span>${escapeHtml(uiText("Board"))}: ${escapeHtml(state.currentBoardName || uiText("Current Board"))}</span><span>${escapeHtml(uiFormat(state.nodes.length === 1 ? "{count} Canvas node" : "{count} Canvas nodes", { count: state.nodes.length }))}</span>${selected ? `<span>${escapeHtml(uiText("Selected"))}: ${escapeHtml(selected.title || selected.type || uiText("Node"))}</span>` : ""}<span class="${unsaved ? "is-unsaved" : ""}">${escapeHtml(uiText(unsaved ? "Includes unsaved Canvas changes" : "Saved Canvas context"))}</span></div>${canAsk ? `<div class="ai-brain-transcript" aria-live="polite"></div><form id="ai-brain-form" class="ai-brain-composer"><label for="ai-brain-question">${escapeHtml(uiText("Your strategic question"))}</label><textarea id="ai-brain-question" maxlength="2000" placeholder="${escapeHtml(uiText("Ask about your Brand or campaign…"))}" required></textarea><div><small>${escapeHtml(uiText("AI advice is qualitative. No changes will be made."))}</small><button type="submit" ${state.aiBrain.status === "loading" ? "disabled" : ""}>${escapeHtml(uiText(state.aiBrain.status === "loading" ? "Thinking…" : "Ask AI Brain"))}</button></div></form>` : `<div class="ai-brain-unavailable"><h4>${escapeHtml(uiText("AI Brain advice is unavailable"))}</h4><p>${escapeHtml(uiText("New advice is available only to authenticated editors."))}</p></div>`}</section>`;
   const headerTitle = el.aiBrainSummary.querySelector(".ai-brain-header > div"); if (headerTitle) headerTitle.prepend(createAiBrainAdvisorAvatar());
   const transcript = el.aiBrainSummary.querySelector(".ai-brain-transcript"); if (transcript) renderAiBrainTranscript(transcript);
+  const composer = el.aiBrainSummary.querySelector("#ai-brain-question"); if (composer && preservedComposerValue) composer.value = preservedComposerValue;
   el.aiBrainSummary.querySelector("#ai-brain-form")?.addEventListener("submit", requestAiBrainAdvice);
   el.aiBrainSummary.querySelectorAll("[data-ai-brain-retry]").forEach((button) => button.addEventListener("click", () => requestAiBrainAdvice(null, button.dataset.aiBrainRetry)));
   el.aiBrainSummary.querySelectorAll("[data-ai-brain-prepare]").forEach((button) => button.addEventListener("click", () => requestAiBrainNodeProposal(button.dataset.aiBrainPrepare)));
   el.aiBrainSummary.querySelectorAll("[data-ai-brain-cancel]").forEach((button) => button.addEventListener("click", () => cancelAiBrainNodeProposal(button.dataset.aiBrainCancel)));
   el.aiBrainSummary.querySelectorAll("[data-ai-brain-create]").forEach((button) => button.addEventListener("click", () => applyAiBrainNodeProposal(button.dataset.aiBrainCreate)));
+  translateInterface(el.aiBrainSummary);
 }
 async function requestAiBrainAdvice(event, retryTurnId = null) {
   event?.preventDefault();
@@ -9363,6 +9348,7 @@ function showFirstCampaignRecommendation() {
 }
 
 function renderBrandCoreEditor() {
+  queueMicrotask(() => translateInterface(el.brandCoreWorkspace));
   const selectedKey = state.brandCoreSelectedKey;
   if (selectedKey === "custom:add") {
     state.brandCore.customTiles.push(createBrandCustomTile("New Custom Tile", ""));
@@ -9475,6 +9461,7 @@ function renderBrandCoreEditor() {
 }
 
 function renderBrandCoreTiles() {
+  queueMicrotask(() => translateInterface(el.brandCoreWorkspace));
   console.log("BrandBrain mounted");
   console.log("BrandBrain data:", state.brandCore);
   renderBrandWorkspaceHero();
@@ -13251,7 +13238,7 @@ function renderOwnerAvatar(parent, name, avatarUrl, className = "owner-avatar") 
   if (avatarUrl) {
     const img = document.createElement("img");
     img.src = avatarUrl;
-    img.alt = `${name} avatar`;
+    img.alt = state.uiLanguage === "de" ? `Avatar von ${name}` : `${name} avatar`;
     parent.appendChild(img);
     return;
   }
@@ -16745,10 +16732,21 @@ el.settingsDialog?.addEventListener("close", () => {
   synchronizeAppShell();
   el.settingsOpenButton?.focus();
 });
+function refreshInterfaceLanguage() {
+  renderActivityFeed();
+  renderBoardsLibrary();
+  renderBrandCoreTiles();
+  renderBrandCoreEditor();
+  renderAiBrain();
+  refreshDashboardIfVisible();
+  [el.dashboardView, el.boardsLibraryView, el.brandCoreWorkspace, el.aiBrainView, el.activityPanel].forEach((root) => translateInterface(root));
+}
+
 el.uiLanguageSelect?.addEventListener("change", () => {
   state.uiLanguage = language?.setUiLanguage?.(el.uiLanguageSelect.value) || "en";
   translateInterface(document);
   refreshOpenInspectorLanguage();
+  refreshInterfaceLanguage();
   window.FunklixTheme?.syncControls?.();
   if (state.activeView === "insights") renderInsightsSurface();
   if (state.activeView === "funnel_simulator") renderFunnelSimulator();
@@ -18181,6 +18179,7 @@ function bindBoardsListDragHandlers() {
 
 function renderBoardsLibrary() {
   if (!el.boardsLibraryList) return;
+  queueMicrotask(() => translateInterface(el.boardsLibraryView));
   el.boardsLibraryList.innerHTML = '';
   renderBoardsLibraryControls();
   if (state.user?.email) {
