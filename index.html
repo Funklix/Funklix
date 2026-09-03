@@ -241,12 +241,12 @@
           <button id="insights-nav-btn" class="nav-item fk-btn" data-icon="📈"><span class="nav-label" data-i18n="Insights">Insights</span></button>
           <button id="funnel-simulator-nav-btn" class="nav-item fk-btn" data-icon="⏳"><span class="nav-label" data-i18n="Funnel Simulator">Funnel Simulator</span></button>
         </nav>
-        <section class="activity-panel fk-section" id="activity-panel" aria-label="Board activity">
+        <section class="activity-panel fk-section" id="activity-panel" data-i18n-aria-label="Board activity" aria-label="Board activity">
           <button class="activity-toggle fk-btn fk-btn-ghost" id="activity-toggle-btn" type="button" aria-expanded="true">
             <span data-i18n="Activity">Activity</span><span id="activity-count" class="activity-count fk-badge"></span>
           </button>
           <div class="activity-feed" id="activity-feed">
-            <p class="activity-empty">Recent collaboration activity will appear here.</p>
+            <p class="activity-empty" data-i18n="Recent collaboration activity will appear here.">Recent collaboration activity will appear here.</p>
           </div>
         </section>
         <div class="sidebar-settings">
@@ -587,37 +587,37 @@
           <div id="funnel-simulator-surface" class="boards-library-panel"></div>
         </section>
         <section id="ai-brain-view" class="board-list-view hidden">
-          <h2>AI Brain</h2>
+          <h2 data-i18n="AI Brain">AI Brain</h2>
           <div id="ai-brain-summary" class="boards-library-panel"></div>
         </section>
         <section id="brand-core-workspace" class="brand-core-workspace fk-section hidden" aria-labelledby="brand-workspace-title">
           <header class="brand-mode-header brand-workspace-hero fk-card">
             <div class="brand-workspace-hero-main">
-              <span class="brand-workspace-kicker fk-badge">Board knowledge snapshot</span>
+              <span class="brand-workspace-kicker fk-badge" data-i18n="Board knowledge snapshot">Board knowledge snapshot</span>
               <div class="brand-workspace-title-row">
                 <div class="brand-workspace-avatar" id="brand-workspace-avatar" aria-hidden="true">B</div>
                 <div>
-                  <h1 id="brand-workspace-title">Board Brand Core</h1>
-                  <p id="brand-workspace-name">Current board Brand</p>
+                  <h1 id="brand-workspace-title" data-i18n="Board Brand Core">Board Brand Core</h1>
+                  <p id="brand-workspace-name" data-i18n="Current board Brand">Current board Brand</p>
                 </div>
               </div>
-              <p class="brand-workspace-support">Saved with the current Board. This snapshot supports its campaigns and AI without changing a Canonical Brand.</p>
+              <p class="brand-workspace-support" data-i18n="Saved with the current Board. This snapshot supports its campaigns and AI without changing a Canonical Brand.">Saved with the current Board. This snapshot supports its campaigns and AI without changing a Canonical Brand.</p>
             </div>
             <div class="brand-workspace-hero-side">
-              <div class="brand-workspace-readiness" aria-label="Brand readiness summary">
-                <span class="fk-pill">Readiness</span>
-                <strong id="brand-workspace-readiness-label">Brand signals pending</strong>
-                <small id="brand-workspace-readiness-detail">Complete the sections below to strengthen future campaign recommendations.</small>
+              <div class="brand-workspace-readiness" data-i18n-aria-label="Brand readiness summary" aria-label="Brand readiness summary">
+                <span class="fk-pill" data-i18n="Readiness">Readiness</span>
+                <strong id="brand-workspace-readiness-label" data-i18n="Brand signals pending">Brand signals pending</strong>
+                <small id="brand-workspace-readiness-detail" data-i18n="Complete the sections below to strengthen future campaign recommendations.">Complete the sections below to strengthen future campaign recommendations.</small>
               </div>
-              <button id="reset-brand-core-btn" class="fk-btn fk-btn-ghost" type="button">Reset Brand Core</button>
+              <button id="reset-brand-core-btn" class="fk-btn fk-btn-ghost" type="button" data-i18n="Reset Brand Core">Reset Brand Core</button>
             </div>
           </header>
           <div class="brand-workspace-body">
-            <div class="brand-core-canvas" id="brand-core-canvas" aria-label="Brand knowledge sections"></div>
+            <div class="brand-core-canvas" id="brand-core-canvas" data-i18n-aria-label="Brand knowledge sections" aria-label="Brand knowledge sections"></div>
             <aside class="brand-core-side fk-card">
               <span class="brand-workspace-kicker fk-badge">Editor</span>
-              <h3>Brand Core Details</h3>
-              <p class="brand-core-side-copy">Select a section to refine the Brand knowledge used by campaigns and AI.</p>
+              <h3 data-i18n="Brand Core Details">Brand Core Details</h3>
+              <p class="brand-core-side-copy" data-i18n="Select a section to refine the Brand knowledge used by campaigns and AI.">Select a section to refine the Brand knowledge used by campaigns and AI.</p>
               <h4 id="bc-editor-title">BRAND CORE</h4>
               <div id="bc-editor-panel"></div>
             </aside>
