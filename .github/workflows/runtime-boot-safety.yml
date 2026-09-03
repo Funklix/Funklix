@@ -151,6 +151,8 @@ jobs:
         run: npm run check:bw31.5.2
       - name: Check BW-32.1 Social Connector foundation
         run: npm run check:bw32.1
+      - name: Check BW-32.2 LinkedIn account connection
+        run: npm run check:bw32.2
       - name: Check dynamic AI Insights translations
         run: node scripts/check-bw25-1-dynamic-insights-translations.js
       - name: Check scoped German interface localization

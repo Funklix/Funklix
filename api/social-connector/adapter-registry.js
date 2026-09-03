@@ -9,4 +9,5 @@ function registry({allowTestAdapters=false}={}){
   return Object.freeze({register,invoke,has:(name)=>adapters.has(name)});
 }
 function inertTestAdapter(){return Object.assign(Object.create(null),{capabilities:['getCapabilities'],getCapabilities:async()=>Object.assign(Object.create(null),{ok:true,value:Object.freeze([])})});}
-module.exports={OPERATIONS,registry,inertTestAdapter};
+function defaultRegistry(options={}){const value=registry();value.register('linkedin',require('./linkedin-adapter').createLinkedInAdapter(options));return value;}
+module.exports={OPERATIONS,registry,defaultRegistry,inertTestAdapter};

@@ -1,0 +1,3 @@
+'use strict';
+const route=require('./social-connector-route');
+module.exports=async function(req,res){const id=route.requestId(req);if(req.method!=='POST')return route.send(res,405,{error:{code:'method_not_allowed',serverRequestId:id}});const owner=route.user(req);if(!owner)return route.send(res,401,{error:{code:'authentication_required',serverRequestId:id}});try{await route.ensure();const input=await route.body(req);const result=await route.service().disconnect({ownerAccountId:owner,connectionId:input.connectionId,serverRequestId:id});return route.send(res,result.ok?200:result.error.code==='connection_missing'?404:500,result);}catch{return route.send(res,400,{ok:false,error:{code:'connector_contract_invalid',phase:'disconnect',serverRequestId:id}});}};
