@@ -43,6 +43,7 @@
     "check:bw32.1": "node scripts/check-bw32-1-social-connector-foundation.js",
     "check:bw32.2": "node scripts/check-bw32-2-linkedin-connection.js",
     "check:bw32.2.1": "node scripts/check-bw32-2-1-linkedin-callback-recovery.js",
-    "check:bw32.2.2": "node scripts/check-bw32-2-2-linkedin-persistence.js"
+    "check:bw32.2.2": "node scripts/check-bw32-2-2-linkedin-persistence.js",
+    "check:bw32.2.3": "node scripts/check-bw32-2-3-linkedin-connection-state.js"
   }
 }

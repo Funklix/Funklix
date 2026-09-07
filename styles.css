@@ -7773,3 +7773,5 @@ html[data-theme="dark"] #node-type-picker .picker-option:disabled { background:v
 #linkedin-connection-result[data-state="warning"] { color:var(--fk-color-warning,#9a6700); }
 #linkedin-connection-result[data-state="error"] { color:var(--fk-color-danger,#c9372c); }
 @media (max-width:700px){#linkedin-connection-card{grid-template-columns:1fr 1fr}#linkedin-connection-card>strong,#linkedin-connection-card>div{grid-column:1/-1}#linkedin-connection-card button{width:100%}}
+.linkedin-disconnect-dialog{width:min(520px,calc(100vw - 32px));border:1px solid var(--fk-color-border-default);border-radius:var(--fk-radius-lg,16px);background:var(--fk-color-surface-elevated);color:var(--fk-color-text-primary);padding:var(--fk-space-6);box-shadow:var(--fk-shadow-lg)}
+.linkedin-disconnect-dialog::backdrop{background:rgba(20,26,52,.55)}.linkedin-disconnect-dialog h2{margin-top:0}.linkedin-disconnect-actions{display:flex;justify-content:flex-end;gap:var(--fk-space-3);margin-top:var(--fk-space-5)}.linkedin-disconnect-actions button{min-height:44px}@media(max-width:560px){.linkedin-disconnect-actions{flex-direction:column-reverse}.linkedin-disconnect-actions button{width:100%}}

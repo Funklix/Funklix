@@ -309,6 +309,12 @@
             <small data-i18n="Internal planning continues to work independently of social connections.">Internal planning continues to work independently of social connections.</small>
           </section>
         </dialog>
+        <dialog class="linkedin-disconnect-dialog" id="linkedin-disconnect-dialog" aria-labelledby="linkedin-disconnect-title" aria-describedby="linkedin-disconnect-description">
+          <h2 id="linkedin-disconnect-title" data-i18n="Disconnect LinkedIn?">Disconnect LinkedIn?</h2>
+          <p id="linkedin-disconnect-description" data-i18n="Funklix will remove its stored LinkedIn authorization. Existing Boards and internal plans remain unchanged, and you can reconnect later.">Funklix will remove its stored LinkedIn authorization. Existing Boards and internal plans remain unchanged, and you can reconnect later.</p>
+          <p id="linkedin-disconnect-error" class="settings-status" role="alert"></p>
+          <div class="linkedin-disconnect-actions"><button type="button" class="fk-btn fk-btn-secondary" id="linkedin-disconnect-cancel" data-i18n="Cancel">Cancel</button><button type="button" class="fk-btn fk-btn-danger" id="linkedin-disconnect-confirm" data-i18n="Disconnect LinkedIn">Disconnect LinkedIn</button></div>
+        </dialog>
       </aside>
 
       <main class="workspace-wrap">
@@ -860,6 +866,7 @@
     <script src="/funnel-simulator.js"></script>
     <script src="/persona-journey-simulator.js"></script>
     <script src="/content-workspace.js"></script>
+    <script src="/social-connections-settings.js"></script>
     <script src="/app.js"></script>
   </body>
 </html>
