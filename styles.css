@@ -106,6 +106,12 @@ html[data-theme="dark"] {
   transition: transform 140ms ease, box-shadow 160ms ease, background 160ms ease, border-color 160ms ease, color 160ms ease;
 }
 
+/* Social Connections owns visibility through the HTML hidden contract.  This
+   author rule must outrank component display rules such as .fk-btn. */
+#social-connections-settings [hidden] {
+  display: none !important;
+}
+
 .fk-btn:hover {
   background: var(--fk-color-surface-muted);
   box-shadow: var(--fk-shadow-md);

@@ -26,5 +26,6 @@ function project({configuration,row,now=Date.now()}){
  return validate({...base('needs_attention',true,[false,true,true]),...common,permissionState:scopes.includes('w_member_social')?'publishing_permission':'limited'});
 }
 function configurationKeyAvailable(configuration,version){return configuration.availableKeyVersions instanceof Set?configuration.availableKeyVersions.has(Number(version)):Number(version)===Number(configuration.keyVersion);}
-function unavailable(requestId){return validate({...base('service_unavailable',true,[false,false,false]),diagnostic:{operation:'settings_projection',phase:'storage',serverRequestId:requestId}});}
-module.exports={STATES,validate,project,unavailable};
+const DIAGNOSTIC_FIELDS=Object.freeze(['server_request_id','classification','phase','operation_category','schema_version','committed_state_category','timestamp']);
+function unavailable(requestId,context={}){const allowed=new Set(['schema_lock','schema_begin','schema_table_initialization','schema_constraint_migration','schema_commit','connection_projection','credential_projection','destination_projection','oauth_attempt_projection','response_construction','storage_unknown']);const diagnostic={server_request_id:requestId,classification:'storage_unavailable',phase:context.phase||'storage_unknown',operation_category:allowed.has(context.operation_category)?context.operation_category:'storage_unknown',schema_version:'1',committed_state_category:'unchanged',timestamp:new Date().toISOString()};return validate({...base('service_unavailable',true,[false,false,false]),diagnostic});}
+module.exports={STATES,DIAGNOSTIC_FIELDS,validate,project,unavailable};
