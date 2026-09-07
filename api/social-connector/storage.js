@@ -6,7 +6,7 @@ function account(value){if(!boundedText(value,320))throw connectorError('authent
 function owned(row,owner){if(!row)throw connectorError('connection_missing');if(row.owner_account_id!==owner)throw connectorError('account_mismatch');return row;}
 function createStorage({pool,boardAuthorizer,diagnostic}={}){
   const mark=(phase,operation_category)=>{if(diagnostic)Object.assign(diagnostic,{phase,operation_category});};
-  async function db(){const selected=pool||require('../_boards-storage').pool;mark('schema_initialization','schema_table_initialization');await ensureSocialConnectorSchema(selected);return selected;}
+  async function db(){const selected=pool||require('../_boards-storage').pool;mark('schema_initialization','schema_unknown');await ensureSocialConnectorSchema(selected,diagnostic);return selected;}
   async function one(ownerAccountId,table,id){account(ownerAccountId);if(!stableId(id))throw connectorError('connector_contract_invalid');const result=await (await db()).query(`SELECT * FROM ${table} WHERE id=$1 AND owner_account_id=$2`,[id,ownerAccountId]);return owned(result.rows[0],ownerAccountId);}
   return Object.freeze({
     getConnectedAccount:(owner,id)=>one(owner,'social_connected_accounts',id), getDestination:(owner,id)=>one(owner,'social_publishing_destinations',id), getPublishJob:(owner,id)=>one(owner,'social_publish_jobs',id),
