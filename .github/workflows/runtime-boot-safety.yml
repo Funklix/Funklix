@@ -155,6 +155,8 @@ jobs:
         run: npm run check:bw32.2
       - name: Check BW-32.2.1 LinkedIn callback recovery
         run: npm run check:bw32.2.1
+      - name: Check BW-32.2.2 LinkedIn persistence reconciliation
+        run: npm run check:bw32.2.2
       - name: Check dynamic AI Insights translations
         run: node scripts/check-bw25-1-dynamic-insights-translations.js
       - name: Check scoped German interface localization

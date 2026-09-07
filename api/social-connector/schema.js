@@ -2,6 +2,8 @@
 // Server-only. Keep pg behind the established lazy storage boundary so browser and clean checks can load contracts without it.
 let ready;
 const SCHEMA_SQL=`
+BEGIN;
+SELECT pg_advisory_xact_lock(32320202);
 CREATE TABLE IF NOT EXISTS social_token_secrets (
  id UUID PRIMARY KEY DEFAULT gen_random_uuid(), owner_account_id TEXT NOT NULL, platform TEXT NOT NULL CHECK(platform IN ('linkedin','instagram','facebook','x')),
  encrypted_payload TEXT NOT NULL CHECK(octet_length(encrypted_payload)<=32768), nonce TEXT NOT NULL, authentication_tag TEXT NOT NULL,
@@ -32,8 +34,14 @@ CREATE TABLE IF NOT EXISTS social_oauth_attempts (
 ALTER TABLE social_oauth_attempts ADD COLUMN IF NOT EXISTS last_confirmed_phase TEXT;
 ALTER TABLE social_oauth_attempts ADD COLUMN IF NOT EXISTS client_request_id TEXT;
 ALTER TABLE social_oauth_attempts ADD COLUMN IF NOT EXISTS server_request_id TEXT;
+ALTER TABLE social_oauth_attempts ALTER COLUMN return_path SET DEFAULT '/';
+UPDATE social_oauth_attempts SET return_path='/' WHERE return_path='/settings';
 ALTER TABLE social_oauth_attempts DROP CONSTRAINT IF EXISTS social_oauth_attempts_return_path_check;
-ALTER TABLE social_oauth_attempts ADD CONSTRAINT social_oauth_attempts_return_path_check CHECK(return_path = '/') NOT VALID;
+ALTER TABLE social_oauth_attempts ADD CONSTRAINT social_oauth_attempts_return_path_check CHECK(return_path = '/');
+ALTER TABLE social_oauth_attempts DROP CONSTRAINT IF EXISTS social_oauth_attempts_last_confirmed_phase_check;
+ALTER TABLE social_oauth_attempts ADD CONSTRAINT social_oauth_attempts_last_confirmed_phase_check CHECK(last_confirmed_phase IS NULL OR last_confirmed_phase IN ('callback_entered','schema_ready','state_loaded','state_validated','state_consumed','token_exchange_started','token_received','identity_resolved','credential_sealed','connection_transaction_started','token_secret_written','connected_account_written','destination_written','connection_committed','callback_result_created','redirect_created','completed'));
+ALTER TABLE social_connected_accounts ADD COLUMN IF NOT EXISTS last_oauth_attempt_id UUID;
+DO $$ BEGIN ALTER TABLE social_connected_accounts ADD CONSTRAINT social_connected_accounts_oauth_attempt_fk FOREIGN KEY(last_oauth_attempt_id) REFERENCES social_oauth_attempts(id) ON DELETE SET NULL; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 CREATE INDEX IF NOT EXISTS social_oauth_owner_idx ON social_oauth_attempts(owner_account_id,created_at DESC);
 CREATE TABLE IF NOT EXISTS social_publish_jobs (
  id UUID PRIMARY KEY DEFAULT gen_random_uuid(), owner_account_id TEXT NOT NULL, board_id UUID NOT NULL REFERENCES boards(id) ON DELETE RESTRICT, node_id TEXT NOT NULL, approved_fingerprint TEXT NOT NULL,
@@ -56,6 +64,7 @@ CREATE TABLE IF NOT EXISTS social_external_posts (
  UNIQUE(platform,external_post_id), UNIQUE(publish_job_id), FOREIGN KEY(destination_id,owner_account_id) REFERENCES social_publishing_destinations(id,owner_account_id) ON DELETE RESTRICT, FOREIGN KEY(publish_job_id,owner_account_id) REFERENCES social_publish_jobs(id,owner_account_id) ON DELETE RESTRICT
 );
 CREATE INDEX IF NOT EXISTS social_external_source_idx ON social_external_posts(owner_account_id,source_board_id,source_node_id);
+COMMIT;
 `;
 async function ensureSocialConnectorSchema(poolOverride){if(!ready){const pool=poolOverride||require('../_boards-storage').pool;ready=pool.query(SCHEMA_SQL).catch((error)=>{ready=null;throw error;});}return ready;}
 module.exports={SCHEMA_SQL,ensureSocialConnectorSchema};
