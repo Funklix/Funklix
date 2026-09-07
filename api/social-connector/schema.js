@@ -26,9 +26,14 @@ CREATE TABLE IF NOT EXISTS social_publishing_destinations (
 );
 CREATE INDEX IF NOT EXISTS social_destinations_owner_idx ON social_publishing_destinations(owner_account_id,status);
 CREATE TABLE IF NOT EXISTS social_oauth_attempts (
- id UUID PRIMARY KEY DEFAULT gen_random_uuid(), owner_account_id TEXT NOT NULL, platform TEXT NOT NULL CHECK(platform IN ('linkedin','instagram','facebook','x')), return_path TEXT NOT NULL CHECK(return_path ~ '^/settings'), state_hash TEXT NOT NULL UNIQUE,
+ id UUID PRIMARY KEY DEFAULT gen_random_uuid(), owner_account_id TEXT NOT NULL, platform TEXT NOT NULL CHECK(platform IN ('linkedin','instagram','facebook','x')), return_path TEXT NOT NULL CHECK(return_path = '/'), state_hash TEXT NOT NULL UNIQUE,
  pkce_verifier_reference TEXT, session_binding_fingerprint TEXT NOT NULL, failure_classification TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), expires_at TIMESTAMPTZ NOT NULL, consumed_at TIMESTAMPTZ, CHECK(expires_at>created_at)
 );
+ALTER TABLE social_oauth_attempts ADD COLUMN IF NOT EXISTS last_confirmed_phase TEXT;
+ALTER TABLE social_oauth_attempts ADD COLUMN IF NOT EXISTS client_request_id TEXT;
+ALTER TABLE social_oauth_attempts ADD COLUMN IF NOT EXISTS server_request_id TEXT;
+ALTER TABLE social_oauth_attempts DROP CONSTRAINT IF EXISTS social_oauth_attempts_return_path_check;
+ALTER TABLE social_oauth_attempts ADD CONSTRAINT social_oauth_attempts_return_path_check CHECK(return_path = '/') NOT VALID;
 CREATE INDEX IF NOT EXISTS social_oauth_owner_idx ON social_oauth_attempts(owner_account_id,created_at DESC);
 CREATE TABLE IF NOT EXISTS social_publish_jobs (
  id UUID PRIMARY KEY DEFAULT gen_random_uuid(), owner_account_id TEXT NOT NULL, board_id UUID NOT NULL REFERENCES boards(id) ON DELETE RESTRICT, node_id TEXT NOT NULL, approved_fingerprint TEXT NOT NULL,

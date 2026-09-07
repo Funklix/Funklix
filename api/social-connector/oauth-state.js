@@ -3,7 +3,8 @@ const crypto=require('crypto');
 const { exact, platform, boundedText, stableId }=require('./contracts');
 const { connectorError }=require('./errors');
 const MAX_TTL_MS=10*60*1000;
-function safeReturn(value){return typeof value==='string'&&value.length<=300&&/^\/(?!\/)(?:settings(?:[/?#].*)?)?$/.test(value);}
+// The deployed SPA entry point is the only OAuth return target.
+function safeReturn(value){return value==='/';}
 function create(input,{now=Date.now,randomBytes=crypto.randomBytes}={}){
   if(!exact(input,['ownerAccountId','platform','returnPath','sessionFingerprint'],['pkceVerifierReference','ttlMs'])||!boundedText(input.ownerAccountId,320)||!platform(input.platform)||!safeReturn(input.returnPath)||!boundedText(input.sessionFingerprint,128)||input.pkceVerifierReference!==undefined&&!stableId(input.pkceVerifierReference))throw connectorError('connector_contract_invalid');
   const ttl=input.ttlMs===undefined?300000:input.ttlMs;if(!Number.isInteger(ttl)||ttl<30000||ttl>MAX_TTL_MS)throw connectorError('connector_contract_invalid');const createdAt=now();
