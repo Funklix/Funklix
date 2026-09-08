@@ -16473,6 +16473,20 @@ function routeContentOperationsFeedback({ source, message, attempt }) {
   else { const host = el.contentWorkspaceSurface?.querySelector(".cw-feedback"); if (host) host.textContent = message; }
 }
 
+async function preflightLinkedInPublish(input) {
+  if (state.isDirty) return { ok: false, status: state.uiLanguage === "de" ? "Board zuerst speichern." : "Save the Board before publishing." };
+  const settingsResponse = await fetch("/api/social-connections", { credentials: "same-origin", headers: { accept: "application/json" } });
+  const settingsPayload = await settingsResponse.json();
+  const destinationId = settingsPayload?.social_connections?.linkedin?.destination_id;
+  if (!destinationId) return { ok: false, status: "connection_unavailable" };
+  const response = await fetch("/api/social-publishing/linkedin/preflight", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json", "x-client-request-id": input.clientRequestId }, body: JSON.stringify({ ...input, destinationId }) });
+  return response.json();
+}
+async function publishLinkedInNow(input) {
+  const response = await fetch("/api/social-publishing/linkedin/publish", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json", "x-client-request-id": input.clientRequestId }, body: JSON.stringify(input) });
+  return response.json();
+}
+
 function renderContentWorkspace() {
   if (!window.FunklixContentWorkspace || !el.contentWorkspaceSurface) return;
   const identity = contentWorkspaceIdentity();
@@ -16500,6 +16514,8 @@ function renderContentWorkspace() {
     onStale: message => { const feedback=el.contentWorkspaceSurface.querySelector(".cw-feedback"); if (feedback) feedback.textContent=message; },
     onTransition: applyContentWorkspaceTransition,
     onSchedule: applyContentWorkspaceSchedule,
+    onPublishPreflight: preflightLinkedInPublish,
+    onPublish: publishLinkedInNow,
     onPlanningFeedback: routeContentOperationsFeedback,
     onOpenNode(nodeId, openInspector, actionIdentity) {
       if (actionIdentity !== contentWorkspaceIdentity() || state.boardAccess?.canView === false || !getNode(nodeId)) return renderContentWorkspace();
