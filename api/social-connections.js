@@ -17,7 +17,7 @@ module.exports=async function(req,res){
  try{
   const rows=await createStorage({diagnostic}).listConnectionProjection(owner),row=rows.find(x=>x.platform==='linkedin'&&x.status!=='disconnected')||rows.find(x=>x.platform==='linkedin');
   diagnostic.phase='response_construction';diagnostic.operation_category='response_construction';
-  return res.end(JSON.stringify(contract.success({linkedin:settings.project({configuration:c,row}),others:['instagram','facebook','x'],serverRequestId,buildIdentity:diagnostic.build_identity})));
+  return res.end(JSON.stringify(contract.success({linkedin:settings.project({configuration:c,row}),others:['instagram','facebook','x'],serverRequestId,buildIdentity:diagnostic.build_identity,schemaMetadata:rows.schema})));
  }catch{
   res.statusCode=503;const linkedin=settings.unavailable(serverRequestId,diagnostic);
   return res.end(JSON.stringify(contract.serviceUnavailable({linkedin,serverRequestId})));
