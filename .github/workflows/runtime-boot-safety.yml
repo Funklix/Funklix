@@ -163,6 +163,8 @@ jobs:
         run: npm run check:bw32.2.5
       - name: Check BW-32.2.6 Social Connector schema recovery
         run: npm run check:bw32.2.6
+      - name: Check BW-32.2.9 OAuth phase migration recovery
+        run: npm run check:bw32.2.9
       - name: Check dynamic AI Insights translations
         run: node scripts/check-bw25-1-dynamic-insights-translations.js
       - name: Check scoped German interface localization
