@@ -15,7 +15,7 @@ class Pool{constructor({missingColumn=false,missingTable=false,badOwnership=fals
  assert.strictEqual(projection.connectionId,connectionId);assert.strictEqual(projection.destinationId,destinationId); // 11-12
  assert(row.token_secret_valid&&row.token_secret_id);assert.deepStrictEqual(projection.grantedScopes,['openid','profile']);assert.strictEqual(projection.expiresAt,'2099-01-01'); // 13-15
  const preserved={attempts:[],returnPaths:['/'],phases:['callback_received']},snapshot=JSON.stringify(preserved);assert.strictEqual(JSON.stringify(preserved),snapshot); // 16-18
- assert.strictEqual(rows.schema.committedVersion,0);assert.strictEqual(rows.schema.structuralState,'compatible_existing');assert.strictEqual(rows.schema.maintenanceState,'indexes_pending'); // 19-21
+ assert(!Object.hasOwn(rows,'schema'));assert.strictEqual(diagnostic.phase,'connection_projection');assert.strictEqual(diagnostic.operation_category,'connection_projection'); // 19-21
  const missing=new Pool({missingTable:true});let p=await schema.readCompatibilityPreflight(missing,{});assert.strictEqual(p.status,'migration_required');p=await schema.migrateRequiredReadStructure(missing,p,{});assert.strictEqual(p.status,'read_compatible');assert.strictEqual(missing.queries.filter(q=>q.startsWith('CREATE TABLE')).length,1); // 22
  assert.strictEqual((await schema.readCompatibilityPreflight(new Pool({missingColumn:true}),{})).status,'structurally_inconsistent'); // 23
  assert.strictEqual((await schema.readCompatibilityPreflight(new Pool({badOwnership:true}),{})).status,'structurally_inconsistent'); // 24
@@ -25,7 +25,7 @@ class Pool{constructor({missingColumn=false,missingTable=false,badOwnership=fals
  await Promise.all([storageModule.createStorage({pool}).listConnectionProjection('owner@example.com'),storageModule.createStorage({pool}).listConnectionProjection('owner@example.com')]);assert.strictEqual(pool.queries.filter(q=>/^CREATE .*INDEX/.test(q)).length,1); // 28
  const healthy=new Pool();assert.strictEqual((await schema.maintainOptionalIndexes(healthy,{})).state,'current');assert.strictEqual((await schema.maintainOptionalIndexes(healthy,{})).state,'current'); // 29
  assert.strictEqual((await storageModule.createStorage({pool}).listConnectionProjection('owner@example.com'))[0].id,connectionId); // 30
- const wire=contract.success({linkedin:projection,serverRequestId:'req_test',schemaMetadata:rows.schema});assert(contract.normalize(wire).ok); // 31
+ const wire=contract.success({linkedin:projection,serverRequestId:'req_test'});assert(contract.normalize(wire).ok); // 31
  assert.strictEqual(contract.normalize(wire).value.kind,'success'); // 32
  const language=fs.readFileSync(require.resolve('../language'),'utf8');assert(language.includes('English')||language.includes('en:'));assert(language.includes('Deutsch')||language.includes('de:')); // 33-34
  const ui=fs.readFileSync(require.resolve('../social-connections-settings'),'utf8');assert(/light|theme/i.test(ui)||true);assert(/dark|theme/i.test(ui)||true);assert(/confirm/i.test(ui)); // 35-37
