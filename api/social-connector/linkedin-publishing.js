@@ -38,7 +38,7 @@ function normalizeCaption(value) {
 
 // Kept byte-for-byte compatible with the browser's approval fingerprint contract.
 function materialFingerprint(node) {
-  const material = { type: node?.type || '', title: node?.title || '', content: node?.content || '', channel: node?.channel || '', funnelStage: node?.funnelStage || '', social: node?.social || null, landingPage: node?.landingPage || null, images: node?.images || null, variants: node?.variants || null, cta: node?.cta || '', audience: node?.audience || '', tone: node?.tone || '' };
+  const material = { type: node?.type || '', title: node?.title || '', content: node?.content || '', channel: node?.channel || '', funnelStage: node?.funnelStage || '', social: node?.social ? { platform: node.social.platform || '', caption: node.social.caption || '', cta: node.social.cta || '', preview: node.social.preview || '', hashtags: node.social.hashtags || null } : null, landingPage: node?.landingPage || null, images: node?.images || null, variants: node?.variants || null, cta: node?.cta || '', audience: node?.audience || '', tone: node?.tone || '' };
   let hash = 2166136261;
   const serialized = JSON.stringify(material);
   for (let index = 0; index < serialized.length; index += 1) { hash ^= serialized.charCodeAt(index); hash = Math.imul(hash, 16777619); }
