@@ -51,6 +51,7 @@
     "check:bw32.2.10": "node scripts/check-bw32-2-10-social-settings-response-contract.js",
     "check:bw32.2.11": "node scripts/check-bw32-2-11-social-settings-read-availability.js",
     "check:bw32.2.12": "node scripts/check-bw32-2-12-direct-social-settings-read.js",
-    "check:bw32.3.1": "node scripts/check-bw32-3-1-linkedin-text-publish-now.js"
+    "check:bw32.3.1": "node scripts/check-bw32-3-1-linkedin-text-publish-now.js",
+    "check:bw32.3.2": "node scripts/check-bw32-3-2-stale-approval-recovery.js"
   }
 }

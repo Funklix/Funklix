@@ -17095,7 +17095,13 @@ el.nodeForm.addEventListener("input", (event) => {
   if (event.target === el.inputs.type) node.type = el.inputs.type.value;
   if (event.target === el.inputs.status) {
     const previousStatus = normalizeNodeStatus(node.status);
-    node.status = normalizeNodeStatus(el.inputs.status.value);
+    const requestedStatus = normalizeNodeStatus(el.inputs.status.value);
+    if (previousStatus === "Approved" && requestedStatus === "Draft" && window.FunklixContentWorkspace?.openTransition) {
+      el.inputs.status.value = previousStatus;
+      window.FunklixContentWorkspace.openTransition(node.id, "Draft", el.inputs.status);
+      return;
+    }
+    node.status = requestedStatus;
     if (previousStatus !== node.status) recordStatusChangedActivity(node, nodeStatusLabel(node.status));
   }
   if (event.target === el.inputs.title) node.title = el.inputs.title.value;
