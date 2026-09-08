@@ -20,9 +20,9 @@ function project({configuration,row,now=Date.now()}){
  const credential=!!row.token_secret_id&&!!row.token_secret_exists&&!!row.token_secret_valid&&keyAvailable&&!expired;
  const destination=!!row.destination_exists&&!!row.destination_active;
  const identity=typeof row.external_display_name==='string'&&!!row.external_display_name&&row.account_type==='personal';
- const common={connectionId:row.id,displayName:row.external_display_name||null,accountType:row.account_type||null,expiresAt:row.token_expires_at||null,attemptId:row.last_oauth_attempt_id||null,credentialCoherent:credential,destinationCoherent:destination,tokenExpired:expired};
+ const common={connectionId:row.id,destinationId:row.destination_id||null,displayName:row.external_display_name||null,accountType:row.account_type||null,connectionStatus:row.status,grantedScopes:Array.isArray(row.granted_scopes)?row.granted_scopes:[],expiresAt:row.token_expires_at||null,attemptId:row.last_oauth_attempt_id||null,credentialCoherent:credential,destinationCoherent:destination,tokenExpired:expired};
  const scopes=Array.isArray(row.granted_scopes)?row.granted_scopes:[];
- if(row.status==='connected'&&credential&&destination&&identity){const publishing=scopes.includes('w_member_social');return validate({...base(publishing?'connected':'connected_limited',true,[false,true,true]),...common,permissionState:publishing?'publishing_permission':'limited'});}
+ if(row.status==='connected'&&credential&&destination&&identity){const publishing=scopes.includes('w_member_social');return validate({...base(publishing?'connected':'connected_limited',true,[false,true,true]),...common,publishAllowed:publishing,permissionState:publishing?'publishing_permission':'limited',recoveryActions:publishing?[]:['reconnect']});}
  return validate({...base('needs_attention',true,[false,true,true]),...common,permissionState:scopes.includes('w_member_social')?'publishing_permission':'limited'});
 }
 function configurationKeyAvailable(configuration,version){return configuration.availableKeyVersions instanceof Set?configuration.availableKeyVersions.has(Number(version)):Number(version)===Number(configuration.keyVersion);}
