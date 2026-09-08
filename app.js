@@ -16487,6 +16487,9 @@ async function publishLinkedInNow(input) {
   return response.json();
 }
 
+const approvalPersistenceByNode = new Map();
+let contentWorkspaceFocusNodeId = "";
+
 function renderContentWorkspace() {
   if (!window.FunklixContentWorkspace || !el.contentWorkspaceSurface) return;
   const identity = contentWorkspaceIdentity();
@@ -16506,6 +16509,8 @@ function renderContentWorkspace() {
     canOpenInspector: state.boardAccess?.canView !== false,
     canCopy: state.boardAccess?.canView !== false,
     dirty: !!state.isDirty,
+    focusNodeId: contentWorkspaceFocusNodeId,
+    approvalPersistence: id => approvalPersistenceByNode.get(id) || "saved",
     getNode: id => getNode(id),
     resolveCurrentContentNode,
     copyText: value => navigator.clipboard.writeText(value),
@@ -16513,6 +16518,8 @@ function renderContentWorkspace() {
     onCanvas: () => setActiveView("board"),
     onStale: message => { const feedback=el.contentWorkspaceSurface.querySelector(".cw-feedback"); if (feedback) feedback.textContent=message; },
     onTransition: applyContentWorkspaceTransition,
+    onTransitionComplete: nodeId => { contentWorkspaceFocusNodeId = nodeId; },
+    onFocusRestored: nodeId => { if (contentWorkspaceFocusNodeId === nodeId) contentWorkspaceFocusNodeId = ""; },
     onSchedule: applyContentWorkspaceSchedule,
     onPublishPreflight: preflightLinkedInPublish,
     onPublish: publishLinkedInNow,
@@ -16581,7 +16588,7 @@ function applyContentWorkspaceSchedule(prepared = {}) {
 // BW-31.2's sole Content Workspace mutation boundary. The dialog's prepared
 // action is only a capability token; this path always resolves the live node,
 // permission and material revision again before changing canonical state.
-function applyContentWorkspaceTransition(prepared = {}) {
+async function applyContentWorkspaceTransition(prepared = {}) {
   const workspace = window.FunklixContentWorkspace;
   const accountId = state.user?.email || "";
   const boardId = state.currentBoardId || "";
@@ -16602,6 +16609,7 @@ function applyContentWorkspaceTransition(prepared = {}) {
     owner: { email: node.ownerEmail || "", name: node.ownerName || "" }, nodeId: node.id, nodeExists: true,
     fingerprint: prepared.fingerprint });
   if (decision.blockingReasonCodes.length) return { ok: false, reason: decision.blockingReasonCodes[0] };
+  if (prepared.toStatus === "Approved" && decision.confirmationRequired && prepared.warningAcknowledged !== true) return { ok: false, reason: "WARNING_ACKNOWLEDGEMENT_REQUIRED" };
   const note = typeof prepared.note === "string" ? prepared.note.trim() : "";
   if (decision.note.required && (!note || note.length > workspace.NOTE_MAX)) return { ok: false, reason: "NOTE_REQUIRED" };
   node.status = prepared.toStatus;
@@ -16610,13 +16618,25 @@ function applyContentWorkspaceTransition(prepared = {}) {
     node.reviewNotes = [...existing, { note: note.slice(0, workspace.NOTE_MAX), authorName: state.user?.name || accountId,
       authorEmail: accountId, timestamp: new Date().toISOString(), boardId, nodeId: node.id }];
   }
-  if (prepared.toStatus === "Approved") node.approvedContentFingerprint = workspace.materialFingerprint(node);
+  if (prepared.toStatus === "Approved") {
+    node.approvedContentFingerprint = workspace.materialFingerprint(node);
+    node.approvalMetadata = { approvedByAccountId: accountId.slice(0, 120), approvedByName: String(state.user?.name || accountId).slice(0, 80), approvedAt: new Date().toISOString(), boardId, nodeId: node.id };
+  }
   else if (prepared.toStatus === "Draft") delete node.approvedContentFingerprint;
   recordStatusChangedActivity(node, nodeStatusLabel(node.status));
   updateNodeCard(node);
   if (state.selectedPrimary === node.id) fillInspector(node);
   updateListView();
   markUnsaved();
+  contentWorkspaceFocusNodeId = node.id;
+  if (prepared.toStatus === "Approved") {
+    approvalPersistenceByNode.set(node.id, "saving");
+    renderContentWorkspace();
+    const saved = await saveBoardToServer("canonical-content-approval");
+    approvalPersistenceByNode.set(node.id, saved ? "saved" : "error");
+    renderContentWorkspace();
+    return { ok: true, nodeId: node.id, status: node.status, saved, saving: !saved };
+  }
   renderContentWorkspace();
   return { ok: true, nodeId: node.id, status: node.status };
 }
@@ -17096,13 +17116,12 @@ el.nodeForm.addEventListener("input", (event) => {
   if (event.target === el.inputs.status) {
     const previousStatus = normalizeNodeStatus(node.status);
     const requestedStatus = normalizeNodeStatus(el.inputs.status.value);
-    if (previousStatus === "Approved" && requestedStatus === "Draft" && window.FunklixContentWorkspace?.openTransition) {
+    if (previousStatus !== requestedStatus && window.FunklixContentWorkspace?.openTransition) {
       el.inputs.status.value = previousStatus;
-      window.FunklixContentWorkspace.openTransition(node.id, "Draft", el.inputs.status);
+      if (previousStatus === "Approved" && requestedStatus === "Draft") window.FunklixContentWorkspace.openTransition(node.id, "Draft", el.inputs.status);
+      else window.FunklixContentWorkspace.openTransition(node.id, requestedStatus, el.inputs.status);
       return;
     }
-    node.status = requestedStatus;
-    if (previousStatus !== node.status) recordStatusChangedActivity(node, nodeStatusLabel(node.status));
   }
   if (event.target === el.inputs.title) node.title = el.inputs.title.value;
   if (event.target === el.inputs.content) node.content = el.inputs.content.value;
