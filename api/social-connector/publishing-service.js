@@ -5,7 +5,7 @@ const { pool: defaultPool } = require('../_boards-storage');
 const { getBoardAccess } = require('../_board-access');
 const vault = require('./token-vault');
 const { createLinkedInAdapter } = require('./linkedin-adapter');
-const { ACTION_VERSION, ACTIVE_JOB_STATES, PERSON_URN, enabled, materialFingerprint, evaluateLinkedInTextPublishEligibility, digest, idempotencyKey, externalUrl } = require('./linkedin-publishing');
+const { ACTION_VERSION, ACTIVE_JOB_STATES, PERSON_URN, enabled, materialFingerprint, evaluateLinkedInTextPublishEligibility, approvalBoundary, digest, idempotencyKey, externalUrl } = require('./linkedin-publishing');
 
 function authorReference(value) {
   if (PERSON_URN.test(value || '')) return value;
@@ -44,8 +44,9 @@ function createPublishingService({ pool = defaultPool, adapter = createLinkedInA
   async function preflight(input, actor) {
     const state = await resolve(input, actor);
     const latestPost = state.node ? (await pool.query(`SELECT platform,delivery_state,published_at,external_url,approved_fingerprint FROM public.social_external_posts WHERE owner_account_id=$1 AND source_board_id=$2 AND source_node_id=$3 ORDER BY published_at DESC NULLS LAST LIMIT 1`, [input.ownerAccountId, input.boardId, input.nodeId])).rows[0] : null;
-    if (state.node?.approvedContentFingerprint !== input.expectedApprovedFingerprint) return { ok: false, status: 'approval_stale', blockingCodes: ['approval_stale'] };
-    return { ok: state.evaluation.eligible, status: state.evaluation.code, blockingCodes: state.evaluation.blockingCodes, confirmationRequired: state.evaluation.eligible, caption: state.evaluation.caption, characterCount: state.evaluation.characterCount, profileDisplayName: state.connection?.external_display_name || null, destination: state.destination ? { id: state.destination.id, type: 'personal', label: state.destination.display_name } : null, approvedFingerprint: state.node?.approvedContentFingerprint || null, readiness: readiness(state.node), editorialStatus: state.node?.status || null, provenance: latestPost ? { platform: latestPost.platform, deliveryState: latestPost.delivery_state, destinationType: 'personal', publishedAt: latestPost.published_at, externalUrl: latestPost.external_url, currentRevisionMatches: latestPost.approved_fingerprint === state.fingerprint } : null };
+    const boundary = approvalBoundary(input, state);
+    if (boundary.rejection) return { ok: false, status: 'approval_stale', classification: 'approval_stale', rejectionCategory: boundary.rejection, blockingCodes: ['approval_stale'], diagnostic: boundary.diagnostic };
+    return { ok: state.evaluation.eligible, status: state.evaluation.code, blockingCodes: state.evaluation.blockingCodes, diagnostic: boundary.diagnostic, confirmationRequired: state.evaluation.eligible, caption: state.evaluation.caption, characterCount: state.evaluation.characterCount, profileDisplayName: state.connection?.external_display_name || null, destination: state.destination ? { id: state.destination.id, type: 'personal', label: state.destination.display_name } : null, approvedFingerprint: state.node?.approvedContentFingerprint || null, readiness: readiness(state.node), editorialStatus: state.node?.status || null, provenance: latestPost ? { platform: latestPost.platform, deliveryState: latestPost.delivery_state, destinationType: 'personal', publishedAt: latestPost.published_at, externalUrl: latestPost.external_url, currentRevisionMatches: latestPost.approved_fingerprint === state.fingerprint } : null };
   }
 
   async function publish(input, actor) {

@@ -16475,6 +16475,11 @@ function routeContentOperationsFeedback({ source, message, attempt }) {
 
 async function preflightLinkedInPublish(input) {
   if (state.isDirty) return { ok: false, status: state.uiLanguage === "de" ? "Board zuerst speichern." : "Save the Board before publishing." };
+  const lifecycleGeneration = ++publishingLifecycleGeneration;
+  const approvalState = approvalPersistenceByNode.get(input.nodeId) || "not_requested";
+  input = { ...input, expectedBoardRevision: state.lastKnownUpdatedAt || undefined,
+    saveConfirmationCategory: approvalState === "saving" ? "request_pending" : approvalState === "saved" ? "request_succeeded" : approvalState === "error" ? "request_failed" : approvalState,
+    nodeMaterialNormalizationCategory: approvalNormalizationByNode.get(input.nodeId) || "unknown", requestLifecycleGeneration: lifecycleGeneration };
   const settingsResponse = await fetch("/api/social-connections", { credentials: "same-origin", headers: { accept: "application/json" } });
   const settingsPayload = await settingsResponse.json();
   const destinationId = settingsPayload?.social_connections?.linkedin?.destination_id;
@@ -16488,6 +16493,8 @@ async function publishLinkedInNow(input) {
 }
 
 const approvalPersistenceByNode = new Map();
+const approvalNormalizationByNode = new Map();
+let publishingLifecycleGeneration = 0;
 let contentWorkspaceFocusNodeId = "";
 
 function renderContentWorkspace() {
@@ -16510,7 +16517,8 @@ function renderContentWorkspace() {
     canCopy: state.boardAccess?.canView !== false,
     dirty: !!state.isDirty,
     focusNodeId: contentWorkspaceFocusNodeId,
-    approvalPersistence: id => approvalPersistenceByNode.get(id) || "saved",
+    approvalPersistence: id => approvalPersistenceByNode.get(id) || "not_requested",
+    requestLifecycleGeneration: publishingLifecycleGeneration,
     getNode: id => getNode(id),
     resolveCurrentContentNode,
     copyText: value => navigator.clipboard.writeText(value),
@@ -16630,6 +16638,15 @@ async function applyContentWorkspaceTransition(prepared = {}) {
   markUnsaved();
   contentWorkspaceFocusNodeId = node.id;
   if (prepared.toStatus === "Approved") {
+    const liveJson = JSON.stringify(node);
+    const persistedNode = sanitizeNodeForPersistence(node);
+    const serializedNode = JSON.parse(JSON.stringify(persistedNode));
+    const liveImages = Array.isArray(node.images) ? node.images : [];
+    const unsupportedImage = liveImages.some(image => typeof image?.url === "string" && (image.url.startsWith("blob:") || image.url.startsWith("data:")));
+    const hasUndefined = Object.values(node).some(value => value === undefined);
+    const retainedReconstructed = liveImages.some((image, index) => serializedNode.images?.[index] && JSON.stringify(image) !== JSON.stringify(serializedNode.images[index]));
+    const materialChanged = workspace.materialFingerprint(node) !== workspace.materialFingerprint(serializedNode);
+    approvalNormalizationByNode.set(node.id, unsupportedImage ? "unsupported_image_removed" : hasUndefined ? "undefined_removed" : retainedReconstructed ? "persistence_normalized" : materialChanged || liveJson !== JSON.stringify(serializedNode) ? "persistence_normalized" : "unchanged");
     approvalPersistenceByNode.set(node.id, "saving");
     renderContentWorkspace();
     const saved = await saveBoardToServer("canonical-content-approval");

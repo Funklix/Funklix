@@ -53,6 +53,7 @@
     "check:bw32.2.12": "node scripts/check-bw32-2-12-direct-social-settings-read.js",
     "check:bw32.3.1": "node scripts/check-bw32-3-1-linkedin-text-publish-now.js",
     "check:bw32.3.2": "node scripts/check-bw32-3-2-stale-approval-recovery.js",
-    "check:bw32.3.3": "node scripts/check-bw32-3-3-canonical-reapproval.js"
+    "check:bw32.3.3": "node scripts/check-bw32-3-3-canonical-reapproval.js",
+    "check:bw32.3.5": "node scripts/check-bw32-3-5-approval-fingerprint-diagnostics.js"
   }
 }

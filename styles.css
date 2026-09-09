@@ -7783,3 +7783,7 @@ html[data-theme="dark"] #node-type-picker .picker-option:disabled { background:v
 .linkedin-disconnect-dialog::backdrop{background:rgba(20,26,52,.55)}.linkedin-disconnect-dialog h2{margin-top:0}.linkedin-disconnect-actions{display:flex;justify-content:flex-end;gap:var(--fk-space-3);margin-top:var(--fk-space-5)}.linkedin-disconnect-actions button{min-height:44px}@media(max-width:560px){.linkedin-disconnect-actions{flex-direction:column-reverse}.linkedin-disconnect-actions button{width:100%}}
 
 .cw-publish-preview{white-space:pre-wrap;overflow-wrap:anywhere;max-height:300px;overflow:auto;margin:0;padding:12px;border:1px solid var(--fk-border,#dce1eb);border-radius:9px;background:var(--fk-surface-muted,#f2f4f8);font:inherit}.cw-publish-result:not(:empty){padding:10px;border-radius:8px;background:var(--fk-surface-muted,#f2f4f8)}@media(prefers-reduced-motion:reduce){.cw-dialog-backdrop,.cw-dialog{animation:none!important;transition:none!important}}
+
+/* BW-32.3.5 node-bound approval diagnostics */
+.cw-stale-approval [data-copy-approval-diagnostics] { margin-inline-start: .5rem; }
+@media(max-width:720px) { .cw-stale-approval [data-copy-approval-diagnostics] { margin: .5rem 0 0; width: 100%; } }
