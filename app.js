@@ -16597,27 +16597,53 @@ function applyContentWorkspaceSchedule(prepared = {}) {
 // action is only a capability token; this path always resolves the live node,
 // permission and material revision again before changing canonical state.
 async function requestAuthoritativeContentApproval(node, prepared, accountId, boardId) {
-  const contract = window.FunklixApprovalMaterialV2;
-  if (!contract) return { ok: false, reason: "APPROVAL_VERIFICATION_FAILED" };
+  const startedAt = new Date().toISOString();
+  const clientRequestId = `approve_${Date.now().toString(36)}_${Math.random().toString(36).slice(2,10)}`;
+  const lifecycleGeneration = state.boardLoadGeneration;
+  const diagnostic = { timestamp: startedAt, client_request_id: clientRequestId, server_request_id: "", phase: "prepare",
+    classification: "approval_failure", failure_category: "unexpected_client_error", action_generation: prepared.actionGeneration || 0,
+    card_generation: prepared.cardGeneration || 0, node_resolution_category: "resolved", board_resolution_category: "resolved",
+    transition_dialog_category: "confirmed", shared_contract_category: "unknown", browser_hash_category: "not_started",
+    approval_request_category: "not_started", response_contract_category: "not_received", authoritative_reload_category: "not_started",
+    pending_state_release_category: "released" };
+  const fail = (reason, failureCategory, phase) => ({ ok: false, reason, recoverable: true, phase, failureCategory, diagnostic: { ...diagnostic, phase, failure_category: failureCategory } });
   approvalPersistenceByNode.set(node.id, "saving"); renderContentWorkspace();
   try {
-    const expectedMaterialFingerprint = await contract.fingerprint(sanitizeNodeForPersistence(node));
-    const clientRequestId = `approve_${Date.now().toString(36)}_${Math.random().toString(36).slice(2,10)}`;
-    const response = await fetch('/api/content-review/approve', { method:'POST', headers:{'Content-Type':'application/json','X-Client-Request-Id':clientRequestId}, body:JSON.stringify({boardId,nodeId:node.id,expectedCurrentStatus:'In Review',expectedMaterialFingerprint,clientRequestId,warningAcknowledged:prepared.warningAcknowledged===true}) });
-    const result = await response.json().catch(() => ({}));
-    if (!response.ok || !result.ok || result.fingerprint !== expectedMaterialFingerprint || result.fingerprintVersion !== 'v2') throw new Error('approval_write_failed');
-    approvalPersistenceByNode.set(node.id, "verifying"); renderContentWorkspace();
-    const reload = await fetch(`/api/boards/${encodeURIComponent(boardId)}`, {headers:{Accept:'application/json'},cache:'no-store'});
-    const savedBoard = await reload.json().catch(() => ({}));
+    const contract = window.FunklixApprovalMaterialV2;
+    if (!contract?.fingerprint || !contract?.isFingerprint) { diagnostic.shared_contract_category = "unavailable"; return fail("APPROVAL_VERIFICATION_FAILED", "shared_contract_unavailable", "contract"); }
+    diagnostic.shared_contract_category = "available"; diagnostic.phase = "browser_hash";
+    let expectedMaterialFingerprint;
+    try { expectedMaterialFingerprint = await contract.fingerprint(sanitizeNodeForPersistence(node)); }
+    catch (_) { diagnostic.browser_hash_category = "failed"; return fail("APPROVAL_VERIFICATION_FAILED", "browser_hash_failed", "browser_hash"); }
+    if (!contract.isFingerprint(expectedMaterialFingerprint) || typeof expectedMaterialFingerprint !== "string") { diagnostic.browser_hash_category = "invalid"; return fail("APPROVAL_VERIFICATION_FAILED", "browser_hash_failed", "browser_hash"); }
+    diagnostic.browser_hash_category = "succeeded"; diagnostic.phase = "approval_request"; diagnostic.approval_request_category = "started";
+    const response = await fetch('/api/content-review/approve', { method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json','X-Client-Request-Id':clientRequestId}, body:JSON.stringify({boardId,nodeId:node.id,expectedCurrentStatus:'In Review',expectedMaterialFingerprint,clientRequestId,warningAcknowledged:prepared.warningAcknowledged===true}) }).catch(() => null);
+    if (!response) { diagnostic.approval_request_category = "network_failed"; return fail("APPROVAL_VERIFICATION_FAILED", "approval_request_failed", "approval_request"); }
+    diagnostic.server_request_id = String(response.headers?.get?.('x-request-id') || '').slice(0,128);
+    const result = await response.json().catch(() => null);
+    if (!result || typeof result !== 'object') { diagnostic.response_contract_category = "invalid"; return fail("APPROVAL_VERIFICATION_FAILED", "invalid_response", "response"); }
+    diagnostic.response_contract_category = "received";
+    if (response.status === 401) return fail("PERMISSION_DENIED", "authentication_required", "response");
+    if (!response.ok || !result.ok) return fail("APPROVAL_VERIFICATION_FAILED", response.ok ? "approval_rejected" : "approval_request_failed", "response");
+    if (result.fingerprint !== expectedMaterialFingerprint || result.fingerprintVersion !== 'v2' || typeof result.boardRevision !== 'string') { diagnostic.response_contract_category = "invalid"; return fail("APPROVAL_VERIFICATION_FAILED", "invalid_response", "response"); }
+    approvalPersistenceByNode.set(node.id, "verifying"); renderContentWorkspace(); diagnostic.phase = "authoritative_reload"; diagnostic.authoritative_reload_category = "started";
+    let reload;
+    try { reload = await fetch(`/api/boards/${encodeURIComponent(boardId)}`, {credentials:'same-origin',headers:{Accept:'application/json'},cache:'no-store'}); }
+    catch (_) { diagnostic.authoritative_reload_category = "failed"; return fail("APPROVAL_VERIFICATION_FAILED", "authoritative_reload_failed", "authoritative_reload"); }
+    const savedBoard = await reload.json().catch(() => null);
+    if (!reload.ok || !savedBoard || state.currentBoardId !== boardId || state.boardLoadGeneration !== lifecycleGeneration) { diagnostic.authoritative_reload_category = "stale_or_failed"; return fail("BOARD_CHANGED", "authoritative_reload_failed", "authoritative_reload"); }
     const savedNodes = Array.isArray(savedBoard?.canvas_json) ? savedBoard.canvas_json : savedBoard?.canvas_json?.nodes;
     const savedNode = Array.isArray(savedNodes) ? savedNodes.find(candidate => candidate?.id === node.id) : null;
-    if (!reload.ok || !savedNode || savedNode.approvedContentFingerprint !== result.fingerprint || savedNode.status !== 'Approved' || savedBoard.updated_at !== result.boardRevision) throw new Error('authoritative_reload_failed');
-    if (await contract.fingerprint(savedNode) !== result.fingerprint) throw new Error('authoritative_material_mismatch');
+    if (!savedNode) { diagnostic.authoritative_reload_category = "node_missing"; return fail("NODE_DELETED", "node_reconciliation_failed", "node_reconciliation"); }
+    if (savedNode.approvedContentFingerprint !== result.fingerprint || savedNode.status !== 'Approved' || savedBoard.updated_at !== result.boardRevision) { diagnostic.authoritative_reload_category = "mismatch"; return fail("APPROVAL_VERIFICATION_FAILED", "node_reconciliation_failed", "node_reconciliation"); }
+    if (await contract.fingerprint(savedNode) !== result.fingerprint) { diagnostic.authoritative_reload_category = "material_mismatch"; return fail("authoritative_material_mismatch", "node_reconciliation_failed", "node_reconciliation"); }
+    diagnostic.authoritative_reload_category = "verified";
     Object.keys(node).forEach(key => delete node[key]); Object.assign(node,savedNode); state.lastKnownUpdatedAt=result.boardRevision;
     approvalPersistenceByNode.set(node.id,"saved"); approvalNormalizationByNode.set(node.id,"unchanged");
     updateNodeCard(node); if(state.selectedPrimary===node.id)fillInspector(node); updateListView(); contentWorkspaceFocusNodeId=node.id; renderContentWorkspace();
     return {ok:true,nodeId:node.id,status:'Approved',saved:true,boardRevision:result.boardRevision,approvedContentFingerprint:result.fingerprint};
-  } catch { approvalPersistenceByNode.set(node.id,"error"); renderContentWorkspace(); return {ok:false,reason:"APPROVAL_VERIFICATION_FAILED",recoverable:true}; }
+  } catch (_) { return fail("APPROVAL_VERIFICATION_FAILED", "unexpected_client_error", diagnostic.phase || "client"); }
+  finally { if (approvalPersistenceByNode.get(node.id) !== "saved") approvalPersistenceByNode.set(node.id,"error"); renderContentWorkspace(); }
 }
 
 async function applyContentWorkspaceTransition(prepared = {}) {
