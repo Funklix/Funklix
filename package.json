@@ -55,6 +55,7 @@
     "check:bw32.3.2": "node scripts/check-bw32-3-2-stale-approval-recovery.js",
     "check:bw32.3.3": "node scripts/check-bw32-3-3-canonical-reapproval.js",
     "check:bw32.3.5": "node scripts/check-bw32-3-5-approval-fingerprint-diagnostics.js",
-    "check:bw32.3.6": "node scripts/check-bw32-3-6-authoritative-v2-approval.js"
+    "check:bw32.3.6": "node scripts/check-bw32-3-6-authoritative-v2-approval.js",
+    "check:bw32.3.7": "node scripts/check-bw32-3-7-approval-action.js"
   }
 }

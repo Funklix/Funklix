@@ -7787,3 +7787,5 @@ html[data-theme="dark"] #node-type-picker .picker-option:disabled { background:v
 /* BW-32.3.5 node-bound approval diagnostics */
 .cw-stale-approval [data-copy-approval-diagnostics] { margin-inline-start: .5rem; }
 @media(max-width:720px) { .cw-stale-approval [data-copy-approval-diagnostics] { margin: .5rem 0 0; width: 100%; } }
+
+.cw-approval-failure{display:grid;gap:8px;padding:10px;border-left:4px solid var(--fk-danger,#a52b35);border-radius:8px;background:color-mix(in srgb,var(--fk-danger,#a52b35) 9%,var(--fk-surface,#fff));font-size:.82rem}.cw-approval-failure>div{display:flex;gap:8px;flex-wrap:wrap}
