@@ -79,6 +79,47 @@ function evaluateLinkedInTextPublishEligibility(input = {}) {
   return Object.freeze({ eligible: blockingCodes.length === 0, code: blockingCodes[0] || 'ready', blockingCodes, caption: caption.ok ? caption.caption : null, characterCount: caption.ok ? caption.characterCount : 0 });
 }
 
+const FINGERPRINT = /^v(\d+)-[0-9a-f]{1,16}$/;
+function fingerprintState(value) {
+  if (value == null || value === '') return { presence: 'missing', version: 'missing' };
+  if (typeof value !== 'string' || !FINGERPRINT.test(value)) return { presence: 'invalid', version: 'unknown' };
+  const version = value.match(FINGERPRINT)[1];
+  return { presence: 'present', version: version === '1' ? 'v1' : version === '2' ? 'v2' : 'unknown' };
+}
+function comparison(left, right) { return left.presence === 'present' && right.presence === 'present' ? (left.value === right.value ? 'match' : 'mismatch') : 'unavailable'; }
+function approvalBoundary(input, state) {
+  const submitted = { ...fingerprintState(input.expectedApprovedFingerprint), value: input.expectedApprovedFingerprint };
+  const storedValue = state.node?.approvedContentFingerprint;
+  const stored = { ...fingerprintState(storedValue), value: storedValue };
+  const recalculated = { ...fingerprintState(state.fingerprint), value: state.fingerprint };
+  const expectedRevision = typeof input.expectedBoardRevision === 'string' && input.expectedBoardRevision ? 'present' : 'missing';
+  const authoritativeRevision = typeof state.board?.updated_at === 'string' && state.board.updated_at ? 'present' : 'missing';
+  const revision = expectedRevision === 'missing' ? 'expected_missing' : authoritativeRevision === 'missing' ? 'authoritative_missing' : input.expectedBoardRevision === state.board.updated_at ? 'match' : 'mismatch';
+  let rejection = null;
+  if (!state.node) rejection = 'node_unresolved';
+  else if (state.node.status !== 'Approved') rejection = 'approval_status_invalid';
+  else if (submitted.presence === 'missing') rejection = 'submitted_fingerprint_missing';
+  else if (submitted.presence === 'invalid') rejection = 'submitted_fingerprint_invalid';
+  else if (stored.presence === 'missing') rejection = 'stored_fingerprint_missing';
+  else if (stored.presence === 'invalid') rejection = 'stored_fingerprint_invalid';
+  else if (comparison(submitted, stored) === 'mismatch') rejection = 'submitted_stored_mismatch';
+  else if (comparison(stored, recalculated) === 'mismatch') rejection = 'stored_recalculated_mismatch';
+  else if (comparison(submitted, recalculated) === 'mismatch') rejection = 'submitted_recalculated_mismatch';
+  else if (revision === 'mismatch') rejection = 'board_revision_mismatch';
+  return { rejection, diagnostic: {
+    timestamp: new Date().toISOString(), client_request_id: input.clientRequestId || null, server_request_id: input.serverRequestId || null,
+    phase: 'authoritative_preflight', classification: rejection ? 'approval_stale' : (state.evaluation.eligible ? 'accepted' : 'ineligible'), rejection_category: rejection || 'none',
+    board_resolution_category: state.board ? 'resolved' : 'unresolved', node_resolution_category: state.node ? 'resolved' : 'unresolved', board_revision_category: revision,
+    submitted_fingerprint_presence: submitted.presence, submitted_fingerprint_version: submitted.version, stored_fingerprint_presence: stored.presence,
+    stored_fingerprint_version: stored.version, recalculated_fingerprint_version: recalculated.version,
+    submitted_stored_match: comparison(submitted, stored), stored_recalculated_match: comparison(stored, recalculated), submitted_recalculated_match: comparison(submitted, recalculated),
+    expected_board_revision_presence: expectedRevision, authoritative_board_revision_presence: authoritativeRevision,
+    expected_authoritative_revision_match: revision === 'match' ? 'match' : revision === 'mismatch' ? 'mismatch' : 'unavailable',
+    save_confirmation_category: ['not_requested','request_pending','request_succeeded','authoritative_confirmed','request_failed','unknown'].includes(input.saveConfirmationCategory) ? input.saveConfirmationCategory : 'unknown',
+    node_material_normalization_category: ['unchanged','image_sanitized','unsupported_image_removed','undefined_removed','persistence_normalized','unknown'].includes(input.nodeMaterialNormalizationCategory) ? input.nodeMaterialNormalizationCategory : 'unknown',
+    request_lifecycle_generation: Number.isSafeInteger(input.requestLifecycleGeneration) && input.requestLifecycleGeneration >= 0 ? input.requestLifecycleGeneration : 0
+  }};
+}
 function digest(value) { return crypto.createHash('sha256').update(value, 'utf8').digest('base64url'); }
 function idempotencyKey({ ownerAccountId, destinationId, boardId, nodeId, approvedFingerprint }) {
   return digest(['funklix-linkedin-publish-v1', ownerAccountId, destinationId, boardId, nodeId, approvedFingerprint, ACTION_VERSION].join('\0'));
@@ -96,4 +137,4 @@ function classifyProviderStatus(status) {
   return 'provider_request_rejected';
 }
 
-module.exports = { ACTION_VERSION, MAX_CAPTION_CODE_POINTS, PERSON_URN, POST_URN, ACTIVE_JOB_STATES, enabled, liveSmokeEnabled, normalizeCaption, materialFingerprint, evaluateLinkedInTextPublishEligibility, digest, idempotencyKey, externalUrl, classifyProviderStatus };
+module.exports = { ACTION_VERSION, MAX_CAPTION_CODE_POINTS, PERSON_URN, POST_URN, ACTIVE_JOB_STATES, enabled, liveSmokeEnabled, normalizeCaption, materialFingerprint, evaluateLinkedInTextPublishEligibility, fingerprintState, approvalBoundary, digest, idempotencyKey, externalUrl, classifyProviderStatus };
