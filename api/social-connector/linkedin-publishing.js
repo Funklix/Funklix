@@ -7,7 +7,7 @@ const ACTION_VERSION = 'linkedin_text_publish_v1';
 const MAX_CAPTION_CODE_POINTS = 3000;
 const PERSON_URN = /^urn:li:person:[A-Za-z0-9_-]{1,128}$/;
 const POST_URN = /^urn:li:(?:ugcPost|share):[A-Za-z0-9_-]{1,128}$/;
-const ACTIVE_JOB_STATES = Object.freeze(['queued', 'validating', 'delivering', 'outcome_unknown']);
+const ACTIVE_JOB_STATES = Object.freeze(['queued', 'validating', 'delivering']);
 const BLOCK_ORDER = Object.freeze([
   'authentication_required', 'board_edit_access_required', 'board_not_saved', 'node_missing',
   'node_role_unsupported', 'platform_not_linkedin', 'readiness_incomplete',
