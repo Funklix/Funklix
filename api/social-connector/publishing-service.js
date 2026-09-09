@@ -23,6 +23,36 @@ function boardNodes(board) { const canvas = board?.canvas_json; return Array.isA
 function safeDiagnostic(input = {}) { return { clientRequestId: input.clientRequestId || null, serverRequestId: input.serverRequestId, publishJobId: input.publishJobId || null, providerAttemptId: input.providerAttemptId || null, phase: input.phase, classification: input.classification, providerHttpStatusCategory: input.providerHttpStatusCategory || null, retryable: input.retryable === true, committedStateCategory: input.committedStateCategory || 'none', timestamp: new Date().toISOString() }; }
 
 function createPublishingService({ pool = defaultPool, adapter = createLinkedInAdapter(), env = process.env, now = () => new Date() } = {}) {
+  async function jobResult(jobId, ownerAccountId, { reconcile = true } = {}) {
+    const found = await pool.query(`SELECT j.*,e.external_post_id,e.published_at,e.external_url,e.delivery_state,d.destination_type,d.display_name,
+      a.id AS provider_attempt_id,a.status AS provider_attempt_state,a.provider_request_reference,a.ambiguous_outcome
+      FROM public.social_publish_jobs j JOIN public.social_publishing_destinations d ON d.id=j.destination_id AND d.owner_account_id=j.owner_account_id
+      LEFT JOIN public.social_external_posts e ON e.publish_job_id=j.id
+      LEFT JOIN public.social_provider_attempts a ON a.publish_job_id=j.id AND a.attempt_number=1
+      WHERE j.id=$1 AND j.owner_account_id=$2 LIMIT 1`, [jobId, ownerAccountId]);
+    if (!found.rowCount) return null;
+    let row = found.rows[0];
+    if (row.external_post_id && row.delivery_state === 'confirmed') {
+      if (row.status !== 'delivered') await pool.query(`UPDATE public.social_publish_jobs SET status='delivered',completed_at=COALESCE(completed_at,$2),updated_at=$2 WHERE id=$1 AND owner_account_id=$3`, [jobId, row.published_at || now().toISOString(), ownerAccountId]);
+      return publishedResult(row);
+    }
+    if (reconcile && row.provider_attempt_state === 'accepted' && POST_ID.test(row.provider_request_reference || '')) {
+      const snapshot = typeof row.content_snapshot === 'string' ? JSON.parse(row.content_snapshot) : row.content_snapshot;
+      const publishedAt = row.completed_at || now().toISOString();
+      await pool.query(`INSERT INTO public.social_external_posts(platform,external_post_id,destination_id,publish_job_id,owner_account_id,source_board_id,source_node_id,approved_fingerprint,published_snapshot_reference,external_url,published_at,delivery_state,deletion_state)
+        VALUES('linkedin',$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'confirmed','retained') ON CONFLICT(publish_job_id) DO NOTHING`, [row.provider_request_reference,row.destination_id,row.id,row.owner_account_id,row.board_id,row.node_id,row.approved_fingerprint,snapshot.normalizedTextDigest,externalUrl(row.provider_request_reference),publishedAt]);
+      const recovered = await pool.query(`SELECT external_post_id,published_at,external_url,delivery_state FROM public.social_external_posts WHERE publish_job_id=$1 AND owner_account_id=$2`, [jobId, ownerAccountId]);
+      const post = recovered.rows[0];
+      if (post?.delivery_state === 'confirmed' && post.external_post_id === row.provider_request_reference) {
+        await pool.query(`UPDATE public.social_provider_attempts SET status='reconciled',completed_at=COALESCE(completed_at,$2) WHERE id=$1`, [row.provider_attempt_id,publishedAt]);
+        await pool.query(`UPDATE public.social_publish_jobs SET status='delivered',completed_at=$2,updated_at=$2,last_safe_error_classification=NULL WHERE id=$1 AND owner_account_id=$3`, [jobId,publishedAt,ownerAccountId]);
+        row={...row,...post,status:'delivered',completed_at:publishedAt}; return publishedResult(row);
+      }
+      await pool.query(`UPDATE public.social_publish_jobs SET status='outcome_unknown',last_safe_error_classification='accepted_identity_conflict',updated_at=NOW() WHERE id=$1 AND owner_account_id=$2`,[jobId,ownerAccountId]);
+      row={...row,status:'outcome_unknown',last_safe_error_classification:'accepted_identity_conflict'};
+    }
+    return { ok:false,status: terminalStatus(row),jobId:row.id,providerAttemptId:row.provider_attempt_id||null,jobState:row.status,providerAttemptState:row.provider_attempt_state||null,destination:{type:row.destination_type,label:row.display_name},diagnostic: lifecycleDiagnostic(row) };
+  }
   async function resolve(input, actor) {
     const { board, access } = await getBoardAccess(input.boardId, actor, { columns: 'id, canvas_json, owner_id, owner_email, updated_at' });
     const node = boardNodes(board).find(item => item?.id === input.nodeId) || null;
@@ -51,6 +81,8 @@ function createPublishingService({ pool = defaultPool, adapter = createLinkedInA
 
   async function publish(input, actor) {
     const state = await resolve(input, actor);
+    const existing = state.previous[0];
+    if (existing) return await jobResult(existing.id,input.ownerAccountId) || {ok:false,status:'publishing_in_progress',jobId:existing.id};
     if (!state.evaluation.eligible) return { ok: false, status: state.evaluation.code, blockingCodes: state.evaluation.blockingCodes };
     if (input.expectedApprovedFingerprint !== state.node.approvedContentFingerprint) return { ok: false, status: 'approval_stale' };
     const jobId = crypto.randomUUID();
@@ -61,7 +93,7 @@ function createPublishingService({ pool = defaultPool, adapter = createLinkedInA
         VALUES($1,$2,$3,$4,$5,$6::jsonb,$7,'immediate','queued',$8,$2) ON CONFLICT(owner_account_id,idempotency_key) DO NOTHING RETURNING *`, [jobId, input.ownerAccountId, input.boardId, input.nodeId, state.node.approvedContentFingerprint, JSON.stringify(snapshot), input.destinationId, state.key]);
       job = inserted.rows[0] || (await pool.query('SELECT * FROM public.social_publish_jobs WHERE owner_account_id=$1 AND idempotency_key=$2', [input.ownerAccountId, state.key])).rows[0];
     } catch { return { ok: false, status: 'storage_failed_without_delivery' }; }
-    if (job.id !== jobId) return { ok: false, status: job.status === 'delivered' ? 'already_published' : 'publishing_in_progress', jobId: job.id };
+    if (job.id !== jobId) return await jobResult(job.id,input.ownerAccountId) || { ok:false,status:'publishing_in_progress',jobId:job.id };
     const attemptId = crypto.randomUUID();
     try {
       const claimed = await pool.query(`UPDATE public.social_publish_jobs SET status='delivering',attempt_count=1,updated_at=NOW() WHERE id=$1 AND owner_account_id=$2 AND status='queued' RETURNING id`, [jobId, input.ownerAccountId]);
@@ -73,20 +105,25 @@ function createPublishingService({ pool = defaultPool, adapter = createLinkedInA
     catch { await markFailure(pool, jobId, attemptId, 'credential_invalid', false); return { ok: false, status: 'credential_invalid', jobId }; }
     const result = await adapter.linkedin_text_publish_v1({ context: { requestId: input.serverRequestId, accountId: input.ownerAccountId }, credentials: credential, input: { author: state.destination.external_destination_id, caption: state.evaluation.caption } });
     Object.keys(credential).forEach(key => { credential[key] = ''; });
-    if (!result.ok) { const unknown = ['outcome_unknown', 'provider_response_invalid'].includes(result.error?.code); await markFailure(pool, jobId, attemptId, result.error?.code || 'provider_unavailable', unknown); return { ok: false, status: result.error?.code || 'provider_unavailable', jobId, providerAttemptId: attemptId }; }
+    if (!result.ok) { const acceptedWithoutIdentity=result.acceptanceKnown===true,unknown=acceptedWithoutIdentity||['outcome_unknown'].includes(result.error?.code);const classification=acceptedWithoutIdentity?'provider_accepted_identity_unretained':result.error?.code||'provider_unavailable';await markFailure(pool,jobId,attemptId,classification,unknown);return {ok:false,status:acceptedWithoutIdentity?'provider_accepted_unreconciled':classification,jobId,providerAttemptId:attemptId,jobState:unknown?'outcome_unknown':'failed'}; }
     const publishedAt = now().toISOString(), url = externalUrl(result.value.postUrn); let client;
-    try { client = await pool.connect(); } catch { await markFailure(pool, jobId, attemptId, 'delivery_committed_provider_only', true).catch(() => {}); return { ok: false, status: 'reconciliation_required', jobId, providerAttemptId: attemptId }; }
+    try { await pool.query(`UPDATE public.social_provider_attempts SET status='accepted',completed_at=$2,provider_request_reference=$3,ambiguous_outcome=FALSE WHERE id=$1`,[attemptId,publishedAt,result.value.postUrn]); }
+    catch { await pool.query(`UPDATE public.social_publish_jobs SET status='outcome_unknown',last_safe_error_classification='provider_accepted_identity_not_durable',updated_at=NOW() WHERE id=$1`,[jobId]).catch(()=>{});return {ok:false,status:'provider_accepted_unreconciled',jobId,providerAttemptId:attemptId,jobState:'outcome_unknown'}; }
+    try { client = await pool.connect(); } catch { await pool.query(`UPDATE public.social_publish_jobs SET status='outcome_unknown',last_safe_error_classification='delivery_committed_provider_only',updated_at=NOW() WHERE id=$1`,[jobId]).catch(()=>{}); return { ok: false, status: 'reconciliation_required', jobId, providerAttemptId: attemptId,jobState:'outcome_unknown' }; }
     try {
       await client.query('BEGIN');
-      await client.query(`UPDATE public.social_provider_attempts SET status='accepted',completed_at=$2,provider_request_reference=$3 WHERE id=$1`, [attemptId, publishedAt, result.value.postUrn]);
-      await client.query(`INSERT INTO public.social_external_posts(platform,external_post_id,destination_id,publish_job_id,owner_account_id,source_board_id,source_node_id,approved_fingerprint,published_snapshot_reference,external_url,published_at,delivery_state,deletion_state) VALUES('linkedin',$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'confirmed','retained')`, [result.value.postUrn, input.destinationId, jobId, input.ownerAccountId, input.boardId, input.nodeId, state.node.approvedContentFingerprint, snapshot.normalizedTextDigest, url, publishedAt]);
+      await client.query(`INSERT INTO public.social_external_posts(platform,external_post_id,destination_id,publish_job_id,owner_account_id,source_board_id,source_node_id,approved_fingerprint,published_snapshot_reference,external_url,published_at,delivery_state,deletion_state) VALUES('linkedin',$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'confirmed','retained') ON CONFLICT(publish_job_id) DO NOTHING`, [result.value.postUrn, input.destinationId, jobId, input.ownerAccountId, input.boardId, input.nodeId, state.node.approvedContentFingerprint, snapshot.normalizedTextDigest, url, publishedAt]);
       await client.query(`UPDATE public.social_publish_jobs SET status='delivered',completed_at=$2,updated_at=$2 WHERE id=$1`, [jobId, publishedAt]);
       await client.query('COMMIT');
       return { ok: true, status: 'published', jobId, providerAttemptId: attemptId, publishedAt, destination: { type: 'personal', label: state.destination.display_name }, externalUrl: url };
-    } catch { await client.query('ROLLBACK').catch(() => {}); await markFailure(pool, jobId, attemptId, 'delivery_committed_provider_only', true).catch(() => {}); return { ok: false, status: 'reconciliation_required', jobId, providerAttemptId: attemptId }; } finally { client.release(); }
+    } catch { await client.query('ROLLBACK').catch(() => {}); await pool.query(`UPDATE public.social_publish_jobs SET status='outcome_unknown',last_safe_error_classification='delivery_committed_provider_only',updated_at=NOW() WHERE id=$1`,[jobId]).catch(()=>{}); return { ok: false, status: 'reconciliation_required', jobId, providerAttemptId: attemptId,jobState:'outcome_unknown' }; } finally { client.release(); }
   }
-  return Object.freeze({ resolve, preflight, publish });
+  return Object.freeze({ resolve, preflight, publish, jobResult });
 }
+const POST_ID=/^urn:li:(?:ugcPost|share):[A-Za-z0-9_-]{1,128}$/;
+function terminalStatus(row){if(row.status==='outcome_unknown')return row.last_safe_error_classification==='provider_accepted_identity_unretained'||row.last_safe_error_classification==='provider_accepted_identity_not_durable'?'provider_accepted_unreconciled':'outcome_unknown';if(row.status==='failed')return 'failed';if(row.status==='cancelled')return 'cancelled';return 'publishing_in_progress';}
+function publishedResult(row){return {ok:true,status:'published',jobId:row.id,providerAttemptId:row.provider_attempt_id||null,jobState:'delivered',publishedAt:row.published_at||row.completed_at,externalUrl:row.external_url||externalUrl(row.external_post_id),destination:{type:row.destination_type,label:row.display_name},recovered:row.status!=='delivered'};}
+function lifecycleDiagnostic(row){return {timestamp:new Date().toISOString(),phase:'job_status',classification:terminalStatus(row),failure_category:row.last_safe_error_classification||'none',job_id:row.id,job_state:row.status,provider_attempt_state:row.provider_attempt_state||'unavailable',provider_acceptance_category:['accepted','reconciled'].includes(row.provider_attempt_state)?'accepted':row.ambiguous_outcome?'unknown':'not_accepted',provider_post_identity_category:POST_ID.test(row.provider_request_reference||'')?'retained':'unavailable',external_post_state:row.delivery_state||'missing',duplicate_delivery_prevented:true};}
 async function markFailure(pool, jobId, attemptId, classification, unknown) { await pool.query(`UPDATE public.social_provider_attempts SET status=$2,safe_error_classification=$3,ambiguous_outcome=$4,completed_at=NOW() WHERE id=$1`, [attemptId, unknown ? 'outcome_unknown' : 'permanent_failure', classification, unknown]); await pool.query(`UPDATE public.social_publish_jobs SET status=$2,last_safe_error_classification=$3,updated_at=NOW() WHERE id=$1`, [jobId, unknown ? 'outcome_unknown' : 'failed', classification]); }
 
 module.exports = { authorReference, readiness, boardNodes, safeDiagnostic, createPublishingService };

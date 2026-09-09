@@ -16489,8 +16489,11 @@ async function preflightLinkedInPublish(input) {
 }
 async function publishLinkedInNow(input) {
   const response = await fetch("/api/social-publishing/linkedin/publish", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json", "x-client-request-id": input.clientRequestId }, body: JSON.stringify(input) });
-  return response.json();
+  const result=await response.json();
+  if(!result||typeof result!=="object"||result.clientRequestId!==input.clientRequestId||typeof result.status!=="string")throw Object.assign(new Error("publish_response_invalid"),{jobId:result?.jobId||"",serverRequestId:result?.serverRequestId||""});
+  return result;
 }
+async function readLinkedInPublicationStatus(jobId){const response=await fetch(`/api/social-publishing/jobs/${encodeURIComponent(jobId)}`,{credentials:"same-origin",headers:{accept:"application/json"}});const result=await response.json();if(!result||typeof result!=="object"||result.jobId!==jobId||typeof result.status!=="string")throw new Error("job_response_invalid");return result;}
 
 const approvalPersistenceByNode = new Map();
 const approvalNormalizationByNode = new Map();
@@ -16531,6 +16534,7 @@ function renderContentWorkspace() {
     onSchedule: applyContentWorkspaceSchedule,
     onPublishPreflight: preflightLinkedInPublish,
     onPublish: publishLinkedInNow,
+    onPublishStatus: readLinkedInPublicationStatus,
     onPlanningFeedback: routeContentOperationsFeedback,
     onOpenNode(nodeId, openInspector, actionIdentity) {
       if (actionIdentity !== contentWorkspaceIdentity() || state.boardAccess?.canView === false || !getNode(nodeId)) return renderContentWorkspace();
