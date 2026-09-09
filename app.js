@@ -16596,6 +16596,30 @@ function applyContentWorkspaceSchedule(prepared = {}) {
 // BW-31.2's sole Content Workspace mutation boundary. The dialog's prepared
 // action is only a capability token; this path always resolves the live node,
 // permission and material revision again before changing canonical state.
+async function requestAuthoritativeContentApproval(node, prepared, accountId, boardId) {
+  const contract = window.FunklixApprovalMaterialV2;
+  if (!contract) return { ok: false, reason: "APPROVAL_VERIFICATION_FAILED" };
+  approvalPersistenceByNode.set(node.id, "saving"); renderContentWorkspace();
+  try {
+    const expectedMaterialFingerprint = await contract.fingerprint(sanitizeNodeForPersistence(node));
+    const clientRequestId = `approve_${Date.now().toString(36)}_${Math.random().toString(36).slice(2,10)}`;
+    const response = await fetch('/api/content-review/approve', { method:'POST', headers:{'Content-Type':'application/json','X-Client-Request-Id':clientRequestId}, body:JSON.stringify({boardId,nodeId:node.id,expectedCurrentStatus:'In Review',expectedMaterialFingerprint,clientRequestId,warningAcknowledged:prepared.warningAcknowledged===true}) });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || !result.ok || result.fingerprint !== expectedMaterialFingerprint || result.fingerprintVersion !== 'v2') throw new Error('approval_write_failed');
+    approvalPersistenceByNode.set(node.id, "verifying"); renderContentWorkspace();
+    const reload = await fetch(`/api/boards/${encodeURIComponent(boardId)}`, {headers:{Accept:'application/json'},cache:'no-store'});
+    const savedBoard = await reload.json().catch(() => ({}));
+    const savedNodes = Array.isArray(savedBoard?.canvas_json) ? savedBoard.canvas_json : savedBoard?.canvas_json?.nodes;
+    const savedNode = Array.isArray(savedNodes) ? savedNodes.find(candidate => candidate?.id === node.id) : null;
+    if (!reload.ok || !savedNode || savedNode.approvedContentFingerprint !== result.fingerprint || savedNode.status !== 'Approved' || savedBoard.updated_at !== result.boardRevision) throw new Error('authoritative_reload_failed');
+    if (await contract.fingerprint(savedNode) !== result.fingerprint) throw new Error('authoritative_material_mismatch');
+    Object.keys(node).forEach(key => delete node[key]); Object.assign(node,savedNode); state.lastKnownUpdatedAt=result.boardRevision;
+    approvalPersistenceByNode.set(node.id,"saved"); approvalNormalizationByNode.set(node.id,"unchanged");
+    updateNodeCard(node); if(state.selectedPrimary===node.id)fillInspector(node); updateListView(); contentWorkspaceFocusNodeId=node.id; renderContentWorkspace();
+    return {ok:true,nodeId:node.id,status:'Approved',saved:true,boardRevision:result.boardRevision,approvedContentFingerprint:result.fingerprint};
+  } catch { approvalPersistenceByNode.set(node.id,"error"); renderContentWorkspace(); return {ok:false,reason:"APPROVAL_VERIFICATION_FAILED",recoverable:true}; }
+}
+
 async function applyContentWorkspaceTransition(prepared = {}) {
   const workspace = window.FunklixContentWorkspace;
   const accountId = state.user?.email || "";
@@ -16620,40 +16644,20 @@ async function applyContentWorkspaceTransition(prepared = {}) {
   if (prepared.toStatus === "Approved" && decision.confirmationRequired && prepared.warningAcknowledged !== true) return { ok: false, reason: "WARNING_ACKNOWLEDGEMENT_REQUIRED" };
   const note = typeof prepared.note === "string" ? prepared.note.trim() : "";
   if (decision.note.required && (!note || note.length > workspace.NOTE_MAX)) return { ok: false, reason: "NOTE_REQUIRED" };
+  if (prepared.toStatus === "Approved") return requestAuthoritativeContentApproval(node, prepared, accountId, boardId);
   node.status = prepared.toStatus;
   if (prepared.toStatus === "Needs Changes") {
     const existing = Array.isArray(node.reviewNotes) ? node.reviewNotes.slice(-9) : [];
     node.reviewNotes = [...existing, { note: note.slice(0, workspace.NOTE_MAX), authorName: state.user?.name || accountId,
       authorEmail: accountId, timestamp: new Date().toISOString(), boardId, nodeId: node.id }];
   }
-  if (prepared.toStatus === "Approved") {
-    node.approvedContentFingerprint = workspace.materialFingerprint(node);
-    node.approvalMetadata = { approvedByAccountId: accountId.slice(0, 120), approvedByName: String(state.user?.name || accountId).slice(0, 80), approvedAt: new Date().toISOString(), boardId, nodeId: node.id };
-  }
-  else if (prepared.toStatus === "Draft") delete node.approvedContentFingerprint;
+  if (prepared.toStatus === "Draft") delete node.approvedContentFingerprint;
   recordStatusChangedActivity(node, nodeStatusLabel(node.status));
   updateNodeCard(node);
   if (state.selectedPrimary === node.id) fillInspector(node);
   updateListView();
   markUnsaved();
   contentWorkspaceFocusNodeId = node.id;
-  if (prepared.toStatus === "Approved") {
-    const liveJson = JSON.stringify(node);
-    const persistedNode = sanitizeNodeForPersistence(node);
-    const serializedNode = JSON.parse(JSON.stringify(persistedNode));
-    const liveImages = Array.isArray(node.images) ? node.images : [];
-    const unsupportedImage = liveImages.some(image => typeof image?.url === "string" && (image.url.startsWith("blob:") || image.url.startsWith("data:")));
-    const hasUndefined = Object.values(node).some(value => value === undefined);
-    const retainedReconstructed = liveImages.some((image, index) => serializedNode.images?.[index] && JSON.stringify(image) !== JSON.stringify(serializedNode.images[index]));
-    const materialChanged = workspace.materialFingerprint(node) !== workspace.materialFingerprint(serializedNode);
-    approvalNormalizationByNode.set(node.id, unsupportedImage ? "unsupported_image_removed" : hasUndefined ? "undefined_removed" : retainedReconstructed ? "persistence_normalized" : materialChanged || liveJson !== JSON.stringify(serializedNode) ? "persistence_normalized" : "unchanged");
-    approvalPersistenceByNode.set(node.id, "saving");
-    renderContentWorkspace();
-    const saved = await saveBoardToServer("canonical-content-approval");
-    approvalPersistenceByNode.set(node.id, saved ? "saved" : "error");
-    renderContentWorkspace();
-    return { ok: true, nodeId: node.id, status: node.status, saved, saving: !saved };
-  }
   renderContentWorkspace();
   return { ok: true, nodeId: node.id, status: node.status };
 }

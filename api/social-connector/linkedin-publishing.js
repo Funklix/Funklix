@@ -1,6 +1,7 @@
 'use strict';
 
 const crypto = require('crypto');
+const approvalContract = require('../../approval-material-contract');
 
 const ACTION_VERSION = 'linkedin_text_publish_v1';
 const MAX_CAPTION_CODE_POINTS = 3000;
@@ -36,14 +37,7 @@ function normalizeCaption(value) {
   return { ok: true, caption, characterCount };
 }
 
-// Kept byte-for-byte compatible with the browser's approval fingerprint contract.
-function materialFingerprint(node) {
-  const material = { type: node?.type || '', title: node?.title || '', content: node?.content || '', channel: node?.channel || '', funnelStage: node?.funnelStage || '', social: node?.social ? { platform: node.social.platform || '', caption: node.social.caption || '', cta: node.social.cta || '', preview: node.social.preview || '', hashtags: node.social.hashtags || null } : null, landingPage: node?.landingPage || null, images: node?.images || null, variants: node?.variants || null, cta: node?.cta || '', audience: node?.audience || '', tone: node?.tone || '' };
-  let hash = 2166136261;
-  const serialized = JSON.stringify(material);
-  for (let index = 0; index < serialized.length; index += 1) { hash ^= serialized.charCodeAt(index); hash = Math.imul(hash, 16777619); }
-  return `v1-${(hash >>> 0).toString(16)}`;
-}
+function materialFingerprint(node) { return approvalContract.fingerprintSync(node); }
 
 function evaluateLinkedInTextPublishEligibility(input = {}) {
   const codes = [];
@@ -58,6 +52,7 @@ function evaluateLinkedInTextPublishEligibility(input = {}) {
   add(!!input.node && !['Ready', 'Needs attention'].includes(input.readiness), 'readiness_incomplete');
   add(!!input.node && input.node.status !== 'Approved', 'editorial_approval_required');
   add(!!input.node && !input.node.approvedContentFingerprint, 'approval_fingerprint_missing');
+  add(!!input.node?.approvedContentFingerprint && !approvalContract.isFingerprint(input.node.approvedContentFingerprint), 'approval_version_outdated');
   add(!!input.node && !!input.node.approvedContentFingerprint && input.node.approvedContentFingerprint !== input.currentFingerprint, 'approval_stale');
   if (!caption.ok) add(true, caption.code);
   add(!input.connection, 'connection_unavailable');
@@ -79,12 +74,11 @@ function evaluateLinkedInTextPublishEligibility(input = {}) {
   return Object.freeze({ eligible: blockingCodes.length === 0, code: blockingCodes[0] || 'ready', blockingCodes, caption: caption.ok ? caption.caption : null, characterCount: caption.ok ? caption.characterCount : 0 });
 }
 
-const FINGERPRINT = /^v(\d+)-[0-9a-f]{1,16}$/;
+const FINGERPRINT = /^(?:v1-[0-9a-f]{1,16}|v2-[0-9a-f]{64})$/;
 function fingerprintState(value) {
   if (value == null || value === '') return { presence: 'missing', version: 'missing' };
   if (typeof value !== 'string' || !FINGERPRINT.test(value)) return { presence: 'invalid', version: 'unknown' };
-  const version = value.match(FINGERPRINT)[1];
-  return { presence: 'present', version: version === '1' ? 'v1' : version === '2' ? 'v2' : 'unknown' };
+  return { presence: 'present', version: value.startsWith('v1-') ? 'v1' : 'v2' };
 }
 function comparison(left, right) { return left.presence === 'present' && right.presence === 'present' ? (left.value === right.value ? 'match' : 'mismatch') : 'unavailable'; }
 function approvalBoundary(input, state) {
@@ -102,10 +96,12 @@ function approvalBoundary(input, state) {
   else if (submitted.presence === 'invalid') rejection = 'submitted_fingerprint_invalid';
   else if (stored.presence === 'missing') rejection = 'stored_fingerprint_missing';
   else if (stored.presence === 'invalid') rejection = 'stored_fingerprint_invalid';
+  else if (stored.version === 'v1') rejection = 'approval_version_outdated';
   else if (comparison(submitted, stored) === 'mismatch') rejection = 'submitted_stored_mismatch';
   else if (comparison(stored, recalculated) === 'mismatch') rejection = 'stored_recalculated_mismatch';
   else if (comparison(submitted, recalculated) === 'mismatch') rejection = 'submitted_recalculated_mismatch';
-  else if (revision === 'mismatch') rejection = 'board_revision_mismatch';
+  // A Board revision is concurrency evidence, not material authority: unrelated
+  // Board changes remain publishable when all three material fingerprints match.
   return { rejection, diagnostic: {
     timestamp: new Date().toISOString(), client_request_id: input.clientRequestId || null, server_request_id: input.serverRequestId || null,
     phase: 'authoritative_preflight', classification: rejection ? 'approval_stale' : (state.evaluation.eligible ? 'accepted' : 'ineligible'), rejection_category: rejection || 'none',
@@ -117,7 +113,9 @@ function approvalBoundary(input, state) {
     expected_authoritative_revision_match: revision === 'match' ? 'match' : revision === 'mismatch' ? 'mismatch' : 'unavailable',
     save_confirmation_category: ['not_requested','request_pending','request_succeeded','authoritative_confirmed','request_failed','unknown'].includes(input.saveConfirmationCategory) ? input.saveConfirmationCategory : 'unknown',
     node_material_normalization_category: ['unchanged','image_sanitized','unsupported_image_removed','undefined_removed','persistence_normalized','unknown'].includes(input.nodeMaterialNormalizationCategory) ? input.nodeMaterialNormalizationCategory : 'unknown',
-    request_lifecycle_generation: Number.isSafeInteger(input.requestLifecycleGeneration) && input.requestLifecycleGeneration >= 0 ? input.requestLifecycleGeneration : 0
+    request_lifecycle_generation: Number.isSafeInteger(input.requestLifecycleGeneration) && input.requestLifecycleGeneration >= 0 ? input.requestLifecycleGeneration : 0,
+    canonical_contract_version: approvalContract.VERSION, approval_authority: 'server', approval_write_result: input.approvalWriteResult || 'not_requested',
+    authoritative_reload_result: input.authoritativeReloadResult || 'not_requested', selected_node_material_change_category: comparison(stored,recalculated)==='match'?'unchanged':'changed'
   }};
 }
 function digest(value) { return crypto.createHash('sha256').update(value, 'utf8').digest('base64url'); }
