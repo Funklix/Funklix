@@ -16489,11 +16489,13 @@ async function preflightLinkedInPublish(input) {
 }
 async function publishLinkedInNow(input) {
   const response = await fetch("/api/social-publishing/linkedin/publish", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json", "x-client-request-id": input.clientRequestId }, body: JSON.stringify(input) });
-  const result=await response.json();
-  if(!result||typeof result!=="object"||result.clientRequestId!==input.clientRequestId||typeof result.status!=="string")throw Object.assign(new Error("publish_response_invalid"),{jobId:result?.jobId||"",serverRequestId:result?.serverRequestId||""});
+  const parsed=await readAuthoritativeJson(response),raw=parsed.value||{},result={...raw,clientRequestId:raw.client_request_id,serverRequestId:raw.server_request_id,jobId:raw.job_id,providerAttemptId:raw.provider_attempt_id,jobState:raw.job_state,providerAttemptState:raw.provider_attempt_state,publishedAt:raw.published_at,externalUrl:raw.external_url};
+  if(!parsed.valid||result.clientRequestId!==input.clientRequestId||typeof result.status!=="string")throw Object.assign(new Error(parsed.category),{jobId:result.jobId||"",serverRequestId:result.serverRequestId||""});
   return result;
 }
-async function readLinkedInPublicationStatus(jobId){const response=await fetch(`/api/social-publishing/jobs/${encodeURIComponent(jobId)}`,{credentials:"same-origin",headers:{accept:"application/json"}});const result=await response.json();if(!result||typeof result!=="object"||result.jobId!==jobId||typeof result.status!=="string")throw new Error("job_response_invalid");return result;}
+async function readLinkedInPublicationStatus(jobId){const response=await fetch(`/api/social-publishing/jobs/${encodeURIComponent(jobId)}`,{credentials:"same-origin",headers:{accept:"application/json"}});const parsed=await readAuthoritativeJson(response),raw=parsed.value||{},result={...raw,serverRequestId:raw.server_request_id,jobId:raw.job_id,providerAttemptId:raw.provider_attempt_id,jobState:raw.job_state,providerAttemptState:raw.provider_attempt_state,publishedAt:raw.published_at,externalUrl:raw.external_url};if(!parsed.valid||result.jobId!==jobId||typeof result.status!=="string")throw new Error(parsed.category);return result;}
+
+async function readAuthoritativeJson(response){const contentType=String(response.headers?.get?.('content-type')||'').toLowerCase(),text=await response.text();if(!text)return{valid:false,category:'empty_body'};if(!contentType.includes('application/json'))return{valid:false,category:contentType.includes('text/html')?'html_response':'wrong_content_type'};let value;try{value=JSON.parse(text);}catch(_){return{valid:false,category:'invalid_json'};}if(!value||typeof value!=='object'||value.contract_version!=='bw32.3.9-v1')return{valid:false,category:'incompatible_contract',value};const header=String(response.headers?.get?.('x-request-id')||'');if(!header||header!==value.server_request_id)return{valid:false,category:'request_id_mismatch',value};return{valid:true,category:response.ok?'structured_success':'structured_failure',value};}
 
 const approvalPersistenceByNode = new Map();
 const approvalNormalizationByNode = new Map();
@@ -16623,13 +16625,16 @@ async function requestAuthoritativeContentApproval(node, prepared, accountId, bo
     diagnostic.browser_hash_category = "succeeded"; diagnostic.phase = "approval_request"; diagnostic.approval_request_category = "started";
     const response = await fetch('/api/content-review/approve', { method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json','X-Client-Request-Id':clientRequestId}, body:JSON.stringify({boardId,nodeId:node.id,expectedCurrentStatus:'In Review',expectedMaterialFingerprint,clientRequestId,warningAcknowledged:prepared.warningAcknowledged===true}) }).catch(() => null);
     if (!response) { diagnostic.approval_request_category = "network_failed"; return fail("APPROVAL_VERIFICATION_FAILED", "approval_request_failed", "approval_request"); }
-    diagnostic.server_request_id = String(response.headers?.get?.('x-request-id') || '').slice(0,128);
-    const result = await response.json().catch(() => null);
-    if (!result || typeof result !== 'object') { diagnostic.response_contract_category = "invalid"; return fail("APPROVAL_VERIFICATION_FAILED", "invalid_response", "response"); }
-    diagnostic.response_contract_category = "received";
-    if (response.status === 401) return fail("PERMISSION_DENIED", "authentication_required", "response");
-    if (!response.ok || !result.ok) return fail("APPROVAL_VERIFICATION_FAILED", response.ok ? "approval_rejected" : "approval_request_failed", "response");
-    if (result.fingerprint !== expectedMaterialFingerprint || result.fingerprintVersion !== 'v2' || typeof result.boardRevision !== 'string') { diagnostic.response_contract_category = "invalid"; return fail("APPROVAL_VERIFICATION_FAILED", "invalid_response", "response"); }
+    diagnostic.http_status_category = `${Math.floor(response.status/100)}xx`; diagnostic.content_type_category=String(response.headers?.get?.('content-type')||'').includes('application/json')?'json':'non_json';
+    // The former `const result = await response.json()` path erased empty, HTML,
+    // content-type, and malformed-JSON distinctions. Capture the body once instead.
+    const parsed=await readAuthoritativeJson(response); diagnostic.response_contract_category=parsed.category; diagnostic.body_presence_category=parsed.category==='empty_body'?'empty':'present'; diagnostic.json_parse_category=parsed.category==='invalid_json'?'failed':'succeeded';
+    const result=parsed.value; diagnostic.server_request_id=String(result?.server_request_id||'').slice(0,128); diagnostic.request_id_match_category=parsed.category==='request_id_mismatch'?'mismatch':parsed.valid?'matched':'unavailable';
+    if(!parsed.valid)return fail("APPROVAL_VERIFICATION_FAILED",parsed.category,"response");
+    if(result.status==='authentication_required')return fail("PERMISSION_DENIED","authentication_required","response");
+    if(result.status!=='approval_saved'||!result.ok)return fail("APPROVAL_VERIFICATION_FAILED","approval_rejected","response");
+    if (result.fingerprint !== expectedMaterialFingerprint || result.fingerprint_version !== 'v2' || typeof result.board_revision !== 'string') { diagnostic.response_contract_category = "invalid"; return fail("APPROVAL_VERIFICATION_FAILED", "invalid_response", "response"); }
+    result.fingerprintVersion=result.fingerprint_version;result.boardRevision=result.board_revision;
     approvalPersistenceByNode.set(node.id, "verifying"); renderContentWorkspace(); diagnostic.phase = "authoritative_reload"; diagnostic.authoritative_reload_category = "started";
     let reload;
     try { reload = await fetch(`/api/boards/${encodeURIComponent(boardId)}`, {credentials:'same-origin',headers:{Accept:'application/json'},cache:'no-store'}); }
