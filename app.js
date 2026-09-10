@@ -27,6 +27,7 @@ const BOARD_HEIGHT = 30000;
 const STORAGE_KEY = "campaignCanvasState";
 const language = typeof window !== "undefined" ? window.FunklixLanguage : null;
 const initialLanguagePreferences = language?.getPreferences?.() || { uiLanguage: "en", campaignLanguage: "en" };
+const canvasDensityPreference = globalThis.TendraCanvasDensity;
 const uiText = (key) => language?.t?.(key) || key;
 const uiFormat = (key, values = {}) => Object.entries(values).reduce(
   (text, [name, value]) => text.replaceAll(`{${name}}`, String(value)),
@@ -156,6 +157,7 @@ const state = {
   ,insightsDiagnosticSnapshot: null
   ,nodeSearchQuery: ""
   ,nodeFilters: { type: new Set(), platform: new Set(), state: new Set(), status: new Set(), owner: new Set() }
+  ,canvasDensity: canvasDensityPreference?.getMode?.() || "compact"
   ,user: null
   ,authConfigured: true
   ,currentBoardOwnerEmail: null
@@ -13343,6 +13345,7 @@ function updateNodeCard(node) {
   nodeEl.style.filter = isConnected ? "grayscale(0)" : "grayscale(1) saturate(0)";
   nodeEl.classList.toggle("just-connected", !!node.justConnectedAt && Date.now() - node.justConnectedAt < 700);
   nodeEl.classList.toggle("is-compact", !!node.compact);
+  nodeEl.dataset.canvasDensity = state.canvasDensity;
   const matchesSearch = nodeMatchesSearchAndFilters(node);
   const hasSearchActive = !!state.nodeSearchQuery.trim() || Object.values(state.nodeFilters).some((set) => set.size > 0);
   nodeEl.classList.toggle("search-match", hasSearchActive && matchesSearch);
@@ -13478,6 +13481,27 @@ function updateNodeCard(node) {
   const compactThumb = node.images?.[node.images.length - 1]?.url;
   compactSummary.classList.toggle("has-thumb", !!compactThumb);
   compactSummary.style.setProperty("--compact-thumb", compactThumb ? `url('${compactThumb.replace(/'/g, "%27")}')` : "none");
+
+  let criticalRow = nodeEl.querySelector(".node-critical-row");
+  if (!criticalRow) {
+    criticalRow = document.createElement("div");
+    criticalRow.className = "node-critical-row";
+    criticalRow.setAttribute("role", "status");
+    compactSummary.insertAdjacentElement("beforebegin", criticalRow);
+  }
+  const normalizedStatus = normalizeNodeStatus(node.status);
+  const persistenceFailure = approvalPersistenceByNode?.get?.(node.id) === "error";
+  const readiness = globalThis.ContentWorkspace?.calculateReadiness?.(node);
+  const criticalCandidates = [
+    [persistenceFailure || node.approvalStale || node.actionFailure || normalizedStatus === "Needs Changes", persistenceFailure ? uiText("Approval or action failed") : normalizedStatus === "Needs Changes" ? uiText("Needs Changes") : uiText("Approval needs attention")],
+    [normalizedStatus === "In Review" || node.approvalActionRequired, uiText("Review or approval needs attention")],
+    [readiness?.level && readiness.level !== "Ready", `${uiText("Readiness blocker")}: ${readiness.level}`],
+    [node.social?.scheduledAt || node.social?.publishImmediately, node.social?.scheduledAt ? `${uiText("Scheduled")}: ${formatNodeScheduleMeta(node)?.dateLabel || ""}` : uiText("Ready to publish immediately")],
+    [node.type === "Social Media Posting" && (node.social?.platform || node.channel), node.social?.platform || node.channel]
+  ];
+  const critical = criticalCandidates.find(([show]) => show)?.[1] || "";
+  criticalRow.textContent = critical ? `⚠ ${critical}` : "";
+  criticalRow.hidden = !critical;
 
   const social = nodeEl.querySelector(".social-preview");
   const isSocial = node.type === "Social Media Posting";
@@ -13962,7 +13986,13 @@ function buildUtilitiesPopoverHtml() {
   const canClaim = !!state.user?.email && !!(state.currentBoardId || getBoardIdFromPath()) && !state.currentBoardOwnerEmail;
   const ownedByYou = !!state.user?.email && !!state.currentBoardOwnerEmail && state.currentBoardOwnerEmail === state.user.email;
   const lastSaved = el.boardLastSaved?.textContent || '';
-  return `<div class="filter-group"><strong>Board</strong><div class="node-filter-chips">
+  const densityChoices = [
+    ["compact", "Compact", "Identity, status, and one critical detail"],
+    ["standard", "Standard", "Adds a short preview and key details"],
+    ["detailed", "Detailed", "Shows the established full Canvas card"]
+  ].map(([value, label, description]) => `<button type="button" role="menuitemradio" aria-checked="${state.canvasDensity === value}" data-density-choice="${value}"><span data-i18n="${label}">${label}</span><small data-i18n="${description}">${description}</small></button>`).join("");
+  return `<div class="filter-group canvas-density-control" role="menu" aria-label="${uiText("Display density")}"><strong data-i18n="Display density">Display density</strong><div class="canvas-density-options">${densityChoices}</div></div>
+  <div class="filter-group"><strong>Board</strong><div class="node-filter-chips">
     <button type="button" data-utility-action="save-board">Save Board</button>
     <button type="button" data-utility-action="duplicate-board">Duplicate Board</button>
     <button type="button" data-utility-action="new-board">New Board</button>
@@ -13985,6 +14015,17 @@ function buildUtilitiesPopoverHtml() {
 
 function closeUtilitiesPopover() {
   document.getElementById("floating-utilities-popover")?.remove();
+}
+
+function applyCanvasDensity(value, { persist = false } = {}) {
+  const mode = canvasDensityPreference?.valid?.(value) || "compact";
+  state.canvasDensity = mode;
+  if (persist) canvasDensityPreference?.setMode?.(mode);
+  el.canvas.dataset.canvasDensity = mode;
+  el.zoomLayer.dataset.canvasDensity = mode;
+  state.nodes.forEach(updateNodeCard);
+  requestAnimationFrame(drawLinks);
+  return mode;
 }
 
 function syncPopoverActiveStates(popoverEl) {
@@ -17535,6 +17576,12 @@ el.utilitiesToggleButton?.addEventListener("click", (event) => {
   popover.style.top = `${rect.bottom + 8}px`;
   popover.style.left = `${Math.max(10, rect.right - 260)}px`;
   popover.addEventListener("click", (e) => {
+    const densityButton = e.target.closest("button[data-density-choice]");
+    if (densityButton) {
+      applyCanvasDensity(densityButton.dataset.densityChoice, { persist: true });
+      closeUtilitiesPopover();
+      return;
+    }
     const btn = e.target.closest("button[data-utility-action]");
     if (!btn) return;
     if (btn.dataset.utilityAction === "duplicate-board") {
@@ -17569,6 +17616,14 @@ el.utilitiesToggleButton?.addEventListener("click", (event) => {
     closeUtilitiesPopover();
   });
   document.body.appendChild(popover);
+  popover.addEventListener("keydown", (event) => {
+    const choices = [...popover.querySelectorAll("button[data-density-choice]")];
+    const index = choices.indexOf(document.activeElement);
+    if (index < 0 || !["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
+    event.preventDefault();
+    const next = event.key === "Home" ? 0 : event.key === "End" ? choices.length - 1 : (index + (event.key === "ArrowDown" ? 1 : -1) + choices.length) % choices.length;
+    choices[next].focus();
+  });
 });
 document.addEventListener("click", (event) => {
   if (event.target.closest("#floating-filters-popover, #filters-toggle-btn")) return;
@@ -18387,6 +18442,7 @@ function showDeleteBoardConfirmModal() {
 
 async function bootApp() {
   state.isBoardLoading = true;
+  applyCanvasDensity(state.canvasDensity);
   diagnoseDomDependencies();
   createDebugPanel();
   await loadSessionUser();

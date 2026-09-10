@@ -1,0 +1,33 @@
+const assert = require('assert');
+const fs = require('fs');
+const density = require('../canvas-density');
+const app = fs.readFileSync('app.js', 'utf8');
+const html = fs.readFileSync('index.html', 'utf8');
+const css = fs.readFileSync('styles.css', 'utf8');
+const lang = fs.readFileSync('language.js', 'utf8');
+const workflow = fs.readFileSync('.github/workflows/runtime-boot-safety.yml', 'utf8');
+
+const memory = value => ({ getItem: () => value, setItem(k, v) { this.written = [k, v]; } });
+assert.equal(density.restore(memory(null)), 'compact');
+for (const mode of density.MODES) assert.equal(density.restore(memory(JSON.stringify({version:1, mode}))), mode);
+for (const bad of ['null','[]','{}','"standard"','{"version":2,"mode":"detailed"}','{"version":1,"mode":null}','{']) assert.equal(density.restore(memory(bad)), 'compact');
+assert.equal(density.restore({getItem(){throw Error('denied')}}), 'compact');
+const store = memory(null); assert.equal(density.setMode('standard', store), 'standard'); assert.equal(store.written[0], density.STORAGE_KEY); assert.deepEqual(JSON.parse(store.written[1]), {version:1,mode:'standard'});
+assert.doesNotThrow(() => density.setMode('detailed', {setItem(){throw Error('quota')}})); assert.equal(density.getMode(), 'detailed');
+assert.equal(density.valid({mode:'compact'}), 'compact');
+
+for (const mode of ['compact','standard','detailed']) assert(app.includes(`["${mode}",`) || app.includes(`"${mode}", "`));
+assert(app.includes('role="menuitemradio"') && app.includes('aria-checked=') && app.includes('ArrowDown') && app.includes('ArrowUp'));
+assert(app.includes('data-density-choice') && html.includes('/canvas-density.js'));
+for (const key of ['Display density','Compact','Detailed','Anzeigedichte','Kompakt','Detailliert']) assert(lang.includes(key));
+assert(css.includes('html[data-theme="dark"] .node-critical-row') && css.includes('@media (max-width:560px)'));
+for (const role of ['Idea','Campaign Variation','Content','Social Media Posting','Landing Page','Email Campaign','Visual Concept','Image Brief']) assert(app.includes(role));
+assert(app.includes('criticalCandidates.find') && app.indexOf('persistenceFailure || node.approvalStale') < app.indexOf('normalizedStatus === "In Review"') && app.indexOf('normalizedStatus === "In Review"') < app.indexOf('readiness?.level'));
+for (const hook of ['data-id', 'node-header-actions', 'connector-handle', 'connector-link-handle', 'node-comment-badge', 'fillInspector(node)']) assert(app.includes(hook) || html.includes(hook));
+const apply = app.slice(app.indexOf('function applyCanvasDensity'), app.indexOf('function syncPopoverActiveStates'));
+for (const forbidden of ['saveCampaignCanvasState','markUnsaved','pushHistorySnapshot','fetch(','appendActivity','state.nodes =','position.x =','position.y =']) assert(!apply.includes(forbidden), `density must not invoke ${forbidden}`);
+assert(app.includes('requestAnimationFrame(drawLinks)') && app.includes('state.nodes.forEach(updateNodeCard)'));
+for (const hidden of ['.content','.content-pack-status','.image-strip','.social-preview','.tags','.ab-tests','.node-compact-summary']) assert(css.includes(hidden));
+assert(!fs.readFileSync('canvas-density.js','utf8').match(/campaignCanvasState|canvas_json|approval|publish|collaboration|fetch|autosave/i));
+assert(workflow.indexOf('check:bw33.3') > workflow.indexOf('check:bw33.2r1'));
+console.log('BW-33.3 Canvas density regression passed');
