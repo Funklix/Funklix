@@ -32,7 +32,7 @@ async function main(){
  assert(app.includes('result.clientRequestId!==input.clientRequestId'),'browser validates the real route envelope');
  assert(app.includes('onPublishStatus: readLinkedInPublicationStatus'),'browser is wired to owner-scoped polling');
  for(const state of ['published','provider_accepted_unreconciled','outcome_unknown','failed','cancelled'])assert(browser.includes(`\"${state}\"`),`browser accepts terminal ${state}`);
- for(const phrase of ['Published to LinkedIn','The post may already be live on LinkedIn.','Funklix could not finish confirming the publication.','Auf LinkedIn veröffentlicht','Der Beitrag ist möglicherweise bereits auf LinkedIn live.','Funklix konnte die Bestätigung der Veröffentlichung nicht abschließen.'])assert(browser.includes(phrase),phrase);
+ for(const phrase of ['Published to LinkedIn','The post may already be live on LinkedIn.','Tendra One could not finish confirming the publication.','Auf LinkedIn veröffentlicht','Der Beitrag ist möglicherweise bereits auf LinkedIn live.','Tendra One konnte die Bestätigung der Veröffentlichung nicht abschließen.'])assert(browser.includes(phrase),phrase);
  assert(browser.includes('try{result=await c.onPublish')&&browser.includes('}catch(error){')&&browser.includes('}finally{'),'confirmation has try/catch/finally cleanup');
  assert(browser.includes('publishLocks.has(lockKey)')&&browser.includes('publishLocks.delete(lockKey)'),'duplicate confirmations share one lock');
  assert(browser.includes('confirm.remove()'),'terminal success and uncertainty remove Publish now');
