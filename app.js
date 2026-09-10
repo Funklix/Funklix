@@ -5371,7 +5371,7 @@ function renderAiBrainFormattedAnswer(container, answer) {
   }
 }
 function captureAiBrainAdvisorIdentity(requestId = state.aiBrain.requestId) {
-  const displayName = String(resolveBrandWorkspaceDisplayName() || "Funklix AI Brain").trim().slice(0, 80);
+  const displayName = String(resolveBrandWorkspaceDisplayName() || "Tendra One AI Brain").trim().slice(0, 80);
   const approved = getSafeDashboardAvatarImageUrl(getApprovedBrandAvatarUrl());
   return Object.freeze({ avatarSource: approved || "", fallback: approved ? "brand-avatar" : "funklix-brain", label: displayName, boardId: String(state.currentBoardId || ""), brandId: String(state.boardBrandAssociation?.brandId || ""), lifecycle: state.boardLoadGeneration, requestId });
 }
@@ -5682,7 +5682,7 @@ function renderInsightsSurface() {
   const diagnostics=section("canvas-diagnostics-title","Canvas Diagnostics","These checks evaluate campaign structure and content. They are not measured campaign results.","insights-diagnostics");
   if(!unavailableReason){const a=snapshot.analysis;const hasCtaOpportunity=(Array.isArray(snapshot.findings)?snapshot.findings:[]).some(f=>String(f?.code||"").startsWith("CTA_"));const groups=[["Structure and readiness",[["Campaign readiness",a.healthScore,"Canvas readiness formula"]]],["Funnel coverage",[["Funnel-stage coverage",a.funnel.confidence,"Funnel-stage mapping"]]],["Strategy and consistency",[["ICP consistency",a.icp.consistencyScore,"Distinct audience labels"],["Tone consistency",a.tone.consistencyScore,"Distinct tone labels"],["Trust-layer coverage",a.trust.score,"Landing Page trust-field presence"]]],["Content and channels",[["CTA variation among existing CTAs",a.cta.qualityScore,"CTA variation check"]]]];const container=make("div","insights-diagnostic-groups");groups.forEach(([name,values])=>{const group=make("section","insights-diagnostic-group");group.append(make("h4","",t(name)));values.forEach(([name,score,method])=>{let status=scoreStatusKey(score);let copy=status==="Strong"?"This check is complete and consistent in the current Canvas.":status==="Good foundation"?"This area has a good foundation in the current Canvas.":status==="Needs attention"?"Review the related evidence and opportunity.":"Content required for this check is incomplete.";if(name==="CTA variation among existing CTAs"&&hasCtaOpportunity){status="Good foundation";copy="The existing CTA is distinct. Adding more purposeful CTA variations could support different campaign stages.";}const row=make("article",`insights-diagnostic-row status-${status.toLowerCase().replace(/\s+/g,"-")}`);row.append(make("span","insights-diagnostic-icon",status==="Strong"?"✓":status==="Incomplete"?"!":"•"),make("h5","",t(name)),make("div","insights-score",`${score}/100 · ${t(status)}`),make("p","",t(copy)));const details=make("details","insights-calculation");details.append(make("summary","",t("How this is calculated")),make("p","",`${t("Scope")}: ${t("Current Board")} · ${t("Method")}: ${t(method)}`));row.append(details);group.append(row);});container.append(group);});diagnostics.append(container);}
   const measured=section("measured-performance-title","Measured performance","","insights-disclosure-section");const measuredDetails=make("details","insights-collapsed-disclosure");const measuredSummary=make("summary");measuredSummary.append(make("span","insights-unavailable-icon","—"),make("strong","",t("No analytics data connected")),make("span","",t("Verified metrics can appear here when available.")));measuredDetails.append(measuredSummary,make("p","",t("Campaign results such as reach, engagement, conversions, and revenue will appear here when a verified data source is connected.")));measured.append(measuredDetails);
-  const methodology=section("insights-methodology-title","Data and Methodology","","insights-disclosure-section");const details=make("details","insights-methodology insights-collapsed-disclosure");details.append(make("summary","",t("View data classifications, methods, and limitations")));const classifications=make("dl","insights-classifications");[["Measured","Verified observations from a supported data source."],["Deterministic diagnostic","Repeatable rules applied to the current Canvas."],["Inferred","A conclusion derived from disclosed Canvas rules."],["Simulated","An assumption-based scenario, not a measurement."],["User-entered","Information supplied directly by a user."],["Unavailable","No reliable value is currently available."]].forEach(([term,definition])=>classifications.append(make("dt","",t(term)),make("dd","",t(definition))));const methods=make("ul","insights-method-list");["Canvas readiness formula","Funnel-stage mapping","Platform counting","CTA variation check","Distinct audience labels","Distinct tone labels","Landing Page trust-field presence"].forEach(method=>methods.append(make("li","",t(method))));details.append(classifications,make("h4","",t("Current source")),make("p","",`${t("Current Canvas")} · ${t("Current Board")} · ${sourceState} · ${snapshot?.analyzedAt||""} · ${state.currentBoardName||t("Current Board")} · ${state.nodes.length} ${t("Canvas nodes")}`),make("h4","",t("Diagnostic methods")),methods,make("h4","",t("Assumptions")),make("p","",t("Diagnostics use only the fields and supported node roles present in the current Canvas.")),make("h4","",t("Limitations")),make("p","",t("Canvas diagnostics evaluate the structure and content currently available in Funklix. They do not measure audience response, media delivery, conversions, revenue, or business impact.")));methodology.append(details);
+  const methodology=section("insights-methodology-title","Data and Methodology","","insights-disclosure-section");const details=make("details","insights-methodology insights-collapsed-disclosure");details.append(make("summary","",t("View data classifications, methods, and limitations")));const classifications=make("dl","insights-classifications");[["Measured","Verified observations from a supported data source."],["Deterministic diagnostic","Repeatable rules applied to the current Canvas."],["Inferred","A conclusion derived from disclosed Canvas rules."],["Simulated","An assumption-based scenario, not a measurement."],["User-entered","Information supplied directly by a user."],["Unavailable","No reliable value is currently available."]].forEach(([term,definition])=>classifications.append(make("dt","",t(term)),make("dd","",t(definition))));const methods=make("ul","insights-method-list");["Canvas readiness formula","Funnel-stage mapping","Platform counting","CTA variation check","Distinct audience labels","Distinct tone labels","Landing Page trust-field presence"].forEach(method=>methods.append(make("li","",t(method))));details.append(classifications,make("h4","",t("Current source")),make("p","",`${t("Current Canvas")} · ${t("Current Board")} · ${sourceState} · ${snapshot?.analyzedAt||""} · ${state.currentBoardName||t("Current Board")} · ${state.nodes.length} ${t("Canvas nodes")}`),make("h4","",t("Diagnostic methods")),methods,make("h4","",t("Assumptions")),make("p","",t("Diagnostics use only the fields and supported node roles present in the current Canvas.")),make("h4","",t("Limitations")),make("p","",t("Canvas diagnostics evaluate the structure and content currently available in Tendra One. They do not measure audience response, media delivery, conversions, revenue, or business impact.")));methodology.append(details);
   el.insightsCards.replaceChildren(root);
 }
 function isValidInsightsDiagnostic(analysis) {
@@ -6853,7 +6853,7 @@ function isFounderStoryCustomTile(tile) {
 const STRATEGY_MODULE_CONFIG = Object.freeze({
   market_research: Object.freeze({
     namespace: "marketResearch", label: "Market Research", endpoint: "/api/generate-market-research",
-    generationHelp: "Generate a structured first draft from the information entered here and your accepted Brand Brain knowledge. Funklix will organize supported information into the relevant sections and leave unknown facts open for review.",
+    generationHelp: "Generate a structured first draft from the information entered here and your accepted Brand Brain knowledge. Tendra One will organize supported information into the relevant sections and leave unknown facts open for review.",
     fields: Object.freeze([
       ["Market Definition", [["marketCategory", "Market category"], ["geographicFocus", "Geographic focus"], ["marketScope", "Market scope"], ["researchObjective", "Research objective"], ["researchDate", "Research date"]]],
       ["Target Customers", [["customerSegments", "Customer segments", true], ["primaryNeeds", "Primary needs", true], ["buyingTriggers", "Buying triggers", true], ["adoptionBarriers", "Adoption barriers", true]]],
@@ -6865,7 +6865,7 @@ const STRATEGY_MODULE_CONFIG = Object.freeze({
   }),
   business_plan: Object.freeze({
     namespace: "businessPlan", label: "Business Plan", endpoint: "/api/generate-business-plan",
-    generationHelp: "Generate a structured first draft from the information entered here and your accepted Brand Brain knowledge. Funklix will organize the available information into a practical business-plan structure and leave unsupported details open for review.",
+    generationHelp: "Generate a structured first draft from the information entered here and your accepted Brand Brain knowledge. Tendra One will organize the available information into a practical business-plan structure and leave unsupported details open for review.",
     fields: Object.freeze([
       ["Business Overview", [["businessSummary", "Business summary"], ["problem", "Problem"], ["solution", "Solution"], ["currentStage", "Current stage"], ["objectives", "Objectives", true]]],
       ["Customer and Market", [["targetCustomers", "Target customers", true], ["marketNeed", "Market need"], ["competitivePosition", "Competitive position"], ["marketResearchReference", "Market Research reference"]]],
@@ -7667,7 +7667,7 @@ function openFounderStoryWebsiteImport(tile, returnFocus) {
   overlay.dataset.importToken = token;
   overlay.innerHTML = `<div class="brand-confirm-card founder-story-import-card"><button type="button" class="brand-dna-recommendation-close fk-btn fk-btn-ghost" aria-label="Close website import" data-import-close>×</button>
     <h3 id="founder-story-import-heading">Import Founder Story facts</h3><div data-founder-story-import-body>
-    <p>Funklix securely retrieves the public webpage on the server and sends extracted text to the configured AI service. Private, login-protected, authenticated, or paywalled pages are unsupported. Suggestions require review before they change your Founder Story.</p>
+    <p>Tendra One securely retrieves the public webpage on the server and sends extracted text to the configured AI service. Private, login-protected, authenticated, or paywalled pages are unsupported. Suggestions require review before they change your Founder Story.</p>
     <label for="founder-story-import-url">Public webpage URL</label><input id="founder-story-import-url" type="url" data-founder-story-import-url placeholder="https://example.com/about">
     <p class="bc-import-error" data-founder-story-import-error role="alert"></p><div class="brand-confirm-actions"><button type="button" class="fk-btn fk-btn-ghost" data-import-cancel>Cancel</button><button type="button" class="fk-btn fk-btn-primary" data-founder-story-import-start>Retrieve and map</button></div></div></div>`;
   document.body.appendChild(overlay);
@@ -7757,7 +7757,7 @@ function renderStrategyModuleEditor(tile, idx) {
   }).join("")}</fieldset>`).join("");
   el.brandEditorTitle.textContent = config.label;
   el.brandEditorPanel.innerHTML = `<div class="bc-editor-meta"><p class="bc-helper">${escapeHtml(config.label)} Knowledge Module</p><span class="bc-badge">${escapeHtml(status.label)}</span></div>
-    <p class="bc-helper">Create a strategic draft from your inputs. Funklix does not browse the web or verify current market data.</p>
+    <p class="bc-helper">Create a strategic draft from your inputs. Tendra One does not browse the web or verify current market data.</p>
     ${data.accepted ? `<section class="strategy-accepted-summary"><h5>Current accepted version</h5><p>${escapeHtml((data.accepted.content || Object.values(data.accepted.structuredFacts).flat().find(Boolean) || "Accepted structured knowledge").slice(0, 500))}</p></section>` : ""}
     <h5>${data.draft ? "Current draft" : data.accepted ? "Edit as a new draft" : "Start draft"}</h5>${fieldsMarkup}
     <label for="brand-core-${config.namespace.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`)}-narrative">Narrative / pasted existing text</label>
@@ -9025,20 +9025,20 @@ function getBrandDnaRecommendationCopy(status) {
   if (status === "ambiguous") {
     return {
       title: "Review your Founder Story",
-      body: "Funklix found more than one Founder Story linked to this brand and cannot determine which one to use yet. Review your Founder Story setup before generating Brand DNA, or continue with the information currently available.",
+      body: "Tendra One found more than one Founder Story linked to this brand and cannot determine which one to use yet. Review your Founder Story setup before generating Brand DNA, or continue with the information currently available.",
       primary: "Review Founder Story"
     };
   }
   if (status === "error") {
     return {
       title: "Review your Founder Story",
-      body: "Funklix could not confirm whether your Founder Story is ready for Brand DNA. You can review it first or continue with the information currently available.",
+      body: "Tendra One could not confirm whether your Founder Story is ready for Brand DNA. You can review it first or continue with the information currently available.",
       primary: "Review Founder Story"
     };
   }
   return {
     title: "Do you already have a Founder Story?",
-    body: "Your Founder Story helps Funklix understand the motivation, experiences, and values behind the company. It can significantly improve your Brand Archetype and Brand DNA. You can also add or update it later.",
+    body: "Your Founder Story helps Tendra One understand the motivation, experiences, and values behind the company. It can significantly improve your Brand Archetype and Brand DNA. You can also add or update it later.",
     primary: "Add Founder Story"
   };
 }
@@ -12763,7 +12763,7 @@ function openCreateCampaignModal() {
     <div class="campaign-builder-hero fk-card">
       <span class="campaign-builder-kicker fk-badge">AI Campaign Builder</span>
       <h3>Create Campaign</h3>
-      <p>Brief your AI marketing teammate. Funklix will build a multi-angle funnel directly on the canvas.</p>
+      <p>Brief your AI marketing teammate. Tendra One will build a multi-angle funnel directly on the canvas.</p>
     </div>
     <label class="campaign-builder-field campaign-builder-field-full fk-card">
       <span>Campaign Idea</span>

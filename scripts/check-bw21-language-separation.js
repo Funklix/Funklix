@@ -46,7 +46,7 @@ const exposed = new Set();
 for (const match of html.matchAll(/data-i18n(?:-placeholder)?="([^"]+)"/g)) exposed.add(match[1]);
 [
   "Language preferences", "Interface language", "Campaign language",
-  "Interface language changes Funklix controls and messages.",
+  "Interface language changes Tendra One controls and messages.",
   "Campaign language is used for newly generated campaign content.",
   "Existing Boards and content are not translated automatically."
 ].forEach((key) => exposed.add(key));
