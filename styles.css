@@ -1,5 +1,6 @@
 /* BW-27 semantic theme contract. */
 :root, html[data-theme="light"] {
+  --brand-deep-focus:#4f46e5;--brand-creative-energy:#a78bfa;--brand-human-warmth:#f8b4c4;--brand-open-possibility:#ffd1a8;--brand-clear-thinking:#f8f9fb;--brand-primary:#4f46e5;--brand-primary-hover:#4338ca;--brand-selected-surface:#eeedff;--brand-focus-ring:#4f46e5;--brand-on-primary:#fff;
   --fk-color-app-bg:#f4f5fb;--fk-color-canvas-bg:#f8f9fd;--fk-color-surface-elevated:#fff;--fk-color-surface-secondary:#f5f6fb;--fk-color-surface-panel:#fff;--fk-color-surface-card:#fff;--fk-color-surface-input:#fff;--fk-color-surface-hover:#f0efff;--fk-color-surface-selected:#ebe8ff;--fk-color-overlay-backdrop:rgba(24,27,48,.56);
   --fk-color-primary-action:#6847f5;--fk-color-primary-hover:#5735df;--fk-color-primary-active:#4527bd;--fk-color-primary-subtle:#eeeaff;--fk-color-focus-ring:#765cff;--fk-color-selection:rgba(104,71,245,.24);
   --fk-color-text-primary:#20243d;--fk-color-text-secondary:#4e5675;--fk-color-text-muted:#717895;--fk-color-text-inverse:#fff;--fk-color-text-link:#5735df;--fk-color-text-disabled:#9ca2b7;
@@ -11,6 +12,7 @@
   --fk-border-width-thin:1px;--fk-border-width-strong:2px;--fk-control-height-sm:32px;--fk-control-height-md:40px;--fk-control-height-lg:44px;--fk-z-menu:999;--fk-z-modal:12000;--fk-z-overlay:20000;--fk-duration-fast:120ms;--fk-duration-normal:180ms;--fk-duration-slow:280ms;--fk-line-height-tight:1.2;--fk-line-height-body:1.5;
 }
 html[data-theme="dark"] {
+  --brand-deep-focus:#4f46e5;--brand-creative-energy:#a78bfa;--brand-human-warmth:#f8b4c4;--brand-open-possibility:#ffd1a8;--brand-clear-thinking:#f8f9fb;--brand-primary:#a78bfa;--brand-primary-hover:#c4b5fd;--brand-selected-surface:rgba(167,139,250,.14);--brand-focus-ring:#c4b5fd;--brand-on-primary:#171329;
   color-scheme:dark;--fk-color-app-bg:#0b1020;--fk-color-page-bg:#0d1324;--fk-color-nav-bg:#0f1528;--fk-color-canvas-bg:#0c1222;--fk-color-surface-panel:#121a2e;--fk-color-surface-card:#161f35;--fk-color-surface-elevated:#1b2540;--fk-color-surface-secondary:#141d32;--fk-color-surface-input:#11192d;--fk-color-surface-hover:#202b48;--fk-color-surface-selected:rgba(124,92,255,.14);--fk-color-overlay-backdrop:rgba(4,7,16,.78);
   --fk-color-primary-action:#7c5cff;--fk-color-primary-hover:#8b72ff;--fk-color-primary-active:#6e4fea;--fk-color-primary-subtle:rgba(124,92,255,.14);--fk-color-primary-border:rgba(139,114,255,.42);--fk-color-primary-glow:rgba(124,92,255,.18);--fk-color-focus-ring:#9d88ff;--fk-focus-shadow:0 0 0 3px rgba(124,92,255,.28);--fk-color-selection:rgba(124,92,255,.14);
   --fk-color-text-primary:#f4f6fc;--fk-color-text-secondary:#bac3d8;--fk-color-text-muted:#8894ae;--fk-color-text-subtle:#69758e;--fk-color-text-inverse:#111528;--fk-color-button-primary-text:#070a12;--fk-color-text-link:#aa98ff;--fk-color-text-disabled:#69758e;
@@ -392,19 +394,35 @@ body {
 }
 
 .logo {
-  width: 44px;
-  height: 44px;
-  border-radius: var(--fk-radius-lg);
-  display: grid;
-  place-items: center;
-  color: var(--fk-color-surface);
-  background: linear-gradient(150deg, var(--fk-color-primary-2), var(--fk-color-primary));
-  box-shadow: var(--fk-shadow-md);
-  font-size: var(--fk-font-size-sm);
-  font-weight: var(--fk-font-weight-bold);
-  letter-spacing: 0.04em;
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  gap: 8px;
+  color: var(--fk-color-heading);
   margin-bottom: 0;
 }
+
+.logo-symbol {
+  display: block;
+  width: 40px;
+  height: 32px;
+  flex: 0 0 auto;
+  object-fit: contain;
+}
+
+.logo-name {
+  overflow: hidden;
+  font-size: 1rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  text-overflow: clip;
+  white-space: nowrap;
+}
+
+.app-shell.sidebar-collapsed .logo-name { display: none; }
+.app-shell.sidebar-collapsed .sidebar-header { gap: 6px; }
+.app-shell.sidebar-collapsed .logo-symbol { width: 20px; height: 32px; }
 
 .brand-switcher-shell {
   margin-bottom: var(--fk-space-3);
@@ -7665,6 +7683,12 @@ html[data-theme=dark] :is(.persona-timeline-row:not(:last-child)::after){backgro
 .journey-copy-diagnostics{display:inline-flex;margin-top:7px;padding:4px 8px;border:1px solid currentColor;border-radius:7px;background:transparent;color:inherit;font:inherit;font-size:.72rem;cursor:pointer}
 .journey-copy-diagnostics:focus-visible{outline:2px solid var(--fk-color-focus-ring);outline-offset:2px}
 html[data-theme=dark] .journey-copy-diagnostics{color:var(--fk-color-text-primary)}
+
+/* BW-33.2R1 restrained brand application; semantic status tokens remain independent. */
+.fk-btn-primary { border-color:var(--brand-primary); background:var(--brand-primary); color:var(--brand-on-primary); }
+.fk-btn-primary:hover { border-color:var(--brand-primary-hover); background:var(--brand-primary-hover); color:var(--brand-on-primary); }
+.nav-item.active { border-color:color-mix(in srgb,var(--brand-primary) 24%,transparent); background:var(--brand-selected-surface); }
+.fk-btn:focus-visible,.fk-input:focus-visible,.fk-select:focus-visible,.fk-textarea:focus-visible { border-color:var(--brand-focus-ring); outline-color:color-mix(in srgb,var(--brand-focus-ring) 22%,transparent); }
 
 /* BW-27.6 — Campaign Canvas controls and overlays.  The legacy declarations
    above use light literals for focused editable node bodies, floating filter
