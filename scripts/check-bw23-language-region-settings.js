@@ -56,7 +56,7 @@ assert(/role="status" aria-live="polite"/.test(html), "polite preference status 
 // Labels include readable language names alongside supportive flags, and all new copy is bilingual.
 for (const id of ["ui-language-select", "campaign-language-select"]) assert(html.includes(`for="${id}"`), `${id} has no label`);
 for (const option of ["🇬🇧 English", "🇩🇪 Deutsch", "🇪🇸 Español"]) assert(html.includes(option), `${option} is missing`);
-for (const key of ["Settings", "Close Settings", "Language & Region", "Changes Tendra One controls and messages.", "Used for newly generated campaign content.", "🇬🇧 English", "🇩🇪 German", "🇪🇸 Spanish", "Interface language changed.", "Campaign language changed."]) {
+for (const key of ["Settings", "Close Settings", "Language & Region", "Changes Funklix controls and messages.", "Used for newly generated campaign content.", "🇬🇧 English", "🇩🇪 German", "🇪🇸 Spanish", "Interface language changed.", "Campaign language changed."]) {
   assert(language.includes(`"${key}"`), `German translation missing for ${key}`);
 }
 
