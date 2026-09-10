@@ -12,6 +12,9 @@
   const STORAGE_KEY = "funklix.languagePreferences.v1";
   const LANGUAGE_NAMES = Object.freeze({ en: "English", de: "German", es: "Spanish" });
   const german = {
+    "Display density": "Anzeigedichte", "Compact": "Kompakt", "Standard": "Standard", "Detailed": "Detailliert",
+    "Identity, status, and one critical detail": "Identität, Status und ein kritisches Detail", "Adds a short preview and key details": "Ergänzt eine kurze Vorschau und wichtige Details", "Shows the established full Canvas card": "Zeigt die etablierte vollständige Canvas-Karte",
+    "Approval or action failed": "Freigabe oder Aktion fehlgeschlagen", "Approval needs attention": "Freigabe benötigt Aufmerksamkeit", "Review or approval needs attention": "Prüfung oder Freigabe benötigt Aufmerksamkeit", "Readiness blocker": "Bereitschaftsblocker", "Ready to publish immediately": "Bereit zur sofortigen Veröffentlichung",
     "Home": "Startseite", "Boards": "Boards", "Campaign Canvas": "Kampagnen-Canvas",
     "Content Workspace": "Content-Arbeitsbereich", "More filters": "Weitere Filter", "Needs review": "Prüfung nötig", "Unscheduled": "Ungeplant", "Content Library": "Inhaltsbibliothek", "Review Queue": "Prüfwarteschlange", "Calendar": "Kalender",
     "Month": "Monat", "Agenda": "Agenda", "Today": "Heute", "Previous period": "Vorheriger Zeitraum", "Next period": "Nächster Zeitraum",
