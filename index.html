@@ -655,6 +655,7 @@
           <button id="inspector-close-btn" class="inspector-close fk-btn fk-btn-ghost" type="button" aria-label="Close Inspector">×</button>
           <h2 data-i18n="Node Configuration">Node Configuration</h2>
           <div class="meta" id="inspector-meta">Select or create a node.</div>
+          <p id="inspector-route-status" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></p>
 
           <form id="node-form" class="node-form" autocomplete="off">
           <section class="inspector-section fk-card">
@@ -703,8 +704,14 @@
           </section>
 
           <section id="ai-workspace-section" class="inspector-section ai-workspace-section hidden">
-            <h3 class="inspector-section-title" data-i18n="AI Workspace">AI Workspace</h3>
+            <h3 id="inspector-ai-review-heading" class="inspector-section-title" tabindex="-1" data-i18n="AI Workspace">AI Workspace</h3>
             <div id="ai-workspace-body" class="ai-workspace-body"></div>
+          </section>
+
+          <section id="inspector-comments-section" class="inspector-section inspector-route-section hidden fk-card">
+            <h3 id="inspector-comments-heading" class="inspector-section-title" tabindex="-1" data-i18n="Comments">Comments</h3>
+            <p id="inspector-comments-summary"></p>
+            <button id="inspector-comments-canvas-btn" class="fk-btn fk-btn-secondary" type="button" data-i18n="Show comments on Canvas">Show comments on Canvas</button>
           </section>
 
           <section id="social-fields" class="inspector-section social-fields hidden fk-card">
