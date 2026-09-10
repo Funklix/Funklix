@@ -127,6 +127,7 @@
     "View": "Ansicht", "Board View": "Board-Ansicht", "List View": "Listenansicht", "Calendar View": "Kalenderansicht",
     "Layout": "Layout", "Fit to Board": "An Board anpassen", "Auto Arrange": "Automatisch anordnen",
     "Compact All": "Alle einklappen", "Expand All": "Alle ausklappen", "Owned by you": "In deinem Besitz",
+    "Display density": "Anzeigedichte", "Compact": "Kompakt", "Standard": "Standard", "Detailed": "Detailliert",
     "Node Type": "Knotentyp", "Variation": "Variante", "Content": "Inhalt", "Landing": "Landingpage",
     "Social": "Social", "Platform": "Plattform", "Status": "Status", "Ownership": "Zuständigkeit",
     "State / Funnel": "Phase / Funnel", "My Nodes": "Meine Knoten", "Unassigned": "Nicht zugewiesen",

@@ -70,7 +70,7 @@ for (const cookie of ['funklix_session','funklix_oauth_state','funklix_oauth_ret
 for (const hook of ['left-sidebar','sidebar-toggle-btn','canvas-topbar','canvas','inspector-panel','content-workspace-view','boards-library-view','ai-brain-nav-btn','insights-nav-btn','review-node-btn','linkedin-connect-button']) assert(index.includes(`id="${hook}"`), `${hook} entry point missing`);
 assert((index + app).toLowerCase().includes('approval') && (index + app).toLowerCase().includes('publish'), 'approval or publishing entry point missing');
 for (const identifier of ['window.FunklixLanguage','window.FunklixContentWorkspace','funklix.workspace-brand.v1.','[Funklix DOM Diagnostics]']) assert(app.includes(identifier) || read('language.js').includes(identifier) || read('content-workspace.js').includes(identifier), `${identifier} compatibility identifier changed`);
-assert(!/canvasDensity|canvas-density|densityPreference|board\.density/i.test(index + app + css), 'Canvas density implementation introduced');
+assert(!/board\.density|canvas_json[^\n]*density|density[^\n]*canvas_json/i.test(index + app), 'Canvas density entered Board data');
 const adapter = read('api/social-connector/linkedin-adapter.js');
 assert.strictEqual(require(path.join(root, 'api/social-connector/linkedin-publishing.js')).enabled({}), false, 'personal LinkedIn publishing default changed');
 assert(adapter.includes("accountType:'personal'") && !/organization|company page/i.test(adapter), 'Company Page publishing introduced');
