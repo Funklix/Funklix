@@ -59,6 +59,7 @@
     "check:bw32.3.7": "node scripts/check-bw32-3-7-approval-action.js",
     "check:bw32.3.8": "node scripts/check-bw32-3-8-linkedin-publication-finalization.js",
     "check:bw32.3.9": "node scripts/check-bw32-3-9-authoritative-response-boundary.js",
-    "check:bw33.2r1": "node scripts/check-bw33-2r1-tendra-one-brand-foundation.js"
+    "check:bw33.2r1": "node scripts/check-bw33-2r1-tendra-one-brand-foundation.js",
+    "check:bw33.3r1": "node scripts/check-bw33-3r1-canvas-density.js"
   }
 }

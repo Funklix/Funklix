@@ -8180,6 +8180,43 @@ function applyCampaignState(campaignState, statusText = "Restored") {
   state.isBoardLoading = false;
 }
 
+function updateCanvasDensityMenuState(root, mode) {
+  root?.querySelectorAll?.("button[data-canvas-density-choice]").forEach((button) => {
+    button.setAttribute("aria-checked", String(button.dataset.canvasDensityChoice === mode));
+  });
+}
+
+function applyCanvasDensityPresentation(mode, { persist = false, menuRoot = document } = {}) {
+  const density = globalThis.TendraOnePresentation?.canvasDensity;
+  if (!density || !state.currentBoardId || state.isBoardLoading || state.isBoardHydrating || state.boardAccess?.canView === false) return false;
+  const selected = density.validateMode(mode);
+  if (persist) density.remember(selected, localStorage);
+  try { density.applyMarker(el.canvas, selected); } catch (_) { return false; }
+  try { updateCanvasDensityMenuState(menuRoot, selected); } catch (_) { /* Menu state cannot affect the Canvas. */ }
+  try {
+    requestAnimationFrame(() => {
+      try { drawLinks(); } catch (_) { /* A passive redraw must never invalidate a loaded Board. */ }
+    });
+  } catch (_) { /* The marker remains useful when redraw scheduling is unavailable. */ }
+  return true;
+}
+
+function schedulePostHydrationCanvasDensity(loadGeneration, boardId) {
+  // The one activation boundary: the authorized response, applyCampaignState, initial node render,
+  // active Board identity, and Canvas ownership have all completed. The timer also keeps density
+  // outside the Board loader's access-error catch and lets boot finish its Inspector render first.
+  try {
+    setTimeout(() => {
+      if (loadGeneration !== state.boardLoadGeneration || String(state.currentBoardId || "") !== String(boardId || "") || state.isBoardLoading || state.isBoardHydrating) return;
+      const density = globalThis.TendraOnePresentation?.canvasDensity;
+      if (!density) return;
+      let mode = density.DEFAULT_MODE;
+      try { mode = density.readPreference(localStorage); } catch (_) { mode = "compact"; }
+      try { applyCanvasDensityPresentation(mode); } catch (_) { /* Density always fails open after hydration. */ }
+    }, 0);
+  } catch (_) { /* Scheduling failure cannot reclassify successful Board access. */ }
+}
+
 async function saveBoardToServer(trigger = "manual") {
   if (state.isBoardLoading || state.isBoardHydrating || state.initialServerLoadInFlight) {
     console.warn("[Funklix Save Guard] Save blocked while board is loading or hydrating", {
@@ -8408,6 +8445,7 @@ async function loadBoardFromUrlIfPresent(requestedBoardId = null) {
     startPresenceLite();
     startBoardRefreshPolling();
     refreshDashboardIfVisible();
+    schedulePostHydrationCanvasDensity(loadGeneration, data.id);
     return true;
   } catch (error) {
     if (loadGeneration === state.boardLoadGeneration && boardId === (getBoardIdFromPath() || state.currentBoardId)) {
@@ -13962,6 +14000,11 @@ function buildUtilitiesPopoverHtml() {
   const canClaim = !!state.user?.email && !!(state.currentBoardId || getBoardIdFromPath()) && !state.currentBoardOwnerEmail;
   const ownedByYou = !!state.user?.email && !!state.currentBoardOwnerEmail && state.currentBoardOwnerEmail === state.user.email;
   const lastSaved = el.boardLastSaved?.textContent || '';
+  const density = globalThis.TendraOnePresentation?.canvasDensity;
+  const densityMode = density?.currentMode?.() || density?.DEFAULT_MODE || "compact";
+  const densityControls = state.currentBoardId && state.boardAccess?.canView !== false ? `<div class="filter-group canvas-density-control"><strong>Display density</strong><div class="node-filter-chips" role="menu" aria-label="Display density">
+    ${["compact", "standard", "detailed"].map((mode) => `<button type="button" role="menuitemradio" aria-checked="${String(densityMode === mode)}" data-canvas-density-choice="${mode}">${mode[0].toUpperCase()}${mode.slice(1)}</button>`).join("")}
+  </div></div>` : "";
   return `<div class="filter-group"><strong>Board</strong><div class="node-filter-chips">
     <button type="button" data-utility-action="save-board">Save Board</button>
     <button type="button" data-utility-action="duplicate-board">Duplicate Board</button>
@@ -13980,6 +14023,7 @@ function buildUtilitiesPopoverHtml() {
     <button type="button" data-utility-action="compact-all">Compact All</button>
     <button type="button" data-utility-action="expand-all">Expand All</button>
   </div></div>
+  ${densityControls}
   `;
 }
 
@@ -17535,6 +17579,13 @@ el.utilitiesToggleButton?.addEventListener("click", (event) => {
   popover.style.top = `${rect.bottom + 8}px`;
   popover.style.left = `${Math.max(10, rect.right - 260)}px`;
   popover.addEventListener("click", (e) => {
+    const densityButton = e.target.closest("button[data-canvas-density-choice]");
+    if (densityButton) {
+      e.stopPropagation();
+      try { applyCanvasDensityPresentation(densityButton.dataset.canvasDensityChoice, { persist: true, menuRoot: popover }); } catch (_) { /* Presentation-only failure. */ }
+      closeUtilitiesPopover();
+      return;
+    }
     const btn = e.target.closest("button[data-utility-action]");
     if (!btn) return;
     if (btn.dataset.utilityAction === "duplicate-board") {
