@@ -5,7 +5,7 @@ const assert = require("assert");
 const fs = require("fs");
 const path = require("path");
 const vm = require("vm");
-const { execFileSync } = require("child_process");
+const unsafeFixture = require("./fixtures/bw33-3-unsafe-density-lifecycle");
 
 const root = path.resolve(__dirname, "..");
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
@@ -104,14 +104,13 @@ assert(css.includes('#canvas[data-tendra-canvas-density="compact"] #zoom-layer >
 assert(!css.includes('body[data-tendra-canvas-density') && !css.includes('html[data-tendra-canvas-density'));
 assert(app.includes('role="menuitemradio"') && app.includes('aria-checked='));
 
-// The locally auditable historical BW-33.3 tree must exhibit the unsafe renderer/boot coupling.
-try {
-  const historical = execFileSync("git", ["show", "783fda913254788d0832711bf086436dbeb89c73:app.js"], { cwd: root, encoding: "utf8" });
-  assert(functionSource(historical, "bootApp").includes("applyCanvasDensity"), "historical pre-session activation was not detected");
-  assert(functionSource(historical, "updateNodeCard").includes("canvasDensity"), "historical renderer coupling was not detected");
-} catch (error) {
-  if (error instanceof assert.AssertionError) throw error;
-  throw new Error(`historical regression comparison unavailable: ${error.message}`);
-}
+// Portable historical proof: BW-33.3A established this exact unsafe lifecycle pattern.
+const unsafe = unsafeFixture.runUnsafeDensityLifecycle();
+assert(unsafe.events.indexOf("density-application") < unsafe.events.indexOf("session-resolved"), "unsafe fixture did not apply density before session resolution");
+assert.deepStrictEqual(unsafe.events.slice(-4), ["applyCampaignState", "renderNode", "updateNodeCard", "density-application"], "unsafe fixture did not couple density to hydration rendering");
+assert.strictEqual(unsafe.firstException?.message, "injected density failure", "unsafe density exception did not escape rendering");
+assert.strictEqual(unsafe.accessWarningShown, true, "unsafe exception did not enter access classification");
+assert.strictEqual(unsafe.state.boardLoaded, false, "unsafe lifecycle incorrectly completed Board loading");
+assert.strictEqual(unsafe.state.activeBoardId, null, "unsafe lifecycle incorrectly preserved Board identity");
 
 console.log("BW-33.3R1 deterministic post-hydration Canvas-density regression checks passed.");
