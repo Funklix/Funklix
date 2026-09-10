@@ -44,6 +44,7 @@ function translateInterface(root = document) {
     node.textContent = uiText(original);
   });
 }
+
 const BRAND_CORE_STORAGE_KEY = "brandBrainState";
 const ACTIVITY_FEED_MAX_ENTRIES = 50;
 const ACTIVITY_FEED_VISIBLE_ENTRIES = 15;
@@ -73,6 +74,7 @@ const state = {
   selectedPrimary: null,
   inspectorDismissedNodeId: null,
   inspectorSelectionSnapshot: null,
+  inspectorSectionRoute: null,
   zoom: 1,
   nodeCounter: 1,
   postitCounter: 1,
@@ -279,6 +281,12 @@ const el = {
   picker: document.getElementById("node-type-picker"),
   pickerOptions: document.getElementById("node-type-options"),
   inspectorMeta: document.getElementById("inspector-meta"),
+  inspectorRouteStatus: document.getElementById("inspector-route-status"),
+  inspectorCommentsSection: document.getElementById("inspector-comments-section"),
+  inspectorCommentsHeading: document.getElementById("inspector-comments-heading"),
+  inspectorCommentsSummary: document.getElementById("inspector-comments-summary"),
+  inspectorCommentsCanvasButton: document.getElementById("inspector-comments-canvas-btn"),
+  inspectorAiReviewHeading: document.getElementById("inspector-ai-review-heading"),
   aiWorkspaceSection: document.getElementById("ai-workspace-section"),
   aiWorkspaceBody: document.getElementById("ai-workspace-body"),
   nodeForm: document.getElementById("node-form"),
@@ -8152,6 +8160,9 @@ function isValidCanvasStatePayload(value) {
 }
 
 function applyCampaignState(campaignState, statusText = "Restored") {
+  clearInspectorSectionRoute();
+  state.commentThreadsOpenedByNode.clear();
+  state.aiReviewFixPreviews = {};
   const normalizedState = withBoardSchemaDefaults(campaignState);
   state.canvasMetadata = { ...normalizedState.metadata };
   state.nodes = (normalizedState.nodes || []).map((node) => sanitizeNodeForPersistence(node));
@@ -8379,6 +8390,7 @@ async function loadBoardFromUrlIfPresent(requestedBoardId = null) {
   if (!boardId) return false;
   const loadGeneration = state.boardLoadGeneration + 1;
   state.boardLoadGeneration = loadGeneration;
+  clearInspectorSectionRoute();
   const userEmail = (state.user?.email || "").trim().toLowerCase();
   state.initialServerLoadInFlight = true;
   state.isBoardLoading = true;
@@ -13185,6 +13197,7 @@ function updateNodeCommentBadge(node, nodeEl) {
         return;
       }
       openNodeCommentThread(node.id);
+      openInspectorSection(node.id, "comments", commentBadge, { keyboard: event.detail === 0 });
     });
     const actions = nodeEl.querySelector(".node-header-actions");
     if (actions) actions.insertBefore(commentBadge, actions.firstChild);
@@ -13197,6 +13210,10 @@ function updateNodeCommentBadge(node, nodeEl) {
   const displayCount = unresolvedCount || totalCommentCount || 0;
   commentBadge.textContent = `💬 ${displayCount}`;
   commentBadge.title = totalCommentCount ? `${unresolvedCount} unresolved · ${totalReplyCount} replies · ${resolvedCount} resolved` : "Add comment";
+  commentBadge.setAttribute("aria-label", totalCommentCount
+    ? uiFormat("Open comments in Inspector for {title}, {count} unresolved", { title: node.title || node.type || uiText("Node"), count: unresolvedCount })
+    : uiText("Add comment"));
+  commentBadge.dataset.inspectorTarget = "comments";
   commentBadge.classList.toggle("has-comments", totalCommentCount > 0);
   commentBadge.classList.toggle("has-unresolved", unresolvedCount > 0);
   commentBadge.classList.toggle("has-recent", hasRecentUnopenedComment(node));
@@ -14146,6 +14163,70 @@ function selectNodeForAiWorkspace(node) {
   fillInspector(node);
 }
 
+function clearInspectorSectionRoute() {
+  document.querySelectorAll(".inspector-route-arrival").forEach((section) => section.classList.remove("inspector-route-arrival"));
+  state.inspectorSectionRoute = null;
+}
+
+function selectCanvasNode(node) {
+  if (!node?.id || !getNode(node.id)) return false;
+  state.selectedIds.clear();
+  state.selectedIds.add(node.id);
+  state.selectedPrimary = node.id;
+  updateSelectionClasses();
+  fillInspector(node);
+  return true;
+}
+
+function renderInspectorSectionRoute(node) {
+  const route = state.inspectorSectionRoute;
+  const valid = !!node && !!route && route.boardId === state.currentBoardId
+    && route.loadGeneration === state.boardLoadGeneration && route.nodeId === node.id;
+  const commentsActive = valid && route.section === "comments";
+  const aiActive = valid && route.section === "ai_review";
+  el.inspectorCommentsSection?.classList.toggle("hidden", !commentsActive);
+  if (commentsActive) {
+    const unresolved = (node.postits || []).filter((note) => !note.resolved).length;
+    if (el.inspectorCommentsSummary) el.inspectorCommentsSummary.textContent = uiFormat("{count} unresolved comments. The complete comment workflow remains available on the Canvas.", { count: unresolved });
+  }
+  if (aiActive && !getAiReviewFixPreview(node.id) && el.aiWorkspaceBody) {
+    el.aiWorkspaceBody.textContent = uiText("AI Review details and actions remain available on the Canvas.");
+  }
+  if (el.aiWorkspaceSection) el.aiWorkspaceSection.classList.toggle("hidden", !(aiActive || getAiReviewFixPreview(node?.id)));
+}
+
+function openInspectorSection(nodeId, section, initiatingControl = null, { keyboard = false } = {}) {
+  if (!state.currentBoardId || state.isBoardLoading || state.isBoardHydrating || state.boardAccess?.canView === false) return false;
+  if (section !== "comments" && section !== "ai_review") return false;
+  const node = getNode(nodeId);
+  if (!node || !el.zoomLayer?.querySelector(`.node[data-id='${nodeId}']`)) return false;
+  const boardId = state.currentBoardId;
+  const loadGeneration = state.boardLoadGeneration;
+  if (!selectCanvasNode(node)) return false;
+  state.inspectorSectionRoute = { boardId, loadGeneration, nodeId, section, initiatingControl };
+  state.inspectorDismissedNodeId = null;
+  fillInspector(node);
+  synchronizeAppShell({ forceInspectorOpen: true });
+  requestAnimationFrame(() => {
+    const route = state.inspectorSectionRoute;
+    if (!route || route.boardId !== state.currentBoardId || route.loadGeneration !== state.boardLoadGeneration || route.nodeId !== state.selectedPrimary) return;
+    const target = section === "comments" ? el.inspectorCommentsSection : el.aiWorkspaceSection;
+    const heading = section === "comments" ? el.inspectorCommentsHeading : el.inspectorAiReviewHeading;
+    if (!target || target.classList.contains("hidden")) return;
+    const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+    target.scrollIntoView?.({ block: "nearest", behavior: reducedMotion ? "auto" : "smooth" });
+    target.classList.add("inspector-route-arrival");
+    if (reducedMotion) requestAnimationFrame(() => target.classList.remove("inspector-route-arrival"));
+    else target.addEventListener("animationend", () => target.classList.remove("inspector-route-arrival"), { once: true });
+    if (keyboard) heading?.focus?.({ preventScroll: true });
+    const message = section === "comments"
+      ? uiFormat("Comments for {title} are available in the Inspector. {count} unresolved.", { title: node.title || node.type || uiText("Node"), count: (node.postits || []).filter((note) => !note.resolved).length })
+      : uiFormat("AI Review for {title} is available in the Inspector.", { title: node.title || node.type || uiText("Node") });
+    if (el.inspectorRouteStatus) el.inspectorRouteStatus.textContent = message;
+  });
+  return true;
+}
+
 function focusAiWorkspace() {
   requestAnimationFrame(() => {
     el.aiWorkspaceSection?.scrollIntoView?.({ block: "nearest", behavior: "smooth" });
@@ -14222,9 +14303,13 @@ function createAiWorkspaceReadonlyText(labelText, value = "") {
 function renderInspectorAiWorkspace(node) {
   if (!el.aiWorkspaceSection || !el.aiWorkspaceBody) return;
   const preview = getAiReviewFixPreview(node?.id);
-  el.aiWorkspaceSection.classList.toggle("hidden", !node || !preview);
+  const routed = !!node && state.inspectorSectionRoute?.section === "ai_review" && state.inspectorSectionRoute.nodeId === node.id;
+  el.aiWorkspaceSection.classList.toggle("hidden", !node || (!preview && !routed));
   el.aiWorkspaceBody.innerHTML = "";
-  if (!node || !preview) return;
+  if (!node || !preview) {
+    if (routed) el.aiWorkspaceBody.textContent = uiText("AI Review details and actions remain available on the Canvas.");
+    return;
+  }
 
   const title = document.createElement("strong");
   title.className = "ai-workspace-heading";
@@ -14533,6 +14618,18 @@ function renderPostits(node, nodeEl) {
     });
     if (parsedAiReview && !note.resolved) {
       area.replaceWith(renderAiReviewCard(parsedAiReview, { node, note, nodeEl }));
+      const reviewCard = postit.querySelector(".ai-review-card");
+      const inspectorButton = document.createElement("button");
+      inspectorButton.type = "button";
+      inspectorButton.className = "ai-review-inspector-route";
+      inspectorButton.dataset.inspectorTarget = "ai_review";
+      inspectorButton.textContent = uiText("Open AI Review in Inspector");
+      inspectorButton.setAttribute("aria-label", uiFormat("Open AI Review in Inspector for {title}", { title: node.title || node.type || uiText("Node") }));
+      inspectorButton.addEventListener("click", (event) => {
+        event.stopPropagation();
+        openInspectorSection(node.id, "ai_review", inspectorButton, { keyboard: event.detail === 0 });
+      });
+      reviewCard.appendChild(inspectorButton);
     }
 
     postit.querySelector(".postit-delete").addEventListener("click", () => {
@@ -14753,6 +14850,7 @@ function fillInspector(node) {
     if (el.connectedContextSummary) el.connectedContextSummary.textContent = uiFormat("Parents: {count} · Children: {children}", { count: 0, children: 0 });
     if (el.connectedContextBody) el.connectedContextBody.textContent = "";
     renderInspectorAiWorkspace(null);
+    renderInspectorSectionRoute(null);
     updateInspectorActionVisibility();
     return;
   }
@@ -14823,6 +14921,7 @@ function fillInspector(node) {
     });
   }
   renderInspectorAiWorkspace(node);
+  renderInspectorSectionRoute(node);
   updateInspectorActionVisibility();
   renderNodePresenceBadges();
 }
@@ -15811,11 +15910,12 @@ function renderNode(node) {
   nodeEl.addEventListener("click", (event) => {
     collapseExpandedNodes(node.id);
     const append = event.shiftKey;
-    if (!append) state.selectedIds.clear();
-    state.selectedIds.add(node.id);
-    state.selectedPrimary = node.id;
-    updateSelectionClasses();
-    fillInspector(node);
+    if (append) {
+      state.selectedIds.add(node.id);
+      state.selectedPrimary = node.id;
+      updateSelectionClasses();
+      fillInspector(node);
+    } else selectCanvasNode(node);
   });
   nodeEl.addEventListener("dblclick", (event) => {
     if (event.target.closest("button,input,textarea,select,[contenteditable='true']")) return;
@@ -16075,11 +16175,7 @@ function enableNodeDrag(nodeEl, node) {
     if (state.boardAccess?.canEdit === false) return;
 
     if (!state.selectedIds.has(node.id)) {
-      state.selectedIds.clear();
-      state.selectedIds.add(node.id);
-      state.selectedPrimary = node.id;
-      updateSelectionClasses();
-      fillInspector(node);
+    selectCanvasNode(node);
     }
 
     const moveIds = [...state.selectedIds];
@@ -16385,6 +16481,11 @@ function inspectorResponsiveMode() {
 }
 
 function restoreInspectorFocus() {
+  const routeOrigin = state.inspectorSectionRoute?.initiatingControl;
+  if (routeOrigin?.isConnected && state.inspectorSectionRoute?.boardId === state.currentBoardId) {
+    routeOrigin.focus?.({ preventScroll: true });
+    return;
+  }
   const selected = state.selectedPrimary
     ? [...(el.zoomLayer?.querySelectorAll?.(".node") || [])].find((node) => node.dataset.id === state.selectedPrimary)
     : null;
@@ -16404,6 +16505,8 @@ function synchronizeAppShell({ view = state.activeView, forceInspectorOpen = fal
     state.selectedIds.delete(state.selectedPrimary);
     state.selectedPrimary = null;
     state.inspectorSelectionSnapshot = null;
+    document.querySelectorAll?.(".inspector-route-arrival")?.forEach((section) => section.classList.remove("inspector-route-arrival"));
+    state.inspectorSectionRoute = null;
   }
   const supported = effectiveView === "board" && state.appMode !== "brand";
   const open = supported && !!selectedNode && (forceInspectorOpen || state.inspectorDismissedNodeId !== selectedNode.id);
@@ -16423,6 +16526,8 @@ function synchronizeAppShell({ view = state.activeView, forceInspectorOpen = fal
 function closeInspector({ restoreFocus = true } = {}) {
   state.inspectorDismissedNodeId = state.selectedPrimary;
   if (restoreFocus && el.inspectorPanel?.contains(document.activeElement)) restoreInspectorFocus();
+  document.querySelectorAll?.(".inspector-route-arrival")?.forEach((section) => section.classList.remove("inspector-route-arrival"));
+  state.inspectorSectionRoute = null;
   synchronizeAppShell();
 }
 
@@ -16844,6 +16949,12 @@ document.addEventListener("keydown", (e) => {
   }
 });
 el.inspectorCloseButton?.addEventListener("click", () => closeInspector());
+el.inspectorCommentsCanvasButton?.addEventListener("click", () => {
+  const route = state.inspectorSectionRoute;
+  if (!route || route.section !== "comments" || route.boardId !== state.currentBoardId) return;
+  openNodeCommentThread(route.nodeId);
+  restoreInspectorFocus();
+});
 window.matchMedia?.("(min-width: 1024px)")?.addEventListener?.("change", () => synchronizeAppShell());
 el.sidebarToggleButton?.addEventListener("click", () => {
   const collapsed = !el.appShell.classList.contains("sidebar-collapsed");
