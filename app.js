@@ -8452,7 +8452,7 @@ async function saveBoardToServer(trigger = "manual") {
 }
 
 async function loadBoardFromUrlIfPresent(requestedBoardId = null) {
-  closePostitEmojiPicker();
+  closePostitEmojiPicker({ reason: "board-load-start" });
   const boardId = requestedBoardId || getBoardIdFromPath() || state.currentBoardId;
   if (!boardId) return false;
   const loadGeneration = state.boardLoadGeneration + 1;
@@ -13425,7 +13425,11 @@ function createOwnerDisplay(node, { includeUnassigned = true } = {}) {
 
 function nodeHasActivePostitEditor(nodeEl) {
   const active = document.activeElement;
-  return !!active?.closest?.(".postit") && !!nodeEl?.contains(active);
+  if (!!active?.closest?.(".postit") && !!nodeEl?.contains(active)) return true;
+  // The emoji grid is portalled to <body>, so focus leaves the textarea even
+  // though the same logical Post-it editor remains active. Presence/ownership
+  // refreshes must not interpret that focus transfer as permission to rebuild it.
+  return !!activePostitEmojiPicker?.trigger && !!nodeEl?.contains(activePostitEmojiPicker.trigger);
 }
 
 function nodeHasActiveSocialPreviewEditor(nodeEl) {
@@ -13889,7 +13893,7 @@ function updateNodeCard(node) {
   }
 
   if (!nodeHasActivePostitEditor(nodeEl)) {
-    renderPostits(node, nodeEl);
+    renderPostits(node, nodeEl, "node-card-refresh");
   }
 }
 
@@ -14599,9 +14603,11 @@ function capturePostitEmojiSelection(editor) {
   return { start: safeStart, end: Math.max(safeStart, Math.min(end, length)) };
 }
 
-function closePostitEmojiPicker({ restoreTrigger = false } = {}) {
+function closePostitEmojiPicker({ reason, restoreTrigger = false } = {}) {
   const active = activePostitEmojiPicker;
   if (!active) return;
+  if (!reason) throw new Error("Post-it emoji picker close requires an authoritative reason");
+  active.closeReason = reason;
   activePostitEmojiPicker = null;
   document.removeEventListener("pointerdown", active.onOutsidePointer, true);
   window.removeEventListener("resize", active.onViewportChange);
@@ -14622,7 +14628,7 @@ function isPostitEmojiPickerEventInside(event, active = activePostitEmojiPicker)
 function insertPostitEmoji(active, emoji) {
   const editor = active.editor;
   if (!editor?.isConnected || active.boardId !== state.currentBoardId || !active.trigger?.isConnected) {
-    closePostitEmojiPicker();
+    closePostitEmojiPicker({ reason: "target-invalid" });
     return;
   }
   const selection = active.selection || capturePostitEmojiSelection(editor);
@@ -14631,14 +14637,14 @@ function insertPostitEmoji(active, emoji) {
   const end = Math.max(start, Math.min(selection.end, length));
   editor.value = `${editor.value.slice(0, start)}${emoji}${editor.value.slice(end)}`;
   const caret = start + emoji.length;
-  closePostitEmojiPicker();
+  closePostitEmojiPicker({ reason: "emoji-selected" });
   editor.focus();
   editor.setSelectionRange(caret, caret);
   if (active.kind === "root") editor.dispatchEvent(new Event("input", { bubbles: true }));
 }
 
 function positionPostitEmojiPicker(active) {
-  if (!active?.trigger?.isConnected || active.boardId !== state.currentBoardId) return closePostitEmojiPicker();
+  if (!active?.trigger?.isConnected || active.boardId !== state.currentBoardId) return closePostitEmojiPicker({ reason: active?.boardId !== state.currentBoardId ? "board-changed" : "target-invalid" });
   const margin = 8;
   const triggerRect = active.trigger.getBoundingClientRect();
   const pickerRect = active.picker.getBoundingClientRect();
@@ -14653,7 +14659,7 @@ function positionPostitEmojiPicker(active) {
 
 function openPostitEmojiPicker(trigger, editor, kind) {
   const selection = capturePostitEmojiSelection(editor);
-  closePostitEmojiPicker();
+  closePostitEmojiPicker({ reason: "ownership-transferred" });
   const picker = document.createElement("div");
   const pickerId = `postit-emoji-picker-${Date.now()}`;
   picker.id = pickerId;
@@ -14692,7 +14698,7 @@ function openPostitEmojiPicker(trigger, editor, kind) {
     picker.appendChild(section);
   });
   picker.addEventListener("keydown", (event) => {
-    if (event.key === "Escape") { event.preventDefault(); closePostitEmojiPicker({ restoreTrigger: true }); return; }
+    if (event.key === "Escape") { event.preventDefault(); closePostitEmojiPicker({ reason: "escape", restoreTrigger: true }); return; }
     const current = buttons.indexOf(document.activeElement);
     if (current < 0 || !["ArrowRight", "ArrowLeft", "ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
     event.preventDefault();
@@ -14707,13 +14713,13 @@ function openPostitEmojiPicker(trigger, editor, kind) {
   const active = {
     boardId: state.currentBoardId, trigger, editor, kind, picker, selection,
     onOutsidePointer(event) {
-      if (!isPostitEmojiPickerEventInside(event, active)) closePostitEmojiPicker({ restoreTrigger: true });
+      if (!isPostitEmojiPickerEventInside(event, active)) closePostitEmojiPicker({ reason: "outside-pointer", restoreTrigger: true });
     },
     onViewportChange(event) {
       // The portal is independently scrollable. Its capture-phase scroll event is
       // not a Canvas/app-shell viewport change and must not dismiss the picker.
       if (event?.type === "scroll" && isPostitEmojiPickerEventInside(event, active)) return;
-      closePostitEmojiPicker();
+      closePostitEmojiPicker({ reason: "viewport-transition" });
     }
   };
   activePostitEmojiPicker = active;
@@ -14742,15 +14748,15 @@ function createPostitEmojiTrigger(editor, kind) {
   trigger.addEventListener("pointerdown", () => { trigger._postitEmojiSelection = capturePostitEmojiSelection(editor); });
   trigger.addEventListener("click", (event) => {
     event.stopPropagation();
-    if (activePostitEmojiPicker?.trigger === trigger) return closePostitEmojiPicker({ restoreTrigger: true });
+    if (activePostitEmojiPicker?.trigger === trigger) return closePostitEmojiPicker({ reason: "trigger-toggle", restoreTrigger: true });
     openPostitEmojiPicker(trigger, editor, kind);
     activePostitEmojiPicker.selection = trigger._postitEmojiSelection || activePostitEmojiPicker.selection;
   });
   return trigger;
 }
 
-function renderPostits(node, nodeEl) {
-  if (activePostitEmojiPicker?.trigger && nodeEl.contains(activePostitEmojiPicker.trigger)) closePostitEmojiPicker();
+function renderPostits(node, nodeEl, pickerCloseReason = "target-removed") {
+  if (activePostitEmojiPicker?.trigger && nodeEl.contains(activePostitEmojiPicker.trigger)) closePostitEmojiPicker({ reason: pickerCloseReason });
   nodeEl.querySelectorAll(".postit").forEach((p) => p.remove());
   if (!Array.isArray(node.postits)) node.postits = [];
 
@@ -14829,7 +14835,7 @@ function renderPostits(node, nodeEl) {
       note.updatedAt = new Date().toISOString();
       markNodeCommentsSeen(node.id);
       appendActivity(note.resolved ? "comment_resolved" : "comment_added", { node });
-      renderPostits(node, nodeEl);
+      renderPostits(node, nodeEl, note.resolved ? "postit-resolved" : "target-removed");
       updateNodeCommentBadge(node, nodeEl);
       saveCampaignCanvasState();
       if (!note.resolved && !isAiReviewNote) {
@@ -14897,7 +14903,7 @@ function renderPostits(node, nodeEl) {
         return;
       }
       node.postits = node.postits.filter((n) => n.id !== note.id);
-      renderPostits(node, nodeEl);
+      renderPostits(node, nodeEl, "postit-deleted");
       updateNodeCommentBadge(node, nodeEl);
       saveCampaignCanvasState();
     });
@@ -15014,7 +15020,7 @@ function renderPostits(node, nodeEl) {
         markNodeCommentsSeen(node.id);
         state.commentThreadsOpenedByNode.delete(node.id);
         appendActivity("reply_added", { node, userName: actor.authorName });
-        renderPostits(node, nodeEl);
+        renderPostits(node, nodeEl, "reply-submitted");
         updateNodeCommentBadge(node, nodeEl);
         saveCampaignCanvasState();
       });
@@ -17288,7 +17294,7 @@ function refreshInterfaceLanguage() {
 }
 
 el.uiLanguageSelect?.addEventListener("change", () => {
-  closePostitEmojiPicker({ restoreTrigger: true });
+  closePostitEmojiPicker({ reason: "interface-layout-transition", restoreTrigger: true });
   state.uiLanguage = language?.setUiLanguage?.(el.uiLanguageSelect.value) || "en";
   translateInterface(document);
   refreshOpenInspectorLanguage();

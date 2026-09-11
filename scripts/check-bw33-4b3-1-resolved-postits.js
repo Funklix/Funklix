@@ -47,7 +47,7 @@ assert.equal(formatted("{count} contributions", 3, "de"), "3 Beiträge");
 
 const render = functionSource(app, "renderPostits");
 for (const contract of [
-  "note.resolved = !note.resolved", "renderPostits(node, nodeEl)", "updateNodeCommentBadge(node, nodeEl)",
+  "note.resolved = !note.resolved", "renderPostits(node, nodeEl, note.resolved ? \"postit-resolved\"", "updateNodeCommentBadge(node, nodeEl)",
   "saveCampaignCanvasState()", "getHistoricalHumanContributionCount(note)", "area.hidden = true", "area.disabled = true",
   "color.hidden = true", "enablePostitDrag(postit, note)", "requestAnimationFrame", ".postit-text`)?.focus()"
 ]) assert(render.includes(contract), `resolved production path missing ${contract}`);
