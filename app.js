@@ -1595,6 +1595,40 @@ function createCommentPayload(text = "") {
   };
 }
 
+// Authoritative, presentation-only count for the existing node conversation badge.
+// Human AI Review contributions use the same replies collection as Post-it replies.
+function getOpenConversationCountForNode(node) {
+  if (!node || !Array.isArray(node.postits)) return 0;
+  const seenIds = new Set();
+  const seenObjects = new WeakSet();
+  let count = 0;
+  const countContribution = (contribution) => {
+    if (!contribution || typeof contribution !== "object" || seenObjects.has(contribution)) return;
+    seenObjects.add(contribution);
+    if (contribution.deleted === true || contribution.deletedAt || contribution.resolved === true) return;
+    if (typeof contribution.text !== "string" || !contribution.text.trim()) return;
+    if (["ai_review", "system", "generated", "activity"].includes(contribution.source)) return;
+    if (contribution.authorEmail === "ai@funklix.local" || contribution.authorName === "AI Review") return;
+    const id = typeof contribution.id === "string" && contribution.id.trim() ? contribution.id.trim() : null;
+    if (id && seenIds.has(id)) return;
+    if (id) seenIds.add(id);
+    count = Math.min(Number.MAX_SAFE_INTEGER, count + 1);
+  };
+  for (const note of node.postits) {
+    if (!note || typeof note !== "object" || seenObjects.has(note)) continue;
+    if (note.deleted === true || note.deletedAt || note.resolved === true) {
+      seenObjects.add(note);
+      continue;
+    }
+    const aiReview = note.source === "ai_review" || note.authorEmail === "ai@funklix.local" || note.authorName === "AI Review";
+    if (!aiReview) countContribution(note);
+    else seenObjects.add(note);
+    if (!Array.isArray(note.replies)) continue;
+    for (const reply of note.replies) countContribution(reply);
+  }
+  return count;
+}
+
 function requireCommentIdentity() {
   if (state.user?.email) return true;
   setAuthMessage("Sign in with Google to comment.");
@@ -13203,19 +13237,14 @@ function updateNodeCommentBadge(node, nodeEl) {
     if (actions) actions.insertBefore(commentBadge, actions.firstChild);
     else nodeEl.appendChild(commentBadge);
   }
-  const unresolvedCount = (node.postits || []).filter((note) => !note.resolved).length;
-  const resolvedCount = (node.postits || []).filter((note) => !!note.resolved).length;
-  const totalReplyCount = (node.postits || []).reduce((sum, note) => sum + (Array.isArray(note.replies) ? note.replies.length : 0), 0);
-  const totalCommentCount = unresolvedCount + resolvedCount + totalReplyCount;
-  const displayCount = unresolvedCount || totalCommentCount || 0;
-  commentBadge.textContent = `💬 ${displayCount}`;
-  commentBadge.title = totalCommentCount ? `${unresolvedCount} unresolved · ${totalReplyCount} replies · ${resolvedCount} resolved` : "Add comment";
-  commentBadge.setAttribute("aria-label", totalCommentCount
-    ? uiFormat("Open comments in Inspector for {title}, {count} unresolved", { title: node.title || node.type || uiText("Node"), count: unresolvedCount })
-    : uiText("Add comment"));
+  const openCount = getOpenConversationCountForNode(node);
+  const label = openCount === 1 ? uiText("1 open comment") : uiFormat("{count} open comments", { count: openCount });
+  commentBadge.textContent = `💬 ${openCount}`;
+  commentBadge.title = uiText("Open comments in Post-it and AI Review conversations");
+  commentBadge.setAttribute("aria-label", label);
   commentBadge.dataset.inspectorTarget = "comments";
-  commentBadge.classList.toggle("has-comments", totalCommentCount > 0);
-  commentBadge.classList.toggle("has-unresolved", unresolvedCount > 0);
+  commentBadge.classList.toggle("has-comments", openCount > 0);
+  commentBadge.classList.toggle("has-unresolved", openCount > 0);
   commentBadge.classList.toggle("has-recent", hasRecentUnopenedComment(node));
   commentBadge.classList.toggle("has-unread", hasUnreadNodeComments(node));
 }
@@ -14614,6 +14643,7 @@ function renderPostits(node, nodeEl) {
       }
       note.text = area.value;
       area.style.fontSize = note.text.length > 220 ? "0.7rem" : note.text.length > 120 ? "0.82rem" : "0.96rem";
+      updateNodeCommentBadge(node, nodeEl);
       saveCampaignCanvasState();
     });
     if (parsedAiReview && !note.resolved) {

@@ -187,6 +187,8 @@
     "Building Trust": "Vertrauen aufbauen", "Call to action for conversion": "Handlungsaufforderung zur Conversion", "Start free trial": "Kostenlos testen",
     "AI Workspace": "KI-Arbeitsbereich", "Comments": "Kommentare", "Show comments on Canvas": "Kommentare im Canvas anzeigen",
     "Open comments in Inspector for {title}, {count} unresolved": "Kommentare für {title} im Inspector öffnen, {count} ungelöst",
+    "1 open comment": "1 offener Kommentar", "{count} open comments": "{count} offene Kommentare",
+    "Open comments in Post-it and AI Review conversations": "Offene Kommentare in Post-it- und AI-Review-Unterhaltungen",
     "Open AI Review in Inspector for {title}": "KI-Prüfung für {title} im Inspector öffnen",
     "Comments for {title} are available in the Inspector. {count} unresolved.": "Kommentare für {title} sind im Inspector verfügbar. {count} ungelöst.",
     "AI Review for {title} is available in the Inspector.": "Die KI-Prüfung für {title} ist im Inspector verfügbar.",
