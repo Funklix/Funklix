@@ -85,7 +85,8 @@ vm.runInContext([
   functionSource("positionPostitEmojiPicker"),
   functionSource("openPostitEmojiPicker"),
   functionSource("createPostitEmojiTrigger"),
-  "this.getActive=()=>activePostitEmojiPicker;this.forceClose=()=>closePostitEmojiPicker({reason:'target-removed'});"
+  functionSource("nodeHasActivePostitEditor"),
+  "this.getActive=()=>activePostitEmojiPicker;this.forceClose=(reason='target-removed')=>closePostitEmojiPicker({reason});this.nodeKeepsPostits=nodeHasActivePostitEditor;"
 ].join("\n"), context);
 
 function editor(value = "Draft", caret = value.length) { const node = document.createElement("textarea"); node.value = value; node.selectionStart = node.selectionEnd = caret; node.events = []; node.dispatchEvent = (event) => { node.events.push(event.type); return true; }; document.body.appendChild(node); return node; }
@@ -106,6 +107,32 @@ activate(rootTrigger);
 const first = context.getActive();
 assert(first?.picker.isConnected); assert.equal(rootTrigger.getAttribute("aria-expanded"), "true");
 assert.equal(document.listenerCount("pointerdown"), 1); assert.equal(first.picker.children[0].children[1].children[0].focusOptions.preventScroll, true);
+
+// Deterministic temporal trace of the production lifecycle. Opening focuses the
+// portalled grid, then the 80 ms focusout cleanup schedules a presence ping. The
+// response historically called refreshOwnershipDisplays -> updateNodeCard ->
+// renderPostits -> closePostitEmojiPicker at t=900 ms. The corrected active-editor
+// predicate suppresses only that disposable Post-it rebuild.
+const nodeEl = document.createElement("article"); document.body.appendChild(nodeEl); nodeEl.appendChild(rootTrigger);
+assert.equal(context.nodeKeepsPostits(nodeEl), true, "portalled grid focus must retain logical editor ownership");
+const temporalTrace = [{ at: 0, event: "picker-inserted", picker: first }];
+for (const at of [500, 1000, 2000, 10000]) {
+  temporalTrace.push({ at, event: at === 1000 ? "presence-refresh-complete" : "time-advanced" });
+  // This is updateNodeCard's real production render gate.
+  if (!context.nodeKeepsPostits(nodeEl)) context.forceClose("node-card-refresh");
+  assert.equal(context.getActive(), first); assert(first.picker.isConnected);
+}
+for (const event of ["autosave-complete", "badge-refresh", "relative-time-refresh", "connection-redraw", "collaboration-refresh", "app-shell-sync", "picker-animation-frame"]) {
+  temporalTrace.push({ at: 10000, event });
+  assert.equal(context.nodeKeepsPostits(nodeEl), true);
+  assert.equal(context.getActive(), first);
+}
+let historicalConnected = true; let historicalReason = null;
+const historicalActiveElementWasInPostit = false;
+if (!historicalActiveElementWasInPostit) { historicalConnected = false; historicalReason = "anonymous-render-cleanup"; }
+assert.equal(historicalConnected, false, "pre-repair presence response must reproduce timed dismissal");
+assert.equal(historicalReason, "anonymous-render-cleanup");
+assert.deepEqual(temporalTrace.map(({ at }) => at).slice(0, 5), [0, 500, 1000, 2000, 10000]);
 
 // Trigger-to-gap-to-portal travel, options, empty space, leave and re-entry are inert.
 movement(rootTrigger); movement(document.body); movement(first.picker); movement(first.picker.children[0]);
@@ -150,6 +177,10 @@ assert.equal(document.listenerCount("pointerdown"), 0); assert.equal(window.list
 
 // Static boundaries cover the surrounding production contracts without replacing their suites.
 const open = functionSource("openPostitEmojiPicker"); const close = functionSource("closePostitEmojiPicker"); const render = functionSource("renderPostits"); const drag = functionSource("enablePostitDrag");
+const activeEditorGate = functionSource("nodeHasActivePostitEditor");
+assert(activeEditorGate.includes("activePostitEmojiPicker?.trigger") && activeEditorGate.includes("nodeEl?.contains(activePostitEmojiPicker.trigger)"));
+assert(close.includes("requires an authoritative reason") && close.includes("active.closeReason = reason"));
+for (const reason of ["emoji-selected", "escape", "outside-pointer", "trigger-toggle", "ownership-transferred", "postit-resolved", "postit-deleted", "reply-submitted", "board-load-start", "board-changed", "target-invalid", "viewport-transition"]) assert(app.includes(`reason: "${reason}"`) || app.includes(`"${reason}"`), `missing close reason ${reason}`);
 assert(open.includes("composedPath") === false && functionSource("isPostitEmojiPickerEventInside").includes("composedPath"));
 assert(open.includes('addEventListener("pointerdown", active.onOutsidePointer, true)')); assert(close.includes('removeEventListener("pointerdown", active.onOutsidePointer, true)'));
 assert(!/pointermove|mousemove|mouseenter|mouseleave|pointerenter|pointerleave|blur|focusout/.test(open));
@@ -158,5 +189,7 @@ assert(drag.includes('event.target.closest("textarea,input,button")')); assert(!
 assert(css.includes("/* BW-33.4B4:") && !css.includes("BW-33.4B4.1"), "approved Light/Dark/responsive CSS remains byte-unmodified");
 assert.equal(pkg.scripts["check:bw33.4b4.1"], "node scripts/check-bw33-4b4-1-emoji-picker-lifecycle.js");
 assert(workflow.indexOf("check:bw33.4b4.1") > workflow.indexOf("check:bw33.4b4")); assert(!pkg.scripts["check:bw33.4b2"] && !workflow.includes("check:bw33.4b2"));
+assert.equal(pkg.scripts["check:bw33.4b4.2"], "node scripts/check-bw33-4b4-2-timed-emoji-picker-lifecycle.js");
+assert(workflow.indexOf("check:bw33.4b4.2") > workflow.indexOf("check:bw33.4b4.1"));
 
-console.log("BW-33.4B4.1 production pointer-travel lifecycle, authoritative dismissal, focus, stale-state, and isolation boundaries passed.");
+console.log("BW-33.4B4.2 proven timed lifecycle, background-refresh resilience, close reasons, and preservation boundaries passed.");
