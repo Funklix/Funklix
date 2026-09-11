@@ -73,7 +73,7 @@ assert(ordinaryCss.includes(".postit:not(.ai-review-postit)"), "ordinary Post-it
 assert(!ordinaryCss.includes(".ai-review-card"), "AI Review card styling leaked into B3 rules");
 for (const forbidden of [".inspector ", ".cw-", "emoji-picker", "node.position", "note.x =", "note.y ="])
   assert(!ordinaryCss.includes(forbidden), `isolated B3 CSS contains ${forbidden}`);
-assert(!app.includes("emoji-picker") && !pkg.dependencies?.["emoji-picker"], "emoji picker crossed the B4 boundary");
+assert(!pkg.dependencies?.["emoji-picker"], "external emoji picker dependency crossed the B4 boundary");
 
 assert.equal(pkg.scripts["check:bw33.4b3"], "node scripts/check-bw33-4b3-postit-polish.js");
 assert(workflow.indexOf("check:bw33.4b3") > workflow.indexOf("check:bw33.4b1r1"));

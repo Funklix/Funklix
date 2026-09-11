@@ -77,5 +77,5 @@ for (let cycle = 0; cycle < 5; cycle += 1) {
 assert.equal(pkg.scripts["check:bw33.4b3.1"], "node scripts/check-bw33-4b3-1-resolved-postits.js");
 assert(workflow.indexOf("check:bw33.4b3.1") > workflow.indexOf("check:bw33.4b3"), "Runtime Boot Safety order");
 assert(!pkg.scripts["check:bw33.4b2"] && !workflow.includes("check:bw33.4b2"), "cancelled B2 was registered");
-assert(!app.includes("emoji-picker") && !pkg.dependencies?.["emoji-picker"], "emoji picker boundary crossed");
+assert(!pkg.dependencies?.["emoji-picker"], "external emoji picker dependency crossed");
 console.log("BW-33.4B3.1 resolved Post-it history, geometry, accessibility, controls, and isolation checks passed.");

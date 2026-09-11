@@ -64,6 +64,7 @@
     "check:bw33.4a1": "node scripts/check-bw33-4a1-inspector-indicator-routing.js",
     "check:bw33.4b1r1": "node scripts/check-bw33-4b1r1-open-conversation-count.js",
     "check:bw33.4b3": "node scripts/check-bw33-4b3-postit-polish.js",
-    "check:bw33.4b3.1": "node scripts/check-bw33-4b3-1-resolved-postits.js"
+    "check:bw33.4b3.1": "node scripts/check-bw33-4b3-1-resolved-postits.js",
+    "check:bw33.4b4": "node scripts/check-bw33-4b4-postit-emoji-picker.js"
   }
 }

@@ -62,6 +62,14 @@ const NODE_STATUS_BY_VALUE = new Map(NODE_STATUSES.map((status) => [status.value
 
 let activeLightbox = null;
 let activeBrandDnaRecommendation = null;
+let activePostitEmojiPicker = null;
+
+const POSTIT_EMOJI_GROUPS = Object.freeze([
+  { label: "Reactions", emojis: [["😀", "Grinning face"], ["😄", "Smiling face"], ["😊", "Warm smile"], ["😂", "Tears of joy"], ["🤔", "Thinking face"], ["👀", "Eyes"], ["👍", "Thumbs up"], ["👎", "Thumbs down"], ["❤️", "Red heart"]] },
+  { label: "Ideas", emojis: [["✨", "Sparkles"], ["💡", "Light bulb"], ["❓", "Question mark"], ["💬", "Speech bubble"], ["📌", "Pushpin"], ["🧠", "Brain"], ["🎨", "Artist palette"], ["📝", "Memo"], ["🔍", "Magnifying glass"]] },
+  { label: "Progress", emojis: [["🎯", "Bullseye"], ["🚀", "Rocket"], ["✅", "Check mark"], ["⚠️", "Warning"], ["📈", "Chart increasing"], ["💪", "Strong arm"], ["🤝", "Handshake"], ["⏳", "Hourglass"], ["🛠️", "Tools"]] },
+  { label: "Celebration", emojis: [["🙌", "Raised hands"], ["👏", "Clapping hands"], ["🔥", "Fire"], ["🥳", "Partying face"], ["🎉", "Party popper"], ["🏆", "Trophy"], ["⭐", "Star"], ["💜", "Purple heart"], ["🌟", "Glowing star"]] }
+]);
 
 const state = {
   uiLanguage: initialLanguagePreferences.uiLanguage,
@@ -8444,6 +8452,7 @@ async function saveBoardToServer(trigger = "manual") {
 }
 
 async function loadBoardFromUrlIfPresent(requestedBoardId = null) {
+  closePostitEmojiPicker();
   const boardId = requestedBoardId || getBoardIdFromPath() || state.currentBoardId;
   if (!boardId) return false;
   const loadGeneration = state.boardLoadGeneration + 1;
@@ -14582,7 +14591,152 @@ function renderAiReviewCard(review, context = {}) {
   return card;
 }
 
+function capturePostitEmojiSelection(editor) {
+  const length = editor?.value?.length || 0;
+  const start = Number.isFinite(editor?.selectionStart) ? editor.selectionStart : length;
+  const end = Number.isFinite(editor?.selectionEnd) ? editor.selectionEnd : start;
+  const safeStart = Math.max(0, Math.min(start, length));
+  return { start: safeStart, end: Math.max(safeStart, Math.min(end, length)) };
+}
+
+function closePostitEmojiPicker({ restoreTrigger = false } = {}) {
+  const active = activePostitEmojiPicker;
+  if (!active) return;
+  activePostitEmojiPicker = null;
+  document.removeEventListener("pointerdown", active.onOutsidePointer, true);
+  window.removeEventListener("resize", active.onViewportChange);
+  window.removeEventListener("scroll", active.onViewportChange, true);
+  active.trigger?.setAttribute("aria-expanded", "false");
+  active.trigger?.removeAttribute("aria-controls");
+  active.picker.remove();
+  if (restoreTrigger && active.trigger?.isConnected && active.boardId === state.currentBoardId) active.trigger.focus();
+}
+
+function insertPostitEmoji(active, emoji) {
+  const editor = active.editor;
+  if (!editor?.isConnected || active.boardId !== state.currentBoardId || !active.trigger?.isConnected) {
+    closePostitEmojiPicker();
+    return;
+  }
+  const selection = active.selection || capturePostitEmojiSelection(editor);
+  const length = editor.value.length;
+  const start = Math.max(0, Math.min(selection.start, length));
+  const end = Math.max(start, Math.min(selection.end, length));
+  editor.value = `${editor.value.slice(0, start)}${emoji}${editor.value.slice(end)}`;
+  const caret = start + emoji.length;
+  closePostitEmojiPicker();
+  editor.focus();
+  editor.setSelectionRange(caret, caret);
+  if (active.kind === "root") editor.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
+function positionPostitEmojiPicker(active) {
+  if (!active?.trigger?.isConnected || active.boardId !== state.currentBoardId) return closePostitEmojiPicker();
+  const margin = 8;
+  const triggerRect = active.trigger.getBoundingClientRect();
+  const pickerRect = active.picker.getBoundingClientRect();
+  const left = Math.max(margin, Math.min(triggerRect.left, window.innerWidth - pickerRect.width - margin));
+  const below = triggerRect.bottom + margin;
+  const top = below + pickerRect.height <= window.innerHeight - margin
+    ? below
+    : Math.max(margin, triggerRect.top - pickerRect.height - margin);
+  active.picker.style.left = `${left}px`;
+  active.picker.style.top = `${top}px`;
+}
+
+function openPostitEmojiPicker(trigger, editor, kind) {
+  const selection = capturePostitEmojiSelection(editor);
+  closePostitEmojiPicker();
+  const picker = document.createElement("div");
+  const pickerId = `postit-emoji-picker-${Date.now()}`;
+  picker.id = pickerId;
+  picker.className = "postit-emoji-picker";
+  picker.setAttribute("role", "dialog");
+  picker.setAttribute("aria-label", uiText("Emoji picker"));
+  picker.addEventListener("pointerdown", (event) => event.stopPropagation());
+  picker.addEventListener("click", (event) => event.stopPropagation());
+  const buttons = [];
+  POSTIT_EMOJI_GROUPS.forEach((group) => {
+    const section = document.createElement("section");
+    section.className = "postit-emoji-group";
+    const heading = document.createElement("h3");
+    heading.textContent = uiText(group.label);
+    section.setAttribute("aria-label", uiText(group.label));
+    const grid = document.createElement("div");
+    grid.className = "postit-emoji-grid";
+    grid.setAttribute("role", "grid");
+    group.emojis.forEach(([emoji, label]) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "postit-emoji-option";
+      button.setAttribute("role", "gridcell");
+      button.setAttribute("aria-label", uiText(label));
+      button.title = uiText(label);
+      button.tabIndex = buttons.length ? -1 : 0;
+      const glyph = document.createElement("span");
+      glyph.setAttribute("aria-hidden", "true");
+      glyph.textContent = emoji;
+      button.appendChild(glyph);
+      button.addEventListener("click", () => insertPostitEmoji(activePostitEmojiPicker, emoji));
+      buttons.push(button);
+      grid.appendChild(button);
+    });
+    section.append(heading, grid);
+    picker.appendChild(section);
+  });
+  picker.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") { event.preventDefault(); closePostitEmojiPicker({ restoreTrigger: true }); return; }
+    const current = buttons.indexOf(document.activeElement);
+    if (current < 0 || !["ArrowRight", "ArrowLeft", "ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
+    event.preventDefault();
+    const columns = 9;
+    const delta = { ArrowRight: 1, ArrowLeft: -1, ArrowDown: columns, ArrowUp: -columns }[event.key];
+    const next = event.key === "Home" ? 0 : event.key === "End" ? buttons.length - 1 : (current + delta + buttons.length) % buttons.length;
+    buttons[current].tabIndex = -1;
+    buttons[next].tabIndex = 0;
+    buttons[next].focus();
+  });
+  document.body.appendChild(picker);
+  const active = {
+    boardId: state.currentBoardId, trigger, editor, kind, picker, selection,
+    onOutsidePointer(event) { if (!picker.contains(event.target) && !trigger.contains(event.target)) closePostitEmojiPicker({ restoreTrigger: true }); },
+    onViewportChange() { closePostitEmojiPicker(); }
+  };
+  activePostitEmojiPicker = active;
+  trigger.setAttribute("aria-expanded", "true");
+  trigger.setAttribute("aria-controls", pickerId);
+  document.addEventListener("pointerdown", active.onOutsidePointer, true);
+  window.addEventListener("resize", active.onViewportChange);
+  window.addEventListener("scroll", active.onViewportChange, true);
+  positionPostitEmojiPicker(active);
+  buttons[0]?.focus();
+}
+
+function createPostitEmojiTrigger(editor, kind) {
+  const trigger = document.createElement("button");
+  const labelKey = kind === "root" ? "Add emoji to Post-it" : "Add emoji to reply";
+  trigger.type = "button";
+  trigger.className = `postit-emoji-trigger postit-emoji-trigger-${kind}`;
+  trigger.textContent = "😊";
+  trigger.title = uiText(labelKey);
+  trigger.setAttribute("aria-label", uiText(labelKey));
+  trigger.setAttribute("aria-haspopup", "dialog");
+  trigger.setAttribute("aria-expanded", "false");
+  trigger.disabled = isBoardReadOnly();
+  trigger.dataset.i18nTitle = labelKey;
+  trigger.dataset.i18nAriaLabel = labelKey;
+  trigger.addEventListener("pointerdown", () => { trigger._postitEmojiSelection = capturePostitEmojiSelection(editor); });
+  trigger.addEventListener("click", (event) => {
+    event.stopPropagation();
+    if (activePostitEmojiPicker?.trigger === trigger) return closePostitEmojiPicker({ restoreTrigger: true });
+    openPostitEmojiPicker(trigger, editor, kind);
+    activePostitEmojiPicker.selection = trigger._postitEmojiSelection || activePostitEmojiPicker.selection;
+  });
+  return trigger;
+}
+
 function renderPostits(node, nodeEl) {
+  if (activePostitEmojiPicker?.trigger && nodeEl.contains(activePostitEmojiPicker.trigger)) closePostitEmojiPicker();
   nodeEl.querySelectorAll(".postit").forEach((p) => p.remove());
   if (!Array.isArray(node.postits)) node.postits = [];
 
@@ -14682,7 +14836,10 @@ function renderPostits(node, nodeEl) {
       const actions = document.createElement("div");
       actions.className = "postit-actions";
       identity.append(avatar, user, time);
-      actions.append(color, resolveBtn, deleteBtn);
+      const emojiTrigger = note.resolved ? null : createPostitEmojiTrigger(postit.querySelector(".postit-text"), "root");
+      actions.append(color);
+      if (emojiTrigger) actions.append(emojiTrigger);
+      actions.append(resolveBtn, deleteBtn);
       header.replaceChildren(identity, actions);
     }
 
@@ -14827,7 +14984,8 @@ function renderPostits(node, nodeEl) {
       sendReply.setAttribute("aria-label", uiText("Send reply"));
       sendReply.dataset.i18n = "Send reply";
       sendReply.dataset.i18nAriaLabel = "Send reply";
-      editor.querySelector("button").addEventListener("click", () => {
+      editor.insertBefore(createPostitEmojiTrigger(replyInput, "reply"), sendReply);
+      sendReply.addEventListener("click", () => {
         if (isBoardReadOnly()) {
           setSaveStatus("Read-only board");
           return;
@@ -17116,6 +17274,7 @@ function refreshInterfaceLanguage() {
 }
 
 el.uiLanguageSelect?.addEventListener("change", () => {
+  closePostitEmojiPicker({ restoreTrigger: true });
   state.uiLanguage = language?.setUiLanguage?.(el.uiLanguageSelect.value) || "en";
   translateInterface(document);
   refreshOpenInspectorLanguage();
