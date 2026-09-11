@@ -7734,6 +7734,95 @@ html[data-theme="dark"] .postit:not(.ai-review-postit) :is(.postit-resolve,.post
 html[data-theme="dark"] .postit:not(.ai-review-postit) :is(.postit-resolve,.postit-reply-button,.postit-delete):active { background:var(--postit-surface); }
 html[data-theme="dark"] .postit:not(.ai-review-postit) :is(.postit-resolve,.postit-reply-button,.postit-delete):disabled { background:var(--postit-secondary);color:var(--postit-text-muted);cursor:not-allowed; }
 
+/* BW-33.4B3: ordinary human Post-its only. AI Review keeps its own presentation. */
+html[data-theme] .postit:not(.ai-review-postit) {
+  --postit-surface:#ffe082;
+  --postit-body:rgba(255,255,255,.28);
+  --postit-thread:rgba(255,248,207,.56);
+  --postit-border:rgba(102,77,13,.24);
+  --postit-text:#30280f;
+  --postit-secondary:#665a32;
+  box-sizing:border-box;
+  display:flex;
+  flex-direction:column;
+  max-height:360px;
+  padding:9px;
+  overflow:hidden;
+  border-color:var(--postit-border);
+  border-radius:7px 9px 12px 8px;
+  color:var(--postit-text);
+  font-family:var(--fk-font-family);
+  box-shadow:0 8px 20px rgba(62,47,10,.16),0 2px 3px rgba(62,47,10,.11);
+}
+html[data-theme] .postit:not(.ai-review-postit) > header {
+  display:grid;
+  gap:7px;
+  margin:0 0 7px;
+  padding:0 0 7px;
+  border-bottom:1px solid var(--postit-border);
+  font-family:inherit;
+}
+html[data-theme] .postit:not(.ai-review-postit) .postit-identity,
+html[data-theme] .postit:not(.ai-review-postit) .postit-actions {
+  display:flex;
+  align-items:center;
+  min-width:0;
+  gap:5px;
+}
+html[data-theme] .postit:not(.ai-review-postit) .postit-actions { justify-content:flex-end; }
+html[data-theme] .postit:not(.ai-review-postit) .postit-user { color:var(--postit-text);font-size:.72rem;font-weight:800; }
+html[data-theme] .postit:not(.ai-review-postit) .postit-time { max-width:none;color:var(--postit-secondary);font-size:.61rem;font-weight:600; }
+html[data-theme] .postit:not(.ai-review-postit) :is(.postit-text,.postit-reply-input) {
+  box-sizing:border-box;
+  border:1px solid var(--postit-border);
+  border-radius:7px;
+  background:var(--postit-body);
+  color:var(--postit-text);
+  font-family:var(--fk-font-family);
+  overflow-wrap:anywhere;
+  white-space:pre-wrap;
+}
+html[data-theme] .postit:not(.ai-review-postit) .postit-text { min-height:76px;padding:7px 8px;line-height:1.45; }
+html[data-theme] .postit:not(.ai-review-postit) :is(.postit-text,.postit-reply-input)::placeholder { color:var(--postit-secondary);opacity:.82; }
+html[data-theme] .postit:not(.ai-review-postit) :is(.postit-text,.postit-reply-input,.postit-color,.postit-resolve,.postit-reply-button,.postit-delete,.postit-reply-editor button):focus-visible {
+  outline:2px solid var(--fk-color-focus-ring);outline-offset:2px;
+}
+html[data-theme] .postit:not(.ai-review-postit) :is(.postit-color,.postit-resolve,.postit-reply-button,.postit-delete,.postit-reply-editor button) {
+  box-sizing:border-box;min-height:30px;font-family:var(--fk-font-family);font-weight:750;
+}
+html[data-theme] .postit:not(.ai-review-postit) .postit-color { width:30px;height:30px;border:1px solid var(--postit-border);border-radius:7px;padding:2px;cursor:pointer; }
+html[data-theme] .postit:not(.ai-review-postit) :is(.postit-resolve,.postit-reply-button) { padding:4px 8px;border-radius:7px; }
+html[data-theme] .postit:not(.ai-review-postit) .postit-delete { width:30px;padding:0;border:1px solid transparent;border-radius:7px;color:#713526; }
+html[data-theme] .postit:not(.ai-review-postit) .postit-replies {
+  min-height:0;max-height:128px;overflow:auto;margin-top:7px;padding:7px;border:1px solid var(--postit-border);border-radius:7px;background:var(--postit-thread);
+}
+html[data-theme] .postit:not(.ai-review-postit) .postit-reply { margin:0;padding:0 0 7px;font-family:inherit; }
+html[data-theme] .postit:not(.ai-review-postit) .postit-reply:last-child { padding-bottom:0; }
+html[data-theme] .postit:not(.ai-review-postit) .postit-reply-meta { color:var(--postit-secondary);font-size:.62rem;line-height:1.35; }
+html[data-theme] .postit:not(.ai-review-postit) .postit-reply-body p { color:var(--postit-text);font-size:.7rem;line-height:1.42;overflow-wrap:anywhere;word-break:break-word; }
+html[data-theme] .postit:not(.ai-review-postit) .postit-reply-editor { margin-top:7px;padding-top:7px;border-color:var(--postit-border); }
+html[data-theme] .postit:not(.ai-review-postit) .postit-reply-input { min-height:54px;padding:6px 7px;line-height:1.4;resize:vertical; }
+html[data-theme] .postit:not(.ai-review-postit) .postit-resolved-summary {
+  margin:7px 0 0;padding:5px 7px;border:1px solid var(--postit-border);border-radius:6px;background:rgba(255,255,255,.25);color:var(--postit-secondary);font-weight:750;line-height:1.35;
+}
+html[data-theme] .postit:not(.ai-review-postit).is-resolved { min-height:130px;max-height:360px;opacity:.9;filter:none; }
+html[data-theme] .postit:not(.ai-review-postit).is-resolved .postit-text { color:var(--postit-secondary); }
+html[data-theme="dark"] .postit:not(.ai-review-postit) {
+  --postit-surface:#d8b957;--postit-body:#e5ca70;--postit-thread:#cfad4d;--postit-border:rgba(71,52,8,.42);--postit-text:#241e0c;--postit-secondary:#57491f;
+  background:var(--postit-surface)!important;box-shadow:0 12px 28px rgba(0,0,0,.32),0 0 0 1px rgba(255,222,119,.08);
+}
+html[data-theme="dark"] .postit:not(.ai-review-postit) :is(.postit-resolve,.postit-reply-button,.postit-delete) { min-width:30px;min-height:30px; }
+html[data-theme="dark"] .postit:not(.ai-review-postit).is-resolved { background:#bca75f!important;filter:none; }
+@media (max-width:720px) {
+  html[data-theme] .postit:not(.ai-review-postit) { max-width:min(180px,calc(100vw - 24px)); }
+  html[data-theme] .postit:not(.ai-review-postit) :is(.postit-color,.postit-resolve,.postit-delete) { min-height:34px; }
+}
+@media (prefers-reduced-motion:reduce) {
+  html[data-theme] .postit:not(.ai-review-postit),
+  html[data-theme] .postit:not(.ai-review-postit) * { transition:none; }
+}
+/* End BW-33.4B3 ordinary Post-it boundary. */
+
 html[data-theme="dark"] :is(#floating-filters-popover,#floating-utilities-popover).floating-filter-popover {
   background:var(--fk-color-surface-panel);border-color:var(--fk-color-border-default);color:var(--fk-color-text-primary);box-shadow:var(--fk-shadow-modal);
 }

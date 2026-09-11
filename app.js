@@ -14588,12 +14588,18 @@ function renderPostits(node, nodeEl) {
     }
     header.prepend(avatar);
 
-    postit.querySelector(".postit-user").textContent = authorName;
-    postit.querySelector(".postit-time").textContent = formatCommentTimestamp(note);
-    postit.querySelector(".postit-time").title = commentCreatedAt(note);
+    const user = postit.querySelector(".postit-user");
+    const time = postit.querySelector(".postit-time");
+    user.textContent = authorName;
+    time.textContent = formatCommentTimestamp(note);
+    time.title = commentCreatedAt(note);
 
     const color = postit.querySelector(".postit-color");
     color.value = note.color || "#ffe082";
+    color.title = uiText("Change Post-it color");
+    color.setAttribute("aria-label", uiText("Change Post-it color"));
+    color.dataset.i18nTitle = "Change Post-it color";
+    color.dataset.i18nAriaLabel = "Change Post-it color";
     color.addEventListener("input", () => {
       if (isBoardReadOnly()) {
         setSaveStatus("Read-only board");
@@ -14607,8 +14613,12 @@ function renderPostits(node, nodeEl) {
     const resolveBtn = document.createElement("button");
     resolveBtn.type = "button";
     resolveBtn.className = "postit-resolve";
-    resolveBtn.textContent = note.resolved ? "Reopen" : "Resolve";
-    resolveBtn.title = note.resolved ? "Reopen comment" : "Resolve comment";
+    resolveBtn.textContent = isAiReviewNote ? (note.resolved ? "Reopen" : "Resolve") : uiText(note.resolved ? "Reopen" : "Resolve");
+    resolveBtn.title = isAiReviewNote ? (note.resolved ? "Reopen comment" : "Resolve comment") : uiText(note.resolved ? "Reopen comment" : "Resolve comment");
+    resolveBtn.setAttribute("aria-label", resolveBtn.title);
+    resolveBtn.dataset.i18n = note.resolved ? "Reopen" : "Resolve";
+    resolveBtn.dataset.i18nTitle = note.resolved ? "Reopen comment" : "Resolve comment";
+    resolveBtn.dataset.i18nAriaLabel = note.resolved ? "Reopen comment" : "Resolve comment";
     resolveBtn.addEventListener("click", () => {
       if (isBoardReadOnly()) {
         setSaveStatus("Read-only board");
@@ -14631,8 +14641,26 @@ function renderPostits(node, nodeEl) {
     });
     header.insertBefore(resolveBtn, postit.querySelector(".postit-delete"));
 
+    const deleteBtn = postit.querySelector(".postit-delete");
+    deleteBtn.title = uiText("Close Post-it");
+    deleteBtn.setAttribute("aria-label", uiText("Close Post-it"));
+    deleteBtn.dataset.i18nTitle = "Close Post-it";
+    deleteBtn.dataset.i18nAriaLabel = "Close Post-it";
+    if (!isAiReviewNote) {
+      const identity = document.createElement("div");
+      identity.className = "postit-identity";
+      const actions = document.createElement("div");
+      actions.className = "postit-actions";
+      identity.append(avatar, user, time);
+      actions.append(color, resolveBtn, deleteBtn);
+      header.replaceChildren(identity, actions);
+    }
+
     const area = postit.querySelector(".postit-text");
     area.value = note.text || "";
+    area.placeholder = uiText("Drop a thought, question, or wild idea…");
+    area.setAttribute("aria-label", uiText("Post-it message"));
+    area.title = uiText("Resize Post-it message");
     area.disabled = !!note.resolved;
     area.readOnly = isAiReviewNote;
     area.style.fontSize = (note.text || "").length > 220 ? "0.7rem" : (note.text || "").length > 120 ? "0.82rem" : "0.96rem";
@@ -14662,7 +14690,7 @@ function renderPostits(node, nodeEl) {
       reviewCard.appendChild(inspectorButton);
     }
 
-    postit.querySelector(".postit-delete").addEventListener("click", () => {
+    deleteBtn.addEventListener("click", () => {
       if (isBoardReadOnly()) {
         setSaveStatus("Read-only board");
         return;
@@ -14676,14 +14704,23 @@ function renderPostits(node, nodeEl) {
     if (note.resolved) {
       const summary = document.createElement("div");
       summary.className = "postit-resolved-summary";
-      const resolvedBy = note.resolvedByName || "Someone";
+      if (isAiReviewNote) {
+        const resolvedBy = note.resolvedByName || "Someone";
+        const replyCount = Array.isArray(note.replies) ? note.replies.length : 0;
+        summary.textContent = `Resolved by ${resolvedBy}${note.resolvedAt ? ` · ${relativeActivityTime(note.resolvedAt)}` : ""}${replyCount ? ` · ${replyCount} repl${replyCount === 1 ? "y" : "ies"} hidden` : ""}`;
+        postit.querySelector(".postit-text")?.remove();
+        postit.appendChild(summary);
+        enablePostitDrag(postit, note);
+        nodeEl.appendChild(postit);
+        return;
+      }
+      summary.setAttribute("role", "status");
+      const resolvedBy = note.resolvedByName || uiText("Someone");
       const replyCount = Array.isArray(note.replies) ? note.replies.length : 0;
-      summary.textContent = `Resolved by ${resolvedBy}${note.resolvedAt ? ` · ${relativeActivityTime(note.resolvedAt)}` : ""}${replyCount ? ` · ${replyCount} repl${replyCount === 1 ? "y" : "ies"} hidden` : ""}`;
-      postit.querySelector(".postit-text")?.remove();
+      const resolvedLabel = uiFormat("Resolved by {name}", { name: resolvedBy });
+      const repliesLabel = replyCount ? uiFormat(replyCount === 1 ? "{count} reply" : "{count} replies", { count: replyCount }) : "";
+      summary.textContent = `${uiText("Resolved")} · ${resolvedLabel}${note.resolvedAt ? ` · ${relativeActivityTime(note.resolvedAt)}` : ""}${repliesLabel ? ` · ${repliesLabel}` : ""}`;
       postit.appendChild(summary);
-      enablePostitDrag(postit, note);
-      nodeEl.appendChild(postit);
-      return;
     }
 
     const repliesWrap = document.createElement("div");
@@ -14708,7 +14745,13 @@ function renderPostits(node, nodeEl) {
       body.className = "postit-reply-body";
       const meta = document.createElement("div");
       meta.className = "postit-reply-meta";
-      meta.textContent = `${replyAuthorName} · ${formatCommentTimestamp(reply)}`;
+      const replyAuthor = document.createElement("strong");
+      replyAuthor.textContent = replyAuthorName;
+      const replyTime = document.createElement("time");
+      replyTime.dateTime = commentCreatedAt(reply);
+      replyTime.title = commentCreatedAt(reply);
+      replyTime.textContent = formatCommentTimestamp(reply);
+      meta.append(replyAuthor, document.createTextNode(" · "), replyTime);
       const text = document.createElement("p");
       text.textContent = reply.text || "";
       body.append(meta, text);
@@ -14719,7 +14762,10 @@ function renderPostits(node, nodeEl) {
     const addReplyBtn = document.createElement("button");
     addReplyBtn.type = "button";
     addReplyBtn.className = "postit-reply-button";
-    addReplyBtn.textContent = note.resolved ? "Resolved" : "Reply";
+    addReplyBtn.textContent = isAiReviewNote ? (note.resolved ? "Resolved" : "Reply") : uiText(note.resolved ? "Resolved" : "Reply");
+    addReplyBtn.setAttribute("aria-label", uiText(note.resolved ? "Resolved" : "Reply"));
+    addReplyBtn.dataset.i18n = note.resolved ? "Resolved" : "Reply";
+    addReplyBtn.dataset.i18nAriaLabel = note.resolved ? "Resolved" : "Reply";
     addReplyBtn.disabled = !!note.resolved;
     addReplyBtn.addEventListener("click", () => {
       if (isBoardReadOnly()) {
@@ -14730,7 +14776,17 @@ function renderPostits(node, nodeEl) {
       if (postit.querySelector(".postit-reply-editor")) return;
       const editor = document.createElement("div");
       editor.className = "postit-reply-editor";
-      editor.innerHTML = `<textarea class="postit-reply-input" rows="2" placeholder="Write a reply..."></textarea><button type="button" class="inspector-image-delete">Send</button>`;
+      editor.innerHTML = `<textarea class="postit-reply-input" rows="2"></textarea><button type="button" class="inspector-image-delete"></button>`;
+      const replyInput = editor.querySelector(".postit-reply-input");
+      replyInput.placeholder = uiText("Write a reply…");
+      replyInput.setAttribute("aria-label", uiText("Reply message"));
+      replyInput.dataset.i18nPlaceholder = "Write a reply…";
+      replyInput.dataset.i18nAriaLabel = "Reply message";
+      const sendReply = editor.querySelector("button");
+      sendReply.textContent = uiText("Send reply");
+      sendReply.setAttribute("aria-label", uiText("Send reply"));
+      sendReply.dataset.i18n = "Send reply";
+      sendReply.dataset.i18nAriaLabel = "Send reply";
       editor.querySelector("button").addEventListener("click", () => {
         if (isBoardReadOnly()) {
           setSaveStatus("Read-only board");
