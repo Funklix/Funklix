@@ -14612,6 +14612,13 @@ function closePostitEmojiPicker({ restoreTrigger = false } = {}) {
   if (restoreTrigger && active.trigger?.isConnected && active.boardId === state.currentBoardId) active.trigger.focus();
 }
 
+function isPostitEmojiPickerEventInside(event, active = activePostitEmojiPicker) {
+  if (!active) return false;
+  const path = typeof event?.composedPath === "function" ? event.composedPath() : [];
+  if (path.includes(active.picker) || path.includes(active.trigger)) return true;
+  return active.picker.contains(event?.target) || active.trigger.contains(event?.target);
+}
+
 function insertPostitEmoji(active, emoji) {
   const editor = active.editor;
   if (!editor?.isConnected || active.boardId !== state.currentBoardId || !active.trigger?.isConnected) {
@@ -14699,8 +14706,15 @@ function openPostitEmojiPicker(trigger, editor, kind) {
   document.body.appendChild(picker);
   const active = {
     boardId: state.currentBoardId, trigger, editor, kind, picker, selection,
-    onOutsidePointer(event) { if (!picker.contains(event.target) && !trigger.contains(event.target)) closePostitEmojiPicker({ restoreTrigger: true }); },
-    onViewportChange() { closePostitEmojiPicker(); }
+    onOutsidePointer(event) {
+      if (!isPostitEmojiPickerEventInside(event, active)) closePostitEmojiPicker({ restoreTrigger: true });
+    },
+    onViewportChange(event) {
+      // The portal is independently scrollable. Its capture-phase scroll event is
+      // not a Canvas/app-shell viewport change and must not dismiss the picker.
+      if (event?.type === "scroll" && isPostitEmojiPickerEventInside(event, active)) return;
+      closePostitEmojiPicker();
+    }
   };
   activePostitEmojiPicker = active;
   trigger.setAttribute("aria-expanded", "true");
@@ -14709,7 +14723,7 @@ function openPostitEmojiPicker(trigger, editor, kind) {
   window.addEventListener("resize", active.onViewportChange);
   window.addEventListener("scroll", active.onViewportChange, true);
   positionPostitEmojiPicker(active);
-  buttons[0]?.focus();
+  buttons[0]?.focus({ preventScroll: true });
 }
 
 function createPostitEmojiTrigger(editor, kind) {
