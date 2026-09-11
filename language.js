@@ -191,6 +191,7 @@
     "Resolve": "Erledigen", "Reopen": "Wieder öffnen", "Resolved": "Erledigt", "Resolve comment": "Kommentar erledigen", "Reopen comment": "Kommentar wieder öffnen",
     "Change Post-it color": "Post-it-Farbe ändern", "Close Post-it": "Post-it schließen", "Resize Post-it message": "Post-it-Nachricht vergrößern oder verkleinern",
     "Resolved by {name}": "Erledigt von {name}", "Someone": "Jemand", "{count} reply": "{count} Antwort", "{count} replies": "{count} Antworten",
+    "{count} contribution": "{count} Beitrag", "{count} contributions": "{count} Beiträge",
     "Open comments in Inspector for {title}, {count} unresolved": "Kommentare für {title} im Inspector öffnen, {count} ungelöst",
     "1 open comment": "1 offener Kommentar", "{count} open comments": "{count} offene Kommentare",
     "Open comments in Post-it and AI Review conversations": "Offene Kommentare in Post-it- und AI-Review-Unterhaltungen",
