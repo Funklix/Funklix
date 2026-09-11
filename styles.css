@@ -2920,6 +2920,16 @@ html[data-theme="dark"] :is(.insights-context span,.insights-diagnostic-group,.i
   background: #f7f9ff;
 }
 
+.ai-review-inspector-route { margin-top: 8px; }
+.inspector-route-section p { margin: 0 0 10px; color: var(--fk-color-text-secondary); }
+.inspector-route-arrival { outline: 2px solid var(--fk-color-primary); outline-offset: -2px; animation: inspector-route-arrival 1.2s ease-out; }
+@keyframes inspector-route-arrival { from { box-shadow: 0 0 0 4px color-mix(in srgb, var(--fk-color-primary) 24%, transparent); } to { box-shadow: none; } }
+.inspector-route-section :focus-visible,
+.ai-review-inspector-route:focus-visible { outline: 0; box-shadow: var(--fk-focus-shadow); }
+@media (prefers-reduced-motion: reduce) {
+  .inspector-route-arrival { scroll-behavior: auto; transition: none; animation: none; }
+}
+
 .ai-workspace-body {
   display: grid;
   gap: 8px;
