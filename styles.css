@@ -7993,3 +7993,40 @@ html[data-theme="dark"] #node-type-picker .picker-option:disabled { background:v
 @media(max-width:720px) { .cw-stale-approval [data-copy-approval-diagnostics] { margin: .5rem 0 0; width: 100%; } }
 
 .cw-approval-failure{display:grid;gap:8px;padding:10px;border-left:4px solid var(--fk-danger,#a52b35);border-radius:8px;background:color-mix(in srgb,var(--fk-danger,#a52b35) 9%,var(--fk-surface,#fff));font-size:.82rem}.cw-approval-failure>div{display:flex;gap:8px;flex-wrap:wrap}
+
+/* BW-33.4B4: ordinary Post-it emoji controls and transient body portal. */
+html[data-theme] .postit:not(.ai-review-postit) .postit-emoji-trigger {
+  width:30px;min-width:30px;height:30px;padding:0;border:1px solid var(--postit-border);border-radius:8px;
+  background:color-mix(in srgb,var(--postit-body) 72%,white);color:var(--postit-text);cursor:pointer;font-size:.92rem;line-height:1;
+  transition:background var(--fk-motion-fast) var(--fk-ease-standard),transform var(--fk-motion-fast) var(--fk-ease-standard);
+}
+html[data-theme] .postit:not(.ai-review-postit) .postit-emoji-trigger:hover { background:var(--postit-body);transform:translateY(-1px); }
+html[data-theme] .postit:not(.ai-review-postit) .postit-emoji-trigger:active { transform:translateY(0) scale(.96); }
+html[data-theme] .postit:not(.ai-review-postit) .postit-emoji-trigger:focus-visible { outline:0;box-shadow:var(--fk-focus-shadow); }
+html[data-theme] .postit:not(.ai-review-postit) .postit-emoji-trigger:disabled { opacity:.48;cursor:not-allowed;transform:none; }
+html[data-theme] .postit:not(.ai-review-postit) .postit-reply-editor { grid-template-columns:1fr auto;align-items:center; }
+html[data-theme] .postit:not(.ai-review-postit) .postit-reply-editor .postit-reply-input { grid-column:1 / -1; }
+html[data-theme] .postit:not(.ai-review-postit) .postit-reply-editor .postit-emoji-trigger { justify-self:end; }
+html[data-theme] .postit-emoji-picker {
+  position:fixed;z-index:1200;box-sizing:border-box;width:min(326px,calc(100vw - 16px));max-height:min(390px,calc(100vh - 16px));overflow:auto;
+  padding:10px;border:1px solid var(--fk-color-border-strong);border-radius:14px;background:var(--fk-color-surface-elevated);color:var(--fk-color-text-primary);
+  box-shadow:0 14px 34px rgba(35,25,68,.22);font-family:var(--fk-font-family);animation:postit-emoji-in var(--fk-motion-fast) var(--fk-ease-emphasized);
+}
+html[data-theme] .postit-emoji-group + .postit-emoji-group { margin-top:9px; }
+html[data-theme] .postit-emoji-group h3 { margin:0 0 5px;color:var(--fk-color-text-secondary);font-size:.68rem;font-weight:800;letter-spacing:.035em;text-transform:uppercase; }
+html[data-theme] .postit-emoji-grid { display:grid;grid-template-columns:repeat(9,minmax(28px,1fr));gap:3px; }
+html[data-theme] .postit-emoji-option {
+  display:grid;place-items:center;min-width:30px;min-height:34px;padding:3px;border:1px solid transparent;border-radius:8px;
+  background:var(--fk-color-surface-subtle);color:var(--fk-color-text-primary);cursor:pointer;font:1.12rem/1 var(--fk-font-family);
+}
+html[data-theme] .postit-emoji-option:hover { border-color:var(--fk-color-primary-border);background:var(--fk-color-surface-hover); }
+html[data-theme] .postit-emoji-option:active { background:var(--fk-color-primary-subtle);transform:scale(.94); }
+html[data-theme] .postit-emoji-option:focus-visible { outline:0;box-shadow:var(--fk-focus-shadow);border-color:var(--fk-color-primary-action); }
+html[data-theme="dark"] .postit-emoji-picker { background:var(--fk-color-surface-elevated);border-color:var(--fk-color-border-strong);box-shadow:0 18px 38px rgba(0,0,0,.48); }
+html[data-theme="dark"] .postit-emoji-option { background:var(--fk-color-surface-panel); }
+html[data-theme="dark"] .postit-emoji-option:hover { background:var(--fk-color-surface-hover); }
+html[data-theme="dark"] .postit:not(.ai-review-postit) .postit-emoji-trigger { background:#f1da85;border-color:rgba(56,43,12,.5); }
+@keyframes postit-emoji-in { from { opacity:0;transform:translateY(-3px) scale(.98); } to { opacity:1;transform:none; } }
+@media (max-width:420px) { html[data-theme] .postit-emoji-grid { grid-template-columns:repeat(7,minmax(34px,1fr)); }html[data-theme] .postit-emoji-option { min-height:40px; } }
+@media (prefers-reduced-motion:reduce) { html[data-theme] .postit-emoji-picker { animation:none; }html[data-theme] .postit-emoji-option,html[data-theme] .postit-emoji-trigger { transition:none!important; } }
+/* End BW-33.4B4. */

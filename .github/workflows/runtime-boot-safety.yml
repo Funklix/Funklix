@@ -199,6 +199,8 @@ jobs:
         run: npm run check:bw33.4b3
       - name: Check BW-33.4B3.1 resolved Post-its and Dark Mode controls
         run: npm run check:bw33.4b3.1
+      - name: Check BW-33.4B4 accessible Post-it emoji picker
+        run: npm run check:bw33.4b4
       - name: Check dynamic AI Insights translations
         run: node scripts/check-bw25-1-dynamic-insights-translations.js
       - name: Check scoped German interface localization
