@@ -74,7 +74,6 @@ const state = {
   selectedPrimary: null,
   inspectorDismissedNodeId: null,
   inspectorSelectionSnapshot: null,
-  inspectorSectionRoute: null,
   zoom: 1,
   nodeCounter: 1,
   postitCounter: 1,
@@ -281,12 +280,6 @@ const el = {
   picker: document.getElementById("node-type-picker"),
   pickerOptions: document.getElementById("node-type-options"),
   inspectorMeta: document.getElementById("inspector-meta"),
-  inspectorRouteStatus: document.getElementById("inspector-route-status"),
-  inspectorCommentsSection: document.getElementById("inspector-comments-section"),
-  inspectorCommentsHeading: document.getElementById("inspector-comments-heading"),
-  inspectorCommentsSummary: document.getElementById("inspector-comments-summary"),
-  inspectorCommentsCanvasButton: document.getElementById("inspector-comments-canvas-btn"),
-  inspectorAiReviewHeading: document.getElementById("inspector-ai-review-heading"),
   aiWorkspaceSection: document.getElementById("ai-workspace-section"),
   aiWorkspaceBody: document.getElementById("ai-workspace-body"),
   nodeForm: document.getElementById("node-form"),
@@ -1593,6 +1586,61 @@ function createCommentPayload(text = "") {
     resolved: false,
     replies: []
   };
+}
+
+function isAiReviewPostit(note) {
+  return !!note && typeof note === "object" && (note.source === "ai_review"
+    || note.authorEmail === "ai@funklix.local" || note.authorName === "AI Review");
+}
+
+function isEligibleHumanConversationContribution(contribution) {
+  if (!contribution || typeof contribution !== "object" || contribution.deleted === true || contribution.deletedAt) return false;
+  if (contribution.resolved === true || typeof contribution.text !== "string" || !contribution.text.trim()) return false;
+  if (["ai_review", "system", "generated", "activity"].includes(contribution.source)) return false;
+  return contribution.authorEmail !== "ai@funklix.local" && contribution.authorName !== "AI Review";
+}
+
+// Production owner for the node badge's derived value. This selector is deliberately
+// pure: drafts outside node.postits, DOM state, activity, and persistence are not read.
+function getOpenConversationCountForNode(node) {
+  if (!node || !Array.isArray(node.postits)) return 0;
+  const seenNotes = new Set();
+  const seenContributions = new Set();
+  const seenNoteObjects = new WeakSet();
+  const seenContributionObjects = new WeakSet();
+  let count = 0;
+  for (const note of node.postits) {
+    if (!note || typeof note !== "object" || note.deleted === true || note.deletedAt || seenNoteObjects.has(note)) continue;
+    seenNoteObjects.add(note);
+    const noteId = typeof note.id === "string" && note.id.trim() ? note.id.trim() : null;
+    if (noteId && seenNotes.has(noteId)) continue;
+    if (noteId) seenNotes.add(noteId);
+    if (note.resolved === true) continue;
+    if (!isAiReviewPostit(note) && isEligibleHumanConversationContribution(note)) {
+      const identity = noteId ? `id:${noteId}` : null;
+      if (!identity || !seenContributions.has(identity)) {
+        if (identity) seenContributions.add(identity);
+        count += 1;
+      }
+    }
+    const replies = Array.isArray(note.replies) ? note.replies : [];
+    for (const reply of replies) {
+      if (!reply || typeof reply !== "object" || seenContributionObjects.has(reply)) continue;
+      seenContributionObjects.add(reply);
+      if (!isEligibleHumanConversationContribution(reply)) continue;
+      const replyId = typeof reply.id === "string" && reply.id.trim() ? reply.id.trim() : null;
+      const identity = replyId ? `id:${replyId}` : null;
+      if (identity && seenContributions.has(identity)) continue;
+      if (identity) seenContributions.add(identity);
+      count += 1;
+    }
+  }
+  return Math.max(0, Math.min(count, Number.MAX_SAFE_INTEGER));
+}
+
+function findAuthoritativePostit(node) {
+  if (!Array.isArray(node?.postits)) return null;
+  return node.postits.find((note) => note && typeof note === "object" && note.deleted !== true && !note.deletedAt && !isAiReviewPostit(note)) || null;
 }
 
 function requireCommentIdentity() {
@@ -8160,7 +8208,6 @@ function isValidCanvasStatePayload(value) {
 }
 
 function applyCampaignState(campaignState, statusText = "Restored") {
-  clearInspectorSectionRoute();
   state.commentThreadsOpenedByNode.clear();
   state.aiReviewFixPreviews = {};
   const normalizedState = withBoardSchemaDefaults(campaignState);
@@ -8390,7 +8437,6 @@ async function loadBoardFromUrlIfPresent(requestedBoardId = null) {
   if (!boardId) return false;
   const loadGeneration = state.boardLoadGeneration + 1;
   state.boardLoadGeneration = loadGeneration;
-  clearInspectorSectionRoute();
   const userEmail = (state.user?.email || "").trim().toLowerCase();
   state.initialServerLoadInFlight = true;
   state.isBoardLoading = true;
@@ -13188,7 +13234,7 @@ function updateNodeCommentBadge(node, nodeEl) {
     commentBadge.className = "node-comment-badge";
     commentBadge.addEventListener("click", (event) => {
       event.stopPropagation();
-      if (!Array.isArray(node.postits) || node.postits.length === 0) {
+      if (!findAuthoritativePostit(node)) {
         if (isBoardReadOnly()) {
           setSaveStatus("Read-only board");
           return;
@@ -13197,25 +13243,18 @@ function updateNodeCommentBadge(node, nodeEl) {
         return;
       }
       openNodeCommentThread(node.id);
-      openInspectorSection(node.id, "comments", commentBadge, { keyboard: event.detail === 0 });
     });
     const actions = nodeEl.querySelector(".node-header-actions");
     if (actions) actions.insertBefore(commentBadge, actions.firstChild);
     else nodeEl.appendChild(commentBadge);
   }
-  const unresolvedCount = (node.postits || []).filter((note) => !note.resolved).length;
-  const resolvedCount = (node.postits || []).filter((note) => !!note.resolved).length;
-  const totalReplyCount = (node.postits || []).reduce((sum, note) => sum + (Array.isArray(note.replies) ? note.replies.length : 0), 0);
-  const totalCommentCount = unresolvedCount + resolvedCount + totalReplyCount;
-  const displayCount = unresolvedCount || totalCommentCount || 0;
-  commentBadge.textContent = `💬 ${displayCount}`;
-  commentBadge.title = totalCommentCount ? `${unresolvedCount} unresolved · ${totalReplyCount} replies · ${resolvedCount} resolved` : "Add comment";
-  commentBadge.setAttribute("aria-label", totalCommentCount
-    ? uiFormat("Open comments in Inspector for {title}, {count} unresolved", { title: node.title || node.type || uiText("Node"), count: unresolvedCount })
-    : uiText("Add comment"));
-  commentBadge.dataset.inspectorTarget = "comments";
-  commentBadge.classList.toggle("has-comments", totalCommentCount > 0);
-  commentBadge.classList.toggle("has-unresolved", unresolvedCount > 0);
+  const openCount = getOpenConversationCountForNode(node);
+  const label = openCount === 1 ? uiText("1 open comment") : uiFormat("{count} open comments", { count: openCount });
+  commentBadge.textContent = `💬 ${openCount}`;
+  commentBadge.title = `${label}. ${uiText("Includes open Post-it and AI Review conversations where applicable")}`;
+  commentBadge.setAttribute("aria-label", label);
+  commentBadge.classList.toggle("has-comments", openCount > 0);
+  commentBadge.classList.toggle("has-unresolved", openCount > 0);
   commentBadge.classList.toggle("has-recent", hasRecentUnopenedComment(node));
   commentBadge.classList.toggle("has-unread", hasUnreadNodeComments(node));
 }
@@ -13258,10 +13297,8 @@ function getNodeListPreview(node) {
 }
 
 function getNodeDiscussionCounts(node) {
-  const comments = Array.isArray(node?.postits) ? node.postits : [];
-  const unresolved = comments.filter((note) => !note.resolved).length;
-  const replies = comments.reduce((sum, note) => sum + (Array.isArray(note.replies) ? note.replies.length : 0), 0);
-  return { comments: comments.length, unresolved, replies, total: comments.length + replies };
+  const records = Array.isArray(node?.postits) ? node.postits.filter((note) => note && typeof note === "object" && note.deleted !== true && !note.deletedAt) : [];
+  return { open: getOpenConversationCountForNode(node), hasHistory: records.length > 0 };
 }
 
 function getNodeListMeta(node) {
@@ -14163,70 +14200,6 @@ function selectNodeForAiWorkspace(node) {
   fillInspector(node);
 }
 
-function clearInspectorSectionRoute() {
-  document.querySelectorAll(".inspector-route-arrival").forEach((section) => section.classList.remove("inspector-route-arrival"));
-  state.inspectorSectionRoute = null;
-}
-
-function selectCanvasNode(node) {
-  if (!node?.id || !getNode(node.id)) return false;
-  state.selectedIds.clear();
-  state.selectedIds.add(node.id);
-  state.selectedPrimary = node.id;
-  updateSelectionClasses();
-  fillInspector(node);
-  return true;
-}
-
-function renderInspectorSectionRoute(node) {
-  const route = state.inspectorSectionRoute;
-  const valid = !!node && !!route && route.boardId === state.currentBoardId
-    && route.loadGeneration === state.boardLoadGeneration && route.nodeId === node.id;
-  const commentsActive = valid && route.section === "comments";
-  const aiActive = valid && route.section === "ai_review";
-  el.inspectorCommentsSection?.classList.toggle("hidden", !commentsActive);
-  if (commentsActive) {
-    const unresolved = (node.postits || []).filter((note) => !note.resolved).length;
-    if (el.inspectorCommentsSummary) el.inspectorCommentsSummary.textContent = uiFormat("{count} unresolved comments. The complete comment workflow remains available on the Canvas.", { count: unresolved });
-  }
-  if (aiActive && !getAiReviewFixPreview(node.id) && el.aiWorkspaceBody) {
-    el.aiWorkspaceBody.textContent = uiText("AI Review details and actions remain available on the Canvas.");
-  }
-  if (el.aiWorkspaceSection) el.aiWorkspaceSection.classList.toggle("hidden", !(aiActive || getAiReviewFixPreview(node?.id)));
-}
-
-function openInspectorSection(nodeId, section, initiatingControl = null, { keyboard = false } = {}) {
-  if (!state.currentBoardId || state.isBoardLoading || state.isBoardHydrating || state.boardAccess?.canView === false) return false;
-  if (section !== "comments" && section !== "ai_review") return false;
-  const node = getNode(nodeId);
-  if (!node || !el.zoomLayer?.querySelector(`.node[data-id='${nodeId}']`)) return false;
-  const boardId = state.currentBoardId;
-  const loadGeneration = state.boardLoadGeneration;
-  if (!selectCanvasNode(node)) return false;
-  state.inspectorSectionRoute = { boardId, loadGeneration, nodeId, section, initiatingControl };
-  state.inspectorDismissedNodeId = null;
-  fillInspector(node);
-  synchronizeAppShell({ forceInspectorOpen: true });
-  requestAnimationFrame(() => {
-    const route = state.inspectorSectionRoute;
-    if (!route || route.boardId !== state.currentBoardId || route.loadGeneration !== state.boardLoadGeneration || route.nodeId !== state.selectedPrimary) return;
-    const target = section === "comments" ? el.inspectorCommentsSection : el.aiWorkspaceSection;
-    const heading = section === "comments" ? el.inspectorCommentsHeading : el.inspectorAiReviewHeading;
-    if (!target || target.classList.contains("hidden")) return;
-    const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
-    target.scrollIntoView?.({ block: "nearest", behavior: reducedMotion ? "auto" : "smooth" });
-    target.classList.add("inspector-route-arrival");
-    if (reducedMotion) requestAnimationFrame(() => target.classList.remove("inspector-route-arrival"));
-    else target.addEventListener("animationend", () => target.classList.remove("inspector-route-arrival"), { once: true });
-    if (keyboard) heading?.focus?.({ preventScroll: true });
-    const message = section === "comments"
-      ? uiFormat("Comments for {title} are available in the Inspector. {count} unresolved.", { title: node.title || node.type || uiText("Node"), count: (node.postits || []).filter((note) => !note.resolved).length })
-      : uiFormat("AI Review for {title} is available in the Inspector.", { title: node.title || node.type || uiText("Node") });
-    if (el.inspectorRouteStatus) el.inspectorRouteStatus.textContent = message;
-  });
-  return true;
-}
-
 function focusAiWorkspace() {
   requestAnimationFrame(() => {
     el.aiWorkspaceSection?.scrollIntoView?.({ block: "nearest", behavior: "smooth" });
@@ -14303,11 +14276,9 @@ function createAiWorkspaceReadonlyText(labelText, value = "") {
 function renderInspectorAiWorkspace(node) {
   if (!el.aiWorkspaceSection || !el.aiWorkspaceBody) return;
   const preview = getAiReviewFixPreview(node?.id);
-  const routed = !!node && state.inspectorSectionRoute?.section === "ai_review" && state.inspectorSectionRoute.nodeId === node.id;
-  el.aiWorkspaceSection.classList.toggle("hidden", !node || (!preview && !routed));
+  el.aiWorkspaceSection.classList.toggle("hidden", !node || !preview);
   el.aiWorkspaceBody.innerHTML = "";
   if (!node || !preview) {
-    if (routed) el.aiWorkspaceBody.textContent = uiText("AI Review details and actions remain available on the Canvas.");
     return;
   }
 
@@ -14535,7 +14506,7 @@ function renderPostits(node, nodeEl) {
 
   node.postits.forEach((note) => {
     ensureCommentIdentity(note);
-    const isAiReviewNote = note.source === "ai_review" || note.authorEmail === "ai@funklix.local" || note.authorName === "AI Review";
+    const isAiReviewNote = isAiReviewPostit(note);
     const parsedAiReview = isAiReviewNote ? parseAiReviewText(note.text) : null;
     const postit = el.postitTemplate.content.firstElementChild.cloneNode(true);
     postit.style.left = `${note.x}px`;
@@ -14614,22 +14585,11 @@ function renderPostits(node, nodeEl) {
       }
       note.text = area.value;
       area.style.fontSize = note.text.length > 220 ? "0.7rem" : note.text.length > 120 ? "0.82rem" : "0.96rem";
+      updateNodeCommentBadge(node, nodeEl);
       saveCampaignCanvasState();
     });
     if (parsedAiReview && !note.resolved) {
       area.replaceWith(renderAiReviewCard(parsedAiReview, { node, note, nodeEl }));
-      const reviewCard = postit.querySelector(".ai-review-card");
-      const inspectorButton = document.createElement("button");
-      inspectorButton.type = "button";
-      inspectorButton.className = "ai-review-inspector-route";
-      inspectorButton.dataset.inspectorTarget = "ai_review";
-      inspectorButton.textContent = uiText("Open AI Review in Inspector");
-      inspectorButton.setAttribute("aria-label", uiFormat("Open AI Review in Inspector for {title}", { title: node.title || node.type || uiText("Node") }));
-      inspectorButton.addEventListener("click", (event) => {
-        event.stopPropagation();
-        openInspectorSection(node.id, "ai_review", inspectorButton, { keyboard: event.detail === 0 });
-      });
-      reviewCard.appendChild(inspectorButton);
     }
 
     postit.querySelector(".postit-delete").addEventListener("click", () => {
@@ -14850,7 +14810,6 @@ function fillInspector(node) {
     if (el.connectedContextSummary) el.connectedContextSummary.textContent = uiFormat("Parents: {count} · Children: {children}", { count: 0, children: 0 });
     if (el.connectedContextBody) el.connectedContextBody.textContent = "";
     renderInspectorAiWorkspace(null);
-    renderInspectorSectionRoute(null);
     updateInspectorActionVisibility();
     return;
   }
@@ -14921,7 +14880,6 @@ function fillInspector(node) {
     });
   }
   renderInspectorAiWorkspace(node);
-  renderInspectorSectionRoute(node);
   updateInspectorActionVisibility();
   renderNodePresenceBadges();
 }
@@ -15855,16 +15813,14 @@ function updateListView() {
       top.appendChild(owner);
 
       const discussion = getNodeDiscussionCounts(node);
-      if (discussion.total > 0) {
+      if (discussion.hasHistory) {
         const commentBtn = document.createElement("button");
         commentBtn.type = "button";
         commentBtn.className = "node-summary-comments";
-        commentBtn.classList.toggle("has-unresolved", discussion.unresolved > 0);
+        commentBtn.classList.toggle("has-unresolved", discussion.open > 0);
         commentBtn.classList.toggle("has-unread", hasUnreadComments);
-        commentBtn.textContent = discussion.unresolved ? `💬 ${discussion.unresolved}` : `💬 ${discussion.total}`;
-        commentBtn.title = discussion.unresolved
-          ? `${discussion.unresolved} unresolved · ${discussion.total} total discussion items`
-          : `${discussion.total} discussion item${discussion.total === 1 ? "" : "s"}`;
+        commentBtn.textContent = `💬 ${discussion.open}`;
+        commentBtn.title = discussion.open === 1 ? uiText("1 open comment") : uiFormat("{count} open comments", { count: discussion.open });
         commentBtn.addEventListener("click", (event) => {
           event.stopPropagation();
           focusListViewNode(node.id, { openComments: true });
@@ -16481,11 +16437,6 @@ function inspectorResponsiveMode() {
 }
 
 function restoreInspectorFocus() {
-  const routeOrigin = state.inspectorSectionRoute?.initiatingControl;
-  if (routeOrigin?.isConnected && state.inspectorSectionRoute?.boardId === state.currentBoardId) {
-    routeOrigin.focus?.({ preventScroll: true });
-    return;
-  }
   const selected = state.selectedPrimary
     ? [...(el.zoomLayer?.querySelectorAll?.(".node") || [])].find((node) => node.dataset.id === state.selectedPrimary)
     : null;
@@ -16505,8 +16456,6 @@ function synchronizeAppShell({ view = state.activeView, forceInspectorOpen = fal
     state.selectedIds.delete(state.selectedPrimary);
     state.selectedPrimary = null;
     state.inspectorSelectionSnapshot = null;
-    document.querySelectorAll?.(".inspector-route-arrival")?.forEach((section) => section.classList.remove("inspector-route-arrival"));
-    state.inspectorSectionRoute = null;
   }
   const supported = effectiveView === "board" && state.appMode !== "brand";
   const open = supported && !!selectedNode && (forceInspectorOpen || state.inspectorDismissedNodeId !== selectedNode.id);
@@ -16526,8 +16475,6 @@ function synchronizeAppShell({ view = state.activeView, forceInspectorOpen = fal
 function closeInspector({ restoreFocus = true } = {}) {
   state.inspectorDismissedNodeId = state.selectedPrimary;
   if (restoreFocus && el.inspectorPanel?.contains(document.activeElement)) restoreInspectorFocus();
-  document.querySelectorAll?.(".inspector-route-arrival")?.forEach((section) => section.classList.remove("inspector-route-arrival"));
-  state.inspectorSectionRoute = null;
   synchronizeAppShell();
 }
 
@@ -16949,12 +16896,6 @@ document.addEventListener("keydown", (e) => {
   }
 });
 el.inspectorCloseButton?.addEventListener("click", () => closeInspector());
-el.inspectorCommentsCanvasButton?.addEventListener("click", () => {
-  const route = state.inspectorSectionRoute;
-  if (!route || route.section !== "comments" || route.boardId !== state.currentBoardId) return;
-  openNodeCommentThread(route.nodeId);
-  restoreInspectorFocus();
-});
 window.matchMedia?.("(min-width: 1024px)")?.addEventListener?.("change", () => synchronizeAppShell());
 el.sidebarToggleButton?.addEventListener("click", () => {
   const collapsed = !el.appShell.classList.contains("sidebar-collapsed");
@@ -17255,6 +17196,12 @@ el.addContextNodeButton.addEventListener("click", () => {
 
 function addPostitToNode(node, position = null) {
   if (!node) return null;
+  const existing = findAuthoritativePostit(node);
+  if (existing) {
+    updateNodeCard(node);
+    openNodeCommentThread(node.id);
+    return existing;
+  }
   if (!requireCommentIdentity()) return null;
   if (!Array.isArray(node.postits)) node.postits = [];
   const actor = createCommentPayload("");
