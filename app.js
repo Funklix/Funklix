@@ -1629,6 +1629,30 @@ function getOpenConversationCountForNode(node) {
   return count;
 }
 
+// Presentation-only history total for a resolved ordinary Post-it. Unlike the
+// open badge, resolution does not exclude retained human contributions.
+function getHistoricalHumanContributionCount(note) {
+  if (!note || typeof note !== "object") return 0;
+  const seenIds = new Set();
+  const seenObjects = new WeakSet();
+  let count = 0;
+  const countContribution = (contribution) => {
+    if (!contribution || typeof contribution !== "object" || seenObjects.has(contribution)) return;
+    seenObjects.add(contribution);
+    if (contribution.deleted === true || contribution.deletedAt) return;
+    if (typeof contribution.text !== "string" || !contribution.text.trim()) return;
+    if (["ai_review", "system", "generated", "activity"].includes(contribution.source)) return;
+    if (contribution.authorEmail === "ai@funklix.local" || contribution.authorName === "AI Review") return;
+    const id = typeof contribution.id === "string" && contribution.id.trim() ? contribution.id.trim() : null;
+    if (id && seenIds.has(id)) return;
+    if (id) seenIds.add(id);
+    count = Math.min(Number.MAX_SAFE_INTEGER, count + 1);
+  };
+  countContribution(note);
+  if (Array.isArray(note.replies)) note.replies.forEach(countContribution);
+  return count;
+}
+
 function requireCommentIdentity() {
   if (state.user?.email) return true;
   setAuthMessage("Sign in with Google to comment.");
@@ -14570,6 +14594,7 @@ function renderPostits(node, nodeEl) {
     postit.style.left = `${note.x}px`;
     postit.style.top = `${note.y}px`;
     postit.style.background = note.color;
+    postit.style.setProperty("--postit-surface", note.color || "#ffe082");
     postit.classList.toggle("is-resolved", !!note.resolved);
     postit.classList.toggle("ai-review-postit", isAiReviewNote);
 
@@ -14607,6 +14632,7 @@ function renderPostits(node, nodeEl) {
       }
       note.color = color.value;
       postit.style.background = color.value;
+      postit.style.setProperty("--postit-surface", color.value);
       saveCampaignCanvasState();
     });
 
@@ -14638,6 +14664,9 @@ function renderPostits(node, nodeEl) {
       renderPostits(node, nodeEl);
       updateNodeCommentBadge(node, nodeEl);
       saveCampaignCanvasState();
+      if (!note.resolved && !isAiReviewNote) {
+        requestAnimationFrame(() => nodeEl.querySelector(`.postit[data-postit-id="${CSS.escape(note.id)}"] .postit-text`)?.focus());
+      }
     });
     header.insertBefore(resolveBtn, postit.querySelector(".postit-delete"));
 
@@ -14647,6 +14676,7 @@ function renderPostits(node, nodeEl) {
     deleteBtn.dataset.i18nTitle = "Close Post-it";
     deleteBtn.dataset.i18nAriaLabel = "Close Post-it";
     if (!isAiReviewNote) {
+      postit.dataset.postitId = note.id;
       const identity = document.createElement("div");
       identity.className = "postit-identity";
       const actions = document.createElement("div");
@@ -14716,11 +14746,21 @@ function renderPostits(node, nodeEl) {
       }
       summary.setAttribute("role", "status");
       const resolvedBy = note.resolvedByName || uiText("Someone");
-      const replyCount = Array.isArray(note.replies) ? note.replies.length : 0;
+      const contributionCount = getHistoricalHumanContributionCount(note);
       const resolvedLabel = uiFormat("Resolved by {name}", { name: resolvedBy });
-      const repliesLabel = replyCount ? uiFormat(replyCount === 1 ? "{count} reply" : "{count} replies", { count: replyCount }) : "";
-      summary.textContent = `${uiText("Resolved")} · ${resolvedLabel}${note.resolvedAt ? ` · ${relativeActivityTime(note.resolvedAt)}` : ""}${repliesLabel ? ` · ${repliesLabel}` : ""}`;
+      const contributionLabel = uiFormat(contributionCount === 1 ? "{count} contribution" : "{count} contributions", { count: contributionCount });
+      const status = document.createElement("strong");
+      status.textContent = `${uiText("Resolved")} · ${contributionLabel}`;
+      const resolutionMeta = document.createElement("span");
+      resolutionMeta.textContent = `${resolvedLabel}${note.resolvedAt ? ` · ${relativeActivityTime(note.resolvedAt)}` : ""}`;
+      summary.append(status, resolutionMeta);
       postit.appendChild(summary);
+      area.hidden = true;
+      area.disabled = true;
+      color.hidden = true;
+      enablePostitDrag(postit, note);
+      nodeEl.appendChild(postit);
+      return;
     }
 
     const repliesWrap = document.createElement("div");
