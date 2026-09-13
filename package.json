@@ -67,6 +67,7 @@
     "check:bw33.4b3.1": "node scripts/check-bw33-4b3-1-resolved-postits.js",
     "check:bw33.4b4": "node scripts/check-bw33-4b4-postit-emoji-picker.js",
     "check:bw33.4b4.1": "node scripts/check-bw33-4b4-1-emoji-picker-lifecycle.js",
-    "check:bw33.4b4.2": "node scripts/check-bw33-4b4-2-timed-emoji-picker-lifecycle.js"
+    "check:bw33.4b4.2": "node scripts/check-bw33-4b4-2-timed-emoji-picker-lifecycle.js",
+    "check:bw33.5": "node scripts/check-bw33-5-supabase-rls-hardening.js"
   }
 }

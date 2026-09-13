@@ -205,6 +205,8 @@ jobs:
         run: npm run check:bw33.4b4.1
       - name: Check BW-33.4B4.2 timed Post-it emoji picker lifecycle
         run: npm run check:bw33.4b4.2
+      - name: Check BW-33.5 Supabase RLS hardening contract
+        run: npm run check:bw33.5
       - name: Check dynamic AI Insights translations
         run: node scripts/check-bw25-1-dynamic-insights-translations.js
       - name: Check scoped German interface localization
