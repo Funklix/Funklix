@@ -15,8 +15,9 @@ function keyFor(version, env = process.env) {
   return key;
 }
 function aad(c, version) { return Buffer.from(`funklix-social:v1:${version}:${c.ownerAccountId}:${c.platform}:${c.secretId}`); }
+function pageCredentials(value) { return value && Object.getPrototypeOf(value)===Object.prototype && Object.keys(value).length>0 && Object.entries(value).every(([id,token])=>/^[A-Za-z0-9_.:-]{1,256}$/.test(id)&&typeof token==='string'&&token.length>=8&&token.length<=12000); }
 function payload(value) {
-  if (!exact(value, [], ['accessToken','refreshToken','clientSecret','tokenType','scope']) || Object.keys(value).length === 0 || !Object.values(value).every((v) => typeof v === 'string')) throw connectorError('connector_contract_invalid');
+  if (!exact(value, [], ['accessToken','refreshToken','clientSecret','tokenType','scope','pageTokens']) || Object.keys(value).length === 0 || !Object.entries(value).every(([key,item]) => key==='pageTokens'?pageCredentials(item):typeof item==='string')) throw connectorError('connector_contract_invalid');
   const data = Buffer.from(JSON.stringify(value)); if (data.length > MAX_PLAINTEXT) { data.fill(0); throw connectorError('connector_contract_invalid'); } return data;
 }
 function seal(value, c, { keyVersion = 1, env } = {}) {
@@ -34,4 +35,4 @@ function rotate(record,c,{currentKeyVersion,env}={}) { const value=open(record,c
 function metadata(row) { return row ? Object.freeze({ secretId:row.id, ownerAccountId:row.owner_account_id, platform:row.platform, keyVersion:row.encryption_key_version, createdAt:row.created_at, updatedAt:row.updated_at, rotatedAt:row.rotated_at, revokedAt:row.revoked_at }) : null; }
 async function revoke(store,c){if(!context(c))throw connectorError('connector_contract_invalid');return store.revokeSecret(c);}
 async function remove(store,c){if(!context(c))throw connectorError('connector_contract_invalid');return store.deleteSecret(c);}
-module.exports={ALGORITHM,MAX_PLAINTEXT,MAX_CIPHERTEXT,seal,open,rotate,metadata,revoke,delete:remove};
+module.exports={ALGORITHM,MAX_PLAINTEXT,MAX_CIPHERTEXT,pageCredentials,seal,open,rotate,metadata,revoke,delete:remove};

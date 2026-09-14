@@ -189,6 +189,8 @@ jobs:
         run: npm run check:bw32.3.9
       - name: Check BW-34.1 Facebook Page publishing
         run: npm run check:bw34.1
+      - name: Check BW-34.1R1 Facebook callback repair
+        run: npm run check:bw34.1r1
       - name: Check BW-33.2R1 corrected Tendra One brand foundation
         run: npm run check:bw33.2r1
       - name: Check BW-33.3R1 post-hydration Canvas density
