@@ -193,6 +193,8 @@ jobs:
         run: npm run check:bw34.1r1
       - name: Check BW-34.1.1 Facebook content publishing surface
         run: npm run check:bw34.1.1
+      - name: Check BW-34.1.2 Facebook Page destination selection
+        run: npm run check:bw34.1.2
       - name: Check BW-33.2R1 corrected Tendra One brand foundation
         run: npm run check:bw33.2r1
       - name: Check BW-33.3R1 post-hydration Canvas density
