@@ -16963,7 +16963,7 @@ async function preflightLinkedInPublish(input) {
   const settingsResponse = await fetch("/api/social-connections", { credentials: "same-origin", headers: { accept: "application/json" } });
   const settingsPayload = await settingsResponse.json();
   const provider=input.provider==='facebook'?'facebook':'linkedin';
-  const destinationId = provider==='facebook'?globalThis.FacebookSettings?.getDestinationId?.() : settingsPayload?.social_connections?.linkedin?.destination_id;
+  const destinationId = provider==='facebook'?globalThis.FacebookSettings?.normalizeProjection?.(settingsPayload?.social_connections?.facebook)?.destination_id : settingsPayload?.social_connections?.linkedin?.destination_id;
   if (!destinationId) return { ok: false, status: "connection_unavailable" };
   const response = await fetch(`/api/social-publishing/${provider}/preflight`, { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json", "x-client-request-id": input.clientRequestId }, body: JSON.stringify({ ...input, destinationId }) });
   return response.json();
@@ -17302,6 +17302,7 @@ el.settingsOpenButton?.addEventListener("click", () => {
   if (el.campaignLanguageSelect) el.campaignLanguageSelect.value = preferences.campaignLanguage;
   if (el.languagePreferenceStatus) el.languagePreferenceStatus.textContent = "";
   el.settingsDialog.showModal();
+  void globalThis.FacebookSettings?.refresh?.();
   synchronizeAppShell({ view: "settings" });
   document.getElementById("settings-dialog-title")?.focus();
 });
@@ -17310,7 +17311,9 @@ el.settingsDialog?.addEventListener("cancel", (event) => {
   event.preventDefault();
   el.settingsDialog.close();
 });
-el.settingsDialog?.addEventListener("close", () => {
+el.settingsDialog?.addEventListener("close", async () => {
+  await globalThis.FacebookSettings?.refresh?.();
+  if (state.activeView === "content_workspace") renderContentWorkspace();
   synchronizeAppShell();
   el.settingsOpenButton?.focus();
 });
