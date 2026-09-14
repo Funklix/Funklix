@@ -8030,3 +8030,6 @@ html[data-theme="dark"] .postit:not(.ai-review-postit) .postit-emoji-trigger { b
 @media (max-width:420px) { html[data-theme] .postit-emoji-grid { grid-template-columns:repeat(7,minmax(34px,1fr)); }html[data-theme] .postit-emoji-option { min-height:40px; } }
 @media (prefers-reduced-motion:reduce) { html[data-theme] .postit-emoji-picker { animation:none; }html[data-theme] .postit-emoji-option,html[data-theme] .postit-emoji-trigger { transition:none!important; } }
 /* End BW-33.4B4. */
+/* BW-34.1: isolated Facebook Page destination control; inherits the established theme tokens. */
+.facebook-connection-card #facebook-page-select{margin-top:.45rem;max-width:min(100%,22rem)}
+@media (max-width:640px){.facebook-connection-card{align-items:stretch}.facebook-connection-card #facebook-page-select{width:100%;max-width:none}}

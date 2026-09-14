@@ -16935,13 +16935,15 @@ async function preflightLinkedInPublish(input) {
     nodeMaterialNormalizationCategory: approvalNormalizationByNode.get(input.nodeId) || "unknown", requestLifecycleGeneration: lifecycleGeneration };
   const settingsResponse = await fetch("/api/social-connections", { credentials: "same-origin", headers: { accept: "application/json" } });
   const settingsPayload = await settingsResponse.json();
-  const destinationId = settingsPayload?.social_connections?.linkedin?.destination_id;
+  const provider=input.provider==='facebook'?'facebook':'linkedin';
+  const destinationId = provider==='facebook'?globalThis.FacebookSettings?.getDestinationId?.() : settingsPayload?.social_connections?.linkedin?.destination_id;
   if (!destinationId) return { ok: false, status: "connection_unavailable" };
-  const response = await fetch("/api/social-publishing/linkedin/preflight", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json", "x-client-request-id": input.clientRequestId }, body: JSON.stringify({ ...input, destinationId }) });
+  const response = await fetch(`/api/social-publishing/${provider}/preflight`, { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json", "x-client-request-id": input.clientRequestId }, body: JSON.stringify({ ...input, destinationId }) });
   return response.json();
 }
 async function publishLinkedInNow(input) {
-  const response = await fetch("/api/social-publishing/linkedin/publish", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json", "x-client-request-id": input.clientRequestId }, body: JSON.stringify(input) });
+  const provider=String(getNode(input.nodeId)?.social?.platform||'').toLowerCase()==='facebook'?'facebook':'linkedin';
+  const response = await fetch(`/api/social-publishing/${provider}/publish`, { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json", "x-client-request-id": input.clientRequestId }, body: JSON.stringify(input) });
   const parsed=await readAuthoritativeJson(response),raw=parsed.value||{},result={...raw,clientRequestId:raw.client_request_id,serverRequestId:raw.server_request_id,jobId:raw.job_id,providerAttemptId:raw.provider_attempt_id,jobState:raw.job_state,providerAttemptState:raw.provider_attempt_state,publishedAt:raw.published_at,externalUrl:raw.external_url};
   if(!parsed.valid||result.clientRequestId!==input.clientRequestId||typeof result.status!=="string")throw Object.assign(new Error(parsed.category),{jobId:result.jobId||"",serverRequestId:result.serverRequestId||""});
   return result;
@@ -18910,3 +18912,4 @@ else void bootApp();
 
 // BW-32.2.3: the server projection is the sole source of LinkedIn actions.
 globalThis.LinkedInSettings?.initialize({document,fetchImpl:fetch.bind(globalThis),location,history,translate:value=>language?.t?.(value)||value});
+globalThis.FacebookSettings=globalThis.FacebookSettings?.initialize({document,fetchImpl:fetch.bind(globalThis),location,history,translate:value=>language?.t?.(value)||value})||globalThis.FacebookSettings;
