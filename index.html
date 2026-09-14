@@ -310,7 +310,7 @@
               <div class="social-connection-row" id="linkedin-connection-card" role="listitem" tabindex="-1"><strong>LinkedIn</strong><div><span id="linkedin-connection-status" data-i18n="Not connected">Not connected</span><small id="linkedin-connection-detail" data-i18n="Authorize Tendra One to identify your personal profile and request permission to publish on your behalf.">Authorize Tendra One to identify your personal profile and request permission to publish on your behalf.</small></div><button type="button" class="fk-btn fk-btn-secondary" disabled id="linkedin-connect-button" data-i18n="Setup required">Setup required</button><button type="button" id="linkedin-disconnect-button" class="fk-btn fk-btn-secondary" hidden data-i18n="Disconnect">Disconnect</button></div>
               <p id="linkedin-connection-result" class="settings-status" role="status" aria-live="polite" aria-atomic="true" tabindex="-1"></p><button type="button" id="linkedin-copy-diagnostics" class="fk-btn fk-btn-ghost" hidden data-i18n="Copy diagnostics">Copy diagnostics</button>
               <div class="social-connection-row" role="listitem"><strong>Instagram</strong><span data-i18n="Not connected">Not connected</span><button type="button" class="fk-btn fk-btn-secondary" disabled data-i18n="Coming soon">Coming soon</button></div>
-              <div class="social-connection-row" role="listitem"><strong>Facebook</strong><span data-i18n="Not connected">Not connected</span><button type="button" class="fk-btn fk-btn-secondary" disabled data-i18n="Coming soon">Coming soon</button></div>
+              <div class="social-connection-row facebook-connection-card" id="facebook-connection-card" role="listitem" tabindex="-1"><strong>Facebook</strong><div><span id="facebook-connection-status" data-i18n="Not connected">Not connected</span><small id="facebook-connection-detail" data-i18n="Connect Facebook">Connect Facebook</small><label id="facebook-page-label" for="facebook-page-select" hidden data-i18n="Select Page">Select Page</label><select id="facebook-page-select" class="fk-select" hidden aria-labelledby="facebook-page-label"></select></div><button type="button" class="fk-btn fk-btn-secondary" disabled id="facebook-connect-button" data-i18n="Setup required">Setup required</button><button type="button" id="facebook-disconnect-button" class="fk-btn fk-btn-secondary" hidden data-i18n="Disconnect">Disconnect</button></div><p id="facebook-connection-result" class="settings-status" role="status" aria-live="polite" aria-atomic="true"></p>
               <div class="social-connection-row" role="listitem"><strong>X</strong><span data-i18n="Not connected">Not connected</span><button type="button" class="fk-btn fk-btn-secondary" disabled data-i18n="Coming soon">Coming soon</button></div>
             </div>
             <small data-i18n="Internal planning continues to work independently of social connections.">Internal planning continues to work independently of social connections.</small>
@@ -884,6 +884,7 @@
     <script src="/content-workspace.js"></script>
     <script src="/social-connections-response-contract.js"></script>
     <script src="/social-connections-settings.js"></script>
+    <script src="/facebook-connections-settings.js"></script>
     <script src="/app.js"></script>
   </body>
 </html>

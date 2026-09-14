@@ -280,6 +280,7 @@
     });
     return findings;
   }
+  Object.assign(german, {"Connect Facebook":"Facebook verbinden","Facebook Page":"Facebook-Seite","Select Page":"Seite auswählen","Connected Page":"Verbundene Seite","No eligible Pages found":"Keine berechtigten Seiten gefunden","Missing publishing permission":"Veröffentlichungsberechtigung fehlt","Permission expired":"Berechtigung abgelaufen","Publish to Facebook":"Auf Facebook veröffentlichen","Publishing":"Wird veröffentlicht","Published":"Veröffentlicht","Open on Facebook":"Auf Facebook öffnen","Unsupported Facebook format":"Nicht unterstütztes Facebook-Format","Facebook is temporarily unavailable.":"Facebook ist vorübergehend nicht verfügbar.","Facebook could not complete the connection.":"Die Facebook-Verbindung konnte nicht abgeschlossen werden.","Facebook could not be disconnected.":"Facebook konnte nicht getrennt werden.","Facebook disconnected.":"Facebook wurde getrennt.","Facebook connected.":"Facebook wurde verbunden.","Connection cancelled.":"Verbindung abgebrochen.","Facebook connection failed.":"Facebook-Verbindung fehlgeschlagen."});
   const dictionaries = Object.freeze({ en: Object.freeze({}), de: Object.freeze(german) });
   const allowed = (value, list, fallback) => list.includes(value) ? value : fallback;
   function restorePreferences(source = storage) {
