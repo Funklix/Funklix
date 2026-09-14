@@ -59,6 +59,12 @@ The existing ordinary (not forced) RLS and restrictive `anon`/`authenticated` de
 
 Coverage includes the exact four requests; account/destination success; the historical envelope mismatch; encryption; task normalization; one eligible among multiple Pages; missing task/scope; provider stage failures; account/destination database failures and rollback; replay rejection and a fresh attempt; safe redirects/logs/correlation; database metadata allowlisting; secret omission; and unchanged LinkedIn source. Fixtures are invented and no external system is contacted.
 
+### Clean-checkout CI correction
+
+The first R1 regression imported the callback before installing a storage double. That import synchronously loaded `api/_boards-storage.js`, whose first line legitimately imports the production `pg` dependency. Runtime Boot Safety intentionally does not install packages. Local validation therefore produced a false positive solely because an untracked `node_modules/` supplied `pg`; a clean GitHub Actions checkout failed with `MODULE_NOT_FOUND` before assertions ran.
+
+The regression now follows the predecessor Social Connector pattern: it saves the relevant CommonJS cache entries, installs bounded storage and route-base doubles **before** importing the real callback, executes the production callback handler against the real Facebook service/adapter/vault with deterministic pool and fetch doubles, and restores the loader cache, environment, and global fetch in `finally`. The exact Runtime Boot Safety command was also run from a Git archive containing neither `.git` nor `node_modules`, with parent/global module lookup disabled, and required no package installation. Production modules and behavior are unchanged by this CI-only correction.
+
 ## Deployment and one production verification
 
 1. Merge and deploy the code.
