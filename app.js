@@ -16898,7 +16898,7 @@ function setActiveView(view) {
   if (view === "calendar") renderCalendarView();
   if (view === "insights" || view === "ai_brain") renderCampaignIntelligence();
   if (view === "funnel_simulator") renderFunnelSimulator();
-  if (view === "content_workspace") renderContentWorkspace();
+  if (view === "content_workspace") { renderContentWorkspace(); void refreshFacebookWorkspaceSnapshot(); }
   if (typeof synchronizeAppShell === "function") synchronizeAppShell({ view });
 }
 
@@ -16984,6 +16984,14 @@ const approvalNormalizationByNode = new Map();
 let publishingLifecycleGeneration = 0;
 let contentWorkspaceFocusNodeId = "";
 
+let facebookWorkspaceRefreshGeneration = 0;
+async function refreshFacebookWorkspaceSnapshot() {
+  const generation = ++facebookWorkspaceRefreshGeneration;
+  await globalThis.FacebookSettings?.refresh?.();
+  if (generation !== facebookWorkspaceRefreshGeneration || state.activeView !== "content_workspace") return;
+  renderContentWorkspace();
+}
+
 function renderContentWorkspace() {
   if (!window.FunklixContentWorkspace || !el.contentWorkspaceSurface) return;
   const identity = contentWorkspaceIdentity();
@@ -17006,7 +17014,7 @@ function renderContentWorkspace() {
     focusNodeId: contentWorkspaceFocusNodeId,
     approvalPersistence: id => approvalPersistenceByNode.get(id) || "not_requested",
     requestLifecycleGeneration: publishingLifecycleGeneration,
-    facebookPublishing: globalThis.FacebookSettings?.getPublishingState?.() || { connected: false, destinationId: "", destinationLabel: "" },
+    facebookConnectionSnapshot: globalThis.FacebookSettings?.getConnectionSnapshot?.() || { status: "loading", projection: null },
     getNode: id => getNode(id),
     resolveCurrentContentNode,
     copyText: value => navigator.clipboard.writeText(value),
@@ -17312,8 +17320,8 @@ el.settingsDialog?.addEventListener("cancel", (event) => {
   el.settingsDialog.close();
 });
 el.settingsDialog?.addEventListener("close", async () => {
-  await globalThis.FacebookSettings?.refresh?.();
-  if (state.activeView === "content_workspace") renderContentWorkspace();
+  if (state.activeView === "content_workspace") await refreshFacebookWorkspaceSnapshot();
+  else await globalThis.FacebookSettings?.refresh?.();
   synchronizeAppShell();
   el.settingsOpenButton?.focus();
 });

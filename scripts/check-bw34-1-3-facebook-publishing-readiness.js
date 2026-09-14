@@ -1,0 +1,38 @@
+'use strict';
+const assert=require('assert'),fs=require('fs'),approval=require('../approval-material-contract');
+const workspace=require('../content-workspace'),facebook=require('../facebook-connections-settings');
+const destinationId='destination_7d5c2b9f',connectionId='connection_2a8d4e6f';
+const response={social_connections:{facebook:{state:'connected',configured:true,connection_id:connectionId,display_name:'Invented owner',permission_state:'authorized',destination_id:destinationId,destinations:[{id:destinationId,label:'Tendra One',type:'page',capabilities:['CREATE_CONTENT'],selected:true}]}}};
+const projection=facebook.normalizeProjection(response.social_connections.facebook);
+const snapshot={status:'resolved',projection};
+function approved(id='facebook_post_1'){const node={id,type:'Social Media Posting',title:'Invented post',content:'',channel:'Facebook',status:'Approved',social:{platform:'Facebook',caption:'An invented approved post. Learn more.',preview:''},images:[]};node.approvedContentFingerprint=approval.fingerprintSync(node);return node;}
+const readyNode=approved(),ready=workspace.selectFacebookPublishingReadiness(snapshot,readyNode);
+assert.strictEqual(projection.selectedDestination.label,'Tendra One');
+assert.strictEqual(workspace.calculateReadiness(readyNode).level,'Ready');
+// Historical split fields allowed the exact contradiction: metadata used destinationLabel while preflight rejected connected !== true.
+const historical={connected:false,destinationId:projection.destination_id,destinationLabel:projection.selectedDestination.label};
+assert.strictEqual(historical.destinationLabel,'Tendra One');
+assert.strictEqual(workspace.evaluateFacebookPublishAction({node:readyNode,currentFingerprint:approval.fingerprintSync(readyNode),...historical}).code,'connection_unavailable');
+assert.strictEqual(ready.reason,'facebook_ready');assert(ready.ready);assert.strictEqual(ready.selectedDestination.label,'Tendra One');assert.strictEqual(ready.selectedDestination.id,destinationId);
+assert.strictEqual(workspace.selectFacebookPublishingReadiness({status:'resolved',projection:{state:'not_connected',destinations:[]}},readyNode).reason,'facebook_not_connected');
+assert.strictEqual(workspace.selectFacebookPublishingReadiness({status:'resolved',projection:{state:'connected',connection_id:connectionId,destination_id:null,destinations:[]}},readyNode).reason,'facebook_destination_required');
+assert.strictEqual(workspace.selectFacebookPublishingReadiness({status:'loading',projection:null},readyNode).reason,'facebook_loading');
+const unsupported=approved('unsupported');unsupported.images=[{id:'invented'}];unsupported.approvedContentFingerprint=approval.fingerprintSync(unsupported);assert.strictEqual(workspace.selectFacebookPublishingReadiness(snapshot,unsupported).reason,'facebook_payload_unsupported');
+const stale=approved('stale');stale.social.caption+=' changed';assert.strictEqual(workspace.selectFacebookPublishingReadiness(snapshot,stale).reason,'facebook_approval_stale');
+const published={...approved('published'),facebookPublication:{status:'published'}};assert.strictEqual(workspace.selectFacebookPublishingReadiness(snapshot,published).reason,'facebook_already_published');
+for(const node of [approved('one'),approved('two')])assert(workspace.selectFacebookPublishingReadiness(snapshot,node).ready);
+assert(!JSON.stringify(snapshot).match(/access.?token|encrypted_payload|authentication_tag|external_destination_id/i));
+const cw=fs.readFileSync('content-workspace.js','utf8'),app=fs.readFileSync('app.js','utf8'),settings=fs.readFileSync('facebook-connections-settings.js','utf8'),workflow=fs.readFileSync('.github/workflows/runtime-boot-safety.yml','utf8');
+assert(cw.includes('facebook.selectedDestination?.label')&&cw.includes('selectFacebookPublishingReadiness(c.facebookConnectionSnapshot'));
+assert(cw.includes('if(e.ready)return{kind:"publish",facebook:e}')); 
+assert(cw.includes('d.code==="facebook_not_connected"?t.connectFacebookPublish')&&cw.includes('d.code==="facebook_destination_required"?t.selectFacebookPublish'));
+assert(cw.includes('facebook_loading')&&cw.includes('facebook_already_published'));
+assert(app.includes('facebookConnectionSnapshot: globalThis.FacebookSettings?.getConnectionSnapshot?.()'));
+assert(app.includes('generation !== facebookWorkspaceRefreshGeneration'));
+assert(app.includes('body: JSON.stringify({ ...input, destinationId })'));
+assert(cw.includes('destinationId:preflight.destination.id'));
+assert(!app.includes('destinationLabel:preflight.destination.label'));
+assert(settings.includes("if(pendingRefresh)return pendingRefresh")&&settings.includes("publishState('loading')"));
+assert(workflow.indexOf('check:bw34.1.3')>workflow.indexOf('check:bw34.1.2'));
+assert(fs.readFileSync('api/social-connector/linkedin-service.js','utf8').includes("platform:'linkedin'"));
+console.log('BW-34.1.3 Facebook publishing readiness regression passed (invented fixtures; no network, credentials, database, Meta request, or Facebook post).');
