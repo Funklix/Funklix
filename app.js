@@ -9864,6 +9864,23 @@ function applyInherited(source, target) {
   if (!target.channel && source.channel) target.channel = source.channel;
 }
 
+// Material edits use the same approval contract as the server. An approved
+// version can never survive a channel or message change.
+function approvalMaterialSnapshot(node) {
+  if (node?.type !== "Social Media Posting") return "";
+  try { return window.FunklixApprovalMaterialV2?.serialize?.(node) || ""; } catch (_) { return ""; }
+}
+function invalidateApprovalAfterMaterialMutation(node, before) {
+  if (!before || approvalMaterialSnapshot(node) === before) return false;
+  if (normalizeNodeStatus(node.status) === "Approved" || node.approvedContentFingerprint) {
+    node.status = "Draft";
+    delete node.approvedContentFingerprint;
+    approvalPersistenceByNode?.delete?.(node.id);
+    return true;
+  }
+  return false;
+}
+
 function createNode({ type = "Idea", parentId = null, position = null, images = [], initial = null } = {}) {
   if (state.boardAccess?.canEdit === false) {
     setSaveStatus("Read-only board");
@@ -10126,7 +10143,7 @@ function normalizeCampaignSetupOptions(options = {}) {
     if (!Number.isFinite(number)) return fallback;
     return Math.max(min, Math.min(max, number));
   };
-  const channel = ["LinkedIn", "X", "Instagram", "TikTok", "Mixed"].includes(options.channel) ? options.channel : "LinkedIn";
+  const channel = ["LinkedIn", "Facebook", "X", "Instagram", "TikTok", "Mixed"].includes(options.channel) ? options.channel : "LinkedIn";
   return {
     variationCount: clamp(options.variationCount, 3, 1, 10),
     postsPerVariation: clamp(options.postsPerVariation, 5, 1, 20),
@@ -11349,6 +11366,7 @@ function campaignV3StrategicSocialPlatform(node = {}, setup = {}, context = {}) 
   if (/^(x|x\s*\/\s*twitter|twitter)$/.test(platform)) return "X";
   if (platform === "tiktok" || platform === "tik tok") return "TikTok";
   if (platform === "instagram") return "Instagram";
+  if (platform === "facebook") return "Facebook";
   return "LinkedIn";
 }
 
@@ -12667,7 +12685,7 @@ function openCampaignV3Modal() {
     </label>
     <label class="campaign-builder-field campaign-builder-field-full fk-card">
       <span>Channel</span>
-      <select class="fk-select" id="campaign-v3-channel"><option>LinkedIn</option><option>X</option><option>Instagram</option><option>TikTok</option><option>Mixed</option></select>
+      <select class="fk-select" id="campaign-v3-channel"><option>LinkedIn</option><option>Facebook</option><option>X</option><option>Instagram</option><option>TikTok</option><option>Mixed</option></select>
     </label>
     <div class="campaign-builder-grid">
       <label class="campaign-builder-field fk-card">
@@ -12910,7 +12928,7 @@ function openCreateCampaignModal() {
     </div>
     <label class="campaign-builder-field campaign-builder-field-full fk-card">
       <span>Channel</span>
-      <select class="fk-select" id="campaign-channel"><option>LinkedIn</option><option>X</option><option>Instagram</option><option>TikTok</option><option>Mixed</option></select>
+      <select class="fk-select" id="campaign-channel"><option>LinkedIn</option><option>Facebook</option><option>X</option><option>Instagram</option><option>TikTok</option><option>Mixed</option></select>
     </label>
     <div class="campaign-builder-grid">
       <label class="campaign-builder-toggle fk-card"><input id="campaign-include-landing" type="checkbox" checked /><span><strong>Landing Page</strong><small>Generate Landing Page</small></span></label>
@@ -13443,7 +13461,7 @@ function updateSocialPreviewCharCount(socialRoot, node) {
   const charCount = socialRoot?.querySelector(".social-char-count");
   if (!charCount) return;
   const captionLen = (node.social?.caption || "").length;
-  const limits = { "X / Twitter": 280, LinkedIn: 3000, Instagram: 2200, TikTok: 2200 };
+  const limits = { "X / Twitter": 280, LinkedIn: 3000, Facebook: 63206, Instagram: 2200, TikTok: 2200 };
   const limit = limits[node.social?.platform] || 3000;
   charCount.textContent = `${captionLen} characters${captionLen > limit ? ` (over ${limit})` : ""}`;
   charCount.classList.toggle("warning", captionLen > limit);
@@ -13616,7 +13634,7 @@ function updateNodeCard(node) {
     top.className = "social-card-top";
     const platformSelect = document.createElement("select");
     platformSelect.className = "social-platform-select";
-    ["LinkedIn", "X / Twitter", "Instagram", "TikTok"].forEach((p) => {
+    ["LinkedIn", "Facebook", "X / Twitter", "Instagram", "TikTok"].forEach((p) => {
       const option = document.createElement("option");
       option.value = p;
       option.textContent = p;
@@ -13629,7 +13647,10 @@ function updateNodeCard(node) {
         setSaveStatus("Read-only board");
         return;
       }
+      const before = approvalMaterialSnapshot(node);
       node.social.platform = platformSelect.value;
+      node.channel = platformSelect.value;
+      const approvalInvalidated = invalidateApprovalAfterMaterialMutation(node, before);
       updateNodeCard(node);
       if (state.selectedPrimary === node.id) fillInspector(node);
       saveCampaignCanvasState();
@@ -13650,7 +13671,7 @@ function updateNodeCard(node) {
     const charCount = document.createElement("div");
     charCount.className = "social-char-count";
     const captionLen = (node.social.caption || "").length;
-    const limits = { "X / Twitter": 280, LinkedIn: 3000, Instagram: 2200, TikTok: 2200 };
+    const limits = { "X / Twitter": 280, LinkedIn: 3000, Facebook: 63206, Instagram: 2200, TikTok: 2200 };
     const limit = limits[node.social.platform] || 3000;
     charCount.textContent = `${captionLen} characters${captionLen > limit ? ` (over ${limit})` : ""}`;
     if (captionLen > limit) charCount.classList.add("warning");
@@ -13665,10 +13686,15 @@ function updateNodeCard(node) {
         setSaveStatus("Read-only board");
         return;
       }
+      const before = approvalMaterialSnapshot(node);
       node.social.caption = caption.textContent;
+      invalidateApprovalAfterMaterialMutation(node, before);
       recordNodeUpdatedActivity(node);
       updateSocialPreviewCharCount(social, node);
-      if (state.selectedPrimary === node.id) el.inputs.caption.value = node.social.caption;
+      if (state.selectedPrimary === node.id) {
+        if (approvalInvalidated) fillInspector(node);
+        else el.inputs.caption.value = node.social.caption;
+      }
       saveCampaignCanvasState();
     });
 
@@ -14055,6 +14081,7 @@ function buildFiltersPopoverHtml() {
   </div></div>
   <div class="filter-group"><strong>Platform</strong><div class="node-filter-chips">
     <button type="button" data-filter-group="platform" data-filter-value="LinkedIn">LinkedIn</button>
+    <button type="button" data-filter-group="platform" data-filter-value="Facebook">Facebook</button>
     <button type="button" data-filter-group="platform" data-filter-value="X / Twitter">X</button>
     <button type="button" data-filter-group="platform" data-filter-value="Instagram">Instagram</button>
     <button type="button" data-filter-group="platform" data-filter-value="TikTok">TikTok</button>
@@ -16979,6 +17006,7 @@ function renderContentWorkspace() {
     focusNodeId: contentWorkspaceFocusNodeId,
     approvalPersistence: id => approvalPersistenceByNode.get(id) || "not_requested",
     requestLifecycleGeneration: publishingLifecycleGeneration,
+    facebookPublishing: globalThis.FacebookSettings?.getPublishingState?.() || { connected: false, destinationId: "", destinationLabel: "" },
     getNode: id => getNode(id),
     resolveCurrentContentNode,
     copyText: value => navigator.clipboard.writeText(value),
@@ -16992,6 +17020,7 @@ function renderContentWorkspace() {
     onPublishPreflight: preflightLinkedInPublish,
     onPublish: publishLinkedInNow,
     onPublishStatus: readLinkedInPublicationStatus,
+    onSocialConnections: () => el.settingsOpenButton?.click(),
     onPlanningFeedback: routeContentOperationsFeedback,
     onOpenNode(nodeId, openInspector, actionIdentity) {
       if (actionIdentity !== contentWorkspaceIdentity() || state.boardAccess?.canView === false || !getNode(nodeId)) return renderContentWorkspace();
@@ -17311,6 +17340,9 @@ window.addEventListener("funklix:themechange", (event) => {
   state.themePreference = event.detail.themePreference;
   state.resolvedTheme = event.detail.resolvedTheme;
 });
+window.addEventListener("funklix:facebookconnectionchange", () => {
+  if (state.activeView === "content_workspace") renderContentWorkspace();
+});
 el.campaignLanguageSelect?.addEventListener("change", () => {
   state.campaignLanguage = language?.setCampaignLanguage?.(el.campaignLanguageSelect.value) || "en";
   if (el.languagePreferenceStatus) el.languagePreferenceStatus.textContent = uiText("Campaign language changed.");
@@ -17629,6 +17661,7 @@ el.nodeForm.addEventListener("input", (event) => {
   }
   const node = getNode(state.selectedPrimary);
   if (!node) return;
+  const approvalMaterialBefore = approvalMaterialSnapshot(node);
 
   if (event.target === el.inputs.type) node.type = el.inputs.type.value;
   if (event.target === el.inputs.status) {
@@ -17645,7 +17678,10 @@ el.nodeForm.addEventListener("input", (event) => {
   if (event.target === el.inputs.content) node.content = el.inputs.content.value;
   if (event.target === el.inputs.imagePrompt) node.imagePrompt = el.inputs.imagePrompt.value;
   if (event.target === el.inputs.variants) node.variants = parseList(el.inputs.variants.value);
-  if (event.target === el.inputs.platform) node.social.platform = el.inputs.platform.value;
+  if (event.target === el.inputs.platform) {
+    node.social.platform = el.inputs.platform.value;
+    if (node.type === "Social Media Posting") node.channel = el.inputs.platform.value;
+  }
   if (event.target === el.inputs.caption) node.social.caption = el.inputs.caption.value;
   if (event.target === el.inputs.hashtags) state.hashtagDraftByNode[node.id] = el.inputs.hashtags.value;
   if (el.inputs.preview && event.target === el.inputs.preview) node.social.preview = el.inputs.preview.value;
@@ -17669,6 +17705,8 @@ el.nodeForm.addEventListener("input", (event) => {
   if (event.target === el.inputs.lpTrust) node.landingPage.trust = el.inputs.lpTrust.value;
   if (event.target === el.inputs.lpCta) node.landingPage.cta = el.inputs.lpCta.value;
 
+  const approvalInvalidated = invalidateApprovalAfterMaterialMutation(node, approvalMaterialBefore);
+
   updateNodeCard(node);
   updateListView();
   const shouldRefreshInspector = event.target === el.inputs.type
@@ -17676,7 +17714,8 @@ el.nodeForm.addEventListener("input", (event) => {
     || event.target === el.inputs.contentFormat
     || event.target === el.inputs.status
     || event.target === el.inputs.owner;
-  if (shouldRefreshInspector) fillInspector(node);
+  if (approvalInvalidated) fillInspector(node);
+  else if (shouldRefreshInspector) fillInspector(node);
   if (event.target !== el.inputs.status && event.target !== el.inputs.owner) recordNodeUpdatedActivity(node);
   saveCampaignCanvasState();
 });
