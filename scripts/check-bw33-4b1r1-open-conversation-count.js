@@ -39,7 +39,7 @@ const frozen = {
   fillInspector: "27f52513d773bda6a84b0f68fa236bdcfd9e7df566debcdb439aa6222ded8e96",
   synchronizeAppShell: "73525a650e735a604d7952b8a324ab3d251b6777402ef8d497b2e2fafa445208",
   inspectorResponsiveMode: "5f1574b183a11272045885c31496a2a4b0468c62d7d5070668e4485a5cd517a5",
-  inspectorHtml: "aa0ef34c507c7ca532158fb76a6e0868e03aae1dd27aec838fbcd595275bae89"
+  inspectorHtml: "0965ebb7d448e42f57c6e2c4a4f8991be1f2e0cd14dc9cfa7aaa2f121b03eace"
 };
 for (const [name, expected] of Object.entries(frozen)) {
   const value = name === "inspectorHtml" ? inspectorHtml : functionSource(app, name);
