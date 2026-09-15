@@ -1,0 +1,27 @@
+'use strict';
+const assert=require('assert');
+const route=require('../api/social-publishing-route');
+const serviceModule=require('../api/social-connector/facebook-publishing-service');
+const contractPath=require.resolve('../api/social-connector/facebook-preflight-contract');
+const handlerPath=require.resolve('../api/social-publishing/facebook/preflight');
+const body={boardId:'11111111-1111-4111-8111-111111111111',nodeId:'approved_node',destinationId:'22222222-2222-4222-8222-222222222222',clientRequestId:'request_1',expectedApprovedFingerprint:'v2-'+('a'.repeat(64))};
+const facebookEnv={FACEBOOK_APP_SECRET:'fixture-provider-secret'};
+const historicalSecret=env=>env.AUTH_SECRET||env.SESSION_SECRET||'';assert.strictEqual(historicalSecret(facebookEnv),'','historical contract cannot use the already-configured Facebook boundary');
+assert.doesNotThrow(()=>require(contractPath).issue(body,{env:facebookEnv}),'repaired contract uses the existing Facebook boundary');
+const token=require(contractPath).issue(body,{env:facebookEnv,now:()=>1700000000000});
+delete require.cache[contractPath];
+const fresh=require(contractPath);
+assert(fresh.verify(token,body,{env:facebookEnv,now:()=>1700000001000}),'binding verifies in fresh module state');
+for(const patch of [{nodeId:'other'},{boardId:'33333333-3333-4333-8333-333333333333'},{destinationId:'44444444-4444-4444-8444-444444444444'},{clientRequestId:'other_request'},{expectedApprovedFingerprint:'v2-'+('b'.repeat(64))}])assert(!fresh.verify(token,{...body,...patch},{env:facebookEnv,now:()=>1700000001000}),'substitution rejected');
+(async()=>{
+  const originals={actor:route.actor,readBody:route.readBody,send:route.send,factory:serviceModule.createFacebookPublishingService,error:console.error,secret:process.env.FACEBOOK_APP_SECRET};
+  let sent,serviceCalls=0,logs=[];
+  route.actor=()=>({ownerAccountId:'owner',user:{id:'actor'}});route.readBody=async()=>body;route.send=(_res,status,value)=>(sent={status,value});console.error=(...args)=>logs.push(args);
+  process.env.FACEBOOK_APP_SECRET=facebookEnv.FACEBOOK_APP_SECRET;
+  serviceModule.createFacebookPublishingService=()=>({preflight:async()=>{serviceCalls++;return {ok:true,status:'ready',approvedFingerprint:body.expectedApprovedFingerprint,destination:{id:body.destinationId,type:'page',label:'Page'},confirmationRequired:true};}});
+  delete require.cache[handlerPath];let handler=require(handlerPath);await handler({method:'POST',headers:{'x-vercel-id':'safe-correlation'}},{});assert.strictEqual(sent.status,200);assert(sent.value.confirmationToken);assert.strictEqual(serviceCalls,1);assert.strictEqual(logs.length,0);
+  route.readBody=async()=>({...body,provider:'facebook'});await handler({method:'POST',headers:{}},{});assert.strictEqual(sent.status,400,'deterministic request validation stays 4xx');
+  route.readBody=async()=>body;serviceModule.createFacebookPublishingService=()=>({preflight:async()=>{const error=Error('contains secret fixture-provider-secret');error.code='08006';throw error;}});delete require.cache[handlerPath];handler=require(handlerPath);await handler({method:'POST',headers:{'x-vercel-id':'safe-correlation'}},{});assert.strictEqual(sent.status,503,'real storage dependency failure stays 503');assert.strictEqual(sent.value.failureCode,'publishing_storage_unavailable');const serialized=JSON.stringify(logs);assert(!serialized.includes('fixture-provider-secret'));assert(!serialized.includes(body.destinationId));assert(!serialized.includes(body.nodeId));assert(serialized.includes('08006'));
+  serviceModule.createFacebookPublishingService=originals.factory;route.actor=originals.actor;route.readBody=originals.readBody;route.send=originals.send;console.error=originals.error;if(originals.secret===undefined)delete process.env.FACEBOOK_APP_SECRET;else process.env.FACEBOOK_APP_SECRET=originals.secret;
+  console.log('BW-34.1.7 Facebook preflight 503 regression passed (no database mutation, provider, or Meta request).');
+})().catch(error=>{console.error(error);process.exitCode=1;});
