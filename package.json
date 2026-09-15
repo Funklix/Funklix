@@ -78,6 +78,7 @@
     "check:bw33.5.1": "node scripts/check-bw33-5-1-social-publishing-destinations-rls.js",
     "check:bw34.1.6": "node scripts/check-bw34-1-6-facebook-publish-preflight-contract.js",
     "check:bw34.1.7": "node scripts/check-bw34-1-7-facebook-preflight-503.js",
-    "check:bw34.1.8": "node scripts/check-bw34-1-8-facebook-preflight-response-serialization.js"
+    "check:bw34.1.8": "node scripts/check-bw34-1-8-facebook-preflight-response-serialization.js",
+    "check:bw34.1.9": "node scripts/check-bw34-1-9-facebook-publication-finalization.js"
   }
 }
