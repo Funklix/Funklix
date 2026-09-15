@@ -16965,8 +16965,12 @@ async function preflightLinkedInPublish(input) {
   const provider=input.provider==='facebook'?'facebook':'linkedin';
   const destinationId = provider==='facebook'?globalThis.FacebookSettings?.normalizeProjection?.(settingsPayload?.social_connections?.facebook)?.destination_id : settingsPayload?.social_connections?.linkedin?.destination_id;
   if (!destinationId) return { ok: false, status: "connection_unavailable" };
-  const response = await fetch(`/api/social-publishing/${provider}/preflight`, { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json", "x-client-request-id": input.clientRequestId }, body: JSON.stringify({ ...input, destinationId }) });
-  return response.json();
+  const requestBody=provider==='facebook'?{boardId:input.boardId,nodeId:input.nodeId,destinationId,clientRequestId:input.clientRequestId,expectedApprovedFingerprint:input.expectedApprovedFingerprint,expectedBoardRevision:input.expectedBoardRevision,saveConfirmationCategory:input.saveConfirmationCategory,nodeMaterialNormalizationCategory:input.nodeMaterialNormalizationCategory,requestLifecycleGeneration:input.requestLifecycleGeneration}:{...input,destinationId};
+  const response = await fetch(`/api/social-publishing/${provider}/preflight`, { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json", "x-client-request-id": input.clientRequestId }, body: JSON.stringify(requestBody) });
+  if(provider!=='facebook')return response.json();
+  const parsed=await readAuthoritativeJson(response),raw=parsed.value||{};
+  if(!parsed.valid)return{ok:false,status:'preflight_unavailable',classification:parsed.category};
+  return{...raw,serverRequestId:raw.server_request_id,clientRequestId:raw.client_request_id,blockingCodes:raw.blocking_codes,confirmationRequired:raw.confirmation_required,confirmationToken:raw.confirmation_token,characterCount:raw.character_count,profileDisplayName:raw.profile_display_name,approvedFingerprint:raw.approved_fingerprint,editorialStatus:raw.editorial_status};
 }
 async function publishLinkedInNow(input) {
   const provider=String(getNode(input.nodeId)?.social?.platform||'').toLowerCase()==='facebook'?'facebook':'linkedin';

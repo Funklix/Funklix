@@ -29,7 +29,7 @@ assert(cw.includes('d.code==="facebook_not_connected"?t.connectFacebookPublish')
 assert(cw.includes('facebook_loading')&&cw.includes('facebook_already_published'));
 assert(app.includes('facebookConnectionSnapshot: globalThis.FacebookSettings?.getConnectionSnapshot?.()'));
 assert(app.includes('generation !== facebookWorkspaceRefreshGeneration'));
-assert(app.includes('body: JSON.stringify({ ...input, destinationId })'));
+assert(app.includes("const requestBody=provider==='facebook'?{boardId:input.boardId,nodeId:input.nodeId,destinationId"));
 assert(cw.includes('destinationId:preflight.destination.id'));
 assert(!app.includes('destinationLabel:preflight.destination.label'));
 assert(settings.includes("if(pendingRefresh)return pendingRefresh")&&settings.includes("publishState('loading')"));
