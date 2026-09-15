@@ -4,7 +4,8 @@ const crypto = require('crypto');
 const TOKEN_VERSION = 'bw34.1.6-v1';
 const TOKEN_TTL_SECONDS = 10 * 60;
 
-function secret(env = process.env) { return env.AUTH_SECRET || env.SESSION_SECRET || ''; }
+// Use the existing provider capability secret rather than adding a second login-secret dependency.
+function secret(env = process.env) { return env.FACEBOOK_APP_SECRET || ''; }
 function signature(value, env) { return crypto.createHmac('sha256', secret(env)).update(value).digest('base64url'); }
 function fields(input = {}) { return { boardId: input.boardId, nodeId: input.nodeId, destinationId: input.destinationId, clientRequestId: input.clientRequestId, expectedApprovedFingerprint: input.expectedApprovedFingerprint }; }
 function issue(input, { env = process.env, now = () => Date.now() } = {}) {

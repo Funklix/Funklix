@@ -76,6 +76,7 @@
     "check:bw33.4b4.2": "node scripts/check-bw33-4b4-2-timed-emoji-picker-lifecycle.js",
     "check:bw33.5": "node scripts/check-bw33-5-supabase-rls-hardening.js",
     "check:bw33.5.1": "node scripts/check-bw33-5-1-social-publishing-destinations-rls.js",
-    "check:bw34.1.6": "node scripts/check-bw34-1-6-facebook-publish-preflight-contract.js"
+    "check:bw34.1.6": "node scripts/check-bw34-1-6-facebook-publish-preflight-contract.js",
+    "check:bw34.1.7": "node scripts/check-bw34-1-7-facebook-preflight-503.js"
   }
 }

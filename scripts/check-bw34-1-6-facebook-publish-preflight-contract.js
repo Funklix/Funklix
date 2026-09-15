@@ -13,7 +13,7 @@ const requestBody={boardId:browserInput.boardId,nodeId:browserInput.nodeId,desti
 assert.deepStrictEqual(Object.keys(requestBody),['boardId','nodeId','destinationId','clientRequestId','expectedApprovedFingerprint','expectedBoardRevision','saveConfirmationCategory','nodeMaterialNormalizationCategory','requestLifecycleGeneration']);
 assert(route.validInput(JSON.parse(JSON.stringify(requestBody))));assert(route.validInput({...requestBody,confirmed:true,confirmationToken:'opaque'},true,true));assert.strictEqual(requestBody.destinationId,destinationId);assert.notStrictEqual(requestBody.destinationId,'Tendra One');assert.notStrictEqual(requestBody.destinationId,externalPageId);assert(!('provider' in requestBody));
 const oldBody={...browserInput,destinationId};assert.strictEqual(route.validInput(oldBody),false,'production request was rejected because provider was an extra envelope field');
-const env={AUTH_SECRET:'deterministic-fixture-secret'},now=()=>1700000000000,token=confirmation.issue(requestBody,{env,now});
+const env={FACEBOOK_APP_SECRET:'deterministic-fixture-secret'},now=()=>1700000000000,token=confirmation.issue(requestBody,{env,now});
 assert(confirmation.verify(token,{...requestBody,confirmed:true,confirmationToken:token},{env,now}));assert(!confirmation.verify(token,{...requestBody,destinationId:'33333333-3333-4333-8333-333333333333'},{env,now}),'confirmation cannot substitute destination');
 assert(!confirmation.verify(token,{...requestBody,nodeId:'another_node'},{env,now}));assert(!confirmation.verify(token,{...requestBody,boardId:'44444444-4444-4444-8444-444444444444'},{env,now}));
 const base={authenticatedAccountId:'owner',boardEditAccess:true,boardSaved:true,node,currentFingerprint:node.approvedContentFingerprint,connection:{id:'connection',owner_account_id:'owner',status:'connected',token_secret_id:'secret',granted_scopes:['pages_show_list','pages_manage_posts','pages_read_engagement']},credential:{revoked_at:null},destination:{id:destinationId,connected_account_id:'connection',owner_account_id:'owner',destination_type:'page',active:true,status:'active',capabilities:['CREATE_CONTENT']},now:new Date().toISOString(),adapterSupported:true,publishingEnabled:true};
@@ -23,13 +23,13 @@ assert(workspace.includes('data-publish-confirm')&&workspace.includes('confirmat
 assert(workspace.includes('Facebook publishing could not be verified. Please try again.')&&!workspace.includes('else feedback(host,preflight?.status||t.publishUnavailable);return false;}'));
 assert(!JSON.stringify(requestBody).includes(externalPageId));assert(!app.includes('api.facebook.com'));
 (async()=>{
-  const serviceModule=require('../api/social-connector/facebook-publishing-service'),originalFactory=serviceModule.createFacebookPublishingService,originalActor=route.actor,originalReadBody=route.readBody,originalSend=route.send,previousSecret=process.env.AUTH_SECRET;
-  let sent;process.env.AUTH_SECRET='deterministic-fixture-secret';
+  const serviceModule=require('../api/social-connector/facebook-publishing-service'),originalFactory=serviceModule.createFacebookPublishingService,originalActor=route.actor,originalReadBody=route.readBody,originalSend=route.send,previousSecret=process.env.FACEBOOK_APP_SECRET;
+  let sent;process.env.FACEBOOK_APP_SECRET='deterministic-fixture-secret';
   serviceModule.createFacebookPublishingService=()=>({preflight:async input=>({ok:true,status:'ready',caption:node.social.caption,characterCount:[...node.social.caption].length,profileDisplayName:'Connected account',destination:{id:input.destinationId,type:'page',label:'Tendra One'},approvedFingerprint:node.approvedContentFingerprint,readiness:'Ready',confirmationRequired:true})});
   route.actor=()=>({ownerAccountId:'owner',user:{id:'actor'}});route.readBody=async()=>requestBody;route.send=(_res,status,body)=>{sent={status,body};return sent};
   delete require.cache[require.resolve('../api/social-publishing/facebook/preflight')];
   await require('../api/social-publishing/facebook/preflight')({method:'POST',headers:{}},{});
   assert.strictEqual(sent.status,200);assert.strictEqual(sent.body.destination.id,destinationId);assert(sent.body.confirmationToken);
-  serviceModule.createFacebookPublishingService=originalFactory;route.actor=originalActor;route.readBody=originalReadBody;route.send=originalSend;if(previousSecret===undefined)delete process.env.AUTH_SECRET;else process.env.AUTH_SECRET=previousSecret;
+  serviceModule.createFacebookPublishingService=originalFactory;route.actor=originalActor;route.readBody=originalReadBody;route.send=originalSend;if(previousSecret===undefined)delete process.env.FACEBOOK_APP_SECRET;else process.env.FACEBOOK_APP_SECRET=previousSecret;
   console.log('BW-34.1.6 Facebook publish-preflight contract regression passed (deterministic; no database, provider, or Meta request).');
 })().catch(error=>{console.error(error);process.exitCode=1;});
