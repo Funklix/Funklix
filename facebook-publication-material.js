@@ -1,0 +1,17 @@
+(function (root, factory) {
+  'use strict';
+  const contract = factory();
+  if (typeof module === 'object' && module.exports) module.exports = contract;
+  if (root) root.FunklixFacebookPublicationMaterial = contract;
+}(typeof globalThis !== 'undefined' ? globalThis : this, function () {
+  'use strict';
+  const MAX_MESSAGE_CODE_POINTS = 63206;
+  const PLANNING_IMAGE_SOURCES = new Set(['generated', 'campaign_generated', 'campaign-generation', 'canvas', 'preview', 'prompt', 'placeholder', 'planning']);
+  const EXPLICIT_IMAGE_SOURCES = new Set(['uploaded', 'manual_upload', 'attached', 'attachment', 'user_selected', 'selected']);
+  function present(value) { if (Array.isArray(value)) return value.length > 0; if (!value || typeof value !== 'object') return value != null && value !== ''; return Object.keys(value).length > 0; }
+  function message(value) { if (typeof value !== 'string' || value.includes('\0') || /[\uD800-\uDFFF]/u.test(value.replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/gu, ''))) return { ok: false, code: 'facebook_content_invalid' }; const normalized=value.replace(/^\uFEFF/,'').replace(/\r\n?/g,'\n').trim(),characterCount=[...normalized].length;if(!normalized)return{ok:false,code:'facebook_content_empty'};if(characterCount>MAX_MESSAGE_CODE_POINTS)return{ok:false,code:'facebook_content_too_long',characterCount};return{ok:true,message:normalized,characterCount}; }
+  function link(node) { const social=node?.social&&typeof node.social==='object'?node.social:{},candidates=[social.link,social.url,/^[a-z][a-z0-9+.-]*:\/\//i.test(String(social.preview||'').trim())?social.preview:null].filter(value=>typeof value==='string'&&value.trim());if(new Set(candidates.map(value=>value.trim())).size>1)return{ok:false,code:'facebook_link_ambiguous'};if(!candidates.length)return{ok:true,link:null};let parsed;try{parsed=new URL(candidates[0].trim());}catch(_){return{ok:false,code:'facebook_link_invalid'};}if(parsed.protocol!=='https:'||parsed.username||parsed.password||parsed.port||!parsed.hostname||parsed.hash)return{ok:false,code:'facebook_link_invalid'};return{ok:true,link:parsed.toString()}; }
+  function media(node) { const images=Array.isArray(node?.images)?node.images:[];let explicit=false,ambiguous=false;for(const image of images){if(!image||typeof image!=='object'){ambiguous=true;continue;}const source=typeof image.source==='string'?image.source.trim().toLowerCase():'';if(EXPLICIT_IMAGE_SOURCES.has(source))explicit=true;else if(!PLANNING_IMAGE_SOURCES.has(source))ambiguous=true;}if(present(node?.attachments)||present(node?.media)||present(node?.social?.attachment)||present(node?.social?.media))ambiguous=true;if(explicit)return{ok:false,code:'facebook_media_unsupported',kind:'explicit_attachment'};if(ambiguous)return{ok:false,code:'facebook_media_ambiguous',kind:'ambiguous'};return{ok:true,kind:images.length?'planning_metadata':'none'}; }
+  function extract(node) { const normalizedMessage=message(node?.social?.caption),normalizedLink=link(node),normalizedMedia=media(node),failure=[normalizedMessage,normalizedLink,normalizedMedia].find(part=>!part.ok);return Object.freeze({ok:!failure,code:failure?.code||'facebook_content_supported',message:normalizedMessage.ok?normalizedMessage.message:null,link:normalizedLink.ok?normalizedLink.link:null,characterCount:normalizedMessage.ok?normalizedMessage.characterCount:0,mediaKind:normalizedMedia.kind}); }
+  return Object.freeze({MAX_MESSAGE_CODE_POINTS,extract,message,link,media});
+}));
