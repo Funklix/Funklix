@@ -25,7 +25,7 @@ assert(!JSON.stringify(requestBody).includes(externalPageId));assert(!app.includ
 (async()=>{
   const serviceModule=require('../api/social-connector/facebook-publishing-service'),originalFactory=serviceModule.createFacebookPublishingService,originalActor=route.actor,originalReadBody=route.readBody,originalSend=route.send,previousSecret=process.env.FACEBOOK_APP_SECRET;
   let sent;process.env.FACEBOOK_APP_SECRET='deterministic-fixture-secret';
-  serviceModule.createFacebookPublishingService=()=>({preflight:async input=>({ok:true,status:'ready',caption:node.social.caption,characterCount:[...node.social.caption].length,profileDisplayName:'Connected account',destination:{id:input.destinationId,type:'page',label:'Tendra One'},approvedFingerprint:node.approvedContentFingerprint,readiness:'Ready',confirmationRequired:true})});
+  serviceModule.createFacebookPublishingService=()=>({preflight:async input=>({ok:true,status:'ready',caption:node.social.caption,link:null,characterCount:[...node.social.caption].length,profileDisplayName:'Connected account',destination:{id:input.destinationId,type:'page',label:'Tendra One'},approvedFingerprint:node.approvedContentFingerprint,readiness:'Ready',editorialStatus:'Approved',confirmationRequired:true})});
   route.actor=()=>({ownerAccountId:'owner',user:{id:'actor'}});route.readBody=async()=>requestBody;route.send=(_res,status,body)=>{sent={status,body};return sent};
   delete require.cache[require.resolve('../api/social-publishing/facebook/preflight')];
   await require('../api/social-publishing/facebook/preflight')({method:'POST',headers:{}},{});

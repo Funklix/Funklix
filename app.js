@@ -16970,7 +16970,9 @@ async function preflightLinkedInPublish(input) {
   if(provider!=='facebook')return response.json();
   const parsed=await readAuthoritativeJson(response),raw=parsed.value||{};
   if(!parsed.valid)return{ok:false,status:'preflight_unavailable',classification:parsed.category};
-  return{...raw,serverRequestId:raw.server_request_id,clientRequestId:raw.client_request_id,blockingCodes:raw.blocking_codes,confirmationRequired:raw.confirmation_required,confirmationToken:raw.confirmation_token,characterCount:raw.character_count,profileDisplayName:raw.profile_display_name,approvedFingerprint:raw.approved_fingerprint,editorialStatus:raw.editorial_status};
+  const result={ok:raw.ok===true,status:raw.status,classification:raw.classification,serverRequestId:raw.server_request_id,clientRequestId:raw.client_request_id,blockingCodes:raw.blocking_codes,confirmationRequired:raw.confirmation_required,confirmationToken:raw.confirmation_token,caption:raw.caption,link:raw.link,characterCount:raw.character_count,profileDisplayName:raw.profile_display_name,destination:raw.destination,approvedFingerprint:raw.approved_fingerprint,readiness:raw.readiness,editorialStatus:raw.editorial_status};
+  if(result.ok&&(!(typeof result.caption==='string')||!Number.isSafeInteger(result.characterCount)||result.clientRequestId!==input.clientRequestId||typeof result.serverRequestId!=='string'||typeof result.destination?.id!=='string'||typeof result.destination?.label!=='string'||typeof result.approvedFingerprint!=='string'||typeof result.confirmationToken!=='string'||result.confirmationRequired!==true))return{ok:false,status:'preflight_unavailable',classification:'response_contract_invalid'};
+  return result;
 }
 async function publishLinkedInNow(input) {
   const provider=String(getNode(input.nodeId)?.social?.platform||'').toLowerCase()==='facebook'?'facebook':'linkedin';

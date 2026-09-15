@@ -20,13 +20,17 @@ function write(res, httpStatus, envelope) {
   const id = requestId(envelope?.server_request_id);
   if (!id || !isPlain(envelope) || typeof envelope.contract_version !== 'string' ||
       typeof envelope.ok !== 'boolean' || typeof envelope.status !== 'string' ||
-      typeof envelope.classification !== 'string') throw new TypeError('unsafe_authoritative_envelope');
-  const serialized = JSON.stringify(envelope);
-  res.statusCode = httpStatus;
-  res.setHeader('content-type', 'application/json; charset=utf-8');
-  res.setHeader('cache-control', 'private, no-store');
-  res.setHeader('X-Request-Id', id);
-  res.end(serialized);
+      typeof envelope.classification !== 'string') { const error=new TypeError('unsafe_authoritative_envelope');error.code='response_contract_invalid';throw error; }
+  let serialized;
+  try { serialized = JSON.stringify(envelope); }
+  catch (cause) { const error=new TypeError('authoritative_json_serialization_failed',{cause});error.code='response_json_serialization_failed';throw error; }
+  try {
+    res.statusCode = httpStatus;
+    res.setHeader('content-type', 'application/json; charset=utf-8');
+    res.setHeader('cache-control', 'private, no-store');
+    res.setHeader('X-Request-Id', id);
+    res.end(serialized);
+  } catch (cause) { const error=new TypeError('authoritative_response_write_failed',{cause});error.code='response_write_failed';throw error; }
   return envelope;
 }
 
