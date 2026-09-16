@@ -16982,6 +16982,7 @@ async function publishLinkedInNow(input) {
   if(!parsed.valid||result.clientRequestId!==input.clientRequestId||typeof result.status!=="string"||(provider==='facebook'&&result.ok&&!facebookSuccess))throw Object.assign(new Error(parsed.category||'response_contract_invalid'),{jobId:result.jobId||"",serverRequestId:result.serverRequestId||""});
   return result;
 }
+async function readFacebookEngagement(input){const clientRequestId=`engagement_${Date.now().toString(36)}_${Math.random().toString(36).slice(2,9)}`;const response=await fetch(`/api/social-publishing/facebook/engagement?boardId=${encodeURIComponent(input.boardId)}&nodeId=${encodeURIComponent(input.nodeId)}&clientRequestId=${encodeURIComponent(clientRequestId)}`,{credentials:"same-origin",headers:{accept:"application/json"}});const parsed=await readAuthoritativeJson(response),raw=parsed.value||{};if(!parsed.valid||raw.client_request_id!==clientRequestId)return{ok:false,status:raw.status||"provider_temporarily_unavailable"};return{ok:raw.ok===true,status:raw.status,metrics:raw.metrics,refreshedAt:raw.refreshed_at};}
 async function readLinkedInPublicationStatus(jobId){const response=await fetch(`/api/social-publishing/jobs/${encodeURIComponent(jobId)}`,{credentials:"same-origin",headers:{accept:"application/json"}});const parsed=await readAuthoritativeJson(response),raw=parsed.value||{},result={...raw,serverRequestId:raw.server_request_id,jobId:raw.job_id,providerAttemptId:raw.provider_attempt_id,jobState:raw.job_state,providerAttemptState:raw.provider_attempt_state,publishedAt:raw.published_at,externalUrl:raw.external_url};if(!parsed.valid||result.jobId!==jobId||typeof result.status!=="string")throw new Error(parsed.category);return result;}
 
 async function readAuthoritativeJson(response){const contentType=String(response.headers?.get?.('content-type')||'').toLowerCase(),text=await response.text();if(!text)return{valid:false,category:'empty_body'};if(!contentType.includes('application/json'))return{valid:false,category:contentType.includes('text/html')?'html_response':'wrong_content_type'};let value;try{value=JSON.parse(text);}catch(_){return{valid:false,category:'invalid_json'};}if(!value||typeof value!=='object'||value.contract_version!=='bw32.3.9-v1')return{valid:false,category:'incompatible_contract',value};const header=String(response.headers?.get?.('x-request-id')||'');if(!header||header!==value.server_request_id)return{valid:false,category:'request_id_mismatch',value};return{valid:true,category:response.ok?'structured_success':'structured_failure',value};}
@@ -17037,6 +17038,7 @@ function renderContentWorkspace() {
     onPublishPreflight: preflightLinkedInPublish,
     onPublish: publishLinkedInNow,
     onPublishStatus: readLinkedInPublicationStatus,
+    onFacebookEngagement: readFacebookEngagement,
     onSocialConnections: () => el.settingsOpenButton?.click(),
     onPlanningFeedback: routeContentOperationsFeedback,
     onOpenNode(nodeId, openInspector, actionIdentity) {

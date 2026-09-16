@@ -79,6 +79,8 @@
     "check:bw34.1.6": "node scripts/check-bw34-1-6-facebook-publish-preflight-contract.js",
     "check:bw34.1.7": "node scripts/check-bw34-1-7-facebook-preflight-503.js",
     "check:bw34.1.8": "node scripts/check-bw34-1-8-facebook-preflight-response-serialization.js",
-    "check:bw34.1.9": "node scripts/check-bw34-1-9-facebook-publication-finalization.js"
+    "check:bw34.1.9": "node scripts/check-bw34-1-9-facebook-publication-finalization.js",
+    "check:bw34.2a": "node scripts/check-bw34-2a-facebook-engagement-mvp.js",
+    "check:bw34.2ar1": "node scripts/check-bw34-2ar1-social-adapter-compatibility.js"
   }
 }
