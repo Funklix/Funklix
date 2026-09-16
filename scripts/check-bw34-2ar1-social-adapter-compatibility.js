@@ -1,0 +1,27 @@
+'use strict';
+const assert=require('assert');
+const fs=require('fs');
+const registryModule=require('../api/social-connector/adapter-registry');
+const {createLinkedInAdapter}=require('../api/social-connector/linkedin-adapter');
+const {createFacebookAdapter}=require('../api/social-connector/facebook-adapter');
+const {engagementCapability,createFacebookEngagementService}=require('../api/social-connector/facebook-engagement-service');
+(async()=>{
+ const noNetwork=async()=>{throw new Error('network forbidden');};
+ const linkedin=createLinkedInAdapter({fetchImpl:noNetwork});
+ assert(!linkedin.capabilities.includes('facebook_post_engagement_read_v1'));
+ assert.strictEqual(linkedin.facebook_post_engagement_read_v1,undefined);
+ const historical=registryModule.registry();historical.register('linkedin',linkedin);assert(historical.has('linkedin'));
+ const testRegistry=registryModule.registry({allowTestAdapters:true});testRegistry.register('linkedin',registryModule.inertTestAdapter(),{testOnly:true});assert(testRegistry.has('linkedin'));
+ const defaults=registryModule.defaultRegistry({fetchImpl:noNetwork});assert(defaults.has('linkedin')&&defaults.has('facebook'));
+ const facebook=createFacebookAdapter({fetchImpl:noNetwork});assert.deepStrictEqual(engagementCapability(facebook),{ok:true});
+ assert(registryModule.OPTIONAL_OPERATIONS.includes('facebook_post_engagement_read_v1'));assert(!registryModule.OPERATIONS.includes('facebook_post_engagement_read_v1'));
+ let databaseCalls=0;const pool={query:async()=>{databaseCalls++;throw new Error('database forbidden');}};
+ const input={boardId:'00000000-0000-4000-8000-000000000001',nodeId:'node',ownerAccountId:'owner@example.com',serverRequestId:'request_12345678'};
+ const missing=await createFacebookEngagementService({pool,adapter:{capabilities:[]}}).read(input,{});assert.deepStrictEqual(missing,{ok:false,code:'engagement_capability_unsupported',httpStatus:501});
+ const malformedDeclared=await createFacebookEngagementService({pool,adapter:{capabilities:['facebook_post_engagement_read_v1']}}).read(input,{});assert.deepStrictEqual(malformedDeclared,{ok:false,code:'engagement_capability_invalid',httpStatus:501});
+ const malformedExposed=await createFacebookEngagementService({pool,adapter:{capabilities:[],facebook_post_engagement_read_v1(){}}}).read(input,{});assert.deepStrictEqual(malformedExposed,{ok:false,code:'engagement_capability_invalid',httpStatus:501});
+ assert.strictEqual(databaseCalls,0,'capability rejection must precede database access');
+ const linkedinSource=fs.readFileSync('api/social-connector/linkedin-adapter.js','utf8');assert(!linkedinSource.includes('facebook_post_engagement_read_v1'));
+ const fixture=fs.readFileSync('scripts/check-bw32-2-linkedin-connection.js','utf8');assert(fixture.includes('adapters.defaultRegistry({env,fetchImpl})'));
+ console.log('BW-34.2AR1 adapter compatibility checks passed (no network or database access).');
+})().catch(error=>{console.error(error);process.exit(1);});

@@ -1,6 +1,4 @@
 'use strict';
-const {pool:defaultPool}=require('../_boards-storage');
-const {getBoardAccess}=require('../_board-access');
 const vault=require('./token-vault');
 const {createFacebookAdapter}=require('./facebook-adapter');
 const {POST_ID}=require('./facebook-publishing');
@@ -8,13 +6,24 @@ const REQUIRED_SCOPE='pages_read_engagement';
 function metric(value){return Number.isSafeInteger(value)&&value>=0?{state:'available',value}:{state:'unavailable'};}
 function projectAggregates(raw){return {reactions:metric(raw?.reactions?.summary?.total_count),comments:metric(raw?.comments?.summary?.total_count),shares:metric(raw?.shares?.count)};}
 function failureCode(result){const code=result?.error?.code;return code==='credential_invalid'?'credential_invalid':code==='permission_missing'?'insufficient_permission':code==='provider_rate_limited'?'provider_rate_limited':'provider_temporarily_unavailable';}
-function createFacebookEngagementService({pool=defaultPool,adapter=createFacebookAdapter(),env=process.env,now=()=>new Date()}={}){
+function engagementCapability(adapter){
+ const declared=Array.isArray(adapter?.capabilities)&&adapter.capabilities.includes('facebook_post_engagement_read_v1');
+ const implemented=typeof adapter?.facebook_post_engagement_read_v1==='function';
+ if(!declared&&!implemented)return{ok:false,code:'engagement_capability_unsupported'};
+ if(!declared||!implemented)return{ok:false,code:'engagement_capability_invalid'};
+ return{ok:true};
+}
+function createFacebookEngagementService({pool=null,boardAccess=null,adapter=createFacebookAdapter(),env=process.env,now=()=>new Date()}={}){
  async function read(input,actor){
-  const {board,access}=await getBoardAccess(input.boardId,actor,{columns:'id, canvas_json'});
+  const capability=engagementCapability(adapter);
+  if(!capability.ok)return{ok:false,code:capability.code,httpStatus:501};
+  const selectedPool=pool||require('../_boards-storage').pool;
+  const authorize=boardAccess||require('../_board-access').getBoardAccess;
+  const {board,access}=await authorize(input.boardId,actor,{columns:'id, canvas_json'});
   if(!board||access?.canView!==true)return{ok:false,code:'board_access_denied',httpStatus:403};
   const nodes=Array.isArray(board.canvas_json)?board.canvas_json:Array.isArray(board.canvas_json?.nodes)?board.canvas_json.nodes:[];
   if(!nodes.some(node=>node?.id===input.nodeId))return{ok:false,code:'publication_unavailable',httpStatus:404};
-  const found=await pool.query(`SELECT e.external_post_id,d.external_destination_id,c.token_secret_id,c.granted_scopes,c.token_expires_at,s.encrypted_payload,s.nonce,s.authentication_tag,s.encryption_key_version,s.revoked_at
+  const found=await selectedPool.query(`SELECT e.external_post_id,d.external_destination_id,c.token_secret_id,c.granted_scopes,c.token_expires_at,s.encrypted_payload,s.nonce,s.authentication_tag,s.encryption_key_version,s.revoked_at
    FROM public.social_external_posts e
    JOIN public.social_publishing_destinations d ON d.id=e.destination_id AND d.owner_account_id=e.owner_account_id AND d.destination_type='page' AND d.status='active'
    JOIN public.social_connected_accounts c ON c.id=d.connected_account_id AND c.owner_account_id=e.owner_account_id AND c.platform='facebook' AND c.status='connected'
@@ -31,4 +40,4 @@ function createFacebookEngagementService({pool=defaultPool,adapter=createFaceboo
  }
  return Object.freeze({read});
 }
-module.exports={REQUIRED_SCOPE,metric,projectAggregates,failureCode,createFacebookEngagementService};
+module.exports={REQUIRED_SCOPE,metric,projectAggregates,failureCode,engagementCapability,createFacebookEngagementService};

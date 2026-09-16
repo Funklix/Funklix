@@ -35,3 +35,13 @@ Changed: the Facebook adapter, engagement service and GET route, shared authorit
 ## Acceptance and rollback
 
 Acceptance is the already-published card retaining “Published to Facebook” and “Open on Facebook,” then showing authoritative reactions/comments and optional shares; Refresh produces one bounded GET and no publication mutation or provider identity disclosure. Rollback is limited to the engagement route/service/adapter capability and workspace panel/wiring/styles; publication and stored records remain untouched.
+
+## BW-34.2AR1 — provider-neutral adapter compatibility repair
+
+Clean-checkout Runtime Boot Safety exposed the failure at `npm run check:bw32.2`: `defaultRegistry()` rejected the Facebook adapter with `Invalid social connector adapter`, causing the LinkedIn connection check to stop during registry initialization. BW-34.2A had added `facebook_post_engagement_read_v1` as both a Facebook capability declaration and method, but the registry's exact allowed-operation predicate did not recognize either key. The LinkedIn adapter itself was not defective.
+
+The repair preserves `OPERATIONS` as the established provider-neutral base interface and introduces a narrow recognized optional-operation list for the Facebook engagement extension. Existing LinkedIn adapters, inert/historical fixtures, and future adapters implementing only the base contract therefore register unchanged. No fake Facebook method was added to LinkedIn. `defaultRegistry()` can register both production adapters again.
+
+The Facebook engagement service now validates the extension at its own boundary before authorization, storage, credential, or provider access. A missing declaration and method yields bounded `engagement_capability_unsupported`; a declaration/method mismatch yields bounded `engagement_capability_invalid`. Only a coherently declared and implemented Facebook engagement adapter can proceed to the existing authorized read path.
+
+Clean-checkout proof uses a temporary archive containing tracked files only and runs BW-32.2 plus BW-34.2AR1 without access to the working tree or its untracked `node_modules/`. The focused repair check additionally proves missing/malformed capabilities cause zero database and network calls. Meta configuration, Graph version, OAuth, publication, schema, UI, and LinkedIn behavior are unchanged.
