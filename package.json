@@ -82,6 +82,7 @@
     "check:bw34.1.9": "node scripts/check-bw34-1-9-facebook-publication-finalization.js",
     "check:bw34.2a": "node scripts/check-bw34-2a-facebook-engagement-mvp.js",
     "check:bw34.2ar1": "node scripts/check-bw34-2ar1-social-adapter-compatibility.js",
-    "check:bw34.2ar2": "node scripts/check-bw34-2ar2-facebook-engagement-repair.js"
+    "check:bw34.2ar2": "node scripts/check-bw34-2ar2-facebook-engagement-repair.js",
+    "check:bw34.2ar3": "node scripts/check-bw34-2ar3-facebook-engagement-authentication.js"
   }
 }
