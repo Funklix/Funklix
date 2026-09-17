@@ -42,7 +42,7 @@ function createFacebookEngagementService({pool=null,boardAccess=null,adapter=cre
   const result=await adapter.facebook_post_engagement_read_v1({context:{requestId:input.serverRequestId},credential:selectedCredential,input:{pageId:row.external_destination_id,postId:row.external_post_id}});
   selectedCredential.accessToken='';
   if(!result.ok){const code=failureCode(result);return{ok:false,code,httpStatus:code==='credential_invalid'||code==='reconnect_required'?401:code==='insufficient_permission'?403:code==='provider_rate_limited'?429:code==='provider_object_unavailable'?404:503,providerHttpStatus:result.httpStatus,providerOAuthCategory:result.providerOAuthCategory||null,tokenSource:'selected_page_token',permissionPresent:true,credentialExpiry:'current',adapterArgumentValidity:result.adapterArgumentValidity||'valid',outboundTokenType:result.outboundTokenType||'string',outboundTokenPresence:result.outboundTokenPresence!==false,tokenPathConsistency:'selected_page_token_equal'};}
-  return{ok:true,metrics:projectAggregates(result.value),refreshedAt:now().toISOString(),providerHttpStatus:200};
+  return{ok:true,metrics:projectAggregates(result.value),refreshedAt:now().toISOString(),providerHttpStatus:200,partialResultCategory:result.partialResultCategory||'complete',failedMetricCategory:result.failedMetricCategory||'none'};
  }
  return Object.freeze({read});
 }

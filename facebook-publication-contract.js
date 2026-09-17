@@ -1,0 +1,10 @@
+(function(root,factory){const value=factory();if(typeof module==='object'&&module.exports)module.exports=value;if(root)root.FacebookPublicationContract=value;})(typeof globalThis!=='undefined'?globalThis:null,function(){
+'use strict';
+const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+function https(value){if(value==null)return true;try{const url=new URL(value);return url.protocol==='https:'&&!url.username&&!url.password;}catch{return false;}}
+function fromWire(raw,expectedClientRequestId){const value=raw&&typeof raw==='object'?raw:{};const result={ok:value.ok===true,status:value.status,classification:value.classification,provider:value.provider,clientRequestId:value.client_request_id,serverRequestId:value.server_request_id,jobId:value.job_id,jobState:value.job_state,providerAttemptState:value.provider_attempt_state,providerAcceptanceCategory:value.provider_acceptance_category,providerPostIdentityCategory:value.provider_post_identity_category,externalPostState:value.external_post_state,publishedAt:value.published_at,externalUrl:value.external_url,destination:value.destination,finalized:value.finalized===true,duplicateDeliveryPrevented:value.duplicate_delivery_prevented===true};
+ const valid=result.ok&&result.status==='published'&&result.provider==='facebook'&&result.clientRequestId===expectedClientRequestId&&typeof result.serverRequestId==='string'&&result.serverRequestId.length>=8&&UUID.test(result.jobId||'')&&result.jobState==='delivered'&&['accepted','reconciled'].includes(result.providerAttemptState)&&result.providerAcceptanceCategory==='accepted'&&result.providerPostIdentityCategory==='retained'&&result.externalPostState==='confirmed'&&result.destination?.type==='page'&&typeof result.destination.label==='string'&&Number.isFinite(Date.parse(result.publishedAt))&&https(result.externalUrl)&&result.finalized&&result.duplicateDeliveryPrevented;
+ return{valid,result,category:valid?'finalized':'response_contract_invalid'};
+}
+return Object.freeze({fromWire});
+});

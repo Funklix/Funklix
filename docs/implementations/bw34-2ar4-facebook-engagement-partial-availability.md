@@ -1,0 +1,7 @@
+# BW-34.2AR4 — Facebook engagement partial availability
+
+The repository and sanitized production event prove that OAuth 10 occurs at the combined post-field boundary (`reactions`, `comments`, and `shares`), not that any particular scope is absent. Meta does not identify the rejected field in that response. Therefore this repair does not add `pages_read_user_content` or `pages_manage_engagement`, and does not require reconnect on OAuth 10.
+
+The adapter keeps the normal single aggregate GET. Only when that exact request returns OAuth 10 does it make one bounded minimum-capability GET for the reaction summary. A successful fallback returns reactions (including authoritative zero) and independently marks comments and shares unavailable; a failed fallback retains the established permission-specific failure. OAuth 190 remains credential renewal. This is at most two provider calls per explicit browser request, with no retries or field-by-field storm.
+
+The exact field within the combined optional boundary requires a controlled Meta verification against the same Page/post and app-access mode: request reactions alone, then the current combined set, and inspect only sanitized categories. Advanced Access/App Review is required for non-role users if Meta's dashboard says the already-requested permission lacks that access; this code supplies no evidence that a new permission or reconnect is required.
