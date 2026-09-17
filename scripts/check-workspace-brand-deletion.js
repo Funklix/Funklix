@@ -7,6 +7,7 @@ const routePath = path.join(root, 'api/brands/[id].js');
 const storagePath = path.join(root, 'api/_brands-storage.js');
 const accessPath = path.join(root, 'api/_brand-access.js');
 const authPath = path.join(root, 'api/_auth-session.js');
+const deletionPath = path.join(root, 'api/_brand-deletion.js');
 const IDS = { target: '11111111-1111-4111-8111-111111111111', other: '22222222-2222-4222-8222-222222222222' };
 process.env.POSTGRES_URL = process.env.POSTGRES_URL || 'postgres://invented.invalid/test';
 
@@ -31,7 +32,7 @@ function fixture({ actor = 'owner@example.test', failAt = '' } = {}) {
       throw new Error(`unexpected SQL: ${sql}`);
     }, release() {}
   };
-  [routePath, storagePath, accessPath, authPath].forEach(p => delete require.cache[p]);
+  [routePath, deletionPath, storagePath, accessPath, authPath].forEach(p => delete require.cache[p]);
   require.cache[storagePath] = { id: storagePath, filename: storagePath, loaded: true, exports: { pool: { connect: async () => client }, BRAND_COLUMNS: '', MAX_BRAND_NAME_LENGTH: 160, ensureBrandsTable: async () => {}, serializeBrand: x => x } };
   require.cache[accessPath] = { id: accessPath, filename: accessPath, loaded: true, exports: { getBrandOwnerEmail: u => u?.email || '', getBrandAccess: async () => ({}), isBrandId: value => /^[0-9a-f-]{36}$/i.test(value) } };
   require.cache[authPath] = { id: authPath, filename: authPath, loaded: true, exports: { getSessionUser: () => ({ email: actor }) } };
@@ -54,6 +55,17 @@ async function invoke(handler, { id = IDS.target, confirmationName = 'Invented A
   f = fixture(); r = await invoke(f.handler, { id: 'bad' }); assert.equal(r.status, 400); assert.equal(r.body.code, 'INVALID_BRAND_ID');
   f = fixture({ failAt: 'DELETE FROM brands' }); const before = structuredClone(f.durable); r = await invoke(f.handler); assert.equal(r.status, 500); assert.deepEqual(f.durable, before, 'failure rolls back detach and membership deletion');
   const app = fs.readFileSync(path.join(root, 'app.js'), 'utf8'); const css = fs.readFileSync(path.join(root, 'styles.css'), 'utf8'); const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+  const route = fs.readFileSync(routePath, 'utf8'); const deletion = fs.readFileSync(deletionPath, 'utf8');
+  assert(!/UPDATE boards|brand_core_source_|brand_core_snapshot_copied_at/.test(route), 'Canonical Brand item route contains no direct Board mutation');
+  assert(deletion.includes('UPDATE boards SET brand_id = NULL') && deletion.includes("client.query('BEGIN')") && deletion.includes("client.query('COMMIT')"), 'dedicated deletion service owns Board-detachment transaction');
+  let deletionCalls = 0;
+  delete require.cache[routePath];
+  require.cache[deletionPath] = { id: deletionPath, filename: deletionPath, loaded: true, exports: { BrandDeletionError: class extends Error {}, deleteOwnedBrand: async () => { deletionCalls++; return { code: 'BRAND_DELETED', deletedBrandId: IDS.target, detachedBoardCount: 0 }; } } };
+  const boundaryHandler = require(routePath);
+  await invoke(boundaryHandler, { id: IDS.target }); // DELETE proves the spy is wired.
+  const boundaryResponse = () => { const result = {}; return { result, res: { status(code) { result.status = code; return this; }, json(body) { result.body = body; return this; } } }; };
+  for (const method of ['GET', 'PATCH', 'PUT']) { const response = boundaryResponse(); await boundaryHandler({ method, query: { id: IDS.target }, body: {} }, response.res); }
+  assert.equal(deletionCalls, 1, 'GET, PATCH, and PUT cannot reach deletion service');
   assert(app.includes('if (!response.ok || result?.ok !== true'), 'client waits for authoritative success');
   assert(app.includes('state.brandCatalog.entries = state.brandCatalog.entries.filter'), 'success removes only confirmed row');
   assert(app.includes('brandDeletion.status = "confirming"') && app.includes('setBrandDeletionPending(false)'), 'failure restores usable UI');
@@ -61,5 +73,5 @@ async function invoke(handler, { id = IDS.target, confirmationName = 'Invented A
   assert(html.includes('Boards, Board content, nodes, approvals, publications, social connections, and user accounts will remain available.'));
   assert(css.includes('background: color-mix(in srgb, var(--fk-color-surface-input) 72%, transparent)') && css.includes('.brand-switcher-details[open] .brand-switcher-summary'), 'selector uses token surfaces for default/open states');
   assert(!css.match(/\.brand-switcher-summary[\s\S]{0,500}background:\s*rgba\(255,\s*255,\s*255/), 'light-only trigger rule removed');
-  console.log('Workspace Brand deletion and selector regression passed (16 contracts).');
+  console.log('Workspace Brand deletion and selector regression passed (19 contracts).');
 })().catch(error => { console.error(error); process.exitCode = 1; });

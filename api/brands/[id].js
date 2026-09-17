@@ -3,6 +3,7 @@ const { getBrandOwnerEmail, getBrandAccess, isBrandId } = require('../_brand-acc
 // BW-20 supersedes the former owner-only item lookup: const brand = await getOwnedBrand(id, user).
 const { pool, BRAND_COLUMNS, MAX_BRAND_NAME_LENGTH, ensureBrandsTable, serializeBrand } = require('../_brands-storage');
 const { randomUUID } = require('crypto');
+const { BrandDeletionError, deleteOwnedBrand } = require('../_brand-deletion');
 
 function validObject(value) {
   return value && typeof value === 'object' && !Array.isArray(value);
@@ -26,46 +27,19 @@ module.exports = async function handler(req, res) {
   const ownerEmail = getBrandOwnerEmail(user);
   if (!ownerEmail) return res.status(401).json({ ok: false, code: 'AUTHENTICATION_REQUIRED', requestId });
 
+  if (req.method === 'DELETE') {
+    const confirmationName = typeof req.body?.confirmationName === 'string' ? req.body.confirmationName : '';
+    try {
+      const result = await deleteOwnedBrand({ brandId: id, ownerEmail, confirmationName, requestId });
+      return res.status(200).json({ ok: true, requestId, ...result });
+    } catch (error) {
+      const failure = error instanceof BrandDeletionError ? error : new BrandDeletionError(500, 'BRAND_DELETE_FAILED');
+      return res.status(failure.status).json({ ok: false, code: failure.code, requestId });
+    }
+  }
+
   try {
     await ensureBrandsTable();
-    if (req.method === 'DELETE') {
-      const confirmationName = typeof req.body?.confirmationName === 'string' ? req.body.confirmationName : '';
-      if (!confirmationName || confirmationName.length > MAX_BRAND_NAME_LENGTH) {
-        return res.status(400).json({ ok: false, code: 'CONFIRMATION_REQUIRED', requestId });
-      }
-      const client = await pool.connect();
-      try {
-        await client.query('BEGIN');
-        const resolved = await client.query(
-          `SELECT id, name FROM brands WHERE id = $1 AND owner_email = $2 FOR UPDATE`,
-          [id, ownerEmail]
-        );
-        const brand = resolved.rows[0];
-        if (!brand) {
-          await client.query('ROLLBACK');
-          return res.status(404).json({ ok: false, code: 'BRAND_NOT_FOUND', requestId });
-        }
-        if (confirmationName !== brand.name) {
-          await client.query('ROLLBACK');
-          return res.status(409).json({ ok: false, code: 'CONFIRMATION_MISMATCH', requestId });
-        }
-        // Boards and their snapshots/content are durable independently of a Canonical Brand.
-        // Clear only the association; the FK is SET NULL as a second line of defense.
-        const detached = await client.query('UPDATE boards SET brand_id = NULL WHERE brand_id = $1', [id]);
-        // Memberships are exclusively scoped to the Brand and have no independent lifecycle.
-        await client.query('DELETE FROM brand_members WHERE brand_id = $1', [id]);
-        const deleted = await client.query('DELETE FROM brands WHERE id = $1 AND owner_email = $2', [id, ownerEmail]);
-        if (deleted.rowCount !== 1) throw new Error('brand_delete_race');
-        await client.query('COMMIT');
-        return res.status(200).json({ ok: true, code: 'BRAND_DELETED', requestId, deletedBrandId: id, detachedBoardCount: detached.rowCount });
-      } catch (_error) {
-        try { await client.query('ROLLBACK'); } catch (_rollbackError) { /* original failure is authoritative */ }
-        console.error('[BRAND_DELETE_FAILURE]', { requestId, code: 'BRAND_DELETE_TRANSACTION_FAILED' });
-        return res.status(500).json({ ok: false, code: 'BRAND_DELETE_FAILED', requestId });
-      } finally {
-        client.release();
-      }
-    }
     if (req.method === 'GET') {
       const { brand, access } = await getBrandAccess(id, user);
       if (!brand) return res.status(404).json({ error: 'Brand not found' });
@@ -95,10 +69,6 @@ module.exports = async function handler(req, res) {
     }
     return res.status(200).json(serializeBrand(updated.rows[0], resolved.access));
   } catch (error) {
-    if (req.method === 'DELETE') {
-      console.error('[BRAND_DELETE_FAILURE]', { requestId, code: 'BRAND_DELETE_SETUP_FAILED' });
-      return res.status(500).json({ ok: false, code: 'BRAND_DELETE_FAILED', requestId });
-    }
     console.error('[BRAND_ITEM_FAILURE]', {
       method: req.method,
       brandId: id,
