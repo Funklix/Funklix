@@ -151,6 +151,20 @@
             </div>
           </details>
         </section>
+        <dialog class="brand-delete-dialog" id="brand-delete-dialog" aria-labelledby="brand-delete-title" aria-describedby="brand-delete-description">
+          <form id="brand-delete-form" method="dialog" novalidate>
+            <h2 id="brand-delete-title" tabindex="-1" data-i18n="Delete Workspace Brand">Delete Workspace Brand</h2>
+            <p id="brand-delete-description"></p>
+            <p data-i18n="The Canonical Brand, its Brand Core, and its memberships will be permanently deleted. Boards, Board content, nodes, approvals, publications, social connections, and user accounts will remain available. Board associations to this Brand will be cleared.">The Canonical Brand, its Brand Core, and its memberships will be permanently deleted. Boards, Board content, nodes, approvals, publications, social connections, and user accounts will remain available. Board associations to this Brand will be cleared.</p>
+            <label for="brand-delete-confirmation"><span data-i18n="Type the exact Brand name to confirm">Type the exact Brand name to confirm</span></label>
+            <input id="brand-delete-confirmation" type="text" autocomplete="off" aria-describedby="brand-delete-feedback" required>
+            <div id="brand-delete-feedback" role="alert" aria-live="assertive"></div>
+            <div class="brand-delete-actions">
+              <button class="fk-btn fk-btn-danger" id="brand-delete-submit" type="submit" data-i18n="Permanently delete Brand">Permanently delete Brand</button>
+              <button class="fk-btn fk-btn-ghost" id="brand-delete-cancel" type="button" data-i18n="Cancel">Cancel</button>
+            </div>
+          </form>
+        </dialog>
         <section class="board-brand-association fk-card" id="board-brand-association" aria-labelledby="board-brand-association-title">
           <span class="brand-switcher-eyebrow" id="board-brand-association-title">Current Board Brand</span>
           <strong id="board-brand-association-current" role="status" aria-live="polite" aria-atomic="true">No Board open</strong>

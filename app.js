@@ -443,6 +443,14 @@ const el = {
   brandSwitcherCreateFeedback: document.getElementById("brand-switcher-create-feedback"),
   brandSwitcherCreateSubmit: document.getElementById("brand-switcher-create-submit"),
   brandSwitcherCreateCancel: document.getElementById("brand-switcher-create-cancel"),
+  brandDeleteDialog: document.getElementById("brand-delete-dialog"),
+  brandDeleteForm: document.getElementById("brand-delete-form"),
+  brandDeleteTitle: document.getElementById("brand-delete-title"),
+  brandDeleteDescription: document.getElementById("brand-delete-description"),
+  brandDeleteConfirmation: document.getElementById("brand-delete-confirmation"),
+  brandDeleteFeedback: document.getElementById("brand-delete-feedback"),
+  brandDeleteSubmit: document.getElementById("brand-delete-submit"),
+  brandDeleteCancel: document.getElementById("brand-delete-cancel"),
   sidebarToggleButton: document.getElementById("sidebar-toggle-btn"),
   brandEditorTitle: document.getElementById("bc-editor-title"),
   brandCoreCanvas: document.getElementById("brand-core-canvas"),
@@ -3532,6 +3540,8 @@ function renderBrandCatalog() {
   if (status.textContent) el.brandSwitcherCatalog.appendChild(status);
   if (catalog.status !== "success") return;
   catalog.entries.forEach((brand) => {
+    const row = document.createElement("div");
+    row.className = "brand-switcher-catalog-row";
     const entry = document.createElement("button");
     entry.type = "button";
     entry.className = "brand-switcher-catalog-entry";
@@ -3551,18 +3561,102 @@ function renderBrandCatalog() {
     copy.append(name, note);
     entry.append(avatar, copy);
     entry.addEventListener("click", () => selectEphemeralBrandFromSwitcher(brand));
-    el.brandSwitcherCatalog.appendChild(entry);
+    row.appendChild(entry);
+    if (brand.role === "owner") {
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "brand-switcher-delete-open";
+      remove.textContent = "⋯";
+      remove.setAttribute("aria-label", uiFormat("Delete {name}", { name: brand.name }));
+      remove.title = uiText("Delete Workspace Brand");
+      remove.addEventListener("click", () => openBrandDeletion(brand, remove));
+      row.appendChild(remove);
+    }
+    el.brandSwitcherCatalog.appendChild(row);
   });
 }
 
-async function loadCanonicalBrandCatalog() {
+let brandDeletion = { status: "closed", brand: null, returnFocus: null };
+
+function setBrandDeletionPending(pending) {
+  if (el.brandDeleteSubmit) el.brandDeleteSubmit.disabled = pending;
+  if (el.brandDeleteCancel) el.brandDeleteCancel.disabled = pending;
+  if (el.brandDeleteConfirmation) el.brandDeleteConfirmation.disabled = pending;
+}
+
+function openBrandDeletion(brand, returnFocus) {
+  if (brand?.role !== "owner" || !el.brandDeleteDialog || brandDeletion.status === "submitting") return;
+  brandDeletion = { status: "confirming", brand: { id: brand.id, name: brand.name }, returnFocus };
+  el.brandDeleteForm?.reset();
+  if (el.brandDeleteDescription) el.brandDeleteDescription.textContent = uiFormat('Delete the Workspace/Brand “{name}”? This cannot be undone.', { name: brand.name });
+  if (el.brandDeleteFeedback) el.brandDeleteFeedback.textContent = "";
+  setBrandDeletionPending(false);
+  translateInterface(el.brandDeleteDialog);
+  el.brandDeleteDialog.showModal();
+  el.brandDeleteTitle?.focus();
+}
+
+function closeBrandDeletion({ restoreFocus = true } = {}) {
+  if (brandDeletion.status === "submitting") return false;
+  const returnFocus = brandDeletion.returnFocus;
+  brandDeletion = { status: "closed", brand: null, returnFocus: null };
+  el.brandDeleteDialog?.close();
+  if (restoreFocus) returnFocus?.focus();
+  return true;
+}
+
+async function submitBrandDeletion(event) {
+  event.preventDefault();
+  if (brandDeletion.status !== "confirming") return;
+  const brand = brandDeletion.brand;
+  const confirmationName = el.brandDeleteConfirmation?.value || "";
+  if (confirmationName !== brand.name) {
+    if (el.brandDeleteFeedback) el.brandDeleteFeedback.textContent = uiText("Enter the exact Brand name to continue.");
+    el.brandDeleteConfirmation?.focus();
+    return;
+  }
+  brandDeletion.status = "submitting";
+  setBrandDeletionPending(true);
+  if (el.brandDeleteFeedback) el.brandDeleteFeedback.textContent = uiText("Deleting Brand…");
+  try {
+    const response = await fetch(`/api/brands/${encodeURIComponent(brand.id)}`, {
+      method: "DELETE", headers: { Accept: "application/json", "Content-Type": "application/json" },
+      body: JSON.stringify({ confirmationName })
+    });
+    let result = null;
+    try { result = await response.json(); } catch (_error) { /* bounded generic failure below */ }
+    if (!response.ok || result?.ok !== true || result?.code !== "BRAND_DELETED" || result?.deletedBrandId !== brand.id) {
+      brandDeletion.status = "confirming";
+      setBrandDeletionPending(false);
+      if (el.brandDeleteFeedback) el.brandDeleteFeedback.textContent = uiText("The Brand could not be deleted. It remains available; try again.");
+      return;
+    }
+    state.brandCatalog.entries = state.brandCatalog.entries.filter(({ id }) => id !== brand.id);
+    if (ephemeralBrandSwitcherSelection?.id === brand.id) {
+      clearEphemeralBrandSwitcherSelection({ persist: true });
+    }
+    if (state.boardBrandAssociation.brandId === brand.id) state.boardBrandAssociation.brandId = null;
+    brandDeletion.status = "complete";
+    closeBrandDeletion({ restoreFocus: false });
+    renderBrandCatalog();
+    renderBoardBrandAssociation();
+    await loadCanonicalBrandCatalog({ force: true });
+    setSaveStatus(uiFormat('Workspace/Brand “{name}” was deleted. Boards remain available.', { name: brand.name }));
+  } catch (_error) {
+    brandDeletion.status = "confirming";
+    setBrandDeletionPending(false);
+    if (el.brandDeleteFeedback) el.brandDeleteFeedback.textContent = uiText("The Brand could not be deleted. It remains available; try again.");
+  }
+}
+
+async function loadCanonicalBrandCatalog({ force = false } = {}) {
   const userEmail = typeof state.user?.email === "string" ? state.user.email.trim().toLowerCase() : "";
   if (!userEmail) {
     state.brandCatalog = { status: "unauthenticated", entries: [], requestId: state.brandCatalog.requestId + 1, userEmail: "" };
     renderBrandCatalog();
     return;
   }
-  if (state.brandCatalog.userEmail === userEmail && ["loading", "success"].includes(state.brandCatalog.status)) return;
+  if (!force && state.brandCatalog.userEmail === userEmail && ["loading", "success"].includes(state.brandCatalog.status)) return;
   const requestId = state.brandCatalog.requestId + 1;
   const preferenceGeneration = brandSwitcherPreferenceGeneration;
   state.brandCatalog = { status: "loading", entries: [], requestId, userEmail };
@@ -17478,6 +17572,9 @@ el.brandWorkspaceDetail?.addEventListener("cancel", (event) => {
 el.brandSwitcherCreateOpen?.addEventListener("click", openCanonicalBrandCreation);
 el.brandSwitcherCreateForm?.addEventListener("submit", submitCanonicalBrandCreation);
 el.brandSwitcherCreateCancel?.addEventListener("click", () => resetCanonicalBrandCreation({ focusTrigger: true }));
+el.brandDeleteForm?.addEventListener("submit", submitBrandDeletion);
+el.brandDeleteCancel?.addEventListener("click", () => closeBrandDeletion());
+el.brandDeleteDialog?.addEventListener("cancel", (event) => { event.preventDefault(); closeBrandDeletion(); });
 el.boardBrandAssociationEdit?.addEventListener("click", openBoardBrandAssociation);
 el.boardBrandCoreCompareOpen?.addEventListener("click", openBoardBrandCoreComparison);
 el.boardBrandCoreComparisonClose?.addEventListener("click", () => closeBoardBrandCoreComparison());
