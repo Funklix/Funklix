@@ -6,7 +6,7 @@ const {resolveSelectedPageCredential}=require('./facebook-page-credential');
 const REQUIRED_SCOPE='pages_read_engagement';
 function metric(value){return Number.isSafeInteger(value)&&value>=0?{state:'available',value}:{state:'unavailable'};}
 function projectAggregates(raw){return {reactions:metric(raw?.reactions?.summary?.total_count),comments:metric(raw?.comments?.summary?.total_count),shares:metric(raw?.shares?.count)};}
-function failureCode(result){const code=result?.error?.code;return code==='credential_invalid'?'credential_invalid':code==='permission_missing'?'insufficient_permission':code==='provider_rate_limited'?'provider_rate_limited':code==='destination_unavailable'||code==='provider_invalid_content'?'provider_object_unavailable':'provider_temporarily_unavailable';}
+function failureCode(result){const code=result?.error?.code;if(code==='credential_invalid'&&result?.providerOAuthCategory==='oauth_190')return'reconnect_required';return code==='credential_invalid'?'credential_invalid':code==='permission_missing'?'insufficient_permission':code==='provider_rate_limited'?'provider_rate_limited':code==='destination_unavailable'||code==='provider_invalid_content'?'provider_object_unavailable':'provider_temporarily_unavailable';}
 function engagementCapability(adapter){
  const declared=Array.isArray(adapter?.capabilities)&&adapter.capabilities.includes('facebook_post_engagement_read_v1');
  const implemented=typeof adapter?.facebook_post_engagement_read_v1==='function';
@@ -41,7 +41,7 @@ function createFacebookEngagementService({pool=null,boardAccess=null,adapter=cre
   const selectedCredential={accessToken:selected.accessToken,tokenSource:selected.tokenSource};
   const result=await adapter.facebook_post_engagement_read_v1({context:{requestId:input.serverRequestId},credential:selectedCredential,input:{pageId:row.external_destination_id,postId:row.external_post_id}});
   selectedCredential.accessToken='';
-  if(!result.ok){const code=failureCode(result);return{ok:false,code,httpStatus:code==='credential_invalid'?401:code==='insufficient_permission'?403:code==='provider_rate_limited'?429:code==='provider_object_unavailable'?404:503,providerHttpStatus:result.httpStatus,providerOAuthCategory:result.providerOAuthCategory||null,tokenSource:'selected_page_token',permissionPresent:true,credentialExpiry:'current'};}
+  if(!result.ok){const code=failureCode(result);return{ok:false,code,httpStatus:code==='credential_invalid'||code==='reconnect_required'?401:code==='insufficient_permission'?403:code==='provider_rate_limited'?429:code==='provider_object_unavailable'?404:503,providerHttpStatus:result.httpStatus,providerOAuthCategory:result.providerOAuthCategory||null,tokenSource:'selected_page_token',permissionPresent:true,credentialExpiry:'current',adapterArgumentValidity:result.adapterArgumentValidity||'valid',outboundTokenType:result.outboundTokenType||'string',outboundTokenPresence:result.outboundTokenPresence!==false,tokenPathConsistency:'selected_page_token_equal'};}
   return{ok:true,metrics:projectAggregates(result.value),refreshedAt:now().toISOString(),providerHttpStatus:200};
  }
  return Object.freeze({read});
