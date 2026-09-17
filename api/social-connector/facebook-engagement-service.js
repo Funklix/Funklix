@@ -2,10 +2,11 @@
 const vault=require('./token-vault');
 const {createFacebookAdapter}=require('./facebook-adapter');
 const {POST_ID}=require('./facebook-publishing');
+const {resolveSelectedPageCredential}=require('./facebook-page-credential');
 const REQUIRED_SCOPE='pages_read_engagement';
 function metric(value){return Number.isSafeInteger(value)&&value>=0?{state:'available',value}:{state:'unavailable'};}
 function projectAggregates(raw){return {reactions:metric(raw?.reactions?.summary?.total_count),comments:metric(raw?.comments?.summary?.total_count),shares:metric(raw?.shares?.count)};}
-function failureCode(result){const code=result?.error?.code;return code==='credential_invalid'?'credential_invalid':code==='permission_missing'?'insufficient_permission':code==='provider_rate_limited'?'provider_rate_limited':'provider_temporarily_unavailable';}
+function failureCode(result){const code=result?.error?.code;return code==='credential_invalid'?'credential_invalid':code==='permission_missing'?'insufficient_permission':code==='provider_rate_limited'?'provider_rate_limited':code==='destination_unavailable'||code==='provider_invalid_content'?'provider_object_unavailable':'provider_temporarily_unavailable';}
 function engagementCapability(adapter){
  const declared=Array.isArray(adapter?.capabilities)&&adapter.capabilities.includes('facebook_post_engagement_read_v1');
  const implemented=typeof adapter?.facebook_post_engagement_read_v1==='function';
@@ -31,11 +32,16 @@ function createFacebookEngagementService({pool=null,boardAccess=null,adapter=cre
    WHERE e.owner_account_id=$1 AND e.source_board_id=$2 AND e.source_node_id=$3 AND e.platform='facebook' AND e.delivery_state='confirmed' AND e.deletion_state='retained'
    ORDER BY e.published_at DESC NULLS LAST LIMIT 1`,[input.ownerAccountId,input.boardId,input.nodeId]);
   const row=found.rows[0];if(!row||!POST_ID.test(row.external_post_id||''))return{ok:false,code:'publication_unavailable',httpStatus:404};
-  if(row.revoked_at||(row.token_expires_at&&Date.parse(row.token_expires_at)<=now().getTime()))return{ok:false,code:'credential_invalid',httpStatus:401};
-  if(!Array.isArray(row.granted_scopes)||!row.granted_scopes.includes(REQUIRED_SCOPE))return{ok:false,code:'insufficient_permission',httpStatus:403};
-  let credentials;try{credentials=vault.open({algorithm:'aes-256-gcm',formatVersion:1,keyVersion:row.encryption_key_version,ciphertext:row.encrypted_payload,nonce:row.nonce,authenticationTag:row.authentication_tag},{secretId:row.token_secret_id,ownerAccountId:input.ownerAccountId,platform:'facebook'},{env});}catch{return{ok:false,code:'credential_invalid',httpStatus:401};}
-  const result=await adapter.facebook_post_engagement_read_v1({context:{requestId:input.serverRequestId},credentials,input:{pageId:row.external_destination_id,postId:row.external_post_id}});
-  if(!result.ok){const code=failureCode(result);return{ok:false,code,httpStatus:code==='credential_invalid'?401:code==='insufficient_permission'?403:code==='provider_rate_limited'?429:503,providerHttpStatus:result.httpStatus};}
+  if(row.revoked_at||(row.token_expires_at&&Date.parse(row.token_expires_at)<=now().getTime()))return{ok:false,code:'credential_invalid',httpStatus:401,tokenSource:'unavailable',permissionPresent:Array.isArray(row.granted_scopes)&&row.granted_scopes.includes(REQUIRED_SCOPE),credentialExpiry:row.revoked_at?'revoked':'expired'};
+  if(!Array.isArray(row.granted_scopes)||!row.granted_scopes.includes(REQUIRED_SCOPE))return{ok:false,code:'insufficient_permission',httpStatus:403,tokenSource:'unavailable',permissionPresent:false,credentialExpiry:'current'};
+  let credentials;try{credentials=vault.open({algorithm:'aes-256-gcm',formatVersion:1,keyVersion:row.encryption_key_version,ciphertext:row.encrypted_payload,nonce:row.nonce,authenticationTag:row.authentication_tag},{secretId:row.token_secret_id,ownerAccountId:input.ownerAccountId,platform:'facebook'},{env});}catch{return{ok:false,code:'credential_invalid',httpStatus:401,tokenSource:'unavailable',permissionPresent:true,credentialExpiry:'unknown'};}
+  const selected=resolveSelectedPageCredential(credentials,row.external_destination_id);
+  if(!selected)return{ok:false,code:'credential_invalid',httpStatus:401,tokenSource:'unavailable',permissionPresent:true,credentialExpiry:'current'};
+  // Pass only the selected Page credential shape. The user token and other Pages are not adapter inputs.
+  const selectedCredential={accessToken:selected.accessToken,tokenSource:selected.tokenSource};
+  const result=await adapter.facebook_post_engagement_read_v1({context:{requestId:input.serverRequestId},credential:selectedCredential,input:{pageId:row.external_destination_id,postId:row.external_post_id}});
+  selectedCredential.accessToken='';
+  if(!result.ok){const code=failureCode(result);return{ok:false,code,httpStatus:code==='credential_invalid'?401:code==='insufficient_permission'?403:code==='provider_rate_limited'?429:code==='provider_object_unavailable'?404:503,providerHttpStatus:result.httpStatus,providerOAuthCategory:result.providerOAuthCategory||null,tokenSource:'selected_page_token',permissionPresent:true,credentialExpiry:'current'};}
   return{ok:true,metrics:projectAggregates(result.value),refreshedAt:now().toISOString(),providerHttpStatus:200};
  }
  return Object.freeze({read});

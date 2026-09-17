@@ -5,6 +5,7 @@ const { pool: defaultPool } = require('../_boards-storage');
 const { getBoardAccess } = require('../_board-access');
 const vault = require('./token-vault');
 const { createFacebookAdapter } = require('./facebook-adapter');
+const { resolveSelectedPageCredential } = require('./facebook-page-credential');
 const { ACTION_VERSION, ACTIVE_JOB_STATES, POST_ID, enabled, evaluate, digest, idempotencyKey } = require('./facebook-publishing');
 const { materialFingerprint, approvalBoundary } = require('./linkedin-publishing');
 
@@ -100,10 +101,13 @@ function createFacebookPublishingService({ pool = defaultPool, adapter = createF
     let credential;
     try { credential = vault.open({ algorithm: 'aes-256-gcm', formatVersion: 1, keyVersion: state.connection.encryption_key_version, ciphertext: state.connection.encrypted_payload, nonce: state.connection.nonce, authenticationTag: state.connection.authentication_tag }, { secretId: state.connection.token_secret_id, ownerAccountId: input.ownerAccountId, platform: 'facebook' }, { env }); }
     catch { await markFailure(pool, jobId, attemptId, 'credential_invalid', false).catch(()=>{}); return { ok: false, status: 'credential_invalid', jobId }; }
+    const selectedPageCredential = resolveSelectedPageCredential(credential, state.destination.external_destination_id);
+    if (!selectedPageCredential) { await markFailure(pool, jobId, attemptId, 'credential_invalid', false).catch(()=>{}); return { ok: false, status: 'credential_invalid', jobId }; }
+    const pageCredentials = { pageTokens: { [state.destination.external_destination_id]: selectedPageCredential.accessToken } };
     let result;
-    try { result = await adapter.facebook_page_text_link_publish_v1({ context: { requestId: input.serverRequestId, accountId: input.ownerAccountId }, credentials: credential, input: { pageId: state.destination.external_destination_id, message: state.evaluation.message, link: state.evaluation.link } }); }
+    try { result = await adapter.facebook_page_text_link_publish_v1({ context: { requestId: input.serverRequestId, accountId: input.ownerAccountId }, credentials: pageCredentials, input: { pageId: state.destination.external_destination_id, message: state.evaluation.message, link: state.evaluation.link } }); }
     catch { await markFailure(pool,jobId,attemptId,'provider_outcome_unknown',true).catch(()=>{}); return {ok:false,status:'outcome_unknown',jobId,providerAttemptId:attemptId,jobState:'outcome_unknown'}; }
-    Object.keys(credential).forEach(key => { credential[key] = ''; });
+    Object.keys(credential).forEach(key => { credential[key] = ''; }); Object.keys(pageCredentials.pageTokens).forEach(key => { pageCredentials.pageTokens[key] = ''; });
     if (!result.ok) { const acceptedWithoutIdentity=result.acceptanceKnown===true,unknown=acceptedWithoutIdentity||['outcome_unknown','provider_ambiguous_result'].includes(result.error?.code);const classification=acceptedWithoutIdentity?'provider_accepted_identity_unretained':result.error?.code||'provider_unavailable';await markFailure(pool,jobId,attemptId,classification,unknown).catch(()=>{});return {ok:false,status:acceptedWithoutIdentity?'provider_accepted_unreconciled':classification,jobId,providerAttemptId:attemptId,jobState:unknown?'outcome_unknown':'failed'}; }
     const publishedAt = now().toISOString(), url = result.value.permalink || null; let client;
     try { await pool.query(`UPDATE public.social_provider_attempts SET status='accepted',completed_at=$2,provider_request_reference=$3,ambiguous_outcome=FALSE WHERE id=$1`,[attemptId,publishedAt,result.value.postId]); }
