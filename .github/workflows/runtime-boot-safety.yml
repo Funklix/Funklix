@@ -199,6 +199,18 @@ jobs:
         run: npm run check:bw34.1.2
       - name: Check BW-34.1.3 Facebook publishing readiness
         run: npm run check:bw34.1.3
+      - name: Check BW-34.1.9 Facebook publication finalization
+        run: npm run check:bw34.1.9
+      - name: Check BW-34.2A Facebook engagement
+        run: npm run check:bw34.2a
+      - name: Check BW-34.2AR1 social adapter compatibility
+        run: npm run check:bw34.2ar1
+      - name: Check BW-34.2AR2 Facebook engagement repair
+        run: npm run check:bw34.2ar2
+      - name: Check BW-34.2AR3 Facebook engagement authentication
+        run: npm run check:bw34.2ar3
+      - name: Check BW-34.2AR4 Facebook engagement partial availability
+        run: npm run check:bw34.2ar4
       - name: Check BW-33.2R1 corrected Tendra One brand foundation
         run: npm run check:bw33.2r1
       - name: Check BW-33.3R1 post-hydration Canvas density
