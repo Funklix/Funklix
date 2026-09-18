@@ -364,6 +364,7 @@ const el = {
   brandCoreButton: document.getElementById("brand-core-nav-btn"),
   campaignCanvasNavButton: document.getElementById("campaign-canvas-nav-btn"),
   contentWorkspaceNavButton: document.getElementById("content-workspace-nav-btn"),
+  postingPlanNavButton: document.getElementById("posting-plan-nav-btn"),
   boardsNavButton: document.getElementById("boards-nav-btn"),
   insightsNavButton: document.getElementById("insights-nav-btn"),
   funnelSimulatorNavButton: document.getElementById("funnel-simulator-nav-btn"),
@@ -16972,7 +16973,8 @@ function setActiveView(view) {
   el.brandCoreWorkspace.classList.toggle("hidden", !isBrandCore);
   el.homeNavButton?.classList.toggle("active", isHome);
   el.campaignCanvasNavButton.classList.toggle("active", view === "board" || view === "list" || view === "calendar");
-  el.contentWorkspaceNavButton?.classList.toggle("active", view === "content_workspace");
+  el.contentWorkspaceNavButton?.classList.toggle("active", view === "content_workspace" && window.FunklixContentWorkspace?.calendarState?.mode !== "posting_plan");
+  el.postingPlanNavButton?.classList.toggle("active", view === "content_workspace" && window.FunklixContentWorkspace?.calendarState?.mode === "posting_plan");
   el.boardsNavButton?.classList.toggle("active", view === "boards_library");
   el.brandCoreButton.classList.toggle("active", isBrandCore);
   el.aiBrainNavButton?.classList.toggle("active", view === "ai_brain");
@@ -17119,6 +17121,7 @@ function renderContentWorkspace() {
     focusNodeId: contentWorkspaceFocusNodeId,
     approvalPersistence: id => approvalPersistenceByNode.get(id) || "not_requested",
     requestLifecycleGeneration: publishingLifecycleGeneration,
+    schedulePending: id => postingScheduleRequests.has(id),
     facebookConnectionSnapshot: globalThis.FacebookSettings?.getConnectionSnapshot?.() || { status: "loading", projection: null },
     getNode: id => getNode(id),
     resolveCurrentContentNode,
@@ -18340,6 +18343,12 @@ el.campaignCanvasNavButton.addEventListener("click", () => {
 });
 el.contentWorkspaceNavButton?.addEventListener("click", () => {
   setAppMode("canvas");
+  if (window.FunklixContentWorkspace?.calendarState) window.FunklixContentWorkspace.calendarState.mode = "library";
+  setActiveView("content_workspace");
+});
+el.postingPlanNavButton?.addEventListener("click", () => {
+  setAppMode("canvas");
+  if (window.FunklixContentWorkspace?.calendarState) window.FunklixContentWorkspace.calendarState.mode = "posting_plan";
   setActiveView("content_workspace");
 });
 el.boardsNavButton?.addEventListener("click", () => {
