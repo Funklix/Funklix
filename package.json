@@ -5,6 +5,7 @@
   },
   "scripts": {
     "check:bw35.1": "node scripts/check-bw35-1-canonical-posting-schedule-persistence.js",
+    "check:bw35.2": "node scripts/check-bw35-2-manual-posting-plan-workspace.js",
     "check:bw25.1": "node scripts/check-bw25-1-dynamic-insights-translations.js",
     "check:bw25.2": "node scripts/check-bw25-2-interface-localization.js",
     "check:bw26": "node scripts/check-bw26-read-only-ai-brain.js",
