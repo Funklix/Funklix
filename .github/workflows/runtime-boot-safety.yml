@@ -21,6 +21,8 @@ jobs:
           node --check campaign-v3.js
       - name: Check browser script integrity
         run: node scripts/check-browser-script-integrity.js
+      - name: Check BW-35.1 canonical posting schedule persistence
+        run: npm run check:bw35.1
       - name: Check read-only Canonical Brand catalog
         run: node scripts/check-bw1-brand-catalog.js
       - name: Check ephemeral Canonical Brand selection

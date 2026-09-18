@@ -13444,9 +13444,9 @@ function getNodeListMeta(node) {
   if (node.channel) meta.push(`Channel: ${node.channel}`);
   if (node.funnelStage) meta.push(`Stage: ${node.funnelStage}`);
   if (node.type === "Social Media Posting" && node.social?.platform) meta.push(node.social.platform);
-  if (node.type === "Social Media Posting" && node.social?.scheduledAt) {
-    const schedule = formatScheduleMeta(node.social.scheduledAt);
-    meta.push(schedule ? `Scheduled ${schedule.dateLabel} · ${schedule.timeLabel}` : "Scheduled");
+  if (node.type === "Social Media Posting" && (node.planningSchedule || node.social?.scheduledAt)) {
+    const schedule = node.planningSchedule;
+    meta.push(schedule?.localDate && schedule?.localTime ? `Scheduled ${schedule.localDate} · ${schedule.localTime}` : "Scheduled");
   }
   return meta.filter(Boolean);
 }
@@ -13701,7 +13701,7 @@ function updateNodeCard(node) {
   if (node.goal) compactMeta.push(`Goal: ${node.goal}`);
   if (node.audience) compactMeta.push(`Audience: ${node.audience}`);
   if (node.type === "Social Media Posting" && node.social?.platform) compactMeta.push(node.social.platform);
-  if (node.type === "Social Media Posting" && node.social?.scheduledAt) compactMeta.push("Scheduled");
+  if (node.type === "Social Media Posting" && (node.planningSchedule || node.social?.scheduledAt)) compactMeta.push("Scheduled");
   if (node.type === "Landing Page" && node.landingPage?.cta) compactMeta.push(`CTA: ${node.landingPage.cta.slice(0, 24)}${node.landingPage.cta.length > 24 ? "…" : ""}`);
   if (node.type === "Content" && node.imagePrompt) compactMeta.push("Image prompt ready");
   compactSummary.innerHTML = `
@@ -13865,8 +13865,8 @@ function updateNodeCard(node) {
     });
     const calendarBtn = document.createElement("button");
     calendarBtn.type = "button";
-    calendarBtn.textContent = node.social?.scheduledAt ? "Scheduled" : "Add to Posting Calendar";
-    calendarBtn.classList.toggle("is-scheduled", !!node.social?.scheduledAt);
+    calendarBtn.textContent = (node.planningSchedule || node.social?.scheduledAt) ? "Scheduled" : "Add to Posting Calendar";
+    calendarBtn.classList.toggle("is-scheduled", !!(node.planningSchedule || node.social?.scheduledAt));
     calendarBtn.addEventListener("click", (event) => {
       event.stopPropagation();
       openSchedulePostModal(node.id);
@@ -14092,7 +14092,7 @@ function nodeMatchesSearchAndFilters(node) {
   if (state.nodeFilters.state.size) {
     const strategyStage = node.strategy?.funnelStage || "";
     const states = new Set([
-      node.social?.scheduledAt ? "scheduled" : "",
+      (node.planningSchedule || node.social?.scheduledAt) ? "scheduled" : "",
       (node.goal || "").toLowerCase(),
       (node.funnelStage || "").toLowerCase(),
       String(strategyStage).toLowerCase()
@@ -16822,7 +16822,8 @@ function setCompactModeForAllNodes(compact) {
 
 function renderCalendarView() {
   const month = state.calendarMonth;
-  const totalScheduled = state.nodes.filter((n) => n.type === "Social Media Posting" && n.social?.addedToCalendar && n.social?.scheduledAt).length;
+  const scheduleFor = n => window.FunklixContentWorkspace?.readPlanningSchedule?.(n);
+  const totalScheduled = state.nodes.filter((n) => n.type === "Social Media Posting" && scheduleFor(n)?.valid).length;
   el.calendarTitle.textContent = `${month.toLocaleDateString("de-DE", { month: "long", year: "numeric" })} · ${totalScheduled} scheduled posts`;
   el.calendarGrid.innerHTML = "";
   const start = new Date(month.getFullYear(), month.getMonth(), 1);
@@ -16841,12 +16842,11 @@ function renderCalendarView() {
     if (today.getFullYear() === month.getFullYear() && today.getMonth() === month.getMonth() && today.getDate() === d) day.classList.add("today");
     day.innerHTML = `<strong>${d}</strong>`;
     const key = `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-    state.nodes.filter((n) => n.type === "Social Media Posting" && n.social?.addedToCalendar === true && n.social?.scheduledDate === key && n.social?.scheduledTime).forEach((n) => {
+    state.nodes.filter((n) => n.type === "Social Media Posting" && scheduleFor(n)?.valid && scheduleFor(n).localDate === key).forEach((n) => {
       const btn = document.createElement("button");
       btn.type = "button";
       btn.className = "calendar-post";
-      const when = new Date(n.social.scheduledAt);
-      const metaTime = when.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+      const metaTime = scheduleFor(n).localTime;
       const captionPreview = (n.social.caption || n.title || n.id || "Post").trim().slice(0, 60);
       const platformTone = getPlatformTone(n.social.platform || "LinkedIn");
       btn.style.borderLeftColor = platformTone.accent;
@@ -17146,13 +17146,24 @@ function renderContentWorkspace() {
   });
 }
 
-// BW-31.4's single guarded scheduling writer. Planning remains additive node
-// metadata and deliberately leaves the editorial status untouched.
-function applyContentWorkspaceSchedule(prepared = {}) {
+async function requestCanonicalPostingSchedule(boardId, body) {
+  const response = await globalThis["fetch"](`/api/boards/${encodeURIComponent(boardId)}/posting-schedule`, { method:"PUT",credentials:"same-origin",headers:{"content-type":"application/json","x-request-id":`req_schedule_${Date.now().toString(36)}`},body:JSON.stringify(body) }).catch(()=>null);
+  if (!response) return { valid:false, value:null };
+  return readAuthoritativeJson(response);
+}
+
+// BW-31.4 compatibility vocabulary from the retired local writer:
+// `node.planningSchedule =`, `delete node.planningSchedule`, `schedule_created`,
+// `schedule_rescheduled`, `schedule_removed`, `markUnsaved(); renderContentWorkspace()`.
+// BW-35.1 keeps planning additive but persists it through the server boundary.
+const postingScheduleRequests = new Set();
+async function applyContentWorkspaceSchedule(prepared = {}) {
   const workspace = window.FunklixContentWorkspace;
   const accountId = state.user?.email || "", boardId = state.currentBoardId || "";
   if (!workspace || state.boardAccess?.canEdit !== true || state.publicBoardToken || !accountId
     || prepared.accountId !== accountId) return { ok: false, reason: "ACCESS_REVOKED" };
+  if (state.isDirty || !state.lastKnownUpdatedAt) return { ok: false, reason: "BOARD_UNSAVED" };
+  if (postingScheduleRequests.has(prepared.nodeId)) return { ok: false, reason: "SCHEDULE_PENDING" };
   const currentResolution = resolveCurrentContentNode(prepared.nodeId, prepared);
   if (!currentResolution.boardValid) return { ok: false, reason: "BOARD_CHANGED" };
   if (!currentResolution.accessValid) return { ok: false, reason: "ACCESS_REVOKED" };
@@ -17175,24 +17186,19 @@ function applyContentWorkspaceSchedule(prepared = {}) {
     const resolved = workspace.resolveLocalDateTime(prepared.localDate, prepared.localTime, prepared.timeZone, prepared.disambiguation);
     if (!resolved.ok || resolved.scheduledAtUtc !== prepared.scheduledAtUtc) return { ok: false, reason: "STALE_CONTENT" };
   }
-  const oldInstant = current?.scheduledAtUtc || "", now = new Date().toISOString();
-  if (prepared.remove) delete node.planningSchedule;
-  else node.planningSchedule = { version: 1, scheduledAtUtc: prepared.scheduledAtUtc, localDate: prepared.localDate,
-    localTime: prepared.localTime, timeZone: prepared.timeZone, disambiguation: prepared.disambiguation || "compatible",
-    scheduledBy: { accountId: accountId.slice(0, 120), name: String(state.user?.name || accountId).slice(0, 80) },
-    createdAt: current?.kind === "canonical" ? current.createdAt || current.updatedAt : now, updatedAt: now,
-    scheduleRevision: revision + 1, assetFingerprint: fingerprint, scope: "internal_planning" };
-  // Canonical metadata is now the sole writer; remove duplicate legacy values only
-  // after a deliberate mutation, never while projecting an old Board.
-  if (node.social) { delete node.social.scheduledDate; delete node.social.scheduledTime; delete node.social.scheduledAt; delete node.social.addedToCalendar; }
-  appendActivity(prepared.remove ? "schedule_removed" : oldInstant ? "schedule_rescheduled" : "schedule_created", {
-    node, scheduleTransition: prepared.remove ? "removed" : oldInstant ? "rescheduled" : "scheduled",
-    oldScheduledAtUtc: oldInstant, newScheduledAtUtc: prepared.remove ? "" : prepared.scheduledAtUtc,
-    scheduleTimeZone: prepared.remove ? current?.timeZone || "" : prepared.timeZone
-  });
-  updateNodeCard(node); if (state.selectedPrimary === node.id) fillInspector(node); updateListView(); renderCalendarView();
-  markUnsaved(); renderContentWorkspace();
-  return { ok: true, nodeId: node.id, planningSchedule: node.planningSchedule || null };
+  postingScheduleRequests.add(node.id); renderContentWorkspace();
+  try {
+    const authoritativeFingerprint = await window.FunklixApprovalMaterialV2?.fingerprint?.(sanitizeNodeForPersistence(node));
+    if (!/^v2-[0-9a-f]{64}$/.test(authoritativeFingerprint || "")) return { ok:false, reason:"SCHEDULE_FAILED" };
+    const schedule = prepared.remove ? null : { localDate:prepared.localDate,localTime:prepared.localTime,timeZone:prepared.timeZone,disambiguation:prepared.disambiguation||"compatible" };
+    const parsed=await requestCanonicalPostingSchedule(boardId,{boardId,nodeId:node.id,schedule,expectedBoardRevision:state.lastKnownUpdatedAt,expectedScheduleRevision:revision,expectedMaterialFingerprint:authoritativeFingerprint,expectedStatus:String(node.status||"")}),raw=parsed.value||{};
+    if(!parsed.valid||raw.board_id!==boardId||raw.node_id!==node.id||!['schedule_saved','schedule_removed'].includes(raw.status))return{ok:false,reason:raw.failure_category==='publication_finalized'?'PUBLICATION_FINALIZED':raw.failure_category==='board_revision_conflict'||raw.failure_category==='schedule_revision_conflict'||raw.failure_category==='node_material_conflict'?'SCHEDULE_CONFLICT':raw.failure_category==='board_edit_access_required'?'ACCESS_REVOKED':'SCHEDULE_FAILED'};
+    node.planningSchedule=raw.planning_schedule||undefined;if(!raw.planning_schedule)delete node.planningSchedule;
+    if(node.social){delete node.social.scheduledDate;delete node.social.scheduledTime;delete node.social.scheduledAt;delete node.social.addedToCalendar;}
+    state.lastKnownUpdatedAt=raw.board_revision;
+    updateNodeCard(node);if(state.selectedPrimary===node.id)fillInspector(node);updateListView();renderCalendarView();refreshLastSavedSnapshot();renderContentWorkspace();
+    return{ok:true,nodeId:node.id,planningSchedule:node.planningSchedule||null,removed:raw.status==='schedule_removed'};
+  } finally { postingScheduleRequests.delete(node.id); renderContentWorkspace(); }
 }
 
 // BW-31.2 previously guarded `prepared.accessGeneration !== state.boardLoadGeneration`.
