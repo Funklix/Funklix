@@ -96,10 +96,7 @@ const state = {
   contextNodeId: null,
   activeView: "board",
   calendarMonth: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
-  pendingScheduleNodeId: null
-  ,scheduleDate: ""
-  ,scheduleTime: "09:00"
-  ,currentBoardId: null
+  currentBoardId: null
   ,session: {
     workspaceId: null,
     // Active Brand runtime is intentionally not implemented yet; keep brandId null until a canonical Brand owner exists.
@@ -316,11 +313,6 @@ const el = {
   generateImageButton: document.getElementById("generate-image-btn"),
   generatePostingVisualButton: document.getElementById("generate-posting-visual-btn"),
   generateFullPackButton: document.getElementById("generate-full-pack-btn"),
-  postingPlanOverlay: document.getElementById("posting-plan-overlay"),
-  postingDateInput: document.getElementById("posting-date-input"),
-  postingTimeInput: document.getElementById("posting-time-input"),
-  postingDoneButton: document.getElementById("posting-done-btn"),
-  postingCancelButton: document.getElementById("posting-cancel-btn"),
   undoButton: document.getElementById("undo-btn"),
   deleteSelectedButton: document.getElementById("delete-selected-btn"),
   disconnectSelectedButton: document.getElementById("disconnect-selected-btn"),
@@ -364,7 +356,6 @@ const el = {
   brandCoreButton: document.getElementById("brand-core-nav-btn"),
   campaignCanvasNavButton: document.getElementById("campaign-canvas-nav-btn"),
   contentWorkspaceNavButton: document.getElementById("content-workspace-nav-btn"),
-  postingPlanNavButton: document.getElementById("posting-plan-nav-btn"),
   boardsNavButton: document.getElementById("boards-nav-btn"),
   insightsNavButton: document.getElementById("insights-nav-btn"),
   funnelSimulatorNavButton: document.getElementById("funnel-simulator-nav-btn"),
@@ -544,7 +535,7 @@ function diagnoseDomDependencies() {
       ],
       filtersUtilities: ["filters-toggle-btn", "utilities-toggle-btn"],
       zoom: ["zoom-in-btn", "zoom-out-btn", "zoom-label"],
-      modals: ["posting-plan-overlay", "image-lightbox"]
+      modals: ["image-lightbox"]
     };
 
     const idsToCheck = new Set();
@@ -10155,18 +10146,6 @@ function openSchedulePostModal(nodeId, sourceContext = "canvas") {
   return openContentPlanning(nodeId, sourceContext, document.activeElement);
 }
 
-function closePostingPlanner() {
-  state.pendingScheduleNodeId = null;
-  state.scheduleDate = "";
-  state.scheduleTime = "09:00";
-  el.postingPlanOverlay.classList.add("hidden");
-}
-
-function confirmSchedulePost() {
-  // Kept only for the retired overlay listener. All active entry points use the
-  // guarded Content Workspace schedule dialog and mutation path above.
-  closePostingPlanner();
-}
 
 function removeNode(nodeId, { logActivity = true } = {}) {
   // Read-only guard: prevent local destructive node mutation on view-only boards.
@@ -16973,8 +16952,7 @@ function setActiveView(view) {
   el.brandCoreWorkspace.classList.toggle("hidden", !isBrandCore);
   el.homeNavButton?.classList.toggle("active", isHome);
   el.campaignCanvasNavButton.classList.toggle("active", view === "board" || view === "list" || view === "calendar");
-  el.contentWorkspaceNavButton?.classList.toggle("active", view === "content_workspace" && window.FunklixContentWorkspace?.calendarState?.mode !== "posting_plan");
-  el.postingPlanNavButton?.classList.toggle("active", view === "content_workspace" && window.FunklixContentWorkspace?.calendarState?.mode === "posting_plan");
+  el.contentWorkspaceNavButton?.classList.toggle("active", view === "content_workspace");
   el.boardsNavButton?.classList.toggle("active", view === "boards_library");
   el.brandCoreButton.classList.toggle("active", isBrandCore);
   el.aiBrainNavButton?.classList.toggle("active", view === "ai_brain");
@@ -18325,8 +18303,6 @@ function centerBoardStartPosition() {
 el.picker.addEventListener("click", (event) => {
   if (event.target === el.picker) el.picker.classList.add("hidden");
 });
-el.postingDoneButton.addEventListener("click", confirmSchedulePost);
-el.postingCancelButton.addEventListener("click", closePostingPlanner);
 setSidebarCollapsed(true);
 
 el.homeNavButton?.addEventListener("click", () => {
@@ -18344,11 +18320,6 @@ el.campaignCanvasNavButton.addEventListener("click", () => {
 el.contentWorkspaceNavButton?.addEventListener("click", () => {
   setAppMode("canvas");
   if (window.FunklixContentWorkspace?.calendarState) window.FunklixContentWorkspace.calendarState.mode = "library";
-  setActiveView("content_workspace");
-});
-el.postingPlanNavButton?.addEventListener("click", () => {
-  setAppMode("canvas");
-  if (window.FunklixContentWorkspace?.calendarState) window.FunklixContentWorkspace.calendarState.mode = "posting_plan";
   setActiveView("content_workspace");
 });
 el.boardsNavButton?.addEventListener("click", () => {

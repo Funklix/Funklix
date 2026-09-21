@@ -87,3 +87,39 @@ Hide/remove the Posting Plan navigation and dedicated presentation functions/sty
 ## Explicit non-goals
 
 No automatic or bulk scheduling; conflict/capacity engine; CSV projection, preview, generation, or download; provider-side schedule; automatic publishing; provider call; destination invention; real post creation/edit/reschedule/deletion; approval mutation; fingerprint change; publication-state mutation; database migration; drag-and-drop; or export action is included.
+
+## 2026-09-18 — BW-35.2R1 integrated design repair
+
+### Corrected product architecture
+
+The original BW-35.2 presentation incorrectly treated Posting Plan as a separate top-level application area. That split implied a second content-planning product even though the plan reads and changes the same current-Board Social Media Posting nodes as Content and Calendar. BW-35.2R1 removes the dedicated sidebar entry, element binding, active-navigation branch, and click route. There is no independent Posting Plan shell or hidden duplicate surface.
+
+Posting Plan is now the third semantic tab in Content Workspace: **Content / Calendar / Posting Plan** and **Inhalte / Kalender / Posting-Plan**. It uses the existing roving tab focus and Left/Right/Home/End keyboard behavior without introducing history state or a shell mode. The selected view remains inside the one Content Workspace mount, Board snapshot, access context, loading path, render cycle, and cleanup lifecycle. A Board identity change clears filter and planning transients while preserving the selected workspace tab, so a newly opened Board immediately replaces the cards without reviving state from the prior Board or forcing an application-area switch.
+
+### Unified no-Board and lifecycle behavior
+
+Loading, missing-Board, and access-denied states are resolved before a view-specific body is rendered. Posting Plan therefore shows the same single Content Workspace no-Board message as Content and Calendar: it does not mount its header, summary, filters, navigator, post empty state, or a four-zero dashboard beneath that message. Once a Board is available, records are projected directly from that render's `nodes`; no additional Board request, store, listener, or duplicate DOM surface is created.
+
+### Content-first visual hierarchy
+
+The repaired view uses a compact purple token-based planning header with concise localized guidance, followed by an accessible progress bar and small count chips for total, scheduled, unscheduled, and finalized posts. Remaining unscheduled work is emphasized. Progress is expressed as “Scheduled N of M” / “N von M geplant” in text and with bounded progress semantics; an empty collection says that there are no posts to schedule and reports zero rather than a misleading completion percentage.
+
+Compact filter chips retain All, Scheduled, Unscheduled, Published/finalized, and Channel filtering with clear selected, hover, focus-visible, and count treatment. A no-results state includes an explicit filter reset. A no-posts state uses a small calendar cue and explains when Social Media Posting nodes will appear rather than filling the page with zero metrics.
+
+Full-content post cards are the primary surface. The complete caption preserves line breaks and safely wraps URLs and hashtags. Each card includes a restrained token-based channel accent; internal title; safe destination label when an existing Facebook selection is available; schedule date, time, and timezone; approval, readiness, and publication state; and link/media presence. Unscheduled cards receive a warm planning cue. Finalized cards retain full contrast, a completion treatment, lock text, and no scheduling mutation controls. No provider identifier, credential, approval fingerprint, or confirmation binding is rendered.
+
+The secondary planning navigator groups scheduled dates, unscheduled posts, and finalized posts deterministically. On wide screens it is the narrow sticky column beside the wider card stream. Activating an entry scrolls to and focuses its full card. At tablet and mobile widths it moves above the cards, loses sticky positioning, and reflows from compact tiles to one column without a second calendar or horizontal overflow. Scheduling forms continue to use the established accessible dialog and stack at existing small-screen breakpoints.
+
+### Theme, motion, and accessibility
+
+All new surfaces use Tendra One surface, border, text, primary, focus, success, warning, glow, motion, radius, and shadow tokens; no Posting Plan surface hardcodes white. Explicit dark-theme rules cover the gradient header, cards, navigator, and caption layer. Controls retain 44px targets, semantic labels, `aria-pressed`, visible focus, and readable locked/status text beyond color. The summary exposes text plus native progressbar values. Tab selection remains semantic and keyboard operable, navigator activation moves focus predictably, and hover/progress motion is removed under `prefers-reduced-motion`.
+
+### Preserved authority and non-goals
+
+BW-35.1 remains the sole scheduling authority. Canonical `node.planningSchedule` wins over the unchanged bounded legacy fallback. Save and remove continue through only `PUT /api/boards/:id/posting-schedule`; removal still sends `schedule: null`; pending UI waits for the authoritative response; and stale, unauthorized, invalid, and finalized results retain their established handling. Scheduling still preserves editorial status, approval metadata and fingerprint, publication material, and unrelated Board data. Viewers remain read-only and durable publication-finalization locks remain enforced.
+
+This repair adds no automatic or bulk scheduler, CSV projection/export/download, provider-side schedule, provider request, publication, edit, reschedule, deletion, queue, credential use, database migration, or real social mutation. Future Phase 3 and Phase 4 actions can enter the existing Posting Plan tab through Content Workspace rather than introducing another workspace.
+
+### Rollback boundary
+
+Rollback is limited to the third Content Workspace tab, its integrated renderer/bindings, the repaired Posting Plan styles, and the BW-35.2R1 regression. Do not restore the removed sidebar area, revert BW-35.1, rewrite Board JSON, remove compatible schedules, alter approval state, or change provider-publication records.
