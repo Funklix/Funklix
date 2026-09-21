@@ -6,7 +6,7 @@ const nodes=[social('review','In Review'),social('changes','Needs Changes'),soci
 const host={innerHTML:'',querySelectorAll:()=>[],querySelector:()=>null,addEventListener:()=>{}};
 const context={language:'en',identity:'a|b',accountId:'a',boardId:'b',accessGeneration:1,nodes,canView:true,canEdit:true,canOpenInspector:true,getNode:id=>nodes.find(n=>n.id===id)};
 w.resetCalendar();let result=w.render(host,context);
-const tabs=[...host.innerHTML.matchAll(/role="tab"[^>]*data-cw-mode="([^"]+)"/g)].map(x=>x[1]);assert.deepStrictEqual(tabs,['library','calendar'],'only two primary destinations');
+const tabs=[...host.innerHTML.matchAll(/role="tab"[^>]*data-cw-mode="([^"]+)"/g)].map(x=>x[1]);assert.deepStrictEqual(tabs,['library','calendar','posting_plan'],'three coherent content-planning destinations');
 assert.match(host.innerHTML,/data-cw-attention="review"[\s\S]*?<strong>1<\/strong>/);assert.match(host.innerHTML,/Review Queue/,'legacy review state remains a hidden compatibility hook');
 assert.equal((host.innerHTML.match(/class="cw-attention"/g)||[]).length,1,'one attention strip');assert.equal((host.innerHTML.match(/class="cw-overview"/g)||[]).length,0,'no repeated metric blocks');
 w.preferences.attention='review';result=w.render(host,context);assert.deepStrictEqual(result.filtered.map(x=>x.id),['review'],'attention filters real projections');
@@ -17,5 +17,5 @@ w.resetCalendar();w.render(host,{...context,language:'de'});assert.match(host.in
 w.render(host,{...context,canEdit:false,readOnly:true,publicViewer:true});assert.doesNotMatch(host.innerHTML,/data-cw-transition=|data-content-plan/);
 w.preferences.owner='Nobody';w.render(host,{...context,boardId:'other',accessGeneration:2});assert.equal(w.preferences.owner,'','lifecycle resets ephemeral filters');
 const css=fs.readFileSync('styles.css','utf8'),workflow=fs.readFileSync('.github/workflows/runtime-boot-safety.yml','utf8'),pkg=fs.readFileSync('package.json','utf8');assert.match(css,/max-width:640px/);assert.match(css,/data-theme="dark"/);assert.match(css,/prefers-reduced-motion/);assert.ok(workflow.indexOf('check:bw31.5.2')>workflow.indexOf('check:bw31.5.1'));assert.equal((pkg.match(/"check:bw31\.5\.2"/g)||[]).length,1);
-for(const source of ['canvas','inspector','content_library','review_queue','calendar_queue','calendar_event'])assert.ok(w.PLANNING_SOURCES.includes(source));assert.equal(w.evaluateScheduling({node:social('model-c','Draft'),accountId:'a',boardId:'b',canEdit:true,warningAccepted:true}).canPlan,true);
+for(const source of ['canvas','inspector','content_library','review_queue','calendar_queue','calendar_event','posting_plan'])assert.ok(w.PLANNING_SOURCES.includes(source));assert.equal(w.evaluateScheduling({node:social('model-c','Draft'),accountId:'a',boardId:'b',canEdit:true,warningAccepted:true}).canPlan,true);
 console.log('BW-31.5.2 simplified Content Workspace UX regression passed (runtime projection, hierarchy, attention, filters, actions, planning, lifecycle, permissions, localization, and responsive contracts).');

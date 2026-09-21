@@ -25,6 +25,8 @@ jobs:
         run: npm run check:bw35.1
       - name: Check BW-35.2 manual Posting Plan workspace
         run: npm run check:bw35.2
+      - name: Check BW-35.2R1 integrated Posting Plan
+        run: npm run check:bw35.2r1
       - name: Check read-only Canonical Brand catalog
         run: node scripts/check-bw1-brand-catalog.js
       - name: Check ephemeral Canonical Brand selection
