@@ -89,6 +89,7 @@
     "check:bw34.2ar3": "node scripts/check-bw34-2ar3-facebook-engagement-authentication.js",
     "check:bw34.2ar4": "node scripts/check-bw34-2ar4-facebook-engagement-partial-availability.js",
     "check:workspace-brand-deletion": "node scripts/check-workspace-brand-deletion.js",
-    "check:bw35.2r2": "node scripts/check-bw35-2r2-unified-content-calendar.js"
+    "check:bw35.2r2": "node scripts/check-bw35-2r2-unified-content-calendar.js",
+    "check:bw35.2r3": "node scripts/check-bw35-2r3-direct-content-calendar.js"
   }
 }
