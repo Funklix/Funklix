@@ -17153,6 +17153,8 @@ async function applyContentWorkspaceSchedule(prepared = {}) {
   if (currentResolution.statusChanged) return { ok: false, reason: "STATUS_CHANGED" };
   if (currentResolution.scheduleChanged) return { ok: false, reason: "SCHEDULE_CHANGED" };
   const node = currentResolution.node;
+  const schedulingEligibility = workspace.schedulingEligibility(node,{accountId,boardId,canEdit:true,publicViewer:false});
+  if (!schedulingEligibility.editable) return { ok:false, reason:schedulingEligibility.reason || "ACTION_NOT_PERMITTED" };
   const readiness = workspace.calculateReadiness(node), fingerprint = workspace.materialFingerprint(node);
   if (readiness.level !== prepared.readiness) return { ok: false, reason: "READINESS_CHANGED" };
   const current = workspace.readPlanningSchedule(node), revision = current?.kind === "canonical" ? current.scheduleRevision : 0;
@@ -17169,11 +17171,11 @@ async function applyContentWorkspaceSchedule(prepared = {}) {
   }
   postingScheduleRequests.add(node.id); renderContentWorkspace();
   try {
-    const authoritativeFingerprint = await window.FunklixApprovalMaterialV2?.fingerprint?.(sanitizeNodeForPersistence(node));
+    const authoritativeFingerprint = await window.FunklixApprovalMaterialV2?.fingerprint?.(node);
     if (!/^v2-[0-9a-f]{64}$/.test(authoritativeFingerprint || "")) return { ok:false, reason:"SCHEDULE_FAILED" };
     const schedule = prepared.remove ? null : { localDate:prepared.localDate,localTime:prepared.localTime,timeZone:prepared.timeZone,disambiguation:prepared.disambiguation||"compatible" };
     const parsed=await requestCanonicalPostingSchedule(boardId,{boardId,nodeId:node.id,schedule,expectedBoardRevision:state.lastKnownUpdatedAt,expectedScheduleRevision:revision,expectedMaterialFingerprint:authoritativeFingerprint,expectedStatus:String(node.status||"")}),raw=parsed.value||{};
-    if(!parsed.valid||raw.board_id!==boardId||raw.node_id!==node.id||!['schedule_saved','schedule_removed'].includes(raw.status))return{ok:false,reason:raw.failure_category==='publication_finalized'?'PUBLICATION_FINALIZED':raw.failure_category==='board_revision_conflict'||raw.failure_category==='schedule_revision_conflict'||raw.failure_category==='node_material_conflict'?'SCHEDULE_CONFLICT':raw.failure_category==='board_edit_access_required'?'ACCESS_REVOKED':'SCHEDULE_FAILED'};
+    if(!parsed.valid||raw.board_id!==boardId||raw.node_id!==node.id||!['schedule_saved','schedule_removed'].includes(raw.status))return{ok:false,reason:raw.failure_category==='publication_finalized'?'PUBLICATION_FINALIZED':raw.failure_category==='board_revision_conflict'||raw.failure_category==='schedule_revision_conflict'||raw.failure_category==='node_material_conflict'?'SCHEDULE_CONFLICT':raw.failure_category==='board_edit_access_required'||raw.failure_category==='authentication_required'?'ACCESS_REVOKED':raw.failure_category==='node_not_found'||raw.failure_category==='board_not_found'?'NODE_MISSING':raw.failure_category==='schedule_invalid'||raw.failure_category==='request_invalid'?'SCHEDULE_DATE_INVALID':raw.failure_category==='storage_unavailable'?'NETWORK_FAILURE':'SCHEDULE_FAILED'};
     node.planningSchedule=raw.planning_schedule||undefined;if(!raw.planning_schedule)delete node.planningSchedule;
     if(node.social){delete node.social.scheduledDate;delete node.social.scheduledTime;delete node.social.scheduledAt;delete node.social.addedToCalendar;}
     state.lastKnownUpdatedAt=raw.board_revision;
