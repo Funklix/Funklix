@@ -167,3 +167,48 @@ The rollback boundary is the R3 drop derivation, optimistic projection, feature-
 Runtime Boot Safety exposed an unconditional DOM assumption added by the R3 drawer portal cleanup: every `render()` called `document.querySelector("[data-calendar-drawer-portal]")` before determining whether the Content Calendar or drawer was active. The historical BW-32.3.7 server-authoritative approval-action regression deliberately supplies a bounded `document` double with no `querySelector`, so an unrelated Content Workspace approval render failed before its normal projection and bindings ran. The focused R3 check had provided no global document at all; its `typeof document !== "undefined"` path therefore skipped the faulty branch and missed this intermediate-capability boundary.
 
 Portal cleanup now goes through the narrow `optionalDrawerPortal()` capability lookup. It returns `null` unless both `document` and `document.querySelector` exist, while normal browsers perform the identical selector, removal, drawer portaling, focus, Escape, Undo, optimistic scheduling, and direct-drop behavior. `unmount()` uses the same boundary. The R3 regression now renders the unrelated library/approval surface with a document double that intentionally omits `querySelector`. The complete Runtime Boot Safety command sequence passes in declared workflow order, including BW-32.3.7, and tracked-files-only checks pass without `node_modules`. Rollback is limited to this helper and its regression/documentation; removing it would restore the unconditional boot-time DOM requirement.
+
+## 2026-09-22 — BW-35.2R4 scheduling interaction repair
+
+### Root causes and evidence
+
+The button path was still bound to the inherited `cw-dialog` centered form. It duplicated broad asset/readiness information, retained the old “Confirm schedule” step, and did not disable its primary action when its local date/time projection was invalid. More importantly, calendar classification and mutation admission were separate decisions: the calendar knew about editorial `Scheduled`/`Published` values and a subset of embedded publication fields, while live finalized publication reconciliation was held in a Facebook-only map and the generic Content card actions made their own decision. A finalized post could consequently be rendered in the eligible backlog before a later path rejected it.
+
+The drag path itself derived the correct optimistic placement, but the authoritative writer created `expectedMaterialFingerprint` from a newly sanitized browser copy. That copy is not necessarily byte-equivalent to the locked Board node used by the server's approval-material projection (notably when persisted image objects have already passed through browser hydration/sanitization). The server correctly returned `node_material_conflict`; the browser collapsed that and all other failures into the same rollback toast. R4 fingerprints the latest current Board node with the shared v2 material contract, while continuing to send the live Board revision, live canonical schedule revision, current editorial status, and exact v1 schedule command. It does not relax any server comparison.
+
+### Shared eligibility authority
+
+`publicationLockProjection` and `schedulingEligibility` are now the common browser projection for calendar records, eligible/blocked backlog sections, card dragging, drop admission, Details controls, quick-scheduler admission, the Content Workspace action menu, and the final browser mutation guard. They recognize the existing authoritative shapes only: editorial `Scheduled`/`Published`, reconciled in-session publication finalization, persisted `facebookPublication.status`, and the existing `externalPublication`/`publication` terminal states (`published`, `delivering`, `delivered`, `provider_accepted_unreconciled`, and `outcome_unknown`). Facebook and LinkedIn production-shaped fixtures are locked. Locked posts remain readable under **Finalized / locked** or the bounded blocked presentation, with Details available, but expose no planning mutation control and cannot reach the endpoint.
+
+### Quick scheduling interaction
+
+The legacy centered scheduling form is replaced by an opaque, channel-accented right-side quick-scheduling sheet. It contains the post title, channel, date, local time, timezone, DST choice only when ambiguity requires it, a single planning-only disclosure, Cancel, and one **Schedule / Planen** action. An unscheduled post starts with the validated `defaultPlanningTime`; an existing canonical record retains its time, IANA timezone, and DST disambiguation unless changed. Invalid values disable the action. Pending submission prevents duplicates, success closes and restores focus, and failure keeps the sheet open with actionable feedback. The existing focus trap, Escape/backdrop semantics, focus restoration, full-height mobile treatment, light/dark tokens, 44px targets, and reduced-motion behavior are retained.
+
+### Drag, persistence, reconciliation, and errors
+
+Month drops change only the local date, retaining canonical local time/timezone/DST, or use `defaultPlanningTime` for a previously unscheduled post. Week drops use the target date/time and retain timezone/DST. Backlog drops issue `schedule: null` without confirmation. Each mutation resolves the current node after the event, verifies Board/access/content/status/schedule generations, reserves one per-node request, projects an optimistic schedule, and sends one canonical PUT. A matching authoritative snake_case response alone updates `planningSchedule`, clears bounded legacy scheduling aliases, and advances `lastKnownUpdatedAt`. A real rejection removes the optimistic projection and restores the prior canonical state. Undo remains bounded and itself passes through all current revision and eligibility checks; Board changes invalidate pending interactions.
+
+Failure codes are now mapped to localized, secret-safe categories for stale calendar state, finalized/locked publication, permission loss, schedule conflict, invalid temporal input, missing post, and network/storage failure. No caption, token, destination/provider identifier, URL, raw provider response, or node payload is included. Stale state is never silently retried; the existing Refresh action is the explicit recovery.
+
+### Preserved boundaries, deployment, and rollback
+
+The server route, row lock, authorization, strict local date/time/IANA/DST validation, Board and schedule revisions, v2 material fingerprint, editorial-status check, durable publication queries, atomic narrow Board JSON update, and allowlisted response remain unchanged. `node.planningSchedule` is still the only write authority and `schedule: null` the only unschedule command. Scheduling changes no caption, media, approval, publication record, credential, provider job, or provider state, and makes zero provider requests.
+
+Deploy `content-workspace.js`, `app.js`, and `styles.css` together with the focused regression registration. No migration, environment variable, worker, or provider credential is required. Rollback is limited to these browser assets and the regression/workflow registration; do not roll back BW-35.1, rewrite Board JSON, or remove compatible schedules.
+
+### Manual production acceptance
+
+1. Open the Content Calendar with eligible, scheduled, and finalized posts.
+2. Confirm finalized Facebook and LinkedIn posts are locked and expose no Schedule action.
+3. Click Schedule on an eligible unscheduled post.
+4. Confirm the new Tendra One scheduling layer opens.
+5. Select a date/time and save once.
+6. Confirm the post moves without reload.
+7. Drag the post to another Month date.
+8. Confirm the date changes while time/timezone remain unchanged.
+9. Drag an unscheduled backlog post onto a date.
+10. Confirm it uses the default planning time.
+11. Drag a scheduled post back to the backlog.
+12. Confirm direct unscheduling without a confirmation dialog.
+13. Test Undo, then verify an Undo after a stale external change is rejected with refresh guidance.
+14. Confirm browser network activity contains one canonical scheduling PUT per action and no Facebook, LinkedIn, Meta, or other provider request caused by scheduling.

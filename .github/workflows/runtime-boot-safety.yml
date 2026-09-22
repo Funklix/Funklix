@@ -29,6 +29,10 @@ jobs:
         run: npm run check:bw35.2r1
       - name: Check BW-35.2R2 unified Content Calendar
         run: npm run check:bw35.2r2
+      - name: Check BW-35.2R3 direct Content Calendar
+        run: npm run check:bw35.2r3
+      - name: Check BW-35.2R4 scheduling interactions
+        run: npm run check:bw35.2r4
       - name: Check read-only Canonical Brand catalog
         run: node scripts/check-bw1-brand-catalog.js
       - name: Check ephemeral Canonical Brand selection
