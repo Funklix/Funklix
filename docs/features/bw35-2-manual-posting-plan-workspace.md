@@ -212,3 +212,48 @@ Deploy `content-workspace.js`, `app.js`, and `styles.css` together with the focu
 12. Confirm direct unscheduling without a confirmation dialog.
 13. Test Undo, then verify an Undo after a stale external change is rejected with refresh guidance.
 14. Confirm browser network activity contains one canonical scheduling PUT per action and no Facebook, LinkedIn, Meta, or other provider request caused by scheduling.
+
+## 2026-09-23 — BW-35.2R5 fluid and reliable scheduling
+
+### Verified causes
+
+Tracing the real path from `dragstart` through the canonical response with production-shaped invented Facebook, LinkedIn, Instagram, and reordered-list fixtures proved three independent defects. First, the drop path synchronously called the complete Content Workspace renderer and the application writer rendered the complete workspace again before fingerprinting, after reconciliation, and from `finally`; replacing the host tree made the calendar appear inactive and discarded focus/interaction state while one card was saving. Second, different-node writes were allowed to race against the same Board revision, while subsequent calls could retain the revision prepared before an earlier response; the first response advanced visible node data and `lastKnownUpdatedAt`, but racing requests had already dispatched. Third, durable publication rows are necessarily server-authoritative and are not always represented in an older loaded Board node. The browser could therefore correctly consider that snapshot eligible while the locked transaction correctly found a finalized external post. The error text described the server result, but was not itself used as root-cause evidence.
+
+No evidence showed an index-based drag target or adjacent-node fingerprint: drag state and the request both use stable node IDs. No provider reconciliation/refetch is required for a normal move. The fingerprint computation was repeated for unchanged material and contributed avoidable work, although it was not the primary freeze cause.
+
+### Paint and granular update boundary
+
+A valid drop now reserves only its stable card ID, stores the optimistic schedule, moves that existing DOM card directly to the destination, adds a compact localized pending pill, and removes drag capability from that card alone. It does not replace the Content Workspace tree. The code then yields through `requestAnimationFrame` (with a minimal non-browser fallback), proving that optimistic DOM work is scheduled and completed before fingerprinting or network dispatch. Toolbar controls, filters, Details, scrolling, other cards, channel styling, and readable content remain live. Authoritative success or card-scoped rollback performs the normal calendar reconciliation only after that paint boundary. No dimmer, blocking spinner, artificial debounce, provider call, or Board refetch was added.
+
+### Lifecycle-bound mutation coordination and revisions
+
+Canonical server dispatch is serialized behind a Board-lifecycle generation queue because every schedule write shares the Board revision. Each queued operation re-resolves the node by stable ID and revalidates access, eligibility, readiness, editorial status, current canonical schedule revision, material, and lifecycle immediately before dispatch. It then reads the latest `state.lastKnownUpdatedAt`; a successful response advances both the node's authoritative `planningSchedule` (including schedule revision) and that Board revision before the next queued operation runs. Queue failure is caught at the chain boundary so it cannot poison later work, and Board-generation changes discard queued work. Per-card reservations still reject duplicate simultaneous delivery. There is no silent retry after an uncertain outcome.
+
+Undo continues through the same queue and live-node validation. It becomes available only after authoritative success, uses the revisions returned by that success, is invalidated by a newer same-card mutation/Board lifecycle, and on failure reconciles to the latest authoritative schedule rather than installing the older optimistic value.
+
+### Fingerprint and finalized-publication consistency
+
+The v2 browser fingerprint remains computed from the current authoritative Board node, never card text. A bounded 64-entry promise cache is keyed by Board identity, stable node identity, and the exact shared material fingerprint key. Unchanged material shares completed/in-flight work; a material change creates a different key; entries never cross nodes, and failed computations are evicted. Server verification is unchanged.
+
+The established semantic browser lock projector remains the sole calendar/control eligibility rule for editorial and embedded publication shapes. When the locked server transaction discovers a newer durable finalization, the one affected card rolls back and the bounded in-session authoritative lock projection is updated. Its drag and schedule controls disappear on reconciliation, preventing repeated false admission. Facebook and LinkedIn finalized fixtures remain non-draggable; eligible Instagram and LinkedIn fixtures remain eligible. The server row lock, durable post/job lookup, and terminal-state protection are not weakened.
+
+### Diagnostics, failure recovery, deployment, and rollback
+
+Development diagnostics cover drag start, accepted drop, optimistic paint scheduled/completed, fingerprint ready, dispatch, response, reconciliation, and rollback. The fixed schema contains only correlation ID, lifecycle generation, mutation/stage/result categories, bounded elapsed time and queue depth, revision presence, and eligibility category. It cannot contain node/provider IDs, captions, titles, URLs, tokens, request bodies, or object snapshots.
+
+Every failure clears the per-card reservation and optimistic projection deterministically, restores only that card from current authoritative state, preserves unrelated interactions, and leaves the queue usable. A finalized response additionally installs the authoritative lock. Deploy `content-workspace.js`, `app.js`, and `styles.css` together with the R5 regression/workflow registration. There is no migration, environment change, provider credential, or worker. Rollback is limited to the card paint helper, queue/cache/diagnostics, styles, and R5 registration; do not roll back BW-35.1 persistence or rewrite schedules.
+
+### Manual acceptance
+
+1. Open a Board containing several eligible, scheduled, and finalized posts.
+2. Drag an unscheduled post into the current month and confirm it appears immediately with only that card showing Saving.
+3. While saving, use filters, open Details, scroll, and interact with another card.
+4. After success, move the same card again and confirm the second move uses the returned revisions.
+5. Move two different eligible cards quickly and confirm serialized persistence without a stale-Board conflict.
+6. Move a scheduled card in Month and confirm local time/timezone/DST are preserved; in Week confirm the dropped time is used.
+7. Move a card to backlog and confirm direct canonical `schedule: null` unscheduling.
+8. Test Undo after success; then make a newer same-card move and confirm obsolete Undo is unavailable.
+9. Induce a bounded failure and confirm only that card returns to its exact authoritative location and can later move successfully.
+10. Attempt finalized Facebook and LinkedIn cards and confirm no drag or planning controls exist.
+11. Confirm a post finalized between drop and row lock rolls back once and becomes locked.
+12. Confirm network activity has one canonical PUT per dispatched intent, no full Board reload, no duplicates, and no Facebook, LinkedIn, Meta, or other provider request.

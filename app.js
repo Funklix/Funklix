@@ -17138,7 +17138,14 @@ async function requestCanonicalPostingSchedule(boardId, body) {
 // `schedule_rescheduled`, `schedule_removed`, `markUnsaved(); renderContentWorkspace()`.
 // BW-35.1 keeps planning additive but persists it through the server boundary.
 const postingScheduleRequests = new Set();
-async function applyContentWorkspaceSchedule(prepared = {}) {
+const postingScheduleFingerprintCache = new Map();
+let postingScheduleQueueTail = Promise.resolve(), postingScheduleQueueDepth = 0;
+function scheduleMutationDiagnostic(stage,prepared={},started=Date.now(),resultCategory="pending"){window.FunklixContentWorkspace?.scheduleDiagnostic?.(stage,{correlationId:prepared.correlationId,lifecycleGeneration:state.boardLoadGeneration,mutationCategory:prepared.remove?"unschedule":"move",elapsedMs:Date.now()-started,pendingQueueDepth:postingScheduleQueueDepth,revisionCategory:state.lastKnownUpdatedAt?"present":"absent",eligibilityCategory:"eligible",resultCategory});}
+function cachedPostingScheduleFingerprint(node,contract){const materialKey=window.FunklixContentWorkspace.materialFingerprint(node),key=`${state.currentBoardId}|${node.id}|${materialKey}`;if(postingScheduleFingerprintCache.has(key))return postingScheduleFingerprintCache.get(key);const pending=Promise.resolve().then(()=>contract.fingerprint(node));postingScheduleFingerprintCache.set(key,pending);while(postingScheduleFingerprintCache.size>64)postingScheduleFingerprintCache.delete(postingScheduleFingerprintCache.keys().next().value);pending.catch(()=>postingScheduleFingerprintCache.delete(key));return pending;}
+function enqueuePostingScheduleMutation(prepared,work){const generation=state.boardLoadGeneration,queued=postingScheduleQueueTail;postingScheduleQueueDepth=Math.min(32,postingScheduleQueueDepth+1);const run=queued.catch(()=>{}).then(()=>generation===state.boardLoadGeneration?work():({ok:false,reason:"BOARD_CHANGED"}));postingScheduleQueueTail=run.finally(()=>{postingScheduleQueueDepth=Math.max(0,postingScheduleQueueDepth-1)});return run;}
+async function applyContentWorkspaceSchedule(prepared = {}) { return enqueuePostingScheduleMutation(prepared,()=>dispatchContentWorkspaceSchedule(prepared)); }
+async function dispatchContentWorkspaceSchedule(prepared = {}) {
+  const lifecycleGeneration=state.boardLoadGeneration;
   const workspace = window.FunklixContentWorkspace;
   const accountId = state.user?.email || "", boardId = state.currentBoardId || "";
   if (!workspace || state.boardAccess?.canEdit !== true || state.publicBoardToken || !accountId
@@ -17169,19 +17176,26 @@ async function applyContentWorkspaceSchedule(prepared = {}) {
     const resolved = workspace.resolveLocalDateTime(prepared.localDate, prepared.localTime, prepared.timeZone, prepared.disambiguation);
     if (!resolved.ok || resolved.scheduledAtUtc !== prepared.scheduledAtUtc) return { ok: false, reason: "STALE_CONTENT" };
   }
-  postingScheduleRequests.add(node.id); renderContentWorkspace();
+  postingScheduleRequests.add(node.id);
+  const diagnosticStarted=Date.now();
   try {
-    const authoritativeFingerprint = await window.FunklixApprovalMaterialV2?.fingerprint?.(node);
+    const contract=window.FunklixApprovalMaterialV2;
+    const authoritativeFingerprint = contract?.fingerprint ? await cachedPostingScheduleFingerprint(node,contract) : "";
+    scheduleMutationDiagnostic("fingerprint_ready",prepared,diagnosticStarted,"ready");
     if (!/^v2-[0-9a-f]{64}$/.test(authoritativeFingerprint || "")) return { ok:false, reason:"SCHEDULE_FAILED" };
     const schedule = prepared.remove ? null : { localDate:prepared.localDate,localTime:prepared.localTime,timeZone:prepared.timeZone,disambiguation:prepared.disambiguation||"compatible" };
+    scheduleMutationDiagnostic("request_dispatched",prepared,diagnosticStarted,"dispatched");
     const parsed=await requestCanonicalPostingSchedule(boardId,{boardId,nodeId:node.id,schedule,expectedBoardRevision:state.lastKnownUpdatedAt,expectedScheduleRevision:revision,expectedMaterialFingerprint:authoritativeFingerprint,expectedStatus:String(node.status||"")}),raw=parsed.value||{};
+    scheduleMutationDiagnostic("response_received",prepared,diagnosticStarted,parsed.valid?"received":"invalid");
+    if(lifecycleGeneration!==state.boardLoadGeneration||boardId!==state.currentBoardId)return{ok:false,reason:"BOARD_CHANGED"};
     if(!parsed.valid||raw.board_id!==boardId||raw.node_id!==node.id||!['schedule_saved','schedule_removed'].includes(raw.status))return{ok:false,reason:raw.failure_category==='publication_finalized'?'PUBLICATION_FINALIZED':raw.failure_category==='board_revision_conflict'||raw.failure_category==='schedule_revision_conflict'||raw.failure_category==='node_material_conflict'?'SCHEDULE_CONFLICT':raw.failure_category==='board_edit_access_required'||raw.failure_category==='authentication_required'?'ACCESS_REVOKED':raw.failure_category==='node_not_found'||raw.failure_category==='board_not_found'?'NODE_MISSING':raw.failure_category==='schedule_invalid'||raw.failure_category==='request_invalid'?'SCHEDULE_DATE_INVALID':raw.failure_category==='storage_unavailable'?'NETWORK_FAILURE':'SCHEDULE_FAILED'};
     node.planningSchedule=raw.planning_schedule||undefined;if(!raw.planning_schedule)delete node.planningSchedule;
     if(node.social){delete node.social.scheduledDate;delete node.social.scheduledTime;delete node.social.scheduledAt;delete node.social.addedToCalendar;}
     state.lastKnownUpdatedAt=raw.board_revision;
-    updateNodeCard(node);if(state.selectedPrimary===node.id)fillInspector(node);updateListView();renderCalendarView();refreshLastSavedSnapshot();renderContentWorkspace();
+    updateNodeCard(node);if(state.selectedPrimary===node.id)fillInspector(node);updateListView();renderCalendarView();refreshLastSavedSnapshot();
+    scheduleMutationDiagnostic("authoritative_reconciled",prepared,diagnosticStarted,"succeeded");
     return{ok:true,nodeId:node.id,planningSchedule:node.planningSchedule||null,removed:raw.status==='schedule_removed'};
-  } finally { postingScheduleRequests.delete(node.id); renderContentWorkspace(); }
+  } finally { postingScheduleRequests.delete(node.id); }
 }
 
 // BW-31.2 previously guarded `prepared.accessGeneration !== state.boardLoadGeneration`.
