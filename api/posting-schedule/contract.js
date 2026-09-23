@@ -9,24 +9,15 @@ const SCHEDULE_KEYS = ['localDate', 'localTime', 'timeZone', 'disambiguation'];
 const COMMAND_KEYS = ['boardId', 'nodeId', 'schedule', 'expectedBoardRevision', 'expectedScheduleRevision', 'expectedMaterialFingerprint', 'expectedStatus'];
 
 function plain(value) { return !!value && typeof value === 'object' && !Array.isArray(value) && Object.getPrototypeOf(value) === Object.prototype; }
+const boundedTimezone = require('../../timezone-resolver');
 function validTimeZone(value) {
-  if (typeof value !== 'string' || value.length < 1 || value.length > 80 || !/^[A-Za-z0-9_+./-]+$/.test(value)) return false;
-  try { new Intl.DateTimeFormat('en', { timeZone: value }).format(0); return value.includes('/') || value === 'UTC'; } catch (_) { return false; }
+  return typeof value === 'string' && value.length <= 80 && /^[A-Za-z0-9_+./-]+$/.test(value) && (value.includes('/') || value === 'UTC') && boundedTimezone.validTimeZone(value);
 }
 function resolveLocalDateTime(localDate, localTime, timeZone, disambiguation = 'compatible') {
-  const dm = DATE.exec(localDate || ''), tm = TIME.exec(localTime || '');
-  if (!dm || !tm || !validTimeZone(timeZone) || !['compatible', 'earlier', 'later'].includes(disambiguation)) return { ok: false, code: 'schedule_invalid' };
-  const y=+dm[1],mo=+dm[2],d=+dm[3],h=+tm[1],mi=+tm[2];
-  const check=new Date(Date.UTC(y,mo-1,d));
-  if (check.getUTCFullYear()!==y||check.getUTCMonth()!==mo-1||check.getUTCDate()!==d) return { ok:false,code:'schedule_invalid' };
-  const format=new Intl.DateTimeFormat('en-CA',{timeZone,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'});
-  const wanted=`${localDate} ${localTime}`, center=Date.UTC(y,mo-1,d,h,mi), matches=[];
-  for(let offset=-14*60;offset<=14*60;offset+=15){const ms=center-offset*60000;const p=Object.fromEntries(format.formatToParts(ms).map(x=>[x.type,x.value]));if(`${p.year}-${p.month}-${p.day} ${p.hour}:${p.minute}`===wanted)matches.push(ms);}
-  const unique=[...new Set(matches)].sort((a,b)=>a-b);
-  if(!unique.length)return{ok:false,code:'schedule_invalid'};
-  if(unique.length>1&&!['earlier','later'].includes(disambiguation))return{ok:false,code:'schedule_ambiguous'};
-  const ms=disambiguation==='later'?unique[unique.length-1]:unique[0];
-  return { ok:true, scheduledAtUtc:new Date(ms).toISOString(), disambiguation:unique.length>1?disambiguation:'compatible' };
+  if (!['compatible', 'earlier', 'later'].includes(disambiguation) || !validTimeZone(timeZone)) return { ok:false,code:'schedule_invalid' };
+  const result=boundedTimezone.resolveLocalDateTime(localDate,localTime,timeZone,disambiguation);
+  if(result.ok)return result;
+  return {ok:false,code:result.reasonCodes?.includes('LOCAL_TIME_AMBIGUOUS')?'schedule_ambiguous':'schedule_invalid',formatterOperations:result.formatterOperations};
 }
 function validateCommand(body) {
   if (!plain(body) || Object.keys(body).some(k=>!COMMAND_KEYS.includes(k)) || Object.keys(body).length !== COMMAND_KEYS.length) return { ok:false,code:'request_invalid' };

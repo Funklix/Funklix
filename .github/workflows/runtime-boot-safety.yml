@@ -35,6 +35,8 @@ jobs:
         run: npm run check:bw35.2r4
       - name: Check BW-35.2R5 fluid and reliable scheduling
         run: npm run check:bw35.2r5
+      - name: Check BW-35.2R7 emergency stability containment
+        run: npm run check:bw35.2r7
       - name: Check read-only Canonical Brand catalog
         run: node scripts/check-bw1-brand-catalog.js
       - name: Check ephemeral Canonical Brand selection
