@@ -92,6 +92,7 @@
     "check:bw35.2r2": "node scripts/check-bw35-2r2-unified-content-calendar.js",
     "check:bw35.2r3": "node scripts/check-bw35-2r3-direct-content-calendar.js",
     "check:bw35.2r4": "node scripts/check-bw35-2r4-calendar-scheduling-interactions.js",
-    "check:bw35.2r5": "node scripts/check-bw35-2r5-fluid-calendar-scheduling.js"
+    "check:bw35.2r5": "node scripts/check-bw35-2r5-fluid-calendar-scheduling.js",
+    "check:bw35.2r7": "node scripts/check-bw35-2r7-calendar-stability-containment.js"
   }
 }
