@@ -1,0 +1,9 @@
+'use strict';
+const single=require('./contract');
+const VERSION='posting_schedule_batch_v1',MAX_COMMANDS=100;
+const ROOT=['type','board_id','board_revision','client_request_id','commands'];
+const COMMAND=['node_id','expected_schedule_revision','expected_editorial_status','publication_material_fingerprint','schedule'];
+function plain(x){return !!x&&typeof x==='object'&&!Array.isArray(x)&&Object.getPrototypeOf(x)===Object.prototype;}
+function exact(value,keys){return plain(value)&&Object.keys(value).length===keys.length&&Object.keys(value).every(k=>keys.includes(k));}
+function validateBatchCommand(body){if(!exact(body,ROOT)||body.type!==VERSION||!single.UUID.test(body.board_id||'')||typeof body.board_revision!=='string'||body.board_revision.length>64||!Number.isFinite(Date.parse(body.board_revision))||!/^req_[A-Za-z0-9_-]{1,80}$/.test(body.client_request_id||'')||!Array.isArray(body.commands)||!body.commands.length)return{ok:false,code:'request_invalid'};if(body.commands.length>MAX_COMMANDS)return{ok:false,code:'batch_too_large'};const ids=new Set(),commands=[];for(const item of body.commands){if(!exact(item,COMMAND)||ids.has(item.node_id))return{ok:false,code:ids.has(item?.node_id)?'duplicate_node':'request_invalid'};ids.add(item.node_id);const validated=single.validateCommand({boardId:body.board_id,nodeId:item.node_id,schedule:item.schedule,expectedBoardRevision:body.board_revision,expectedScheduleRevision:item.expected_schedule_revision,expectedMaterialFingerprint:item.publication_material_fingerprint,expectedStatus:item.expected_editorial_status});if(!validated.ok)return{ok:false,code:validated.code};commands.push(validated.value);}return{ok:true,value:{type:VERSION,boardId:body.board_id,boardRevision:body.board_revision,clientRequestId:body.client_request_id,commands}};}
+module.exports={VERSION,MAX_COMMANDS,validateBatchCommand};

@@ -41,6 +41,8 @@ jobs:
         run: npm run check:bw35.2r8
       - name: Check BW-35.2R9 Content Calendar visual system
         run: npm run check:bw35.2r9
+      - name: Check BW-35.3 deterministic automatic planning
+        run: npm run check:bw35.3
       - name: Check read-only Canonical Brand catalog
         run: node scripts/check-bw1-brand-catalog.js
       - name: Check ephemeral Canonical Brand selection

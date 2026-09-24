@@ -95,6 +95,7 @@
     "check:bw35.2r5": "node scripts/check-bw35-2r5-fluid-calendar-scheduling.js",
     "check:bw35.2r7": "node scripts/check-bw35-2r7-calendar-stability-containment.js",
     "check:bw35.2r8": "node scripts/check-bw35-2r8-simplified-calendar-architecture.js",
-    "check:bw35.2r9": "node scripts/check-bw35-2r9-content-calendar-visual-system.js"
+    "check:bw35.2r9": "node scripts/check-bw35-2r9-content-calendar-visual-system.js",
+    "check:bw35.3": "node scripts/check-bw35-3-deterministic-automatic-planning.js"
   }
 }
