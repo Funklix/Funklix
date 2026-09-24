@@ -17112,6 +17112,7 @@ function renderContentWorkspace() {
     onTransitionComplete: nodeId => { contentWorkspaceFocusNodeId = nodeId; },
     onFocusRestored: nodeId => { if (contentWorkspaceFocusNodeId === nodeId) contentWorkspaceFocusNodeId = ""; },
     onSchedule: applyContentWorkspaceSchedule,
+    onScheduleBatch: dispatchAutomaticPlanningBatch,
     onPublishPreflight: preflightLinkedInPublish,
     onPublish: publishLinkedInNow,
     onPublishStatus: readLinkedInPublicationStatus,
@@ -17126,6 +17127,18 @@ function renderContentWorkspace() {
       if (openInspector) synchronizeAppShell({ view: "board", forceInspectorOpen: true });
     }
   });
+}
+
+async function dispatchAutomaticPlanningBatch(prepared={}){
+  const boardId=state.currentBoardId||"",generation=state.boardLoadGeneration;
+  if(state.boardAccess?.canEdit!==true||state.publicBoardToken||state.isDirty||prepared.boardRevision!==state.lastKnownUpdatedAt||prepared.lifecycleGeneration!==publishingLifecycleGeneration)return{ok:false,reason:"BOARD_CHANGED"};
+  if(!Array.isArray(prepared.commands)||!prepared.commands.length||prepared.commands.length>100)return{ok:false,reason:"BATCH_INVALID"};
+  const contract=window.FunklixApprovalMaterialV2,commands=[];
+  for(const item of prepared.commands){const node=getNode(item.nodeId);if(!node)return{ok:false,reason:"NODE_MISSING"};const fingerprint=contract?.fingerprint?await contract.fingerprint(node):"";if(!/^v2-[0-9a-f]{64}$/.test(fingerprint))return{ok:false,reason:"FINGERPRINT_CONFLICT"};commands.push({node_id:item.nodeId,expected_schedule_revision:item.expectedScheduleRevision,expected_editorial_status:String(node.status||""),publication_material_fingerprint:fingerprint,schedule:item.schedule?{localDate:item.schedule.localDate,localTime:item.schedule.localTime,timeZone:item.schedule.timeZone,disambiguation:item.schedule.disambiguation||"compatible"}:null});}
+  if(generation!==state.boardLoadGeneration||boardId!==state.currentBoardId||prepared.boardRevision!==state.lastKnownUpdatedAt)return{ok:false,reason:"BOARD_CHANGED"};
+  const priorSchedules=new Map(commands.map(command=>{const prior=getNode(command.node_id)?.planningSchedule;return[command.node_id,prior?{localDate:prior.localDate,localTime:prior.localTime,timeZone:prior.timeZone,disambiguation:prior.disambiguation}:null];}));
+  const clientRequestId=`req_autoplan_${Date.now().toString(36)}`,response=await globalThis["fetch"](`/api/boards/${encodeURIComponent(boardId)}/posting-schedule/batch`,{method:"PUT",credentials:"same-origin",headers:{"content-type":"application/json","x-request-id":clientRequestId},body:JSON.stringify({type:"posting_schedule_batch_v1",board_id:boardId,board_revision:state.lastKnownUpdatedAt,client_request_id:clientRequestId,commands})}).catch(()=>null);
+  if(!response)return{ok:false,reason:"NETWORK_UNCERTAINTY"};const parsed=await readAuthoritativeJson(response),raw=parsed.value||{};if(!parsed.valid||raw.status!=="posting_schedule_batch_applied"||!Array.isArray(raw.schedules)||raw.schedules.length!==commands.length)return{ok:false,reason:raw.failure_category||"BATCH_FAILED"};const byId=new Map(raw.schedules.map(x=>[x.node_id,x]));if(commands.some(x=>!byId.has(x.node_id)))return{ok:false,reason:"IDENTITY_MISMATCH"};for(const command of commands){const node=getNode(command.node_id),item=byId.get(command.node_id);node.planningSchedule=item.planning_schedule||undefined;if(!item.planning_schedule)delete node.planningSchedule;if(node.social){delete node.social.scheduledDate;delete node.social.scheduledTime;delete node.social.scheduledAt;delete node.social.addedToCalendar;}}state.lastKnownUpdatedAt=raw.board_revision;refreshLastSavedSnapshot();return{ok:true,boardRevision:raw.board_revision,schedules:raw.schedules.map(x=>({nodeId:x.node_id,planningSchedule:x.planning_schedule,scheduleRevision:x.schedule_revision})),undo:{batch:true,boardRevision:raw.board_revision,lifecycleGeneration:publishingLifecycleGeneration,commands:raw.schedules.map(x=>({nodeId:x.node_id,schedule:priorSchedules.get(x.node_id),expectedScheduleRevision:x.schedule_revision}))}};
 }
 
 async function requestCanonicalPostingSchedule(boardId, body) {
