@@ -339,3 +339,33 @@ Deploy `content-calendar-architecture.js`, `timezone-resolver.js`, `content-work
 Rollback must revert the R8 browser bundle together; do not roll back BW-35.1 canonical persistence or R7 timezone containment and do not rewrite Board JSON. A rollback restores the former bounded R7 queue but does not require database work.
 
 Production acceptance covers Month with scheduled/backlog/locked posts; immediate single-overlay placement; a second same-post move using returned revisions; two rapid posts showing active plus latest only; removal of superseded queued presentation; isolated controlled rollback followed by a successful move; quick-sheet time change; backlog unschedule; Undo; Details during save; filter/view switching; Board switching during pending work; and absence of duplicates, stuck state, freezes, or provider requests. Browser network inspection must show only canonical posting-schedule PUTs. Scheduling performs zero Facebook, LinkedIn, Meta, or other provider requests and zero real social-media mutations.
+
+## 2026-09-24 — BW-35.2R9 visual system and post previews
+
+### Shared channel identity and card hierarchy
+
+The Calendar now owns one dependency-free channel projection in `content-calendar-visuals.js`. It canonicalizes only persisted LinkedIn, Instagram, Facebook, X/Twitter, and TikTok values, with a Tendra purple unknown fallback. Repository-owned inline SVG uses `currentColor`; visible labels or bounded accessible names accompany icons, so color is never the sole identity. Each projection supplies light/dark accent, surface, and border values. No icon package, CDN, provider API, credential, or provider identifier is involved.
+
+Month cards are fixed, compact summaries: icon and local time, a two-line title beside a reserved 44px preview, then one compact approval/readiness or scheduling state. They never include captions, destinations, timezone prose, or publication explanations. Week cards add a bounded two-line caption. List rows add channel, date/time, 72px media, caption, approval, readiness, planning state, safe destination, Details, and an authorized scheduling action. Backlog cards use a balanced handle/60px-preview/summary/actions layout, visible channel label, two-line caption, and 44px actions; locked cards remain fully readable and omit mutation controls.
+
+### Safe media boundary
+
+Social Media Posting `images` records remain the only media source. The model has no favorite/selected field, so the preview is the latest safe image by numeric `createdAt`, with Board order as a deterministic tie-breaker. Explicit non-image records are excluded. URLs must be established same-origin paths or HTTPS, must contain no URL credentials, and must not contain credential-bearing query keys. The renderer escapes the allowlisted URL, emits no HTML from content, uses fixed dimensions, `object-fit`, lazy loading and async decoding, and caps the additional-media badge at `+99`. There is no fabricated image, provider request, retry, timer, or mutation.
+
+A failed image hides itself and exposes the already-rendered channel-tinted fallback. This local `onerror` class change neither rebuilds the indexed projection nor enters the scheduling writer. The drawer uses the same selected safe source in a bounded 16:9 preview and preserves caption paragraphs, Unicode, hashtags, and URLs as escaped text.
+
+### Responsive, theme, and accessibility behavior
+
+Current day has a high-visibility inset marker; weekends and out-of-month dates use distinct readable surfaces; selected drop targets have a strong dashed treatment. Dark-mode channel equivalents stay restrained. Forced-colors rules restore system borders and icon color, reduced-motion disables pending animation, and focus continues to use the design-system ring. On phones, the established preference moves first-time Month users to List; compact Month can also collapse to one column, backlog stacks, the drawer is full-screen, actions remain 44px, and horizontal overflow is removed. Touch scheduling is independent of drag.
+
+The channel filter presents icon, localized label, count, and keyboard-operable pressed state. Compact pending/queued updates retain polite status semantics. Locked reason text is available beside a local lock SVG. Full-card detail activation does not contain mutation controls; List and backlog actions are sibling buttons.
+
+### Performance and architecture boundary
+
+R9 is presentation-only above R8's immutable snapshot, memoized indexed projection, bounded per-node overlay, active-plus-latest writer, and single reconciliation path. Media selection occurs while projecting each node once. Image load/error changes only the image element and fallback class: it cannot update the Board snapshot, projection cache, overlay, writer, or schedule. Delegated drag listeners, constant-time dragover, timezone ceilings, optimistic rollback, Undo, publication locks, and provider isolation remain unchanged.
+
+### Deployment, rollback, and manual acceptance
+
+Deploy `content-calendar-visuals.js`, `content-workspace.js`, `styles.css`, `index.html`, the R9 regression, package registration, and Runtime Boot Safety registration together. No migration, environment variable, dependency, provider connection, build step, or data rewrite is required. Roll back this bundle together while retaining BW-35.1 persistence and R7/R8 architecture.
+
+Manual acceptance uses one Board containing LinkedIn, Instagram, Facebook, X, TikTok, and unknown fixtures. In light, dark, forced-color, desktop, tablet, and mobile modes verify recognizable icons, compact Month cards without captions, stable valid-image previews, intentional no-media/unsafe/broken fallbacks, bounded `+N`, readable locked posts without scheduling controls, progressive Week/List detail, full drawer caption/media, labeled filter counts, keyboard and touch Schedule/Move, and no horizontal overflow. Repeat 20 successful/failed/cancelled scheduling operations plus Board switch/remount; confirm one card per ID, no freeze/layout corruption/listener growth, idle writer and empty overlay. Network inspection must show only accepted canonical Board scheduling PUTs: zero Facebook, LinkedIn, Meta, CDN, or other provider requests and zero real social-media mutations.
