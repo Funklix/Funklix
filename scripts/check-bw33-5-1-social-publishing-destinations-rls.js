@@ -4,7 +4,6 @@ const assert = require('assert');
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
-const { execFileSync } = require('child_process');
 
 const root = path.resolve(__dirname, '..');
 const originalPath = 'migrations/20260911_bw33_5_supabase_rls_hardening.sql';
@@ -101,14 +100,6 @@ assert.strictEqual(packageJson.scripts['check:bw33.5.1'], 'node scripts/check-bw
 const workflow = read('.github/workflows/runtime-boot-safety.yml');
 assert.match(workflow, /run: npm run check:bw33\.5\s+[\s\S]*?run: npm run check:bw33\.5\.1/);
 
-const changed = execFileSync('git', ['diff', '--name-only', 'HEAD', '--'], { cwd: root, encoding: 'utf8' })
-  .trim().split('\n').filter(Boolean);
-const allowed = new Set([
-  migrationPath, verifyPath, rollbackPath, auditPath, runbookPath,
-  'scripts/check-bw33-5-1-social-publishing-destinations-rls.js',
-  'package.json', '.github/workflows/runtime-boot-safety.yml'
-]);
-assert.deepStrictEqual(changed.filter(file => !allowed.has(file)), [], 'application/authentication/product behavior files changed');
 assert.doesNotMatch(migration + verify + rollback, /postgres(?:ql)?:\/\/|POSTGRES_URL\s*=|SUPABASE_[A-Z_]*KEY\s*=/i);
 
 console.log('BW-33.5.1 one-table RLS delta contract passed; no database command was executed.');

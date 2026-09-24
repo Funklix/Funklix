@@ -17084,6 +17084,7 @@ function renderContentWorkspace() {
     language: state.uiLanguage,
     identity,
     boardId: state.currentBoardId || "",
+    boardRevision: state.lastKnownUpdatedAt || "",
     boardName: state.currentBoardName || uiText("Current Board"),
     accountId: state.user?.email || "",
     accessGeneration: state.boardLoadGeneration,
@@ -17139,12 +17140,10 @@ async function requestCanonicalPostingSchedule(boardId, body) {
 // BW-35.1 keeps planning additive but persists it through the server boundary.
 const postingScheduleRequests = new Set();
 const postingScheduleFingerprintCache = new Map();
-let postingScheduleQueueTail = Promise.resolve(), postingScheduleQueueDepth = 0;
-const POSTING_SCHEDULE_QUEUE_MAX=8,postingScheduleIntentKeys=new Set();
+let postingScheduleQueueDepth = 0;
 function scheduleMutationDiagnostic(stage,prepared={},started=Date.now(),resultCategory="pending"){window.FunklixContentWorkspace?.scheduleDiagnostic?.(stage,{correlationId:prepared.correlationId,lifecycleGeneration:state.boardLoadGeneration,mutationCategory:prepared.remove?"unschedule":"move",elapsedMs:Date.now()-started,pendingQueueDepth:postingScheduleQueueDepth,revisionCategory:state.lastKnownUpdatedAt?"present":"absent",eligibilityCategory:"eligible",resultCategory});}
 function cachedPostingScheduleFingerprint(node,contract){const materialKey=window.FunklixContentWorkspace.materialFingerprint(node),key=`${state.currentBoardId}|${node.id}|${materialKey}`;if(postingScheduleFingerprintCache.has(key))return postingScheduleFingerprintCache.get(key);const pending=Promise.resolve().then(()=>contract.fingerprint(node));postingScheduleFingerprintCache.set(key,pending);while(postingScheduleFingerprintCache.size>64)postingScheduleFingerprintCache.delete(postingScheduleFingerprintCache.keys().next().value);pending.catch(()=>postingScheduleFingerprintCache.delete(key));return pending;}
-function enqueuePostingScheduleMutation(prepared,work){const generation=state.boardLoadGeneration,key=JSON.stringify([generation,prepared.nodeId,prepared.remove===true,prepared.localDate||"",prepared.localTime||"",prepared.timeZone||"",prepared.disambiguation||""]);if(postingScheduleIntentKeys.has(key))return Promise.resolve({ok:false,reason:"SCHEDULE_PENDING"});if(postingScheduleQueueDepth>=POSTING_SCHEDULE_QUEUE_MAX)return Promise.resolve({ok:false,reason:"SCHEDULE_QUEUE_FULL"});postingScheduleIntentKeys.add(key);const queued=postingScheduleQueueTail;postingScheduleQueueDepth+=1;const yieldTurn=()=>new Promise(resolve=>setTimeout(resolve,0));const run=queued.catch(()=>{}).then(yieldTurn).then(()=>generation===state.boardLoadGeneration?work():({ok:false,reason:"BOARD_CHANGED"}));postingScheduleQueueTail=run.catch(()=>{}).finally(()=>{postingScheduleIntentKeys.delete(key);postingScheduleQueueDepth=Math.max(0,postingScheduleQueueDepth-1)});return run;}
-async function applyContentWorkspaceSchedule(prepared = {}) { return enqueuePostingScheduleMutation(prepared,()=>dispatchContentWorkspaceSchedule(prepared)); }
+async function applyContentWorkspaceSchedule(prepared = {}) { return dispatchContentWorkspaceSchedule(prepared); }
 async function dispatchContentWorkspaceSchedule(prepared = {}) {
   const lifecycleGeneration=state.boardLoadGeneration;
   const workspace = window.FunklixContentWorkspace;
@@ -17195,7 +17194,7 @@ async function dispatchContentWorkspaceSchedule(prepared = {}) {
     state.lastKnownUpdatedAt=raw.board_revision;
     updateNodeCard(node);if(state.selectedPrimary===node.id)fillInspector(node);updateListView();renderCalendarView();refreshLastSavedSnapshot();
     scheduleMutationDiagnostic("authoritative_reconciled",prepared,diagnosticStarted,"succeeded");
-    return{ok:true,nodeId:node.id,planningSchedule:node.planningSchedule||null,removed:raw.status==='schedule_removed'};
+    return{ok:true,nodeId:node.id,boardId,boardRevision:raw.board_revision,lifecycleGeneration,planningSchedule:node.planningSchedule||null,removed:raw.status==='schedule_removed'};
   } finally { postingScheduleRequests.delete(node.id); }
 }
 
@@ -17324,6 +17323,7 @@ function renderFunnelSimulator() {
     language: state.uiLanguage,
     identity,
     boardId: state.currentBoardId || "",
+    boardRevision: state.lastKnownUpdatedAt || "",
     boardName: state.currentBoardName || uiText("Current Board"),
     boardRevision: state.lastKnownUpdatedAt || "local",
     brandCore: state.authoritativeBoardBrandCore?.value || state.brandCore,
