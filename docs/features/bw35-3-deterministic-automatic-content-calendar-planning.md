@@ -57,3 +57,58 @@ Use a Board containing eligible unscheduled, scheduled and locked posts. Open Au
 ## Non-goals
 
 CSV export, provider scheduling/publishing, recurrence, automatic publishing, engagement/AI recommendations, provider review work, automatic replanning and modification of publication material or approval state are explicitly excluded.
+
+## BW-35.3R1 — Auto-plan studio presentation repair
+
+### Root-cause analysis
+
+The BW-35.3 studio was emitted by `renderCalendar` as the final child of the Content Calendar section. Although the studio itself used `position: fixed`, it remained owned by the calendar DOM and its stacking context. The calendar toolbar was sticky, the backlog and calendar surfaces had their own layered descendants, and the studio used `z-index: 45` while portal-owned drawers, sheets, and toasts used four- and five-digit layers. This made the result dependent on ancestor stacking contexts and allowed calendar chrome to paint above it. The sheet also began below a hard-coded 72 px offset without a bounded height or a header/body/footer grid. One `overflow:auto` on the complete aside made header and actions scroll away, while its token surface was not explicitly isolated from the backdrop-filtered calendar chrome.
+
+The markup compounded the defect: the detached `Proposed` label preceded the heading; settings, summary, and a complete proposal-card collection shared one undifferentiated grid; weekday controls used a wrapping flex row; date/rhythm controls used unconstrained flex children; and toolbar order placed a minimally styled text action after Display options. Every workspace render replaced the calendar-owned studio node, so lifecycle ownership and focus restoration were implicit rather than reliable. No ancestor transform was required to reproduce the defect, and the markup was syntactically valid; the primary causes were the wrong DOM owner, incompatible layer scales, incomplete height/overflow containment, and insufficiently structured responsive CSS.
+
+### Portal ownership and lifecycle
+
+R1 gives Auto-plan its own `data-calendar-auto-plan-portal` node appended directly to `document.body`. It is distinct from the detail-drawer and quick-scheduling portal nodes. Creation checks `document`, `createElement`, `body`, and `appendChild` capabilities so BW-35.2R3CI bounded document doubles still boot. Cleanup uses the retained portal reference first and only uses selector APIs when supplied; a capable browser additionally removes every stale matching node before mounting the sole current instance.
+
+The Content Workspace owns the portal. Board/access lifecycle changes, reset, unmount, cancel, successful apply, and render failure remove it. Opening Auto-plan closes an active detail drawer or quick-scheduling sheet before mounting. Portal remounts preserve the proposal session and the calendar's authoritative snapshot, projection preferences, current period, filters, and scroll owner. Opening creates no schedule or provider request. Apply still uses exactly the existing single atomic batch command and successful apply still installs the returned authority before closing.
+
+### Desktop, tablet, and mobile behavior
+
+Desktop Auto-plan is a fixed, opaque, isolated 420–480 px right sheet above calendar chrome, backlog, popovers, toasts, and drop targets. Its outer layer ignores pointer events while the sheet accepts them, so the visible calendar remains interactive and no desktop backdrop or focus trap is applied. A three-row grid owns a sticky header, independently scrolling body, and sticky action footer. The trigger is retained and receives focus after Cancel, successful Apply, or Escape.
+
+Tablet uses a wider sheet up to 520 px without squeezing the calendar into a second layout. At 640 px and below, the portal becomes an opaque full-screen modal layer with `100dvh`, safe-area header/footer padding, body scroll locking, bounded horizontal overflow, Escape handling, and a Tab/Shift+Tab focus loop. Cleanup restores the prior body overflow value and trigger focus.
+
+### Toolbar and information hierarchy
+
+Auto-plan is now the primary calendar action: a semantic button with a repository-owned sparkle SVG, filled Tendra gradient, elevation, visible localized label, and a badge capped at 99. Navigation and view controls remain first; Auto-plan is visually stronger than the secondary Filters and Display options controls; timezone remains compact context. On mobile the primary action occupies a full toolbar row without horizontal scrolling. Editors retain a disabled entry plus localized explanation when no unscheduled posts exist; viewers receive no mutation action.
+
+The studio header combines the icon, `Auto-plan` / `Automatisch planen`, supporting copy, compact preview-state badge, and integrated 44 px close control. The body begins with five compact metrics: proposed, eligible, preserved, excluded, and unplaced. Settings are divided into Planning range, Active days, Posting rhythm, and Channels. Dates use two bounded columns and stack on phones. All seven localized weekday toggles use a single seven-column grid, full weekday accessible names, restrained selected styling, and explicit focus treatment. Time slots are bounded chips with removable additional slots; maximum capacity stays inside its grid; minimum spacing is behind progressive disclosure. Channel choices reuse the R9 local icon and accent system with visible labels, counts, and pressed state.
+
+Results contain only compact counts and expandable excluded/unplaced lists—never ordinary backlog cards, thumbnails, captions, Schedule, or Details actions. Regenerate stays in the results heading. The opaque sticky footer always provides Cancel preview and Apply plan; its pending label is contained without changing footer dimensions.
+
+### Proposal preview, accessibility, and layer scale
+
+The existing indexed calendar projection remains singular. While a proposal session exists, its minimal ID-to-schedule map is read as a temporary projection overlay; the immutable Board snapshot is not rebuilt or written. Proposed calendar cards reuse the R9 channel icon/accent and receive a compact Proposed badge plus dashed/dual border, making them distinct from persisted schedules. There is no second calendar or duplicate proposal-card collection in the studio.
+
+Desktop exposes the sheet as a labelled non-modal region and leaves the calendar visible and operable. Mobile supplies modal-equivalent backdrop, focus containment, body scroll lock, and focus restoration. A polite summary live region announces generated counts. Semantic inputs/buttons, full weekday labels, focus-visible outlines, reduced-motion rules, forced-color borders, light/dark surface tokens, safe areas, and no-horizontal-overflow containment are explicit.
+
+The calendar layer scale is centralized in CSS: content `0`, sticky chrome `12`, popovers `30`, toast `10020`, Auto-plan `10040`, quick scheduling `10050`, detail drawer `10060`, and mobile modal `12000`. Auto-plan proactively closes conflicting opaque side sheets; detail and quick-scheduling portals never share its node.
+
+### Deployment, rollback, and manual acceptance
+
+Deploy `content-workspace.js`, `styles.css`, the R1 regression, package script, workflow registration, and this document together. There is no migration, provider configuration, proposal-engine version change, or batch-contract change. Rollback removes the R1 portal/presentation layer and its check while leaving BW-35.1 canonical schedules, BW-35.3 deterministic planning, atomic persistence, and Undo untouched.
+
+Manual acceptance:
+
+1. Open Content Calendar on desktop and confirm Auto-plan is the prominent primary action before the secondary Filters/Display options context.
+2. Open it and confirm an opaque right sheet with no toolbar, backlog, card, or calendar text bleeding through.
+3. Scroll the body independently; confirm the header and Cancel/Apply footer stay visible.
+4. Confirm seven weekdays fit; date, time, capacity, additional-time, and channel controls remain bounded.
+5. Confirm the summary and expandable exception lists do not duplicate full backlog cards.
+6. Continue using the visible calendar, inspect differentiated proposed cards, adjust a proposal, and regenerate without period/filter/scroll resets or writes.
+7. Close with the button and Escape and confirm focus returns to Auto-plan.
+8. Reopen and Apply; inspect the network log for exactly one internal batch request and no provider request.
+9. At mobile width, confirm full-screen presentation, focus containment, body scroll lock, safe-area footer, and no horizontal overflow.
+10. Repeat in English/German, light/dark, reduced motion, and forced colors.
+11. Confirm viewers cannot invoke Auto-plan and an editor with no eligible work sees the disabled explanatory state.
+12. Run the declared Runtime Boot Safety workflow and verify the R1 check immediately follows BW-35.3.
