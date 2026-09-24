@@ -273,3 +273,69 @@ Correlation remains bounded to category data from drag through intent and reconc
 Phase 2 still owns removal of the promise-tail writer, consolidation of the three schedule authorities and numerous transient representations, memoized/keyed Calendar rendering, and broader module extraction. Automatic planning, CSV export, provider scheduling, recurrence, and channel/media redesign remain paused.
 
 Deploy `timezone-resolver.js`, `content-workspace.js`, `app.js`, `styles.css`, and the server contract together. No migration, dependency, worker, environment variable, or provider credential is required. Rollback is limited to this R7 bundle; do not roll back BW-35.1 persistence or rewrite Board JSON. Production acceptance requires 20 alternating successful/failed/cancelled moves plus Board switch and unmount/remount, while confirming responsive controls, one card per stable ID, idle queue, no pending marker, stable listener count, bounded formatter cache, and exactly one canonical scheduling PUT per accepted operation with zero social-provider requests.
+
+## 2026-09-23 — BW-35.2R8 simplified Content Calendar architecture
+
+### Previous architecture and state-authority reduction
+
+R7 intentionally contained, but did not remove, three client-side schedule authorities: mutable Board nodes, `optimisticSchedules`, and physically relocated cards. The same operation was additionally represented by `calendarMutations`, the application `postingScheduleRequests` set, an unbounded promise-tail queue, DOM pending state, drag state, and Undo. Month and Week scanned all scheduled records inside every cell, quick scheduling bypassed the Calendar coordinator, and response completion was split between the application dispatcher and Calendar mutation code.
+
+R8 makes the application Board data the durable-input boundary and creates one immutable, lifecycle-versioned `authoritativeBoardSnapshot` in `renderCore`. That boundary owns Board ID/revision, lifecycle generation, frozen node records (including canonical `planningSchedule`, schedule revision, editorial/publication fields), and access projection. Event handlers retain stable IDs and resolve the node from that snapshot. An accepted response creates a new snapshot with `replaceSnapshotNode`; a failure never changes it. The application dispatcher still performs server-bound fingerprint, authorization, revision, and response-envelope validation, but it no longer queues or coordinates presentation state.
+
+The reduction is:
+
+* schedule authorities: three to one client authority plus the server durable authority;
+* mutable Calendar coordination containers: `optimisticSchedules`, `calendarMutations`, promise-tail/depth/intent set, moved DOM cards, and separate temporary record state to one interaction overlay plus one `{active, latest}` writer;
+* pending representations: five or more to one overlay entry per stable node (with a rendered fixed 14px status slot);
+* write entry points: direct quick-sheet/application and Calendar paths to `applyCalendarMutation` -> `SchedulingWriter.submit`;
+* response completion paths: per-action Calendar completion branches to the writer's one `reconcile` hook.
+
+The bounded legacy `node.social.scheduledDate`, `scheduledTime`, `scheduledAt`, and `addedToCalendar` read fallback remains because persisted pre-BW-35.1 Boards can still contain it. Every write remains exclusively canonical and successful canonical writes clear those aliases. No standalone Posting Plan, retired scheduling modal, DOM relocation, duplicate pending map, promise-tail queue, or provider-scheduling compatibility path remains.
+
+### Extracted module and indexed projection
+
+`content-calendar-architecture.js` is a dependency-free UMD/classic-script module loaded after the timezone resolver and before `content-workspace.js`. It exposes only immutable snapshot creation/replacement, bounded overlay creation, the memoized projection factory, the writer state machine, writer state constants, and schedule-summary normalization. It has no server or DOM dependency and is directly testable in Node.
+
+`createProjectionFactory` caches against the explicit Board identity/revision/generation, period, view, filter, preference, locale, timezone, and overlay version tuple. A rebuild creates read-only stable-ID, local-date, and channel indexes and immutable ordered visible/backlog/locked collections. Month uses the local-date buckets directly. Week performs only a bounded bucket-local hour selection rather than a full-record scan for each of 168 cells. Dragover only reads the frozen drag identity and target transition and cannot invalidate or rebuild the projection. Ordering remains scheduled instant, original Board index, then stable ID.
+
+The overlay stores only stable node ID, lifecycle generation, compact versioned intent, prior/optimistic schedule summaries, stage, bounded correlation category/timestamps, and optional Undo expiry. It excludes nodes, Boards, DOM references, captions/media, credentials, request bodies, and provider responses. Projection rules select exactly one effective placement, so a node cannot appear in backlog and a date, two dates, or scheduled and locked sections.
+
+### Writer state machine, coalescing, and reconciliation
+
+The Board-scoped writer has explicit `idle`, `optimistic`, `preparing`, `sending`, `reconciling`, and `rolling_back` states. It holds one active immutable intent and at most one latest immutable queued intent—never an array or promise tail. Exact duplicates are ignored. A newer queued intent replaces the previous queued intent (including its overlay); the latest same-node intent therefore coalesces, while a different-node intent remains bounded to the same single slot. Active completion reconciles first and only then revalidates the latest intent against the new snapshot. Active failure clears only the active interaction and likewise revalidates the latest intent. Network uncertainty is returned as failure and is never silently retried.
+
+The shared entry point resolves current authority, validates eligibility/temporal input, writes the overlay, renders optimistic projection, yields to the browser, prepares the current fingerprint/request, dispatches once, and calls the single writer reconciliation hook. Drag/drop, the quick sheet, change time, unschedule, and Undo all reach this entry point. Reconciliation rejects missing, malformed, identity-inconsistent, lifecycle-stale, and noncanonical success values. Only that hook replaces the authoritative snapshot. A same-identity finalized response adds the bounded publication-lock projection; Board-revision, schedule-revision, and fingerprint conflicts remain conflicts and are not mislabeled finalized.
+
+Board switches, reset, and unmount invalidate the writer epoch, clear active/queued overlay presentation, clear drag state, and leave the writer idle. Late responses cannot cross that epoch. The delegated host remains the sole Calendar drag binding boundary; rerenders keep the same five host drag properties and unmount returns the Calendar listener ledger to zero. The detail drawer and quick sheet retain their explicit portal lifecycles.
+
+### Removed compatibility paths and safety rationale
+
+* Removed physical card reparenting. Projection plus overlay now determines placement; no DOM location is read as schedule state.
+* Removed `optimisticSchedules` and `calendarMutations`. Their responsibilities are one minimal overlay and writer state.
+* Removed `postingScheduleQueueTail`, the queue cap/depth, and intent-key set. The replacement structurally cannot retain more than active plus latest.
+* Removed direct quick-sheet and library-unschedule calls to the application writer. They now use the shared Calendar writer.
+* Removed nested Month date filtering and Week date filtering. Indexed buckets are produced once per relevant version.
+* Removed duplicate Calendar response-completion branches. One reconciliation hook owns snapshot replacement and rollback.
+* Retired R3/R4/R5/R7 regressions that asserted old implementation tokens; they now assert the preserved behavior or replacement invariant.
+
+The legacy schedule read fallback is deliberately retained as the only verified persisted-data compatibility consumer. Publication and approval compatibility logic is outside this architecture change and remains intact.
+
+### Complexity measurements
+
+Measurements use repository bytes (`wc -c`) and named function declarations (`rg -o 'function …'`). The R6 baseline was `content-workspace.js` 129,090 bytes, 91 named functions, 68 functions in the broad audited Calendar-heavy region, three schedule authorities, at least five pending representations, multiple render/write paths, and one unbounded queue. R8 has `content-workspace.js` 132,464 bytes and 96 named functions because its thin integration/reconciliation adapter is explicit; the extracted pure module is 8,220 bytes and 16 named functions. The focused Calendar scheduling region is 40 named functions rather than 68. Core authority/projection/overlay/writer ownership (16 functions) is no longer in the workspace facade. Runtime containers are one snapshot, one memoized projection, one overlay, one active/latest writer, one preference value, and bounded Undo/feedback. There is one Calendar render projection entry and one scheduling write entry.
+
+The important complexity reduction is runtime state and ownership rather than minified source bytes: the oversized classic workspace remains a future extraction candidate, but it no longer owns the queue, projection cache algorithm, snapshot immutability algorithm, or overlay/writer data structures.
+
+### Preserved R7 containment and historical test boundary
+
+The shared five-probe timezone resolver, ten-`formatToParts` ceiling, formatter cache, constant-time dragover, frozen drag identity, render re-entry guard, listener cleanup, fixed 14px pending slot, reduced-motion treatment, secret-safe diagnostics, identity mismatch ordering, finalized-lock behavior, and browser/server timezone parity remain active. R8's regression repeats the bounded resolver assertion and 20-operation idle/zero-overlay/unique-record stress.
+
+The BW-33.5 and BW-33.5.1 checks incorrectly inspected the current working-tree diff and required every future change to remain inside their historical migration-only scope. Their boundary now validates the migration/rollback/verification artifacts, original migration hash, exact table inventory, SQL safety, runtime schema inventory, documentation, and workflow order without treating unrelated later tracked product work as part of the historical migration. No migration invariant was removed, no current file is hardcoded as an exception, and tracked-files-only checkouts are deterministic.
+
+### Deployment, rollback, and production acceptance
+
+Deploy `content-calendar-architecture.js`, `timezone-resolver.js`, `content-workspace.js`, `app.js`, `index.html`, and the regression registration together. The classic loading order is explicit. There is no framework, dependency, build step, migration, environment variable, worker, provider credential, provider schedule, or automatic publication change.
+
+Rollback must revert the R8 browser bundle together; do not roll back BW-35.1 canonical persistence or R7 timezone containment and do not rewrite Board JSON. A rollback restores the former bounded R7 queue but does not require database work.
+
+Production acceptance covers Month with scheduled/backlog/locked posts; immediate single-overlay placement; a second same-post move using returned revisions; two rapid posts showing active plus latest only; removal of superseded queued presentation; isolated controlled rollback followed by a successful move; quick-sheet time change; backlog unschedule; Undo; Details during save; filter/view switching; Board switching during pending work; and absence of duplicates, stuck state, freezes, or provider requests. Browser network inspection must show only canonical posting-schedule PUTs. Scheduling performs zero Facebook, LinkedIn, Meta, or other provider requests and zero real social-media mutations.
