@@ -112,3 +112,53 @@ Manual acceptance:
 10. Repeat in English/German, light/dark, reduced motion, and forced colors.
 11. Confirm viewers cannot invoke Auto-plan and an editor with no eligible work sees the disabled explanatory state.
 12. Run the declared Runtime Boot Safety workflow and verify the R1 check immediately follows BW-35.3.
+
+## BW-35.3R2 — Apply transaction and session persistence repair
+
+### Verified root cause and ruled-out hypotheses
+
+Repository tracing established a two-part client defect. First, the active proposal object owned only the planner result, while every edited date, weekday, time, capacity, spacing, and channel value lived only in portal inputs. `applyAutomaticPlanning` set `pending` and immediately called the workspace renderer. R1 correctly rebuilt the body portal on that render, but `renderPlanningStudio` repopulated it from the original `p.result.settings`; therefore the visible fields jumped to defaults before preflight. Regenerate happened to scrape the old portal immediately, but Apply did not, so configuration had no durable session owner.
+
+Second, the prior Apply path treated an optional callback and a loosely shaped success object as sufficient authority. It had no guarded exception boundary, no post-await Board-lifecycle check, incomplete response identity/revision validation, and no in-studio failure state. A rejection or malformed/obsolete response could consequently become silent, while the pending render had already erased DOM-only edits. The Apply button itself was `type="button"` and had a direct listener, so a missing listener and native submission were ruled out as primary causes. The server already used one row lock, one transaction, strict fingerprints/revisions, and rollback; no database or server atomicity defect was found. The R1 portal ownership and CSS design were also not causes.
+
+The historical R1 regression used `[^}]+` between successful session clearing and portal cleanup. R2 diagnostics legitimately insert bounded object literals there, so that scope-only assertion now uses a non-greedy cross-line match. Its actual ordering assertion remains unchanged.
+
+### Corrected ownership and state machine
+
+The proposal session wrapper is now the single explicit owner of normalized `settings`, the generated result/session, `pending`, bounded `status`, and localized `error`. Defaults are created only by `openAutomaticPlanning` for a new proposal. Every control change copies normalized values into session settings; portal and calendar renders read those settings rather than the DOM or the original result. Regeneration consumes the owned settings and atomically replaces the generated proposal. Apply captures and validates the last rendered values at its boundary before entering pending state. Recoverable failure retains settings and proposal; cancel, success, Board/access lifecycle invalidation, reset, and unmount clear them deliberately.
+
+The bounded Apply states are `ready → preparing → applying → success`, with `failure` returning to an enabled attempt and `stale` requiring regeneration. The direct portal listener prevents default and propagation, the portal also prevents native submit, and the synchronous `pending` guard makes rapid clicks single-flight. Preparing/applying keep the proposal overlay and cards mounted, expose an item-count progress label through a polite live region, preserve footer dimensions, block Escape cleanup while pending, and use reduced-motion-safe token styling. Disabled Apply exposes a localized explanation.
+
+### Exact preflight and transaction boundary
+
+Immediately before dispatch the client verifies the current immutable snapshot's Board identity, revision, lifecycle generation, access, and every proposal identity. Each node is re-resolved by stable ID from current authority; scheduling eligibility, absence of an intervening schedule, editorial status, and proposal/result settings freshness are checked. Any missing or changed item rejects the whole proposal as stale—commands are never silently filtered. The App boundary then re-resolves every node from current application authority and computes each v2 publication-material fingerprint from that current node.
+
+Exactly one strict `posting_schedule_batch_v1` PUT is sent for Apply and exactly one for complete-plan Undo. It carries the Board revision plus every proposal command's node identity, expected schedule revision/editorial status, current fingerprint, and canonical local date, local time, IANA timezone, and DST disambiguation. There is no per-post request and no Board refetch.
+
+### Response validation and reconciliation
+
+The authoritative route now echoes the validated Board identity. Before any client mutation, the App validates lifecycle/Board continuity, response contract, Board identity, changed Board revision, requested/updated counts, unique and complete node identities, exact schedule-revision advancement, and returned canonical schedule fields. The workspace independently validates the identity-complete schedule set and revision advancement. Only then does it construct and install the next immutable R8 Board snapshot, one node replacement at a time under the returned Board revision. Month, Week, and List therefore read the same reconciled snapshot; scheduled/unscheduled counts update in the same render. Proposal overlays and the Auto-plan portal are removed only after validation and reconciliation. The localized toast includes the applied count, and Undo retains every returned authoritative revision and uses one atomic batch.
+
+### Failure and lifecycle preservation
+
+Network, storage, permissions, publication lock, stale revision, temporal conflict, identity mismatch, malformed response, and unexpected client failures map to bounded categories. Failure restores Apply, keeps the portal open, retains all settings, and preserves the proposal unless authority proves it stale. Identity mismatch is not classified as publication lock. No response mutates partial authority: response validation precedes the mutation loop. A late response checks both retained context identity and Board generation and cannot affect a newly opened Board. Portal cleanup remains scoped to `data-calendar-auto-plan-portal`, idempotent, focus-restoring, body-scroll-safe, and separate from drawer/quick-scheduling portals.
+
+### Diagnostics and privacy
+
+Allowlisted stages cover click receipt, preflight start/completion, fingerprint preparation start/completion, batch dispatch, response receipt/validation, immutable reconciliation, bounded failure, and portal cleanup. Records include only stage, bounded error category, count, lifecycle generation, and a sanitized correlation identifier. Captions, media URLs, destinations, fingerprints, tokens, provider payloads, and request/response bodies are never logged.
+
+### Deployment, rollback, and manual acceptance
+
+Deploy the workspace, App dispatcher, authoritative route, state CSS, regression, Runtime Boot Safety registration, and this document together. No migration, provider configuration, dependency, or build change is required. Rollback those R2 files as one unit; already persisted canonical schedules remain compatible.
+
+Manual acceptance:
+
+1. Open a writable Board in each calendar view; open Auto-plan and change dates, weekdays, two custom times, capacity, spacing, and channels.
+2. Regenerate, navigate/rerender the calendar, and confirm every setting and proposal survives.
+3. Apply once and rapidly double-click; confirm one internal batch PUT, stable count-based progress, retained overlay while pending, then immediate Month/Week/List schedules and counts.
+4. Confirm the portal closes only after reconciliation, the success toast reports the exact count, and complete-plan Undo sends one atomic PUT.
+5. Repeat with offline/server failure; confirm the studio, proposal, settings, focus/scroll ownership, and enabled retry remain.
+6. Force Board revision conflict and confirm explicit regenerate feedback; return malformed/identity-mismatched authority and confirm no client authority changes and no publication-lock wording.
+7. Switch Boards while a response is pending and confirm the late response cannot mutate the new Board.
+8. Repeat in English/German, dark/light mode, mobile, keyboard-only, and reduced motion.
+9. Inspect network traffic and confirm zero Facebook, LinkedIn, Meta, CDN, or other provider requests and zero real publication mutations.
