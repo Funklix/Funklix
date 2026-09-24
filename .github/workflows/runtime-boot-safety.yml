@@ -45,6 +45,8 @@ jobs:
         run: npm run check:bw35.3
       - name: Check BW-35.3R1 Auto-plan studio and primary action
         run: npm run check:bw35.3r1
+      - name: Check BW-35.3R2 Auto-plan apply and session persistence
+        run: npm run check:bw35.3r2
       - name: Check read-only Canonical Brand catalog
         run: node scripts/check-bw1-brand-catalog.js
       - name: Check ephemeral Canonical Brand selection
