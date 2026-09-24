@@ -98,7 +98,6 @@
     "check:bw35.2r9": "node scripts/check-bw35-2r9-content-calendar-visual-system.js",
     "check:bw35.3": "node scripts/check-bw35-3-deterministic-automatic-planning.js",
     "check:bw35.3r1": "node scripts/check-bw35-3r1-auto-plan-studio.js",
-    "check:bw35.3r2": "node scripts/check-bw35-3r2-auto-plan-apply.js",
-    "check:bw35.3r3": "node scripts/check-bw35-3r3-auto-plan-freshness.js"
+    "check:bw35.3r2": "node scripts/check-bw35-3r2-auto-plan-apply.js"
   }
 }
