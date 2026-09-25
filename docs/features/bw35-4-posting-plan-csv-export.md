@@ -1,5 +1,7 @@
 # BW-35.4 — Posting Plan preview and CSV export
 
+> **PDF extension:** BW-35.4R1 adds a presentation-ready, browser-native Posting Plan PDF preview and print workflow while preserving this CSV v1 contract. See [BW-35.4R1 Posting Plan PDF export](./bw35-4r1-posting-plan-pdf-export.md).
+
 ## User flow and scope
 
 The unified Content Calendar keeps **Auto-plan** primary and places **Export plan** beside it. Export opens a dedicated review studio; it never downloads immediately. Its compact summary and content-first cards cover every exact `Social Media Posting` node in the current authoritative Board, independent of Calendar filters. Cards retain complete plain-text captions, paragraphs, channel visuals, schedule, approval/readiness/publication state, safe destination/link indicators, and the existing safe-media preview/fallback. Non-post nodes and unavailable material remain counted with a bounded reason rather than disappearing.

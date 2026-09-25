@@ -55,6 +55,8 @@ jobs:
         run: npm run check:bw35.3r5
       - name: Check BW-35.4 safe Posting Plan CSV export
         run: npm run check:bw35.4
+      - name: Check BW-35.4R1 visual Posting Plan PDF export
+        run: npm run check:bw35.4r1
       - name: Check read-only Canonical Brand catalog
         run: node scripts/check-bw1-brand-catalog.js
       - name: Check ephemeral Canonical Brand selection
