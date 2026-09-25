@@ -100,6 +100,7 @@
     "check:bw35.3r1": "node scripts/check-bw35-3r1-auto-plan-studio.js",
     "check:bw35.3r2": "node scripts/check-bw35-3r2-auto-plan-apply.js",
     "check:bw35.3r3": "node scripts/check-bw35-3r3-auto-plan-freshness.js",
-    "check:bw35.3r4": "node scripts/check-bw35-3r4-auto-plan-batch-runtime.js"
+    "check:bw35.3r4": "node scripts/check-bw35-3r4-auto-plan-batch-runtime.js",
+    "check:bw35.3r5": "node scripts/check-bw35-3r5-auto-plan-production-evidence.js"
   }
 }
