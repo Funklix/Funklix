@@ -1,6 +1,6 @@
 'use strict';
 const assert=require('assert'),fs=require('fs'),planning=require('../automatic-planning'),batch=require('../api/posting-schedule/batch-contract');
-const workspace=fs.readFileSync('content-workspace.js','utf8'),service=fs.readFileSync('api/posting-schedule/batch-service.js','utf8'),route=fs.readFileSync('api/boards/[id]/posting-schedule/batch.js','utf8'),app=fs.readFileSync('app.js','utf8'),css=fs.readFileSync('styles.css','utf8'),workflow=fs.readFileSync('.github/workflows/runtime-boot-safety.yml','utf8'),pkg=require('../package.json');
+const workspace=fs.readFileSync('content-workspace.js','utf8'),service=fs.readFileSync('api/posting-schedule/batch-service.js','utf8'),route=fs.readFileSync('api/boards/[id]/posting-schedule-batch.js','utf8'),app=fs.readFileSync('app.js','utf8'),css=fs.readFileSync('styles.css','utf8'),workflow=fs.readFileSync('.github/workflows/runtime-boot-safety.yml','utf8'),pkg=require('../package.json');
 const BOARD='00000000-0000-4000-8000-000000000353',R1='2032-03-01T10:00:00.000Z',R2='2032-03-01T10:01:00.000Z';
 const settings={version:planning.VERSION,startDate:'2032-03-01',endDate:'2032-03-21',weekdays:[1,3,5],times:['09:15'],maxPerDay:1,minimumSpacingMinutes:30,channels:[],timeZone:'Europe/Berlin',disambiguation:'compatible'};
 const schedule={localDate:'2032-03-08',localTime:'12:00',timeZone:'Europe/Berlin',disambiguation:'compatible',scheduledAtUtc:'2032-03-08T11:00:00.000Z',scheduleRevision:4};

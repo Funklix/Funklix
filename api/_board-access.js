@@ -110,8 +110,9 @@ function accessForRole(role) {
   };
 }
 
-async function getBoardAccess(boardId, user, { columns = '*' } = {}) {
-  const result = await pool.query(
+async function getBoardAccess(boardId, user, { columns = '*', client = pool } = {}) {
+  const db = client;
+  const result = await db.query(
     `SELECT ${columns}${columns.trim() === '*' || /(^|,)\s*brand_id\s*(,|$)/.test(columns) ? '' : ', brand_id'} FROM boards WHERE id = $1 LIMIT 1`,
     [boardId]
   );
@@ -125,10 +126,15 @@ async function getBoardAccess(boardId, user, { columns = '*' } = {}) {
   } else if (isUnowned && user?.email) {
     role = 'unowned';
   } else {
-    const membershipRole = await getBoardMembershipRole(boardId, user);
+    const email = normalizeEmail(user?.email);
+    const membership = email ? await db.query(
+      `SELECT role FROM board_editors WHERE board_id = $1 AND email = $2 AND role IN ('editor', 'viewer') LIMIT 1`,
+      [boardId, email]
+    ) : { rows: [] };
+    const membershipRole = membership.rows[0]?.role || null;
     let brandRole = null;
     if (board.brand_id && normalizeEmail(user?.email)) {
-      const brand = await pool.query(`SELECT CASE WHEN owner_email = $2 THEN 'owner' ELSE bm.role END AS role
+      const brand = await db.query(`SELECT CASE WHEN owner_email = $2 THEN 'owner' ELSE bm.role END AS role
         FROM brands b LEFT JOIN brand_members bm ON bm.brand_id = b.id AND bm.email = $2
         WHERE b.id = $1 AND (b.owner_email = $2 OR bm.role IN ('admin','editor','viewer')) LIMIT 1`, [board.brand_id, normalizeEmail(user.email)]);
       brandRole = brand.rows[0]?.role || null;
