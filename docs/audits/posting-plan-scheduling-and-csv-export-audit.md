@@ -569,3 +569,7 @@ Every phase must run existing BW-31.4, BW-32.3.x, BW-34.1.x/2a checks and browse
 8. Must published historical rows be exportable, and if so is the permalink included in a later CSV version?
 
 Until answered, implementations must expose “unavailable/selectable” states rather than infer policy.
+
+## Implementation status
+
+BW-35.4 implements the Phase 4 browser-only Posting Plan preview and safe CSV v1 export. See `docs/features/bw35-4-posting-plan-csv-export.md`; this note does not alter the audit's historical findings.
