@@ -162,3 +162,40 @@ Manual acceptance:
 7. Switch Boards while a response is pending and confirm the late response cannot mutate the new Board.
 8. Repeat in English/German, dark/light mode, mobile, keyboard-only, and reduced motion.
 9. Inspect network traffic and confirm zero Facebook, LinkedIn, Meta, CDN, or other provider requests and zero real publication mutations.
+
+## BW-35.3R3 — semantic freshness and safe rebasing
+
+### Verified root cause
+
+The production failure was reproduced deterministically in the browser-side Apply path. An empty `channels` array is the normalized configuration for “all channels.” The studio renders every channel button pressed for that wildcard. At Apply, `collectAutomaticPlanningSettings` previously serialized those pressed buttons as an explicit array of every visible channel. `proposalSettingsMatch` compared that array with the proposal's empty wildcard array by JSON value, classified the valid proposal as changed, called `session.invalidate("")`, and displayed the generic stale message before any batch request. A Content refresh could not help: opening a new studio recreated the same wildcard configuration and Apply repeated the same lossy UI round trip. Apply/pending portal reconstruction, server fingerprints, the batch transaction, and authoritative reconciliation were ruled out because the failing branch preceded pending state and dispatch. Strict Board-revision equality and destructive revision-based session cleanup were contributing false-staleness risks, but were not needed to trigger the reported all-channel failure.
+
+R3 preserves the wildcard when all channel controls are selected. Mutable controls remain configuration input only; they are never freshness authority. It also removes the revision-only session deletion and replaces the former Apply equality gate with semantic classification.
+
+### Proposal provenance contract
+
+Each generated session owns one immutable `auto_plan_provenance_v1` value. It records the normalized Board ID, authoritative base revision, Board lifecycle and access generations, normalized configuration, deterministic command identity, stable target IDs, canonical target schedules and schedule revisions, target editorial/eligibility/publication-lock state, publication-material identity, the eligible unscheduled ID set, and existing canonical schedules used for collision and capacity calculation. Records are sorted by stable ID and schedules normalize date, time, timezone, disambiguation, UTC instant, and numeric revision. Property order, absent visual optionals, labels, cloned objects, DOM/portal identity, render counters, projections, preferences, and proposal overlays are excluded.
+
+Publication-material fingerprints remain internal comparison/request preconditions. Diagnostics and UI never expose them. Browser dispatch still recomputes the v2 fingerprint from the latest authoritative node, while the batch service verifies it with the shared approval-material contract. The strict batch allowlist, canonical timezone/DST resolver, numeric schedule revision, and parseable Board revision contracts remain unchanged.
+
+### Freshness classifier and state transitions
+
+Apply captures the active session once, resolves the latest immutable Board snapshot, and runs one bounded classifier before setting pending state:
+
+* `current`: revision and every semantic invariant match.
+* `safe_rebase`: only the authoritative Board revision/lifecycle or unrelated metadata changed. Apply retains **Preview ready**, uses the latest Board revision, current target revisions and freshly calculated fingerprints, and dispatches one batch without regeneration.
+* `requires_regeneration`: target schedule/revision, eligible set, editorial eligibility, publication material, collision/capacity schedule, normalized configuration, or command coverage changed. Configuration and preview remain owned by the session, the badge becomes **Update needed** / **Aktualisierung nötig**, a bounded reason is shown, and Regenerate becomes primary. Regeneration uses the latest authority plus preserved settings, then restores **Preview ready** and Apply.
+* `blocked`: Board switch, access removal, missing target, finalized/durable publication lock, invalid configuration, or missing provenance. No request is sent and an actionable bounded state remains visible.
+
+Apply reserves `pending` before asynchronous fingerprinting/dispatch, so rapid clicks cannot send duplicates. It resolves every target by stable ID, checks exact command coverage, eligibility and publication locks, uses current canonical schedule revisions, and sends exactly one `posting_schedule_batch_v1` request. A recoverable network, storage, malformed-response, or uncertain failure releases pending without converting a semantically current preview into stale state. Authoritative success alone reconciles every returned schedule and closes the studio.
+
+### Batch errors and diagnostics
+
+The endpoint preserves one transaction and one `FOR UPDATE` Board lock. Its bounded taxonomy distinguishes authentication/edit authorization, malformed request or strict allowlist failure, stale Board revision, missing/invalid target, stale target schedule revision, editorial-state conflict/ineligibility, publication-material mismatch, finalized publication, canonical temporal/DST failure, collision, and storage failure. Every command is validated before mutation; any failure rolls back all commands. The route returns only machine-readable classification/category metadata, request correlation IDs, and success schedule projections—never request bodies, captions, media URLs, fingerprints, provider identifiers, credentials, or database details.
+
+Allowlisted client diagnostics cover provenance capture, refreshed snapshot receipt, classification start/result, safe rebase, regeneration category, Apply preflight, batch dispatch, response validation, reconciliation, and bounded failure. Payloads contain only stage, bounded classification/reason category, count, lifecycle generation, and sanitized correlation ID. No full node, schedule body, material fingerprint, caption, URL, provider identity, token, or complete response is logged.
+
+### Deployment, rollback, and manual acceptance
+
+Deployment requires no migration and adds no dependency. Deploy the browser assets, focused regression registration, and documentation together; the existing API contract and atomic storage path are retained. Rollback is the single R3 commit. If rollback is necessary, do not weaken server revisions, fingerprints, authorization, locks, collision checks, or canonical temporal validation; disable Auto-plan Apply rather than accepting stale commands.
+
+Manual acceptance: open an editable Board with invented eligible, scheduled, and finalized social-post fixtures; refresh Content; open Auto-plan; retain all-channel selection or configure and regenerate; apply once; verify one batch request uses the latest Board revision and all targets reconcile before the studio closes. Repeat after an equivalent cloned/newer snapshot and verify no stale UI. Then independently change a target schedule, eligible status, material, capacity schedule, and finalized lock; verify a bounded Update-needed or blocked state, preserved controls, prominent Regenerate where allowed, and zero batch requests. Regenerate and confirm Preview ready/Apply return. Test double-click, network failure/retry, English/German, keyboard focus, mobile, dark mode, and reduced motion. Network inspection must show zero Facebook, LinkedIn, Meta, Instagram, TikTok, X, CDN, provider-scheduling, or real publication mutations.
