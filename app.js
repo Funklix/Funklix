@@ -17086,6 +17086,7 @@ function renderContentWorkspace() {
     boardId: state.currentBoardId || "",
     boardRevision: state.lastKnownUpdatedAt || "",
     boardName: state.currentBoardName || uiText("Current Board"),
+    brandName: state.brandCatalog?.status === "success" ? (state.brandCatalog.entries.find(entry => entry.id === state.boardBrandAssociation?.brandId)?.name || "") : "",
     accountId: state.user?.email || "",
     accessGeneration: state.boardLoadGeneration,
     nodes: state.nodes,

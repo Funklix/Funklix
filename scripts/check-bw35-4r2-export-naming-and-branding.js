@@ -1,0 +1,20 @@
+'use strict';
+const assert=require('assert'),fs=require('fs'),naming=require('../posting-plan-export'),pdf=require('../posting-plan-pdf'),pkg=require('../package.json');
+const workspace=fs.readFileSync('content-workspace.js','utf8'),css=fs.readFileSync('styles.css','utf8'),workflow=fs.readFileSync('.github/workflows/runtime-boot-safety.yml','utf8'),logo=fs.readFileSync('assets/brand/tendra-one-symbol.svg','utf8');
+const date=new Date(2026,8,25);
+assert.equal(naming.suggestFilename({brandName:'SaudeBrasil',boardName:'Demo',date}),'posting-plan-saudebrasil-demo-2026-09-25');
+assert.equal(naming.suggestFilename({brandName:'SaudeBrasil',boardName:'SaudeBrasil Demo',date}),'posting-plan-saudebrasil-demo-2026-09-25');
+assert.equal(naming.suggestFilename({boardName:'SaudeBrasil Demo',date}),'posting-plan-saudebrasil-demo-2026-09-25');
+assert.equal(naming.suggestFilename({brandName:'Acme',date}),'posting-plan-acme-2026-09-25');
+assert.equal(naming.suggestFilename({date}),'posting-plan-2026-09-25');
+for(const input of ['', '   ','../..','a/b\\c','a\0b','a<>:"|?*b','---a---b---','...name...','.','..','CON','prn.txt','COM1','LPT9','name.csv','name.pdf','name.csv.pdf']){const a=naming.sanitizeFilenameBase(input),b=naming.sanitizeFilenameBase(input);assert(a.valid,input);assert.equal(a.base,b.base,input);assert(!/[<>:"/\\|?*\x00-\x1f]/.test(a.base),input);assert(!/\.(csv|pdf)$/i.test(a.base),input)}
+assert.equal(naming.sanitizeFilenameBase('Überblick 🚀').base,'Überblick 🚀');assert(naming.sanitizeFilenameBase('x'.repeat(500)).base.length<=naming.MAX_FILENAME_BASE);
+assert.equal(naming.resolvedFilename('review.csv','csv'),'review.csv');assert.equal(naming.resolvedFilename('review.pdf','pdf'),'review.pdf');
+const projection={rows:[],counts:{excluded:0,unsafeUrlOmissions:0}},model=pdf.build({projection,boardName:'Launch',brandName:'Acme'}),markup=pdf.render(model,{preview:true});
+for(const token of ['/assets/brand/tendra-one-symbol.svg','Tendra One logo','Posting Plan','Launch','Brand: Acme','Created with Tendra One','pp-signature'])assert(markup.includes(token),token);assert(!markup.includes('>T</span>'));assert(!markup.includes('http'));
+const duplicate=pdf.render(pdf.build({projection,boardName:'Acme Launch',brandName:'Acme'}));assert(!duplicate.includes('Brand: Acme'));
+for(const token of ['filenameBase','filenameManual','suggestedName','data-export-filename','data-export-reset-name','File name','Dateiname','Review the file name before exporting.','Prüfe den Dateinamen vor dem Export.','The file extension is added automatically.','Die Dateiendung wird automatisch ergänzt.','The browser should suggest this name','Der Browser sollte diesen Namen','postingPlanExport.sanitizeFilenameBase','filenameBase:resolved.base'])assert(workspace.includes(token),token);
+for(const token of ['min-height:44px','focus-within','forced-colors:active','max-width:640px','pp-signature','object-fit:contain'])assert(css.includes(token),token);
+assert(logo.startsWith('<svg'));assert(!/fetch\(|XMLHttpRequest|localStorage|sessionStorage|console\./.test(fs.readFileSync('posting-plan-pdf.js','utf8')));
+assert.equal(pkg.scripts['check:bw35.4r2'],'node scripts/check-bw35-4r2-export-naming-and-branding.js');assert(workflow.indexOf('check:bw35.4r2')>workflow.indexOf('check:bw35.4r1'));
+(async()=>{let listener,prints=0;const root={dataset:{},querySelectorAll(){return[]},remove(){this.removed=true}},body={classList:{add(){},remove(){}},appendChild(){}},doc={title:'Tendra One — Campaign Canvas',body,createElement(){return root},querySelector(){return null},querySelectorAll(){return[]}},win={addEventListener(_,fn){listener=fn},removeEventListener(){},print(){prints++}};const out=await pdf.printDocument(model,{filenameBase:'client-plan.pdf',document:doc,window:win,cleanupDelay:1000});assert.equal(doc.title,'client-plan');assert.equal(prints,1);listener();assert.equal(doc.title,'Tendra One — Campaign Canvas');assert(root.removed);out.cleanup();console.log('BW-35.4R2 export naming and Tendra One branding passed.');})().catch(error=>{console.error(error);process.exitCode=1});
