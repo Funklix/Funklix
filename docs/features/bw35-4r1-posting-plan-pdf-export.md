@@ -49,3 +49,7 @@ Automated checks verify deterministic DOM/CSS/security contracts. Final renderin
 ## Non-goals
 
 No provider scheduling or publication, remote/server PDF generation or storage, database change, recurrence/publishing queue, schedule/approval mutation, fabricated dates, CSV change, external CDN/framework, full-page raster export, or Auto-plan persistence change.
+
+## BW-35.4R2 follow-up
+
+BW-35.4R2 adds shared, user-confirmed CSV/PDF naming, temporary print-title filename suggestion, the repository-owned Tendra One symbol, meaningful Brand/campaign cover hierarchy, and the compact document signature. See [BW-35.4R2 export naming and Tendra One branding](./bw35-4r2-export-naming-and-branding.md); this R1 audit remains unchanged.
