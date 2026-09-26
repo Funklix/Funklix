@@ -12,7 +12,9 @@
   const STORAGE_KEY = "funklix.languagePreferences.v1";
   const LANGUAGE_NAMES = Object.freeze({ en: "English", de: "German", es: "Spanish" });
   const german = {
-    "Home": "Startseite", "Boards": "Boards", "Campaign Canvas": "Kampagnen-Canvas",
+    "Home": "Startseite", "Boards": "Boards", "Settings": "Einstellungen", "Account": "Konto", "Campaign Canvas": "Kampagnen-Canvas",
+    "Board": "Board", "Current Board": "Aktuelles Board", "Open Canvas": "Canvas öffnen", "No Board selected": "Kein Board ausgewählt",
+    "Brand": "Marke", "Current Brand": "Aktuelle Marke", "No Brand selected": "Keine Marke ausgewählt",
     "Content Workspace": "Content-Arbeitsbereich", "Posting Plan": "Posting-Plan", "More filters": "Weitere Filter", "Needs review": "Prüfung nötig", "Unscheduled": "Ungeplant", "Content Library": "Inhaltsbibliothek", "Review Queue": "Prüfwarteschlange", "Calendar": "Content-Kalender",
     "Month": "Monat", "Agenda": "Agenda", "Today": "Heute", "Previous period": "Vorheriger Zeitraum", "Next period": "Nächster Zeitraum",
     "Schedule": "Planen", "Reschedule": "Neu planen", "Remove schedule": "Planung entfernen", "Timezone": "Zeitzone",

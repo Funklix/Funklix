@@ -234,6 +234,12 @@ const el = {
   dashboardView: document.getElementById("dashboard-view"),
   canvas: document.getElementById("canvas"),
   canvasTopbar: document.getElementById("canvas-topbar"),
+  canvasToolbar: document.querySelector("#canvas-topbar .canvas-toolbar"),
+  canvasToolbarBrand: document.getElementById("canvas-toolbar-brand"),
+  contextualHeader: document.getElementById("contextual-header"),
+  contextualHeaderEyebrow: document.getElementById("contextual-header-eyebrow"),
+  contextualHeaderTitle: document.getElementById("contextual-header-title"),
+  contextualOpenCanvas: document.getElementById("contextual-open-canvas"),
   inspectorPanel: document.getElementById("inspector-panel"),
   inspectorCloseButton: document.getElementById("inspector-close-btn"),
   canvasScrollSurface: document.getElementById("canvas-scroll-surface"),
@@ -3015,6 +3021,7 @@ function renderEphemeralBrandSwitcherSelection() {
     const validated = Boolean(selection && state.brandCatalog.status === "success" && state.brandCatalog.entries.some(({ id }) => id === selection.id));
     el.brandWorkspaceDetailOpen.disabled = !validated;
   }
+  if (state.activeView === "brand-core") renderContextualHeader("brand-core");
 }
 
 function clearEphemeralBrandSwitcherSelection({ close = false, persist = false } = {}) {
@@ -16897,6 +16904,58 @@ function restoreInspectorFocus() {
   (selected || el.canvas)?.focus?.({ preventScroll: true });
 }
 
+const HEADER_MODE_BY_VIEW = Object.freeze({
+  board: "canvas",
+  list: "board_context",
+  calendar: "board_context",
+  content_workspace: "board_context",
+  ai_brain: "board_context",
+  insights: "board_context",
+  funnel_simulator: "board_context",
+  "brand-core": "brand_context",
+  home: "account_library",
+  boards_library: "account_library",
+  settings: "account_library"
+});
+
+function deriveHeaderModel(view = state.activeView) {
+  const mode = HEADER_MODE_BY_VIEW[view] || "account_library";
+  if (mode === "canvas") return { mode, eyebrow: "", title: "", canOpenCanvas: false };
+  if (mode === "board_context") {
+    const authorizedBoard = Boolean(state.currentBoardId && state.boardAccess?.canView !== false);
+    return {
+      mode,
+      eyebrow: uiText("Current Board"),
+      title: authorizedBoard && state.currentBoardName?.trim() ? state.currentBoardName.trim() : uiText("No Board selected"),
+      canOpenCanvas: authorizedBoard
+    };
+  }
+  if (mode === "brand_context") {
+    const brand = ephemeralBrandSwitcherSelection;
+    const authorizedBrand = Boolean(brand && state.brandCatalog.status === "success" && state.brandCatalog.entries.some(({ id }) => id === brand.id));
+    return { mode, eyebrow: uiText("Current Brand"), title: authorizedBrand ? brand.name : uiText("No Brand selected"), canOpenCanvas: false };
+  }
+  const sectionLabels = { home: "Home", boards_library: "Boards", settings: "Settings" };
+  return { mode, eyebrow: uiText("Account"), title: uiText(sectionLabels[view] || "Home"), canOpenCanvas: false };
+}
+
+function renderContextualHeader(view = state.activeView) {
+  if (!el.canvasTopbar) return;
+  const model = deriveHeaderModel(view);
+  const canvas = model.mode === "canvas";
+  el.canvasTopbar.dataset.headerMode = model.mode;
+  el.canvasToolbar?.classList.toggle("hidden", !canvas);
+  el.canvasToolbarBrand?.classList.toggle("hidden", !canvas);
+  el.contextualHeader?.classList.toggle("hidden", canvas);
+  if (el.contextualHeaderEyebrow) el.contextualHeaderEyebrow.textContent = model.eyebrow;
+  if (el.contextualHeaderTitle) {
+    el.contextualHeaderTitle.textContent = model.title;
+    el.contextualHeaderTitle.title = model.title;
+    el.contextualHeaderTitle.setAttribute("aria-label", model.title);
+  }
+  el.contextualOpenCanvas?.classList.toggle("hidden", !model.canOpenCanvas);
+}
+
 function synchronizeAppShell({ view = state.activeView, forceInspectorOpen = false } = {}) {
   if (!el.appShell || !el.inspectorPanel) return;
   const publicViewer = !!state.publicBoardToken || document.body.classList.contains("public-board-view");
@@ -16958,7 +17017,7 @@ function setActiveView(view) {
   el.aiBrainNavButton?.classList.toggle("active", view === "ai_brain");
   el.insightsNavButton?.classList.toggle("active", view === "insights");
   el.funnelSimulatorNavButton?.classList.toggle("active", view === "funnel_simulator");
-  if (state.appMode !== "brand") el.canvasTopbar.classList.toggle("hidden", isHome);
+  if (typeof renderContextualHeader === "function") renderContextualHeader(view);
   el.cycleViewButton.textContent =
     view === "home" ? "Home" : view === "board" ? "Board View" : view === "list" ? "List View" : view === "calendar" ? "Calendar View" : view === "content_workspace" ? "Content Workspace" : view === "boards_library" ? "Boards" : view === "insights" ? "Insights" : view === "funnel_simulator" ? "Funnel Simulator" : view === "ai_brain" ? "AI Brain" : "Brand Core";
   if (isHome) {
@@ -17368,7 +17427,6 @@ function renderFunnelSimulator() {
 function setAppMode(mode) {
   state.appMode = mode;
   const brand = mode === "brand";
-  el.canvasTopbar.classList.toggle("hidden", brand);
   el.workspaceWrap?.classList?.toggle("brand-mode", brand);
   if (brand) {
     setActiveView("brand-core");
@@ -17384,6 +17442,10 @@ function setAppMode(mode) {
 
 // Events
 document.addEventListener("click", (e) => {
+  if (e.target.closest("#contextual-open-canvas")) {
+    setActiveView("board");
+    return;
+  }
   if (e.target.closest(".image-lightbox-close")) {
     e.preventDefault();
     e.stopPropagation();
@@ -17437,6 +17499,7 @@ el.settingsOpenButton?.addEventListener("click", () => {
   if (el.languagePreferenceStatus) el.languagePreferenceStatus.textContent = "";
   el.settingsDialog.showModal();
   void globalThis.FacebookSettings?.refresh?.();
+  if (typeof renderContextualHeader === "function") renderContextualHeader("settings");
   synchronizeAppShell({ view: "settings" });
   document.getElementById("settings-dialog-title")?.focus();
 });
@@ -17448,6 +17511,7 @@ el.settingsDialog?.addEventListener("cancel", (event) => {
 el.settingsDialog?.addEventListener("close", async () => {
   if (state.activeView === "content_workspace") await refreshFacebookWorkspaceSnapshot();
   else await globalThis.FacebookSettings?.refresh?.();
+  if (typeof renderContextualHeader === "function") renderContextualHeader(state.activeView);
   synchronizeAppShell();
   el.settingsOpenButton?.focus();
 });
