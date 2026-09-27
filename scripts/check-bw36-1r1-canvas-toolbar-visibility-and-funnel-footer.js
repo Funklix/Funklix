@@ -47,7 +47,7 @@ const visibilityContext = {
   state: { activeView: "home", appMode: "canvas" },
   el: { canvasTopbar: { classList: { toggle(name, force) { if (force) toolbarClasses.add(name); else toolbarClasses.delete(name); } } } }
 };
-vm.runInNewContext(`${visibilitySource}\n${functionSource(app, "synchronizeCanvasToolbarVisibility")}; this.decide = activeSurfaceIsCanvas; this.applyVisibility = synchronizeCanvasToolbarVisibility;`, visibilityContext);
+vm.runInNewContext(`${visibilitySource}\nfunction renderCompactContextBar() {}\n${functionSource(app, "synchronizeCanvasToolbarVisibility")}; this.decide = activeSurfaceIsCanvas; this.applyVisibility = synchronizeCanvasToolbarVisibility;`, visibilityContext);
 const activeSurfaceIsCanvas = visibilityContext.decide;
 const sections = ["home", "boards_library", "list", "calendar", "content_workspace", "brand-core", "ai_brain", "insights", "funnel_simulator", "settings", "bounded_unknown"];
 
@@ -120,7 +120,8 @@ check("only the audited compact journey navigation rule changed presentation CSS
   const repaired = ".journey-nav{position:static;inset:auto;min-height:0;height:auto;padding:8px 8px max(8px,env(safe-area-inset-bottom,0px));background:transparent;border-radius:0}";
   const baseline = ".journey-nav{position:sticky;bottom:4px;padding:8px;background:var(--fk-color-surface-elevated);border-radius:12px}";
   assert.match(css, new RegExp(repaired.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
-  assert.equal(sha(css.replace(repaired, baseline)), "06771fe0f41453d3afa5661e593866fba37fc1c6315699283532732c138bb755", "all non-Funnel CSS remains at the restored baseline");
+  const withoutBw362 = css.replace(/\/\* BW-36\.2: isolated, non-Canvas context utility bar\. \*\/[\s\S]*?(?=\.topbar \{)/, "");
+  assert.equal(sha(withoutBw362.replace(repaired, baseline)), "06771fe0f41453d3afa5661e593866fba37fc1c6315699283532732c138bb755", "Canvas and all pre-BW-36.2 non-Funnel CSS remain at the restored baseline");
 });
 
 check("compact journey actions are in flow, bounded, transparent, safe-area padded, and reachable", () => {

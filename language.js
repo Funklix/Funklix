@@ -119,7 +119,7 @@
     "Tone shifts across nodes are high.": "Die Tonalität unterscheidet sich deutlich zwischen den Knoten.",
     "Add trust-building proof in Landing Page nodes.": "Füge vertrauensbildende Nachweise in Landingpage-Knoten hinzu.",
     "Create campaign": "Kampagne erstellen", "+ Add node": "+ Knoten hinzufügen",
-    "Search nodes...": "Knoten suchen...", "Sign in with Google": "Mit Google anmelden", "Sign out": "Abmelden",
+    "Search nodes...": "Knoten suchen...", "Sign in with Google": "Mit Google anmelden", "Sign out": "Abmelden", "No Board selected": "Kein Board ausgewählt",
     "Filters": "Filter", "Utilities": "Werkzeuge", "Copy Link": "Link kopieren",
     "View-only board. Changes cannot be saved.": "Board nur zur Ansicht. Änderungen können nicht gespeichert werden.",
     "Board": "Board", "Save Board": "Board speichern", "Duplicate Board": "Board duplizieren",
