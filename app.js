@@ -16897,6 +16897,14 @@ function restoreInspectorFocus() {
   (selected || el.canvas)?.focus?.({ preventScroll: true });
 }
 
+function activeSurfaceIsCanvas(view = state.activeView) {
+  return view === "board" && state.appMode !== "brand";
+}
+
+function synchronizeCanvasToolbarVisibility(view = state.activeView) {
+  el.canvasTopbar?.classList.toggle("hidden", !activeSurfaceIsCanvas(view));
+}
+
 function synchronizeAppShell({ view = state.activeView, forceInspectorOpen = false } = {}) {
   if (!el.appShell || !el.inspectorPanel) return;
   const publicViewer = !!state.publicBoardToken || document.body.classList.contains("public-board-view");
@@ -16958,7 +16966,7 @@ function setActiveView(view) {
   el.aiBrainNavButton?.classList.toggle("active", view === "ai_brain");
   el.insightsNavButton?.classList.toggle("active", view === "insights");
   el.funnelSimulatorNavButton?.classList.toggle("active", view === "funnel_simulator");
-  if (state.appMode !== "brand") el.canvasTopbar.classList.toggle("hidden", isHome);
+  el.canvasTopbar?.classList.toggle("hidden", view !== "board" || state.appMode === "brand");
   el.cycleViewButton.textContent =
     view === "home" ? "Home" : view === "board" ? "Board View" : view === "list" ? "List View" : view === "calendar" ? "Calendar View" : view === "content_workspace" ? "Content Workspace" : view === "boards_library" ? "Boards" : view === "insights" ? "Insights" : view === "funnel_simulator" ? "Funnel Simulator" : view === "ai_brain" ? "AI Brain" : "Brand Core";
   if (isHome) {
@@ -17368,7 +17376,7 @@ function renderFunnelSimulator() {
 function setAppMode(mode) {
   state.appMode = mode;
   const brand = mode === "brand";
-  el.canvasTopbar.classList.toggle("hidden", brand);
+  synchronizeCanvasToolbarVisibility(brand ? "brand-core" : state.activeView);
   el.workspaceWrap?.classList?.toggle("brand-mode", brand);
   if (brand) {
     setActiveView("brand-core");
@@ -17437,6 +17445,7 @@ el.settingsOpenButton?.addEventListener("click", () => {
   if (el.languagePreferenceStatus) el.languagePreferenceStatus.textContent = "";
   el.settingsDialog.showModal();
   void globalThis.FacebookSettings?.refresh?.();
+  synchronizeCanvasToolbarVisibility("settings");
   synchronizeAppShell({ view: "settings" });
   document.getElementById("settings-dialog-title")?.focus();
 });
@@ -17448,6 +17457,7 @@ el.settingsDialog?.addEventListener("cancel", (event) => {
 el.settingsDialog?.addEventListener("close", async () => {
   if (state.activeView === "content_workspace") await refreshFacebookWorkspaceSnapshot();
   else await globalThis.FacebookSettings?.refresh?.();
+  synchronizeCanvasToolbarVisibility();
   synchronizeAppShell();
   el.settingsOpenButton?.focus();
 });
