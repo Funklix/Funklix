@@ -430,6 +430,24 @@
           </div>
         </header>
 
+        <div id="compact-context-bar" class="compact-context-bar hidden" role="region" aria-label="Board context">
+          <div class="compact-context-identity">
+            <span class="compact-context-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" focusable="false"><path d="M5 4.5h5.5v6H5zm8.5 0H19v4h-5.5zM5 13.5h5.5v6H5zm8.5-2H19v8h-5.5z"/></svg>
+            </span>
+            <span id="compact-context-title" class="compact-context-title"></span>
+          </div>
+          <div class="compact-context-account">
+            <button id="compact-context-theme-button" class="compact-context-control" type="button" aria-label="Change theme" title="Change theme" aria-pressed="false">◐</button>
+            <div id="compact-context-user" class="compact-context-user">
+              <img id="compact-context-avatar" class="compact-context-avatar hidden" alt="User avatar" />
+              <span id="compact-context-avatar-fallback" class="compact-context-avatar compact-context-avatar-fallback hidden" aria-label="User avatar"></span>
+              <span class="compact-context-meta"><strong id="compact-context-name"></strong><span id="compact-context-email"></span></span>
+            </div>
+            <button id="compact-context-signout-button" class="compact-context-control compact-context-signout" type="button" aria-label="Sign out" title="Sign out"><span data-i18n="Sign out">Sign out</span><span class="compact-context-signout-icon" aria-hidden="true">↪</span></button>
+          </div>
+        </div>
+
         <section id="dashboard-view" class="dashboard-view hidden" aria-labelledby="dashboard-title">
           <div class="mission-control">
             <section class="mission-hero fk-section" aria-labelledby="dashboard-title">

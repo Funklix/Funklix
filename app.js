@@ -234,6 +234,15 @@ const el = {
   dashboardView: document.getElementById("dashboard-view"),
   canvas: document.getElementById("canvas"),
   canvasTopbar: document.getElementById("canvas-topbar"),
+  compactContextBar: document.getElementById("compact-context-bar"),
+  compactContextTitle: document.getElementById("compact-context-title"),
+  compactContextThemeButton: document.getElementById("compact-context-theme-button"),
+  compactContextUser: document.getElementById("compact-context-user"),
+  compactContextAvatar: document.getElementById("compact-context-avatar"),
+  compactContextAvatarFallback: document.getElementById("compact-context-avatar-fallback"),
+  compactContextName: document.getElementById("compact-context-name"),
+  compactContextEmail: document.getElementById("compact-context-email"),
+  compactContextSignoutButton: document.getElementById("compact-context-signout-button"),
   inspectorPanel: document.getElementById("inspector-panel"),
   inspectorCloseButton: document.getElementById("inspector-close-btn"),
   canvasScrollSurface: document.getElementById("canvas-scroll-surface"),
@@ -725,6 +734,7 @@ function applyBoardAccessFromServer(access, source = "server") {
     || state.boardAccess?.canRename !== nextAccess.canRename
     || state.boardAccess?.canDelete !== nextAccess.canDelete;
   state.boardAccess = nextAccess;
+  renderCompactContextBar();
   document.body.classList.toggle("public-board-view", nextAccess.reason === "public_viewer");
   if (!nextAccess.canViewBoardBrandCore && nextAccess.canEdit === false) {
     clearAutosaveTimer();
@@ -1457,6 +1467,7 @@ async function saveBoardAsNew(payload) {
     syncRuntimeSessionFromLegacy("save-as-new");
     saveBrandBrainState({ markDirty: false });
     state.currentBoardName = data?.name || payload?.name || "Campaign Canvas Copy";
+    renderCompactContextBar();
     state.lastKnownUpdatedAt = data?.updated_at || null;
     const nextPath = `/boards/${newId}`;
     if (window.location.pathname !== nextPath) window.history.pushState({}, '', nextPath);
@@ -1513,6 +1524,7 @@ async function duplicateCurrentBoard() {
     syncRuntimeSessionFromLegacy("duplicate-board");
     saveBrandBrainState({ markDirty: false });
     state.currentBoardName = data?.name || payload.name;
+    renderCompactContextBar();
     state.lastKnownUpdatedAt = data?.updated_at || null;
     const nextPath = `/boards/${newId}`;
     if (window.location.pathname !== nextPath) window.history.pushState({}, '', nextPath);
@@ -4401,6 +4413,7 @@ function renderAuthState() {
   if (!signedIn) {
     if (el.authAvatar) el.authAvatar.classList.add("hidden");
     if (el.authAvatarFallback) el.authAvatarFallback.classList.add("hidden");
+    renderCompactContextBar();
     refreshDashboardIfVisible();
     return;
   }
@@ -4415,6 +4428,7 @@ function renderAuthState() {
     el.authAvatarFallback.textContent = getUserInitials(state.user);
     el.authAvatarFallback.classList.toggle("hidden", hasAvatar);
   }
+  renderCompactContextBar();
   refreshDashboardIfVisible();
 }
 
@@ -8502,6 +8516,7 @@ async function saveBoardToServer(trigger = "manual") {
     if (returnedId) state.currentBoardId = returnedId;
     syncRuntimeSessionFromLegacy(isUpdate ? "save-board-update" : "save-board-create");
     if (data?.name && typeof data.name === "string") state.currentBoardName = data.name;
+    renderCompactContextBar();
     state.lastLocalSaveAt = saveTimestamp;
     state.lastKnownUpdatedAt = data?.updated_at || new Date().toISOString();
 
@@ -8549,6 +8564,8 @@ async function loadBoardFromUrlIfPresent(requestedBoardId = null) {
   state.isBoardLoading = true;
   state.isBoardHydrating = true;
   state.currentBoardId = boardId;
+  state.currentBoardName = "";
+  renderCompactContextBar();
   state.publicBoardToken = getPublicBoardTokenFromFragment();
   clearGeneratedPublicToken();
     state.authoritativeBoardBrandCore = { boardId: "", loadGeneration, value: {}, provenance: null, provenanceValid: true, updatedAt: null, restoreAvailable: false, backupCreatedAt: null };
@@ -8580,6 +8597,7 @@ async function loadBoardFromUrlIfPresent(requestedBoardId = null) {
     state.currentBoardId = data.id;
     syncRuntimeSessionFromLegacy("board-load");
     state.currentBoardName = data?.name || "";
+    renderCompactContextBar();
     state.lastKnownUpdatedAt = data?.updated_at || null;
     state.boardBrandAssociation.brandId = data?.brand_visibility === "hidden" ? null : data.brand_id;
     state.boardBrandAssociation.boardId = String(data.id);
@@ -16901,8 +16919,68 @@ function activeSurfaceIsCanvas(view = state.activeView) {
   return view === "board" && state.appMode !== "brand";
 }
 
+const COMPACT_CONTEXT_MODE_BY_VIEW = Object.freeze({
+  boards_library: "library",
+  list: "library",
+  calendar: "board",
+  content_workspace: "board",
+  ai_brain: "board",
+  insights: "board",
+  funnel_simulator: "board"
+});
+
+function deriveCompactContextMode(view = state.activeView) {
+  if (state.appMode === "brand") return "hidden";
+  return COMPACT_CONTEXT_MODE_BY_VIEW[view] || "hidden";
+}
+
+function renderCompactContextBar(view = state.activeView) {
+  const host = el.compactContextBar;
+  if (!host) return;
+  const mode = deriveCompactContextMode(view);
+  const hidden = mode === "hidden";
+  host.classList.toggle("hidden", hidden);
+  host.setAttribute("aria-hidden", String(hidden));
+  host.dataset.mode = mode;
+  if (hidden) return;
+
+  const authorizedBoardName = state.currentBoardId && !state.isBoardLoading && state.boardAccess?.canView !== false
+    ? String(state.currentBoardName || "").trim()
+    : "";
+  const title = mode === "library" ? uiText("Boards") : (authorizedBoardName || uiText("No Board selected"));
+  el.compactContextTitle.textContent = title;
+  el.compactContextTitle.title = title;
+  el.compactContextTitle.setAttribute("aria-label", title);
+  host.setAttribute("aria-label", mode === "library" ? uiText("Boards") : title);
+
+  const signedIn = !!state.user;
+  el.compactContextUser?.classList.toggle("hidden", !signedIn);
+  el.compactContextSignoutButton?.classList.toggle("hidden", !signedIn);
+  if (signedIn) {
+    const name = state.user.name || "Google user";
+    const hasAvatar = !!state.user.avatar;
+    el.compactContextName.textContent = name;
+    el.compactContextName.title = name;
+    el.compactContextEmail.textContent = state.user.email || "";
+    el.compactContextAvatar.src = hasAvatar ? state.user.avatar : "";
+    el.compactContextAvatar.alt = `${name} — ${uiText("User avatar")}`;
+    el.compactContextAvatar.classList.toggle("hidden", !hasAvatar);
+    el.compactContextAvatarFallback.textContent = getUserInitials(state.user);
+    el.compactContextAvatarFallback.setAttribute("aria-label", `${name} — ${uiText("User avatar")}`);
+    el.compactContextAvatarFallback.classList.toggle("hidden", hasAvatar);
+  }
+  const themeLabel = uiText("Change theme");
+  el.compactContextThemeButton.setAttribute("aria-label", themeLabel);
+  el.compactContextThemeButton.title = themeLabel;
+  el.compactContextThemeButton.setAttribute("aria-pressed", String(state.resolvedTheme === "dark"));
+  const signoutLabel = uiText("Sign out");
+  el.compactContextSignoutButton.setAttribute("aria-label", signoutLabel);
+  el.compactContextSignoutButton.title = signoutLabel;
+}
+
 function synchronizeCanvasToolbarVisibility(view = state.activeView) {
   el.canvasTopbar?.classList.toggle("hidden", !activeSurfaceIsCanvas(view));
+  renderCompactContextBar(view);
 }
 
 function synchronizeAppShell({ view = state.activeView, forceInspectorOpen = false } = {}) {
@@ -16967,6 +17045,7 @@ function setActiveView(view) {
   el.insightsNavButton?.classList.toggle("active", view === "insights");
   el.funnelSimulatorNavButton?.classList.toggle("active", view === "funnel_simulator");
   el.canvasTopbar?.classList.toggle("hidden", view !== "board" || state.appMode === "brand");
+  renderCompactContextBar(view);
   el.cycleViewButton.textContent =
     view === "home" ? "Home" : view === "board" ? "Board View" : view === "list" ? "List View" : view === "calendar" ? "Calendar View" : view === "content_workspace" ? "Content Workspace" : view === "boards_library" ? "Boards" : view === "insights" ? "Insights" : view === "funnel_simulator" ? "Funnel Simulator" : view === "ai_brain" ? "AI Brain" : "Brand Core";
   if (isHome) {
@@ -17486,6 +17565,19 @@ el.uiLanguageSelect?.addEventListener("change", () => {
 window.addEventListener("funklix:themechange", (event) => {
   state.themePreference = event.detail.themePreference;
   state.resolvedTheme = event.detail.resolvedTheme;
+  renderCompactContextBar();
+});
+el.compactContextThemeButton?.addEventListener("click", () => {
+  const choices = ["system", "light", "dark"];
+  const current = window.FunklixTheme?.getState?.().themePreference || "system";
+  window.FunklixTheme?.setPreference?.(choices[(choices.indexOf(current) + 1) % choices.length]);
+});
+el.compactContextSignoutButton?.addEventListener("click", () => {
+  if (!el.authSignoutButton?.disabled) el.authSignoutButton?.click();
+});
+el.compactContextAvatar?.addEventListener("error", () => {
+  el.compactContextAvatar.classList.add("hidden");
+  el.compactContextAvatarFallback?.classList.remove("hidden");
 });
 window.addEventListener("funklix:facebookconnectionchange", (event) => {
   window.FunklixContentWorkspace?.resetFacebookEngagementForConnection?.(event.detail);
@@ -18683,7 +18775,7 @@ async function createNewBoardFlow() {
       : data.brand_core_source_revision == null && data.brand_core_source_updated_at == null && data.brand_core_snapshot_copied_at == null;
     if (!validShape || !validProvenance || (choice.mode === "brand" ? data.brand_id !== brandId : data.brand_id !== null)) throw new Error("The server returned an invalid or mismatched Board response.");
     creation.status = "success"; status.textContent = "Board created. Opening it now…";
-    clearAutosaveTimer(); state.boardLoadGeneration += 1; state.currentBoardId = data.id; state.currentBoardName = data.name; state.lastKnownUpdatedAt = data.updated_at;
+    clearAutosaveTimer(); state.boardLoadGeneration += 1; state.currentBoardId = data.id; state.currentBoardName = data.name; state.lastKnownUpdatedAt = data.updated_at; renderCompactContextBar();
     state.boardBrandAssociation = { brandId: data.brand_id, boardId: data.id, status: "idle", generation: state.boardBrandAssociation.generation + 1, intendedBrandId: null, message: "" };
     state.authoritativeBoardBrandCore = { boardId: data.id, loadGeneration: state.boardLoadGeneration, value: clonePlainObject(data.brand_core_snapshot), provenance, provenanceValid: hasValidBoardSnapshotProvenance(data), updatedAt: data.updated_at, restoreAvailable: data.brand_core_restore_available === true, backupCreatedAt: data.brand_core_snapshot_backup_created_at || null };
     state.brandCore = normalizeBrandCoreState(data.brand_core_snapshot, { restoration: true });
