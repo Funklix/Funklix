@@ -109,6 +109,7 @@
     "check:bw36.1r1": "node scripts/check-bw36-1r1-canvas-toolbar-visibility-and-funnel-footer.js",
     "check:bw36.2": "node scripts/check-bw36-2-compact-non-canvas-context-bar.js",
     "check:bw36.4": "node scripts/check-bw36-4-simplified-brand-sidebar.js",
-    "check:bw36.6": "node scripts/check-bw36-6-workspace-schema-foundation.js"
+    "check:bw36.6": "node scripts/check-bw36-6-workspace-schema-foundation.js",
+    "check:bw36.7": "node scripts/check-bw36-7-workspace-backfill-preflight.js"
   }
 }
