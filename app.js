@@ -389,6 +389,8 @@ const el = {
   brandSwitcherCurrentAvatar: document.getElementById("brand-switcher-current-avatar"),
   brandSwitcherCurrentName: document.getElementById("brand-switcher-current-name"),
   brandSwitcherCurrentNote: document.getElementById("brand-switcher-current-note"),
+  brandSidebarUpdateStatus: document.getElementById("brand-sidebar-update-status"),
+  brandIdentityPanel: document.getElementById("brand-identity-panel"),
   brandWorkspaceDetailOpen: document.getElementById("brand-workspace-detail-open"),
   brandWorkspaceDetail: document.getElementById("brand-workspace-detail"),
   brandWorkspaceDetailTitle: document.getElementById("brand-workspace-detail-title"),
@@ -3017,16 +3019,12 @@ async function restoreBrandSwitcherPreference(userEmail, entries, requestId, gen
 
 function renderEphemeralBrandSwitcherSelection() {
   const selection = ephemeralBrandSwitcherSelection;
-  if (el.brandSwitcherCurrentName) el.brandSwitcherCurrentName.textContent = selection?.name || "No Brand selected";
-  if (el.brandSwitcherCurrentAvatar) el.brandSwitcherCurrentAvatar.textContent = selection?.name?.trim().charAt(0).toUpperCase() || "B";
-  if (el.brandSwitcherCurrentNote) el.brandSwitcherCurrentNote.textContent = selection
-    ? `Brand · ${selection.restored ? "Restored Workspace selection" : "Workspace selection"}`
-    : "Brand · No Workspace selection";
   el.brandSwitcherNoBrand?.setAttribute("aria-current", selection ? "false" : "true");
-  if (el.brandWorkspaceDetailOpen) {
-    const validated = Boolean(selection && state.brandCatalog.status === "success" && state.brandCatalog.entries.some(({ id }) => id === selection.id));
-    el.brandWorkspaceDetailOpen.disabled = !validated;
-  }
+  renderBoardBrandAssociation();
+}
+
+function selectedBrandPreferenceId() {
+  return ephemeralBrandSwitcherSelection?.id || null;
 }
 
 function clearEphemeralBrandSwitcherSelection({ close = false, persist = false } = {}) {
@@ -3055,6 +3053,8 @@ function selectEphemeralBrandFromSwitcher(brand) {
 }
 
 let canonicalBrandDetail = { status: "closed", requestId: 0, saveId: 0, brandId: "", userEmail: "", brand: null, draft: null, controller: null, saveController: null, returnFocus: null };
+let sidebarBrandProjection = null;
+const sidebarProfileCache = new Map();
 
 function isCanonicalBrandDetail(value, expectedId) {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -3359,7 +3359,7 @@ function canonicalBrandDetailErrorStatus(status) {
 }
 
 async function loadCanonicalBrandDetail() {
-  const selection = ephemeralBrandSwitcherSelection;
+  const selection = state.brandCatalog.entries.find(({ id }) => id === canonicalBrandDetail.brandId) || ephemeralBrandSwitcherSelection;
   const userEmail = (state.user?.email || "").trim().toLowerCase();
   const catalogValidated = selection && state.brandCatalog.status === "success"
     && state.brandCatalog.userEmail === userEmail
@@ -3378,7 +3378,8 @@ async function loadCanonicalBrandDetail() {
     const response = await fetch(`/api/brands/${encodeURIComponent(selection.id)}`, { headers: { Accept: "application/json" }, signal: controller.signal });
     const stillCurrent = canonicalBrandDetail.requestId === requestId && canonicalBrandDetail.brandId === selection.id
       && canonicalBrandDetail.userEmail === (state.user?.email || "").trim().toLowerCase()
-      && ephemeralBrandSwitcherSelection?.id === selection.id && el.brandWorkspaceDetail.open;
+      && (ephemeralBrandSwitcherSelection?.id === selection.id || sidebarBrandProjection?.id === selection.id)
+      && state.brandCatalog.entries.some(({ id }) => id === selection.id) && el.brandWorkspaceDetail.open;
     if (!stillCurrent) return;
     if (!response.ok) {
       canonicalBrandDetail.status = canonicalBrandDetailErrorStatus(response.status);
@@ -3402,6 +3403,7 @@ async function loadCanonicalBrandDetail() {
     else {
       canonicalBrandDetail.status = retainedConflictDraft ? "conflict" : "ready";
       canonicalBrandDetail.brand = (({ id, name, brand_core, revision, created_at, updated_at, access }) => ({ id, name, brand_core, revision, created_at, updated_at, access }))(brand);
+      sidebarProfileCache.set(brand.id, brand.brand_core);
       canonicalBrandDetail.draft = retainedConflictDraft;
     }
     renderCanonicalBrandDetail();
@@ -3414,11 +3416,14 @@ async function loadCanonicalBrandDetail() {
 }
 
 function openCanonicalBrandDetail() {
-  const selection = ephemeralBrandSwitcherSelection;
+  const selection = sidebarBrandProjection?.reusable
+    ? state.brandCatalog.entries.find(({ id }) => id === sidebarBrandProjection.id)
+    : null;
   const userEmail = (state.user?.email || "").trim().toLowerCase();
   if (!selection || !userEmail || state.brandCatalog.status !== "success" || state.brandCatalog.userEmail !== userEmail
     || !state.brandCatalog.entries.some(({ id }) => id === selection.id) || !el.brandWorkspaceDetail) return;
   canonicalBrandDetail.returnFocus = el.brandWorkspaceDetailOpen;
+  canonicalBrandDetail.brandId = selection.id;
   if (el.brandSwitcherDetails) el.brandSwitcherDetails.open = false;
   el.brandWorkspaceDetail.showModal();
   el.brandWorkspaceDetailTitle?.focus();
@@ -4281,12 +4286,31 @@ function renderBoardBrandAssociation() {
     && state.authoritativeBoardBrandCore.boardId === boardId;
   if (el.boardBrandCoreCompareOpen) {
     el.boardBrandCoreCompareOpen.disabled = !canCompare;
+    el.boardBrandCoreCompareOpen.classList.toggle("hidden", !canCompare);
+    el.boardBrandCoreCompareOpen.textContent = BrandSidebar.TEXT[state.uiLanguage === "de" ? "de" : "en"].review;
     el.boardBrandCoreCompareOpen.title = canCompare ? "" : "Open a Board whose associated Brand is resolved through your authenticated catalog.";
   }
   if (el.boardBrandAssociationEdit) {
     el.boardBrandAssociationEdit.disabled = !canWrite || association.status === "submitting";
     el.boardBrandAssociationEdit.title = canWrite ? "" : "A signed-in Board editor is required to change this association.";
   }
+  const sourceRevision = state.authoritativeBoardBrandCore?.provenance?.sourceRevision;
+  const updateAvailable = Boolean(canCompare && Number.isSafeInteger(sourceRevision) && catalogBrand.revision > sourceRevision);
+  sidebarBrandProjection = BrandSidebar.project({
+    language: state.uiLanguage,
+    catalog: catalog.status === "success" ? catalog.entries : [],
+    loading: isBoardLoading || catalog.status === "loading",
+    accessDenied: hasAssociation && ["forbidden", "unauthenticated"].includes(catalog.status),
+    hasBoard,
+    boardBrandId: hasAssociation ? association.brandId : null,
+    hasLegacySnapshot: hasBoard && !hasAssociation && Boolean(state.authoritativeBoardBrandCore?.value && Object.keys(state.authoritativeBoardBrandCore.value).length),
+    selectedBrandId: selectedBrandPreferenceId(),
+    brandMode: state.appMode === "brand",
+    viewedBrandId: hasAssociation ? association.brandId : selectedBrandPreferenceId(),
+    canChange: canWrite,
+    updateAvailable
+  });
+  BrandSidebar.render({ panel: el.brandIdentityPanel, avatar: el.brandSwitcherCurrentAvatar, name: el.brandSwitcherCurrentName, note: el.brandSwitcherCurrentNote, status: el.brandSidebarUpdateStatus, open: el.brandWorkspaceDetailOpen, change: el.boardBrandAssociationEdit }, sidebarBrandProjection, { brandCore: sidebarProfileCache.get(sidebarBrandProjection.id) });
   const editing = ["editing", "error", "validation", "submitting"].includes(association.status);
   el.boardBrandAssociationForm?.classList.toggle("hidden", !editing);
   if (editing && el.boardBrandAssociationChoice) {
@@ -4321,11 +4345,18 @@ function renderBoardBrandAssociation() {
 
 function openBoardBrandAssociation() {
   const boardId = getBoardIdFromPath() || state.currentBoardId || "";
+  if (!boardId) {
+    if (el.brandSwitcherDetails) el.brandSwitcherDetails.open = true;
+    el.brandSwitcherCatalog?.querySelector("button")?.focus();
+    return;
+  }
   if (!boardId || state.boardBrandAssociation.boardId !== boardId || state.boardBrandAssociation.status === "loading" || state.boardAccess?.canEdit !== true || !state.user?.email) return;
   const candidate = state.boardBrandAssociation.brandId;
   state.boardBrandAssociation.status = "editing";
   state.boardBrandAssociation.intendedBrandId = candidate;
   state.boardBrandAssociation.message = "Choose deliberately, then save. Workspace selection will not change.";
+  const choiceLabel = el.boardBrandAssociationChoice?.closest("form")?.querySelector(`label[for="board-brand-association-choice"]`);
+  if (choiceLabel) choiceLabel.textContent = uiText("Brand");
   renderBoardBrandAssociation();
   if (state.brandCatalog.status !== "success") void loadCanonicalBrandCatalog();
   requestAnimationFrame(() => el.boardBrandAssociationChoice?.focus());

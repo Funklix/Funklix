@@ -117,14 +117,17 @@
           </div>
           <button id="sidebar-toggle-btn" class="sidebar-toggle fk-btn fk-btn-ghost" type="button" aria-label="Collapse sidebar" title="Collapse sidebar">◀</button>
         </div>
-        <section class="brand-switcher-shell fk-card" aria-label="Workspace Brand context">
-          <span class="brand-switcher-eyebrow">Workspace</span>
+        <section class="brand-switcher-shell brand-identity-panel fk-card" id="brand-identity-panel" aria-label="Workspace Brand context" aria-labelledby="board-brand-association-title" aria-live="polite">
+          <span class="brand-switcher-eyebrow" id="board-brand-association-title" data-i18n="Brand">Brand</span>
+          <strong id="board-brand-association-current" role="status" aria-live="polite" aria-atomic="true" class="sr-only"></strong>
+          <small id="board-brand-association-detail" class="sr-only"></small>
           <details class="brand-switcher-details" id="brand-switcher-details">
             <summary class="brand-switcher-summary">
-              <span class="brand-switcher-avatar" id="brand-switcher-current-avatar" aria-hidden="true">B</span>
+              <span class="brand-switcher-avatar" id="brand-switcher-current-avatar" role="img" aria-label="Brand"><span>B</span></span>
               <span class="brand-switcher-copy">
                 <strong id="brand-switcher-current-name">No Brand selected</strong>
-                <small id="brand-switcher-current-note">Brand · Ephemeral Workspace selection</small>
+                <small id="brand-switcher-current-note">Choose a Brand to continue.</small>
+                <small class="brand-update-status hidden" id="brand-sidebar-update-status" role="status"></small>
               </span>
               <span class="brand-switcher-chevron" aria-hidden="true">⌄</span>
             </summary>
@@ -136,7 +139,8 @@
               <div class="brand-switcher-catalog" id="brand-switcher-catalog" role="status">
                 <span>Open the switcher to view your read-only Brand catalog.</span>
               </div>
-              <button class="fk-btn fk-btn-secondary" id="brand-workspace-detail-open" type="button" disabled>View Canonical Brand</button>
+              <button class="fk-btn fk-btn-primary" id="brand-workspace-detail-open" type="button" disabled data-i18n="Open Brand Profile">Open Brand Profile</button>
+              <button class="fk-btn fk-btn-ghost" id="board-brand-association-edit" type="button" disabled>Switch Brand</button>
               <button class="fk-btn fk-btn-secondary" id="brand-switcher-create-open" type="button" disabled>Create Brand</button>
               <form class="brand-switcher-create-form hidden" id="brand-switcher-create-form" aria-labelledby="brand-switcher-create-title" novalidate>
                 <strong id="brand-switcher-create-title">Create a Canonical Brand</strong>
@@ -147,6 +151,13 @@
                   <button class="fk-btn fk-btn-primary" id="brand-switcher-create-submit" type="submit">Create Brand</button>
                   <button class="fk-btn fk-btn-ghost" id="brand-switcher-create-cancel" type="button">Cancel</button>
                 </div>
+              </form>
+              <form class="board-brand-association-form hidden" id="board-brand-association-form" aria-label="Change campaign Brand" novalidate>
+                <label for="board-brand-association-choice">Canonical Brand</label>
+                <select id="board-brand-association-choice" aria-describedby="board-brand-association-feedback"></select>
+                <span id="board-brand-association-pending">This choice is not saved until you confirm.</span>
+                <span id="board-brand-association-feedback" role="status" aria-live="polite"></span>
+                <div class="brand-switcher-create-actions"><button class="fk-btn fk-btn-primary" id="board-brand-association-save" type="submit">Save association</button><button class="fk-btn fk-btn-ghost" id="board-brand-association-cancel" type="button">Cancel</button></div>
               </form>
             </div>
           </details>
@@ -165,23 +176,6 @@
             </div>
           </form>
         </dialog>
-        <section class="board-brand-association fk-card" id="board-brand-association" aria-labelledby="board-brand-association-title">
-          <span class="brand-switcher-eyebrow" id="board-brand-association-title">Current Board Brand</span>
-          <strong id="board-brand-association-current" role="status" aria-live="polite" aria-atomic="true">No Board open</strong>
-          <small id="board-brand-association-detail">Board association is separate from Workspace selection.</small>
-          <button class="fk-btn fk-btn-secondary" id="board-brand-core-compare-open" type="button" disabled>Compare Brand Cores</button>
-          <button class="fk-btn fk-btn-secondary" id="board-brand-association-edit" type="button" disabled>Change Board Brand</button>
-          <form class="board-brand-association-form hidden" id="board-brand-association-form" aria-label="Edit Current Board Brand association" novalidate>
-            <label for="board-brand-association-choice">Canonical Brand</label>
-            <select id="board-brand-association-choice" aria-describedby="board-brand-association-feedback"></select>
-            <span id="board-brand-association-pending">This choice is not saved until you confirm.</span>
-            <span id="board-brand-association-feedback" role="status" aria-live="polite"></span>
-            <div class="brand-switcher-create-actions">
-              <button class="fk-btn fk-btn-primary" id="board-brand-association-save" type="submit">Save association</button>
-              <button class="fk-btn fk-btn-ghost" id="board-brand-association-cancel" type="button">Cancel</button>
-            </div>
-          </form>
-        </section>
         <dialog class="brand-workspace-detail brand-core-comparison" id="board-brand-core-comparison" aria-labelledby="board-brand-core-comparison-title" aria-describedby="board-brand-core-comparison-context">
           <div class="brand-workspace-detail-header">
             <div><span class="brand-switcher-eyebrow">Current Board Brand</span><h2 id="board-brand-core-comparison-title" tabindex="-1">Compare Brand Cores</h2></div>
@@ -245,6 +239,7 @@
             </div>
           </form>
           <div class="brand-workspace-detail-actions">
+            <button class="fk-btn fk-btn-secondary hidden" id="board-brand-core-compare-open" type="button">Compare Brand Cores</button>
             <button class="fk-btn fk-btn-primary hidden" id="brand-workspace-edit-open" type="button">Edit Canonical Brand</button>
             <button class="fk-btn fk-btn-secondary hidden" id="brand-workspace-conflict-reload" type="button">Reload latest Brand</button>
           </div>
@@ -914,6 +909,7 @@
     <script src="/social-connections-response-contract.js"></script>
     <script src="/social-connections-settings.js"></script>
     <script src="/facebook-connections-settings.js"></script>
+    <script src="/brand-sidebar.js"></script>
     <script src="/app.js"></script>
   </body>
 </html>

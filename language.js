@@ -14,6 +14,7 @@
   const german = {
     "Home": "Startseite", "Boards": "Boards", "Campaign Canvas": "Kampagnen-Canvas",
     "Content Workspace": "Content-Arbeitsbereich", "Posting Plan": "Posting-Plan", "More filters": "Weitere Filter", "Needs review": "Prüfung nötig", "Unscheduled": "Ungeplant", "Content Library": "Inhaltsbibliothek", "Review Queue": "Prüfwarteschlange", "Calendar": "Content-Kalender",
+    "Brand": "Marke", "Used by this campaign": "Für diese Kampagne verwendet", "Selected Brand": "Ausgewählte Marke", "Brand Profile": "Markenprofil", "Open Brand Profile": "Markenprofil öffnen", "Change campaign Brand": "Kampagnenmarke ändern", "Switch Brand": "Marke wechseln", "Update available": "Aktualisierung verfügbar", "Review campaign updates": "Kampagnen-Updates prüfen", "No Brand selected": "Keine Marke ausgewählt", "Choose a Brand to continue.": "Wähle eine Marke aus, um fortzufahren.", "Campaign Brand": "Kampagnenmarke", "Saved with this campaign": "Mit dieser Kampagne gespeichert", "Brand unavailable": "Marke nicht verfügbar", "Loading Brand…": "Marke wird geladen…",
     "Month": "Monat", "Agenda": "Agenda", "Today": "Heute", "Previous period": "Vorheriger Zeitraum", "Next period": "Nächster Zeitraum",
     "Schedule": "Planen", "Reschedule": "Neu planen", "Remove schedule": "Planung entfernen", "Timezone": "Zeitzone",
     "Internal planning is available before approval.": "Interne Planung ist bereits vor der Freigabe möglich.",
