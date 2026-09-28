@@ -1193,6 +1193,13 @@ html[data-theme="dark"] .compact-context-bar { background:var(--fk-color-nav-bg)
   .compact-context-bar .compact-context-control { transition:none; }
 }
 
+/* BW-36.4: one bounded, presentation-only Brand identity panel. */
+.brand-identity-panel{max-height:180px;padding:12px;border:1px solid var(--fk-color-border);background:var(--fk-color-surface);overflow:visible}.brand-identity-panel .brand-switcher-eyebrow{padding:0 0 6px}.brand-identity-panel .brand-switcher-summary{grid-template-columns:48px minmax(0,1fr) auto;min-height:58px;padding:5px;border:0;background:transparent;box-shadow:none}.brand-identity-panel .brand-switcher-avatar{width:48px;height:48px;border-radius:12px;overflow:hidden;font-size:var(--fk-font-size-md)}.brand-identity-panel .brand-switcher-avatar img{width:100%;height:100%;display:block;object-fit:cover}.brand-identity-panel .brand-switcher-copy strong{font-size:var(--fk-font-size-sm)}.brand-update-status{color:var(--fk-color-warning-text,#7a5f00)!important;font-weight:var(--fk-font-weight-bold)}.brand-update-status.hidden{display:none}.brand-identity-panel .brand-switcher-menu{top:calc(100% + 6px)}.brand-identity-panel .brand-switcher-menu>.fk-btn{min-height:44px}.brand-identity-panel :is(button,summary):focus-visible{outline:2px solid var(--fk-color-primary);outline-offset:2px}
+.app-shell.sidebar-collapsed .brand-identity-panel{max-height:52px;padding:0;border-color:transparent;background:transparent}.app-shell.sidebar-collapsed .brand-identity-panel .brand-switcher-summary{display:flex}.app-shell.sidebar-collapsed .brand-identity-panel .brand-switcher-avatar{width:36px;height:36px}
+@media(max-width:1023px) and (min-width:769px){.sidebar .brand-identity-panel{position:static!important;width:auto!important;height:auto!important;overflow:visible!important;clip-path:none!important;white-space:normal!important;max-height:52px;padding:0;border-color:transparent;background:transparent}.brand-identity-panel .brand-switcher-eyebrow,.brand-identity-panel .brand-switcher-copy,.brand-identity-panel .brand-switcher-chevron,.brand-identity-panel .brand-switcher-menu{display:none}.brand-identity-panel .brand-switcher-summary{display:flex!important;justify-content:center;min-height:44px;padding:0}.brand-identity-panel .brand-switcher-avatar{width:36px;height:36px}}
+@media(forced-colors:active){.brand-identity-panel{border:1px solid CanvasText}.brand-update-status{color:CanvasText!important}.brand-identity-panel :is(button,summary):focus-visible{outline:2px solid Highlight}}
+@media(prefers-reduced-motion:reduce){.brand-identity-panel *{transition:none!important;scroll-behavior:auto!important}}
+
 .topbar {
   display: flex;
   justify-content: space-between;
