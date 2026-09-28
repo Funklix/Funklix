@@ -279,6 +279,8 @@ jobs:
         run: npm run check:bw36.2
       - name: Check BW-36.4 simplified Brand sidebar
         run: npm run check:bw36.4
+      - name: Check BW-36.6 Workspace schema foundation
+        run: npm run check:bw36.6
       - name: Check dynamic AI Insights translations
         run: node scripts/check-bw25-1-dynamic-insights-translations.js
       - name: Check scoped German interface localization
