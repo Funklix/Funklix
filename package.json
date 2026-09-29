@@ -113,6 +113,7 @@
     "check:bw36.7": "node scripts/check-bw36-7-workspace-backfill-preflight.js",
     "check:bw36.7r1": "node scripts/check-bw36-7r1-workspace-identity-diagnostic.js",
     "check:bw36.7r2": "node scripts/check-bw36-7r2-application-identity-bridge.js",
-    "check:bw36.7r3": "node scripts/check-bw36-7r3-corrected-workspace-backfill-preflight.js"
+    "check:bw36.7r3": "node scripts/check-bw36-7r3-corrected-workspace-backfill-preflight.js",
+    "check:bw36.8": "node scripts/check-bw36-8-transactional-workspace-backfill.js"
   }
 }
