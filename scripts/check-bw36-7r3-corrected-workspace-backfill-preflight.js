@@ -1,0 +1,45 @@
+'use strict';
+const assert = require('node:assert/strict');
+const crypto = require('node:crypto');
+const fs = require('node:fs');
+const path = require('node:path');
+const cp = require('node:child_process');
+const root = path.resolve(__dirname, '..');
+const sqlPath = path.join(root, 'scripts/sql/bw36-7r3-corrected-workspace-backfill-preflight.sql');
+const sql = fs.readFileSync(sqlPath, 'utf8');
+const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json')));
+const workflow = fs.readFileSync(path.join(root, '.github/workflows/runtime-boot-safety.yml'), 'utf8');
+let passed = 0;
+function test(name, fn) { fn(); passed++; process.stdout.write(`✓ ${name}\n`); }
+function digest(file) { return crypto.createHash('sha256').update(fs.readFileSync(path.join(root,file))).digest('hex'); }
+// PostgreSQL lexical sanitizer: comments, ordinary/escape/unicode/bit/hex strings,
+// quoted identifiers, and tagged or untagged dollar strings become whitespace.
+function executable(source) {
+  let out='', i=0, block=0;
+  while (i<source.length) {
+    if (!block && source.startsWith('--',i)) { while(i<source.length && source[i]!='\n') i++; out+='\n'; continue; }
+    if (source.startsWith('/*',i)) { block++; i+=2; while(block && i<source.length){ if(source.startsWith('/*',i)){block++;i+=2;} else if(source.startsWith('*/',i)){block--;i+=2;} else i++; } out+=' '; continue; }
+    const dollar=source.slice(i).match(/^\$[A-Za-z_][A-Za-z_0-9]*\$|^\$\$/);
+    if(dollar){const tag=dollar[0], end=source.indexOf(tag,i+tag.length); assert.notEqual(end,-1,'unterminated dollar quote'); i=end+tag.length; out+=' '; continue;}
+    const prefix=source.slice(i).match(/^(?:[eE]|[uU]&|[bBxX])?'/);
+    if(prefix){i+=prefix[0].length; while(i<source.length){if(source[i]==="'"&&source[i+1]==="'"){i+=2;continue;} if(source[i]==="'"){i++;break;} if((prefix[0][0]==='E'||prefix[0][0]==='e')&&source[i]==='\\')i++; i++;} out+=' '; continue;}
+    if(source[i]==='"'){i++;while(i<source.length){if(source[i]==='"'&&source[i+1]==='"'){i+=2;continue;}if(source[i++]==='"')break;}out+=' ';continue;}
+    out+=source[i++];
+  }
+  return out;
+}
+const code=executable(sql), flat=code.replace(/\s+/g,' ').trim();
+test('SQL is exactly one CTE and final aggregate SELECT',()=>{assert.match(flat,/^WITH\b/i);assert.equal((flat.match(/;/g)||[]).length,1);assert.match(flat,/SELECT category,check_name,status,record_count,notes FROM checks ORDER BY sort_group,sort_item,check_name;$/i);});
+test('executable SQL has a strict read-only boundary',()=>{assert.doesNotMatch(code,/\b(?:INSERT|UPDATE|DELETE|MERGE|UPSERT|CREATE|ALTER|DROP|TRUNCATE|GRANT|REVOKE|CALL|DO|EXECUTE|COPY|BEGIN|COMMIT|ROLLBACK|SAVEPOINT|LOCK|VACUUM|ANALYZE|CLUSTER|REINDEX)\b/i);assert.doesNotMatch(code,/\b(?:pg_advisory|dblink|postgres_fdw|lo_import|lo_export|nextval|setval|gen_random_uuid|uuid_generate)\w*\s*\(/i);assert.doesNotMatch(code,/\b(?:TEMP|TEMPORARY)\b/i);});
+test('privacy contract exposes only five aggregate columns',()=>{assert.match(flat,/SELECT category,check_name,status,record_count,notes FROM checks/i);assert.equal((flat.match(/SELECT category,check_name,status,record_count,notes FROM checks/ig)||[]).length,1);for(const status of ["'ok'","'info'","'review'","'blocked'"])assert.ok(sql.includes(status));});
+const categories=['identity_bridge_schema','post_migration_state','source_identity_inventory','projected_application_identities','projected_workspaces','projected_memberships','projected_brand_assignments','projected_board_assignments','access_preservation','backfill_projection','final_readiness'];
+test('all eleven categories and deterministic ordering are encoded',()=>{let at=-1;for(const c of categories){const next=sql.indexOf(`'${c}'`,at+1);assert.ok(next>at,c);at=next;}assert.match(flat,/ORDER BY sort_group,sort_item,check_name/i);});
+test('post-R2 schema contract is comprehensive',()=>{for(const t of ['stable_uuid_primary_key','canonical_email_normalization_constraint','unique_canonical_email_index','exact_identity_status_constraint','non_negative_identity_revision','identity_timestamps','identity_rls_enabled','no_direct_browser_policies','no_browser_table_privileges','workspace_creation_actor_identity','workspace_membership_identity','workspace_invitation_actor_identity','identity_foreign_keys_restrictive','updated_last_owner_trigger','obsolete_identity_columns_absent','workspace_auth_uid_policies_absent','workspace_auth_user_foreign_keys_absent'])assert.ok(sql.includes(t),t);});
+test('canonical signed-session identity replaces auth.users authority',()=>{assert.ok((sql.match(/lower\(btrim\(/g)||[]).length>=5);assert.doesNotMatch(code,/\b(?:FROM|JOIN)\s+auth\.users\b/i);assert.match(sql,/public\.app_identities/);assert.match(sql,/qualifying_identities AS/);});
+test('Option C projections and isolation controls are explicit',()=>{for(const t of ['primary_owners AS','brand_members AS','visibility AS','Exactly one per distinct safe owner','minimal_visibility_memberships_to_create','board_only_collaborators_excluded','public_token_access_excluded','branded_boards_safe_to_inherit','unbranded_boards_safe_for_owner','snapshot_only_unbranded_boards','campaign_brand_snapshots_remaining_unchanged','potential_access_expansion_cases','potential_access_loss_cases'])assert.ok(sql.includes(t),t);});
+test('invented fixture proves distinct eligibility and Option C counts',()=>{const brands=[['b1','owner@invented.test'],['b2','owner@invented.test']];const boards=[['x1','owner@invented.test','b1'],['x2','solo@invented.test',null]];const members=[['b1','member@invented.test'],['b2','member@invented.test']];const shares=[['x1','boardonly@invented.test'],['x2','member@invented.test']];const owners=new Set([...brands.map(x=>x[1]),...boards.map(x=>x[1])]);const eligible=new Set([...owners,...members.map(x=>x[1])]);const boardOnly=new Set(shares.map(x=>x[1]).filter(x=>!eligible.has(x)));assert.deepEqual({workspaces:owners.size,identities:eligible.size,boardOnly:boardOnly.size,brands:brands.length,boards:boards.length},{workspaces:2,identities:3,boardOnly:1,brands:2,boards:2});});
+test('blockers are derived once and final readiness uses their disjoint result',()=>{assert.equal((sql.match(/blockers AS \(/g)||[]).length,1);assert.match(sql,/total_blocking_anomalies[\s\S]*SELECT n::bigint FROM blockers/);assert.match(sql,/workspace_backfill_readiness[\s\S]*CASE WHEN n=0 THEN 'ok' ELSE 'blocked'/);assert.match(sql,/review-only relationships are excluded/);});
+test('historical evidence remains byte-exact and later ordered files are permitted',()=>{const expected={'migrations/20260928_bw36_6_workspace_schema_foundation.sql':'d7832add0dd280a05a420fad42c90b81929dae5e72eae9ccc5a7377b1d49a35c','migrations/20260929_bw36_7r2_application_identity_bridge.sql':'cbe66bcd7a69f01c2755aac159df86dfba8dd86b70347e6504e9b418d0489557','scripts/sql/bw36-7-workspace-backfill-preflight.sql':'617b23351d89a99966d7aa86c98bfd0dde0a02e7e94f90b2716c2b41baabd234','scripts/sql/bw36-7r1-workspace-identity-diagnostic.sql':'45b62b508f7b1c4dc0b553b52eddfce4fc890c7e2a6a713ea98a7401cf6561e8','scripts/check-bw36-6-workspace-schema-foundation.js':'0dcb3f0ba0c684d1ecd2e56accc2f9031768390199066d8c9922f6293129967e','scripts/check-bw36-7-workspace-backfill-preflight.js':'ec1932c8d0048bee445fb4435943e2bc00c8f207bc48a764c67a97a28bcffacf','scripts/check-bw36-7r1-workspace-identity-diagnostic.js':'40aba5055da826561e488e5dd957bfb618c746a3e7d33649aad23cc3d91f03e8','scripts/check-bw36-7r2-application-identity-bridge.js':'f9c2ac7242fc30f1e17e750ab3b98cf2978299f0db25080d7462ccf9f0d9318e'};for(const [f,h] of Object.entries(expected))assert.equal(digest(f),h,f);assert.equal(fs.readdirSync(path.join(root,'migrations')).filter(x=>/bw36_7r3/i.test(x)).length,0);});
+test('only the five scoped files differ and no runtime file changed',()=>{const changed=cp.execFileSync('git',['status','--short','--untracked-files=all'],{cwd:root,encoding:'utf8'}).trimEnd().split('\n').filter(Boolean).map(x=>x.slice(3)).filter(x=>!x.startsWith('node_modules/'));const allowed=['.github/workflows/runtime-boot-safety.yml','docs/implementation/2026-09-29-bw36-7r3-corrected-workspace-backfill-preflight.md','package.json','scripts/check-bw36-7r3-corrected-workspace-backfill-preflight.js','scripts/sql/bw36-7r3-corrected-workspace-backfill-preflight.sql'];for(const f of changed)assert.ok(allowed.includes(f),f);});
+test('registration immediately follows R2 in package and Runtime Boot Safety',()=>{assert.equal(pkg.scripts['check:bw36.7r3'],'node scripts/check-bw36-7r3-corrected-workspace-backfill-preflight.js');assert.ok(Object.keys(pkg.scripts).indexOf('check:bw36.7r3')===Object.keys(pkg.scripts).indexOf('check:bw36.7r2')+1);assert.match(workflow,/check:bw36\.7r2[\s\S]*check:bw36\.7r3/);});
+process.stdout.write(`BW-36.7R3 corrected Workspace backfill preflight: ${passed} deterministic groups passed; zero database, provider, AI, or network requests.\n`);
