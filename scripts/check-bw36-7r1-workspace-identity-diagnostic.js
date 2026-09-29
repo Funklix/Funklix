@@ -149,18 +149,24 @@ test('all derived conclusion states and evidence-only readiness are supported', 
   assert.ok(sql.includes('never a backfill'));
 });
 
-test('no migration exists and protected BW-36.6, BW-36.7, BW-36.4/runtime files are byte-identical', () => {
+test('R1 introduced no migration and its required historical files survive later ordered migrations byte-identically', () => {
   assert.ok(relativeSql.startsWith('scripts/sql/'));
-  assert.deepEqual(fs.readdirSync(path.join(root, 'migrations')).sort(), [
+  const migrationFiles = fs.readdirSync(path.join(root, 'migrations')).sort();
+  const requiredAtR1 = [
     '20260911_bw33_5_supabase_rls_hardening.rollback.sql',
     '20260911_bw33_5_supabase_rls_hardening.sql',
     '20260914_bw33_5_1_social_publishing_destinations_rls.rollback.sql',
     '20260914_bw33_5_1_social_publishing_destinations_rls.sql',
     '20260914_bw33_5_1_social_publishing_destinations_rls.verify.sql',
     '20260928_bw36_6_workspace_schema_foundation.sql'
-  ]);
+  ];
+  for (const required of requiredAtR1) assert.equal(migrationFiles.filter((name) => name === required).length, 1, required);
+  assert.equal(migrationFiles.some((name) => /bw36[_-]7r1/i.test(name)), false);
+  const foundationPosition = migrationFiles.indexOf('20260928_bw36_6_workspace_schema_foundation.sql');
+  assert.ok(migrationFiles.slice(foundationPosition + 1).every((name) => name > '20260928_bw36_6_workspace_schema_foundation.sql'));
   const baselines = {
     'migrations/20260928_bw36_6_workspace_schema_foundation.sql': 'd7832add0dd280a05a420fad42c90b81929dae5e72eae9ccc5a7377b1d49a35c',
+    'scripts/sql/bw36-7r1-workspace-identity-diagnostic.sql': '45b62b508f7b1c4dc0b553b52eddfce4fc890c7e2a6a713ea98a7401cf6561e8',
     'scripts/sql/bw36-7-workspace-backfill-preflight.sql': '617b23351d89a99966d7aa86c98bfd0dde0a02e7e94f90b2716c2b41baabd234',
     'brand-sidebar.js': '1c9dc05ca3dea04cd7a78538db3b958e35ade0441184a8234a456d4ce2bb22f0',
     'scripts/check-bw36-4-simplified-brand-sidebar.js': '2d8cfe6e01c8e604bde5aff70c02872eb4c7ad2797c0082400ceeb3dcf7129a5',
