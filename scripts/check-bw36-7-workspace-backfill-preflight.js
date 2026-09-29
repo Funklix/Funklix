@@ -110,7 +110,7 @@ test('final readiness and deterministic category order are explicit', () => {
 });
 test('browser preference, UI, provider and AI boundaries are untouched', () => {
   assert.doesNotMatch(sql, /localStorage|sessionStorage|ephemeralBrand|browser preference/i);
-  const allowed = new Set([relativeSql, 'scripts/check-bw36-7-workspace-backfill-preflight.js', 'docs/implementation/2026-09-28-bw36-7-workspace-backfill-preflight.md', 'package.json', '.github/workflows/runtime-boot-safety.yml']);
+  const allowed = new Set([relativeSql, 'scripts/check-bw36-7-workspace-backfill-preflight.js', 'docs/implementation/2026-09-28-bw36-7-workspace-backfill-preflight.md', 'package.json', '.github/workflows/runtime-boot-safety.yml', 'scripts/check-bw36-7r3-corrected-workspace-backfill-preflight.js', 'scripts/check-bw36-7r2-application-identity-bridge.js']);
   const changed = execFileSync('git', ['diff', '--name-only', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim().split('\n').filter(Boolean);
   for (const file of changed) assert.ok(allowed.has(file), `unexpected changed file: ${file}`);
 });
