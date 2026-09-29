@@ -46,9 +46,14 @@ function test(name, fn) { fn(); passed += 1; process.stdout.write(`✓ ${name}\n
 function hasStatement(pattern) { return parsed.some((statement) => pattern.test(statement)); }
 function sha(file) { return crypto.createHash('sha256').update(fs.readFileSync(path.join(root, file))).digest('hex'); }
 
-test('one newest ordered additive migration is selected', () => {
-  assert.equal(schemaMigrations.at(-1), migrationName);
-  assert.equal(schemaMigrations.filter((name) => name.includes('bw36_6')).length, 1);
+test('the exact immutable BW-36.6 migration is selected while later migrations are allowed', () => {
+  assert.equal(path.basename(migrationPath), migrationName);
+  assert.equal(schemaMigrations.filter((name) => name === migrationName).length, 1);
+  assert.equal(schemaMigrations.filter((name) => /bw36[_-]6/i.test(name)).length, 1);
+  assert.equal(sha(`migrations/${migrationName}`), 'd7832add0dd280a05a420fad42c90b81929dae5e72eae9ccc5a7377b1d49a35c');
+  const migrationPosition = schemaMigrations.indexOf(migrationName);
+  assert.ok(migrationPosition >= 0);
+  assert.ok(schemaMigrations.slice(migrationPosition + 1).every((name) => name > migrationName));
   assert.equal(parsed[0].toUpperCase(), 'BEGIN');
   assert.equal(parsed.at(-1).toUpperCase(), 'COMMIT');
 });
@@ -109,15 +114,16 @@ test('last owner downgrade, revocation, deletion, bulk and concurrent boundary a
   assert.match(docs, /single\/bulk statements and competing transactions/);
 });
 test('pure authorization helper evaluates identity, lifecycle and role rank', () => {
+  const identityId = '11111111-1111-4111-8111-111111111111';
   assert.deepEqual(auth.WORKSPACE_ROLES, ['owner', 'admin', 'member', 'viewer']);
   assert.equal(auth.normalizeWorkspaceRole(' ADMIN '), 'admin');
   assert.equal(auth.normalizeWorkspaceRole('editor'), null);
   assert.equal(auth.evaluateWorkspacePermission().category, 'unauthenticated');
-  assert.equal(auth.evaluateWorkspacePermission({ identity: 'invented', workspaceExists: false }).category, 'workspace_not_found');
-  assert.equal(auth.evaluateWorkspacePermission({ identity: 'invented' }).category, 'membership_missing');
-  assert.equal(auth.evaluateWorkspacePermission({ identity: 'invented', membership: { role: 'owner', status: 'revoked' } }).category, 'membership_inactive');
-  assert.equal(auth.evaluateWorkspacePermission({ identity: 'invented', membership: { role: 'viewer', status: 'accepted' }, minimumRole: 'admin' }).category, 'insufficient_workspace_role');
-  assert.equal(auth.evaluateWorkspacePermission({ identity: 'invented', membership: { role: 'admin', status: 'accepted' }, minimumRole: 'member' }).allowed, true);
+  assert.equal(auth.evaluateWorkspacePermission({ identity: identityId, workspaceExists: false }).category, 'workspace_not_found');
+  assert.equal(auth.evaluateWorkspacePermission({ identity: identityId }).category, 'membership_missing');
+  assert.equal(auth.evaluateWorkspacePermission({ identity: identityId, membership: { identity_id: identityId, role: 'owner', status: 'revoked' } }).category, 'membership_inactive');
+  assert.equal(auth.evaluateWorkspacePermission({ identity: identityId, membership: { identity_id: identityId, role: 'viewer', status: 'accepted' }, minimumRole: 'admin' }).category, 'insufficient_workspace_role');
+  assert.equal(auth.evaluateWorkspacePermission({ identity: identityId, membership: { identity_id: identityId, role: 'admin', status: 'accepted' }, minimumRole: 'member' }).allowed, true);
 });
 test('migration is additive, data-free, preference-free and provider-free', () => {
   assert.equal(parsed.some((statement) => /^(DROP|TRUNCATE|UPDATE|INSERT|DELETE)\b/i.test(statement)), false);
