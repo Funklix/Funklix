@@ -5,17 +5,22 @@ const { getSessionUser } = require('./_auth-session');
 const { pool } = require('./_boards-storage');
 const { APP_IDENTITY_ERRORS, lookupRequestFromVerifiedSession, validateIdentityRow, compareIdentityToSessionEmail } = require('./_app-identity');
 const { WorkspaceCatalogError, loadWorkspaceCatalog } = require('./_workspace-catalog');
+const { validateWorkspaceName } = require('../workspace-name');
 
 const CONTRACT = 'workspace_catalog_v1';
+const UPDATE_CONTRACT = 'workspace_update_v1';
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const IDENTITY_SELECT = 'SELECT id, canonical_email, status, revision FROM public.app_identities WHERE canonical_email = $1 ORDER BY id LIMIT 2';
 const ERROR_STATUS = Object.freeze({ METHOD_NOT_ALLOWED: 405, AUTHENTICATION_REQUIRED: 401, SESSION_INVALID: 401,
   IDENTITY_INVALID: 422, IDENTITY_DISABLED: 403, IDENTITY_AMBIGUOUS: 409, WORKSPACE_SCHEMA_UNAVAILABLE: 503,
   WORKSPACE_CATALOG_CONFLICT: 409, DATABASE_UNAVAILABLE: 503, RESPONSE_INVALID: 500, INTERNAL_ERROR: 500 });
+const UPDATE_ERROR_STATUS = Object.freeze({ WORKSPACE_NOT_FOUND:404, MEMBERSHIP_REQUIRED:403, PERMISSION_DENIED:403,
+  INVALID_WORKSPACE_NAME:422, WORKSPACE_CHANGED:409, DATABASE_UNAVAILABLE:503, RESPONSE_INVALID:500, INTERNAL_ERROR:500 });
 
 function requestId() { return crypto.randomBytes(12).toString('hex'); }
 function durationBucket(started) { const ms = Date.now() - started; return ms < 100 ? 'lt_100ms' : ms < 500 ? 'lt_500ms' : 'gte_500ms'; }
 function send(res, status, body) { res.status(status); return res.json(body); }
-function failure(res, id, code, stage) { return send(res, ERROR_STATUS[code] || 500, { contract: CONTRACT, request_id: id, error: { code, stage } }); }
+function failure(res, id, code, stage, contract = CONTRACT) { return send(res, UPDATE_ERROR_STATUS[code] || ERROR_STATUS[code] || 500, { contract, request_id: id, error: { code, stage } }); }
 function identityCode(code) {
   if (code === APP_IDENTITY_ERRORS.DISABLED) return 'IDENTITY_DISABLED';
   if (code === APP_IDENTITY_ERRORS.AMBIGUOUS) return 'IDENTITY_AMBIGUOUS';
@@ -30,6 +35,13 @@ function identityRows(result) {
   return result && typeof result === 'object' && !Array.isArray(result) && Array.isArray(result.rows)
     ? result.rows : null;
 }
+function updateRequest(body) {
+  const keys = body && typeof body === 'object' && !Array.isArray(body) ? Object.keys(body) : [];
+  if (keys.length !== 5 || keys.some((key) => !['contract','workspace_id','expected_revision','name','request_id'].includes(key))
+    || body.contract !== UPDATE_CONTRACT || !UUID.test(body.workspace_id || '') || !Number.isSafeInteger(body.expected_revision) || body.expected_revision < 0 || typeof body.name !== 'string'
+    || typeof body.request_id !== 'string' || !/^[A-Za-z0-9._:-]{1,64}$/.test(body.request_id)) return null;
+  return { ...body };
+}
 
 function createHandler({ sessionReader = getSessionUser, db = pool, catalogLoader = loadWorkspaceCatalog } = {}) {
   return async function handler(req, res) {
@@ -37,15 +49,16 @@ function createHandler({ sessionReader = getSessionUser, db = pool, catalogLoade
     res.setHeader('Cache-Control', 'private, no-store, max-age=0');
     res.setHeader('Pragma', 'no-cache');
     res.setHeader('X-Request-Id', id);
-    if (req.method !== 'GET') { res.setHeader('Allow', 'GET'); return failure(res, id, 'METHOD_NOT_ALLOWED', 'method'); }
+    const contract = req.method === 'PATCH' ? UPDATE_CONTRACT : CONTRACT;
+    if (!['GET','PATCH'].includes(req.method)) { res.setHeader('Allow', 'GET, PATCH'); return failure(res, id, 'METHOD_NOT_ALLOWED', 'method', req.method === 'PATCH' ? UPDATE_CONTRACT : CONTRACT); }
     let user;
-    try { user = sessionReader(req); } catch { return failure(res, id, 'SESSION_INVALID', 'session'); }
+    try { user = sessionReader(req); } catch { return failure(res, id, 'SESSION_INVALID', 'session', contract); }
     if (!user) {
       const hasSessionCookie = /(?:^|;\s*)funklix_session=/.test(req.headers?.cookie || '');
-      return failure(res, id, hasSessionCookie ? 'SESSION_INVALID' : 'AUTHENTICATION_REQUIRED', 'session');
+      return failure(res, id, hasSessionCookie ? 'SESSION_INVALID' : 'AUTHENTICATION_REQUIRED', 'session', contract);
     }
     const lookup = lookupRequestFromVerifiedSession({ verified: true, user });
-    if (!lookup.ok) return failure(res, id, 'SESSION_INVALID', 'session');
+    if (!lookup.ok) return failure(res, id, 'SESSION_INVALID', 'session', contract);
     let currentStage = 'identity_query_construction';
     const diagnostic = (stage, code = 'OK') => {
       currentStage = stage;
@@ -59,22 +72,59 @@ function createHandler({ sessionReader = getSessionUser, db = pool, catalogLoade
       const rows = identityRows(identityResult);
       if (!rows) {
         diagnostic('identity_response_normalization', 'IDENTITY_INVALID');
-        return failure(res, id, 'IDENTITY_INVALID', 'identity');
+        return failure(res, id, 'IDENTITY_INVALID', 'identity', contract);
       }
       diagnostic('identity_row_validation');
       const identity = validateIdentityRow(rows);
       if (!identity.ok && identity.code === APP_IDENTITY_ERRORS.NOT_FOUND) {
+        if (req.method === 'PATCH') return failure(res, id, 'IDENTITY_INVALID', 'identity', contract);
         return send(res, 200, { contract: CONTRACT, request_id: id, workspaces: [] });
       }
       if (!identity.ok) {
         diagnostic('identity_row_validation', identityCode(identity.code));
-        return failure(res, id, identityCode(identity.code), 'identity');
+        return failure(res, id, identityCode(identity.code), 'identity', contract);
       }
       diagnostic('identity_canonical_comparison');
       const match = compareIdentityToSessionEmail(identity, lookup.canonicalEmail);
       if (!match.ok) {
         diagnostic('identity_canonical_comparison', 'IDENTITY_INVALID');
-        return failure(res, id, 'IDENTITY_INVALID', 'identity');
+        return failure(res, id, 'IDENTITY_INVALID', 'identity', contract);
+      }
+      if (req.method === 'PATCH') {
+        const input = updateRequest(req.body);
+        if (!input) return failure(res, id, 'INVALID_WORKSPACE_NAME', 'request', UPDATE_CONTRACT);
+        const client = typeof db.connect === 'function' ? await db.connect() : db;
+        let roleCategory = 'none'; let changed = false;
+        try {
+          await client.query('BEGIN');
+          const workspaceResult = await client.query(`SELECT id, name, avatar_url, locale, revision, status FROM public.workspaces WHERE id = $1 FOR UPDATE`, [input.workspace_id]);
+          const workspace = workspaceResult.rows?.[0];
+          if (!workspace || workspace.status !== 'active') { await client.query('ROLLBACK'); return failure(res,id,'WORKSPACE_NOT_FOUND','workspace',UPDATE_CONTRACT); }
+          const membershipResult = await client.query(`SELECT role, status FROM public.workspace_memberships WHERE workspace_id = $1 AND identity_id = $2 FOR UPDATE`, [input.workspace_id, match.identityId]);
+          const membership = membershipResult.rows?.[0];
+          if (!membership || membership.status !== 'accepted') { await client.query('ROLLBACK'); return failure(res,id,'MEMBERSHIP_REQUIRED','membership',UPDATE_CONTRACT); }
+          roleCategory = ['owner','admin'].includes(membership.role) ? membership.role : 'read_only';
+          if (!['owner','admin'].includes(membership.role)) { await client.query('ROLLBACK'); return failure(res,id,'PERMISSION_DENIED','authorization',UPDATE_CONTRACT); }
+          if (Number(workspace.revision) !== input.expected_revision) { await client.query('ROLLBACK'); return failure(res,id,'WORKSPACE_CHANGED','revision',UPDATE_CONTRACT); }
+          const checkedName = validateWorkspaceName(input.name);
+          if (!checkedName.ok) { await client.query('ROLLBACK'); return failure(res,id,'INVALID_WORKSPACE_NAME','name',UPDATE_CONTRACT); }
+          input.name = checkedName.name;
+          let updated = workspace;
+          if (workspace.name !== input.name) {
+            changed = true;
+            const result = await client.query(`UPDATE public.workspaces SET name = $2, revision = revision + 1, updated_at = now() WHERE id = $1 RETURNING id, name, avatar_url, locale, revision`, [input.workspace_id,input.name]);
+            updated = result.rows?.[0];
+            if (!updated) throw Object.assign(new Error('update failed'), { code:'RESPONSE_INVALID' });
+          }
+          await client.query('COMMIT');
+          console.info('[WORKSPACE_UPDATE]', { request_id:id, stage:'complete', code:'OK', role_category:roleCategory, changed, duration_bucket:durationBucket(started) });
+          return send(res,200,{contract:UPDATE_CONTRACT,request_id:input.request_id,workspace:{id:updated.id,name:updated.name,avatar_url:updated.avatar_url||null,locale:updated.locale||null,revision:Number(updated.revision),role:membership.role}});
+        } catch (error) {
+          try { await client.query('ROLLBACK'); } catch {}
+          const code = error?.code === 'RESPONSE_INVALID' ? 'RESPONSE_INVALID' : databaseCode(error);
+          console.error('[WORKSPACE_UPDATE]', { request_id:id, stage:'transaction', code, role_category:roleCategory, changed:false, duration_bucket:durationBucket(started) });
+          return failure(res,id,code,'transaction',UPDATE_CONTRACT);
+        } finally { if (client !== db) client.release(); }
       }
       const workspaces = await catalogLoader({ db, identityId: match.identityId, canonicalEmail: lookup.canonicalEmail, diagnostic });
       console.info('[WORKSPACE_CATALOG]', { request_id: id, stage: 'complete', code: 'OK', workspace_count: workspaces.length,
@@ -88,7 +138,7 @@ function createHandler({ sessionReader = getSessionUser, db = pool, catalogLoade
       const diagnosticStage = error instanceof WorkspaceCatalogError ? error.stage : currentStage;
       console.error('[WORKSPACE_CATALOG]', { request_id: id, stage: diagnosticStage, code, workspace_count: 0, brand_count: 0, board_count: 0,
         membership_count: 0, duration_bucket: durationBucket(started) });
-      return failure(res, id, code, stage);
+      return failure(res, id, code, stage, contract);
     }
   };
 }
@@ -96,4 +146,6 @@ function createHandler({ sessionReader = getSessionUser, db = pool, catalogLoade
 module.exports = createHandler();
 module.exports.createHandler = createHandler;
 module.exports.CONTRACT = CONTRACT;
+module.exports.UPDATE_CONTRACT = UPDATE_CONTRACT;
+module.exports.updateRequest = updateRequest;
 module.exports.IDENTITY_SELECT = IDENTITY_SELECT;

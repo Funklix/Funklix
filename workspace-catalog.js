@@ -52,5 +52,33 @@
     if (brand && byId.has(brand.workspace_id)) return brand.workspace_id;
     return workspaces.length === 1 ? workspaces[0].id : null;
   }
-  root.FunklixWorkspaceCatalog = Object.freeze({ load, validate, deriveActiveWorkspaceId });
+  function updateError(code, stage) { const error=new Error('Workspace update failed');error.code=code;error.stage=stage;return error; }
+  function buildUpdateRequest(workspace, name, requestId) {
+    if (!workspace || !id(workspace.id) || !Number.isSafeInteger(workspace.revision) || workspace.revision < 0 || !/^[A-Za-z0-9._:-]{1,64}$/.test(requestId || '')) throw updateError('RESPONSE_INVALID','request');
+    const checked=root.FunklixWorkspaceName?.validateWorkspaceName(name);
+    if (!checked?.ok) throw updateError('INVALID_WORKSPACE_NAME',checked?.reason||'request');
+    return {contract:'workspace_update_v1',workspace_id:workspace.id,expected_revision:workspace.revision,name:checked.name,request_id:requestId};
+  }
+  function validateUpdate(payload) {
+    const workspace=payload?.workspace;
+    if (!payload || Object.keys(payload).some(k=>!['contract','request_id','workspace'].includes(k)) || payload.contract!=='workspace_update_v1' || !/^[A-Za-z0-9._:-]{1,64}$/.test(payload.request_id||'')
+      || !workspace || Object.keys(workspace).some(k=>!['id','name','avatar_url','locale','revision','role'].includes(k)) || !id(workspace.id) || !text(workspace.name,160)
+      || !nullableString(workspace.avatar_url,2048) || !(workspace.locale===null||['en','de'].includes(workspace.locale)) || !Number.isSafeInteger(workspace.revision) || workspace.revision<0 || !WORKSPACE_ROLES.has(workspace.role)) throw updateError('RESPONSE_INVALID','response');
+    return Object.freeze({...workspace});
+  }
+  async function rename(workspace,name,requestId,fetchImpl=root.fetch.bind(root)) {
+    const body=buildUpdateRequest(workspace,name,requestId);
+    const response=await fetchImpl('/api/workspaces',{method:'PATCH',credentials:'same-origin',headers:{Accept:'application/json','Content-Type':'application/json'},body:JSON.stringify(body)});
+    const payload=await response.json().catch(()=>{throw updateError('RESPONSE_INVALID','response');});
+    if(!response.ok)throw updateError(payload?.error?.code||'INTERNAL_ERROR',payload?.error?.stage||'response');
+    if(payload.request_id!==requestId)throw updateError('RESPONSE_INVALID','response');
+    return validateUpdate(payload);
+  }
+  function patch(catalog, updated) {
+    const index=catalog?.workspaces?.findIndex(item=>item.id===updated?.id);
+    if(index<0)throw updateError('RESPONSE_INVALID','reconciliation');
+    const workspaces=catalog.workspaces.slice();workspaces[index]=Object.freeze({...workspaces[index],...updated});
+    return Object.freeze({...catalog,workspaces:Object.freeze(workspaces)});
+  }
+  root.FunklixWorkspaceCatalog = Object.freeze({ load, validate, deriveActiveWorkspaceId, buildUpdateRequest, validateUpdate, rename, patch });
 }(typeof globalThis !== 'undefined' ? globalThis : window));

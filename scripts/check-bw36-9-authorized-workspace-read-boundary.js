@@ -71,7 +71,8 @@ function workspace(overrides={}) { return { id:ids.workspace,name:'Invented Work
   });
   Module._load=originalLoad;
   await test('catalog is read-only, private, and excludes forbidden material',()=>{
-    const source=fs.readFileSync(path.join(root,'api/_workspace-catalog.js'),'utf8')+fs.readFileSync(path.join(root,'api/workspaces.js'),'utf8');
+    // The catalog loader remains read-only; BW-36.11 chronologically adds an authorized PATCH to the flat route.
+    const source=fs.readFileSync(path.join(root,'api/_workspace-catalog.js'),'utf8');
     assert(!/\b(INSERT|UPDATE|DELETE|UPSERT)\b/.test(source));assert(!/canvas_json|brand_core|snapshot|public_view_token|prompt|comment|schedule|publication/.test(source));assert(!/req\.(body|query)/.test(source));
   });
   await test('runtime lifecycle is isolated and registered before app',()=>{
