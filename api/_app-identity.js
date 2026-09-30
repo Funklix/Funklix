@@ -26,6 +26,16 @@ function normalizeAppIdentityStatus(value) {
   return APP_IDENTITY_STATUSES.includes(status) ? status : null;
 }
 
+// node-postgres deliberately returns PostgreSQL int8/BIGINT values as strings
+// because the full database range cannot be represented safely by JavaScript.
+// Revisions remain bounded to JavaScript's safe integer range at this API edge.
+function normalizeRevision(value) {
+  if (typeof value === 'number') return Number.isSafeInteger(value) && value >= 0 ? value : null;
+  if (typeof value !== 'string' || !/^(0|[1-9][0-9]*)$/.test(value)) return null;
+  const revision = Number(value);
+  return Number.isSafeInteger(revision) ? revision : null;
+}
+
 // Only getSessionUser()/verifySessionToken output may be supplied here. The
 // caller proves that boundary with verified: true; request body/query values
 // are never an authority for this helper.
@@ -48,14 +58,15 @@ function validateIdentityRow(row) {
     if (row.length !== 1) return failure(APP_IDENTITY_ERRORS.AMBIGUOUS);
     return validateIdentityRow(row[0]);
   }
+  const revision = normalizeRevision(row?.revision);
   if (typeof row !== 'object' || !UUID.test(row.id || '') || !isCanonicalEmail(row.canonical_email)
-      || !Number.isSafeInteger(row.revision) || row.revision < 0) {
+      || revision === null) {
     return failure(APP_IDENTITY_ERRORS.CONTRACT_INVALID);
   }
   const status = normalizeAppIdentityStatus(row.status);
   if (!status) return failure(APP_IDENTITY_ERRORS.CONTRACT_INVALID);
   if (status === 'disabled') return failure(APP_IDENTITY_ERRORS.DISABLED);
-  return Object.freeze({ ok: true, identityId: row.id.toLowerCase(), canonicalEmail: row.canonical_email, status, revision: row.revision });
+  return Object.freeze({ ok: true, identityId: row.id.toLowerCase(), canonicalEmail: row.canonical_email, status, revision });
 }
 
 function compareIdentityToSessionEmail(identity, canonicalSessionEmail) {
@@ -72,6 +83,7 @@ module.exports = {
   normalizeCanonicalEmail,
   isCanonicalEmail,
   normalizeAppIdentityStatus,
+  normalizeRevision,
   lookupRequestFromVerifiedSession,
   validateIdentityRow,
   compareIdentityToSessionEmail
