@@ -121,23 +121,30 @@
         <section class="workspace-context" id="workspace-context" aria-label="Workspace and Brand context">
           <div class="workspace-context-group">
             <span class="workspace-context-label" data-i18n="Workspace">Workspace</span>
-            <button class="workspace-context-trigger" id="workspace-context-trigger" type="button" aria-haspopup="listbox" aria-expanded="false" aria-controls="workspace-context-popover">
-              <span class="workspace-context-avatar" id="workspace-context-avatar" aria-hidden="true">W</span>
-              <span class="workspace-context-name" id="workspace-context-name" data-i18n="Choose a workspace">Choose a workspace</span>
-              <span class="workspace-context-chevron" aria-hidden="true">⌄</span>
-            </button>
+            <div class="workspace-context-identity-row">
+              <button class="workspace-context-trigger" id="workspace-context-trigger" type="button" aria-haspopup="listbox" aria-expanded="false" aria-controls="workspace-context-popover" aria-label="Choose a workspace">
+                <span class="workspace-context-avatar" id="workspace-context-avatar" aria-hidden="true">W</span>
+                <span class="workspace-context-copy"><span class="workspace-context-name" id="workspace-context-name" data-i18n="Choose a workspace">Choose a workspace</span><span class="workspace-context-access" id="workspace-context-access" hidden></span></span>
+                <span class="workspace-context-chevron" id="workspace-context-chevron" aria-hidden="true">⌄</span>
+              </button>
+              <button class="workspace-context-manage" id="workspace-context-manage" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="workspace-context-menu" aria-label="Workspace actions" title="Workspace actions" hidden>⋯</button>
+            </div>
           </div>
           <div class="workspace-context-group">
             <span class="workspace-context-label" data-i18n="Brand">Brand</span>
-            <button class="workspace-context-trigger" id="workspace-brand-trigger" type="button" aria-haspopup="listbox" aria-expanded="false" aria-controls="workspace-context-popover">
+            <button class="workspace-context-trigger" id="workspace-brand-trigger" type="button" aria-haspopup="listbox" aria-expanded="false" aria-controls="brand-selector-popover" aria-label="Choose a Brand">
               <span class="workspace-context-avatar workspace-brand-avatar" id="workspace-brand-avatar" aria-hidden="true">B</span>
               <span class="workspace-context-name" id="workspace-brand-name" data-i18n="Choose a brand">Choose a brand</span>
               <span class="workspace-context-chevron" id="workspace-brand-chevron" aria-hidden="true">⌄</span>
             </button>
           </div>
-          <div class="workspace-context-popover" id="workspace-context-popover" hidden>
+          <div class="workspace-context-popover workspace-selector-popover" id="workspace-context-popover" hidden>
             <div class="workspace-context-options" id="workspace-context-options" role="listbox" tabindex="-1"></div>
             <p class="workspace-context-status" id="workspace-context-status" role="status" aria-live="polite"></p>
+          </div>
+          <div class="workspace-context-popover brand-selector-popover" id="brand-selector-popover" hidden>
+            <div class="workspace-context-options" id="brand-selector-options" role="listbox" tabindex="-1"></div>
+            <p class="workspace-context-status" id="brand-selector-status" role="status" aria-live="polite"></p>
           </div>
         </section>
         <section class="brand-switcher-shell brand-identity-panel fk-card legacy-brand-context" id="brand-identity-panel" hidden aria-hidden="true" aria-label="Workspace Brand context" aria-labelledby="board-brand-association-title" aria-live="polite">
