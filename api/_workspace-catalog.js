@@ -68,7 +68,8 @@ function projectCatalog({ memberships, brands, boards }) {
   return output;
 }
 
-async function loadWorkspaceCatalog({ db, identityId, canonicalEmail }) {
+async function loadWorkspaceCatalog({ db, identityId, canonicalEmail, diagnostic = () => {} }) {
+  diagnostic('membership_lookup');
   const membershipResult = await db.query(
     `SELECT w.id, w.name, w.avatar_url, w.locale, w.revision, m.role
        FROM public.workspace_memberships m
@@ -78,6 +79,7 @@ async function loadWorkspaceCatalog({ db, identityId, canonicalEmail }) {
   const memberships = membershipResult.rows;
   if (!memberships.length) return [];
   const ids = memberships.map((row) => row.id);
+  diagnostic('catalog_projection');
   const brandResult = await db.query(
     `SELECT b.id, b.workspace_id, b.name, b.revision,
             CASE WHEN lower(b.owner_email) = $1 THEN 'owner' ELSE bm.role END AS role
