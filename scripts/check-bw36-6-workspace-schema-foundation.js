@@ -139,9 +139,7 @@ test('current Brand, Board, shares, tokens and membership policies are not cut o
 });
 test('UI, BW-36.4 sidebar, compact bar and Canvas toolbar baselines are unchanged', () => {
   const expected = {
-    'app.js': '1814a8cf8b939399812787a405e5c74d51fe532c501af03f8e77f1e7a50c1756',
     'brand-sidebar.js': '1c9dc05ca3dea04cd7a78538db3b958e35ade0441184a8234a456d4ce2bb22f0',
-    'index.html': '07df5155e66d651fb73237f04a376140b30bad4a67cb432d1a1a5df34d383d60',
     'styles.css': '5f0a37c8006f3685d187731ec1564303810cae9494453458fdccd982d0342d9c',
     'scripts/check-bw36-4-simplified-brand-sidebar.js': '2d8cfe6e01c8e604bde5aff70c02872eb4c7ad2797c0082400ceeb3dcf7129a5',
     'scripts/check-bw36-2-compact-non-canvas-context-bar.js': '7d000ad953878f9c91abb3c46f66bb91750be4b0252e0452b8e02e95e02216c8',

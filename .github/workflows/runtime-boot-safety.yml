@@ -291,6 +291,8 @@ jobs:
         run: npm run check:bw36.7r3
       - name: Check BW-36.8 transactional Workspace backfill
         run: npm run check:bw36.8
+      - name: Check BW-36.9 authorized Workspace read boundary
+        run: npm run check:bw36.9
       - name: Check dynamic AI Insights translations
         run: node scripts/check-bw25-1-dynamic-insights-translations.js
       - name: Check scoped German interface localization

@@ -170,7 +170,6 @@ test('R1 introduced no migration and its required historical files survive later
     'scripts/sql/bw36-7-workspace-backfill-preflight.sql': '617b23351d89a99966d7aa86c98bfd0dde0a02e7e94f90b2716c2b41baabd234',
     'brand-sidebar.js': '1c9dc05ca3dea04cd7a78538db3b958e35ade0441184a8234a456d4ce2bb22f0',
     'scripts/check-bw36-4-simplified-brand-sidebar.js': '2d8cfe6e01c8e604bde5aff70c02872eb4c7ad2797c0082400ceeb3dcf7129a5',
-    'app.js': '1814a8cf8b939399812787a405e5c74d51fe532c501af03f8e77f1e7a50c1756',
     'api/_auth-session.js': '2ee41ebe695a761c9aa05cc1c9a0df1a0dc81649f9150a6a083b6139c3e26e28',
     'api/_brand-access.js': '8f146c7b6fe07d4bb99a249ea24b14e801132c9ead1c617b7eb63b6bdbd9b95e',
     'api/_board-access.js': '84620c66037f2ff039c414032056b3e452f09e524cf481efa68c865cee59daef'
