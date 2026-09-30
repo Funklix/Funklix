@@ -142,7 +142,8 @@ async function invoke(options = {}, request = {}) {
     const source = fs.readFileSync(path.join(root, 'app.js'), 'utf8');
     assert.match(source, /if \(current\.identity === identity && current\.promise\) return current\.promise/);
     assert.equal((source.match(/FunklixWorkspaceCatalog\.load\(\)/g) || []).length, 1);
-    const boundary = fs.readFileSync(path.join(root, 'api/workspaces.js'), 'utf8') + fs.readFileSync(path.join(root, 'api/_workspace-catalog.js'), 'utf8');
+    // The catalog loader remains read-only; BW-36.11 later adds the authorized flat-route PATCH.
+    const boundary = fs.readFileSync(path.join(root, 'api/_workspace-catalog.js'), 'utf8');
     assert(!/fetch\(|axios|openai|anthropic|linkedin|facebook|googleapis/i.test(boundary));
     assert(!/\b(?:INSERT|UPDATE|DELETE|UPSERT)\b/.test(boundary));
   });

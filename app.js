@@ -4597,6 +4597,14 @@ function refreshActiveWorkspaceContext() {
   renderWorkspaceSidebar();
 }
 
+async function renameSessionWorkspace(workspace, name) {
+  const requestId = `rename-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,10)}`;
+  const updated = await window.FunklixWorkspaceCatalog.rename(workspace, name, requestId);
+  state.workspaceCatalog.value = window.FunklixWorkspaceCatalog.patch(state.workspaceCatalog.value, updated);
+  renderWorkspaceSidebar();
+  return updated;
+}
+
 function showBoardConflictModal() {
   return new Promise((resolve) => {
     const overlay = document.createElement('div');
@@ -17602,7 +17610,8 @@ function setAppMode(mode) {
 workspaceSidebarController = window.FunklixWorkspaceSidebar?.create({
   document, language: () => state.uiLanguage,
   onWorkspace: selectSessionWorkspace,
-  onBrand: selectSessionBrand
+  onBrand: selectSessionBrand,
+  onRename: renameSessionWorkspace
 }) || null;
 globalThis.FunklixWorkspaceSidebarController = workspaceSidebarController;
 renderWorkspaceSidebar();
