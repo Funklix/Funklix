@@ -231,6 +231,7 @@ const state = {
 const el = {
   appShell: document.querySelector(".app-shell"),
   leftSidebar: document.getElementById("left-sidebar"),
+  workspaceContext: document.getElementById("workspace-context"),
   workspaceWrap: document.querySelector(".workspace-wrap"),
   dashboardView: document.getElementById("dashboard-view"),
   canvas: document.getElementById("canvas"),
@@ -3055,6 +3056,7 @@ function selectEphemeralBrandFromSwitcher(brand) {
 
 let canonicalBrandDetail = { status: "closed", requestId: 0, saveId: 0, brandId: "", userEmail: "", brand: null, draft: null, controller: null, saveController: null, returnFocus: null };
 let sidebarBrandProjection = null;
+let workspaceSidebarController = null;
 const sidebarProfileCache = new Map();
 
 function isCanonicalBrandDetail(value, expectedId) {
@@ -4342,6 +4344,7 @@ function renderBoardBrandAssociation() {
   if (el.boardBrandAssociationCancel) el.boardBrandAssociationCancel.disabled = association.status === "submitting";
   if (el.boardBrandAssociationFeedback) el.boardBrandAssociationFeedback.textContent = association.message || (state.brandCatalog.status === "loading" && editing ? "Loading your authenticated Canonical Brand catalog…" : "");
   if (hasAssociation && catalog.status === "idle" && state.user?.email) void loadCanonicalBrandCatalog();
+  renderWorkspaceSidebar();
 }
 
 function openBoardBrandAssociation() {
@@ -4502,10 +4505,61 @@ async function loadSessionUser() {
   startPresenceLite();
 }
 
+function renderWorkspaceSidebar() {
+  if (!workspaceSidebarController || !window.FunklixWorkspaceSidebar) return;
+  const catalog = state.workspaceCatalog.value;
+  const activeBoardId = state.currentBoardId || getBoardIdFromPath() || null;
+  const associationBrandId = activeBoardId && state.boardBrandAssociation.boardId === activeBoardId ? state.boardBrandAssociation.brandId : null;
+  const model = workspaceSidebarController.render({
+    signedIn: Boolean(state.user), status: state.workspaceCatalog.status, catalog,
+    activeWorkspaceId: state.workspaceCatalog.activeWorkspaceId, boardId: activeBoardId,
+    brandId: associationBrandId || state.session.brandId
+  });
+  if (state.workspaceCatalog.status === "ready") {
+    state.workspaceCatalog.activeWorkspaceId = model.activeWorkspaceId;
+    state.session.workspaceId = model.activeWorkspaceId;
+    state.session.brandId = model.activeBrandId;
+  }
+}
+
+async function selectSessionWorkspace(workspaceId) {
+  const catalog = state.workspaceCatalog.value;
+  const target = catalog?.workspaces?.find((item) => item.id === workspaceId);
+  if (!target || state.workspaceCatalog.status !== "ready") return false;
+  const activeBoardId = state.currentBoardId || getBoardIdFromPath() || null;
+  const activeBoard = catalog.workspaces.flatMap((item) => item.boards).find((item) => item.id === activeBoardId);
+  if (activeBoard && activeBoard.workspace_id !== workspaceId) {
+    if (!closeCanonicalBrandDetail({ restoreFocus: false })) return false;
+    state.currentBoardId = null; state.session.boardId = null; state.currentBoardName = "";
+    history.replaceState({}, "", "/");
+    setActiveView("home");
+  }
+  state.workspaceCatalog.activeWorkspaceId = workspaceId;
+  state.session.workspaceId = workspaceId;
+  const currentBrand = target.brands.find((item) => item.id === state.session.brandId);
+  state.session.brandId = currentBrand?.id || (target.brands.length === 1 ? target.brands[0].id : null);
+  if (!state.session.brandId) ephemeralBrandSwitcherSelection = null;
+  renderWorkspaceSidebar(); renderBoardsLibrary();
+  return true;
+}
+
+function selectSessionBrand(brandId) {
+  const selectedWorkspace = state.workspaceCatalog.value?.workspaces?.find((item) => item.id === state.workspaceCatalog.activeWorkspaceId);
+  const selected = selectedWorkspace?.brands.find((item) => item.id === brandId);
+  if (!selected || (state.currentBoardId || getBoardIdFromPath())) return false;
+  state.session.brandId = selected.id;
+  ephemeralBrandSwitcherSelection = { id: selected.id, name: selected.name, restored: false };
+  renderWorkspaceSidebar(); renderBoardBrandAssociation(); handleWorkspaceBrandSelectionChange();
+  return true;
+}
+
 function clearWorkspaceCatalog() {
   const generation = state.workspaceCatalog.generation + 1;
   state.workspaceCatalog = { status: "idle", value: null, activeWorkspaceId: null, error: null, generation, identity: "", promise: null };
   state.session.workspaceId = null;
+  state.session.brandId = null;
+  workspaceSidebarController?.close(false);
+  renderWorkspaceSidebar();
 }
 
 function loadAuthorizedWorkspaceCatalog(identity = (state.user?.email || "").trim().toLowerCase()) {
@@ -4523,10 +4577,12 @@ function loadAuthorizedWorkspaceCatalog(identity = (state.user?.email || "").tri
       boardId: state.currentBoardId || getBoardIdFromPath(), brandId: state.session.brandId
     });
     state.session.workspaceId = lifecycle.activeWorkspaceId;
+    renderWorkspaceSidebar();
     return catalog;
   }).catch((error) => {
     if (state.workspaceCatalog !== lifecycle || lifecycle.generation !== generation || identity !== (state.user?.email || "").trim().toLowerCase()) return null;
     lifecycle.status = "error"; lifecycle.error = { code: error?.code || "INTERNAL_ERROR", stage: error?.stage || "response" }; lifecycle.promise = null;
+    renderWorkspaceSidebar();
     return null;
   });
   return lifecycle.promise;
@@ -4538,6 +4594,7 @@ function refreshActiveWorkspaceContext() {
     boardId: state.currentBoardId || getBoardIdFromPath(), brandId: state.session.brandId
   });
   state.session.workspaceId = state.workspaceCatalog.activeWorkspaceId;
+  renderWorkspaceSidebar();
 }
 
 function showBoardConflictModal() {
@@ -17095,6 +17152,7 @@ function closeInspector({ restoreFocus = true } = {}) {
 }
 
 function setActiveView(view) {
+  globalThis.FunklixWorkspaceSidebarController?.close(false);
   state.activeView = view;
   const isHome = view === "home";
   const isBrandCore = view === "brand-core";
@@ -17541,6 +17599,14 @@ function setAppMode(mode) {
   synchronizeAppShell();
 }
 
+workspaceSidebarController = window.FunklixWorkspaceSidebar?.create({
+  document, language: () => state.uiLanguage,
+  onWorkspace: selectSessionWorkspace,
+  onBrand: selectSessionBrand
+}) || null;
+globalThis.FunklixWorkspaceSidebarController = workspaceSidebarController;
+renderWorkspaceSidebar();
+
 // Events
 document.addEventListener("click", (e) => {
   if (e.target.closest(".image-lightbox-close")) {
@@ -17629,6 +17695,7 @@ el.uiLanguageSelect?.addEventListener("change", () => {
   refreshOpenInspectorLanguage();
   refreshInterfaceLanguage();
   window.FunklixTheme?.syncControls?.();
+  renderWorkspaceSidebar();
   if (state.activeView === "insights") renderInsightsSurface();
   if (state.activeView === "funnel_simulator") renderFunnelSimulator();
   if (state.activeView === "content_workspace") renderContentWorkspace();
@@ -18517,6 +18584,11 @@ el.homeNavButton?.addEventListener("click", () => {
   setActiveView("home");
 });
 el.brandCoreButton.addEventListener("click", () => {
+  const context = workspaceSidebarController?.getModel();
+  if (context?.brands?.length > 1 && !context.activeBrandId) {
+    workspaceSidebarController.openBrand();
+    return;
+  }
   setAppMode("brand");
 });
 el.campaignCanvasNavButton.addEventListener("click", () => {
@@ -19011,7 +19083,8 @@ function getBoardLastEdited(board = {}) {
 }
 
 function getDisplayedBoards() {
-  const boards = Array.isArray(state.boardsLibrary) ? [...state.boardsLibrary] : [];
+  const allBoards = Array.isArray(state.boardsLibrary) ? [...state.boardsLibrary] : [];
+  const boards = window.FunklixWorkspaceSidebar?.filterBoards(allBoards, state.workspaceCatalog.value, state.workspaceCatalog.activeWorkspaceId) || allBoards;
   const currentBoardId = state.currentBoardId || getBoardIdFromPath() || "";
   if (!currentBoardId) return boards;
   const activeIndex = boards.findIndex((board) => String(board?.id || "") === String(currentBoardId));

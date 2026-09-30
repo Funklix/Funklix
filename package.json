@@ -116,6 +116,7 @@
     "check:bw36.7r3": "node scripts/check-bw36-7r3-corrected-workspace-backfill-preflight.js",
     "check:bw36.8": "node scripts/check-bw36-8-transactional-workspace-backfill.js",
     "check:bw36.9": "node scripts/check-bw36-9-authorized-workspace-read-boundary.js",
-    "check:bw36.9r1": "node scripts/check-bw36-9r1-workspace-identity-resolution.js"
+    "check:bw36.9r1": "node scripts/check-bw36-9r1-workspace-identity-resolution.js",
+    "check:bw36.10": "node scripts/check-bw36-10-workspace-selector-and-sidebar-hierarchy.js"
   }
 }
