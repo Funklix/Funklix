@@ -10,6 +10,7 @@
     <link rel="icon" href="/assets/brand/tendra-one-symbol.svg" type="image/svg+xml" />
     <script src="/theme-bootstrap.js"></script>
     <link rel="stylesheet" href="/styles.css" />
+    <link rel="stylesheet" href="/workspace-sidebar.css" />
     <style>
       .canvas-toolbar { display: grid; grid-template-rows: auto auto; gap: 8px; width: 100%; min-width: 0; box-sizing: border-box; overflow: visible; }
       .canvas-toolbar-row { min-width: 0; box-sizing: border-box; }
@@ -117,7 +118,30 @@
           </div>
           <button id="sidebar-toggle-btn" class="sidebar-toggle fk-btn fk-btn-ghost" type="button" aria-label="Collapse sidebar" title="Collapse sidebar">◀</button>
         </div>
-        <section class="brand-switcher-shell brand-identity-panel fk-card" id="brand-identity-panel" aria-label="Workspace Brand context" aria-labelledby="board-brand-association-title" aria-live="polite">
+        <section class="workspace-context" id="workspace-context" aria-label="Workspace and Brand context">
+          <div class="workspace-context-group">
+            <span class="workspace-context-label" data-i18n="Workspace">Workspace</span>
+            <button class="workspace-context-trigger" id="workspace-context-trigger" type="button" aria-haspopup="listbox" aria-expanded="false" aria-controls="workspace-context-popover">
+              <span class="workspace-context-avatar" id="workspace-context-avatar" aria-hidden="true">W</span>
+              <span class="workspace-context-name" id="workspace-context-name" data-i18n="Choose a workspace">Choose a workspace</span>
+              <span class="workspace-context-chevron" aria-hidden="true">⌄</span>
+            </button>
+          </div>
+          <div class="workspace-context-group">
+            <span class="workspace-context-label" data-i18n="Brand">Brand</span>
+            <button class="workspace-context-trigger" id="workspace-brand-trigger" type="button" aria-haspopup="listbox" aria-expanded="false" aria-controls="workspace-context-popover">
+              <span class="workspace-context-avatar workspace-brand-avatar" id="workspace-brand-avatar" aria-hidden="true">B</span>
+              <span class="workspace-context-name" id="workspace-brand-name" data-i18n="Choose a brand">Choose a brand</span>
+              <span class="workspace-context-chevron" id="workspace-brand-chevron" aria-hidden="true">⌄</span>
+            </button>
+          </div>
+          <div class="workspace-context-popover" id="workspace-context-popover" hidden>
+            <div class="workspace-context-popover-head"><strong id="workspace-context-popover-title"></strong><button type="button" id="workspace-context-close" aria-label="Close">×</button></div>
+            <div class="workspace-context-options" id="workspace-context-options" role="listbox" tabindex="-1"></div>
+            <p class="workspace-context-status" id="workspace-context-status" role="status" aria-live="polite"></p>
+          </div>
+        </section>
+        <section class="brand-switcher-shell brand-identity-panel fk-card legacy-brand-context" id="brand-identity-panel" hidden aria-hidden="true" aria-label="Workspace Brand context" aria-labelledby="board-brand-association-title" aria-live="polite">
           <span class="brand-switcher-eyebrow" id="board-brand-association-title" data-i18n="Brand">Brand</span>
           <strong id="board-brand-association-current" role="status" aria-live="polite" aria-atomic="true" class="sr-only"></strong>
           <small id="board-brand-association-detail" class="sr-only"></small>
@@ -252,7 +276,7 @@
           <button id="boards-nav-btn" class="nav-item fk-btn" data-icon="📚"><span class="nav-label" data-i18n="Boards">Boards</span></button>
           <button id="campaign-canvas-nav-btn" class="nav-item nav-item-child fk-btn active" data-icon="🧩"><span class="nav-label" data-i18n="Campaign Canvas">Campaign Canvas</span></button>
           <button id="content-workspace-nav-btn" class="nav-item fk-btn" data-icon="🗂"><span class="nav-label" data-i18n="Content Workspace">Content Workspace</span></button>
-          <button id="brand-core-nav-btn" class="nav-item nav-item-child fk-btn" data-icon="🧠"><span class="nav-label" data-i18n="Board Brand Core">Board Brand Core</span></button>
+          <button id="brand-core-nav-btn" class="nav-item nav-item-child fk-btn" data-icon="🧠"><span class="nav-label" data-i18n="Brand Profile">Brand Profile</span></button>
           <button id="ai-brain-nav-btn" class="nav-item fk-btn" data-icon="✨"><span class="nav-label" data-i18n="AI Brain">AI Brain</span></button>
           <button id="insights-nav-btn" class="nav-item fk-btn" data-icon="📈"><span class="nav-label" data-i18n="Insights">Insights</span></button>
           <button id="funnel-simulator-nav-btn" class="nav-item fk-btn" data-icon="⏳"><span class="nav-label" data-i18n="Funnel Simulator">Funnel Simulator</span></button>
@@ -911,6 +935,7 @@
     <script src="/facebook-connections-settings.js"></script>
     <script src="/brand-sidebar.js"></script>
     <script src="/workspace-catalog.js"></script>
+    <script src="/workspace-sidebar.js"></script>
     <script src="/app.js"></script>
   </body>
 </html>
