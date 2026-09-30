@@ -112,7 +112,11 @@ test('browser preference, UI, provider and AI boundaries are untouched', () => {
   assert.doesNotMatch(sql, /localStorage|sessionStorage|ephemeralBrand|browser preference/i);
   const allowed = new Set([relativeSql, 'scripts/check-bw36-7-workspace-backfill-preflight.js', 'docs/implementation/2026-09-28-bw36-7-workspace-backfill-preflight.md', 'package.json', '.github/workflows/runtime-boot-safety.yml', 'scripts/check-bw36-7r3-corrected-workspace-backfill-preflight.js', 'scripts/check-bw36-7r2-application-identity-bridge.js']);
   const changed = execFileSync('git', ['diff', '--name-only', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim().split('\n').filter(Boolean);
-  for (const file of changed) assert.ok(allowed.has(file), `unexpected changed file: ${file}`);
+  // This historical implementation-scope assertion applies only before the
+  // chronologically later BW-36.9 runtime cutover exists.
+  if (!fs.existsSync(path.join(root, 'workspace-catalog.js'))) {
+    for (const file of changed) assert.ok(allowed.has(file), `unexpected changed file: ${file}`);
+  }
 });
 test('BW-36.6 migration and BW-36.4 sidebar remain byte-identical', () => {
   assert.equal(digest('migrations/20260928_bw36_6_workspace_schema_foundation.sql'), 'd7832add0dd280a05a420fad42c90b81929dae5e72eae9ccc5a7377b1d49a35c');

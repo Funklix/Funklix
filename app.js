@@ -148,6 +148,7 @@ const state = {
   ,boardsLibrary: []
   ,boardsLibraryRequest: { scope: "all", status: "idle", generation: 0, identity: "", controller: null }
   ,brandCatalog: { status: "idle", entries: [], requestId: 0, userEmail: "" }
+  ,workspaceCatalog: { status: "idle", value: null, activeWorkspaceId: null, error: null, generation: 0, identity: "", promise: null }
   ,brandCreation: { status: "initial", requestId: 0, userEmail: "" }
   ,boardCreation: { status: "idle", generation: 0, lifecycle: 0, controller: null, overlay: null, retryName: "" }
   ,boardBrandAssociation: { brandId: null, boardId: "", status: "idle", generation: 0, intendedBrandId: null, message: "" }
@@ -4481,6 +4482,7 @@ async function loadSessionUser() {
   renderAuthState();
   const currentUserEmail = typeof state.user?.email === "string" ? state.user.email.trim().toLowerCase() : "";
   if (previousUserEmail !== currentUserEmail) {
+    clearWorkspaceCatalog();
     state.boardSharing.generation += 1;
     state.boardSharing.lifecycle += 1;
     clearGeneratedPublicToken();
@@ -4489,6 +4491,7 @@ async function loadSessionUser() {
     state.boardsLibraryRequest = { scope: "all", status: "idle", generation: state.boardsLibraryRequest.generation + 1, identity: "", controller: null };
     state.boardsLibrary = [];
   }
+  if (currentUserEmail) void loadAuthorizedWorkspaceCatalog(currentUserEmail);
   if (previousUserEmail !== currentUserEmail) clearEphemeralBrandSwitcherSelection();
   if (previousUserEmail !== currentUserEmail) resetCanonicalBrandCreation();
   if (previousUserEmail !== currentUserEmail) invalidateBoardBrandAssociation({ clearBoard: true });
@@ -4497,6 +4500,44 @@ async function loadSessionUser() {
   if (el.brandSwitcherDetails?.open) void loadCanonicalBrandCatalog();
   setSharePanelState(state.currentBoardId || getBoardIdFromPath(), null, state.currentBoardOwnerEmail, state.currentBoardOwnerName, state.currentBoardOwnerAvatar);
   startPresenceLite();
+}
+
+function clearWorkspaceCatalog() {
+  const generation = state.workspaceCatalog.generation + 1;
+  state.workspaceCatalog = { status: "idle", value: null, activeWorkspaceId: null, error: null, generation, identity: "", promise: null };
+  state.session.workspaceId = null;
+}
+
+function loadAuthorizedWorkspaceCatalog(identity = (state.user?.email || "").trim().toLowerCase()) {
+  if (!identity || !window.FunklixWorkspaceCatalog) return Promise.resolve(null);
+  const current = state.workspaceCatalog;
+  if (current.identity === identity && current.promise) return current.promise;
+  if (current.identity === identity && ["ready", "error"].includes(current.status)) return Promise.resolve(current.value);
+  const generation = current.generation + 1;
+  const lifecycle = { status: "loading", value: null, activeWorkspaceId: null, error: null, generation, identity, promise: null };
+  state.workspaceCatalog = lifecycle;
+  lifecycle.promise = window.FunklixWorkspaceCatalog.load().then((catalog) => {
+    if (state.workspaceCatalog !== lifecycle || lifecycle.generation !== generation || identity !== (state.user?.email || "").trim().toLowerCase()) return null;
+    lifecycle.status = "ready"; lifecycle.value = catalog; lifecycle.promise = null;
+    lifecycle.activeWorkspaceId = window.FunklixWorkspaceCatalog.deriveActiveWorkspaceId(catalog, {
+      boardId: state.currentBoardId || getBoardIdFromPath(), brandId: state.session.brandId
+    });
+    state.session.workspaceId = lifecycle.activeWorkspaceId;
+    return catalog;
+  }).catch((error) => {
+    if (state.workspaceCatalog !== lifecycle || lifecycle.generation !== generation || identity !== (state.user?.email || "").trim().toLowerCase()) return null;
+    lifecycle.status = "error"; lifecycle.error = { code: error?.code || "INTERNAL_ERROR", stage: error?.stage || "response" }; lifecycle.promise = null;
+    return null;
+  });
+  return lifecycle.promise;
+}
+
+function refreshActiveWorkspaceContext() {
+  if (state.workspaceCatalog.status !== "ready" || !state.workspaceCatalog.value) return;
+  state.workspaceCatalog.activeWorkspaceId = window.FunklixWorkspaceCatalog.deriveActiveWorkspaceId(state.workspaceCatalog.value, {
+    boardId: state.currentBoardId || getBoardIdFromPath(), brandId: state.session.brandId
+  });
+  state.session.workspaceId = state.workspaceCatalog.activeWorkspaceId;
 }
 
 function showBoardConflictModal() {
@@ -17769,6 +17810,7 @@ el.authSignoutButton?.addEventListener("click", async () => {
   state.documentSourceOperationByTileId.clear();
   state.documentSourceStateByTileId.clear();
   state.user = null;
+  clearWorkspaceCatalog();
   state.boardsLibraryRequest.controller?.abort();
   state.boardsLibraryRequest = { scope: "all", status: "idle", generation: state.boardsLibraryRequest.generation + 1, identity: "", controller: null };
   state.boardsLibrary = [];
@@ -19194,6 +19236,7 @@ async function bootApp() {
   if (boardIdFromPath) {
     resetBrandBrainForBoardHydration();
     await loadBoardFromUrlIfPresent();
+    refreshActiveWorkspaceContext();
   } else {
     loadBrandBrainState();
   }
