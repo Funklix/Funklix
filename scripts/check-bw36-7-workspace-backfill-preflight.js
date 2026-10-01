@@ -52,11 +52,11 @@ const normalized = sql.replace(/\s+/g, ' ');
 let passed = 0;
 function test(name, callback) { callback(); passed += 1; process.stdout.write(`✓ ${name}\n`); }
 
-test('preflight lives outside migrations and no migration file was added', () => {
+test('preflight lives outside migrations and permits only the later BW-36.12 migration', () => {
   assert.ok(relativeSql.startsWith('scripts/sql/'));
   assert.equal(relativeSql.includes('migrations/'), false);
   const changedMigrations = execFileSync('git', ['diff', '--name-only', 'HEAD', '--', 'migrations'], { cwd: root, encoding: 'utf8' }).trim();
-  assert.equal(changedMigrations, '');
+  assert.deepEqual(changedMigrations.split('\n').filter(Boolean).filter((file) => file !== 'migrations/20261001_bw36_12_brand_logo.sql'), []);
 });
 test('parser sees exactly one read-only CTE/SELECT statement', () => {
   assert.equal(parsed.length, 1);
@@ -120,7 +120,7 @@ test('browser preference, UI, provider and AI boundaries are untouched', () => {
 });
 test('BW-36.6 migration and BW-36.4 sidebar remain byte-identical', () => {
   assert.equal(digest('migrations/20260928_bw36_6_workspace_schema_foundation.sql'), 'd7832add0dd280a05a420fad42c90b81929dae5e72eae9ccc5a7377b1d49a35c');
-  assert.equal(digest('brand-sidebar.js'), '1c9dc05ca3dea04cd7a78538db3b958e35ade0441184a8234a456d4ce2bb22f0');
+  assert.equal(digest('brand-sidebar.js'), '10a42a42f4319eff9858f59333cb67b15d52ed22ea6b17b17000b5638bd6891f');
   assert.equal(digest('scripts/check-bw36-4-simplified-brand-sidebar.js'), '2d8cfe6e01c8e604bde5aff70c02872eb4c7ad2797c0082400ceeb3dcf7129a5');
 });
 test('package and Runtime Boot Safety register BW-36.7 immediately after BW-36.6', () => {

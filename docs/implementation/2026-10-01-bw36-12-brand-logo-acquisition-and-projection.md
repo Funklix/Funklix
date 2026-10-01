@@ -8,7 +8,7 @@ Brands had no dedicated durable logo authority. Workspace catalog Brand rows emi
 
 The reusable `brands` row now owns `logo_object_path`, raster MIME, `uploaded|discovered` source, monotonic `logo_revision`, update time, and a bounded source hostname. Logo data is not placed in Brand Core or a Campaign snapshot. Existing rows remain valid and show Unicode-safe initials. **Manual Supabase execution of `migrations/20261001_bw36_12_brand_logo.sql` is required after merge and before deploying the code.** No fake-logo backfill occurs.
 
-The stored provider reference is server-only. Product surfaces receive only the same-origin `/api/brands/:id/logo?revision=N` URL. The read boundary independently checks Brand visibility and validates the owned raster before returning it with MIME, `nosniff`, and revision-aware immutable caching.
+Supabase Storage is the sole Brand-logo object store. The dedicated `brand-logos` bucket is private, limited to the four accepted raster MIME types and 2 MiB objects, and has no browser upload/read/update/delete grant. Its deterministic `Brand UUID/revision.extension` object key is server-only. Product surfaces receive only the same-origin `/api/brands/:id/logo?revision=N` URL. The read boundary independently checks Brand visibility and validates the owned raster before returning it with MIME, `nosniff`, and revision-aware immutable caching. No Vercel Blob account, package, token, or configuration is required.
 
 ## Discovery and fetch safety
 
@@ -30,11 +30,9 @@ Successful mutation patches the in-memory Workspace catalog and rerenders visibl
 
 ## Deployment and rollback
 
-1. Run the additive migration in Supabase.
-2. Deploy the API and static assets together.
-3. Confirm Blob credentials permit writes/deletes.
+After this pull request is merged, run the corrected additive migration in Supabase. Deploy the application only after that migration succeeds. The server uses the existing `POSTGRES_URL` convention to derive the Supabase project origin when possible; server-only `SUPABASE_URL` may provide it explicitly, and `SUPABASE_SERVICE_ROLE_KEY` performs private Storage operations. Neither value is exposed to browser code.
 
-Rollback application code first, then optionally drop the six logo columns after retained objects are handled. The additive columns are harmless to the preceding release; do not drop them while the new API is live.
+Rollback application code first. If the private bucket is empty, it may then be removed; otherwise retain or deliberately archive its objects before removal. Only afterward may the six metadata columns be dropped. The additive columns and an empty private bucket are harmless to the preceding release; do not remove either while the new API is live.
 
 ## Minimal manual browser acceptance
 

@@ -3,7 +3,8 @@ const { getSessionUser } = require('../../_auth-session');
 const { pool } = require('../../_brands-storage');
 const { getBrandAccess, isBrandId } = require('../../_brand-access');
 const { validateImageBuffer } = require('../../_website-image-retrieval');
-const { LOGO_COLUMNS, MAX_IMAGE_BYTES, projectLogo, discoverLogo, storeLogo, deleteLogo } = require('../../_brand-logo');
+const { LOGO_COLUMNS, MAX_IMAGE_BYTES, projectLogo, discoverLogo } = require('../../_brand-logo');
+const logoStorage = require('../../_brand-logo-storage');
 
 const CONTRACT='brand_logo_v1';
 function send(res,status,body){res.setHeader('Cache-Control','private, no-store');return res.status(status).json(body);}
@@ -16,7 +17,7 @@ module.exports=async function handler(req,res){
   const columns=`id, workspace_id, ${LOGO_COLUMNS}`;
   if(req.method==='GET'){
     const {brand,access}=await getBrandAccess(brandId,user,{columns});if(!brand||!access.canReadBrand)return failure(res,404,'NOT_FOUND');if(!brand.logo_object_path)return failure(res,404,'NOT_FOUND');
-    try{const url=new URL(brand.logo_object_path);if(url.protocol!=='https:'||!url.hostname.endsWith('.public.blob.vercel-storage.com'))return failure(res,500,'ASSET_UNAVAILABLE');const upstream=await fetch(url,{redirect:'error',signal:AbortSignal.timeout(5000)});if(!upstream.ok)return failure(res,502,'ASSET_UNAVAILABLE');const bytes=Buffer.from(await upstream.arrayBuffer());validateImageBuffer(bytes,brand.logo_mime_type);res.setHeader('Content-Type',brand.logo_mime_type);res.setHeader('Cache-Control',`private, max-age=31536000, immutable`);res.setHeader('X-Content-Type-Options','nosniff');return res.status(200).send(bytes);}catch{return failure(res,502,'ASSET_UNAVAILABLE');}
+    try{const bytes=await logoStorage.read(brand.logo_object_path);validateImageBuffer(bytes,brand.logo_mime_type);res.setHeader('Content-Type',brand.logo_mime_type);res.setHeader('Cache-Control','private, max-age=31536000, immutable');res.setHeader('X-Content-Type-Options','nosniff');return res.status(200).send(bytes);}catch{return failure(res,502,'ASSET_UNAVAILABLE');}
   }
   if(req.method!=='POST'){res.setHeader('Allow','GET, POST');return failure(res,405,'METHOD_NOT_ALLOWED');}
   const input=parse(req.body);if(!input)return failure(res,422,'INVALID_REQUEST');
@@ -33,9 +34,9 @@ module.exports=async function handler(req,res){
       let buffer,mimeType,source,sourceHost=null;
       if(input.action==='upload'){if(typeof input.image_base64!=='string'||input.image_base64.length>MAX_IMAGE_BYTES*1.4+16){await client.query('ROLLBACK');return failure(res,413,'FILE_TOO_LARGE');}buffer=Buffer.from(input.image_base64,'base64');mimeType=input.mime_type;validateImageBuffer(buffer,mimeType);source='uploaded';}
       else {if(row.logo_source==='uploaded'){await client.query('ROLLBACK');return failure(res,409,'UPLOADED_LOGO_PRESERVED');}const found=await discoverLogo(input.website);if(found.status!=='found'){await client.query('ROLLBACK');return failure(res,422,'LOGO_NOT_FOUND');}buffer=found.image.buffer;mimeType=found.image.mimeType;source='discovered';sourceHost=found.sourceHost;}
-      pendingPath=await storeLogo(buffer,mimeType);
+      pendingPath=await logoStorage.upload({brandId,revision:Number(row.logo_revision)+1,buffer,mimeType});
       await client.query(`UPDATE brands SET logo_object_path=$2,logo_mime_type=$3,logo_source=$4,logo_source_host=$5,logo_updated_at=now(),logo_revision=logo_revision+1 WHERE id=$1`,[brandId,pendingPath,mimeType,source,sourceHost]);
     }
-    const saved=(await client.query(`SELECT id,${LOGO_COLUMNS} FROM brands WHERE id=$1`,[brandId])).rows[0];await client.query('COMMIT');if(oldPath&&oldPath!==pendingPath)void deleteLogo(oldPath);return send(res,200,{contract:CONTRACT,request_id:input.request_id,logo:{...projectLogo(saved),source:saved.logo_source,updated_at:saved.logo_updated_at}});
-  }catch(error){await client.query('ROLLBACK').catch(()=>{});if(pendingPath)await deleteLogo(pendingPath);const code=['unsupported_content_type','invalid_dimensions'].includes(error?.code)?'UNSUPPORTED_FILE':'UPDATE_FAILED';return failure(res,code==='UNSUPPORTED_FILE'?415:500,code);}finally{client.release();}
+    const saved=(await client.query(`SELECT id,${LOGO_COLUMNS} FROM brands WHERE id=$1`,[brandId])).rows[0];await client.query('COMMIT');if(oldPath&&oldPath!==pendingPath)void logoStorage.remove(oldPath);return send(res,200,{contract:CONTRACT,request_id:input.request_id,logo:{...projectLogo(saved),source:saved.logo_source,updated_at:saved.logo_updated_at}});
+  }catch(error){await client.query('ROLLBACK').catch(()=>{});if(pendingPath)await logoStorage.remove(pendingPath);const code=['unsupported_content_type','invalid_dimensions'].includes(error?.code)?'UNSUPPORTED_FILE':'UPDATE_FAILED';return failure(res,code==='UNSUPPORTED_FILE'?415:500,code);}finally{client.release();}
 };

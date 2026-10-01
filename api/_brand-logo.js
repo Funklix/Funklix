@@ -1,6 +1,4 @@
 'use strict';
-const crypto = require('crypto');
-const { del, put } = require('@vercel/blob');
 const { retrievePublicImage, validateImageBuffer, ALLOWED_IMAGE_TYPES, MAX_IMAGE_BYTES } = require('./_website-image-retrieval');
 const { retrieveWebsiteText } = require('./_website-retrieval');
 
@@ -25,6 +23,4 @@ async function discoverLogo(domain, deps={}){
   for(const candidate of candidates){try{const url=new URL(candidate.url);if(candidate.kind==='favicon'&&url.origin!==base.origin)continue;const image=await (deps.retrievePublicImage||retrievePublicImage)(url.href);return {status:'found',candidate,image,sourceHost:url.hostname.slice(0,253)};}catch{/* bounded candidate failure */}}
   return {status:'not_found'};
 }
-async function storeLogo(buffer,mimeType){validateImageBuffer(buffer,mimeType);const ext={'image/png':'png','image/jpeg':'jpg','image/webp':'webp','image/gif':'gif'}[mimeType];const path=`brand-logo/${crypto.randomUUID()}.${ext}`;const blob=await put(path,buffer,{access:'public',contentType:mimeType,addRandomSuffix:false});return blob.url;}
-async function deleteLogo(path){if(path)await del(path).catch(()=>{});}
-module.exports={LOGO_COLUMNS,MAX_IMAGE_BYTES,projectLogo,rankLogoCandidates,discoverLogo,storeLogo,deleteLogo};
+module.exports={LOGO_COLUMNS,MAX_IMAGE_BYTES,projectLogo,rankLogoCandidates,discoverLogo};

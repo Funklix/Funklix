@@ -19,3 +19,21 @@ DO $$ BEGIN
   ALTER TABLE public.brands ADD CONSTRAINT brands_logo_revision_check CHECK (logo_revision >= 0);
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
+
+-- Private Supabase Storage authority. Application service operations are server-side;
+-- browser anon/authenticated roles are explicitly denied every object operation.
+INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+VALUES ('brand-logos', 'brand-logos', false, 2097152,
+        ARRAY['image/png','image/jpeg','image/webp','image/gif'])
+ON CONFLICT (id) DO UPDATE SET
+  public = false,
+  file_size_limit = EXCLUDED.file_size_limit,
+  allowed_mime_types = EXCLUDED.allowed_mime_types;
+
+DO $$ BEGIN
+  CREATE POLICY bw36_12_deny_browser_brand_logos
+    ON storage.objects AS RESTRICTIVE FOR ALL TO anon, authenticated
+    USING (bucket_id <> 'brand-logos')
+    WITH CHECK (bucket_id <> 'brand-logos');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
