@@ -10,6 +10,11 @@ const SIGNATURES = {
 };
 
 module.exports = async function handler(req, res) {
+  // Retired: unbound uploads created a second logo authority. Use the authenticated
+  // /api/brands/:id/logo boundary, which owns authorization and compensation.
+  res.setHeader('Cache-Control', 'private, no-store');
+  return res.status(410).json({ error: { code: 'BRAND_LOGO_BOUNDARY_REQUIRED' } });
+  /* c8 ignore start -- retained temporarily for rollback archaeology */
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   if (!getSessionUser(req)?.email) return res.status(401).json({ error: 'Sign in before uploading a logo.' });
   try {
@@ -23,4 +28,5 @@ module.exports = async function handler(req, res) {
   } catch (_error) {
     return res.status(500).json({ error: 'Could not persist the logo.' });
   }
+  /* c8 ignore stop */
 };

@@ -49,7 +49,9 @@ function projectCatalog({ memberships, brands, boards }) {
     }
     brandIds.add(row.id);
     brandWorkspaceIds.set(row.id, row.workspace_id);
-    byWorkspace.get(row.workspace_id).brands.push({ id: row.id, name: row.name.trim(), avatar_url: null,
+    const logoRevision=Number(row.logo_revision||0);
+    if(!Number.isSafeInteger(logoRevision)||logoRevision<0||(row.logo_object_path&&(!['uploaded','discovered'].includes(row.logo_source)||!['image/png','image/jpeg','image/webp','image/gif'].includes(row.logo_mime_type)))) throw new WorkspaceCatalogError('WORKSPACE_CATALOG_CONFLICT','brand_logo_projection');
+    byWorkspace.get(row.workspace_id).brands.push({ id: row.id, name: row.name.trim(), logo_url: row.logo_object_path ? `/api/brands/${row.id}/logo?revision=${logoRevision}` : null, logo_revision: logoRevision,
       revision: Number(row.revision), role: row.role });
   }
   const boardIds = new Set();
@@ -81,7 +83,7 @@ async function loadWorkspaceCatalog({ db, identityId, canonicalEmail, diagnostic
   const ids = memberships.map((row) => row.id);
   diagnostic('catalog_projection');
   const brandResult = await db.query(
-    `SELECT b.id, b.workspace_id, b.name, b.revision,
+    `SELECT b.id, b.workspace_id, b.name, b.revision, b.logo_object_path, b.logo_mime_type, b.logo_source, b.logo_revision,
             CASE WHEN lower(b.owner_email) = $1 THEN 'owner' ELSE bm.role END AS role
        FROM public.brands b
        LEFT JOIN public.brand_members bm ON bm.brand_id = b.id AND bm.email = $1

@@ -31,7 +31,7 @@
   }
 
   function identity(kind, brand, relationship, text, input) {
-    return { kind, id: brand.id, title: String(brand.name || "").trim(), supporting: relationship, text, reusable: true, hasBoard: !!input.hasBoard, canChange: input.canChange === true, updateAvailable: input.updateAvailable === true, role: brand.role || "viewer" };
+    return { kind, id: brand.id, title: String(brand.name || "").trim(), logo_url: brand.logo_url || null, supporting: relationship, text, reusable: true, hasBoard: !!input.hasBoard, canChange: input.canChange === true, updateAvailable: input.updateAvailable === true, role: brand.role || "viewer" };
   }
 
   function initials(name) {
@@ -54,7 +54,8 @@
     name.title = model.title;
     note.textContent = model.supporting;
     avatar.replaceChildren();
-    const url = model.reusable ? avatarUrl(options.brandCore) : "";
+    if (model.reusable && model.logo_url && root.FunklixBrandLogo) root.FunklixBrandLogo.render(avatar, { name: model.title, logo_url: model.logo_url });
+    const url = model.reusable && !model.logo_url ? avatarUrl(options.brandCore) : "";
     const fallback = () => {
       avatar.replaceChildren();
       const mark = avatar.ownerDocument.createElement("span");
@@ -63,7 +64,8 @@
       avatar.append(mark);
     };
     avatar.setAttribute("aria-label", model.reusable ? `${model.title} Brand` : model.title);
-    if (url) {
+    if (model.logo_url && root.FunklixBrandLogo) { /* shared helper already rendered it */ }
+    else if (url) {
       const image = avatar.ownerDocument.createElement("img");
       image.src = url;
       image.alt = `${model.title} Brand`;

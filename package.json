@@ -120,6 +120,7 @@
     "check:bw36.10": "node scripts/check-bw36-10-workspace-selector-and-sidebar-hierarchy.js",
     "check:bw36.10r1": "node scripts/check-bw36-10r1-workspace-selector-popover-layout.js",
     "check:bw36.11": "node scripts/check-bw36-11-workspace-renaming.js",
-    "check:bw36.11r1": "node scripts/check-bw36-11r1-sidebar-context-interaction.js"
+    "check:bw36.11r1": "node scripts/check-bw36-11r1-sidebar-context-interaction.js",
+    "check:bw36.12": "node scripts/check-bw36-12-brand-logo-acquisition-and-projection.js"
   }
 }

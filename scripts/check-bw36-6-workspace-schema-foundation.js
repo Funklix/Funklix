@@ -139,11 +139,11 @@ test('current Brand, Board, shares, tokens and membership policies are not cut o
 });
 test('UI, BW-36.4 sidebar, compact bar and Canvas toolbar baselines are unchanged', () => {
   const expected = {
-    'brand-sidebar.js': '1c9dc05ca3dea04cd7a78538db3b958e35ade0441184a8234a456d4ce2bb22f0',
-    'styles.css': '5f0a37c8006f3685d187731ec1564303810cae9494453458fdccd982d0342d9c',
+    'brand-sidebar.js': '10a42a42f4319eff9858f59333cb67b15d52ed22ea6b17b17000b5638bd6891f',
+    'styles.css': 'b70d22f3dbca76c365037c6b6b07243c100317e1873339a53f091c3ad29f5582',
     'scripts/check-bw36-4-simplified-brand-sidebar.js': '2d8cfe6e01c8e604bde5aff70c02872eb4c7ad2797c0082400ceeb3dcf7129a5',
     'scripts/check-bw36-2-compact-non-canvas-context-bar.js': '7d000ad953878f9c91abb3c46f66bb91750be4b0252e0452b8e02e95e02216c8',
-    'scripts/check-bw36-1r1-canvas-toolbar-visibility-and-funnel-footer.js': 'de9b3bfadb6dc64c805d27931c06beb4d5c3780bdc83ce071feaff7d0fefb5d1'
+    'scripts/check-bw36-1r1-canvas-toolbar-visibility-and-funnel-footer.js': '2a418644a2c5c3065a63968abb91cff287ecfbd465f939fccecc4ca9cfad2fc9'
   };
   for (const [file, digest] of Object.entries(expected)) assert.equal(sha(file), digest, file);
 });

@@ -1,8 +1,7 @@
 const { getSessionUser } = require('./_auth-session');
 const { retrieveWebsiteText } = require('./_website-retrieval');
 const { extractBrandProjection, stableBound, MAX_PROVIDER_CONTEXT } = require('./_html-text-extractor');
-const { retrievePublicImage } = require('./_website-image-retrieval');
-const { uploadImageBuffer } = require('./_image-storage');
+const { rankLogoCandidates } = require('./_brand-logo');
 
 const STATUS_BY_CODE = {
   invalid_url: 400, unsupported_scheme: 400, credentials_not_allowed: 400, invalid_host: 400, port_not_allowed: 400,
@@ -32,7 +31,7 @@ async function analyzeBrandDomain(domainUrl, dependencies = {}) {
   if (projection.providerContext.length < 80) { const error = new Error('The webpage contains too little readable brand content.'); error.code = 'empty_content'; throw error; }
   const baseUrl = new URL(normalized);
   const absolute = (candidate) => { try { const value = new URL(candidate, baseUrl); return value.origin === baseUrl.origin ? value.href : ''; } catch { return ''; } };
-  const logoCandidate = projection.assets.find((asset) => /logo|icon/i.test(`${asset.alt || ''} ${asset.rel || ''} ${asset.url || ''}`));
+  const rankedLogoCandidates = rankLogoCandidates(website.internalHtml, normalized);
   const providerContext = stableBound([`URL: ${normalized}`, `Title: ${projection.title}`, ...projection.metadata, ...projection.sections], MAX_PROVIDER_CONTEXT).text;
   const prompt = `Analyze this bounded semantic website projection and produce a concise Brand Brain JSON object. Return raw JSON only with exactly these keys: {"brandCore":"","toneOfVoice":[],"messagingPillars":[],"valueProposition":"","personas":[],"contentGuidelines":[],"dosAndDonts":{"dos":[],"donts":[]},"brandVoiceExamples":{"good":"","avoid":""},"keywords":[],"brandAssets":{"domain":"","logo":"","colors":[],"typography":"","references":[]}}. Keep arrays concise (3-8); persona entries are {"name":"","note":""}; be conservative when evidence is absent.\nWebsite context:\n${providerContext}`;
   const aiRes = await providerFetch('https://api.openai.com/v1/chat/completions', {
@@ -44,18 +43,10 @@ async function analyzeBrandDomain(domainUrl, dependencies = {}) {
   const first = rawText.indexOf('{'); const last = rawText.lastIndexOf('}'); let parsed;
   try { parsed = JSON.parse(first >= 0 && last > first ? rawText.slice(first, last + 1) : ''); } catch { const error = new Error('The analysis provider returned an invalid response.'); error.code = 'invalid_analysis_response'; throw error; }
   if (!validSuggestions(parsed)) { const error = new Error('The analysis provider returned an invalid response.'); error.code = 'invalid_analysis_response'; throw error; }
-  let persistedLogo = null; const detectedLogoUrl = absolute(logoCandidate?.url || '');
-  if (detectedLogoUrl && dependencies.skipLogo !== true) {
-    try {
-      const fetched = await (dependencies.retrievePublicImage || retrievePublicImage)(detectedLogoUrl);
-      const uploaded = await (dependencies.uploadImageBuffer || uploadImageBuffer)({ buffer: fetched.buffer, mimeType: fetched.mimeType, prefix: 'brand-logo' });
-      persistedLogo = { url: uploaded.imageUrl, sourceUrl: fetched.sourceUrl, mimeType: uploaded.mimeType };
-    } catch { /* Optional same-origin candidate failure must not discard analysis. */ }
-  }
-  parsed.brandAssets = { ...parsed.brandAssets, domain: parsed.brandAssets.domain || normalized, logo: persistedLogo?.url || '', logoAsset: persistedLogo
-    ? { kind: 'company_logo', role: 'primary', status: 'persisted', source: 'domain_analysis', sourceUrl: persistedLogo.sourceUrl, mimeType: persistedLogo.mimeType, candidateDetected: true, fetched: true, persisted: true, persistedAt: new Date().toISOString() }
-    : { kind: 'company_logo', role: 'primary', status: detectedLogoUrl ? 'unavailable' : 'not_found', source: 'domain_analysis', candidateDetected: Boolean(detectedLogoUrl), fetched: false, persisted: false } };
-  return { suggestions: parsed, source: { url: normalized, sections: projection.sections.length, truncated: projection.truncated } };
+  // Brand Core never becomes a competing logo authority. The authenticated Brand
+  // mutation may consume the already-fetched HTML and persist the ranked candidate.
+  parsed.brandAssets = { ...parsed.brandAssets, domain: parsed.brandAssets.domain || normalized, logo: '' };
+  return { suggestions: parsed, logoDiscovery: { status: rankedLogoCandidates.length ? 'candidate_found' : 'not_found', candidateCount: rankedLogoCandidates.length }, source: { url: normalized, sections: projection.sections.length, truncated: projection.truncated } };
 }
 
 async function handler(req, res) {

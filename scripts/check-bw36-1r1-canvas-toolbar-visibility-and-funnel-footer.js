@@ -120,7 +120,8 @@ check("only the audited compact journey navigation rule changed presentation CSS
   const repaired = ".journey-nav{position:static;inset:auto;min-height:0;height:auto;padding:8px 8px max(8px,env(safe-area-inset-bottom,0px));background:transparent;border-radius:0}";
   const baseline = ".journey-nav{position:sticky;bottom:4px;padding:8px;background:var(--fk-color-surface-elevated);border-radius:12px}";
   assert.match(css, new RegExp(repaired.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
-  const withoutBw362 = css.replace(/\/\* BW-36\.2: isolated, non-Canvas context utility bar\. \*\/[\s\S]*?(?=\.topbar \{)/, "");
+  const withoutBw362 = css.replace(/\/\* BW-36\.2: isolated, non-Canvas context utility bar\. \*\/[\s\S]*?(?=\.topbar \{)/, "")
+    .replace(/\/\* Reusable Brand logo editor and projections\. \*\/[\s\S]*$/, "");
   assert.equal(sha(withoutBw362.replace(repaired, baseline)), "06771fe0f41453d3afa5661e593866fba37fc1c6315699283532732c138bb755", "Canvas and all pre-BW-36.2 non-Funnel CSS remain at the restored baseline");
 });
 
