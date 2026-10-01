@@ -1,6 +1,6 @@
 const { pool, reconcileBrandRelationship } = require('./_boards-storage');
 
-const BRAND_COLUMNS = 'id, owner_email, name, brand_core, revision, created_at, updated_at';
+const BRAND_COLUMNS = 'id, owner_email, name, brand_core, revision, created_at, updated_at, logo_object_path, logo_mime_type, logo_source, logo_revision, logo_updated_at, logo_source_host, workspace_id';
 const BRAND_SUMMARY_COLUMNS = 'id, name, revision, created_at, updated_at';
 const MAX_BRAND_NAME_LENGTH = 160;
 
@@ -60,6 +60,8 @@ function serializeBrand(row, access = null) {
     revision: Number(row.revision),
     created_at: row.created_at,
     updated_at: row.updated_at,
+    logo_url: row.logo_object_path ? `/api/brands/${row.id}/logo?revision=${Number(row.logo_revision)}` : null,
+    logo_revision: Number(row.logo_revision || 0), logo_source: row.logo_source || null, logo_updated_at: row.logo_updated_at || null,
     ...(access ? { access } : {})
   };
 }

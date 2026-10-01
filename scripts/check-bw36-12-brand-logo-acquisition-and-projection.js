@@ -1,0 +1,15 @@
+'use strict';
+const assert=require('assert');const fs=require('fs');const vm=require('vm');
+const {rankLogoCandidates}=require('../api/_brand-logo');const {validateWebsiteUrl,isPublicAddress}=require('../api/_website-url-policy');const {validateImageBuffer}=require('../api/_website-image-retrieval');
+const html=`<meta property="og:image" content="/hero.jpg"><link rel="apple-touch-icon" href="/apple.png"><link rel="icon" href="/favicon.png"><script type="application/ld+json">{"@type":"Organization","logo":"/schema.png"}</script>`;
+const ranked=rankLogoCandidates(html,'https://example.com/about');assert.equal(ranked[0].kind,'schema');assert(!ranked.some(x=>x.url.includes('hero.jpg')),'generic social image rejected');assert.equal(ranked.at(-1).kind,'icon');
+assert.throws(()=>validateWebsiteUrl('http://example.com'));assert.throws(()=>validateWebsiteUrl('https://user:pass@example.com'));assert(!isPublicAddress('127.0.0.1'));assert(!isPublicAddress('::1'));assert(!isPublicAddress('169.254.169.254'));
+assert.throws(()=>validateImageBuffer(Buffer.from('<svg/>'),'image/svg+xml'));assert.throws(()=>validateImageBuffer(Buffer.alloc(25),'image/png'));
+const logoSource=fs.readFileSync('api/brands/[id]/logo.js','utf8');const catalog=fs.readFileSync('api/_workspace-catalog.js','utf8');const app=fs.readFileSync('app.js','utf8');const migration=fs.readFileSync('migrations/20261001_bw36_12_brand_logo.sql','utf8');
+for(const token of ['expected_revision','UPLOADED_LOGO_PRESERVED','ROLLBACK','deleteLogo(pendingPath)','canEditCanonicalBrand','logo_revision=logo_revision+1'])assert(logoSource.includes(token)||app.includes(token),token);
+for(const token of ['logo_object_path','logo_source','logo_revision','logo_updated_at','logo_source_host'])assert(migration.includes(token),token);
+assert(catalog.includes('/api/brands/${row.id}/logo?revision=${logoRevision}'));assert(!catalog.includes('logo_object_path:'));
+for(const text of ['Brand logo','Markenlogo','Upload logo','Logo hochladen','Find from website','Auf Website suchen','Remove logo','Logo entfernen','Logo found from website','Logo auf der Website gefunden'])assert(app.includes(text),text);
+const sandbox={globalThis:{}};vm.runInNewContext(fs.readFileSync('brand-logo.js','utf8'),sandbox);assert.equal(sandbox.globalThis.FunklixBrandLogo.initials('😀 Über'),'😀Ü');assert.equal(sandbox.globalThis.FunklixBrandLogo.safeUrl('https://evil.example/logo.png'),null);
+assert(logoSource.includes("row.logo_source==='uploaded'"));assert(logoSource.includes("input.action==='remove'"));assert(!logoSource.includes('brand_core'));assert(!logoSource.includes('snapshot'));assert(!logoSource.includes('openai'));assert(!logoSource.includes('provider'));
+console.log('BW-36.12 Brand logo acquisition and projection checks passed.');
