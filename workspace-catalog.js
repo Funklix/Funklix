@@ -82,11 +82,38 @@
     if(payload.request_id!==requestId)throw updateError('RESPONSE_INVALID','response');
     return validateUpdate(payload);
   }
+  function createError(code,stage) { const error=new Error('Workspace creation failed');error.code=code;error.stage=stage;return error; }
+  function buildCreateRequest(name,requestId) {
+    const checked=root.FunklixWorkspaceName?.validateWorkspaceName(name);
+    if(!checked?.ok)throw createError('WORKSPACE_NAME_INVALID',checked?.reason||'name');
+    if(!/^[A-Za-z0-9._:-]{1,64}$/.test(requestId||''))throw createError('REQUEST_INVALID','request');
+    return {contract:'workspace_create_v1',request_id:requestId,name:checked.name};
+  }
+  function validateCreate(payload,requestId) {
+    const workspace=payload?.workspace;
+    if(!payload||Object.keys(payload).some(k=>!['contract','request_id','ok','created','workspace'].includes(k))
+      ||payload.contract!=='workspace_create_v1'||payload.request_id!==requestId||payload.ok!==true||typeof payload.created!=='boolean'
+      ||!workspace||Object.keys(workspace).some(k=>!['id','name','role','revision','brands','boards'].includes(k))
+      ||!id(workspace.id)||!text(workspace.name,160)||workspace.role!=='owner'||!Number.isSafeInteger(workspace.revision)||workspace.revision<0
+      ||!Array.isArray(workspace.brands)||workspace.brands.length||!Array.isArray(workspace.boards)||workspace.boards.length)throw createError('RESPONSE_INVALID','response');
+    return Object.freeze({created:payload.created,workspace:Object.freeze({...workspace,brands:Object.freeze([]),boards:Object.freeze([])})});
+  }
+  async function create(name,requestId,fetchImpl=root.fetch.bind(root)) {
+    const body=buildCreateRequest(name,requestId);
+    const response=await fetchImpl('/api/workspaces',{method:'POST',credentials:'same-origin',headers:{Accept:'application/json','Content-Type':'application/json'},body:JSON.stringify(body)});
+    const payload=await response.json().catch(()=>{throw createError('RESPONSE_INVALID','response');});
+    if(!response.ok)throw createError(payload?.error?.code||'INTERNAL_ERROR',payload?.error?.stage||'response');
+    return validateCreate(payload,requestId);
+  }
+  function reconcileCreate(catalog,created) {
+    if(!catalog||!Array.isArray(catalog.workspaces)||catalog.workspaces.length||!created?.workspace)throw createError('RESPONSE_INVALID','reconciliation');
+    return Object.freeze({...catalog,workspaces:Object.freeze([created.workspace])});
+  }
   function patch(catalog, updated) {
     const index=catalog?.workspaces?.findIndex(item=>item.id===updated?.id);
     if(index<0)throw updateError('RESPONSE_INVALID','reconciliation');
     const workspaces=catalog.workspaces.slice();workspaces[index]=Object.freeze({...workspaces[index],...updated});
     return Object.freeze({...catalog,workspaces:Object.freeze(workspaces)});
   }
-  root.FunklixWorkspaceCatalog = Object.freeze({ load, validate, deriveActiveWorkspaceId, buildUpdateRequest, validateUpdate, rename, patch });
+  root.FunklixWorkspaceCatalog = Object.freeze({ load, validate, deriveActiveWorkspaceId, buildUpdateRequest, validateUpdate, rename, patch, buildCreateRequest, validateCreate, create, reconcileCreate });
 }(typeof globalThis !== 'undefined' ? globalThis : window));
