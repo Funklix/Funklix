@@ -22,8 +22,10 @@
         || !Array.isArray(workspace.brands) || !Array.isArray(workspace.boards)) throw invalid();
       workspaceIds.add(workspace.id);
       const brands = workspace.brands.map((brand) => {
-        if (!brand || Object.keys(brand).some((key) => !['id','name','avatar_url','revision','role'].includes(key))
-          || !id(brand.id) || brandIds.has(brand.id) || !text(brand.name,160) || !nullableString(brand.avatar_url,2048)
+        const legacyLogo=Object.hasOwn(brand||{},'avatar_url')&&!Object.hasOwn(brand||{},'logo_url');
+        if (!brand || Object.keys(brand).some((key) => !(legacyLogo?['id','name','avatar_url','revision','role']:['id','name','logo_url','logo_revision','revision','role']).includes(key))
+          || !id(brand.id) || brandIds.has(brand.id) || !text(brand.name,160) || (legacyLogo?!nullableString(brand.avatar_url,2048):!(brand.logo_url===null||brand.logo_url===`/api/brands/${brand.id}/logo?revision=${brand.logo_revision}`))
+          || (!legacyLogo&&(!Number.isSafeInteger(brand.logo_revision) || brand.logo_revision < 0))
           || !Number.isSafeInteger(brand.revision) || brand.revision < 0 || !BRAND_ROLES.has(brand.role)) throw invalid();
         brandIds.add(brand.id); return Object.freeze({ ...brand, workspace_id: workspace.id });
       });

@@ -52,7 +52,7 @@
     const t=key=>STRINGS[language()][key];
     const activeSurface=()=>surface && !surface.hidden ? surface : null;
     const viewport=()=>({width:root.visualViewport?.width||root.innerWidth||doc.documentElement.clientWidth,height:root.visualViewport?.height||root.innerHeight||doc.documentElement.clientHeight});
-    function avatar(node,item){node.replaceChildren();const url=safeAvatar(item?.avatar_url);if(url){const image=doc.createElement('img');image.src=url;image.alt='';image.addEventListener('error',()=>node.replaceChildren(doc.createTextNode(words(item?.name))));node.append(image);}else node.textContent=words(item?.name);}
+    function avatar(node,item){if(item?.logo_url&&root.FunklixBrandLogo){root.FunklixBrandLogo.render(node,item,{label:language()==='de'?'Markenlogo':'Brand logo'});return;}node.replaceChildren();const url=safeAvatar(item?.avatar_url);if(url){const image=doc.createElement('img');image.src=url;image.alt='';image.addEventListener('error',()=>node.replaceChildren(doc.createTextNode(words(item?.name))));node.append(image);}else node.textContent=words(item?.name);}
     function position(element,trigger,width,compact=false){
       if(!element||element.hidden||!trigger?.isConnected)return;
       const view=viewport(),mobile=view.width<768,measured=Math.min(element.scrollHeight||120,Math.max(80,view.height-16));

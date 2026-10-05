@@ -168,7 +168,7 @@ test('R1 introduced no migration and its required historical files survive later
     'migrations/20260928_bw36_6_workspace_schema_foundation.sql': 'd7832add0dd280a05a420fad42c90b81929dae5e72eae9ccc5a7377b1d49a35c',
     'scripts/sql/bw36-7r1-workspace-identity-diagnostic.sql': '45b62b508f7b1c4dc0b553b52eddfce4fc890c7e2a6a713ea98a7401cf6561e8',
     'scripts/sql/bw36-7-workspace-backfill-preflight.sql': '617b23351d89a99966d7aa86c98bfd0dde0a02e7e94f90b2716c2b41baabd234',
-    'brand-sidebar.js': '1c9dc05ca3dea04cd7a78538db3b958e35ade0441184a8234a456d4ce2bb22f0',
+    'brand-sidebar.js': '10a42a42f4319eff9858f59333cb67b15d52ed22ea6b17b17000b5638bd6891f',
     'scripts/check-bw36-4-simplified-brand-sidebar.js': '2d8cfe6e01c8e604bde5aff70c02872eb4c7ad2797c0082400ceeb3dcf7129a5',
     'api/_auth-session.js': '2ee41ebe695a761c9aa05cc1c9a0df1a0dc81649f9150a6a083b6139c3e26e28',
     'api/_brand-access.js': '8f146c7b6fe07d4bb99a249ea24b14e801132c9ead1c617b7eb63b6bdbd9b95e',

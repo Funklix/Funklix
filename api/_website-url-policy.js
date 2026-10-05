@@ -61,7 +61,7 @@ function validateWebsiteUrl(input) {
   if (typeof input !== 'string' || !input || input.length > 2048) throw new WebsitePolicyError('invalid_url', 'Enter a valid public webpage URL.');
   let url;
   try { url = new URL(input); } catch { throw new WebsitePolicyError('invalid_url', 'Enter a valid public webpage URL.'); }
-  if (!['http:', 'https:'].includes(url.protocol)) throw new WebsitePolicyError('unsupported_scheme', 'Only HTTP and HTTPS webpages are supported.');
+  if (url.protocol !== 'https:') throw new WebsitePolicyError('unsupported_scheme', 'Only HTTPS webpages are supported.');
   if (url.username || url.password) throw new WebsitePolicyError('credentials_not_allowed', 'URLs containing credentials are not supported.');
   if (!url.hostname || url.hostname.endsWith('.') || url.hostname.includes('%')) throw new WebsitePolicyError('invalid_host', 'Enter a valid public webpage URL.');
   const hostname = url.hostname.replace(/^\[|\]$/g, '').toLowerCase();
@@ -70,8 +70,8 @@ function validateWebsiteUrl(input) {
   const rawHost = authority.replace(/^[^@]*@/, '').replace(/^\[([^\]]+)\](?::\d+)?$/, '$1').replace(/:\d+$/, '');
   if (net.isIP(hostname) && !net.isIP(rawHost)) throw new WebsitePolicyError('invalid_host', 'Alternative IP address formats are not supported.');
   if (net.isIP(hostname) && !isPublicAddress(hostname)) throw new WebsitePolicyError('unsafe_destination', 'That destination is not available.');
-  const port = url.port || (url.protocol === 'https:' ? '443' : '80');
-  if ((url.protocol === 'https:' && port !== '443') || (url.protocol === 'http:' && port !== '80')) throw new WebsitePolicyError('port_not_allowed', 'That network port is not supported.');
+  const port = url.port || '443';
+  if (port !== '443') throw new WebsitePolicyError('port_not_allowed', 'That network port is not supported.');
   url.hash = '';
   return url;
 }
