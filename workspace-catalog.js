@@ -8,6 +8,13 @@
   function id(value) { return typeof value === 'string' && UUID.test(value); }
   function text(value, max) { return typeof value === 'string' && value.trim() === value && value.length > 0 && value.length <= max; }
   function nullableString(value, max) { return value === null || (typeof value === 'string' && value.length <= max); }
+  function logoProjection(brand, legacyLogo) {
+    if (legacyLogo) return { avatar_url: nullableString(brand.avatar_url, 2048) ? brand.avatar_url : null };
+    const revision=brand.logo_revision;
+    const valid=Number.isSafeInteger(revision)&&revision>=0
+      && (brand.logo_url===null||brand.logo_url===`/api/brands/${brand.id}/logo?revision=${revision}`);
+    return valid ? { logo_url:brand.logo_url,logo_revision:revision } : { logo_url:null,logo_revision:0 };
+  }
   function validate(payload) {
     if (!payload || typeof payload !== 'object' || Array.isArray(payload) || payload.contract !== 'workspace_catalog_v1'
       || !/^[a-f0-9]{24}$/.test(payload.request_id || '') || !Array.isArray(payload.workspaces)
@@ -24,10 +31,9 @@
       const brands = workspace.brands.map((brand) => {
         const legacyLogo=Object.hasOwn(brand||{},'avatar_url')&&!Object.hasOwn(brand||{},'logo_url');
         if (!brand || Object.keys(brand).some((key) => !(legacyLogo?['id','name','avatar_url','revision','role']:['id','name','logo_url','logo_revision','revision','role']).includes(key))
-          || !id(brand.id) || brandIds.has(brand.id) || !text(brand.name,160) || (legacyLogo?!nullableString(brand.avatar_url,2048):!(brand.logo_url===null||brand.logo_url===`/api/brands/${brand.id}/logo?revision=${brand.logo_revision}`))
-          || (!legacyLogo&&(!Number.isSafeInteger(brand.logo_revision) || brand.logo_revision < 0))
+          || !id(brand.id) || brandIds.has(brand.id) || !text(brand.name,160)
           || !Number.isSafeInteger(brand.revision) || brand.revision < 0 || !BRAND_ROLES.has(brand.role)) throw invalid();
-        brandIds.add(brand.id); return Object.freeze({ ...brand, workspace_id: workspace.id });
+        brandIds.add(brand.id); return Object.freeze({ ...brand, ...logoProjection(brand,legacyLogo), workspace_id: workspace.id });
       });
       const localBrands = new Set(brands.map((brand) => brand.id));
       const boards = workspace.boards.map((board) => {
@@ -43,7 +49,7 @@
   async function load(fetchImpl = root.fetch.bind(root)) {
     const response = await fetchImpl('/api/workspaces', { method: 'GET', credentials: 'same-origin', headers: { Accept: 'application/json' } });
     const payload = await response.json().catch(() => { throw invalid(); });
-    if (!response.ok) { const error = new Error('Workspace catalog unavailable'); error.code = payload?.error?.code || 'INTERNAL_ERROR'; error.stage = payload?.error?.stage || 'response'; throw error; }
+    if (!response.ok) { const error = new Error('Workspace catalog unavailable'); error.code = payload?.error?.code || 'INTERNAL_ERROR'; error.stage = payload?.error?.stage || 'response'; error.status=response.status; throw error; }
     return validate(payload);
   }
   function deriveActiveWorkspaceId(catalog, context = {}) {

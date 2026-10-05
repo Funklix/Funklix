@@ -21,6 +21,19 @@ function boardRole(value) {
   return null;
 }
 
+// Optional presentation metadata is not an authorization or relationship
+// boundary. Invalid logo metadata projects to the shared no-logo shape.
+function projectBrandLogo(row) {
+  const logoRevision = Number(row?.logo_revision ?? 0);
+  const usable = typeof row?.logo_object_path === 'string' && row.logo_object_path.length > 0
+    && ['uploaded', 'discovered'].includes(row.logo_source)
+    && ['image/png', 'image/jpeg', 'image/webp', 'image/gif'].includes(row.logo_mime_type)
+    && Number.isSafeInteger(logoRevision) && logoRevision >= 0;
+  return usable
+    ? { logo_url: `/api/brands/${row.id}/logo?revision=${logoRevision}`, logo_revision: logoRevision }
+    : { logo_url: null, logo_revision: 0 };
+}
+
 function projectCatalog({ memberships, brands, boards }) {
   if (!Array.isArray(memberships) || !Array.isArray(brands) || !Array.isArray(boards)) {
     throw new WorkspaceCatalogError('RESPONSE_INVALID', 'projection');
@@ -49,9 +62,8 @@ function projectCatalog({ memberships, brands, boards }) {
     }
     brandIds.add(row.id);
     brandWorkspaceIds.set(row.id, row.workspace_id);
-    const logoRevision=Number(row.logo_revision||0);
-    if(!Number.isSafeInteger(logoRevision)||logoRevision<0||(row.logo_object_path&&(!['uploaded','discovered'].includes(row.logo_source)||!['image/png','image/jpeg','image/webp','image/gif'].includes(row.logo_mime_type)))) throw new WorkspaceCatalogError('WORKSPACE_CATALOG_CONFLICT','brand_logo_projection');
-    byWorkspace.get(row.workspace_id).brands.push({ id: row.id, name: row.name.trim(), logo_url: row.logo_object_path ? `/api/brands/${row.id}/logo?revision=${logoRevision}` : null, logo_revision: logoRevision,
+    const logo = projectBrandLogo(row);
+    byWorkspace.get(row.workspace_id).brands.push({ id: row.id, name: row.name.trim(), ...logo,
       revision: Number(row.revision), role: row.role });
   }
   const boardIds = new Set();
@@ -113,4 +125,4 @@ async function loadWorkspaceCatalog({ db, identityId, canonicalEmail, diagnostic
   return projectCatalog({ memberships, brands: brandResult.rows, boards: boardResult.rows });
 }
 
-module.exports = { BRAND_ROLES, BOARD_ROLES, WorkspaceCatalogError, boardRole, projectCatalog, loadWorkspaceCatalog };
+module.exports = { BRAND_ROLES, BOARD_ROLES, WorkspaceCatalogError, boardRole, projectBrandLogo, projectCatalog, loadWorkspaceCatalog };
