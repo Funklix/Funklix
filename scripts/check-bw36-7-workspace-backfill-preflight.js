@@ -52,11 +52,11 @@ const normalized = sql.replace(/\s+/g, ' ');
 let passed = 0;
 function test(name, callback) { callback(); passed += 1; process.stdout.write(`✓ ${name}\n`); }
 
-test('preflight lives outside migrations and permits only the later BW-36.12 migration', () => {
+test('preflight lives outside migrations and permits the later BW-36.12 and R3 additive migrations', () => {
   assert.ok(relativeSql.startsWith('scripts/sql/'));
   assert.equal(relativeSql.includes('migrations/'), false);
   const changedMigrations = execFileSync('git', ['diff', '--name-only', 'HEAD', '--', 'migrations'], { cwd: root, encoding: 'utf8' }).trim();
-  assert.deepEqual(changedMigrations.split('\n').filter(Boolean).filter((file) => file !== 'migrations/20261001_bw36_12_brand_logo.sql'), []);
+  assert.deepEqual(changedMigrations.split('\n').filter(Boolean).filter((file) => file !== 'migrations/20261001_bw36_12_brand_logo.sql' && file !== 'migrations/20261006_bw36_13r3_project_commands.sql'), []);
 });
 test('parser sees exactly one read-only CTE/SELECT statement', () => {
   assert.equal(parsed.length, 1);

@@ -164,6 +164,7 @@ test('R1 introduced no migration and its required historical files survive later
   assert.equal(migrationFiles.some((name) => /bw36[_-]7r1/i.test(name)), false);
   const foundationPosition = migrationFiles.indexOf('20260928_bw36_6_workspace_schema_foundation.sql');
   assert.ok(migrationFiles.slice(foundationPosition + 1).every((name) => name > '20260928_bw36_6_workspace_schema_foundation.sql'));
+  // R3 adds opt-in transaction-scoped membership locks and skips runtime DDL; default Brand authorization is unchanged.
   const baselines = {
     'migrations/20260928_bw36_6_workspace_schema_foundation.sql': 'd7832add0dd280a05a420fad42c90b81929dae5e72eae9ccc5a7377b1d49a35c',
     'scripts/sql/bw36-7r1-workspace-identity-diagnostic.sql': '45b62b508f7b1c4dc0b553b52eddfce4fc890c7e2a6a713ea98a7401cf6561e8',
@@ -171,7 +172,7 @@ test('R1 introduced no migration and its required historical files survive later
     'brand-sidebar.js': '10a42a42f4319eff9858f59333cb67b15d52ed22ea6b17b17000b5638bd6891f',
     'scripts/check-bw36-4-simplified-brand-sidebar.js': '2d8cfe6e01c8e604bde5aff70c02872eb4c7ad2797c0082400ceeb3dcf7129a5',
     'api/_auth-session.js': '2ee41ebe695a761c9aa05cc1c9a0df1a0dc81649f9150a6a083b6139c3e26e28',
-    'api/_brand-access.js': '8f146c7b6fe07d4bb99a249ea24b14e801132c9ead1c617b7eb63b6bdbd9b95e',
+    'api/_brand-access.js': '15f35ef6ab4e77a1fda5d07ecd24d5a85cf920d98a16beeb57f8d789990b214c',
     'api/_board-access.js': '84620c66037f2ff039c414032056b3e452f09e524cf481efa68c865cee59daef'
   };
   for (const [file, expected] of Object.entries(baselines)) assert.equal(digest(file), expected, file);

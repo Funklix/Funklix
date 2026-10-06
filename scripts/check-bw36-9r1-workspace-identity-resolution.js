@@ -157,8 +157,9 @@ async function invoke(options = {}, request = {}) {
     assert(workflow.indexOf('check:bw36.9r1') > workflow.indexOf('check:bw36.9'));
     if (fs.existsSync(path.join(root, '.git'))) {
       const changed = require('child_process').execFileSync('git', ['status', '--short', '--untracked-files=all'], { cwd: root, encoding: 'utf8' });
+      // R3 permits its one additive command migration; no historical migration rewrite.
       const unexpected = changed.split('\n').filter(Boolean).filter((line) => /migrations\//.test(line)
-        && !line.endsWith('migrations/20261001_bw36_12_brand_logo.sql'));
+        && !line.endsWith('migrations/20261001_bw36_12_brand_logo.sql') && !line.endsWith('migrations/20261006_bw36_13r3_project_commands.sql'));
       assert.deepEqual(unexpected, []);
     }
   });

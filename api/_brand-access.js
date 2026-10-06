@@ -39,10 +39,11 @@ function brandCapabilities(role) {
   };
 }
 
-async function getBrandAccess(brandId, user, { columns = BRAND_COLUMNS, client = pool } = {}) {
+async function getBrandAccess(brandId, user, { columns = BRAND_COLUMNS, client = pool, skipEnsure = false, lockMembership = false } = {}) {
   const email = getBrandOwnerEmail(user);
   if (!brandId || !email) return { brand: null, access: brandCapabilities('unrelated') };
-  await ensureBrandsTable();
+  if (!skipEnsure) await ensureBrandsTable();
+  if (lockMembership) await client.query(`SELECT role FROM brand_members WHERE brand_id = $1 AND email = $2 FOR UPDATE`, [brandId, email]);
   const safeColumns = columns.split(',').map((column) => `b.${column.trim()}`).join(', ');
   const result = await client.query(
     `SELECT ${safeColumns}, CASE WHEN b.owner_email = $2 THEN 'owner' ELSE bm.role END AS brand_access_role
