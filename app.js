@@ -4619,6 +4619,29 @@ async function renameSessionWorkspace(workspace, name) {
   return updated;
 }
 
+let firstWorkspaceCreation = null;
+function createFirstSessionWorkspace(name) {
+  const lifecycle = state.workspaceCatalog;
+  const identity = (state.user?.email || "").trim().toLowerCase();
+  if (!identity || lifecycle.status !== "ready" || lifecycle.value?.workspaces?.length !== 0) {
+    return Promise.reject(Object.assign(new Error("Workspace creation is unavailable"), { code: "REQUEST_INVALID" }));
+  }
+  if (firstWorkspaceCreation?.identity === identity && firstWorkspaceCreation.generation === lifecycle.generation) return firstWorkspaceCreation.promise;
+  const requestId = `create-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,10)}`;
+  const operation = { identity, generation: lifecycle.generation, promise: null };
+  operation.promise = window.FunklixWorkspaceCatalog.create(name, requestId).then((result) => {
+    if (state.workspaceCatalog !== lifecycle || lifecycle.generation !== operation.generation || identity !== (state.user?.email || "").trim().toLowerCase()) return null;
+    lifecycle.value = window.FunklixWorkspaceCatalog.reconcileCreate(lifecycle.value, result);
+    lifecycle.activeWorkspaceId = result.workspace.id;
+    state.session.workspaceId = result.workspace.id;
+    state.session.brandId = null;
+    renderWorkspaceSidebar();
+    return result.workspace;
+  }).finally(() => { if (firstWorkspaceCreation === operation) firstWorkspaceCreation = null; });
+  firstWorkspaceCreation = operation;
+  return operation.promise;
+}
+
 function showBoardConflictModal() {
   return new Promise((resolve) => {
     const overlay = document.createElement('div');
@@ -17627,6 +17650,7 @@ workspaceSidebarController = window.FunklixWorkspaceSidebar?.create({
   onWorkspace: selectSessionWorkspace,
   onBrand: selectSessionBrand,
   onRename: renameSessionWorkspace,
+  onCreate: createFirstSessionWorkspace,
   onRetry: retryWorkspaceCatalog
 }) || null;
 globalThis.FunklixWorkspaceSidebarController = workspaceSidebarController;
