@@ -123,6 +123,7 @@
     "check:bw36.11r1": "node scripts/check-bw36-11r1-sidebar-context-interaction.js",
     "check:bw36.12": "node scripts/check-bw36-12-brand-logo-acquisition-and-projection.js",
     "check:bw36.13r1": "node scripts/check-bw36-13r1-workspace-stability-containment.js",
-    "check:bw36.13r2": "node scripts/check-bw36-13r2-first-workspace-creation.js"
+    "check:bw36.13r2": "node scripts/check-bw36-13r2-first-workspace-creation.js",
+    "check:bw36.13r3": "node scripts/check-bw36-13r3-authoritative-project-creation.js"
   }
 }

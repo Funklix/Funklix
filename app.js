@@ -3091,6 +3091,7 @@ function brandDetailFieldLabel(key) {
 function renderCanonicalBrandDetail() {
   if (!el.brandWorkspaceDetailStatus || !el.brandWorkspaceDetailContent) return;
   const detail = canonicalBrandDetail;
+  renderProjectSetupNotice();
   el.brandWorkspaceDetailContent.replaceChildren();
   const editing = ["editing", "submitting", "conflict", "save-error"].includes(detail.status);
   el.brandWorkspaceDetailContent.classList.toggle("hidden", detail.status !== "ready");
@@ -4541,6 +4542,7 @@ async function selectSessionWorkspace(workspaceId) {
     history.replaceState({}, "", "/");
     setActiveView("home");
   }
+  invalidateBoardCreationContext();
   state.workspaceCatalog.activeWorkspaceId = workspaceId;
   state.session.workspaceId = workspaceId;
   const currentBrand = target.brands.find((item) => item.id === state.session.brandId);
@@ -4561,6 +4563,7 @@ function selectSessionBrand(brandId) {
 }
 
 function clearWorkspaceCatalog() {
+  invalidateBoardCreationContext();
   const generation = state.workspaceCatalog.generation + 1;
   state.workspaceCatalog = { status: "idle", value: null, activeWorkspaceId: null, error: null, generation, identity: "", promise: null };
   state.session.workspaceId = null;
@@ -8499,7 +8502,7 @@ function isValidCanvasStatePayload(value) {
   return true;
 }
 
-function applyCampaignState(campaignState, statusText = "Restored") {
+function applyCampaignState(campaignState, statusText = "Restored", { memoryOnly = false } = {}) {
   clearInspectorSectionRoute();
   state.commentThreadsOpenedByNode.clear();
   state.aiReviewFixPreviews = {};
@@ -8512,8 +8515,8 @@ function applyCampaignState(campaignState, statusText = "Restored") {
   state.nodeCounter = normalizedState.nodeCounter || 1;
   state.postitCounter = normalizedState.postitCounter || 1;
   state.activityFeed = sanitizeActivityFeed(normalizedState.activityFeed);
-  state.lastSeenActivityAt = parseStoredTimestamp(localStorage.getItem(activitySeenStorageKey()));
-  ensureCommentSeenBaseline();
+  state.lastSeenActivityAt = memoryOnly ? null : parseStoredTimestamp(localStorage.getItem(activitySeenStorageKey()));
+  if (!memoryOnly) ensureCommentSeenBaseline();
   state.selectedIds.clear();
   state.selectedPrimary = null;
   el.zoomLayer.querySelectorAll(".node").forEach((n) => n.remove());
@@ -8523,7 +8526,10 @@ function applyCampaignState(campaignState, statusText = "Restored") {
   updateListView();
   updateEmptyState();
   drawLinks();
-  if (normalizedState.zoom) setZoom(normalizedState.zoom);
+  if (normalizedState.zoom) {
+    if (memoryOnly) applyCanvasZoom(normalizedState.zoom);
+    else setZoom(normalizedState.zoom);
+  }
   state.isDirty = false;
   clearAutosaveTimer();
   setSaveStatus(statusText);
@@ -18850,73 +18856,118 @@ function blankCanvasState() {
   return { nodes: [], edges: [], nodeCounter: 1, postitCounter: 1, zoom: 1, schemaVersion: 1, metadata: { createdAt: nowIso, updatedAt: nowIso } };
 }
 
-function isBoardCreationBrandEligible() {
-  const brand = getResolvedWorkspaceBrand();
-  return Boolean(state.user?.email && brand && ["owner", "admin", "editor"].includes(brand.role) && isValidBoardBrandId(brand.id) && state.brandCatalog.status === "success" && state.boardCreation.status !== "pending");
-}
-
-function renderBoardCreationMode(overlay) {
-  if (!overlay?.isConnected) return;
-  const brand = getResolvedWorkspaceBrand();
-  const eligible = isBoardCreationBrandEligible();
-  const button = overlay.querySelector("#create-board-brand");
-  button.disabled = !eligible;
-  button.textContent = eligible ? `Create Board from ${brand.name}` : "Create Board from selected Brand";
-  overlay.querySelector("#create-board-brand-explanation").textContent = eligible
-    ? `This creates a new Board associated with ${brand.name} and initializes its Board Brand Core from the Brand’s current saved Core. Future changes remain separate.`
-    : "Select an accessible Workspace Brand after its catalog has loaded to use Brand-backed creation.";
-}
+let projectDialogController = null;
+let createdProjectContext = null;
+let projectSetupContext = null;
+const projectCommandBoundary = window.FunklixProjectCommand.createBoundary({
+  context: () => ({ account: state.user, generation: state.workspaceCatalog.generation, workspaceId: state.workspaceCatalog.activeWorkspaceId }),
+  fetchImpl: (...args) => fetch(...args),
+  reconcile: reconcileCreatedProject,
+  navigate: navigateCreatedProject
+});
 
 function invalidateBoardCreationContext() {
-  const creation = state.boardCreation;
-  if (!creation.overlay?.isConnected) return;
-  creation.lifecycle += 1;
-  creation.status = creation.status === "pending" ? "invalidated" : "idle";
-  creation.overlay.querySelector("#create-board-status").textContent = creation.status === "invalidated"
-    ? "Creation could not be confirmed in this changed account or Brand context. Check the Board list before retrying."
-    : "The Workspace Brand changed. Review and explicitly choose the creation mode again.";
-  creation.overlay.querySelector("#create-board-confirm").disabled = true;
-  creation.overlay.querySelectorAll("[data-create-board-mode]").forEach((button) => button.setAttribute("aria-pressed", "false"));
-  if (creation.status === "invalidated") creation.overlay.querySelector("#create-board-retry").classList.remove("hidden");
-  renderBoardCreationMode(creation.overlay);
+  projectCommandBoundary.invalidate();
+  projectDialogController?.invalidate();
+  projectDialogController = null;
+  createdProjectContext = null;
+  projectSetupContext = null;
+  document.querySelector('[data-project-setup]')?.remove();
+  state.boardCreation.generation += 1;
+  state.boardCreation.status = "idle";
 }
 
-function showCreateBoardModal() {
-  return new Promise((resolve) => {
-    const overlay = document.createElement("div");
-    overlay.className = "brand-confirm-modal";
-    overlay.setAttribute("role", "dialog"); overlay.setAttribute("aria-modal", "true"); overlay.setAttribute("aria-labelledby", "create-board-title");
-    overlay.innerHTML = `<div class="brand-confirm-card"><h3 id="create-board-title">Create new Board</h3><p>Give your new Campaign Canvas Board a name, then deliberately choose how it is created.</p><label for="create-board-name">Board name</label><input id="create-board-name" placeholder="Board name" autocomplete="off" /><div class="brand-confirm-actions" role="group" aria-label="Board creation mode"><button type="button" id="create-board-unbranded" data-create-board-mode="unbranded" aria-pressed="false">Create unbranded Board</button><button type="button" id="create-board-brand" data-create-board-mode="brand" aria-pressed="false">Create Board from selected Brand</button></div><p id="create-board-brand-explanation"></p><p id="create-board-status" role="status" aria-live="polite">Choose a creation mode.</p><div class="brand-confirm-actions"><button type="button" id="create-board-cancel">Cancel</button><button type="button" id="create-board-retry" class="hidden">Retry</button><button type="button" class="primary-add" id="create-board-confirm" disabled>Create</button></div></div>`;
-    document.body.appendChild(overlay);
-    const lifecycle = ++state.boardCreation.lifecycle;
-    const retryName = state.boardCreation.retryName || "";
-    state.boardCreation = { status: "idle", generation: state.boardCreation.generation, lifecycle, controller: null, overlay, retryName: "" };
-    let mode = null, capturedBrand = null, settled = false;
-    const status = overlay.querySelector("#create-board-status"), confirm = overlay.querySelector("#create-board-confirm");
-    const close = (value) => { if (state.boardCreation.status === "pending") return; state.boardCreation.controller?.abort(); state.boardCreation.overlay = null; overlay.remove(); if (!settled) { settled = true; resolve(value); } };
-    const choose = (nextMode) => {
-      if (state.boardCreation.status === "pending" || (nextMode === "brand" && !isBoardCreationBrandEligible())) return;
-      mode = nextMode; capturedBrand = mode === "brand" ? getResolvedWorkspaceBrand() : null;
-      overlay.querySelectorAll("[data-create-board-mode]").forEach((button) => button.setAttribute("aria-pressed", button.dataset.createBoardMode === mode ? "true" : "false"));
-      confirm.disabled = false; confirm.textContent = mode === "brand" ? `Create Board from ${capturedBrand.name}` : "Create unbranded Board";
-      status.textContent = mode === "brand" ? `Confirm creation from Canonical Brand ${capturedBrand.name}.` : "Confirm creation without a Brand association.";
-    };
-    renderBoardCreationMode(overlay);
-    overlay.querySelector("#create-board-name").value = retryName;
-    overlay.addEventListener("click", (event) => { if (event.target === overlay) close(null); });
-    overlay.querySelector("#create-board-cancel").addEventListener("click", () => close(null));
-    overlay.querySelector("#create-board-unbranded").addEventListener("click", () => choose("unbranded"));
-    overlay.querySelector("#create-board-brand").addEventListener("click", () => choose("brand"));
-    overlay.querySelector("#create-board-retry").addEventListener("click", () => { state.boardCreation.retryName = overlay.querySelector("#create-board-name")?.value || ""; state.boardCreation.status = "idle"; state.boardCreation.overlay = null; overlay.remove(); setTimeout(() => { void createNewBoardFlow(); }, 0); });
-    confirm.addEventListener("click", () => {
-      const name = overlay.querySelector("#create-board-name")?.value?.trim();
-      if (!name) { status.textContent = "Enter a Board name before creating it."; return; }
-      if (!mode || state.boardCreation.status === "pending") return;
-      if (mode === "brand" && (!capturedBrand || getResolvedWorkspaceBrand()?.id !== capturedBrand.id || !isBoardCreationBrandEligible())) { invalidateBoardCreationContext(); return; }
-      if (!settled) { settled = true; resolve({ name, mode, brand: capturedBrand, lifecycle, overlay }); }
-    });
-    overlay.addEventListener("keydown", (event) => { if (event.key === "Escape" && state.boardCreation.status !== "pending") close(null); });
-    overlay.querySelector("#create-board-name").focus();
+function reconcileCreatedProject(outcome) {
+  const projection = window.FunklixProjectCommand.reconcile(state.workspaceCatalog.value, state.boardsLibrary, outcome);
+  state.workspaceCatalog.value = projection.catalog;
+  state.workspaceCatalog.activeWorkspaceId = outcome.workspace.id;
+  state.boardsLibraryRequest.controller?.abort();
+  state.boardsLibraryRequest.generation += 1;
+  state.boardsLibraryRequest.status = "success";
+  state.boardsLibrary = projection.library;
+  state.session.workspaceId = outcome.workspace.id;
+  state.session.brandId = outcome.brand.id;
+  state.session.boardId = outcome.board.id;
+  state.brandCatalog = { ...state.brandCatalog, status: "success", userEmail: (state.user?.email || "").trim().toLowerCase(),
+    entries: [...state.brandCatalog.entries.filter(brand => brand.id !== outcome.brand.id), { id: outcome.brand.id, name: outcome.brand.name, role: outcome.brand.role, revision: outcome.brand.revision }] };
+  ephemeralBrandSwitcherSelection = { id: outcome.brand.id, name: outcome.brand.name, restored: false };
+  sidebarProfileCache.set(outcome.brand.id, outcome.brand.brand_core);
+  createdProjectContext = { account: state.user, outcome };
+}
+
+function hydrateCreatedProject(outcome) {
+  const data = outcome.board;
+  clearAutosaveTimer(); stopPresenceLite(); stopBoardRefreshPolling();
+  state.boardLoadGeneration += 1;
+  state.currentBoardId = data.id; state.currentBoardName = data.name; state.lastKnownUpdatedAt = data.updated_at;
+  state.publicBoardToken = null;
+  state.boardBrandAssociation = { brandId: data.brand_id, boardId: data.id, status: "idle", generation: state.boardBrandAssociation.generation + 1, intendedBrandId: null, message: "" };
+  state.authoritativeBoardBrandCore = { boardId: data.id, loadGeneration: state.boardLoadGeneration, value: clonePlainObject(data.brand_core_snapshot), provenance: normalizeBoardSnapshotProvenance(data), provenanceValid: true, updatedAt: data.updated_at, restoreAvailable: false, backupCreatedAt: null };
+  state.brandCore = normalizeBrandCoreState(clonePlainObject(data.brand_core_snapshot), { restoration: true });
+  applyBoardAccessFromServer(data.access, "project-command");
+  applyCampaignState(data.canvas_json, "Saved", { memoryOnly: true });
+  state.isDirty = false;
+  syncRuntimeSessionFromLegacy("project-command");
+  state.session.workspaceId = outcome.workspace.id; state.session.brandId = outcome.brand.id; state.session.boardId = data.id;
+  setSharePanelState(data.id, new Date(data.updated_at), state.user?.email || null, state.user?.name || null, state.user?.avatar || null);
+  renderBoardBrandAssociation(); renderWorkspaceSidebar(); renderBoardsLibrary();
+  renderBrandCoreTiles(); renderBrandCoreEditor();
+}
+
+function renderProjectSetupNotice() {
+  document.querySelector('[data-project-setup]')?.remove();
+  if (!projectSetupContext || projectSetupContext.account !== state.user || !el.brandWorkspaceDetail?.open) return;
+  const t = window.FunklixProjectDialog.copy(state.uiLanguage);
+  const notice = document.createElement("section"); notice.className = "project-setup-notice"; notice.dataset.projectSetup = "true";
+  const text = document.createElement("p"); text.textContent = t.setup;
+  const status = document.createElement("p"); status.setAttribute("aria-live", "polite");
+  const button = document.createElement("button"); button.type = "button"; button.textContent = t.toProject;
+  button.addEventListener("click", async () => {
+    const context = projectSetupContext;
+    if (!context || context.account !== state.user || button.disabled) return;
+    if (!closeCanonicalBrandDetail({ restoreFocus: false })) return;
+    button.disabled = true;
+    const outcome = { ...context.outcome, setup_required: false, next_route: `/boards/${context.outcome.board.id}` };
+    try {
+      if (outcome.board.canvas_json) navigateCreatedProject(outcome);
+      else await window.FunklixProjectCommand.navigate(outcome, {
+        history: window.history, setView: view => setActiveView(view),
+        openBoard: async value => { if (!await loadBoardFromUrlIfPresent(value.board.id)) throw window.FunklixProjectCommand.error("OPEN_FAILED"); },
+        openSetup: () => { throw window.FunklixProjectCommand.error("RESPONSE_INVALID"); }
+      });
+      if (context.account !== state.user || projectSetupContext !== context) return;
+      projectSetupContext = null;
+    } catch {
+      if (context.account !== state.user || projectSetupContext !== context) return;
+      if (!el.brandWorkspaceDetail.open) el.brandWorkspaceDetail.showModal();
+      renderProjectSetupNotice();
+      const retryStatus = document.querySelector('[data-project-setup] [aria-live]');
+      if (retryStatus) retryStatus.textContent = t.openFailed;
+    }
+  });
+  notice.append(text, button, status);
+  el.brandWorkspaceDetail.prepend(notice);
+}
+
+function openCreatedBrandSetup(outcome) {
+  const brand = outcome.brand, manager = ["owner", "admin"].includes(brand.role);
+  projectSetupContext = { account: state.user, outcome };
+  canonicalBrandDetail = { ...canonicalBrandDetail, status: "ready", requestId: canonicalBrandDetail.requestId + 1, brandId: brand.id,
+    userEmail: (state.user?.email || "").trim().toLowerCase(), draft: null, saved: false,
+    brand: { ...brand, access: { ...brand.access, canReadBrand: true, canViewCanonicalBrandCore: true, canViewAllBrandBoards: true,
+      canEditAllBrandBoards: true, canManageBrandMembers: manager, canManageBrandAdmins: brand.role === "owner" } } };
+  if (!el.brandWorkspaceDetail.open) el.brandWorkspaceDetail.showModal();
+  renderCanonicalBrandDetail(); renderProjectSetupNotice();
+  el.brandWorkspaceDetailTitle?.focus();
+}
+
+function navigateCreatedProject(outcome) {
+  if (createdProjectContext?.account !== state.user) throw window.FunklixProjectCommand.error("STALE_OPERATION");
+  return window.FunklixProjectCommand.navigate(outcome, {
+    history: window.history,
+    setView: view => { setAppMode("canvas"); setActiveView(view); },
+    openBoard: value => { hydrateCreatedProject(value); setActiveView("board"); },
+    openSetup: value => { hydrateCreatedProject(value); openCreatedBrandSetup(value); }
   });
 }
 
@@ -18934,56 +18985,29 @@ function showUnsavedLeaveModal() {
 }
 
 async function createNewBoardFlow() {
-  if (!state.user?.email) { setAuthMessage("Sign in with Google to create a board."); setSaveStatus("Sign in with Google to create a board."); return; }
-  if (state.boardCreation.status === "pending") return;
+  if (!state.user?.email) { setAuthMessage(window.FunklixProjectDialog.copy(state.uiLanguage).authentication); return; }
+  if (projectDialogController || state.boardCreation.status === "pending") return;
+  const workspace = state.workspaceCatalog.status === "ready"
+    ? state.workspaceCatalog.value?.workspaces.find(item => item.id === state.workspaceCatalog.activeWorkspaceId) : null;
+  if (!workspace) { setSaveStatus(window.FunklixProjectDialog.copy(state.uiLanguage).not_found); return; }
   if (state.isDirty && !await showUnsavedLeaveModal()) return;
-  const choice = await showCreateBoardModal();
-  if (!choice) return;
-  const creation = state.boardCreation;
-  const userEmail = (state.user?.email || "").trim().toLowerCase();
-  const brandId = choice.mode === "brand" ? choice.brand?.id : null;
-  const catalogIdentity = choice.mode === "brand" ? `${state.brandCatalog.userEmail}|${choice.brand.id}|${choice.brand.name}` : "";
-  const generation = ++creation.generation, controller = new AbortController();
-  creation.controller = controller; creation.status = "pending";
-  const status = choice.overlay.querySelector("#create-board-status");
-  choice.overlay.querySelectorAll("button, input").forEach((control) => { control.disabled = true; });
-  status.textContent = "Creating Board…";
-  const payload = { name: choice.name, canvas_json: blankCanvasState() };
-  if (choice.mode === "brand") payload.brand_id = brandId;
-  else payload.brand_core_snapshot = defaultBrandCoreState();
-  try {
-    const response = await fetch("/api/boards", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload), signal: controller.signal });
-    let data; try { data = await response.json(); } catch (_error) { throw new Error("The server returned a malformed Board response."); }
-    const currentBrand = getResolvedWorkspaceBrand();
-    const brandContextCurrent = choice.mode !== "brand" || (currentBrand?.id === brandId && `${state.brandCatalog.userEmail}|${currentBrand.id}|${currentBrand.name}` === catalogIdentity);
-    const contextCurrent = generation === creation.generation && choice.lifecycle === creation.lifecycle && userEmail === (state.user?.email || "").trim().toLowerCase() && brandContextCurrent;
-    if (!contextCurrent || creation.status === "invalidated") throw new Error("Creation was invalidated because the account, Brand, mode, request, or dialog context changed.");
-    if (response.status === 401) { setAuthMessage("Sign in with Google to create a board."); throw new Error("Authentication expired. The Board was not confirmed."); }
-    if (response.status === 404 && choice.mode === "brand") throw new Error("The selected Canonical Brand is no longer accessible.");
-    if (!response.ok) throw new Error(data?.error || `Board creation failed (${response.status}).`);
-    const provenance = normalizeBoardSnapshotProvenance(data);
-    const validShape = data && isValidBoardBrandId(data.id) && data.id !== null && typeof data.name === "string" && isValidCanvasStatePayload(data.canvas_json)
-      && data.canvas_json.nodes.length === 0 && data.canvas_json.edges.length === 0 && isPlainJsonObject(data.brand_core_snapshot)
-      && typeof data.updated_at === "string" && !Number.isNaN(Date.parse(data.updated_at));
-    const validProvenance = choice.mode === "brand" ? provenance !== null
-      : data.brand_core_source_revision == null && data.brand_core_source_updated_at == null && data.brand_core_snapshot_copied_at == null;
-    if (!validShape || !validProvenance || (choice.mode === "brand" ? data.brand_id !== brandId : data.brand_id !== null)) throw new Error("The server returned an invalid or mismatched Board response.");
-    creation.status = "success"; status.textContent = "Board created. Opening it now…";
-    clearAutosaveTimer(); state.boardLoadGeneration += 1; state.currentBoardId = data.id; state.currentBoardName = data.name; state.lastKnownUpdatedAt = data.updated_at; renderCompactContextBar();
-    state.boardBrandAssociation = { brandId: data.brand_id, boardId: data.id, status: "idle", generation: state.boardBrandAssociation.generation + 1, intendedBrandId: null, message: "" };
-    state.authoritativeBoardBrandCore = { boardId: data.id, loadGeneration: state.boardLoadGeneration, value: clonePlainObject(data.brand_core_snapshot), provenance, provenanceValid: hasValidBoardSnapshotProvenance(data), updatedAt: data.updated_at, restoreAvailable: data.brand_core_restore_available === true, backupCreatedAt: data.brand_core_snapshot_backup_created_at || null };
-    state.brandCore = normalizeBrandCoreState(data.brand_core_snapshot, { restoration: true });
-    applyCampaignState(withBoardSchemaDefaults(data.canvas_json), "Created Board"); saveBrandBrainState({ markDirty: false }); state.isDirty = false; refreshLastSavedSnapshot(); renderBoardBrandAssociation();
-    const nextPath = `/boards/${data.id}`; if (window.location.pathname !== nextPath) window.history.pushState({}, "", nextPath);
-    syncRuntimeSessionFromLegacy("create-board"); setSharePanelState(data.id, new Date(data.updated_at), data.owner_email || null, data.owner_name || null, data.owner_avatar || null);
-    choice.overlay.remove(); creation.overlay = null; setSaveStatus("Saved"); void loadBoardsLibrary();
-  } catch (error) {
-    if (generation !== creation.generation) return;
-    creation.status = "failed";
-    const uncertain = error?.name === "AbortError" || error instanceof TypeError || /invalidated|malformed|mismatched/i.test(error?.message || "");
-    status.textContent = uncertain ? `${error?.message || "Network failure."} Board creation was not confirmed; check the Board list before a deliberate retry.` : (error?.message || "Board creation failed.");
-    choice.overlay.querySelector("#create-board-retry").classList.remove("hidden"); choice.overlay.querySelector("#create-board-cancel").disabled = false;
-  } finally { if (generation === creation.generation) creation.controller = null; }
+  const account = state.user, generation = state.workspaceCatalog.generation;
+  createdProjectContext = null;
+  projectDialogController = window.FunklixProjectDialog.mount({
+    workspace, language: state.uiLanguage,
+    requestId: () => crypto.randomUUID(),
+    onClose: () => { projectDialogController = null; state.boardCreation.status = "idle"; },
+    submit: async command => {
+      if (account !== state.user || generation !== state.workspaceCatalog.generation || workspace.id !== state.workspaceCatalog.activeWorkspaceId) throw window.FunklixProjectCommand.error("STALE_OPERATION");
+      state.boardCreation.status = "pending";
+      try {
+        // A committed result is retained even if opening fails. Retry opens only, without another POST.
+        if (createdProjectContext?.account === state.user) return navigateCreatedProject(createdProjectContext.outcome);
+        try { return await projectCommandBoundary.submit(command); }
+        catch (error) { if (createdProjectContext?.account === state.user) throw window.FunklixProjectCommand.error("OPEN_FAILED"); throw error; }
+      } finally { state.boardCreation.status = "idle"; }
+    }
+  });
 }
 
 function getResolvedWorkspaceBrand() {
@@ -18999,6 +19023,7 @@ function getBoardsLibraryIdentity(scope = state.boardsLibraryRequest.scope) {
 }
 
 function renderBoardsLibraryControls() {
+  if (el.boardsCreateButton) el.boardsCreateButton.textContent = window.FunklixProjectDialog.copy(state.uiLanguage).title;
   const request = state.boardsLibraryRequest;
   [['all', el.boardsScopeAll], ['brand', el.boardsScopeBrand], ['unbranded', el.boardsScopeUnbranded]].forEach(([scope, button]) => {
     button?.setAttribute('aria-pressed', request.scope === scope ? 'true' : 'false');
@@ -19248,7 +19273,7 @@ function renderBoardsLibrary() {
   if (!state.boardsLibrary.length) {
     const filteredEmpty = request.scope === 'brand' ? 'No Boards for the selected Brand.' : (request.scope === 'unbranded' ? 'No Unbranded Boards.' : 'No boards yet');
     const detail = request.scope === 'all' ? 'Create your first board to start collaborating.' : 'The open Board, if any, remains open and unchanged.';
-    el.boardsLibraryList.innerHTML = `<div class="board-empty fk-card"><span class="boards-empty-kicker fk-badge">No matching workspaces</span><strong>${filteredEmpty}</strong><span>${detail}</span>${request.scope === 'all' ? '<button type="button" class="fk-btn fk-btn-primary" data-empty-create-board>Create New Board</button>' : ''}</div>`;
+    el.boardsLibraryList.innerHTML = `<div class="board-empty fk-card"><span class="boards-empty-kicker fk-badge">No matching workspaces</span><strong>${filteredEmpty}</strong><span>${detail}</span>${request.scope === 'all' ? `<button type="button" class="fk-btn fk-btn-primary" data-empty-create-board>${window.FunklixProjectDialog.copy(state.uiLanguage).title}</button>` : ''}</div>`;
     return;
   }
   bindBoardsListDragHandlers();
@@ -19330,6 +19355,29 @@ function showDeleteBoardConfirmModal() {
   });
 }
 
+async function restoreProjectSetupRoute() {
+  const match = window.location.pathname.match(/^\/brands\/([0-9a-f-]+)\/setup$/i);
+  const boardId = new URLSearchParams(window.location.search).get("board");
+  if (!match || !boardId || !isValidBoardBrandId(match[1]) || !isValidBoardBrandId(boardId) || !state.user) return;
+  const account = state.user;
+  const catalog = await loadAuthorizedWorkspaceCatalog();
+  if (account !== state.user || !catalog) return;
+  const workspace = catalog.workspaces.find(w => w.brands.some(b => b.id === match[1]) && w.boards.some(b => b.id === boardId && b.brand_id === match[1]));
+  if (!workspace) { setSaveStatus(window.FunklixProjectDialog.copy(state.uiLanguage).permission); return; }
+  const brand = workspace.brands.find(b => b.id === match[1]);
+  state.workspaceCatalog.activeWorkspaceId = workspace.id; state.session.workspaceId = workspace.id; state.session.brandId = brand.id;
+  state.brandCatalog = { ...state.brandCatalog, status: "success", userEmail: (state.user.email || "").trim().toLowerCase(), entries: [...state.brandCatalog.entries.filter(b => b.id !== brand.id), brand] };
+  ephemeralBrandSwitcherSelection = { id: brand.id, name: brand.name, restored: false };
+  canonicalBrandDetail.brandId = brand.id;
+  el.brandWorkspaceDetail.showModal();
+  await loadCanonicalBrandDetail();
+  if (account !== state.user || canonicalBrandDetail.status !== "ready") return;
+  const outcome = { brand: canonicalBrandDetail.brand, board: { id: boardId }, workspace, next_route: `/boards/${boardId}`, setup_required: false };
+  projectSetupContext = { account, outcome };
+  // Direct setup routes have no in-memory command outcome; opening uses the established authorized Board read.
+  renderProjectSetupNotice();
+}
+
 async function bootApp() {
   state.isBoardLoading = true;
   diagnoseDomDependencies();
@@ -19381,6 +19429,7 @@ async function bootApp() {
   bindEditingPresenceTracking();
   startPresenceLite();
   startBoardRefreshPolling();
+  await restoreProjectSetupRoute();
   logRuntimeAlignmentDiagnostics("boot");
 }
 

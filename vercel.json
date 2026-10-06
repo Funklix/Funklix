@@ -1,6 +1,7 @@
 {
   "rewrites": [
     { "source": "/boards", "destination": "/index.html" },
-    { "source": "/boards/:id", "destination": "/index.html" }
+    { "source": "/boards/:id", "destination": "/index.html" },
+    { "source": "/brands/:id/setup", "destination": "/index.html" }
   ]
 }

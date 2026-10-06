@@ -87,7 +87,7 @@ function workspace(overrides={}) { return { id:ids.workspace,name:'Invented Work
     assert.equal((app.match(/FunklixWorkspaceCatalog\.load\(\)/g)||[]).length,1);assert(!/addEventListener\(["']resize["'][\s\S]{0,200}loadAuthorizedWorkspaceCatalog/.test(app));assert(!/theme[\s\S]{0,100}loadAuthorizedWorkspaceCatalog/.test(app));
   });
   await test('no UI, mutation, provider, AI, migration, or baseline scope change',()=>{
-    if(fs.existsSync(path.join(root,'.git'))){const changed=require('child_process').execFileSync('git',['status','--short','--untracked-files=all'],{cwd:root,encoding:'utf8'});const unexpected=changed.split('\n').filter(Boolean).filter(line=>/migrations\//.test(line)&&!line.endsWith('migrations/20261001_bw36_12_brand_logo.sql'));assert.deepEqual(unexpected,[]);}
+    if(fs.existsSync(path.join(root,'.git'))){const changed=require('child_process').execFileSync('git',['status','--short','--untracked-files=all'],{cwd:root,encoding:'utf8'});/* R3 adds only its separate command table; historical migrations remain protected. */const unexpected=changed.split('\n').filter(Boolean).filter(line=>/migrations\//.test(line)&&!line.endsWith('migrations/20261001_bw36_12_brand_logo.sql') && !line.endsWith('migrations/20261006_bw36_13r3_project_commands.sql'));assert.deepEqual(unexpected,[]);}
     const browserSource=fs.readFileSync(path.join(root,'workspace-catalog.js'),'utf8');assert(!/openai|googleapis|linkedin|facebook|anthropic|schedule|approval|publication/i.test(browserSource));
     for(const file of ['campaign-v3.js','content-workspace.js','automatic-planning.js','posting-plan-export.js','posting-plan-pdf.js','funnel-simulator.js','language.js','styles.css'])assert(fs.existsSync(path.join(root,file)));
   });

@@ -48,8 +48,13 @@ assert.match(app, /authoritativeBoardBrandCore = \{ boardId: String\(data\.id\),
 assert.match(app, /provenance: snapshot\.provenance \? \{ \.\.\.snapshot\.provenance \} : null/);
 assert.match(app, /current\.boardLoadGeneration === state\.authoritativeBoardBrandCore\.loadGeneration/);
 assert.doesNotMatch(app.slice(app.indexOf('async function submitCanonicalBrandCoreInitialization'), app.indexOf('async function loadBoardBrandCoreComparison')), /authoritativeBoardBrandCore\.provenance\s*=|brand_core_source_/, 'BW-9 does not fabricate provenance');
-assert.match(app, /const validProvenance = choice\.mode === "brand" \? provenance !== null/);
-assert.match(app, /data\.brand_id !== brandId/);
+// R3 normal creation validates the authoritative relationship/provenance envelope
+// before hydration; legacy association, editing and public isolation assertions above remain.
+const projectContract = read('project-command.js');
+assert.match(projectContract, /board\.brand_id !== b\.id/);
+assert.match(projectContract, /s\.source_revision !== b\.revision/);
+assert.match(projectContract, /s\.copied_at !== board\.brand_core_snapshot_copied_at/);
+assert.match(app, /provenance: normalizeBoardSnapshotProvenance\(data\)/);
 assert.match(workflow, /check-bw11-create-board-from-canonical-brand\.js[\s\S]*check-bw12-canonical-snapshot-provenance\.js/);
 assert.strictEqual((workflow.match(/check-bw12-canonical-snapshot-provenance\.js/g) || []).length, 1, 'BW-12 handler is registered once');
 
