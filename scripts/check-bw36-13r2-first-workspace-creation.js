@@ -1,7 +1,17 @@
 #!/usr/bin/env node
 'use strict';
-const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
-const {createHandler}=require('../api/workspaces');
+const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),Module=require('node:module');
+const originalLoad=Module._load;
+class GuardedPool {
+  query(){throw new Error('Production pg Pool.query must not be used by this regression');}
+  connect(){throw new Error('Production pg Pool.connect must not be used by this regression');}
+}
+Module._load=function(request,parent,isMain){
+  if(request==='pg')return{Pool:GuardedPool};
+  return originalLoad.call(this,request,parent,isMain);
+};
+let createHandler;
+try{({createHandler}=require('../api/workspaces'));}finally{Module._load=originalLoad;}
 const I='11111111-1111-4111-8111-111111111111',W='22222222-2222-4222-8222-222222222222';
 function response(){return{headers:{},statusCode:0,body:null,setHeader(k,v){this.headers[k]=v;},status(v){this.statusCode=v;return this;},json(v){this.body=v;return v;}};}
 async function call(handler,{method='POST',body={contract:'workspace_create_v1',request_id:'request-1',name:' Workspace '},cookie='funklix_session=ok'}={}){const res=response();await handler({method,body,headers:{cookie}},res);return res;}
