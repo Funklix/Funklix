@@ -63,7 +63,13 @@ function workspace(overrides={}) { return { id:ids.workspace,name:'Invented Work
   });
   await test('disabled, ambiguous, method, authentication, database and cross-Workspace failures are bounded',async()=>{
     assert.equal((await invoke({status:'disabled'})).res.body.error.code,'IDENTITY_DISABLED');assert.equal((await invoke({ambiguous:true})).res.body.error.code,'IDENTITY_AMBIGUOUS');
-    assert.equal((await invoke({}, {method:'POST',headers:{cookie:cookie({email:'owner@example.test'})}})).res.body.error.code,'METHOD_NOT_ALLOWED');
+    const exactCreate={contract:'workspace_create_v1',request_id:'bw36-9-create',name:'First Workspace'};
+    const permittedPost=(await invoke({}, {method:'POST',body:exactCreate,headers:{cookie:cookie({email:'owner@example.test'})}})).res;
+    assert.notEqual(permittedPost.body.error?.code,'METHOD_NOT_ALLOWED');assert.equal(permittedPost.body.contract,'workspace_create_v1');
+    assert.equal((await invoke({}, {method:'POST',body:null,headers:{cookie:cookie({email:'owner@example.test'})}})).res.body.error.code,'REQUEST_INVALID');
+    assert.equal((await invoke({}, {method:'POST',body:{...exactCreate,workspace_id:ids.workspace},headers:{cookie:cookie({email:'owner@example.test'})}})).res.body.error.code,'REQUEST_INVALID');
+    assert.equal((await invoke({}, {method:'POST',body:exactCreate,headers:{}})).res.body.error.code,'AUTHENTICATION_REQUIRED');
+    assert.equal((await invoke({}, {method:'DELETE',headers:{cookie:cookie({email:'owner@example.test'})}})).res.body.error.code,'METHOD_NOT_ALLOWED');
     assert.equal((await invoke({}, {method:'GET',headers:{}})).res.body.error.code,'AUTHENTICATION_REQUIRED');
     assert.equal((await invoke({}, {method:'GET',headers:{cookie:'funklix_session=malformed'}})).res.body.error.code,'SESSION_INVALID');
     assert.equal((await invoke({fail:'57P03'})).res.body.error.code,'DATABASE_UNAVAILABLE');assert.equal((await invoke({fail:'42P01'})).res.body.error.code,'WORKSPACE_SCHEMA_UNAVAILABLE');
