@@ -2,7 +2,6 @@ const { getSessionUser } = require('./_auth-session');
 const { retrieveWebsiteText } = require('./_website-retrieval');
 const { extractBrandProjection, stableBound, MAX_PROVIDER_CONTEXT } = require('./_html-text-extractor');
 const { rankLogoCandidates, discoverLogo } = require('./_brand-logo');
-const { getBrandAccess, isBrandId } = require('./_brand-access');
 const { createHash } = require('crypto');
 
 const STATUS_BY_CODE = {
@@ -75,6 +74,8 @@ async function handler(req, res) {
   try {
     const brandId = req.body?.brandId;
     if (brandId !== undefined) {
+      // Keep legacy analysis helpers loadable without database runtime dependencies.
+      const { getBrandAccess, isBrandId } = require('./_brand-access');
       if (!isBrandId(brandId)) return res.status(400).json({ error: { code: 'invalid_brand' } });
       const { brand, access } = await getBrandAccess(brandId, user, { columns: 'id' });
       if (!brand || !access.canEditCanonicalBrand) return res.status(403).json({ error: { code: 'permission_denied' } });
