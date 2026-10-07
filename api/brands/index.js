@@ -1,6 +1,6 @@
 const { getSessionUser } = require('../_auth-session');
 const { getBrandOwnerEmail } = require('../_brand-access');
-const { pool, BRAND_COLUMNS, BRAND_SUMMARY_COLUMNS, MAX_BRAND_NAME_LENGTH, ensureBrandsTable, serializeBrand, serializeBrandSummary } = require('../_brands-storage');
+const { pool, MAX_BRAND_NAME_LENGTH, ensureBrandsTable, serializeBrandSummary } = require('../_brands-storage');
 
 function validBrandCore(value) {
   return value && typeof value === 'object' && !Array.isArray(value);
@@ -21,6 +21,7 @@ module.exports = async function handler(req, res) {
   const user = getSessionUser(req);
   const ownerEmail = getBrandOwnerEmail(user);
   if (!ownerEmail) return res.status(401).json({ error: 'Authentication required' });
+  if (req.method === 'POST') return res.status(409).json({ code: 'PROJECT_CREATION_REQUIRED', error: 'Create a project from New project in Boards to create a Brand in your workspace.' });
 
   try {
     await ensureBrandsTable();
@@ -37,17 +38,6 @@ module.exports = async function handler(req, res) {
       );
       return res.status(200).json({ brands: result.rows.map(serializeBrandSummary) });
     }
-
-    const name = validBrandName(req.body?.name);
-    const brandCore = req.body?.brand_core;
-    if (!name) return res.status(400).json({ error: `name must be between 1 and ${MAX_BRAND_NAME_LENGTH} characters` });
-    if (!validBrandCore(brandCore)) return res.status(400).json({ error: 'brand_core must be an object' });
-
-    const result = await pool.query(
-      `INSERT INTO brands (owner_email, name, brand_core) VALUES ($1, $2, $3::jsonb) RETURNING ${BRAND_COLUMNS}`,
-      [ownerEmail, name, JSON.stringify(brandCore)]
-    );
-    return res.status(201).json(serializeBrand(result.rows[0], require('../_brand-access').brandCapabilities('owner')));
   } catch (error) {
     console.error('[BRAND_COLLECTION_FAILURE]', {
       method: req.method,

@@ -127,56 +127,10 @@ module.exports = async function handler(req, res) {
       return res.status(200).json({ boards: result.rows.map(serializeBoardListRow) });
     }
 
-    const { name: rawName = '', canvas_json = null, brand_core_snapshot = null, brand_id = null } = req.body || {};
     const user = getSessionUser(req);
-    if (!user?.email) {
-      return res.status(401).json({ error: 'Authentication required' });
-    }
-    const trimmedName = typeof rawName === 'string' ? rawName.trim() : '';
-    const name = trimmedName || `Campaign Canvas ${new Date().toISOString()}`;
-    if (!canvas_json || typeof canvas_json !== 'object') {
-      return res.status(400).json({ error: 'canvas_json is required' });
-    }
+    if (!user?.email) return res.status(401).json({ error: 'Authentication required' });
+    return res.status(409).json({ code: 'PROJECT_CREATION_REQUIRED', error: 'This creation path is unavailable. Use New project in Boards to create a project in your workspace.' });
 
-    await ensureBoardsTable();
-    const ownerEmail = normalizeEmail(user.email);
-    let authoritativeSnapshot = brand_core_snapshot;
-    let linkedBrandId = null;
-    let sourceRevision = null;
-    let sourceUpdatedAt = null;
-    if (brand_id !== null && brand_id !== undefined && brand_id !== '') {
-      if (typeof brand_id !== 'string') return res.status(400).json({ error: 'brand_id must be a string' });
-      const requestedBrandId = brand_id.trim();
-      if (!isBrandId(requestedBrandId)) return res.status(400).json({ error: 'brand_id must be a UUID' });
-      let brand;
-      try {
-        const resolvedBrand = await getBrandAccess(requestedBrandId, user, { columns: 'id, brand_core, revision, updated_at' });
-        brand = resolvedBrand.access.canCreateBrandBoards ? resolvedBrand.brand : null;
-      } catch (error) {
-        console.error('[BOARD_BRAND_LOOKUP_FAILURE]', {
-          brandId: requestedBrandId,
-          ownerEmail,
-          error: error?.message || 'unknown',
-          stack: error?.stack || null
-        });
-        return res.status(500).json({ error: 'Failed to save board' });
-      }
-      if (!brand) return res.status(404).json({ error: 'Brand not found' });
-      linkedBrandId = brand.id;
-      authoritativeSnapshot = brand.brand_core;
-      sourceRevision = brand.revision;
-      sourceUpdatedAt = brand.updated_at;
-    }
-    const result = await pool.query(
-      `INSERT INTO boards (name, canvas_json, brand_core_snapshot, brand_id, brand_core_source_revision, brand_core_source_updated_at,
-        brand_core_snapshot_copied_at, owner_id, owner_email, owner_name, owner_avatar, created_by)
-       VALUES ($1, $2::jsonb, $3::jsonb, $4, $5, $6, CASE WHEN $4::uuid IS NULL THEN NULL ELSE NOW() END, $7, $8, $9, $10, $11)
-       RETURNING id, name, canvas_json, brand_core_snapshot, brand_id, brand_core_source_revision, brand_core_source_updated_at,
-         brand_core_snapshot_copied_at, updated_at, owner_id, owner_email, owner_name, owner_avatar, created_by, created_at`,
-      [name, JSON.stringify(canvas_json), JSON.stringify(authoritativeSnapshot || null), linkedBrandId, sourceRevision, sourceUpdatedAt, ownerEmail, ownerEmail, user?.name || null, user?.avatar || null, ownerEmail]
-    );
-
-    return res.status(200).json(serializeBoardItem(result.rows[0]));
   } catch (error) {
     return res.status(500).json({ error: req.method === 'GET' ? 'Failed to load boards' : 'Failed to save board' });
   }

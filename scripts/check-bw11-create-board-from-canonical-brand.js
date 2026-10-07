@@ -5,8 +5,8 @@ const app = fs.readFileSync(require.resolve('../app.js'), 'utf8');
 const route = fs.readFileSync(require.resolve('../api/boards/index.js'), 'utf8');
 const workflow = fs.readFileSync(require.resolve('../.github/workflows/runtime-boot-safety.yml'), 'utf8');
 const slice = (from, to) => app.slice(app.indexOf(from), app.indexOf(to, app.indexOf(from)));
-// BW-36.13R3 supersedes only the normal browser creation contract. The legacy
-// route remains bounded and independently authorizes Brand snapshot creation.
+// BW-36.13R3R1 retires legacy creation without changing independent reads.
+// The authoritative R3 service retains Brand authorization and snapshot creation.
 const create = slice('async function createNewBoardFlow', 'function getResolvedWorkspaceBrand');
 const dialog = fs.readFileSync(require.resolve('../project-dialog.js'), 'utf8');
 const command = fs.readFileSync(require.resolve('../project-command.js'), 'utf8');
@@ -32,10 +32,8 @@ assert.match(app, /state\.brandCore = normalizeBrandCoreState\(clonePlainObject\
 assert.match(app, /setActiveView\("board"\)/);
 assert.match(app, /clearAutosaveTimer\(\)/);
 assert.match(route, /getSessionUser\(req\)/);
-assert.match(route, /getOwnedBrand\(requestedBrandId, user, \{ columns: 'id, brand_core, revision, updated_at' \}\)/);
-assert.match(route, /authoritativeSnapshot = brand\.brand_core/);
-assert.match(route, /linkedBrandId = brand\.id/);
-assert.match(route, /if \(!brand\) return res\.status\(404\)/);
+assert.match(route, /PROJECT_CREATION_REQUIRED/);
+assert.doesNotMatch(route, /INSERT INTO boards/);
 assert.match(workflow, /check-bw10-brand-scoped-board-library\.js[\s\S]*check-bw11-create-board-from-canonical-brand\.js/);
 assert.strictEqual((app.match(/el\.newBoardButton\?\.addEventListener\("click", createNewBoardFlow\)/g) || []).length, 1);
 assert.strictEqual((app.match(/el\.boardsCreateButton\?\.addEventListener\("click", createNewBoardFlow\)/g) || []).length, 1);

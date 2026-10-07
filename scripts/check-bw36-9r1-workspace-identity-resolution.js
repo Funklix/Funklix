@@ -46,7 +46,7 @@ const identity = Object.freeze({
 });
 const membership = Object.freeze({ id: ids.workspace, name: 'Invented Workspace', avatar_url: null, locale: 'en', revision: '0', role: 'owner' });
 const brand = Object.freeze({ id: ids.brand, workspace_id: ids.workspace, name: 'Invented Brand', revision: '0', role: 'owner' });
-const board = Object.freeze({ id: ids.board, workspace_id: ids.workspace, brand_id: ids.brand, name: 'Invented Board', role: 'owner' });
+const board = Object.freeze({ id: ids.board, workspace_id: ids.workspace, brand_id: ids.brand, brand_workspace_id: ids.workspace, name: 'Invented Board', role: 'owner' });
 
 function cookie(email = ' Owner@Example.Test ') {
   return `funklix_session=${encodeURIComponent(createSessionToken({ email }))}`;
@@ -122,11 +122,14 @@ async function invoke(options = {}, request = {}) {
     assert(!/private database detail/.test(JSON.stringify(result.logs)));
   });
 
-  await test('membership cannot expand descendants and cross-Workspace descendants fail closed', async () => {
+  await test('membership cannot expand descendants and external descendants are excluded', async () => {
     const isolated = await invoke({ brands: [], boards: [] });
     assert.deepEqual(isolated.res.body.workspaces[0].brands, []); assert.deepEqual(isolated.res.body.workspaces[0].boards, []);
     const cross = await invoke({ brands: [{ ...brand, workspace_id: ids.otherWorkspace }], boards: [] });
-    assert.equal(cross.res.body.error.code, 'WORKSPACE_CATALOG_CONFLICT');
+    assert.equal(cross.res.statusCode, 200);
+    assert.deepEqual(cross.res.body.workspaces[0].brands, []);
+    const inconsistent = await invoke({ boards: [{ ...board, brand_workspace_id: ids.otherWorkspace }] });
+    assert.equal(inconsistent.res.body.error.code, 'WORKSPACE_CATALOG_CONFLICT');
   });
 
   await test('Board-only collaborator, public token and request parameters cannot become identity authority', async () => {

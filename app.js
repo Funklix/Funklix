@@ -3464,10 +3464,10 @@ function openCanonicalBrandCreation() {
 }
 
 function canonicalBrandCreationError(status) {
+  if (status === 409) return state.uiLanguage === "de" ? "Erstelle eine Marke über Neues Projekt in Boards, damit sie deinem Workspace zugeordnet wird." : "Use New project in Boards to create a Brand in your workspace.";
   if (status === 401) return "Your session has expired. Sign in before creating a Brand.";
   if (status === 403) return "You are not authorized to create a Brand for this account.";
   if (status === 400 || status === 422) return "That Brand name is not valid. Review it and try again.";
-  if (status === 409) return "A Brand with that name already exists. Choose a different name.";
   return "The Brand could not be created. Please try again deliberately.";
 }
 
@@ -4563,6 +4563,7 @@ function selectSessionBrand(brandId) {
 }
 
 function clearWorkspaceCatalog() {
+  showProjectLaunchFeedback(null);
   invalidateBoardCreationContext();
   const generation = state.workspaceCatalog.generation + 1;
   state.workspaceCatalog = { status: "idle", value: null, activeWorkspaceId: null, error: null, generation, identity: "", promise: null };
@@ -18984,14 +18985,100 @@ function showUnsavedLeaveModal() {
   });
 }
 
+function showProjectLaunchFeedback(kind) {
+  let host = document.getElementById("project-launch-feedback");
+  let status = document.getElementById("project-launch-status");
+  let action = document.getElementById("project-launch-action");
+  if (!host || !status || !action) return;
+  const de = state.uiLanguage === "de";
+  // The same handler is also attached to the Canvas New project action. Keep
+  // feedback visible there without changing the toolbar or navigating away.
+  if (!kind && showProjectLaunchFeedback.surface) {
+    showProjectLaunchFeedback.surface.host.hidden = true;
+    showProjectLaunchFeedback.surface.host.close();
+    showProjectLaunchFeedback.surface.host.remove();
+    showProjectLaunchFeedback.surface = null;
+  }
+  if (kind && state.activeView !== "boards_library") {
+    if (!showProjectLaunchFeedback.surface) {
+      const dialog = document.createElement("dialog");
+      dialog.className = "project-dialog";
+      const title = document.createElement("h2");
+      title.textContent = window.FunklixProjectDialog.copy(state.uiLanguage).title;
+      dialog.setAttribute("aria-label", title.textContent);
+      const message = document.createElement("p");
+      message.setAttribute("role", "status"); message.setAttribute("aria-live", "polite");
+      const retry = document.createElement("button"); retry.type = "button";
+      const close = document.createElement("button"); close.type = "button";
+      close.textContent = de ? "Schließen" : "Close";
+      close.addEventListener("click", () => showProjectLaunchFeedback(null));
+      dialog.addEventListener("cancel", () => showProjectLaunchFeedback(null));
+      dialog.append(title, message, retry, close); document.body.append(dialog);
+      showProjectLaunchFeedback.surface = { host: dialog, status: message, action: retry };
+      dialog.showModal(); close.focus();
+    }
+    ({ host, status, action } = showProjectLaunchFeedback.surface);
+  }
+  const messages = de ? {
+    loading: "Workspace wird geladen. Bitte kurz warten und erneut klicken.",
+    unavailable: "Workspace nicht verfügbar. Bitte erneut versuchen.",
+    empty: "Erstelle zuerst einen Workspace, um ein Projekt anzulegen.",
+    select: "Wähle links einen Workspace, um ein Projekt anzulegen.",
+    authentication: "Melde dich an, um ein Projekt anzulegen.",
+    pending: "Die Projekterstellung läuft bereits."
+  } : {
+    loading: "Workspace is loading. Please wait briefly and click again.",
+    unavailable: "Workspace unavailable. Please retry.",
+    empty: "Create a workspace first to start a project.",
+    select: "Select a workspace in the sidebar to start a project.",
+    authentication: "Sign in to start a project.",
+    pending: "Project creation is already in progress."
+  };
+  host.hidden = !kind;
+  status.textContent = messages[kind] || "";
+  action.hidden = !["unavailable", "empty"].includes(kind);
+  action.textContent = kind === "empty" ? (de ? "Workspace erstellen" : "Create workspace") : (de ? "Erneut versuchen" : "Retry");
+  action.onclick = kind === "empty" ? () => {
+    if (state.user && state.workspaceCatalog.status === "ready" && state.workspaceCatalog.value?.workspaces.length === 0) {
+      const origin = showProjectLaunchFeedback.surface ? document.getElementById("new-board-btn") : action;
+      if (showProjectLaunchFeedback.surface) showProjectLaunchFeedback(null);
+      workspaceSidebarController?.openCreate(origin);
+    } else { showProjectLaunchFeedback("unavailable"); }
+  } : () => {
+    // The existing loader owns identity/generation checks and single flight.
+    showProjectLaunchFeedback("loading");
+    const account = state.user;
+    const flight = retryWorkspaceCatalog();
+    const lifecycle = state.workspaceCatalog;
+    return Promise.resolve(flight).then(() => {
+      if (state.user !== account || state.workspaceCatalog !== lifecycle || host.hidden) return;
+      showProjectLaunchFeedback(state.workspaceCatalog.status === "ready"
+        ? (state.workspaceCatalog.value?.workspaces.length ? null : "empty") : "unavailable");
+    });
+  };
+}
+
 async function createNewBoardFlow() {
-  if (!state.user?.email) { setAuthMessage(window.FunklixProjectDialog.copy(state.uiLanguage).authentication); return; }
-  if (projectDialogController || state.boardCreation.status === "pending") return;
+  if (!state.user?.email) { showProjectLaunchFeedback("authentication"); return; }
+  if (projectDialogController) { projectDialogController.dialog?.focus(); return; }
+  if (state.boardCreation.status === "pending") { showProjectLaunchFeedback("pending"); return; }
   const workspace = state.workspaceCatalog.status === "ready"
     ? state.workspaceCatalog.value?.workspaces.find(item => item.id === state.workspaceCatalog.activeWorkspaceId) : null;
-  if (!workspace) { setSaveStatus(window.FunklixProjectDialog.copy(state.uiLanguage).not_found); return; }
-  if (state.isDirty && !await showUnsavedLeaveModal()) return;
+  if (!workspace) {
+    const status = state.workspaceCatalog.status;
+    showProjectLaunchFeedback(["idle", "loading", "refreshing"].includes(status) ? "loading"
+      : status !== "ready" ? "unavailable"
+      : state.workspaceCatalog.value?.workspaces.length === 0 ? "empty" : "select");
+    return;
+  }
+  showProjectLaunchFeedback(null);
   const account = state.user, generation = state.workspaceCatalog.generation;
+  if (state.isDirty && !await showUnsavedLeaveModal()) return;
+  if (account !== state.user || generation !== state.workspaceCatalog.generation
+    || state.workspaceCatalog.status !== "ready" || workspace.id !== state.workspaceCatalog.activeWorkspaceId) {
+    showProjectLaunchFeedback(state.user?.email ? "unavailable" : "authentication");
+    return;
+  }
   createdProjectContext = null;
   projectDialogController = window.FunklixProjectDialog.mount({
     workspace, language: state.uiLanguage,

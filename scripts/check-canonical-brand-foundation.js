@@ -184,8 +184,8 @@ function runIsolatedProbe(source) {
   for (const revision of [null, 0, -1, 1.5, "2"]) assert.strictEqual((await call(brandItem, req("PUT", owner, { name: "Valid", brand_core: {}, revision }, { id: brandId }))).statusCode, 400);
   for (const name of ["", " ", "x".repeat(161)]) assert.strictEqual((await call(brandItem, req("PUT", owner, { name, brand_core: {}, revision: 2 }, { id: brandId }))).statusCode, 400);
   for (const brand_core of [null, [], "text", 1, true]) assert.strictEqual((await call(brandItem, req("PUT", owner, { name: "Valid", brand_core, revision: 2 }, { id: brandId }))).statusCode, 400);
-  for (const name of ["", " ", "x".repeat(161)]) assert.strictEqual((await call(brandCollection, req("POST", owner, { name, brand_core: {} }))).statusCode, 400);
-  for (const brand_core of [null, [], "text", 1, true]) assert.strictEqual((await call(brandCollection, req("POST", owner, { name: "Valid", brand_core }))).statusCode, 400);
+  for (const name of ["", " ", "x".repeat(161)]) assert.strictEqual((await call(brandCollection, req("POST", owner, { name, brand_core: {} }))).statusCode, 409);
+  for (const brand_core of [null, [], "text", 1, true]) assert.strictEqual((await call(brandCollection, req("POST", owner, { name: "Valid", brand_core }))).statusCode, 409);
 
   // Accessible collection, item, and body-ownership behavior.
   let response = await call(brandCollection, req("GET", owner));
@@ -197,8 +197,9 @@ function runIsolatedProbe(source) {
   response = await call(brandCollection, req("GET", other));
   assert.deepStrictEqual(response.body.brands.map(({ id }) => id), [otherBrandId]);
   response = await call(brandCollection, req("POST", owner, { name: "Created", brand_core: {}, owner_email: other.email, owner_id: "forged" }));
-  assert.strictEqual(response.statusCode, 201);
-  assert.strictEqual(brands.get(response.body.id).owner_email, ownerEmail);
+  assert.strictEqual(response.statusCode, 409);
+  assert.strictEqual(response.body.code, "PROJECT_CREATION_REQUIRED");
+  assert(!queries.some(({ text }) => text.includes("INSERT INTO brands")));
   assert(!Object.hasOwn(response.body, "owner_email"));
 
   for (const method of ["GET", "PUT"]) {
@@ -238,30 +239,23 @@ function runIsolatedProbe(source) {
   assert(logged.some((entry) => JSON.stringify(entry).includes("postgres secret")));
   console.error = originalConsoleError;
 
-  // Create-from-Brand is server-authoritative and never partially inserts on auth/load failure.
-  const insertCount = () => queries.filter(({ text }) => text.includes("INSERT INTO boards")).length;
-  const forged = { brandCore: "FORGED CLIENT SNAPSHOT" };
-  response = await call(boardCollection, req("POST", owner, { name: "Linked campaign", canvas_json: { nodes: [], edges: [] }, brand_id: brandId, brand_core_snapshot: forged, owner_email: other.email }));
-  assert.strictEqual(response.statusCode, 200); assert.strictEqual(response.body.brand_id, brandId);
-  assert.deepStrictEqual(response.body.brand_core_snapshot, brands.get(brandId).brand_core);
-  assert.notDeepStrictEqual(response.body.brand_core_snapshot, forged);
-  assert.strictEqual(response.body.owner_email, ownerEmail);
-  let beforeInsert = insertCount();
-  assert.strictEqual((await call(boardCollection, req("POST", other, { name: "No", canvas_json: {}, brand_id: brandId }))).statusCode, 404);
-  assert.strictEqual((await call(boardCollection, req("POST", owner, { name: "No", canvas_json: {}, brand_id: "invalid" }))).statusCode, 400);
-  injectedFailure = /FROM brands b/;
-  response = await call(boardCollection, req("POST", owner, { name: "No", canvas_json: {}, brand_id: brandId }));
-  assert.strictEqual(response.statusCode, 500); assert.deepStrictEqual(response.body, { error: "Failed to save board" });
-  assert(!JSON.stringify(response.body).includes("postgres secret"));
-  assert.strictEqual(insertCount(), beforeInsert);
-
-  // Generic create/copy/save-as-new paths omit brand_id and preserve their supplied snapshot.
-  for (const actor of [owner, other]) {
-    const copiedSnapshot = { brandCore: `Copied for ${actor.email}` };
-    response = await call(boardCollection, req("POST", actor, { name: "Generic copy", canvas_json: { nodes: [], edges: [] }, brand_core_snapshot: copiedSnapshot }));
-    assert.strictEqual(response.statusCode, 200); assert.strictEqual(response.body.brand_id, null);
-    assert.deepStrictEqual(response.body.brand_core_snapshot, copiedSnapshot);
+  // R3R1 blocks every old creation/copy payload before any query. R3's actual
+  // transaction/authorization/snapshot behavior is exercised by R3 and R3R1.
+  for (const actor of [owner, other, viewer]) {
+    for (const body of [
+      { name: "Linked", canvas_json: {}, brand_id: brandId, brand_core_snapshot: { brandCore: "FORGED" }, owner_email: other.email },
+      { name: "Invalid", canvas_json: {}, brand_id: "invalid" },
+      { name: "Copy", canvas_json: {}, brand_core_snapshot: boardSnapshot }
+    ]) {
+      const beforeQueries = queries.length;
+      response = await call(boardCollection, req("POST", actor, body));
+      assert.strictEqual(response.statusCode, 409);
+      assert.strictEqual(response.body.code, "PROJECT_CREATION_REQUIRED");
+      assert.strictEqual(queries.length, beforeQueries);
+      assert(!JSON.stringify(response.body).includes("postgres secret"));
+    }
   }
+  assert.strictEqual((await call(boardCollection, req("POST", null, {}))).statusCode, 401);
 
   // Legacy, linked, shared-read, save, restore, and immutable brand_id compatibility.
   response = await call(boardItem, req("GET", owner, {}, { id: legacyBoardId }));
