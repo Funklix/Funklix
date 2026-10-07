@@ -92,6 +92,7 @@ async function loadWorkspaceCatalog({ db, identityId, canonicalEmail, diagnostic
       ORDER BY w.name, w.id`, [identityId]);
   const memberships = membershipResult.rows;
   if (!memberships.length) return [];
+  projectCatalog({ memberships, brands: [], boards: [] });
   const ids = memberships.map((row) => row.id);
   diagnostic('catalog_projection');
   const brandResult = await db.query(
@@ -99,10 +100,11 @@ async function loadWorkspaceCatalog({ db, identityId, canonicalEmail, diagnostic
             CASE WHEN lower(b.owner_email) = $1 THEN 'owner' ELSE bm.role END AS role
        FROM public.brands b
        LEFT JOIN public.brand_members bm ON bm.brand_id = b.id AND bm.email = $1
-      WHERE (lower(b.owner_email) = $1 OR bm.role IN ('admin','editor','viewer'))
-      ORDER BY b.name, b.id`, [canonicalEmail]);
+      WHERE b.workspace_id = ANY($2::uuid[])
+        AND (lower(b.owner_email) = $1 OR bm.role IN ('admin','editor','viewer'))
+      ORDER BY b.name, b.id`, [canonicalEmail, ids]);
   const boardResult = await db.query(
-    `SELECT b.id, b.workspace_id, b.brand_id, b.name,
+    `SELECT b.id, b.workspace_id, b.brand_id, b.name, br.workspace_id AS brand_workspace_id,
             CASE WHEN lower(coalesce(b.owner_email, '')) = $1 THEN 'owner'
                  WHEN br.owner_email = $1 THEN 'brand_owner'
                  WHEN bm.role = 'admin' THEN 'brand_admin'
@@ -114,15 +116,21 @@ async function loadWorkspaceCatalog({ db, identityId, canonicalEmail, diagnostic
        LEFT JOIN public.board_editors be ON be.board_id = b.id AND be.email = $1 AND be.role IN ('editor','viewer')
        LEFT JOIN public.brands br ON br.id = b.brand_id
        LEFT JOIN public.brand_members bm ON bm.brand_id = b.brand_id AND bm.email = $1 AND bm.role IN ('admin','editor','viewer')
-      WHERE lower(coalesce(b.owner_email, '')) = $1 OR be.email IS NOT NULL OR br.owner_email = $1 OR bm.email IS NOT NULL
-      ORDER BY b.name, b.id`, [canonicalEmail]);
-  // All independently authorized descendants must point to an accepted active Workspace.
-  // A mismatch is corruption, not an invitation to broaden or silently infer authority.
+      WHERE b.workspace_id = ANY($2::uuid[])
+        AND (lower(coalesce(b.owner_email, '')) = $1 OR be.email IS NOT NULL OR br.owner_email = $1 OR bm.email IS NOT NULL)
+      ORDER BY b.name, b.id`, [canonicalEmail, ids]);
+  // Workspace membership bounds this projection, not the independent Board API.
+  // Null/out-of-scope legacy and shared rows cannot poison an accepted catalog.
   const allowed = new Set(ids);
-  if ([...brandResult.rows, ...boardResult.rows].some((row) => !allowed.has(row.workspace_id))) {
+  const brands = brandResult.rows.filter((row) => allowed.has(row.workspace_id));
+  const boards = boardResult.rows.filter((row) => allowed.has(row.workspace_id));
+  // Validate the actual Brand relationship even when independent Brand authority
+  // hides that Brand from the response. Never project its UUID or other metadata.
+  if (boards.some((row) => row.brand_id != null
+    && (!validId(row.brand_workspace_id) || row.brand_workspace_id !== row.workspace_id))) {
     throw new WorkspaceCatalogError('WORKSPACE_CATALOG_CONFLICT', 'relationship_validation');
   }
-  return projectCatalog({ memberships, brands: brandResult.rows, boards: boardResult.rows });
+  return projectCatalog({ memberships, brands, boards });
 }
 
 module.exports = { BRAND_ROLES, BOARD_ROLES, WorkspaceCatalogError, boardRole, projectBrandLogo, projectCatalog, loadWorkspaceCatalog };

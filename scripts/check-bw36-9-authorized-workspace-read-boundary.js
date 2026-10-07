@@ -53,7 +53,7 @@ function workspace(overrides={}) { return { id:ids.workspace,name:'Invented Work
   const membership={id:ids.workspace,name:'Invented Workspace',avatar_url:null,locale:'en',revision:1,role:'owner'};
   async function invoke(options={},req={method:'GET',headers:{cookie:cookie({email:' Owner@Example.Test '})}}){const db=dbFor(options);const res=response();await route.createHandler({db})(req,res);return {res,db};}
   await test('actual route verifies session, canonicalizes identity and projects authorized descendants',async()=>{
-    const {res,db}=await invoke({memberships:[membership],brands:[{id:ids.brand,workspace_id:ids.workspace,name:'Allowed Brand',revision:1,role:'owner'}],boards:[{id:ids.board,workspace_id:ids.workspace,brand_id:ids.brand,name:'Allowed Board',role:'owner'}]});
+    const {res,db}=await invoke({memberships:[membership],brands:[{id:ids.brand,workspace_id:ids.workspace,name:'Allowed Brand',revision:1,role:'owner'}],boards:[{id:ids.board,workspace_id:ids.workspace,brand_id:ids.brand,brand_workspace_id:ids.workspace,name:'Allowed Board',role:'owner'}]});
     assert.equal(res.statusCode,200);assert.equal(res.body.contract,'workspace_catalog_v1');assert.equal(res.body.workspaces[0].boards.length,1);assert.equal(db.calls[0].params[0],'owner@example.test');assert.match(res.headers['Cache-Control'],/no-store/);
   });
   await test('no identity, no membership, revoked membership, inactive workspace and Board-only are empty',async()=>{
@@ -73,7 +73,8 @@ function workspace(overrides={}) { return { id:ids.workspace,name:'Invented Work
     assert.equal((await invoke({}, {method:'GET',headers:{}})).res.body.error.code,'AUTHENTICATION_REQUIRED');
     assert.equal((await invoke({}, {method:'GET',headers:{cookie:'funklix_session=malformed'}})).res.body.error.code,'SESSION_INVALID');
     assert.equal((await invoke({fail:'57P03'})).res.body.error.code,'DATABASE_UNAVAILABLE');assert.equal((await invoke({fail:'42P01'})).res.body.error.code,'WORKSPACE_SCHEMA_UNAVAILABLE');
-    assert.equal((await invoke({memberships:[membership],brands:[{id:ids.brand,workspace_id:ids.workspace2,name:'Cross',revision:1,role:'owner'}]})).res.body.error.code,'WORKSPACE_CATALOG_CONFLICT');
+    assert.equal((await invoke({memberships:[membership],brands:[{id:ids.brand,workspace_id:ids.workspace2,name:'Cross',revision:1,role:'owner'}]})).res.statusCode,200);
+    assert.equal((await invoke({memberships:[membership],boards:[{id:ids.board,workspace_id:ids.workspace,brand_id:ids.brand,brand_workspace_id:ids.workspace2,name:'Cross',role:'owner'}]})).res.body.error.code,'WORKSPACE_CATALOG_CONFLICT');
   });
   Module._load=originalLoad;
   await test('catalog is read-only, private, and excludes forbidden material',()=>{

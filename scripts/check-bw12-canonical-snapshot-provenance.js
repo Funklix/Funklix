@@ -19,12 +19,15 @@ assert.match(storage, /brand_core_source_revision IS NULL OR brand_core_source_r
 assert.doesNotMatch(storage, /UPDATE boards[\s\S]*brand_core_source_(?:revision|updated_at)|UPDATE boards[\s\S]*brand_core_snapshot_copied_at/, 'schema setup never backfills provenance');
 assert.match(storage, /schemaReadyPromise = null[\s\S]*\.catch\(\(error\) => \{[\s\S]*schemaReadyPromise = null/, 'initialization remains retryable');
 
-assert.match(collection, /getOwnedBrand\(requestedBrandId, user, \{ columns: 'id, brand_core, revision, updated_at' \}\)/);
-assert.match(collection, /sourceRevision = brand\.revision[\s\S]*sourceUpdatedAt = brand\.updated_at/);
-assert.match(collection, /brand_core_snapshot_copied_at[\s\S]*CASE WHEN \$4::uuid IS NULL THEN NULL ELSE NOW\(\) END/);
-assert.match(collection, /sourceRevision, sourceUpdatedAt/);
+// R3R1 blocks legacy writes; assert authoritative R3 provenance instead.
+const service = read('api/_project-command.js');
+assert.match(collection, /PROJECT_CREATION_REQUIRED/);
+assert.doesNotMatch(collection, /INSERT INTO boards/);
+assert.match(service, /getBrandAccess\(brandId,user/);
+assert.match(service, /JSON\.stringify\(brand\.brand_core\),Number\(brand\.revision\),brand\.updated_at/);
+assert.match(service, /brand_core_snapshot_copied_at/);
+assert.match(service, /NOW\(\)/);
 assert.doesNotMatch(collection, /req\.body\?\.brand_core_source_|const \{[^}]*brand_core_source_/, 'client provenance is never read');
-assert.match(collection, /let sourceRevision = null;[\s\S]*let sourceUpdatedAt = null;/, 'unbranded provenance stays null');
 
 const association = item.slice(item.indexOf("if (req.method === 'PATCH')"), item.indexOf("if (req.method === 'DELETE')"));
 for (const field of fields) assert.match(association, new RegExp(`${field} = NULL`), 'association clears provenance atomically');

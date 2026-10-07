@@ -137,7 +137,7 @@
     createAction.addEventListener('click',()=>openCreate(createAction));
     nodes['workspace-context-options'].addEventListener('click',event=>selectFrom(event,'workspace'));nodes['brand-selector-options'].addEventListener('click',event=>selectFrom(event,'brand'));nodes['workspace-context-options'].addEventListener('keydown',event=>keyboard(event,nodes['workspace-context-options']));nodes['brand-selector-options'].addEventListener('keydown',event=>keyboard(event,nodes['brand-selector-options']));
     doc.addEventListener('keydown',event=>{if(event.key==='Escape'&&activeSurface()){event.preventDefault();close();}});doc.addEventListener('pointerdown',event=>{if(activeSurface()&&!surface.contains(event.target)&&!host.contains(event.target))close();});doc.addEventListener('scroll',updatePosition,true);root.addEventListener?.('resize',updatePosition);root.visualViewport?.addEventListener?.('resize',updatePosition);root.ResizeObserver&&new root.ResizeObserver(updatePosition).observe(host);
-    return Object.freeze({render,close,openBrand:()=>openSelector('brand',nodes['workspace-brand-trigger']),getModel:()=>model,updatePosition});
+    return Object.freeze({render,close,openCreate:(origin)=>{if(host.dataset.status==='ready'&&!host.hidden&&model.workspaces.length===0)openCreate(origin);},openBrand:()=>openSelector('brand',nodes['workspace-brand-trigger']),getModel:()=>model,updatePosition});
   }
   root.FunklixWorkspaceSidebar=Object.freeze({STRINGS,words,derive,filterBoards,safeAvatar,brandCountLabel,placement,create});
 }(typeof globalThis!=='undefined'?globalThis:window));
