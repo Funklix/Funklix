@@ -3055,6 +3055,8 @@ function selectEphemeralBrandFromSwitcher(brand) {
 }
 
 let canonicalBrandDetail = { status: "closed", requestId: 0, saveId: 0, brandId: "", userEmail: "", brand: null, draft: null, controller: null, saveController: null, returnFocus: null };
+let brandProfileController = null;
+let brandProfileAdvanced = false;
 let sidebarBrandProjection = null;
 let workspaceSidebarController = null;
 const sidebarProfileCache = new Map();
@@ -3091,8 +3093,25 @@ function brandDetailFieldLabel(key) {
 function renderCanonicalBrandDetail() {
   if (!el.brandWorkspaceDetailStatus || !el.brandWorkspaceDetailContent) return;
   const detail = canonicalBrandDetail;
+  if (!brandProfileAdvanced && window.FunklixBrandProfileSetup) {
+    el.brandWorkspaceDetail.classList.add('profile-guided-mode');
+    el.brandWorkspaceDetailContent.classList.toggle('hidden', detail.status !== 'ready');
+    el.brandWorkspaceEditForm?.classList.add('hidden');
+    el.brandWorkspaceEditOpen?.classList.add('hidden');
+    el.brandWorkspaceConflictReload?.classList.add('hidden');
+    el.brandWorkspaceDetailRetry?.classList.toggle('hidden', ['ready', 'closed', 'loading'].includes(detail.status));
+    el.brandWorkspaceDetailStatus.textContent = uiText(detail.status === 'loading' ? 'Loading Brand Profile…' : detail.status === 'ready' || detail.status === 'closed' ? '' : 'Loading Brand Profile failed. Retry or close this profile.');
+    if (detail.status === 'ready' && detail.brand) renderGuidedBrandProfile(detail);
+    return;
+  }
+  el.brandWorkspaceDetail.classList.remove('profile-guided-mode');
   renderProjectSetupNotice();
   el.brandWorkspaceDetailContent.replaceChildren();
+  if (brandProfileAdvanced) {
+    const back = document.createElement('button'); back.type = 'button'; back.className = 'fk-btn fk-btn-secondary'; back.textContent = uiText('Back to Brand Profile');
+    back.addEventListener('click', () => { if (!cancelCanonicalBrandEditing()) return; brandProfileAdvanced = false; renderCanonicalBrandDetail(); });
+    el.brandWorkspaceDetailContent.append(back);
+  }
   const editing = ["editing", "submitting", "conflict", "save-error"].includes(detail.status);
   el.brandWorkspaceDetailContent.classList.toggle("hidden", detail.status !== "ready");
   el.brandWorkspaceEditForm?.classList.toggle("hidden", !editing);
@@ -3151,9 +3170,88 @@ function renderCanonicalBrandDetail() {
   if (brand.access.canManageBrandMembers) renderBrandTeamSection(el.brandWorkspaceDetailContent, brand);
 }
 
+function renderGuidedBrandProfile(detail) {
+  el.brandWorkspaceDetailTitle.textContent = detail.brand.name;
+  if (detail.userEmail !== (state.user?.email || '').trim().toLowerCase()) {
+    brandProfileController?.invalidate(); brandProfileController = null;
+    el.brandWorkspaceDetailContent.replaceChildren();
+    el.brandWorkspaceDetailStatus.textContent = uiText('Workspace or Brand context is no longer available.'); return;
+  }
+  if (brandProfileController?.current()) { brandProfileController.render(); return; }
+  brandProfileController?.invalidate();
+  const brand = detail.brand;
+  const workspace = state.workspaceCatalog.value?.workspaces.find(w => w.brands.some(b => b.id === brand.id));
+  if (!workspace || state.workspaceCatalog.status !== 'ready') {
+    el.brandWorkspaceDetailStatus.textContent = uiText('Workspace or Brand context is no longer available.'); return;
+  }
+  brandProfileController = window.FunklixBrandProfileSetup.mount(el.brandWorkspaceDetailContent, {
+    brand, website: projectSetupContext?.website || '', language: () => state.uiLanguage,
+    getContext: () => ({ account: state.user, generation: state.workspaceCatalog.generation, brandId: canonicalBrandDetail.brandId,
+      workspaceId: state.workspaceCatalog.activeWorkspaceId,
+      authorized: state.workspaceCatalog.status === 'ready' && state.workspaceCatalog.activeWorkspaceId === workspace.id
+        && !!state.workspaceCatalog.value?.workspaces.find(w => w.id === workspace.id)?.brands.some(b => b.id === brand.id) }),
+    fetchImpl: (...args) => fetch(...args), requestId: () => crypto.randomUUID(), validateBrand: isCanonicalBrandDetail,
+    onBusy: pending => { if (el.brandWorkspaceDetailClose) el.brandWorkspaceDetailClose.disabled = pending; },
+    moduleDefinition: type => getKnowledgeModuleRegistryApi()?.getModuleDefinition(type),
+    createTile: type => createBrandCustomTile(getKnowledgeModuleRegistryApi().getModuleDefinition(type).label, '', { moduleType: type }),
+    onSave: confirmed => {
+      canonicalBrandDetail.brand = confirmed;
+      sidebarProfileCache.set(confirmed.id, confirmed.brand_core);
+      const catalog = state.workspaceCatalog.value;
+      state.workspaceCatalog.value = Object.freeze({ ...catalog, workspaces: Object.freeze(catalog.workspaces.map(w => Object.freeze({ ...w,
+        brands: Object.freeze(w.brands.map(b => b.id === confirmed.id ? Object.freeze({ ...b, name: confirmed.name, revision: confirmed.revision, logo_url: confirmed.logo_url, logo_revision: confirmed.logo_revision }) : b)) }))) });
+      const entry = state.brandCatalog.entries.find(b => b.id === confirmed.id);
+      if (entry) Object.assign(entry, { name: confirmed.name, revision: confirmed.revision });
+      if (ephemeralBrandSwitcherSelection?.id === confirmed.id) ephemeralBrandSwitcherSelection.name = confirmed.name;
+      el.brandWorkspaceDetailTitle.textContent = confirmed.name;
+      projectDialogController?.reconcileBrand?.(confirmed.id, { name: confirmed.name, logo_url: confirmed.logo_url, logo_revision: confirmed.logo_revision });
+      renderWorkspaceSidebar(); renderBoardBrandAssociation();
+    },
+    onLogo: (id, logo) => { Object.assign(canonicalBrandDetail.brand, logo, { logo_source: logo.source }); patchCatalogBrandLogo(id, logo); },
+    hasProject: () => !!projectSetupContext && projectSetupContext.account === state.user && projectSetupContext.generation === state.workspaceCatalog.generation,
+    onContinue: continueBrandProfileProject,
+    onAdvanced: controller => {
+      if (controller.busy() || (controller.dirty() && !window.confirm(uiText('Discard unsaved Brand Profile changes?')))) return;
+      controller.invalidate(); brandProfileController = null; brandProfileAdvanced = true; renderCanonicalBrandDetail();
+    }
+  });
+}
+
+async function continueBrandProfileProject() {
+  const context = projectSetupContext;
+  if (!context) { closeCanonicalBrandDetail(); return; }
+  if (context.account !== state.user || context.generation !== state.workspaceCatalog.generation) {
+    el.brandWorkspaceDetailStatus.textContent = uiText('Workspace or Brand context is no longer available.'); return;
+  }
+  if (context.pending) return;
+  context.pending = true;
+  const detail = canonicalBrandDetail;
+  try {
+    // Read the existing Board through its usual authority; never replay a creation.
+    const opened = await loadBoardFromUrlIfPresent(context.outcome.board.id);
+    if (projectSetupContext !== context || context.account !== state.user || context.generation !== state.workspaceCatalog.generation) return;
+    if (!opened || state.currentBoardId !== context.outcome.board.id || state.boardBrandAssociation.brandId !== detail.brandId) throw new Error('unavailable');
+    if (!closeCanonicalBrandDetail({ restoreFocus: false })) return;
+    history.pushState({}, '', `/boards/${context.outcome.board.id}`);
+    setAppMode('canvas'); setActiveView('board'); renderWorkspaceSidebar();
+    projectSetupContext = null;
+    document.getElementById('create-campaign-btn')?.focus();
+  } catch {
+    if (projectSetupContext === context && context.account === state.user) el.brandWorkspaceDetailStatus.textContent = uiText('This project is no longer available. Your Brand Profile is still saved.');
+  } finally { context.pending = false; }
+}
+
 const BRAND_LOGO_MUTATIONS_ENABLED=false;
 function brandLogoCopy(key){const de=state.uiLanguage==='de';const copy={title:['Brand logo','Markenlogo'],upload:['Upload logo','Logo hochladen'],change:['Change logo','Logo ändern'],find:['Find from website','Auf Website suchen'],remove:['Remove logo','Logo entfernen'],found:['Logo found from website','Logo auf der Website gefunden'],empty:['No logo yet. Initials are shown.','Noch kein Logo. Initialen werden angezeigt.'],contained:['Logo changes are temporarily unavailable.','Logoänderungen sind vorübergehend nicht verfügbar.'],unsupported:['Use PNG, JPEG, WebP, or GIF.','Verwende PNG, JPEG, WebP oder GIF.'],large:['Logo must be 2 MB or smaller.','Das Logo darf höchstens 2 MB groß sein.'],failed:['The logo could not be updated.','Das Logo konnte nicht aktualisiert werden.'],stale:['The logo changed elsewhere. Reload and try again.','Das Logo wurde anderswo geändert. Lade neu und versuche es erneut.'],denied:['You do not have permission to change this logo.','Du darfst dieses Logo nicht ändern.'],confirm:['Remove this Brand logo?','Dieses Markenlogo entfernen?']};return copy[key]?.[de?1:0]||key;}
-function patchCatalogBrandLogo(brandId,logo){const catalog=state.workspaceCatalog.value;if(!catalog)return;const workspaces=catalog.workspaces.map(workspace=>Object.freeze({...workspace,brands:Object.freeze(workspace.brands.map(brand=>brand.id===brandId?Object.freeze({...brand,...logo}):brand))}));state.workspaceCatalog.value=Object.freeze({...catalog,workspaces:Object.freeze(workspaces)});renderWorkspaceSidebar();renderBoardBrandAssociation();}
+function patchCatalogBrandLogo(brandId,logo){
+  const catalog=state.workspaceCatalog.value;if(!catalog)return;
+  const projection={logo_url:logo.logo_url,logo_revision:logo.logo_revision};
+  const workspaces=catalog.workspaces.map(workspace=>Object.freeze({...workspace,brands:Object.freeze(workspace.brands.map(brand=>brand.id===brandId?Object.freeze({...brand,...projection}):brand))}));
+  state.workspaceCatalog.value=Object.freeze({...catalog,workspaces:Object.freeze(workspaces)});
+  const entry=state.brandCatalog.entries.find(brand=>brand.id===brandId);if(entry)Object.assign(entry,projection);
+  projectDialogController?.reconcileBrand?.(brandId,projection);
+  renderWorkspaceSidebar();renderBoardBrandAssociation();
+}
 async function mutateBrandLogo(brand,action,extra,status){const generation=canonicalBrandDetail.requestId;status.textContent=action==='discover'?'Searching…':'Updating logo…';try{const response=await fetch(`/api/brands/${encodeURIComponent(brand.id)}/logo`,{method:'POST',credentials:'same-origin',headers:{Accept:'application/json','Content-Type':'application/json'},body:JSON.stringify({contract:'brand_logo_v1',action,expected_revision:brand.logo_revision||0,request_id:`logo-${Date.now().toString(36)}`,workspace_id:state.workspaceCatalog.activeWorkspaceId,...extra})});const data=await response.json().catch(()=>null);if(generation!==canonicalBrandDetail.requestId||canonicalBrandDetail.brandId!==brand.id)return;if(!response.ok){status.textContent=data?.error?.code==='STALE_UPDATE'?brandLogoCopy('stale'):data?.error?.code==='PERMISSION_DENIED'?brandLogoCopy('denied'):brandLogoCopy('failed');return;}Object.assign(brand,data.logo);patchCatalogBrandLogo(brand.id,data.logo);renderCanonicalBrandDetail();el.brandWorkspaceDetailStatus.textContent=action==='discover'?brandLogoCopy('found'):'Brand logo updated.';}catch{status.textContent=brandLogoCopy('failed');}}
 function renderBrandLogoEditor(container,brand){const section=document.createElement('section');section.className='brand-logo-editor';const preview=document.createElement('div');preview.className='brand-logo-preview';window.FunklixBrandLogo?.render(preview,brand,{label:brandLogoCopy('title')});const body=document.createElement('div');const heading=document.createElement('h3');heading.textContent=brandLogoCopy('title');const status=document.createElement('p');status.setAttribute('role','status');status.setAttribute('aria-live','polite');status.textContent=BRAND_LOGO_MUTATIONS_ENABLED?(brand.logo_url?'':brandLogoCopy('empty')):brandLogoCopy('contained');body.append(heading,status);if(BRAND_LOGO_MUTATIONS_ENABLED&&brand.access.canEditCanonicalBrand){const actions=document.createElement('div');actions.className='brand-logo-actions';const input=document.createElement('input');input.type='file';input.className='brand-logo-file';input.accept='image/png,image/jpeg,image/webp,image/gif';input.id=`brand-logo-file-${brand.id}`;const upload=document.createElement('label');upload.className='fk-btn fk-btn-primary';upload.htmlFor=input.id;upload.tabIndex=0;upload.textContent=brand.logo_url?brandLogoCopy('change'):brandLogoCopy('upload');upload.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();input.click();}});input.addEventListener('change',()=>{const file=input.files?.[0];if(!file)return;if(!['image/png','image/jpeg','image/webp','image/gif'].includes(file.type)){status.textContent=brandLogoCopy('unsupported');return;}if(file.size>2*1024*1024){status.textContent=brandLogoCopy('large');return;}const reader=new FileReader();reader.onload=()=>mutateBrandLogo(brand,'upload',{mime_type:file.type,image_base64:String(reader.result).split(',')[1]},status);reader.readAsDataURL(file);});actions.append(input,upload);const website=brand.brand_core?.brandAssets?.domain||brand.brand_core?.website||brand.brand_core?.domain;if(website){const find=document.createElement('button');find.type='button';find.className='fk-btn fk-btn-secondary';find.textContent=brandLogoCopy('find');find.addEventListener('click',()=>mutateBrandLogo(brand,'discover',{website},status));actions.append(find);}if(brand.logo_url){const remove=document.createElement('button');remove.type='button';remove.className='fk-btn fk-btn-ghost';remove.textContent=brandLogoCopy('remove');remove.addEventListener('click',()=>{if(window.confirm(brandLogoCopy('confirm')))mutateBrandLogo(brand,'remove',{},status);});actions.append(remove);}body.append(actions);}section.append(preview,body);container.append(section);}
 
@@ -3335,7 +3433,7 @@ async function submitCanonicalBrandEditing(event) {
       || brand.name !== name || JSON.stringify(canonicalJson(brand.brand_core)) !== JSON.stringify(canonicalJson(brandCore))) {
       detail.status = "save-error"; el.brandWorkspaceEditFeedback.textContent = "The server response could not be verified. Your draft is retained."; renderCanonicalBrandDetail(); return;
     }
-    detail.brand = (({ id, name: confirmedName, brand_core, revision, created_at, updated_at, access }) => ({ id, name: confirmedName, brand_core, revision, created_at, updated_at, access }))(brand);
+    detail.brand = (({ id, name: confirmedName, brand_core, revision, created_at, updated_at, access, logo_url, logo_revision, logo_source }) => ({ id, name: confirmedName, brand_core, revision, created_at, updated_at, access, logo_url, logo_revision, logo_source }))(brand);
     const entryIndex = state.brandCatalog.entries.findIndex(({ id }) => id === brand.id);
     if (entryIndex >= 0) state.brandCatalog.entries.splice(entryIndex, 1, { ...state.brandCatalog.entries[entryIndex], name: brand.name, revision: brand.revision, updated_at: brand.updated_at });
     if (ephemeralBrandSwitcherSelection?.id === brand.id) ephemeralBrandSwitcherSelection = { ...ephemeralBrandSwitcherSelection, name: brand.name };
@@ -3352,12 +3450,16 @@ async function submitCanonicalBrandEditing(event) {
 
 function closeCanonicalBrandDetail({ restoreFocus = true } = {}) {
   const previous = canonicalBrandDetail;
+  if (brandProfileController?.busy()) return false;
+  if (brandProfileController?.dirty() && !window.confirm(uiText('Discard unsaved Brand Profile changes?'))) return false;
   if (["editing", "submitting", "conflict", "save-error"].includes(previous.status) && !confirmCanonicalBrandDiscard()) return false;
   previous.controller?.abort();
   previous.saveController?.abort();
+  brandProfileController?.invalidate(); brandProfileController = null; brandProfileAdvanced = false;
+  if (!projectSetupContext?.pending) projectSetupContext = null;
   canonicalBrandDetail = { status: "closed", requestId: previous.requestId + 1, saveId: previous.saveId + 1, brandId: "", userEmail: "", brand: null, draft: null, controller: null, saveController: null, returnFocus: null };
   if (el.brandWorkspaceDetail?.open) el.brandWorkspaceDetail.close();
-  if (el.brandWorkspaceDetailTitle) el.brandWorkspaceDetailTitle.textContent = "Canonical Brand";
+  if (el.brandWorkspaceDetailTitle) el.brandWorkspaceDetailTitle.textContent = uiText('Brand Profile');
   renderCanonicalBrandDetail();
   if (restoreFocus && previous.returnFocus?.isConnected) previous.returnFocus.focus();
   return true;
@@ -3413,7 +3515,7 @@ async function loadCanonicalBrandDetail() {
     if (!isCanonicalBrandDetail(brand, selection.id)) canonicalBrandDetail.status = "malformed";
     else {
       canonicalBrandDetail.status = retainedConflictDraft ? "conflict" : "ready";
-      canonicalBrandDetail.brand = (({ id, name, brand_core, revision, created_at, updated_at, access }) => ({ id, name, brand_core, revision, created_at, updated_at, access }))(brand);
+      canonicalBrandDetail.brand = (({ id, name, brand_core, revision, created_at, updated_at, access, logo_url, logo_revision, logo_source }) => ({ id, name, brand_core, revision, created_at, updated_at, access, logo_url, logo_revision, logo_source }))(brand);
       sidebarProfileCache.set(brand.id, brand.brand_core);
       canonicalBrandDetail.draft = retainedConflictDraft;
     }
@@ -3434,6 +3536,7 @@ function openCanonicalBrandDetail() {
   if (!selection || !userEmail || state.brandCatalog.status !== "success" || state.brandCatalog.userEmail !== userEmail
     || !state.brandCatalog.entries.some(({ id }) => id === selection.id) || !el.brandWorkspaceDetail) return;
   canonicalBrandDetail.returnFocus = el.brandWorkspaceDetailOpen;
+  projectSetupContext = null;
   canonicalBrandDetail.brandId = selection.id;
   if (el.brandSwitcherDetails) el.brandSwitcherDetails.open = false;
   el.brandWorkspaceDetail.showModal();
@@ -17877,6 +17980,14 @@ el.brandSwitcherDetails?.addEventListener("toggle", () => {
 el.brandSwitcherNoBrand?.addEventListener("click", () => clearEphemeralBrandSwitcherSelection({ close: true, persist: true }));
 el.brandWorkspaceDetailOpen?.addEventListener("click", openCanonicalBrandDetail);
 el.brandWorkspaceDetailClose?.addEventListener("click", () => closeCanonicalBrandDetail());
+el.brandWorkspaceDetail?.addEventListener('keydown', event => {
+  if (event.key !== 'Tab' || !el.brandWorkspaceDetail.classList.contains('profile-guided-mode')) return;
+  const controls = [...el.brandWorkspaceDetail.querySelectorAll('button,input,textarea,select')]
+    .filter(control => !control.disabled && control.getClientRects().length > 0);
+  const first = controls[0], last = controls[controls.length - 1];
+  if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+  else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+});
 el.brandWorkspaceDetailRetry?.addEventListener("click", () => { void loadCanonicalBrandDetail(); });
 el.brandWorkspaceEditOpen?.addEventListener("click", beginCanonicalBrandEditing);
 el.brandWorkspaceEditForm?.addEventListener("submit", submitCanonicalBrandEditing);
@@ -18860,6 +18971,7 @@ function blankCanvasState() {
 let projectDialogController = null;
 let createdProjectContext = null;
 let projectSetupContext = null;
+let projectCreationWebsite = "";
 const projectCommandBoundary = window.FunklixProjectCommand.createBoundary({
   context: () => ({ account: state.user, generation: state.workspaceCatalog.generation, workspaceId: state.workspaceCatalog.activeWorkspaceId }),
   fetchImpl: (...args) => fetch(...args),
@@ -18873,6 +18985,12 @@ function invalidateBoardCreationContext() {
   projectDialogController = null;
   createdProjectContext = null;
   projectSetupContext = null;
+  projectCreationWebsite = "";
+  if (typeof brandProfileController !== "undefined" && brandProfileController) {
+    brandProfileController.invalidate(); brandProfileController = null; brandProfileAdvanced = false;
+    el.brandWorkspaceDetailContent?.replaceChildren();
+    if (el.brandWorkspaceDetailStatus) el.brandWorkspaceDetailStatus.textContent = uiText('Workspace or Brand context is no longer available.');
+  }
   document.querySelector('[data-project-setup]')?.remove();
   state.boardCreation.generation += 1;
   state.boardCreation.status = "idle";
@@ -18893,7 +19011,7 @@ function reconcileCreatedProject(outcome) {
     entries: [...state.brandCatalog.entries.filter(brand => brand.id !== outcome.brand.id), { id: outcome.brand.id, name: outcome.brand.name, role: outcome.brand.role, revision: outcome.brand.revision }] };
   ephemeralBrandSwitcherSelection = { id: outcome.brand.id, name: outcome.brand.name, restored: false };
   sidebarProfileCache.set(outcome.brand.id, outcome.brand.brand_core);
-  createdProjectContext = { account: state.user, outcome };
+  createdProjectContext = { account: state.user, outcome, website: projectCreationWebsite };
 }
 
 function hydrateCreatedProject(outcome) {
@@ -18924,6 +19042,7 @@ function renderProjectSetupNotice() {
   const status = document.createElement("p"); status.setAttribute("aria-live", "polite");
   const button = document.createElement("button"); button.type = "button"; button.textContent = t.toProject;
   button.addEventListener("click", async () => {
+    if (window.FunklixBrandProfileSetup) { await continueBrandProfileProject(); return; }
     const context = projectSetupContext;
     if (!context || context.account !== state.user || button.disabled) return;
     if (!closeCanonicalBrandDetail({ restoreFocus: false })) return;
@@ -18952,9 +19071,10 @@ function renderProjectSetupNotice() {
 
 function openCreatedBrandSetup(outcome) {
   const brand = outcome.brand, manager = ["owner", "admin"].includes(brand.role);
-  projectSetupContext = { account: state.user, outcome };
+  projectSetupContext = { account: state.user, generation: state.workspaceCatalog.generation, outcome, website: createdProjectContext?.website || "" };
   canonicalBrandDetail = { ...canonicalBrandDetail, status: "ready", requestId: canonicalBrandDetail.requestId + 1, brandId: brand.id,
     userEmail: (state.user?.email || "").trim().toLowerCase(), draft: null, saved: false,
+    returnFocus: el.homeNavButton,
     brand: { ...brand, access: { ...brand.access, canReadBrand: true, canViewCanonicalBrandCore: true, canViewAllBrandBoards: true,
       canEditAllBrandBoards: true, canManageBrandMembers: manager, canManageBrandAdmins: brand.role === "owner" } } };
   if (!el.brandWorkspaceDetail.open) el.brandWorkspaceDetail.showModal();
@@ -19084,9 +19204,10 @@ async function createNewBoardFlow() {
     workspace, language: state.uiLanguage,
     requestId: () => crypto.randomUUID(),
     onClose: () => { projectDialogController = null; state.boardCreation.status = "idle"; },
-    submit: async command => {
+    submit: async (command, setup = {}) => {
       if (account !== state.user || generation !== state.workspaceCatalog.generation || workspace.id !== state.workspaceCatalog.activeWorkspaceId) throw window.FunklixProjectCommand.error("STALE_OPERATION");
       state.boardCreation.status = "pending";
+      projectCreationWebsite = setup.website || "";
       try {
         // A committed result is retained even if opening fails. Retry opens only, without another POST.
         if (createdProjectContext?.account === state.user) return navigateCreatedProject(createdProjectContext.outcome);
@@ -19460,7 +19581,7 @@ async function restoreProjectSetupRoute() {
   await loadCanonicalBrandDetail();
   if (account !== state.user || canonicalBrandDetail.status !== "ready") return;
   const outcome = { brand: canonicalBrandDetail.brand, board: { id: boardId }, workspace, next_route: `/boards/${boardId}`, setup_required: false };
-  projectSetupContext = { account, outcome };
+  projectSetupContext = { account, generation: state.workspaceCatalog.generation, outcome };
   // Direct setup routes have no in-memory command outcome; opening uses the established authorized Board read.
   renderProjectSetupNotice();
 }

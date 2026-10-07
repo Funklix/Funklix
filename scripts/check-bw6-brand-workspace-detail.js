@@ -29,7 +29,7 @@ const create = source("submitCanonicalBrandCreation");
 const associate = source("submitBoardBrandAssociation");
 
 assert.match(html, /<dialog[^>]+id="brand-workspace-detail"[^>]+aria-labelledby="brand-workspace-detail-title"/, "detail must be an accessible dialog");
-assert.match(html, /Read-only Workspace Brand details\. This is separate from Current Board Brand/, "detail must be distinct from Board content");
+assert.match(html, /id="brand-workspace-detail-context"[^>]+data-i18n="These details help shape your future campaigns\."/, "R4 reusable Profile must retain its localized, accessible description");
 assert.match(html, /id="brand-workspace-detail-close"[^>]+aria-label=/, "detail must have an explicit accessible close action");
 assert.match(app, /brandWorkspaceDetailOpen\?\.addEventListener\("click", openCanonicalBrandDetail\)/, "detail fetch must begin from a deliberate open action");
 assert.doesNotMatch(catalog, /\/api\/brands\/\$\{|loadCanonicalBrandDetail|openCanonicalBrandDetail/, "catalog/switcher opening must not request details");

@@ -5,6 +5,7 @@ const { getBrandAccess, isBrandId } = require('../../_brand-access');
 const { validateImageBuffer } = require('../../_website-image-retrieval');
 const { LOGO_COLUMNS, MAX_IMAGE_BYTES, projectLogo, discoverLogo } = require('../../_brand-logo');
 const logoStorage = require('../../_brand-logo-storage');
+const { createHash } = require('crypto');
 
 const CONTRACT='brand_logo_v1';
 function send(res,status,body){res.setHeader('Cache-Control','private, no-store');return res.status(status).json(body);}
@@ -33,7 +34,8 @@ module.exports=async function handler(req,res){
     else{
       let buffer,mimeType,source,sourceHost=null;
       if(input.action==='upload'){if(typeof input.image_base64!=='string'||input.image_base64.length>MAX_IMAGE_BYTES*1.4+16){await client.query('ROLLBACK');return failure(res,413,'FILE_TOO_LARGE');}buffer=Buffer.from(input.image_base64,'base64');mimeType=input.mime_type;validateImageBuffer(buffer,mimeType);source='uploaded';}
-      else {if(row.logo_source==='uploaded'){await client.query('ROLLBACK');return failure(res,409,'UPLOADED_LOGO_PRESERVED');}const found=await discoverLogo(input.website);if(found.status!=='found'){await client.query('ROLLBACK');return failure(res,422,'LOGO_NOT_FOUND');}buffer=found.image.buffer;mimeType=found.image.mimeType;source='discovered';sourceHost=found.sourceHost;}
+      else {if(row.logo_source==='uploaded'){await client.query('ROLLBACK');return failure(res,409,'UPLOADED_LOGO_PRESERVED');}const found=await discoverLogo(input.website,{logoOnly:!!input.candidate_url,candidateUrl:input.candidate_url});if(found.status!=='found'){await client.query('ROLLBACK');return failure(res,422,'LOGO_NOT_FOUND');}buffer=found.image.buffer;mimeType=found.image.mimeType;source='discovered';sourceHost=found.sourceHost;}
+      if(input.action==='discover'&&input.candidate_url&&(!/^[a-f0-9]{64}$/.test(input.image_sha256||'')||createHash('sha256').update(buffer).digest('hex')!==input.image_sha256)){await client.query('ROLLBACK');return failure(res,409,'CANDIDATE_CHANGED');}
       pendingPath=await logoStorage.upload({brandId,revision:Number(row.logo_revision)+1,buffer,mimeType});
       await client.query(`UPDATE brands SET logo_object_path=$2,logo_mime_type=$3,logo_source=$4,logo_source_host=$5,logo_updated_at=now(),logo_revision=logo_revision+1 WHERE id=$1`,[brandId,pendingPath,mimeType,source,sourceHost]);
     }

@@ -125,6 +125,7 @@
     "check:bw36.13r1": "node scripts/check-bw36-13r1-workspace-stability-containment.js",
     "check:bw36.13r2": "node scripts/check-bw36-13r2-first-workspace-creation.js",
     "check:bw36.13r3": "node scripts/check-bw36-13r3-authoritative-project-creation.js",
-    "check:bw36.13r3r1": "node scripts/check-bw36-13r3r1-workspace-catalog-repair.js"
+    "check:bw36.13r3r1": "node scripts/check-bw36-13r3r1-workspace-catalog-repair.js",
+    "check:bw36.13r4": "node scripts/check-bw36-13r4-guided-brand-profile-setup.js"
   }
 }
