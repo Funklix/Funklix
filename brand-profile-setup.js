@@ -53,6 +53,22 @@
       && /^[A-Za-z0-9+/]+={0,2}$/.test(value.image_base64) && /^[a-f0-9]{64}$/.test(value.image_sha256 || '')
       && typeof value.candidate_url === 'string' && value.candidate_url.startsWith('https://');
   }
+  // Resolve only within the already authorized Workspace catalog. A Board never
+  // falls back to a different Brand, including when its association is unavailable.
+  function resolveEntry(input) {
+    const workspaces = input.catalog?.workspaces || [];
+    if (!input.signedIn || input.publicToken || input.status !== 'ready') return { kind: 'empty', brands: [] };
+    if (input.boardId) {
+      const workspace = workspaces.find(w => w.boards.some(b => b.id === input.boardId));
+      const board = workspace?.boards.find(b => b.id === input.boardId);
+      const brand = input.boardAuthorized && workspace?.brands.find(b => b.id === board?.brand_id);
+      return brand ? { kind: 'brand', brand, workspace } : { kind: 'empty', brands: [] };
+    }
+    const workspace = workspaces.find(w => w.id === input.workspaceId) || (workspaces.length === 1 ? workspaces[0] : null);
+    const brands = workspace?.brands || [];
+    const brand = brands.find(b => b.id === input.brandId) || (brands.length === 1 ? brands[0] : null);
+    return brand ? { kind: 'brand', brand, workspace } : { kind: brands.length > 1 ? 'choice' : 'empty', brands, workspace };
+  }
   function createSession(options) {
     const { getContext, fetchImpl = root.fetch.bind(root), validateBrand, onSave, onLogo } = options;
     const captured = getContext();
@@ -171,17 +187,21 @@
         }
         const logo = result.payload?.logo;
         if (result.payload?.contract !== 'brand_logo_v1' || result.payload.request_id !== requestId || !logo
-          || logo.logo_revision !== revision + 1 || logo.logo_url !== `/api/brands/${state.brand.id}/logo?revision=${logo.logo_revision}`) {
+          || logo.logo_revision !== revision + 1 || (action === 'remove' ? logo.logo_url !== null : logo.logo_url !== `/api/brands/${state.brand.id}/logo?revision=${logo.logo_revision}`)) {
           state.message = 'The logo save could not be verified. Retry or reload the latest Brand.'; return false;
         }
         state.brand = { ...state.brand, ...logo, logo_source: logo.source };
-        state.logo = 'Logo saved'; state.message = 'Logo saved'; state.candidate = null;
+        state.logo = action === 'remove' ? 'No logo yet. Initials are shown.' : 'Logo saved'; state.message = action === 'remove' ? 'Logo removed' : 'Logo saved'; state.candidate = null;
         state.file = null; state.fileData = null; onLogo(state.brand.id, logo); return true;
       });
     }
     function upload() {
       if (!state.fileData) { state.message = 'Choose a logo file first.'; changed(); return Promise.resolve(false); }
       return logoMutation('upload', { image_base64: state.fileData.base64, mime_type: state.fileData.mime });
+    }
+    function removeLogo() {
+      if (!state.brand.logo_url || !current() || state.readOnly) return Promise.resolve(false);
+      return logoMutation('remove', {});
     }
     function useLogo() {
       const candidate = state.candidate;
@@ -218,7 +238,7 @@
         onSave(brand); return true;
       });
     }
-    return { state, current, analyze, save, upload, useLogo, chooseFile, applyProposal, reload,
+    return { state, current, analyze, save, upload, removeLogo, useLogo, chooseFile, applyProposal, reload,
       subscribe(fn) { notify = fn; }, invalidate() { alive = false; state.file = null; state.fileData = null; state.candidate = null; state.proposals = {}; state.core = {}; state.website = ''; state.name = ''; },
       dirty() { return state.dirty; }, busy() { return !!state.pending; } };
   }
@@ -306,7 +326,8 @@
       node('label', t('Choose logo file'), parent).append(fileInput);
       if (s.file) node('p', s.file.name, parent);
       if (s.fileData) { const img = node('img', '', parent); img.className = 'profile-logo-candidate'; img.alt = t('Local logo preview'); img.src = `data:${s.fileData.mime};base64,${s.fileData.base64}`; }
-      const upload = button('Upload logo', parent, () => { void session.upload(); }); upload.disabled ||= !s.fileData;
+      const upload = button(s.brand.logo_url ? 'Change logo' : 'Upload logo', parent, () => { void session.upload(); }); upload.disabled ||= !s.fileData;
+      if (s.brand.logo_url) button('Remove logo', parent, () => { if (root.confirm(t('Remove this Brand logo?'))) void session.removeLogo(); });
       if (s.candidate) {
         const img = node('img', '', parent); img.className = 'profile-logo-candidate'; img.alt = t('Suggested logo'); img.src = `data:${s.candidate.mime_type};base64,${s.candidate.image_base64}`;
         const use = button('Use this logo', parent, () => { void session.useLogo(); }); use.disabled ||= s.brand.logo_source === 'uploaded';
@@ -359,11 +380,12 @@
         s.returning = true; render();
         try { await options.onContinue(); } finally { s.returning = false; if (session.current()) render(); }
       });
+      if (options.hasSnapshot?.()) button('Campaign Brand Snapshot', actions, () => options.onSnapshot());
       button('Advanced options', actions, () => options.onAdvanced(session));
       if (focused) [...container.querySelectorAll('[data-profile-key]')].find(n => n.dataset.profileKey === focused)?.focus();
     }
     session.subscribe(render); render();
     return { ...session, render, invalidate() { session.invalidate(); options.onBusy?.(false); } };
   }
-  return Object.freeze({ SECTIONS, FIELDS, meaningful, website, filteredSuggestions, validCandidate, createSession, mount });
+  return Object.freeze({ SECTIONS, FIELDS, resolveEntry, meaningful, website, filteredSuggestions, validCandidate, createSession, mount });
 }));

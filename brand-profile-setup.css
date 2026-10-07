@@ -32,3 +32,8 @@
 @media(max-width:375px){.guided-brand-profile nav button{flex-basis:100%}.guided-brand-profile .profile-header{gap:10px}}
 @media(max-width:320px){.brand-workspace-detail:has(.guided-brand-profile){padding:12px}.profile-logo{width:48px;height:48px;flex-basis:48px}}
 @media(forced-colors:active){.guided-brand-profile button,.guided-brand-profile input,.guided-brand-profile textarea,.profile-proposal,.profile-persona{border:1px solid CanvasText}.guided-brand-profile button[aria-current=step],.guided-brand-profile :focus-visible{outline:3px solid Highlight}}
+/* Regular navigation reuses the same controller and dialog as an in-flow view. */
+.brand-workspace-detail.profile-page-mode[open]{position:relative;inset:auto;box-sizing:border-box;display:block;flex:1 1 auto;width:100%;max-width:960px;max-height:none;margin:0 auto;padding:24px;box-shadow:none}
+.brand-workspace-detail.profile-page-mode:not([open]){display:none}
+.brand-workspace-detail.profile-page-mode .brand-workspace-detail-content{overflow:visible}
+@media(max-width:480px){.brand-workspace-detail.profile-page-mode[open]{padding:12px}}

@@ -12,3 +12,9 @@
 @media(prefers-reduced-motion:reduce){.workspace-context *,.workspace-context-popover,.workspace-context-menu,.workspace-rename-dialog{transition:none!important;scroll-behavior:auto!important}}
 /* BW-36.12 logos stay square and contained; transparent artwork is never cropped. */
 .workspace-brand-avatar{border-radius:9px}.workspace-brand-avatar img,.brand-logo img{display:block;width:100%;height:100%;object-fit:contain}.brand-logo-initials{display:grid;place-items:center;width:100%;height:100%}
+/* Keep the existing actions reachable in compact context, without a new surface. */
+.app-shell.sidebar-collapsed .workspace-context-identity-row{grid-template-columns:1fr}
+.app-shell.sidebar-collapsed .workspace-context-manage:not([hidden]){display:grid;justify-self:center}
+@media(max-width:1300px) and (min-width:768px){.workspace-context-identity-row{grid-template-columns:1fr}.workspace-context-manage:not([hidden]){display:grid;justify-self:center}}
+@media(max-width:767px){.sidebar>.workspace-context:has(.workspace-context-manage:not([hidden])){width:88px}.workspace-context .workspace-context-manage:not([hidden]){display:grid;background:var(--fk-color-surface-elevated);border-color:var(--fk-color-border)}.workspace-context-identity-row{grid-template-columns:44px 44px}}
+@media(max-width:767px){.sidebar>#workspace-context:not([hidden]){display:block}}
