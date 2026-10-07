@@ -108,8 +108,39 @@
     </style>
 
       <link rel="stylesheet" href="/project-dialog.css" />
+      <link rel="stylesheet" href="/brand-profile-setup.css" />
   </head>
   <body>
+    <dialog class="brand-workspace-detail" id="brand-workspace-detail" aria-labelledby="brand-workspace-detail-title" aria-describedby="brand-workspace-detail-context">
+      <div class="brand-workspace-detail-header">
+        <div>
+          <span class="brand-switcher-eyebrow" data-i18n="Brand Profile">Brand Profile</span>
+          <h2 id="brand-workspace-detail-title" tabindex="-1">Brand Profile</h2>
+        </div>
+        <button class="fk-btn fk-btn-ghost" id="brand-workspace-detail-close" type="button" aria-label="Close Brand Profile" data-i18n="Close" data-i18n-aria-label="Close Brand Profile">Close</button>
+      </div>
+      <p id="brand-workspace-detail-context" data-i18n="These details help shape your future campaigns.">These details help shape your future campaigns.</p>
+      <div class="brand-workspace-detail-status" id="brand-workspace-detail-status" role="status" aria-live="polite"></div>
+      <div class="brand-workspace-detail-content hidden" id="brand-workspace-detail-content"></div>
+      <form class="brand-workspace-edit hidden" id="brand-workspace-edit-form" novalidate>
+        <label for="brand-workspace-edit-name">Canonical Brand name</label>
+        <input id="brand-workspace-edit-name" type="text" maxlength="160" required aria-describedby="brand-workspace-edit-feedback">
+        <label for="brand-workspace-edit-core">Canonical Brand Core (JSON object)</label>
+        <textarea id="brand-workspace-edit-core" rows="12" spellcheck="false" aria-describedby="brand-workspace-edit-core-help brand-workspace-edit-feedback"></textarea>
+        <small id="brand-workspace-edit-core-help">Edit the complete JSON object. Unknown and forward-compatible fields remain intact unless you deliberately change or remove them here.</small>
+        <div id="brand-workspace-edit-feedback" role="alert" aria-live="assertive"></div>
+        <div class="brand-workspace-edit-actions">
+          <button class="fk-btn fk-btn-primary" id="brand-workspace-edit-save" type="submit">Save Canonical Brand</button>
+          <button class="fk-btn fk-btn-ghost" id="brand-workspace-edit-cancel" type="button">Cancel</button>
+        </div>
+      </form>
+      <div class="brand-workspace-detail-actions">
+        <button class="fk-btn fk-btn-secondary hidden" id="board-brand-core-compare-open" type="button">Compare Brand Cores</button>
+        <button class="fk-btn fk-btn-primary hidden" id="brand-workspace-edit-open" type="button">Edit Canonical Brand</button>
+        <button class="fk-btn fk-btn-secondary hidden" id="brand-workspace-conflict-reload" type="button">Reload latest Brand</button>
+      </div>
+      <button class="fk-btn fk-btn-secondary hidden" id="brand-workspace-detail-retry" type="button" data-i18n="Retry loading details">Retry loading details</button>
+    </dialog>
     <div class="app-shell" data-active-view="board" data-layout-mode="canvas" data-inspector-supported="true" data-inspector-open="false" data-inspector-mode="closed">
       <aside class="sidebar" id="left-sidebar">
         <div class="sidebar-header">
@@ -249,36 +280,6 @@
             <div id="board-brand-core-operation-feedback" role="status" aria-live="polite" aria-atomic="true"></div>
           </div>
           <button class="fk-btn fk-btn-secondary hidden" id="board-brand-core-comparison-retry" type="button">Retry comparison</button>
-        </dialog>
-        <dialog class="brand-workspace-detail" id="brand-workspace-detail" aria-labelledby="brand-workspace-detail-title" aria-describedby="brand-workspace-detail-context">
-          <div class="brand-workspace-detail-header">
-            <div>
-              <span class="brand-switcher-eyebrow">Brand Workspace</span>
-              <h2 id="brand-workspace-detail-title" tabindex="-1">Canonical Brand</h2>
-            </div>
-            <button class="fk-btn fk-btn-ghost" id="brand-workspace-detail-close" type="button" aria-label="Close Canonical Brand detail">Close</button>
-          </div>
-          <p id="brand-workspace-detail-context">Read-only Workspace Brand details. This is separate from Current Board Brand and is not Board content. Editing is explicit and also remains separate from Workspace selection and the Board Brand Core snapshot.</p>
-          <div class="brand-workspace-detail-status" id="brand-workspace-detail-status" role="status" aria-live="polite"></div>
-          <div class="brand-workspace-detail-content hidden" id="brand-workspace-detail-content"></div>
-          <form class="brand-workspace-edit hidden" id="brand-workspace-edit-form" novalidate>
-            <label for="brand-workspace-edit-name">Canonical Brand name</label>
-            <input id="brand-workspace-edit-name" type="text" maxlength="160" required aria-describedby="brand-workspace-edit-feedback">
-            <label for="brand-workspace-edit-core">Canonical Brand Core (JSON object)</label>
-            <textarea id="brand-workspace-edit-core" rows="12" spellcheck="false" aria-describedby="brand-workspace-edit-core-help brand-workspace-edit-feedback"></textarea>
-            <small id="brand-workspace-edit-core-help">Edit the complete JSON object. Unknown and forward-compatible fields remain intact unless you deliberately change or remove them here.</small>
-            <div id="brand-workspace-edit-feedback" role="alert" aria-live="assertive"></div>
-            <div class="brand-workspace-edit-actions">
-              <button class="fk-btn fk-btn-primary" id="brand-workspace-edit-save" type="submit">Save Canonical Brand</button>
-              <button class="fk-btn fk-btn-ghost" id="brand-workspace-edit-cancel" type="button">Cancel</button>
-            </div>
-          </form>
-          <div class="brand-workspace-detail-actions">
-            <button class="fk-btn fk-btn-secondary hidden" id="board-brand-core-compare-open" type="button">Compare Brand Cores</button>
-            <button class="fk-btn fk-btn-primary hidden" id="brand-workspace-edit-open" type="button">Edit Canonical Brand</button>
-            <button class="fk-btn fk-btn-secondary hidden" id="brand-workspace-conflict-reload" type="button">Reload latest Brand</button>
-          </div>
-          <button class="fk-btn fk-btn-secondary hidden" id="brand-workspace-detail-retry" type="button">Retry loading details</button>
         </dialog>
         <nav aria-label="Workspace navigation">
           <span class="sidebar-nav-heading">Workspace</span>
@@ -950,6 +951,7 @@
     <script src="/facebook-connections-settings.js"></script>
     <script src="/brand-sidebar.js"></script>
     <script src="/brand-logo.js"></script>
+    <script src="/brand-profile-setup.js"></script>
     <script src="/workspace-name.js"></script>
     <script src="/workspace-catalog.js"></script>
     <script src="/project-command.js"></script>

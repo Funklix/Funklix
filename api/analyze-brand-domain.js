@@ -1,7 +1,9 @@
 const { getSessionUser } = require('./_auth-session');
 const { retrieveWebsiteText } = require('./_website-retrieval');
 const { extractBrandProjection, stableBound, MAX_PROVIDER_CONTEXT } = require('./_html-text-extractor');
-const { rankLogoCandidates } = require('./_brand-logo');
+const { rankLogoCandidates, discoverLogo } = require('./_brand-logo');
+const { getBrandAccess, isBrandId } = require('./_brand-access');
+const { createHash } = require('crypto');
 
 const STATUS_BY_CODE = {
   invalid_url: 400, unsupported_scheme: 400, credentials_not_allowed: 400, invalid_host: 400, port_not_allowed: 400,
@@ -46,16 +48,39 @@ async function analyzeBrandDomain(domainUrl, dependencies = {}) {
   // Brand Core never becomes a competing logo authority. The authenticated Brand
   // mutation may consume the already-fetched HTML and persist the ranked candidate.
   parsed.brandAssets = { ...parsed.brandAssets, domain: parsed.brandAssets.domain || normalized, logo: '' };
-  return { suggestions: parsed, logoDiscovery: { status: rankedLogoCandidates.length ? 'candidate_found' : 'not_found', candidateCount: rankedLogoCandidates.length }, source: { url: normalized, sections: projection.sections.length, truncated: projection.truncated } };
+  let logoDiscovery = { status: rankedLogoCandidates.length ? 'candidate_found' : 'not_found', candidateCount: rankedLogoCandidates.length };
+  if (dependencies.previewLogo) {
+    // Reuse the fetched page and BW-36.12 image safety. No object/metadata write.
+    let found;
+    try { found = await (dependencies.discoverLogo || discoverLogo)(normalized, {
+      retrieveWebsiteText: async () => website, retrievePublicImage: dependencies.retrievePublicImage, logoOnly: true
+    }); } catch { found = { status: 'not_found' }; }
+    logoDiscovery = found.status === 'found' ? {
+      status: 'candidate_found', candidateCount: 1, candidate_url: found.candidate.url,
+      mime_type: found.image.mimeType, image_base64: found.image.buffer.toString('base64'),
+      image_sha256: createHash('sha256').update(found.image.buffer).digest('hex')
+    } : { status: 'not_found', candidateCount: 0 };
+  }
+  return { suggestions: parsed, logoDiscovery, source: { url: normalized, sections: projection.sections.length, truncated: projection.truncated } };
 }
 
 async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: { code: 'method_not_allowed' } });
-  if (!getSessionUser(req)?.email) return res.status(401).json({ error: { code: 'unauthenticated' } });
+  res.setHeader('Cache-Control', 'private, no-store');
+  const user = getSessionUser(req);
+  if (!user?.email) return res.status(401).json({ error: { code: 'unauthenticated' } });
   if (!process.env.OPENAI_API_KEY) return res.status(503).json({ error: { code: 'provider_unavailable' } });
   const domainUrl = req.body?.domainUrl;
   if (typeof domainUrl !== 'string' || !domainUrl.trim()) return res.status(400).json({ error: { code: 'invalid_url' } });
-  try { return res.status(200).json(await analyzeBrandDomain(domainUrl)); }
+  try {
+    const brandId = req.body?.brandId;
+    if (brandId !== undefined) {
+      if (!isBrandId(brandId)) return res.status(400).json({ error: { code: 'invalid_brand' } });
+      const { brand, access } = await getBrandAccess(brandId, user, { columns: 'id' });
+      if (!brand || !access.canEditCanonicalBrand) return res.status(403).json({ error: { code: 'permission_denied' } });
+    }
+    return res.status(200).json(await analyzeBrandDomain(domainUrl, { previewLogo: brandId !== undefined }));
+  }
   catch (error) {
     const code = typeof error?.code === 'string' ? error.code : 'extraction_failed';
     console.error('[BRAND_DOMAIN_ANALYSIS_FAILED]', { code, stage: error?.diagnostics?.stage || 'analysis' });
