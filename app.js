@@ -3057,6 +3057,7 @@ function selectEphemeralBrandFromSwitcher(brand) {
 let canonicalBrandDetail = { status: "closed", requestId: 0, saveId: 0, brandId: "", userEmail: "", brand: null, draft: null, controller: null, saveController: null, returnFocus: null };
 let brandProfileController = null;
 let brandProfileAdvanced = false;
+let brandProfilePage = null;
 let sidebarBrandProjection = null;
 let workspaceSidebarController = null;
 const sidebarProfileCache = new Map();
@@ -3099,9 +3100,10 @@ function renderCanonicalBrandDetail() {
     el.brandWorkspaceEditForm?.classList.add('hidden');
     el.brandWorkspaceEditOpen?.classList.add('hidden');
     el.brandWorkspaceConflictReload?.classList.add('hidden');
-    el.brandWorkspaceDetailRetry?.classList.toggle('hidden', ['ready', 'closed', 'loading'].includes(detail.status));
-    el.brandWorkspaceDetailStatus.textContent = uiText(detail.status === 'loading' ? 'Loading Brand Profile…' : detail.status === 'ready' || detail.status === 'closed' ? '' : 'Loading Brand Profile failed. Retry or close this profile.');
+    el.brandWorkspaceDetailRetry?.classList.toggle('hidden', ['ready', 'closed', 'loading', 'choice', 'empty'].includes(detail.status));
+    el.brandWorkspaceDetailStatus.textContent = uiText(detail.status === 'loading' ? 'Loading Brand Profile…' : ['ready', 'closed', 'choice', 'empty'].includes(detail.status) ? '' : 'Loading Brand Profile failed. Retry or close this profile.');
     if (detail.status === 'ready' && detail.brand) renderGuidedBrandProfile(detail);
+    else if (['choice', 'empty'].includes(detail.status)) renderBrandProfileEntryState(detail);
     return;
   }
   el.brandWorkspaceDetail.classList.remove('profile-guided-mode');
@@ -3208,6 +3210,8 @@ function renderGuidedBrandProfile(detail) {
       renderWorkspaceSidebar(); renderBoardBrandAssociation();
     },
     onLogo: (id, logo) => { Object.assign(canonicalBrandDetail.brand, logo, { logo_source: logo.source }); patchCatalogBrandLogo(id, logo); },
+    hasSnapshot: () => Boolean(state.currentBoardId && state.boardAccess?.canViewBoardBrandCore && !state.publicBoardToken),
+    onSnapshot: openCampaignBrandSnapshot,
     hasProject: () => !!projectSetupContext && projectSetupContext.account === state.user && projectSetupContext.generation === state.workspaceCatalog.generation,
     onContinue: continueBrandProfileProject,
     onAdvanced: controller => {
@@ -3448,7 +3452,7 @@ async function submitCanonicalBrandEditing(event) {
   }
 }
 
-function closeCanonicalBrandDetail({ restoreFocus = true } = {}) {
+function closeCanonicalBrandDetail({ restoreFocus = true, navigate = true } = {}) {
   const previous = canonicalBrandDetail;
   if (brandProfileController?.busy()) return false;
   if (brandProfileController?.dirty() && !window.confirm(uiText('Discard unsaved Brand Profile changes?'))) return false;
@@ -3459,6 +3463,10 @@ function closeCanonicalBrandDetail({ restoreFocus = true } = {}) {
   if (!projectSetupContext?.pending) projectSetupContext = null;
   canonicalBrandDetail = { status: "closed", requestId: previous.requestId + 1, saveId: previous.saveId + 1, brandId: "", userEmail: "", brand: null, draft: null, controller: null, saveController: null, returnFocus: null };
   if (el.brandWorkspaceDetail?.open) el.brandWorkspaceDetail.close();
+  const page = brandProfilePage; brandProfilePage = null;
+  el.brandWorkspaceDetail?.classList.remove('profile-page-mode');
+  if (el.brandWorkspaceDetail) document.body.append(el.brandWorkspaceDetail);
+  if (page && navigate && state.activeView === 'brand-profile') setActiveView(page.returnView);
   if (el.brandWorkspaceDetailTitle) el.brandWorkspaceDetailTitle.textContent = uiText('Brand Profile');
   renderCanonicalBrandDetail();
   if (restoreFocus && previous.returnFocus?.isConnected) previous.returnFocus.focus();
@@ -3472,15 +3480,14 @@ function canonicalBrandDetailErrorStatus(status) {
 }
 
 async function loadCanonicalBrandDetail() {
-  const selection = state.brandCatalog.entries.find(({ id }) => id === canonicalBrandDetail.brandId) || ephemeralBrandSwitcherSelection;
-  const userEmail = (state.user?.email || "").trim().toLowerCase();
-  const catalogValidated = selection && state.brandCatalog.status === "success"
-    && state.brandCatalog.userEmail === userEmail
-    && state.brandCatalog.entries.some(({ id }) => id === selection.id);
-  if (!userEmail || !catalogValidated || !el.brandWorkspaceDetail?.open) {
-    closeCanonicalBrandDetail({ restoreFocus: false });
-    return;
+  const userEmail = (state.user?.email || '').trim().toLowerCase();
+  const workspace = state.workspaceCatalog.value?.workspaces.find(w => w.brands.some(b => b.id === canonicalBrandDetail.brandId));
+  const selection = workspace?.brands.find(b => b.id === canonicalBrandDetail.brandId);
+  if (!userEmail || state.publicBoardToken || state.workspaceCatalog.status !== 'ready' || !selection
+    || workspace.id !== state.workspaceCatalog.activeWorkspaceId || !el.brandWorkspaceDetail?.open) {
+    closeCanonicalBrandDetail({ restoreFocus: false }); return;
   }
+  const generation = state.workspaceCatalog.generation;
   canonicalBrandDetail.controller?.abort();
   const retainedConflictDraft = canonicalBrandDetail.status === "conflict" ? canonicalBrandDetail.draft : null;
   const requestId = canonicalBrandDetail.requestId + 1;
@@ -3491,8 +3498,9 @@ async function loadCanonicalBrandDetail() {
     const response = await fetch(`/api/brands/${encodeURIComponent(selection.id)}`, { headers: { Accept: "application/json" }, signal: controller.signal });
     const stillCurrent = canonicalBrandDetail.requestId === requestId && canonicalBrandDetail.brandId === selection.id
       && canonicalBrandDetail.userEmail === (state.user?.email || "").trim().toLowerCase()
-      && (ephemeralBrandSwitcherSelection?.id === selection.id || sidebarBrandProjection?.id === selection.id)
-      && state.brandCatalog.entries.some(({ id }) => id === selection.id) && el.brandWorkspaceDetail.open;
+      && state.workspaceCatalog.generation === generation && state.workspaceCatalog.status === 'ready'
+      && state.workspaceCatalog.activeWorkspaceId === workspace.id
+      && state.workspaceCatalog.value?.workspaces.find(w => w.id === workspace.id)?.brands.some(b => b.id === selection.id) && el.brandWorkspaceDetail.open;
     if (!stillCurrent) return;
     if (!response.ok) {
       canonicalBrandDetail.status = canonicalBrandDetailErrorStatus(response.status);
@@ -3510,7 +3518,11 @@ async function loadCanonicalBrandDetail() {
     }
     let brand = null;
     try { brand = await response.json(); } catch (_error) { /* handled as malformed */ }
-    if (canonicalBrandDetail.requestId !== requestId || !el.brandWorkspaceDetail.open) return;
+    if (canonicalBrandDetail.requestId !== requestId || !el.brandWorkspaceDetail.open
+      || state.workspaceCatalog.generation !== generation || state.workspaceCatalog.status !== 'ready'
+      || state.workspaceCatalog.activeWorkspaceId !== workspace.id
+      || canonicalBrandDetail.userEmail !== (state.user?.email || '').trim().toLowerCase()
+      || !state.workspaceCatalog.value?.workspaces.find(w => w.id === workspace.id)?.brands.some(b => b.id === selection.id)) return;
     canonicalBrandDetail.controller = null;
     if (!isCanonicalBrandDetail(brand, selection.id)) canonicalBrandDetail.status = "malformed";
     else {
@@ -3528,20 +3540,64 @@ async function loadCanonicalBrandDetail() {
   }
 }
 
-function openCanonicalBrandDetail() {
-  const selection = sidebarBrandProjection?.reusable
-    ? state.brandCatalog.entries.find(({ id }) => id === sidebarBrandProjection.id)
-    : null;
-  const userEmail = (state.user?.email || "").trim().toLowerCase();
-  if (!selection || !userEmail || state.brandCatalog.status !== "success" || state.brandCatalog.userEmail !== userEmail
-    || !state.brandCatalog.entries.some(({ id }) => id === selection.id) || !el.brandWorkspaceDetail) return;
-  canonicalBrandDetail.returnFocus = el.brandWorkspaceDetailOpen;
-  projectSetupContext = null;
-  canonicalBrandDetail.brandId = selection.id;
-  if (el.brandSwitcherDetails) el.brandSwitcherDetails.open = false;
-  el.brandWorkspaceDetail.showModal();
+function resolveRegularBrandProfile() {
+  return window.FunklixBrandProfileSetup.resolveEntry({
+    signedIn: Boolean(state.user?.email), publicToken: state.publicBoardToken,
+    status: state.workspaceCatalog.status, catalog: state.workspaceCatalog.value,
+    boardId: state.currentBoardId || getBoardIdFromPath(), boardAuthorized: state.boardAccess?.canView === true,
+    workspaceId: state.workspaceCatalog.activeWorkspaceId, brandId: state.session.brandId
+  });
+}
+
+function renderBrandProfileEntryState(detail) {
+  el.brandWorkspaceDetailContent.classList.remove('hidden');
+  el.brandWorkspaceDetailContent.replaceChildren();
+  const message = document.createElement('p');
+  message.textContent = uiText(detail.status === 'choice' ? 'Choose a Brand to open its Brand Profile.' : 'No authorized Brand Profile is available in this context.');
+  el.brandWorkspaceDetailContent.append(message);
+  if (state.currentBoardId && state.boardAccess?.canViewBoardBrandCore && !state.publicBoardToken) {
+    const snapshot = document.createElement('button'); snapshot.type = 'button'; snapshot.className = 'fk-btn fk-btn-secondary'; snapshot.textContent = uiText('Campaign Brand Snapshot');
+    snapshot.addEventListener('click', openCampaignBrandSnapshot); el.brandWorkspaceDetailContent.append(snapshot);
+  }
+  if (detail.status === 'choice') {
+    for (const brand of resolveRegularBrandProfile().brands) {
+      const choose = document.createElement('button'); choose.type = 'button'; choose.className = 'fk-btn fk-btn-secondary'; choose.textContent = brand.name;
+      choose.addEventListener('click', () => {
+        if (!selectSessionBrand(brand.id)) return;
+        canonicalBrandDetail.brandId = brand.id; void loadCanonicalBrandDetail();
+      });
+      el.brandWorkspaceDetailContent.append(choose);
+    }
+  }
+}
+
+function openRegularBrandProfile() {
+  const entry = resolveRegularBrandProfile();
+  if (!closeCanonicalBrandDetail({ restoreFocus: false, navigate: false })) return;
+  brandProfilePage = { returnView: state.activeView === 'brand-profile' ? 'home' : state.activeView };
+  canonicalBrandDetail.returnFocus = el.brandCoreButton;
+  canonicalBrandDetail.userEmail = (state.user?.email || '').trim().toLowerCase();
+  canonicalBrandDetail.brandId = entry.brand?.id || '';
+  state.appMode = 'canvas'; el.workspaceWrap?.classList.remove('brand-mode');
+  el.workspaceWrap.append(el.brandWorkspaceDetail);
+  el.brandWorkspaceDetail.classList.add('profile-page-mode');
+  setActiveView('brand-profile'); el.brandWorkspaceDetail.show();
   el.brandWorkspaceDetailTitle?.focus();
-  void loadCanonicalBrandDetail();
+  if (entry.kind === 'brand') {
+    state.workspaceCatalog.activeWorkspaceId = entry.workspace.id;
+    void loadCanonicalBrandDetail();
+  } else {
+    canonicalBrandDetail.status = entry.kind; renderCanonicalBrandDetail();
+  }
+}
+
+function openCanonicalBrandDetail() { openRegularBrandProfile(); }
+
+function openCampaignBrandSnapshot() {
+  if (!state.currentBoardId || !state.boardAccess?.canViewBoardBrandCore || state.publicBoardToken) return;
+  if (!closeCanonicalBrandDetail({ restoreFocus: false, navigate: false })) return;
+  setAppMode('brand');
+  document.getElementById('brand-workspace-title')?.focus();
 }
 
 function resetCanonicalBrandCreation({ focusTrigger = false } = {}) {
@@ -9295,6 +9351,7 @@ async function analyzeBrandDomainFromEditor() {
 }
 
 async function replacePrimaryBrandLogo(file) {
+  if (!BRAND_LOGO_MUTATIONS_ENABLED) return false;
   if (!file || !["image/png", "image/jpeg", "image/webp", "image/gif"].includes(file.type) || file.size > 2 * 1024 * 1024) {
     alert("Choose a PNG, JPEG, WebP, or GIF logo up to 2 MB.");
     return;
@@ -9933,12 +9990,11 @@ function renderBrandCoreEditor() {
     el.brandEditorPanel.insertAdjacentHTML("beforeend", `<label>Good example</label><textarea class="bc-good" id="bc-good" rows="3">${value.good || ""}</textarea><label>Avoid example</label><textarea class="bc-bad" id="bc-avoid" rows="3">${value.avoid || ""}</textarea>`);
     ["bc-good","bc-avoid"].forEach((id) => el.brandEditorPanel.querySelector(`#${id}`).addEventListener("input", () => { value.good = el.brandEditorPanel.querySelector("#bc-good").value; value.avoid = el.brandEditorPanel.querySelector("#bc-avoid").value; saveBrandBrainState(); renderBrandCoreTiles(); }));
   } else if (key === "brandAssets") {
-    const logoStatus = value.logoAsset?.status || (value.logo ? "persisted" : "not_found");
-    const containedLogoCopy=state.uiLanguage==='de'?'Logoänderungen sind vorübergehend nicht verfügbar.':'Logo changes are temporarily unavailable.';
-    const boardLogo=value.logo?`<span class="bc-primary-logo-fallback"><img class="bc-primary-logo" src="${escapeHtml(value.logo)}" alt="Saved primary company logo"/></span>`:`<p class="bc-helper">${escapeHtml(window.FunklixBrandLogo?.initials(state.currentBoardName||'Brand')||'B')}</p>`;
-    el.brandEditorPanel.insertAdjacentHTML("beforeend", `<label>Domain URL</label><input id="bc-domain" value="${escapeHtml(value.domain || "")}"/><button id="bc-analyze-domain" class="fk-btn fk-btn-primary" type="button">Analyze Website</button><div id="bc-domain-import-status" class="bc-domain-import-status hidden" role="status" aria-live="polite" aria-atomic="true"></div><label>Typography</label><input id="bc-typo" value="${escapeHtml(value.typography || "")}"/><label>Primary company logo</label>${boardLogo}<p class="bc-helper" data-logo-status>${escapeHtml(logoStatus.replace(/_/g, " "))}</p><p class="bc-helper" role="status">${escapeHtml(containedLogoCopy)}</p><label>Palette</label><div class="posting-actions bc-add-row"><input id="bc-color-add" placeholder="#AABBCC"/><input id="bc-color-picker" type="color" value="#6f5bff"/><button type="button" id="bc-color-plus" class="bc-editor-icon-action fk-btn fk-btn-primary" aria-label="Add color">+</button></div><div class="bc-tags">${(value.colors||[]).map((c,i)=>`<span data-i="${i}">${c}</span>`).join("")}</div>`);
+    el.brandEditorPanel.insertAdjacentHTML("beforeend", `<label>Domain URL</label><input id="bc-domain" value="${escapeHtml(value.domain || "")}"/><button id="bc-analyze-domain" class="fk-btn fk-btn-primary" type="button">Analyze Website</button><div id="bc-domain-import-status" class="bc-domain-import-status hidden" role="status" aria-live="polite" aria-atomic="true"></div><label>Typography</label><input id="bc-typo" value="${escapeHtml(value.typography || "")}"/><div class="profile-logo" data-snapshot-logo></div><label>Palette</label><div class="posting-actions bc-add-row"><input id="bc-color-add" placeholder="#AABBCC"/><input id="bc-color-picker" type="color" value="#6f5bff"/><button type="button" id="bc-color-plus" class="bc-editor-icon-action fk-btn fk-btn-primary" aria-label="Add color">+</button></div><div class="bc-tags">${(value.colors||[]).map((c,i)=>`<span data-i="${i}">${c}</span>`).join("")}</div>`);
+    const identity = resolveRegularBrandProfile().brand;
+    window.FunklixBrandLogo?.render(el.brandEditorPanel.querySelector('[data-snapshot-logo]'), identity || { name: state.currentBoardName }, { label: uiText('Brand logo') });
     ["bc-domain","bc-typo"].forEach((id) => el.brandEditorPanel.querySelector(`#${id}`).addEventListener("input", () => { value.domain = el.brandEditorPanel.querySelector("#bc-domain").value; value.typography = el.brandEditorPanel.querySelector("#bc-typo").value; saveBrandBrainState(); renderBrandCoreTiles(); }));
-    const boardLogoImage=el.brandEditorPanel.querySelector('.bc-primary-logo');boardLogoImage?.addEventListener('error',()=>{const fallback=boardLogoImage.parentElement;fallback.textContent=window.FunklixBrandLogo?.initials(state.currentBoardName||'Brand')||'B';},{once:true});
+
     el.brandEditorPanel.querySelector("#bc-analyze-domain").addEventListener("click", analyzeBrandDomainFromEditor);
     el.brandEditorPanel.querySelector("#bc-color-picker").addEventListener("input", () => {
       const picked = el.brandEditorPanel.querySelector("#bc-color-picker").value.trim();
@@ -10044,7 +10100,7 @@ function renderBrandCoreTiles() {
       preview = `<ul>${val.slice(0,3).map((p) => `<li>${p.name}<small> ${p.note}</small></li>`).join("")}</ul>`;
       count = `${val.length} personas`;
     } else if (key === "brandAssets") {
-      preview = `<div class="bc-assets-preview">${val.logo ? `<img class="bc-primary-logo" src="${escapeHtml(val.logo)}" alt="Primary company logo"/>` : ""}<span>${escapeHtml(val.domain || "")}</span><span>${escapeHtml(val.typography || "")}</span><div class="bc-colors">${(val.colors||[]).slice(0,4).map((c) => `<i style="background:${c}"></i>`).join("")}</div></div>`;
+      preview = `<div class="bc-assets-preview"><span>${escapeHtml(val.domain || "")}</span><span>${escapeHtml(val.typography || "")}</span><div class="bc-colors">${(val.colors||[]).slice(0,4).map((c) => `<i style="background:${c}"></i>`).join("")}</div></div>`;
       count = "assets";
     } else if (Array.isArray(val)) {
       preview = `<ul>${val.slice(0, 4).map((v) => `<li>${v}</li>`).join("")}</ul>`;
@@ -17177,6 +17233,7 @@ const SHELL_LAYOUT_BY_VIEW = Object.freeze({
   calendar: "full",
   content_workspace: "full",
   "brand-core": "contained",
+  "brand-profile": "contained",
   ai_brain: "contained",
   insights: "reading",
   funnel_simulator: "contained",
@@ -17308,6 +17365,7 @@ function closeInspector({ restoreFocus = true } = {}) {
 }
 
 function setActiveView(view) {
+  if (view !== 'brand-profile' && brandProfilePage && !closeCanonicalBrandDetail({ restoreFocus: false, navigate: false })) return;
   globalThis.FunklixWorkspaceSidebarController?.close(false);
   state.activeView = view;
   const isHome = view === "home";
@@ -17326,7 +17384,7 @@ function setActiveView(view) {
   el.campaignCanvasNavButton.classList.toggle("active", view === "board" || view === "list" || view === "calendar");
   el.contentWorkspaceNavButton?.classList.toggle("active", view === "content_workspace");
   el.boardsNavButton?.classList.toggle("active", view === "boards_library");
-  el.brandCoreButton.classList.toggle("active", isBrandCore);
+  el.brandCoreButton.classList.toggle("active", view === "brand-profile");
   el.aiBrainNavButton?.classList.toggle("active", view === "ai_brain");
   el.insightsNavButton?.classList.toggle("active", view === "insights");
   el.funnelSimulatorNavButton?.classList.toggle("active", view === "funnel_simulator");
@@ -17981,7 +18039,7 @@ el.brandSwitcherNoBrand?.addEventListener("click", () => clearEphemeralBrandSwit
 el.brandWorkspaceDetailOpen?.addEventListener("click", openCanonicalBrandDetail);
 el.brandWorkspaceDetailClose?.addEventListener("click", () => closeCanonicalBrandDetail());
 el.brandWorkspaceDetail?.addEventListener('keydown', event => {
-  if (event.key !== 'Tab' || !el.brandWorkspaceDetail.classList.contains('profile-guided-mode')) return;
+  if (el.brandWorkspaceDetail.classList.contains('profile-page-mode') || event.key !== 'Tab' || !el.brandWorkspaceDetail.classList.contains('profile-guided-mode')) return;
   const controls = [...el.brandWorkspaceDetail.querySelectorAll('button,input,textarea,select')]
     .filter(control => !control.disabled && control.getClientRects().length > 0);
   const first = controls[0], last = controls[controls.length - 1];
@@ -18750,14 +18808,8 @@ el.homeNavButton?.addEventListener("click", () => {
   setAppMode("canvas");
   setActiveView("home");
 });
-el.brandCoreButton.addEventListener("click", () => {
-  const context = workspaceSidebarController?.getModel();
-  if (context?.brands?.length > 1 && !context.activeBrandId) {
-    workspaceSidebarController.openBrand();
-    return;
-  }
-  setAppMode("brand");
-});
+el.brandCoreButton.addEventListener("click", openRegularBrandProfile);
+document.getElementById('campaign-snapshot-open-profile')?.addEventListener('click', openRegularBrandProfile);
 el.campaignCanvasNavButton.addEventListener("click", () => {
   setAppMode("canvas");
   setActiveView("board");
