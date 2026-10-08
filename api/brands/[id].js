@@ -14,11 +14,10 @@ module.exports = async function handler(req, res) {
   if (!['GET', 'PUT', 'DELETE'].includes(req.method)) return res.status(405).json({ ok: false, code: 'METHOD_NOT_ALLOWED', requestId });
   if (!process.env.POSTGRES_URL) {
     if (req.method === 'DELETE') {
-      console.error('[BRAND_DELETE_FAILURE]', { requestId, code: 'BRAND_DELETE_STORAGE_UNAVAILABLE' });
+      console.error('[BRAND_DELETE_FAILURE]', { code: 'BRAND_DELETE_STORAGE_UNAVAILABLE' });
       return res.status(500).json({ ok: false, code: 'BRAND_DELETE_FAILED', requestId });
     }
-    console.error('[BRAND_ITEM_FAILURE]', { method: req.method, brandId: req.query?.id || null, error: 'POSTGRES_URL is not configured' });
-    return res.status(500).json({ ok: false, code: 'BRAND_OPERATION_FAILED', requestId });
+    return res.status(503).json({ ok: false, code: 'DATABASE_UNAVAILABLE' });
   }
   const { id } = req.query || {};
   if (!id || !isBrandId(id)) return res.status(400).json({ ok: false, code: 'INVALID_BRAND_ID', requestId });
@@ -42,40 +41,36 @@ module.exports = async function handler(req, res) {
     await ensureBrandsTable();
     if (req.method === 'GET') {
       const { brand, access } = await getBrandAccess(id, user);
-      if (!brand) return res.status(404).json({ error: 'Brand not found' });
+      if (!brand) return res.status(404).json({ ok: false, code: 'BRAND_NOT_FOUND' });
       return res.status(200).json(serializeBrand(brand, access));
     }
 
     const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
     const brandCore = req.body?.brand_core;
     const revision = req.body?.revision;
-    if (!name || name.length > MAX_BRAND_NAME_LENGTH) return res.status(400).json({ error: `name must be between 1 and ${MAX_BRAND_NAME_LENGTH} characters` });
-    if (!validObject(brandCore)) return res.status(400).json({ error: 'brand_core must be an object' });
-    if (!Number.isSafeInteger(revision) || revision < 1) return res.status(400).json({ error: 'revision must be a positive integer' });
+    if (!name || name.length > MAX_BRAND_NAME_LENGTH || /[\u0000-\u001f\u007f]/.test(name)) return res.status(400).json({ ok: false, code: 'INVALID_BRAND_NAME' });
+    if (!validObject(brandCore) || Buffer.byteLength(JSON.stringify(brandCore)) > 1024 * 1024) return res.status(400).json({ ok: false, code: 'INVALID_BRAND_CORE' });
+    if (!Number.isSafeInteger(revision) || revision < 1) return res.status(400).json({ ok: false, code: 'INVALID_REVISION' });
 
-    const resolved = await getBrandAccess(id, user, { columns: 'id, revision, updated_at' });
-    if (!resolved.brand) return res.status(404).json({ error: 'Brand not found' });
-    if (!resolved.access.canEditCanonicalBrand) return res.status(404).json({ error: 'Brand not found' });
+    const resolved = await getBrandAccess(id, user, { columns: 'id, revision, updated_at, brand_core' });
+    if (!resolved.brand) return res.status(404).json({ ok: false, code: 'BRAND_NOT_FOUND' });
+    if (!resolved.access.canEditCanonicalBrand) return res.status(403).json({ ok: false, code: 'PERMISSION_DENIED' });
+    // The creation fingerprint is server-owned and survives subsequent editing.
+    if (JSON.stringify(brandCore._creation) !== JSON.stringify(resolved.brand.brand_core?._creation)) return res.status(422).json({ ok: false, code: 'INVALID_BRAND_CORE' });
     const updated = await pool.query(
-      `UPDATE brands SET name = $3, brand_core = $4::jsonb, revision = revision + 1, updated_at = NOW()
-       WHERE id = $1 AND revision = $5
+      `UPDATE brands SET name = $2, brand_core = $3::jsonb, revision = revision + 1, updated_at = NOW()
+       WHERE id = $1 AND revision = $4
        RETURNING ${BRAND_COLUMNS}`,
-      [id, ownerEmail, name, JSON.stringify(brandCore), revision]
+      [id, name, JSON.stringify(brandCore), revision]
     );
     if (updated.rowCount === 0) {
       const { brand: current } = await getBrandAccess(id, user, { columns: 'id, revision, updated_at' });
-      if (!current) return res.status(404).json({ error: 'Brand not found' });
-      return res.status(409).json({ error: 'Brand update conflict', id, revision: Number(current.revision), updated_at: current.updated_at });
+      if (!current) return res.status(404).json({ ok: false, code: 'BRAND_NOT_FOUND' });
+      return res.status(409).json({ ok: false, code: 'STALE_UPDATE' });
     }
     return res.status(200).json(serializeBrand(updated.rows[0], resolved.access));
   } catch (error) {
-    console.error('[BRAND_ITEM_FAILURE]', {
-      method: req.method,
-      brandId: id,
-      ownerEmail,
-      error: error?.message || 'unknown',
-      stack: error?.stack || null
-    });
-    return res.status(500).json({ error: 'Failed to load Brand' });
+    console.error('[BRAND_ITEM_FAILURE]', { method: req.method, code: 'DATABASE_UNAVAILABLE' });
+    return res.status(503).json({ ok: false, code: 'DATABASE_UNAVAILABLE' });
   }
 };

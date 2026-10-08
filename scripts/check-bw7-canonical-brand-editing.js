@@ -32,7 +32,7 @@ assert.match(html, /Save Canonical Brand[\s\S]*id="brand-workspace-edit-cancel"/
 assert.doesNotMatch(begin, /fetch\(|persistBrand|submitCanonical|localStorage|sessionStorage/, "entering edit mode performs no request or persistence");
 assert.doesNotMatch(cancel, /fetch\(|localStorage|sessionStorage/, "cancel performs no request");
 assert.doesNotMatch(close, /fetch\(|localStorage|sessionStorage|persist/, "closing performs no write");
-assert.match(app, /window\.confirm\("Discard unsaved Canonical Brand changes\? Nothing will be saved\."\)/, "dirty lifecycle changes require deliberate discard confirmation");
+assert.match(close, /guardBrandProfileLeave/, "dirty lifecycle changes use the internal leave dialog; R5 verifies its three actions in Chromium");
 assert.match(save, /method: "PUT"/, "save reuses PUT");
 assert.match(save, /fetch\(`\/api\/brands\/\$\{encodeURIComponent\(detail\.brandId\)\}`/, "save reuses /api/brands/:id");
 assert.match(save, /JSON\.stringify\(\{ name, brand_core: brandCore, revision: detail\.draft\.revision \}\)/, "payload contains only accepted fields");
@@ -41,8 +41,8 @@ assert.match(save, /catalogValidated[\s\S]*selection\.id !== detail\.brandId[\s\
 assert.match(save, /detail\.saveController\) return/, "duplicate submissions are prevented");
 assert.doesNotMatch(save, /setTimeout|while\s*\(|retry|force|recursive/, "save has no automatic retry or conflict bypass");
 assert.match(save, /brand\.revision !== expectedRevision[\s\S]*brand\.name !== name[\s\S]*canonicalJson/, "success requires exact authoritative identity, revision, name, and Core");
-assert.match(save, /detail\.brand = \(\(\{ id/, "success replaces detail with the authoritative response");
-assert.match(save, /entries\.findIndex[\s\S]*entries\.splice\(entryIndex, 1/, "rename updates exactly one catalog summary");
+assert.match(save, /detail\.brand = brand/, "success replaces detail with the authoritative response");
+assert.match(save, /reconcileConfirmedBrand\(brand\)/, "rename uses the shared confirmed projection boundary");
 assert.doesNotMatch(save, /persistBrandSwitcherPreference|removeBrandSwitcherPreference|brandSwitcherPreferenceGeneration/, "save preserves the BW-4 preference and selected ID");
 assert.doesNotMatch(`${begin}\n${cancel}\n${close}\n${save}\n${load}`, /\/api\/boards|brandCoreState|state\.brandCore|brand_core_snapshot|canvas|autosave|saveBoard|loadBoard|location\.|history\./i, "editing is isolated from Boards, snapshots, Canvas, autosave, and navigation");
 assert.doesNotMatch(associate, /canonicalBrandDetail|brandWorkspaceEdit|submitCanonicalBrandEditing/, "BW-5 does not interact with editing");
@@ -54,7 +54,7 @@ assert.match(html, /id="brand-workspace-conflict-reload"[^>]*>Reload latest Bran
 assert.match(load, /retainedConflictDraft/, "reload-latest retains the conflict draft");
 assert.match(save, /status = "save-error"/g, "failures never present the draft as saved");
 assert.match(close, /requestId: previous\.requestId \+ 1[\s\S]*saveId: previous\.saveId \+ 1/, "close invalidates late GET and PUT responses");
-assert.match(save, /stillCurrent[\s\S]*saveId === saveId[\s\S]*ephemeralBrandSwitcherSelection/, "late saves are account, selection, dialog, and generation guarded");
+assert.match(save, /stillCurrent[\s\S]*saveId === saveId[\s\S]*state\.workspaceCatalog\.generation === generation/, "late saves are account, authoritative workspace, dialog, and generation guarded");
 assert.match(load, /canonicalBrandDetail\.requestId !== requestId/, "late GET responses are generation guarded");
 assert.doesNotMatch(app, /(?:window|globalThis)\.(?:activeBrand|currentBrand|canonicalBrandCore)/, "no global Brand authority is introduced");
 assert.doesNotMatch(app, /syncCanonical|syncBrandToBoard|synchronizeBrand/, "no Brand-to-Board synchronization is introduced");

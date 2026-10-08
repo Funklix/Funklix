@@ -9,6 +9,7 @@
   const object = value => !!value && typeof value === 'object' && !Array.isArray(value);
   const SECTIONS = ['Brand Basics', 'Foundation', 'Audience', 'Voice & Messaging', 'Offers & Proof', 'Review'];
   const FIELDS = Object.freeze({
+    brandAssets: ['Brand Basics', 'Brand assets', 'assets'],
     brandCore: ['Foundation', 'Brand description', 'text'],
     valueProposition: ['Foundation', 'Value Proposition', 'text'],
     personas: ['Audience', 'Personas', 'personas'],
@@ -39,6 +40,13 @@
     const result = {};
     for (const [key, [, , type]] of Object.entries(FIELDS)) {
       const value = raw[key];
+      if (type === 'assets' && object(value)) {
+        const assets = {};
+        for (const part of ['colors', 'references']) if (Array.isArray(value[part]) && value[part].length <= 100 && value[part].every(item => typeof item === 'string' && item.length <= 5000)) assets[part] = value[part].slice();
+        if (typeof value.typography === 'string' && value.typography.length <= 5000) assets.typography = value.typography;
+        // Domain comes from the user's website. Logos use their separate private boundary.
+        if (Object.keys(assets).length) result[key] = assets;
+      }
       if (type === 'text' && typeof value === 'string' && value.length <= 50000) result[key] = value;
       if (type === 'list' && Array.isArray(value) && value.length <= 100 && value.every(item => typeof item === 'string' && item.length <= 5000)) result[key] = value.slice();
       if (type === 'personas' && Array.isArray(value) && value.length <= 100 && value.every(item => object(item) && typeof item.name === 'string' && typeof item.note === 'string')) result[key] = value.map(item => ({ name: item.name.slice(0, 500), note: item.note.slice(0, 5000) }));
@@ -77,10 +85,12 @@
       brand: options.brand, name: options.brand.name, core: clone(options.brand.brand_core),
       website: options.website || options.brand.brand_core?.brandAssets?.domain || options.brand.brand_core?.website || '',
       section: 0, message: '', analysis: 'Not analyzed', logo: options.brand.logo_url ? 'Logo saved' : 'No logo yet. Initials are shown.',
-      proposals: {}, candidate: null, file: null, fileData: null, pending: '', dirty: !!options.website,
+      proposals: clone(options.pendingData?.proposals || {}), candidate: clone(options.pendingData?.candidate || null),
+      file: options.pendingData?.file || null, fileData: options.pendingData?.fileData || null, pending: '', dirty: !!options.website, deferred: false,
       readOnly: options.brand.access?.canEditCanonicalBrand !== true || !['owner','admin','editor'].includes(options.brand.access?.role)
     };
     for (const [key, [, , type]] of Object.entries(FIELDS)) {
+      if (type === 'assets') continue;
       if (!Object.hasOwn(state.core, key)) state.core[key] = type === 'text' ? '' : type === 'rules' ? { dos: [], donts: [] } : type === 'examples' ? { good: '', avoid: '' } : [];
     }
     let notify = () => {};
@@ -89,10 +99,16 @@
       return alive && live.account === captured.account && live.generation === captured.generation
         && live.brandId === captured.brandId && live.workspaceId === captured.workspaceId && live.authorized !== false;
     }
-    function changed() { if (current()) notify(); }
-    function errorText(response, fallback) {
+    function changed() { if (current()) { try { notify(); } catch { state.message = state.dirty ? 'The view could not be updated. Your inputs are retained.' : 'Brand Profile saved. Refresh the view if the update is not visible everywhere yet.'; } } }
+    function errorText(response, fallback, payload) {
       if (response.status === 409) return 'This Brand changed elsewhere. Your inputs are retained. Reload latest before retrying.';
-      if ([401, 403, 404].includes(response.status)) { state.readOnly = true; return 'Your access is no longer available. Your inputs are retained.'; }
+      if (response.status === 401) { state.readOnly = true; return 'Your session expired. Sign in again. Your inputs are retained.'; }
+      if (response.status === 403) { state.readOnly = true; return 'You do not have permission to change this Brand. Your inputs are retained.'; }
+      if (response.status === 404) { state.readOnly = true; return 'This Brand or workspace is no longer available. Your inputs are retained.'; }
+      const code = payload?.error?.code || payload?.code;
+      if (code === 'STORAGE_UNAVAILABLE') return 'Logo storage is temporarily unavailable. Your Brand information can still be saved.';
+      if (['UNSUPPORTED_FILE', 'FILE_TOO_LARGE'].includes(code)) return 'Choose PNG, JPEG, WebP or GIF, up to 2 MB.';
+      if (code === 'DATABASE_UNAVAILABLE') return 'The database is temporarily unavailable. Your inputs are retained. Try again.';
       return fallback;
     }
     function run(kind, operation) {
@@ -104,7 +120,7 @@
       flight = (async () => {
         try { return await operation(); }
         catch { if (current()) { if (kind === 'Analyzing website…') state.analysis = 'Analysis failed'; state.message = kind === 'Analyzing website…' ? 'Website analysis failed. Retry or continue manually.' : kind === 'Uploading logo…' ? 'Logo upload failed. Your file is retained. Retry the upload.' : 'The save was not confirmed. Your inputs are retained. Retry safely.'; } return false; }
-        finally { flight = null; if (current()) { state.pending = ''; changed(); } }
+        finally { flight = null; state.pending = ''; if (!current()) refreshContext(); changed(); }
       })();
       return flight;
     }
@@ -123,7 +139,7 @@
       return run('Analyzing website…', async () => {
         let domain;
         try { domain = website(state.website); } catch { state.message = 'Enter a valid public HTTPS website.'; return false; }
-        state.analysis = 'Analyzing website…'; state.message = '';
+        state.deferred = false; state.analysis = 'Analyzing website…'; state.message = '';
         const result = await jsonRequest('/api/analyze-brand-domain', 'POST', { domainUrl: domain, brandId: state.brand.id });
         if (!result) return false;
         if (!result.response.ok) {
@@ -131,14 +147,14 @@
           state.analysis = code === 'empty_content' ? 'No usable information found' : 'Analysis failed';
           const fallback = ['invalid_url','unsupported_scheme','credentials_not_allowed','invalid_host','port_not_allowed','unsafe_destination'].includes(code) ? 'Enter a valid public HTTPS website.'
             : code === 'empty_content' ? 'No usable information found. You can fill in your Brand Profile manually.' : 'Website analysis failed. Retry or continue manually.';
-          state.message = errorText(result.response, fallback); return false;
+          state.message = errorText(result.response, fallback, result.payload); return false;
         }
         const suggestions = filteredSuggestions(result.payload?.suggestions);
         if (!Object.values(suggestions).some(meaningful)) { state.proposals = {}; state.analysis = 'No usable information found'; state.message = 'No usable information found. You can fill in your Brand Profile manually.'; }
         else {
           state.proposals = suggestions; state.analysis = 'Review website suggestions'; state.section = 5;
           // Filling an empty local draft is never a save or a replacement of confirmed data.
-          if (!Object.keys(FIELDS).some(key => meaningful(state.core[key]))) {
+          if (!Object.keys(FIELDS).some(key => key !== 'brandAssets' && meaningful(state.core[key]))) {
             Object.assign(state.core, clone(suggestions)); state.proposals = {}; state.dirty = true;
           }
         }
@@ -158,13 +174,16 @@
         const revision = state.brand.revision;
         const result = await jsonRequest(`/api/brands/${state.brand.id}`, 'PUT', { name, brand_core: core, revision });
         if (!result) return false;
-        if (!result.response.ok) { state.message = errorText(result.response, 'The save was not confirmed. Your inputs are retained. Retry safely.'); return false; }
+        if (!result.response.ok) { state.message = errorText(result.response, 'The save was not confirmed. Your inputs are retained. Retry safely.', result.payload); return false; }
         const brand = result.payload;
         if (!validateBrand(brand, state.brand.id) || brand.revision !== revision + 1 || brand.name !== name
           || stable(brand.brand_core) !== stable(core)) { state.message = 'The save response could not be verified. Your inputs are retained.'; return false; }
         state.brand = brand; state.name = name; state.core = clone(core); state.dirty = false;
         state.message = 'Brand Profile saved';
-        onSave(brand); return true;
+        // Confirmation is authoritative. A later projection failure cannot undo it.
+        try { await onSave(brand); }
+        catch { state.message = 'Brand Profile saved. Refresh the view if the update is not visible everywhere yet.'; }
+        return true;
       });
     }
     function stable(value) {
@@ -182,7 +201,7 @@
           state.logo = 'Logo upload failed';
           state.message = result.payload?.error?.code === 'UPLOADED_LOGO_PRESERVED' ? 'Your uploaded logo has priority. It was kept.'
             : result.payload?.error?.code === 'CANDIDATE_CHANGED' ? 'The suggested logo changed. Analyze the website again before confirming.'
-            : errorText(result.response, 'Logo upload failed. Your file is retained. Retry the upload.');
+            : errorText(result.response, 'Logo upload failed. Your file is retained. Retry the upload.', result.payload);
           return false;
         }
         const logo = result.payload?.logo;
@@ -190,9 +209,12 @@
           || logo.logo_revision !== revision + 1 || (action === 'remove' ? logo.logo_url !== null : logo.logo_url !== `/api/brands/${state.brand.id}/logo?revision=${logo.logo_revision}`)) {
           state.message = 'The logo save could not be verified. Retry or reload the latest Brand.'; return false;
         }
-        state.brand = { ...state.brand, ...logo, logo_source: logo.source };
+        state.brand = { ...state.brand, logo_url: logo.logo_url, logo_revision: logo.logo_revision, logo_source: logo.source, logo_updated_at: logo.updated_at };
         state.logo = action === 'remove' ? 'No logo yet. Initials are shown.' : 'Logo saved'; state.message = action === 'remove' ? 'Logo removed' : 'Logo saved'; state.candidate = null;
-        state.file = null; state.fileData = null; onLogo(state.brand.id, logo); return true;
+        state.file = null; state.fileData = null;
+        try { await onLogo(state.brand.id, logo); }
+        catch { state.message = 'Logo saved. Refresh the view if the update is not visible everywhere yet.'; }
+        return true;
       });
     }
     function upload() {
@@ -217,7 +239,7 @@
       if (!file || !['image/png', 'image/jpeg', 'image/webp', 'image/gif'].includes(file.type) || file.size <= 0 || file.size > 2 * 1024 * 1024) {
         state.message = 'Choose PNG, JPEG, WebP or GIF, up to 2 MB.'; changed(); return false;
       }
-      state.file = file; state.fileData = null; state.pending = 'Reading logo…'; changed();
+      state.deferred = false; state.file = file; state.fileData = null; state.pending = 'Reading logo…'; changed();
       try {
         const base64 = await read(file);
         if (!current() || state.file !== file) return false;
@@ -235,12 +257,19 @@
         // Keep the unsaved draft for deliberate review against the latest revision.
         state.brand = brand; state.readOnly = brand.access.canEditCanonicalBrand !== true || !['owner','admin','editor'].includes(brand.access.role);
         state.message = 'Latest Brand loaded. Your unsaved inputs are retained; review them before saving.';
-        onSave(brand); return true;
+        try { await onSave(brand); } catch { state.message = 'Latest Brand loaded. Refresh the view if the update is not visible everywhere yet.'; }
+        return true;
       });
     }
-    return { state, current, analyze, save, upload, removeLogo, useLogo, chooseFile, applyProposal, reload,
+    function refreshContext() {
+      const live = getContext();
+      if (!alive || flight || live.account !== captured.account || live.brandId !== captured.brandId || live.workspaceId !== captured.workspaceId || live.authorized !== true) return false;
+      captured.generation = live.generation;
+      return true;
+    }
+    return { state, current, refreshContext, analyze, save, upload, removeLogo, useLogo, chooseFile, applyProposal, reload,
       subscribe(fn) { notify = fn; }, invalidate() { alive = false; state.file = null; state.fileData = null; state.candidate = null; state.proposals = {}; state.core = {}; state.website = ''; state.name = ''; },
-      dirty() { return state.dirty; }, busy() { return !!state.pending; } };
+      dirty() { return state.dirty || (!state.deferred && !!(state.file || state.candidate || Object.keys(state.proposals).length)); }, busy() { return !!state.pending; } };
   }
 
   function mount(container, options) {
@@ -250,7 +279,7 @@
     function node(tag, text, parent) { const n = doc.createElement(tag); if (text) n.textContent = text; if (parent) parent.append(n); return n; }
     function button(key, parent, action, id = key) {
       const b = node('button', t(key), parent); b.type = 'button'; b.dataset.profileKey = id;
-      if (key === 'Continue to project' || (key === 'Confirm and save Brand Profile' && s.section !== 5)) b.className = 'fk-btn fk-btn-primary';
+      if (key === 'Save Brand Profile and continue' || (key === 'Confirm and save Brand Profile' && s.section !== 5)) b.className = 'fk-btn fk-btn-primary';
       b.disabled = !!s.pending || !!s.returning; b.addEventListener('click', action); return b;
     }
     function textField(label, value, parent, update, multiline = false, id = label) {
@@ -270,7 +299,17 @@
       for (const [key, [group, label, type]] of Object.entries(FIELDS)) {
         if (group !== section) continue;
         count++;
-        if (type === 'personas') {
+        if (type === 'assets') {
+          for (const part of ['colors', 'typography', 'references']) {
+            const assets = object(s.core[key]) ? s.core[key] : {};
+            const value = assets[part];
+            if (value !== undefined && (part === 'typography' ? typeof value !== 'string' : !Array.isArray(value) || value.some(item => typeof item !== 'string'))) { readable(value, parent); continue; }
+            textField({ colors: 'Colors', typography: 'Typography', references: 'References' }[part], part === 'typography' ? value : (value || []).join('\n'), parent, text => {
+              if (!object(s.core[key])) s.core[key] = {};
+              s.core[key][part] = part === 'typography' ? text : text.split('\n').map(line => line.trim()).filter(Boolean);
+            }, true, `brandAssets-${part}`);
+          }
+        } else if (type === 'personas') {
           node('h4', t(label), parent);
           if (!Array.isArray(s.core[key])) { readable(s.core[key], parent); continue; }
           s.core[key].forEach((persona, index) => {
@@ -327,7 +366,7 @@
       if (s.file) node('p', s.file.name, parent);
       if (s.fileData) { const img = node('img', '', parent); img.className = 'profile-logo-candidate'; img.alt = t('Local logo preview'); img.src = `data:${s.fileData.mime};base64,${s.fileData.base64}`; }
       const upload = button(s.brand.logo_url ? 'Change logo' : 'Upload logo', parent, () => { void session.upload(); }); upload.disabled ||= !s.fileData;
-      if (s.brand.logo_url) button('Remove logo', parent, () => { if (root.confirm(t('Remove this Brand logo?'))) void session.removeLogo(); });
+      if (s.brand.logo_url) button('Remove logo', parent, () => { void session.removeLogo(); });
       if (s.candidate) {
         const img = node('img', '', parent); img.className = 'profile-logo-candidate'; img.alt = t('Suggested logo'); img.src = `data:${s.candidate.mime_type};base64,${s.candidate.image_base64}`;
         const use = button('Use this logo', parent, () => { void session.useLogo(); }); use.disabled ||= s.brand.logo_source === 'uploaded';
@@ -351,7 +390,7 @@
         textField('Brand name', s.name, section, value => { s.name = value; });
         textField('Website', s.website, section, value => { s.website = value; s.proposals = {}; s.candidate = null; s.analysis = 'Not analyzed'; });
         if (!s.readOnly) button('Analyze website', section, () => { void session.analyze(); });
-        logo(section);
+        logo(section); fields('Brand Basics', section);
       } else if (s.section === 5) {
         const list = node('ul', '', section);
         for (const key of SECTIONS.slice(0, 5)) {
@@ -374,8 +413,12 @@
         button('Confirm and save Brand Profile', actions, () => { void session.save(); });
         button('Reload latest Brand', actions, () => { void session.reload(); });
       }
-      if (s.section === 5) button(options.hasProject() ? 'Continue to project' : 'Back', actions, async () => {
-        if (s.dirty && !s.readOnly && !await session.save()) return;
+      if (options.hasProject() || s.section === 5) button(options.hasProject() ? 'Save Brand Profile and continue' : 'Back', actions, async () => {
+        if (options.hasProject() && !s.readOnly) {
+          if (!await session.save()) return;
+          // Optional unuploaded files/suggestions stay in the account's memory cache.
+          s.deferred = true;
+        }
         if (!session.current()) return;
         s.returning = true; render();
         try { await options.onContinue(); } finally { s.returning = false; if (session.current()) render(); }
@@ -387,5 +430,42 @@
     session.subscribe(render); render();
     return { ...session, render, invalidate() { session.invalidate(); options.onBusy?.(false); } };
   }
-  return Object.freeze({ SECTIONS, FIELDS, resolveEntry, meaningful, website, filteredSuggestions, validCandidate, createSession, mount });
+  function leaveDialog({ document: doc = root.document, language, save, proceed }) {
+    const existing = doc.getElementById('brand-leave-dialog');
+    if (existing) { existing.querySelector('[data-keep-editing]')?.focus(); return; }
+    const t = key => root.FunklixLanguage.t(key, language());
+    const origin = doc.activeElement, dialog = doc.createElement('dialog');
+    dialog.id = 'brand-leave-dialog'; dialog.className = 'brand-leave-dialog';
+    dialog.setAttribute('aria-labelledby', 'brand-leave-title');
+    const title = doc.createElement('h2'); title.id = 'brand-leave-title'; title.textContent = t('Save changes before leaving?');
+    const status = doc.createElement('p'); status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
+    const actions = doc.createElement('div'); actions.className = 'brand-leave-actions';
+    const primary = doc.createElement('button'), keep = doc.createElement('button'), discard = doc.createElement('button');
+    primary.type = keep.type = discard.type = 'button';
+    primary.className = 'fk-btn fk-btn-primary'; primary.textContent = t('Save and continue');
+    keep.className = 'fk-btn fk-btn-secondary'; keep.textContent = t('Keep editing'); keep.dataset.keepEditing = 'true';
+    discard.className = 'fk-btn fk-btn-ghost brand-leave-discard'; discard.textContent = t('Discard changes');
+    actions.append(primary, keep, discard); dialog.append(title, status, actions); doc.body.append(dialog);
+    let pending = false;
+    const close = restore => { dialog.close(); dialog.remove(); if (restore && origin?.isConnected) origin.focus(); };
+    keep.addEventListener('click', () => { if (!pending) close(true); });
+    discard.addEventListener('click', () => { if (!pending) { close(false); proceed('discard'); } });
+    primary.addEventListener('click', async () => {
+      if (pending) return;
+      pending = true; primary.disabled = discard.disabled = keep.disabled = true;
+      try { if (await save()) { close(false); proceed('save'); return; } }
+      catch { /* preserve the profile and show bounded feedback */ }
+      status.textContent = t('The save was not confirmed. Your inputs are retained. Retry safely.');
+      pending = false; primary.disabled = discard.disabled = keep.disabled = false; keep.focus();
+    });
+    dialog.addEventListener('cancel', event => { event.preventDefault(); if (!pending) close(true); });
+    dialog.addEventListener('keydown', event => {
+      if (event.key !== 'Tab') return;
+      const buttons = [primary, keep, discard].filter(button => !button.disabled);
+      const next = event.shiftKey && doc.activeElement === buttons[0] ? buttons.at(-1) : !event.shiftKey && doc.activeElement === buttons.at(-1) ? buttons[0] : null;
+      if (next) { event.preventDefault(); next.focus(); }
+    });
+    dialog.showModal(); keep.focus();
+  }
+  return Object.freeze({ SECTIONS, FIELDS, resolveEntry, meaningful, website, filteredSuggestions, validCandidate, createSession, mount, leaveDialog });
 }));

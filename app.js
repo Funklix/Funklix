@@ -3031,7 +3031,7 @@ function selectedBrandPreferenceId() {
 
 function clearEphemeralBrandSwitcherSelection({ close = false, persist = false } = {}) {
   const userEmail = typeof state.user?.email === "string" ? state.user.email.trim().toLowerCase() : "";
-  if (!closeCanonicalBrandDetail({ restoreFocus: false })) return false;
+  if (!closeCanonicalBrandDetail({ restoreFocus: false, resume: () => clearEphemeralBrandSwitcherSelection({ close, persist }) })) return false;
   brandSwitcherPreferenceGeneration += 1;
   ephemeralBrandSwitcherSelection = null;
   renderEphemeralBrandSwitcherSelection();
@@ -3044,7 +3044,7 @@ function clearEphemeralBrandSwitcherSelection({ close = false, persist = false }
 function selectEphemeralBrandFromSwitcher(brand) {
   const userEmail = typeof state.user?.email === "string" ? state.user.email.trim().toLowerCase() : "";
   if (!userEmail || state.brandCatalog.status !== "success" || !state.brandCatalog.entries.some(({ id }) => id === brand.id)) return;
-  if (!closeCanonicalBrandDetail({ restoreFocus: false })) return;
+  if (!closeCanonicalBrandDetail({ restoreFocus: false, resume: () => selectEphemeralBrandFromSwitcher(brand) })) return;
   const generation = ++brandSwitcherPreferenceGeneration;
   ephemeralBrandSwitcherSelection = { id: brand.id, name: brand.name.trim(), restored: false };
   void persistBrandSwitcherPreference(userEmail, brand.id, generation);
@@ -3061,6 +3061,7 @@ let brandProfilePage = null;
 let sidebarBrandProjection = null;
 let workspaceSidebarController = null;
 const sidebarProfileCache = new Map();
+const pendingBrandProfileData = new Map();
 
 function isCanonicalBrandDetail(value, expectedId) {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -3155,7 +3156,7 @@ function renderCanonicalBrandDetail() {
   core.className = "brand-workspace-core";
   const heading = document.createElement("h3"); heading.textContent = "Canonical Brand Core (read-only)";
   core.appendChild(heading);
-  const entries = Object.entries(brand.brand_core);
+  const entries = Object.entries(brand.brand_core).filter(([key]) => key !== '_creation');
   if (!entries.length) {
     const empty = document.createElement("p"); empty.textContent = "No Canonical Brand Core details have been provided."; core.appendChild(empty);
   } else {
@@ -3172,6 +3173,33 @@ function renderCanonicalBrandDetail() {
   if (brand.access.canManageBrandMembers) renderBrandTeamSection(el.brandWorkspaceDetailContent, brand);
 }
 
+function reconcileConfirmedBrand(confirmed) {
+  canonicalBrandDetail.brand = confirmed;
+  sidebarProfileCache.set(confirmed.id, confirmed.brand_core);
+  const catalog = state.workspaceCatalog.value;
+  const projection = { name: confirmed.name, revision: confirmed.revision, logo_url: confirmed.logo_url, logo_revision: confirmed.logo_revision };
+  state.workspaceCatalog.value = Object.freeze({ ...catalog, workspaces: Object.freeze(catalog.workspaces.map(w => Object.freeze({ ...w,
+    brands: Object.freeze(w.brands.map(b => b.id === confirmed.id ? Object.freeze({ ...b, ...projection }) : b)) }))) });
+  state.brandCatalog.entries = state.brandCatalog.entries.map(b => b.id === confirmed.id ? { ...b, ...projection, updated_at: confirmed.updated_at } : b);
+  if (ephemeralBrandSwitcherSelection?.id === confirmed.id) ephemeralBrandSwitcherSelection = { ...ephemeralBrandSwitcherSelection, name: confirmed.name };
+  el.brandWorkspaceDetailTitle.textContent = confirmed.name;
+  // Run independent consumers even if one local renderer fails.
+  let failed = false;
+  for (const update of [() => projectDialogController?.reconcileBrand?.(confirmed.id, projection), renderWorkspaceSidebar, renderBoardBrandAssociation]) {
+    try { update(); } catch { failed = true; }
+  }
+  if (failed) throw new Error('LOCAL_PROJECTION_FAILED');
+}
+
+function retainPendingBrandProfile() {
+  const profile = brandProfileController?.state;
+  if (!profile) return;
+  if (profile.file || profile.candidate || Object.keys(profile.proposals).length) {
+    pendingBrandProfileData.set(profile.brand.id, { account: state.user, file: profile.file, fileData: profile.fileData,
+      candidate: profile.candidate ? clonePlainObject(profile.candidate) : null, proposals: clonePlainObject(profile.proposals) });
+  } else pendingBrandProfileData.delete(profile.brand.id);
+}
+
 function renderGuidedBrandProfile(detail) {
   el.brandWorkspaceDetailTitle.textContent = detail.brand.name;
   if (detail.userEmail !== (state.user?.email || '').trim().toLowerCase()) {
@@ -3179,7 +3207,13 @@ function renderGuidedBrandProfile(detail) {
     el.brandWorkspaceDetailContent.replaceChildren();
     el.brandWorkspaceDetailStatus.textContent = uiText('Workspace or Brand context is no longer available.'); return;
   }
-  if (brandProfileController?.current()) { brandProfileController.render(); return; }
+  if (brandProfileController?.state.brand.id === detail.brandId) {
+    // A catalog refresh/stale interval must not replace the user's local draft.
+    brandProfileController.refreshContext();
+    const role = state.workspaceCatalog.value?.workspaces.flatMap(w => w.brands).find(b => b.id === detail.brandId)?.role;
+    if (state.workspaceCatalog.status === 'ready' && role) brandProfileController.state.readOnly = !['owner', 'admin', 'editor'].includes(role);
+    brandProfileController.render(); return;
+  }
   brandProfileController?.invalidate();
   const brand = detail.brand;
   const workspace = state.workspaceCatalog.value?.workspaces.find(w => w.brands.some(b => b.id === brand.id));
@@ -3187,6 +3221,7 @@ function renderGuidedBrandProfile(detail) {
     el.brandWorkspaceDetailStatus.textContent = uiText('Workspace or Brand context is no longer available.'); return;
   }
   brandProfileController = window.FunklixBrandProfileSetup.mount(el.brandWorkspaceDetailContent, {
+    pendingData: pendingBrandProfileData.get(brand.id)?.account === state.user ? pendingBrandProfileData.get(brand.id) : null,
     brand, website: projectSetupContext?.website || '', language: () => state.uiLanguage,
     getContext: () => ({ account: state.user, generation: state.workspaceCatalog.generation, brandId: canonicalBrandDetail.brandId,
       workspaceId: state.workspaceCatalog.activeWorkspaceId,
@@ -3196,27 +3231,18 @@ function renderGuidedBrandProfile(detail) {
     onBusy: pending => { if (el.brandWorkspaceDetailClose) el.brandWorkspaceDetailClose.disabled = pending; },
     moduleDefinition: type => getKnowledgeModuleRegistryApi()?.getModuleDefinition(type),
     createTile: type => createBrandCustomTile(getKnowledgeModuleRegistryApi().getModuleDefinition(type).label, '', { moduleType: type }),
-    onSave: confirmed => {
-      canonicalBrandDetail.brand = confirmed;
-      sidebarProfileCache.set(confirmed.id, confirmed.brand_core);
-      const catalog = state.workspaceCatalog.value;
-      state.workspaceCatalog.value = Object.freeze({ ...catalog, workspaces: Object.freeze(catalog.workspaces.map(w => Object.freeze({ ...w,
-        brands: Object.freeze(w.brands.map(b => b.id === confirmed.id ? Object.freeze({ ...b, name: confirmed.name, revision: confirmed.revision, logo_url: confirmed.logo_url, logo_revision: confirmed.logo_revision }) : b)) }))) });
-      const entry = state.brandCatalog.entries.find(b => b.id === confirmed.id);
-      if (entry) Object.assign(entry, { name: confirmed.name, revision: confirmed.revision });
-      if (ephemeralBrandSwitcherSelection?.id === confirmed.id) ephemeralBrandSwitcherSelection.name = confirmed.name;
-      el.brandWorkspaceDetailTitle.textContent = confirmed.name;
-      projectDialogController?.reconcileBrand?.(confirmed.id, { name: confirmed.name, logo_url: confirmed.logo_url, logo_revision: confirmed.logo_revision });
-      renderWorkspaceSidebar(); renderBoardBrandAssociation();
+    onSave: reconcileConfirmedBrand,
+    onLogo: (id, logo) => {
+      const confirmed = { ...canonicalBrandDetail.brand, logo_url: logo.logo_url, logo_revision: logo.logo_revision, logo_source: logo.source, logo_updated_at: logo.updated_at };
+      reconcileConfirmedBrand(confirmed);
     },
-    onLogo: (id, logo) => { Object.assign(canonicalBrandDetail.brand, logo, { logo_source: logo.source }); patchCatalogBrandLogo(id, logo); },
     hasSnapshot: () => Boolean(state.currentBoardId && state.boardAccess?.canViewBoardBrandCore && !state.publicBoardToken),
     onSnapshot: openCampaignBrandSnapshot,
     hasProject: () => !!projectSetupContext && projectSetupContext.account === state.user && projectSetupContext.generation === state.workspaceCatalog.generation,
     onContinue: continueBrandProfileProject,
     onAdvanced: controller => {
-      if (controller.busy() || (controller.dirty() && !window.confirm(uiText('Discard unsaved Brand Profile changes?')))) return;
-      controller.invalidate(); brandProfileController = null; brandProfileAdvanced = true; renderCanonicalBrandDetail();
+      const advance = () => { retainPendingBrandProfile(); controller.invalidate(); brandProfileController = null; brandProfileAdvanced = true; renderCanonicalBrandDetail(); };
+      if (guardBrandProfileLeave(advance)) advance();
     }
   });
 }
@@ -3224,6 +3250,12 @@ function renderGuidedBrandProfile(detail) {
 async function continueBrandProfileProject() {
   const context = projectSetupContext;
   if (!context) { closeCanonicalBrandDetail(); return; }
+  if (canonicalBrandDraftDirty()) {
+    await submitCanonicalBrandEditing({ preventDefault() {} });
+    if (canonicalBrandDraftDirty()) return;
+  }
+  if (brandProfileController?.state.dirty && !await brandProfileController.save()) return;
+  if (brandProfileController) brandProfileController.state.deferred = true;
   if (context.account !== state.user || context.generation !== state.workspaceCatalog.generation) {
     el.brandWorkspaceDetailStatus.textContent = uiText('Workspace or Brand context is no longer available.'); return;
   }
@@ -3257,7 +3289,7 @@ function patchCatalogBrandLogo(brandId,logo){
   renderWorkspaceSidebar();renderBoardBrandAssociation();
 }
 async function mutateBrandLogo(brand,action,extra,status){const generation=canonicalBrandDetail.requestId;status.textContent=action==='discover'?'Searching…':'Updating logo…';try{const response=await fetch(`/api/brands/${encodeURIComponent(brand.id)}/logo`,{method:'POST',credentials:'same-origin',headers:{Accept:'application/json','Content-Type':'application/json'},body:JSON.stringify({contract:'brand_logo_v1',action,expected_revision:brand.logo_revision||0,request_id:`logo-${Date.now().toString(36)}`,workspace_id:state.workspaceCatalog.activeWorkspaceId,...extra})});const data=await response.json().catch(()=>null);if(generation!==canonicalBrandDetail.requestId||canonicalBrandDetail.brandId!==brand.id)return;if(!response.ok){status.textContent=data?.error?.code==='STALE_UPDATE'?brandLogoCopy('stale'):data?.error?.code==='PERMISSION_DENIED'?brandLogoCopy('denied'):brandLogoCopy('failed');return;}Object.assign(brand,data.logo);patchCatalogBrandLogo(brand.id,data.logo);renderCanonicalBrandDetail();el.brandWorkspaceDetailStatus.textContent=action==='discover'?brandLogoCopy('found'):'Brand logo updated.';}catch{status.textContent=brandLogoCopy('failed');}}
-function renderBrandLogoEditor(container,brand){const section=document.createElement('section');section.className='brand-logo-editor';const preview=document.createElement('div');preview.className='brand-logo-preview';window.FunklixBrandLogo?.render(preview,brand,{label:brandLogoCopy('title')});const body=document.createElement('div');const heading=document.createElement('h3');heading.textContent=brandLogoCopy('title');const status=document.createElement('p');status.setAttribute('role','status');status.setAttribute('aria-live','polite');status.textContent=BRAND_LOGO_MUTATIONS_ENABLED?(brand.logo_url?'':brandLogoCopy('empty')):brandLogoCopy('contained');body.append(heading,status);if(BRAND_LOGO_MUTATIONS_ENABLED&&brand.access.canEditCanonicalBrand){const actions=document.createElement('div');actions.className='brand-logo-actions';const input=document.createElement('input');input.type='file';input.className='brand-logo-file';input.accept='image/png,image/jpeg,image/webp,image/gif';input.id=`brand-logo-file-${brand.id}`;const upload=document.createElement('label');upload.className='fk-btn fk-btn-primary';upload.htmlFor=input.id;upload.tabIndex=0;upload.textContent=brand.logo_url?brandLogoCopy('change'):brandLogoCopy('upload');upload.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();input.click();}});input.addEventListener('change',()=>{const file=input.files?.[0];if(!file)return;if(!['image/png','image/jpeg','image/webp','image/gif'].includes(file.type)){status.textContent=brandLogoCopy('unsupported');return;}if(file.size>2*1024*1024){status.textContent=brandLogoCopy('large');return;}const reader=new FileReader();reader.onload=()=>mutateBrandLogo(brand,'upload',{mime_type:file.type,image_base64:String(reader.result).split(',')[1]},status);reader.readAsDataURL(file);});actions.append(input,upload);const website=brand.brand_core?.brandAssets?.domain||brand.brand_core?.website||brand.brand_core?.domain;if(website){const find=document.createElement('button');find.type='button';find.className='fk-btn fk-btn-secondary';find.textContent=brandLogoCopy('find');find.addEventListener('click',()=>mutateBrandLogo(brand,'discover',{website},status));actions.append(find);}if(brand.logo_url){const remove=document.createElement('button');remove.type='button';remove.className='fk-btn fk-btn-ghost';remove.textContent=brandLogoCopy('remove');remove.addEventListener('click',()=>{if(window.confirm(brandLogoCopy('confirm')))mutateBrandLogo(brand,'remove',{},status);});actions.append(remove);}body.append(actions);}section.append(preview,body);container.append(section);}
+function renderBrandLogoEditor(container,brand){const section=document.createElement('section');section.className='brand-logo-editor';const preview=document.createElement('div');preview.className='brand-logo-preview';window.FunklixBrandLogo?.render(preview,brand,{label:brandLogoCopy('title')});const body=document.createElement('div');const heading=document.createElement('h3');heading.textContent=brandLogoCopy('title');const status=document.createElement('p');status.setAttribute('role','status');status.setAttribute('aria-live','polite');status.textContent=BRAND_LOGO_MUTATIONS_ENABLED?(brand.logo_url?'':brandLogoCopy('empty')):brandLogoCopy('contained');body.append(heading,status);if(BRAND_LOGO_MUTATIONS_ENABLED&&brand.access.canEditCanonicalBrand){const actions=document.createElement('div');actions.className='brand-logo-actions';const input=document.createElement('input');input.type='file';input.className='brand-logo-file';input.accept='image/png,image/jpeg,image/webp,image/gif';input.id=`brand-logo-file-${brand.id}`;const upload=document.createElement('label');upload.className='fk-btn fk-btn-primary';upload.htmlFor=input.id;upload.tabIndex=0;upload.textContent=brand.logo_url?brandLogoCopy('change'):brandLogoCopy('upload');upload.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();input.click();}});input.addEventListener('change',()=>{const file=input.files?.[0];if(!file)return;if(!['image/png','image/jpeg','image/webp','image/gif'].includes(file.type)){status.textContent=brandLogoCopy('unsupported');return;}if(file.size>2*1024*1024){status.textContent=brandLogoCopy('large');return;}const reader=new FileReader();reader.onload=()=>mutateBrandLogo(brand,'upload',{mime_type:file.type,image_base64:String(reader.result).split(',')[1]},status);reader.readAsDataURL(file);});actions.append(input,upload);const website=brand.brand_core?.brandAssets?.domain||brand.brand_core?.website||brand.brand_core?.domain;if(website){const find=document.createElement('button');find.type='button';find.className='fk-btn fk-btn-secondary';find.textContent=brandLogoCopy('find');find.addEventListener('click',()=>mutateBrandLogo(brand,'discover',{website},status));actions.append(find);}if(brand.logo_url){const remove=document.createElement('button');remove.type='button';remove.className='fk-btn fk-btn-ghost';remove.textContent=brandLogoCopy('remove');remove.addEventListener('click',()=>{mutateBrandLogo(brand,'remove',{},status);});actions.append(remove);}body.append(actions);}section.append(preview,body);container.append(section);}
 
 async function renderBrandTeamSection(container, brand) {
   const generation = canonicalBrandDetail.requestId;
@@ -3310,7 +3342,7 @@ async function renderBrandTeamSection(container, brand) {
           const submittedRole = select.value;
           const reductions = { admin: 3, editor: 2, viewer: 1 };
           if (reductions[submittedRole] < reductions[authoritativeRole]
-            && !window.confirm(`Reduce ${member.email} from ${authoritativeRole} to ${submittedRole}? Their Brand access will be reduced immediately.`)) { select.focus(); return; }
+            && !await showStrategyConfirm(uiText("Change Brand access?"), uiText("This changes access to this Brand and its associated Boards."), uiText("Change access"))) { select.focus(); return; }
           const operationId = ++requestGeneration;
           row.dataset.pending = "true"; setControlsDisabled(row, true); rowStatus.textContent = "Updating role…";
           try {
@@ -3334,7 +3366,7 @@ async function renderBrandTeamSection(container, brand) {
             rowStatus.textContent = "Update outcome is uncertain. Reload the member list before trying again."; reload.focus();
           }
         });
-        remove.addEventListener("click", async () => { if (!window.confirm(`Remove ${member.email} from this Brand and its associated Boards?`)) { remove.focus(); return; } remove.disabled = true; await fetch(`/api/brands/${encodeURIComponent(brand.id)}/members`, { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: member.email }) }); if (current()) await load(); });
+        remove.addEventListener("click", async () => { if (!await showStrategyConfirm(uiText("Remove Brand member?"), uiText("This removes access to this Brand and its associated Boards."), uiText("Remove member"))) { remove.focus(); return; } remove.disabled = true; await fetch(`/api/brands/${encodeURIComponent(brand.id)}/members`, { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: member.email }) }); if (current()) await load(); });
         label.appendChild(select); row.append(label, update, cancel, remove);
       } else { const role = document.createElement("span"); role.textContent = authoritativeRole; row.appendChild(role); }
       row.appendChild(rowStatus); list.appendChild(row);
@@ -3361,8 +3393,33 @@ function canonicalBrandDraftDirty() {
   return el.brandWorkspaceEditName?.value !== draft.initialName || el.brandWorkspaceEditCore?.value !== draft.initialCore;
 }
 
-function confirmCanonicalBrandDiscard() {
-  return !canonicalBrandDraftDirty() || window.confirm("Discard unsaved Canonical Brand changes? Nothing will be saved.");
+function guardBrandProfileLeave(resume) {
+  if (brandProfileController?.busy() || canonicalBrandDetail.status === 'submitting') return false;
+  if (!brandProfileController?.dirty() && !canonicalBrandDraftDirty()) return true;
+  workspaceSidebarController?.close(false);
+  window.FunklixBrandProfileSetup.leaveDialog({ document, language: () => state.uiLanguage,
+    save: async () => {
+      if (brandProfileController) return brandProfileController.save();
+      await submitCanonicalBrandEditing({ preventDefault() {} });
+      return canonicalBrandDetail.saved === true && canonicalBrandDetail.status === 'ready';
+    },
+    proceed: action => {
+      if (action === 'discard') {
+        pendingBrandProfileData.delete(canonicalBrandDetail.brandId);
+        if (brandProfileController) { brandProfileController.state.file = null; brandProfileController.state.fileData = null; brandProfileController.state.candidate = null; brandProfileController.state.proposals = {}; }
+      }
+      if (brandProfileController) brandProfileController.state.deferred = true;
+      // Only an explicit Discard click or a confirmed save reaches this callback.
+      if (brandProfileController) brandProfileController.state.dirty = false;
+      canonicalBrandDetail.draft = null;
+      resume();
+    }
+  });
+  return false;
+}
+
+function confirmCanonicalBrandDiscard(resume = cancelCanonicalBrandEditing) {
+  return guardBrandProfileLeave(resume);
 }
 
 function beginCanonicalBrandEditing() {
@@ -3380,7 +3437,7 @@ function beginCanonicalBrandEditing() {
 }
 
 function cancelCanonicalBrandEditing() {
-  if (canonicalBrandDetail.status === "submitting" || !confirmCanonicalBrandDiscard()) return false;
+  if (canonicalBrandDetail.status === "submitting" || !confirmCanonicalBrandDiscard(cancelCanonicalBrandEditing)) return false;
   canonicalBrandDetail.saveController?.abort();
   canonicalBrandDetail.saveId += 1;
   canonicalBrandDetail.saveController = null;
@@ -3392,28 +3449,29 @@ function cancelCanonicalBrandEditing() {
 }
 
 function canonicalBrandSaveError(status) {
-  if (status === 401) return "Your session expired. Sign in again; the save was not confirmed.";
-  if (status === 400 || status === 422) return "The server rejected the Brand values. Review the name and Brand Core.";
-  if (status === 404 || status === 403) return "This Canonical Brand is no longer available to this account.";
-  return "The server did not confirm this save. Your draft remains available.";
+  if (status === 401) return uiText("Your session expired. Sign in again; the save was not confirmed.");
+  if (status === 400 || status === 422) return uiText("The server rejected the Brand values. Review the name and Brand Core.");
+  if (status === 404 || status === 403) return uiText("This Canonical Brand is no longer available to this account.");
+  return uiText("The server did not confirm this save. Your draft remains available.");
 }
 
 async function submitCanonicalBrandEditing(event) {
   event.preventDefault();
   const detail = canonicalBrandDetail;
   if (!["editing", "conflict", "save-error"].includes(detail.status) || !detail.draft || detail.saveController) return;
-  const selection = ephemeralBrandSwitcherSelection;
+  const account = state.user, generation = state.workspaceCatalog.generation, workspaceId = state.workspaceCatalog.activeWorkspaceId;
+  const selection = { id: detail.brandId };
   const userEmail = (state.user?.email || "").trim().toLowerCase();
-  const catalogValidated = selection && state.brandCatalog.status === "success" && state.brandCatalog.userEmail === userEmail
-    && state.brandCatalog.entries.some(({ id }) => id === selection.id);
+  const catalogValidated = state.workspaceCatalog.status === 'ready'
+    && state.workspaceCatalog.value?.workspaces.find(w => w.id === state.workspaceCatalog.activeWorkspaceId)?.brands.some(b => b.id === detail.brandId);
   if (!catalogValidated || selection.id !== detail.brandId || detail.brand?.id !== detail.brandId || detail.userEmail !== userEmail || !el.brandWorkspaceDetail?.open) return;
   const name = el.brandWorkspaceEditName.value.trim();
   let brandCore;
   try { brandCore = JSON.parse(el.brandWorkspaceEditCore.value); } catch (_error) {
-    el.brandWorkspaceEditFeedback.textContent = "Brand Core must be valid JSON."; return;
+    el.brandWorkspaceEditFeedback.textContent = uiText("Brand Core must be valid JSON."); return;
   }
-  if (!name || name.length > 160) { el.brandWorkspaceEditFeedback.textContent = "Name must be between 1 and 160 characters."; return; }
-  if (!brandCore || typeof brandCore !== "object" || Array.isArray(brandCore)) { el.brandWorkspaceEditFeedback.textContent = "Brand Core must be a JSON object, not an array or primitive."; return; }
+  if (!name || name.length > 160) { el.brandWorkspaceEditFeedback.textContent = uiText("Name must be between 1 and 160 characters."); return; }
+  if (!brandCore || typeof brandCore !== "object" || Array.isArray(brandCore)) { el.brandWorkspaceEditFeedback.textContent = uiText("Brand Core must be a JSON object, not an array or primitive."); return; }
   const expectedRevision = detail.draft.revision + 1;
   const saveId = detail.saveId + 1;
   const controller = new AbortController();
@@ -3424,41 +3482,51 @@ async function submitCanonicalBrandEditing(event) {
       method: "PUT", headers: { Accept: "application/json", "Content-Type": "application/json" },
       body: JSON.stringify({ name, brand_core: brandCore, revision: detail.draft.revision }), signal: controller.signal
     });
-    const stillCurrent = canonicalBrandDetail === detail && detail.saveId === saveId && detail.saveController === controller
+    const stillCurrent = () => canonicalBrandDetail === detail && detail.saveId === saveId && detail.saveController === controller
       && detail.brandId === selection.id && detail.userEmail === (state.user?.email || "").trim().toLowerCase()
-      && ephemeralBrandSwitcherSelection?.id === selection.id && el.brandWorkspaceDetail.open;
-    if (!stillCurrent) return;
-    detail.saveController = null;
+      && state.user === account && state.workspaceCatalog.generation === generation && state.workspaceCatalog.activeWorkspaceId === workspaceId
+      && state.workspaceCatalog.status === 'ready' && el.brandWorkspaceDetail.open;
+    if (!stillCurrent()) return;
+    if (!response.ok) { detail.saveController = null; }
     if (response.status === 409) { detail.status = "conflict"; renderCanonicalBrandDetail(); return; }
     if (!response.ok) { detail.status = "save-error"; el.brandWorkspaceEditFeedback.textContent = canonicalBrandSaveError(response.status); renderCanonicalBrandDetail(); return; }
     let brand = null;
     try { brand = await response.json(); } catch (_error) { /* malformed below */ }
+    if (!stillCurrent()) return;
+    detail.saveController = null;
     if (detail.saveId !== saveId || !isCanonicalBrandDetail(brand, detail.brandId) || brand.revision !== expectedRevision
       || brand.name !== name || JSON.stringify(canonicalJson(brand.brand_core)) !== JSON.stringify(canonicalJson(brandCore))) {
-      detail.status = "save-error"; el.brandWorkspaceEditFeedback.textContent = "The server response could not be verified. Your draft is retained."; renderCanonicalBrandDetail(); return;
+      detail.status = "save-error"; el.brandWorkspaceEditFeedback.textContent = uiText("The server response could not be verified. Your draft is retained."); renderCanonicalBrandDetail(); return;
     }
-    detail.brand = (({ id, name: confirmedName, brand_core, revision, created_at, updated_at, access, logo_url, logo_revision, logo_source }) => ({ id, name: confirmedName, brand_core, revision, created_at, updated_at, access, logo_url, logo_revision, logo_source }))(brand);
-    const entryIndex = state.brandCatalog.entries.findIndex(({ id }) => id === brand.id);
-    if (entryIndex >= 0) state.brandCatalog.entries.splice(entryIndex, 1, { ...state.brandCatalog.entries[entryIndex], name: brand.name, revision: brand.revision, updated_at: brand.updated_at });
-    if (ephemeralBrandSwitcherSelection?.id === brand.id) ephemeralBrandSwitcherSelection = { ...ephemeralBrandSwitcherSelection, name: brand.name };
-    detail.draft = null; detail.status = "ready"; detail.saved = true;
-    renderEphemeralBrandSwitcherSelection(); renderBrandCatalog(); renderCanonicalBrandDetail();
-    el.brandWorkspaceEditOpen?.focus();
+    detail.brand = brand; detail.draft = null; detail.status = "ready"; detail.saved = true;
+    try { reconcileConfirmedBrand(brand); renderEphemeralBrandSwitcherSelection(); renderBrandCatalog(); renderCanonicalBrandDetail(); el.brandWorkspaceEditOpen?.focus(); }
+    catch { el.brandWorkspaceDetailStatus.textContent = uiText('Brand Profile saved. Refresh the view if the update is not visible everywhere yet.'); }
+
   } catch (error) {
     if (error?.name === "AbortError" || detail.saveId !== saveId) return;
     detail.saveController = null; detail.status = "save-error";
-    el.brandWorkspaceEditFeedback.textContent = "The save outcome could not be confirmed. Reload the authoritative Brand before assuming whether it was applied.";
+    el.brandWorkspaceEditFeedback.textContent = uiText("The save outcome could not be confirmed. Reload the authoritative Brand before assuming whether it was applied.");
     renderCanonicalBrandDetail();
+  } finally {
+    if (canonicalBrandDetail === detail && detail.saveController === controller) {
+      detail.saveController = null;
+      if (detail.status === 'submitting') {
+        detail.status = 'save-error';
+        if (state.user === account) {
+          el.brandWorkspaceEditFeedback.textContent = uiText('Workspace or Brand context is no longer available.');
+          renderCanonicalBrandDetail();
+        }
+      }
+    }
   }
 }
 
-function closeCanonicalBrandDetail({ restoreFocus = true, navigate = true } = {}) {
+function closeCanonicalBrandDetail({ restoreFocus = true, navigate = true, resume = null } = {}) {
   const previous = canonicalBrandDetail;
-  if (brandProfileController?.busy()) return false;
-  if (brandProfileController?.dirty() && !window.confirm(uiText('Discard unsaved Brand Profile changes?'))) return false;
-  if (["editing", "submitting", "conflict", "save-error"].includes(previous.status) && !confirmCanonicalBrandDiscard()) return false;
+  if (!guardBrandProfileLeave(resume || (() => closeCanonicalBrandDetail({ restoreFocus, navigate })))) return false;
   previous.controller?.abort();
   previous.saveController?.abort();
+  retainPendingBrandProfile();
   brandProfileController?.invalidate(); brandProfileController = null; brandProfileAdvanced = false;
   if (!projectSetupContext?.pending) projectSetupContext = null;
   canonicalBrandDetail = { status: "closed", requestId: previous.requestId + 1, saveId: previous.saveId + 1, brandId: "", userEmail: "", brand: null, draft: null, controller: null, saveController: null, returnFocus: null };
@@ -3573,7 +3641,7 @@ function renderBrandProfileEntryState(detail) {
 
 function openRegularBrandProfile() {
   const entry = resolveRegularBrandProfile();
-  if (!closeCanonicalBrandDetail({ restoreFocus: false, navigate: false })) return;
+  if (!closeCanonicalBrandDetail({ restoreFocus: false, navigate: false, resume: openRegularBrandProfile })) return;
   brandProfilePage = { returnView: state.activeView === 'brand-profile' ? 'home' : state.activeView };
   canonicalBrandDetail.returnFocus = el.brandCoreButton;
   canonicalBrandDetail.userEmail = (state.user?.email || '').trim().toLowerCase();
@@ -3595,7 +3663,7 @@ function openCanonicalBrandDetail() { openRegularBrandProfile(); }
 
 function openCampaignBrandSnapshot() {
   if (!state.currentBoardId || !state.boardAccess?.canViewBoardBrandCore || state.publicBoardToken) return;
-  if (!closeCanonicalBrandDetail({ restoreFocus: false, navigate: false })) return;
+  if (!closeCanonicalBrandDetail({ restoreFocus: false, navigate: false, resume: openCampaignBrandSnapshot })) return;
   setAppMode('brand');
   document.getElementById('brand-workspace-title')?.focus();
 }
@@ -3788,6 +3856,7 @@ async function submitBrandDeletion(event) {
   event.preventDefault();
   if (brandDeletion.status !== "confirming") return;
   const brand = brandDeletion.brand;
+  const account = state.user, generation = state.workspaceCatalog.generation;
   const confirmationName = el.brandDeleteConfirmation?.value || "";
   if (confirmationName !== brand.name) {
     if (el.brandDeleteFeedback) el.brandDeleteFeedback.textContent = uiText("Enter the exact Brand name to continue.");
@@ -3810,17 +3879,30 @@ async function submitBrandDeletion(event) {
       if (el.brandDeleteFeedback) el.brandDeleteFeedback.textContent = uiText("The Brand could not be deleted. It remains available; try again.");
       return;
     }
-    state.brandCatalog.entries = state.brandCatalog.entries.filter(({ id }) => id !== brand.id);
-    if (ephemeralBrandSwitcherSelection?.id === brand.id) {
-      clearEphemeralBrandSwitcherSelection({ persist: true });
-    }
-    if (state.boardBrandAssociation.brandId === brand.id) state.boardBrandAssociation.brandId = null;
     brandDeletion.status = "complete";
     closeBrandDeletion({ restoreFocus: false });
-    renderBrandCatalog();
-    renderBoardBrandAssociation();
-    await loadCanonicalBrandCatalog({ force: true });
-    setSaveStatus(uiFormat('Workspace/Brand “{name}” was deleted. Boards remain available.', { name: brand.name }));
+    if (account !== state.user || generation !== state.workspaceCatalog.generation) return;
+    try {
+      const catalog = state.workspaceCatalog.value;
+      state.workspaceCatalog.value = Object.freeze({ ...catalog, workspaces: Object.freeze(catalog.workspaces.map(w => Object.freeze({ ...w,
+        brands: Object.freeze(w.brands.filter(b => b.id !== brand.id)),
+        boards: Object.freeze(w.boards.map(b => b.brand_id === brand.id ? Object.freeze({ ...b, brand_id: null }) : b)) }))) });
+      state.brandCatalog.entries = state.brandCatalog.entries.filter(b => b.id !== brand.id);
+      state.boardsLibrary = state.boardsLibrary.map(b => b.brand_id === brand.id ? { ...b, brand_id: null } : b);
+      if (state.boardBrandAssociation.brandId === brand.id) state.boardBrandAssociation = { ...state.boardBrandAssociation, brandId: null };
+      sidebarProfileCache.delete(brand.id); pendingBrandProfileData.delete(brand.id);
+      if (canonicalBrandDetail.brandId === brand.id) {
+        if (brandProfileController) { Object.assign(brandProfileController.state, { dirty: false, deferred: true, file: null, fileData: null, candidate: null, proposals: {} }); }
+        canonicalBrandDetail.draft = null; closeCanonicalBrandDetail({ restoreFocus: false });
+      }
+      const remaining = state.workspaceCatalog.value.workspaces.find(w => w.id === state.workspaceCatalog.activeWorkspaceId)?.brands || [];
+      if (state.session.brandId === brand.id) state.session.brandId = remaining.length === 1 ? remaining[0].id : null;
+      if (ephemeralBrandSwitcherSelection?.id === brand.id) { ephemeralBrandSwitcherSelection = null; void removeBrandSwitcherPreference((state.user?.email || '').trim().toLowerCase()); }
+      projectDialogController?.removeBrand?.(brand.id);
+      renderBrandCatalog(); renderBoardBrandAssociation(); renderWorkspaceSidebar(); renderBoardsLibrary();
+      setSaveStatus(uiFormat('Workspace/Brand “{name}” was deleted. Boards remain available.', { name: brand.name }));
+    } catch { setSaveStatus(uiText('Brand deleted. Refresh the view if the update is not visible everywhere yet.')); }
+
   } catch (_error) {
     brandDeletion.status = "confirming";
     setBrandDeletionPending(false);
@@ -4690,6 +4772,8 @@ function renderWorkspaceSidebar() {
 }
 
 async function selectSessionWorkspace(workspaceId) {
+  if (!guardBrandProfileLeave(() => selectSessionWorkspace(workspaceId))) return false;
+  if (!closeCanonicalBrandDetail({ restoreFocus: false })) return false;
   const catalog = state.workspaceCatalog.value;
   const target = catalog?.workspaces?.find((item) => item.id === workspaceId);
   if (!target || state.workspaceCatalog.status !== "ready") return false;
@@ -4712,16 +4796,49 @@ async function selectSessionWorkspace(workspaceId) {
 }
 
 function selectSessionBrand(brandId) {
+  if (!guardBrandProfileLeave(() => selectSessionBrand(brandId))) return false;
   const selectedWorkspace = state.workspaceCatalog.value?.workspaces?.find((item) => item.id === state.workspaceCatalog.activeWorkspaceId);
   const selected = selectedWorkspace?.brands.find((item) => item.id === brandId);
   if (!selected || (state.currentBoardId || getBoardIdFromPath())) return false;
+  const reopen = !!el.brandWorkspaceDetail?.open;
+  if (!closeCanonicalBrandDetail({ restoreFocus: false, navigate: !reopen })) return false;
   state.session.brandId = selected.id;
   ephemeralBrandSwitcherSelection = { id: selected.id, name: selected.name, restored: false };
   renderWorkspaceSidebar(); renderBoardBrandAssociation(); handleWorkspaceBrandSelectionChange();
+  if (reopen) openRegularBrandProfile();
   return true;
 }
 
+async function createSidebarBrand(input) {
+  const account = state.user, generation = state.workspaceCatalog.generation;
+  const workspace = state.workspaceCatalog.value?.workspaces.find(w => w.id === input.workspace_id);
+  if (!account || state.workspaceCatalog.status !== 'ready' || workspace?.id !== state.workspaceCatalog.activeWorkspaceId || !['owner', 'admin'].includes(workspace.role)) throw { code: 'PERMISSION_DENIED' };
+  const response = await fetch('/api/brands', { method: 'POST', credentials: 'same-origin', headers: { Accept: 'application/json', 'Content-Type': 'application/json' }, body: JSON.stringify(input) });
+  const outcome = await response.json().catch(() => null);
+  if (state.user !== account || state.workspaceCatalog.generation !== generation || state.workspaceCatalog.activeWorkspaceId !== workspace.id || state.workspaceCatalog.status !== 'ready') throw { code: 'STALE_OPERATION' };
+  if (!response.ok) throw { code: outcome?.code || 'CREATE_FAILED' };
+  const brand = outcome?.brand;
+  if (outcome.contract !== 'brand_creation_v1' || outcome.ok !== true || typeof outcome.created !== 'boolean' || !isCanonicalBrandDetail(brand, input.id) || brand.workspace_id !== workspace.id || brand.role !== 'owner' || brand.access.role !== 'owner') throw { code: 'RESPONSE_INVALID' };
+  try {
+    const catalog = state.workspaceCatalog.value;
+    state.workspaceCatalog.value = Object.freeze({ ...catalog, workspaces: Object.freeze(catalog.workspaces.map(w => w.id === workspace.id ? Object.freeze({ ...w,
+    brands: Object.freeze([...w.brands.filter(b => b.id !== brand.id), Object.freeze({ id: brand.id, workspace_id: workspace.id, name: brand.name, revision: brand.revision, role: brand.role, logo_url: brand.logo_url, logo_revision: brand.logo_revision })]) }) : w)) });
+    state.brandCatalog.entries = [...state.brandCatalog.entries.filter(b => b.id !== brand.id), { id: brand.id, name: brand.name, revision: brand.revision, role: brand.role, created_at: brand.created_at, updated_at: brand.updated_at, logo_url: brand.logo_url, logo_revision: brand.logo_revision }];
+    state.currentBoardId = null; state.session.boardId = null; history.replaceState({}, '', '/');
+    state.session.brandId = brand.id; ephemeralBrandSwitcherSelection = { id: brand.id, name: brand.name, restored: false };
+    if (!closeCanonicalBrandDetail({ restoreFocus: false, navigate: false })) throw { code: 'LOCAL_PROJECTION_FAILED' };
+    brandProfilePage = { returnView: 'home' };
+    canonicalBrandDetail = { ...canonicalBrandDetail, status: 'ready', brandId: brand.id, brand, userEmail: (account.email || '').trim().toLowerCase(), returnFocus: document.getElementById('workspace-brand-manage') };
+    el.workspaceWrap.append(el.brandWorkspaceDetail); el.brandWorkspaceDetail.classList.add('profile-page-mode');
+    setActiveView('brand-profile'); el.brandWorkspaceDetail.show();
+    renderCanonicalBrandDetail(); renderWorkspaceSidebar();
+    el.brandWorkspaceDetailTitle?.focus();
+  } catch { setSaveStatus(uiText('Brand created. Refresh the view if the update is not visible everywhere yet.')); }
+  return brand;
+}
+
 function clearWorkspaceCatalog() {
+  pendingBrandProfileData.clear();
   showProjectLaunchFeedback(null);
   invalidateBoardCreationContext();
   const generation = state.workspaceCatalog.generation + 1;
@@ -8893,6 +9010,7 @@ async function saveBoardToServer(trigger = "manual") {
 }
 
 async function loadBoardFromUrlIfPresent(requestedBoardId = null) {
+  if (!projectSetupContext?.pending && !guardBrandProfileLeave(() => loadBoardFromUrlIfPresent(requestedBoardId))) return false;
   closePostitEmojiPicker({ reason: "board-load-start" });
   const boardId = requestedBoardId || getBoardIdFromPath() || state.currentBoardId;
   if (!boardId) return false;
@@ -17365,7 +17483,7 @@ function closeInspector({ restoreFocus = true } = {}) {
 }
 
 function setActiveView(view) {
-  if (view !== 'brand-profile' && brandProfilePage && !closeCanonicalBrandDetail({ restoreFocus: false, navigate: false })) return;
+  if (view !== 'brand-profile' && el.brandWorkspaceDetail?.open && !closeCanonicalBrandDetail({ restoreFocus: false, navigate: false, resume: () => setActiveView(view) })) return;
   globalThis.FunklixWorkspaceSidebarController?.close(false);
   state.activeView = view;
   const isHome = view === "home";
@@ -17817,6 +17935,9 @@ workspaceSidebarController = window.FunklixWorkspaceSidebar?.create({
   document, language: () => state.uiLanguage,
   onWorkspace: selectSessionWorkspace,
   onBrand: selectSessionBrand,
+  onBeforeBrandAction: action => { if (guardBrandProfileLeave(action)) action(); },
+  onCreateBrand: createSidebarBrand,
+  onDeleteBrand: (brand, origin) => openBrandDeletion(brand, origin),
   onRename: renameSessionWorkspace,
   onCreate: createFirstSessionWorkspace,
   onRetry: retryWorkspaceCatalog
@@ -19087,12 +19208,13 @@ function hydrateCreatedProject(outcome) {
 
 function renderProjectSetupNotice() {
   document.querySelector('[data-project-setup]')?.remove();
+  if (!brandProfileAdvanced && brandProfileController) return;
   if (!projectSetupContext || projectSetupContext.account !== state.user || !el.brandWorkspaceDetail?.open) return;
   const t = window.FunklixProjectDialog.copy(state.uiLanguage);
   const notice = document.createElement("section"); notice.className = "project-setup-notice"; notice.dataset.projectSetup = "true";
   const text = document.createElement("p"); text.textContent = t.setup;
   const status = document.createElement("p"); status.setAttribute("aria-live", "polite");
-  const button = document.createElement("button"); button.type = "button"; button.textContent = t.toProject;
+  const button = document.createElement("button"); button.type = "button"; button.textContent = uiText('Save Brand Profile and continue');
   button.addEventListener("click", async () => {
     if (window.FunklixBrandProfileSetup) { await continueBrandProfileProject(); return; }
     const context = projectSetupContext;
@@ -19231,6 +19353,7 @@ function showProjectLaunchFeedback(kind) {
 }
 
 async function createNewBoardFlow() {
+  if (!guardBrandProfileLeave(createNewBoardFlow)) return;
   if (!state.user?.email) { showProjectLaunchFeedback("authentication"); return; }
   if (projectDialogController) { projectDialogController.dialog?.focus(); return; }
   if (state.boardCreation.status === "pending") { showProjectLaunchFeedback("pending"); return; }

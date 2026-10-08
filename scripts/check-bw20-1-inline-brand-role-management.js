@@ -30,7 +30,7 @@ assert.match(browser, /select\.addEventListener\("change"/);
 assert.match(browser, /update\.addEventListener\("click"/);
 assert.match(browser, /JSON\.stringify\(\{ email: member\.email, role: submittedRole \}\)/);
 assert.match(browser, /row\.dataset\.pending === "true"/);
-assert.match(browser, /reductions\[submittedRole\] < reductions\[authoritativeRole\][^]*window\.confirm/);
+assert.match(browser, /reductions\[submittedRole\] < reductions\[authoritativeRole\][^]*await showStrategyConfirm/);
 
 // Owner receives all three choices; Admin receives Viewer/Editor and neither Admin nor self controls.
 assert.match(browser, /\["viewer", "editor", \.\.\.\(brand\.access\.canManageBrandAdmins \? \["admin"\] : \[\]\)\]/);
