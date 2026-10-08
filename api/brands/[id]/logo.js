@@ -17,12 +17,13 @@ module.exports=async function handler(req,res){
   const user=getSessionUser(req);if(!user?.email)return failure(res,401,'AUTHENTICATION_REQUIRED');
   const columns=`id, workspace_id, ${LOGO_COLUMNS}`;
   if(req.method==='GET'){
-    const {brand,access}=await getBrandAccess(brandId,user,{columns});if(!brand||!access.canReadBrand)return failure(res,404,'NOT_FOUND');if(!brand.logo_object_path)return failure(res,404,'NOT_FOUND');
+    let brand,access;try{({brand,access}=await getBrandAccess(brandId,user,{columns}));}catch{return failure(res,503,'DATABASE_UNAVAILABLE');}if(!brand||!access.canReadBrand)return failure(res,404,'NOT_FOUND');if(!brand.logo_object_path)return failure(res,404,'NOT_FOUND');
     try{const bytes=await logoStorage.read(brand.logo_object_path);validateImageBuffer(bytes,brand.logo_mime_type);res.setHeader('Content-Type',brand.logo_mime_type);res.setHeader('Cache-Control','private, max-age=31536000, immutable');res.setHeader('X-Content-Type-Options','nosniff');return res.status(200).send(bytes);}catch{return failure(res,502,'ASSET_UNAVAILABLE');}
   }
   if(req.method!=='POST'){res.setHeader('Allow','GET, POST');return failure(res,405,'METHOD_NOT_ALLOWED');}
   const input=parse(req.body);if(!input)return failure(res,422,'INVALID_REQUEST');
-  const client=await pool.connect();let pendingPath=null,oldPath=null;
+  let client,pendingPath=null,oldPath=null;
+  try{client=await pool.connect();}catch{return failure(res,503,'DATABASE_UNAVAILABLE');}
   try{
     await client.query('BEGIN');
     const result=await client.query(`SELECT b.id,b.workspace_id,b.logo_object_path,b.logo_source,b.logo_revision,CASE WHEN lower(b.owner_email)=$2 THEN 'owner' ELSE bm.role END role FROM brands b LEFT JOIN brand_members bm ON bm.brand_id=b.id AND bm.email=$2 WHERE b.id=$1 FOR UPDATE`,[brandId,user.email.trim().toLowerCase()]);const row=result.rows[0];
@@ -39,6 +40,6 @@ module.exports=async function handler(req,res){
       pendingPath=await logoStorage.upload({brandId,revision:Number(row.logo_revision)+1,buffer,mimeType});
       await client.query(`UPDATE brands SET logo_object_path=$2,logo_mime_type=$3,logo_source=$4,logo_source_host=$5,logo_updated_at=now(),logo_revision=logo_revision+1 WHERE id=$1`,[brandId,pendingPath,mimeType,source,sourceHost]);
     }
-    const saved=(await client.query(`SELECT id,${LOGO_COLUMNS} FROM brands WHERE id=$1`,[brandId])).rows[0];await client.query('COMMIT');if(oldPath&&oldPath!==pendingPath)void logoStorage.remove(oldPath);return send(res,200,{contract:CONTRACT,request_id:input.request_id,logo:{...projectLogo(saved),source:saved.logo_source,updated_at:saved.logo_updated_at}});
-  }catch(error){await client.query('ROLLBACK').catch(()=>{});if(pendingPath)await logoStorage.remove(pendingPath);const code=['unsupported_content_type','invalid_dimensions'].includes(error?.code)?'UNSUPPORTED_FILE':'UPDATE_FAILED';return failure(res,code==='UNSUPPORTED_FILE'?415:500,code);}finally{client.release();}
+    const saved=(await client.query(`SELECT id,${LOGO_COLUMNS} FROM brands WHERE id=$1`,[brandId])).rows[0];await client.query('COMMIT');if(oldPath&&oldPath!==pendingPath)void logoStorage.remove(oldPath).catch(()=>{});return send(res,200,{contract:CONTRACT,request_id:input.request_id,logo:{...projectLogo(saved),source:saved.logo_source,updated_at:saved.logo_updated_at}});
+  }catch(error){await client.query('ROLLBACK').catch(()=>{});if(pendingPath)await logoStorage.remove(pendingPath);const code=error?.code==='STORAGE_UNAVAILABLE'?'STORAGE_UNAVAILABLE':['unsupported_content_type','invalid_dimensions','invalid_image_signature','unsupported_image_type','invalid_image','empty_response'].includes(error?.code)?'UNSUPPORTED_FILE':'UPDATE_FAILED';return failure(res,code==='UNSUPPORTED_FILE'?415:code==='STORAGE_UNAVAILABLE'?503:500,code);}finally{client.release();}
 };

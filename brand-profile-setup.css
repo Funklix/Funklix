@@ -38,3 +38,12 @@
 .brand-workspace-detail.profile-page-mode:not([open]){display:none}
 .brand-workspace-detail.profile-page-mode .brand-workspace-detail-content{overflow:visible}
 @media(max-width:480px){.brand-workspace-detail.profile-page-mode[open]{padding:12px}}
+/* BW-36.13R5: internal leave decisions preserve the profile until confirmation. */
+.brand-leave-dialog{box-sizing:border-box;width:min(460px,calc(100vw - 24px));max-height:calc(100dvh - 24px);margin:auto;padding:var(--fk-space-5,24px);overflow:auto;border:1px solid var(--fk-color-border);border-radius:var(--fk-radius-md);background:var(--fk-color-surface-elevated);color:var(--fk-color-text);box-shadow:var(--fk-shadow-md);font:inherit}
+.brand-leave-dialog::backdrop{background:rgb(0 0 0 / .45)}
+.brand-leave-dialog h2{margin:0 0 16px;color:var(--fk-color-heading);font-size:1.125rem}
+.brand-leave-actions{display:flex;flex-wrap:wrap;gap:8px}.brand-leave-actions button{min-width:44px;min-height:44px;white-space:normal}.brand-leave-discard{color:var(--fk-color-danger,#b42318)}
+.brand-leave-dialog :focus-visible{outline:2px solid var(--fk-color-primary);outline-offset:3px}
+@media(max-width:480px){.brand-leave-actions{display:grid;grid-template-columns:1fr}.brand-leave-dialog{padding:16px}}
+@media(forced-colors:active){.brand-leave-dialog,.brand-leave-actions button{border:1px solid CanvasText}.brand-leave-dialog :focus-visible{outline-color:Highlight}.brand-leave-discard{color:LinkText}}
+@media(prefers-reduced-motion:reduce){.brand-leave-dialog,.brand-leave-dialog *{animation:none!important;transition:none!important}}

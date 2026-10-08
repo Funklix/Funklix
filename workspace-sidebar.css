@@ -18,3 +18,9 @@
 @media(max-width:1300px) and (min-width:768px){.workspace-context-identity-row{grid-template-columns:1fr}.workspace-context-manage:not([hidden]){display:grid;justify-self:center}}
 @media(max-width:767px){.sidebar>.workspace-context:has(.workspace-context-manage:not([hidden])){width:88px}.workspace-context .workspace-context-manage:not([hidden]){display:grid;background:var(--fk-color-surface-elevated);border-color:var(--fk-color-border)}.workspace-context-identity-row{grid-template-columns:44px 44px}}
 @media(max-width:767px){.sidebar>#workspace-context:not([hidden]){display:block}}
+/* Brand actions remain reachable in the existing compact mobile context. */
+@media(max-width:767px){.sidebar>.workspace-context:has(#workspace-brand-manage:not([hidden])){display:flex;align-items:center;width:auto;max-width:calc(100vw - 16px);gap:4px}.workspace-context:has(#workspace-brand-manage:not([hidden])) .workspace-context-group:nth-child(2){display:block}.workspace-context:has(#workspace-brand-manage:not([hidden])) .workspace-context-group:nth-child(2) .workspace-context-identity-row{display:block}.workspace-context:has(#workspace-brand-manage:not([hidden])) #workspace-brand-trigger{display:none}.workspace-context #workspace-brand-manage:not([hidden]){display:grid;background:var(--fk-color-surface-elevated);border-color:var(--fk-color-border)}}
+#brand-create-dialog .workspace-rename-actions{display:flex;flex-wrap:wrap}#brand-create-dialog .workspace-rename-actions button{flex:1;white-space:normal;min-width:44px}
+.sidebar .workspace-context .workspace-context-group:has(#workspace-brand-manage:not([hidden])){display:grid}
+.app-shell.sidebar-collapsed #workspace-brand-trigger .workspace-context-name{display:none}
+@media(max-width:1300px) and (min-width:768px){#workspace-brand-trigger .workspace-context-name{display:none}}

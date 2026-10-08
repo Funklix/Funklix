@@ -33,6 +33,7 @@ assert.equal(profile.resolveEntry({ ...base, catalog: { workspaces: [] } }).kind
     const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
     page.setDefaultTimeout(10000);
     const errors = [], requests = [], expectedTransportErrors = [];
+    page.on('dialog', dialog => { errors.push(`Unexpected native dialog: ${dialog.type()}`); void dialog.dismiss(); });
     page.on('pageerror', e => errors.push(e.message));
     page.on('console', m => { if (m.type() === 'error') {
       if (m.location().url === `http://localhost/api/brands/${B}/logo` && m.text().includes('status of 500')) expectedTransportErrors.push(m.text());
@@ -162,10 +163,12 @@ assert.equal(profile.resolveEntry({ ...base, catalog: { workspaces: [] } }).kind
     await visible('[data-profile-key="Change logo"]'); await visible('[data-profile-key="Remove logo"]');
     await page.locator('[data-profile-key="Analyze website"]').click();
     await page.waitForFunction(() => !!brandProfileController.state.candidate); await visible('[data-profile-key="Use this logo"]');
-    page.once('dialog', d => d.accept()); await page.locator('[data-profile-key="Remove logo"]').click();
+    await page.locator('[data-profile-key="Remove logo"]').click();
     await page.waitForFunction(() => brandProfileController.state.message === 'Logo removed');
     await visible('[data-profile-key="Campaign Brand Snapshot"]');
-    await page.locator('[data-profile-key="Campaign Brand Snapshot"]').click(); await visible('#brand-core-workspace');
+    await page.locator('[data-profile-key="Campaign Brand Snapshot"]').click();
+    await visible('#brand-leave-dialog');
+    await page.getByRole('button', { name: 'Discard changes', exact: true }).click(); await visible('#brand-core-workspace');
     await page.evaluate(() => { state.brandCoreSelectedKey = 'brandAssets'; renderBrandCoreEditor(); });
     assert.equal(await page.locator('#brand-core-workspace input[type=file]').count(), 0);
     assert(!(await page.locator('#brand-core-workspace').innerText()).includes('temporarily unavailable'));

@@ -32,7 +32,7 @@
       else if(root.FunklixBrandLogo)root.FunklixBrandLogo.render(logo,brand);
       else logo.textContent=Array.from(brand.name.trim()).slice(0,2).join('').toLocaleUpperCase();
       const label=node('span',isNew?t.newBrand:brand.name,button);label.className='project-brand-label';
-      if(!isNew)brandViews.set(brand.id,{brand,logo,label});
+      if(!isNew)brandViews.set(brand.id,{brand,logo,label,radio:button});
       const selection=node('small',localized('Choose',language),button);selection.className='project-brand-selection';
       if(button.disabled)node('small',t.readOnly,button);
       button.addEventListener('click',()=>{if(pending||command||button.disabled)return;choice=isNew?{new_name:''}:{existing_id:brand.id};radios.forEach(r=>{r.setAttribute('aria-checked',String(r===button));r.tabIndex=r===button?0:-1;const marker=r.querySelector?.('.project-brand-selection');if(marker)marker.textContent=localized(r===button?'Selected':'Choose',language);});brandLabel.hidden=brandName.hidden=websiteLabel.hidden=websiteInput.hidden=!isNew;status.textContent='';if(isNew)brandName.focus();});
@@ -72,7 +72,7 @@
       else if(!event.shiftKey&&doc.activeElement===last){event.preventDefault();firstControl?.focus();}
     });
     doc.body.append(dialog);render();dialog.showModal();projectName.focus();
-    return {dialog,reconcileBrand(id,projection){const view=brandViews.get(id);if(closed||!view)return;view.brand={...view.brand,...projection};view.label.textContent=view.brand.name;root.FunklixBrandLogo?.render(view.logo,view.brand);},invalidate(){closed=true;dialog.close();dialog.remove();onClose();}};
+    return {dialog,removeBrand(id){if(closed)return;const view=brandViews.get(id);if(!view)return;view.radio.remove();allowed.delete(view.radio);const radioIndex=radios.indexOf(view.radio);if(radioIndex>=0)radios.splice(radioIndex,1);const index=workspace.brands.findIndex(b=>b.id===id);if(index>=0)workspace={...workspace,brands:workspace.brands.filter(b=>b.id!==id)};if(choice?.existing_id===id){choice=null;command=null;}brandViews.delete(id);render();},reconcileBrand(id,projection){const view=brandViews.get(id);if(closed||!view)return;view.brand={...view.brand,...projection};view.label.textContent=view.brand.name;root.FunklixBrandLogo?.render(view.logo,view.brand);},invalidate(){closed=true;dialog.close();dialog.remove();onClose();}};
   }
   root.FunklixProjectDialog=Object.freeze({mount,copy,message});
 }(typeof globalThis!=='undefined'?globalThis:window));

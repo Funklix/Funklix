@@ -1,5 +1,7 @@
 const { getSessionUser } = require('../_auth-session');
-const { getBrandOwnerEmail } = require('../_brand-access');
+const { getBrandOwnerEmail, isBrandId } = require('../_brand-access');
+const { createWorkspaceBrand } = require('../_brand-creation');
+const { validateWorkspaceName } = require('../../workspace-name');
 const { pool, MAX_BRAND_NAME_LENGTH, ensureBrandsTable, serializeBrandSummary } = require('../_brands-storage');
 
 function validBrandCore(value) {
@@ -14,14 +16,23 @@ function validBrandName(value) {
 module.exports = async function handler(req, res) {
   if (req.method !== 'GET' && req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   if (!process.env.POSTGRES_URL) {
-    console.error('[BRAND_COLLECTION_FAILURE]', { method: req.method, error: 'POSTGRES_URL is not configured' });
-    return res.status(500).json({ error: 'Failed to persist Brand' });
+    return res.status(503).json({ ok: false, code: 'DATABASE_UNAVAILABLE' });
   }
 
   const user = getSessionUser(req);
   const ownerEmail = getBrandOwnerEmail(user);
-  if (!ownerEmail) return res.status(401).json({ error: 'Authentication required' });
-  if (req.method === 'POST') return res.status(409).json({ code: 'PROJECT_CREATION_REQUIRED', error: 'Create a project from New project in Boards to create a Brand in your workspace.' });
+  if (!ownerEmail) return res.status(401).json({ ok: false, code: 'AUTHENTICATION_REQUIRED' });
+  if (req.method === 'POST') {
+    res.setHeader('Cache-Control', 'private, no-store');
+    const body = req.body;
+    const checked = validateWorkspaceName(body?.name);
+    const name = checked.ok ? checked.name : '';
+    if (body?.contract !== 'brand_creation_v1' || !isBrandId(body.id) || !isBrandId(body.workspace_id) || !name || name.length > MAX_BRAND_NAME_LENGTH || /[\u0000-\u001f\u007f]/.test(body.name)) return res.status(422).json({ ok: false, code: 'INVALID_REQUEST' });
+    try {
+      const outcome = await createWorkspaceBrand({ db: pool, email: ownerEmail, input: { id: body.id.toLowerCase(), workspace_id: body.workspace_id.toLowerCase(), name } });
+      return res.status(outcome.created ? 201 : 200).json(outcome);
+    } catch (error) { return res.status(error.status || 503).json({ ok: false, code: error.code || 'DATABASE_UNAVAILABLE' }); }
+  }
 
   try {
     await ensureBrandsTable();
@@ -39,13 +50,8 @@ module.exports = async function handler(req, res) {
       return res.status(200).json({ brands: result.rows.map(serializeBrandSummary) });
     }
   } catch (error) {
-    console.error('[BRAND_COLLECTION_FAILURE]', {
-      method: req.method,
-      ownerEmail,
-      error: error?.message || 'unknown',
-      stack: error?.stack || null
-    });
-    return res.status(500).json({ error: 'Failed to persist Brand' });
+    console.error('[BRAND_COLLECTION_FAILURE]', { method: req.method, code: 'DATABASE_UNAVAILABLE' });
+    return res.status(503).json({ ok: false, code: 'DATABASE_UNAVAILABLE' });
   }
 };
 

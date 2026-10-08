@@ -161,7 +161,7 @@ let cookie;
     const state = { activeView: 'boards_library', user: { email }, uiLanguage: 'en', isDirty: false, boardCreation: { status: 'idle' }, workspaceCatalog: { status: 'ready', value: checked, activeWorkspaceId: A, generation: 1, identity: email, promise: null }, session: {} };
     let gets = 0, release;
     root.FunklixWorkspaceCatalog = { ...root.FunklixWorkspaceCatalog, load: () => { gets++; return new Promise(resolve => { release = resolve; }); } };
-    const context = { state, window: root, document: doc, workspaceSidebarController: sidebar, projectDialogController: null, createdProjectContext: null,
+    const context = { state, guardBrandProfileLeave: () => true, window: root, document: doc, workspaceSidebarController: sidebar, projectDialogController: null, createdProjectContext: null,
       crypto: { randomUUID: () => 'launch-1' }, projectCommandBoundary: { submit() { assert.fail('No mutation on launch'); } }, getBoardIdFromPath: () => null,
       renderWorkspaceSidebar() { sidebar.render({ signedIn: !!state.user, status: state.workspaceCatalog.status, catalog: state.workspaceCatalog.value, activeWorkspaceId: state.workspaceCatalog.activeWorkspaceId }); },
       setSaveStatus() { assert.fail('Invisible status'); }, setAuthMessage() { assert.fail('Invisible auth'); }, fetch() { assert.fail('Unexpected fetch'); } };
@@ -202,10 +202,11 @@ let cookie;
     state.activeView = 'boards_library';
     assert(fs.readFileSync('index.html', 'utf8').includes('id="project-launch-status" role="status" aria-live="polite"'));
 
-    // Every legacy Collection POST is blocked before any query/schema write.
+    // Legacy inputs stay rejected before any query/schema write; R5 adds an explicit workspace Brand contract.
     for (const handler of [boardCollection, brandCollection]) for (const body of [{}, { brand_id: BRAND_A, workspace_id: A }, { name: 'Legacy new row', canvas_json: {} }]) {
       const res = response(); await handler({ method: 'POST', body, headers: { cookie } }, res);
-      assert.equal(res.statusCode, 409); assert.equal(res.body.code, 'PROJECT_CREATION_REQUIRED'); assert(res.body.error.includes('New project'));
+      if (handler === boardCollection) { assert.equal(res.statusCode, 409); assert.equal(res.body.code, 'PROJECT_CREATION_REQUIRED'); assert(res.body.error.includes('New project')); }
+      else { assert.equal(res.statusCode, 422); assert.equal(res.body.code, 'INVALID_REQUEST'); }
     }
     // Execute the authoritative service against the existing invented transaction fixture.
     const r3 = fs.readFileSync('scripts/check-bw36-13r3-authoritative-project-creation.js', 'utf8');

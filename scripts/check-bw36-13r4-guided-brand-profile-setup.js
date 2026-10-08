@@ -190,7 +190,7 @@ async function checkDialogAndReturn() {
   const source = app.slice(app.indexOf('async function continueBrandProfileProject()'), app.indexOf('const BRAND_LOGO_MUTATIONS_ENABLED'));
   const account = {}, context = { account, generation: 1, outcome: { board: { id: D }, workspace: { id: W }, brand: { id: B } } };
   let opened = [], routes = [], fail = false;
-  const fixture = { projectSetupContext: context, state: { user: account, workspaceCatalog: { generation: 1 }, currentBoardId: D, boardBrandAssociation: { brandId: B } }, canonicalBrandDetail: { brandId: B }, el: { brandWorkspaceDetailStatus: {} }, uiText: key => key,
+  const fixture = { projectSetupContext: context, state: { user: account, workspaceCatalog: { generation: 1 }, currentBoardId: D, boardBrandAssociation: { brandId: B } }, brandProfileController: null, canonicalBrandDraftDirty: () => false, canonicalBrandDetail: { brandId: B }, el: { brandWorkspaceDetailStatus: {} }, uiText: key => key,
     loadBoardFromUrlIfPresent: async id => { opened.push(id); return !fail; }, closeCanonicalBrandDetail: () => true, history: { pushState: (_a, _b, route) => routes.push(route) }, document: { getElementById() { return null; } }, setAppMode() {}, setActiveView() {}, renderWorkspaceSidebar() {} };
   vm.createContext(fixture); vm.runInContext(source + '\nthis.run=continueBrandProfileProject;', fixture);
   await fixture.run(); assert.deepEqual(opened, [D]); assert.deepEqual(routes, [`/boards/${D}`]); assert.equal(fixture.projectSetupContext, null);
@@ -257,7 +257,7 @@ async function checkProfileUI() {
     let release; fixture = makeSession({ website: 'example.com', fetchImpl: () => new Promise(resolve => { release = resolve; }) }); const pending = fixture.session.analyze(); fixture.change(change); fixture.session.invalidate(); release(response({ suggestions, logoDiscovery: candidate })); await pending; assert.equal(fixture.session.state.candidate, null); assert.equal(fixture.session.state.fileData, null); assert.equal(fixture.session.state.website, ''); assert.equal(fixture.saves.length, 0);
   }
   fixture = makeSession({ fetchImpl: async () => response({}, 409) }); fixture.session.state.name = 'Draft'; await fixture.session.save(); assert.equal(fixture.session.state.name, 'Draft'); assert(fixture.session.state.message.includes('changed elsewhere'));
-  fixture = makeSession({ fetchImpl: async () => response({}, 403) }); await fixture.session.save(); assert.equal(fixture.session.state.readOnly, true); assert(fixture.session.state.message.includes('access'));
+  fixture = makeSession({ fetchImpl: async () => response({}, 403) }); await fixture.session.save(); assert.equal(fixture.session.state.readOnly, true); assert(fixture.session.state.message.includes('permission'));
   fixture = makeSession({ website: 'example.com', fetchImpl: async () => { throw new Error('offline'); } }); await fixture.session.analyze(); assert.equal(fixture.session.state.analysis, 'Analysis failed'); assert.equal(fixture.session.state.website, 'example.com');
   fixture = makeSession({ website: 'example.com', fetchImpl: async () => response({ suggestions: {}, logoDiscovery: {} }) }); await fixture.session.analyze(); assert.equal(fixture.session.state.analysis, 'No usable information found');
   fixture = makeSession({ brand: { ...clone(brand), access: { role: 'viewer', canEditCanonicalBrand: false } }, website: 'example.com' });

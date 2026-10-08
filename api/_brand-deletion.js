@@ -42,7 +42,7 @@ async function deleteOwnedBrand({ brandId, ownerEmail, confirmationName, request
       try { await client.query('ROLLBACK'); } catch (_rollbackError) { /* original failure is authoritative */ }
     }
     if (error instanceof BrandDeletionError) throw error;
-    console.error('[BRAND_DELETE_FAILURE]', { requestId, code: 'BRAND_DELETE_TRANSACTION_FAILED' });
+    console.error('[BRAND_DELETE_FAILURE]', { code: 'BRAND_DELETE_TRANSACTION_FAILED' });
     throw new BrandDeletionError(500, 'BRAND_DELETE_FAILED');
   } finally {
     client?.release();

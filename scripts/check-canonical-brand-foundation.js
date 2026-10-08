@@ -141,8 +141,8 @@ boardsStorage.pool.query = async (sql, params = []) => {
   }
   if (text.includes("UPDATE brands SET")) {
     const row = brands.get(params[0]);
-    if (!row || row.owner_email !== params[1] || row.revision !== params[4]) return { rowCount: 0, rows: [] };
-    Object.assign(row, { name: params[2], brand_core: JSON.parse(params[3]), revision: row.revision + 1, updated_at: now });
+    if (!row || row.revision !== params[3]) return { rowCount: 0, rows: [] };
+    Object.assign(row, { name: params[1], brand_core: JSON.parse(params[2]), revision: row.revision + 1, updated_at: now });
     return { rowCount: 1, rows: [{ ...row }] };
   }
   if (text.includes("INSERT INTO boards")) {
@@ -166,7 +166,7 @@ boardsStorage.pool.query = async (sql, params = []) => {
   throw new Error(`Unexpected query: ${text}`);
 };
 
-async function call(route, request) { const response = res(); await route(request, response); return response; }
+async function call(route, request) { const response = res(); response.setHeader = () => {}; await route(request, response); return response; }
 
 function runIsolatedProbe(source) {
   const mockPrelude = `(${installPgMock.toString()})();`;
@@ -184,8 +184,8 @@ function runIsolatedProbe(source) {
   for (const revision of [null, 0, -1, 1.5, "2"]) assert.strictEqual((await call(brandItem, req("PUT", owner, { name: "Valid", brand_core: {}, revision }, { id: brandId }))).statusCode, 400);
   for (const name of ["", " ", "x".repeat(161)]) assert.strictEqual((await call(brandItem, req("PUT", owner, { name, brand_core: {}, revision: 2 }, { id: brandId }))).statusCode, 400);
   for (const brand_core of [null, [], "text", 1, true]) assert.strictEqual((await call(brandItem, req("PUT", owner, { name: "Valid", brand_core, revision: 2 }, { id: brandId }))).statusCode, 400);
-  for (const name of ["", " ", "x".repeat(161)]) assert.strictEqual((await call(brandCollection, req("POST", owner, { name, brand_core: {} }))).statusCode, 409);
-  for (const brand_core of [null, [], "text", 1, true]) assert.strictEqual((await call(brandCollection, req("POST", owner, { name: "Valid", brand_core }))).statusCode, 409);
+  for (const name of ["", " ", "x".repeat(161)]) assert.strictEqual((await call(brandCollection, req("POST", owner, { name, brand_core: {} }))).statusCode, 422);
+  for (const brand_core of [null, [], "text", 1, true]) assert.strictEqual((await call(brandCollection, req("POST", owner, { name: "Valid", brand_core }))).statusCode, 422);
 
   // Accessible collection, item, and body-ownership behavior.
   let response = await call(brandCollection, req("GET", owner));
@@ -197,8 +197,8 @@ function runIsolatedProbe(source) {
   response = await call(brandCollection, req("GET", other));
   assert.deepStrictEqual(response.body.brands.map(({ id }) => id), [otherBrandId]);
   response = await call(brandCollection, req("POST", owner, { name: "Created", brand_core: {}, owner_email: other.email, owner_id: "forged" }));
-  assert.strictEqual(response.statusCode, 409);
-  assert.strictEqual(response.body.code, "PROJECT_CREATION_REQUIRED");
+  assert.strictEqual(response.statusCode, 422);
+  assert.strictEqual(response.body.code, "INVALID_REQUEST");
   assert(!queries.some(({ text }) => text.includes("INSERT INTO brands")));
   assert(!Object.hasOwn(response.body, "owner_email"));
 
@@ -206,7 +206,7 @@ function runIsolatedProbe(source) {
     const body = method === "PUT" ? { name: "Stolen", brand_core: {}, revision: 2 } : {};
     response = await call(brandItem, req(method, other, body, { id: brandId }));
     assert.strictEqual(response.statusCode, 404);
-    assert.deepStrictEqual(response.body, { error: "Brand not found" });
+    assert.deepStrictEqual(response.body, { ok: false, code: "BRAND_NOT_FOUND" });
   }
   // Knowing brand_id and having linked-board editor access still grants no Brand access.
   for (const method of ["GET", "PUT"]) {
@@ -231,12 +231,12 @@ function runIsolatedProbe(source) {
   console.error = (...args) => logged.push(args);
   injectedFailure = /FROM brands b/;
   response = await call(brandCollection, req("GET", owner));
-  assert.strictEqual(response.statusCode, 500); assert.deepStrictEqual(response.body, { error: "Failed to persist Brand" });
+  assert.strictEqual(response.statusCode, 503); assert.deepStrictEqual(response.body, { ok: false, code: "DATABASE_UNAVAILABLE" });
   assert(!JSON.stringify(response.body).includes("postgres secret"));
   injectedFailure = /FROM brands b/;
   response = await call(brandItem, req("GET", owner, {}, { id: brandId }));
-  assert.strictEqual(response.statusCode, 500); assert.deepStrictEqual(response.body, { error: "Failed to load Brand" });
-  assert(logged.some((entry) => JSON.stringify(entry).includes("postgres secret")));
+  assert.strictEqual(response.statusCode, 503); assert.deepStrictEqual(response.body, { ok: false, code: "DATABASE_UNAVAILABLE" });
+  assert(logged.length > 0); assert(!JSON.stringify(logged).includes("postgres secret")); assert(!JSON.stringify(logged).includes(owner.email));
   console.error = originalConsoleError;
 
   // R3R1 blocks every old creation/copy payload before any query. R3's actual
