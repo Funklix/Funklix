@@ -1,6 +1,7 @@
 'use strict';
 
 const { WORKSPACE_ROLES, normalizeWorkspaceRole } = require('./_workspace-authorization');
+const { normalizeLogoRevision } = require('./_brand-logo');
 
 const BRAND_ROLES = Object.freeze(['owner', 'admin', 'editor', 'viewer']);
 const BOARD_ROLES = Object.freeze(['owner', 'editor', 'viewer']);
@@ -24,7 +25,9 @@ function boardRole(value) {
 // Optional presentation metadata is not an authorization or relationship
 // boundary. Invalid logo metadata projects to the shared no-logo shape.
 function projectBrandLogo(row) {
-  const logoRevision = Number(row?.logo_revision ?? 0);
+  let logoRevision;
+  try { logoRevision = normalizeLogoRevision(row?.logo_revision); }
+  catch { return { logo_url: null, logo_revision: 0 }; }
   const usable = typeof row?.logo_object_path === 'string' && row.logo_object_path.length > 0
     && ['uploaded', 'discovered'].includes(row.logo_source)
     && ['image/png', 'image/jpeg', 'image/webp', 'image/gif'].includes(row.logo_mime_type)
