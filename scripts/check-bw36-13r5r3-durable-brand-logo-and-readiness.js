@@ -91,9 +91,9 @@ function readiness() {
   const pkg = require('../package.json').scripts, keys = Object.keys(pkg); assert.equal(keys.indexOf('check:bw36.13r5r3'), keys.indexOf('check:bw36.13r5r2')+1);
   console.log('R5R3 readiness: all sections empty/partial/complete/neutral, placeholders, saved assets and accepted avatars passed.');
 }
-async function browserJourney() {
+async function browserJourney(runtimeOptions) {
   let chromium; try { ({ chromium } = require('playwright-core')); } catch { ({ chromium } = require('/opt/codex/runtimes/cua/lib/node_modules/playwright-core')); }
-  const r = runtime(); seed(r); const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || (fs.existsSync('/usr/bin/chromium') ? '/usr/bin/chromium' : undefined), args: ['--no-sandbox'] });
+  const r = runtime(runtimeOptions); seed(r); const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || (fs.existsSync('/usr/bin/chromium') ? '/usr/bin/chromium' : undefined), args: ['--no-sandbox'] });
   try {
     const page = await browser.newPage({ viewport: { width: 1440, height: 900 } }); const errors = []; let nativeDialogs = 0;
     page.on('pageerror', e => errors.push(e.message)); page.on('dialog', d => { nativeDialogs++; void d.dismiss(); });
@@ -130,6 +130,8 @@ async function browserJourney() {
     await page.waitForFunction(() => !!brandProfileController.state.fileData); assert(await page.locator('.profile-logo-candidate').isVisible());
     await key('Upload logo').click(); await page.waitForFunction(() => brandProfileController.state.logo === 'Logo saved' && !brandProfileController.busy());
     assert.equal(r.objects.size, 1); assert.equal(r.db.brands[0].logo_revision, 1); assert.equal(await key('file').inputValue(), '');
+    await page.locator('#home-nav-btn').click(); assert.equal(await page.locator('#brand-leave-dialog').count(), 0, 'Logo upload alone clears dirty state');
+    await page.locator('#brand-core-nav-btn').click(); await ready(); await key('Brand Assets').click();
     const metadata = clone(Object.fromEntries(Object.entries(r.db.brands[0]).filter(([k]) => k.startsWith('logo_'))));
     await key('Confirm and save Brand Profile').click(); await page.waitForFunction(() => brandProfileController.state.message === 'Brand Profile saved' && !brandProfileController.busy());
     assert.equal(await page.evaluate(() => brandProfileController.dirty()), false);
@@ -142,6 +144,15 @@ async function browserJourney() {
     await page.locator('#brand-core-nav-btn').click(); await ready();
     assert.equal(await page.locator('.profile-official-logo img').getAttribute('src'), url); assert.equal(await page.locator('.profile-overview-avatar').getAttribute('src'), 'https://example.test/accepted.png');
     assert(await page.locator('.profile-official-logo img').evaluate(img => img.complete && img.naturalWidth > 0));
+    if (runtimeOptions?.postgresLogo) {
+      await key('Brand Assets').click(); await key('file').setInputFiles({ name: 'replacement.png', mimeType: 'image/png', buffer: png });
+      await page.waitForFunction(() => !!brandProfileController.state.fileData);
+      await key('Change logo').click(); await page.waitForFunction(() => brandProfileController.state.brand.logo_revision === 2 && !brandProfileController.busy());
+      assert.equal(r.objects.size, 1); assert(!r.objects.has(`${B}/1.png`)); assert(r.objects.has(`${B}/2.png`));
+      await page.evaluate(() => { const current = canonicalBrandDetail.brand; reconcileConfirmedBrand({ ...current, logo_revision: 1, logo_url: `/api/brands/${current.id}/logo?revision=1` }); });
+      assert.equal(await page.evaluate(() => state.workspaceCatalog.value.workspaces[0].brands.find(b => b.id === canonicalBrandDetail.brand.id).logo_revision), 2, 'Stale reconciliation cannot overwrite the new logo');
+      await key('Overview').click();
+    }
     assert.equal(await key('Brand DNA').getAttribute('data-readiness'), 'complete'); assert.equal(await key('Overview').getAttribute('data-readiness'), 'partial'); assert.equal(await key('Audience').getAttribute('data-readiness'), 'empty'); assert.equal(await key('Team and permissions').getAttribute('data-readiness'), 'neutral');
     for (const section of profile.SECTIONS) { assert(await key(section).getAttribute('aria-describedby')); assert((await key(section).getAttribute('title')).includes(':')); assert(await key(section).getAttribute('title')); }
     const selected = await key('Overview').evaluate(b => ({ outline: getComputedStyle(b).outlineStyle, current: b.getAttribute('aria-current') })); assert.equal(selected.current, 'step'); assert.equal(selected.outline, 'solid');
@@ -161,4 +172,5 @@ async function browserJourney() {
     console.log('R5R3 Chromium production DOM: select–preview–upload–Storage/metadata–save–leave without dialog–full reload–validated catalog–Overview/sidebar/selector logo; separate avatar, readiness/selection/accessibility, stale/broken fallback, German, themes, mobile/reflow/keyboard/forced colors passed.');
   } finally { await browser.close(); }
 }
-(async () => { readiness(); await boundaries(); await browserJourney(); })().catch(error => { console.error(error); process.exitCode = 1; });
+module.exports = { browserJourney };
+if (require.main === module) (async () => { readiness(); await boundaries(); await browserJourney(); })().catch(error => { console.error(error); process.exitCode = 1; });

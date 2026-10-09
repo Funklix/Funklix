@@ -3,7 +3,7 @@ const { getSessionUser } = require('../../_auth-session');
 const { pool } = require('../../_brands-storage');
 const { getBrandAccess, isBrandId } = require('../../_brand-access');
 const { validateImageBuffer } = require('../../_website-image-retrieval');
-const { LOGO_COLUMNS, MAX_IMAGE_BYTES, projectLogo, discoverLogo } = require('../../_brand-logo');
+const { LOGO_COLUMNS, MAX_IMAGE_BYTES, normalizeLogoRevision, projectLogo, discoverLogo } = require('../../_brand-logo');
 const logoStorage = require('../../_brand-logo-storage');
 const { createHash } = require('crypto');
 
@@ -23,24 +23,52 @@ module.exports=async function handler(req,res){
   }
   if(req.method!=='POST'){res.setHeader('Allow','GET, POST');return failure(res,405,'METHOD_NOT_ALLOWED');}
   const input=parse(req.body);if(!input)return failure(res,422,'INVALID_REQUEST');
-  let client,pendingPath=null,oldPath=null,committed=false;
+  let client,pendingPath=null,oldPath=null,committed=false,stage='authorization';
   try{client=await pool.connect();}catch{return failure(res,503,'DATABASE_UNAVAILABLE');}
   try{
     await client.query('BEGIN');
-    const result=await client.query(`SELECT b.id,b.workspace_id,b.logo_object_path,b.logo_source,b.logo_revision,CASE WHEN lower(b.owner_email)=$2 THEN 'owner' ELSE bm.role END role FROM brands b LEFT JOIN brand_members bm ON bm.brand_id=b.id AND bm.email=$2 WHERE b.id=$1 FOR UPDATE`,[brandId,user.email.trim().toLowerCase()]);const row=result.rows[0];
+    const result=await client.query(`SELECT b.id,b.workspace_id,b.logo_object_path,b.logo_source,b.logo_revision,CASE WHEN lower(b.owner_email)=$2 THEN 'owner' ELSE bm.role END role FROM brands b LEFT JOIN brand_members bm ON bm.brand_id=b.id AND bm.email=$2 WHERE b.id=$1 FOR UPDATE OF b`,[brandId,user.email.trim().toLowerCase()]);const row=result.rows[0];
     if(!row||!['owner','admin','editor'].includes(row.role)){await client.query('ROLLBACK');return failure(res,403,'PERMISSION_DENIED');}
     if(input.workspace_id){const member=await client.query(`SELECT 1 FROM workspace_memberships WHERE workspace_id=$1 AND identity_id=(SELECT id FROM app_identities WHERE canonical_email=$2 AND status='active') AND status='accepted'`,[input.workspace_id,user.email.trim().toLowerCase()]);if(row.workspace_id!==input.workspace_id||!member.rowCount){await client.query('ROLLBACK');return failure(res,403,'PERMISSION_DENIED');}}
-    if(Number(row.logo_revision)!==input.expected_revision){await client.query('ROLLBACK');return failure(res,409,'STALE_UPDATE');}
+    const revision=normalizeLogoRevision(row.logo_revision);
+    if(revision!==input.expected_revision){await client.query('ROLLBACK');return failure(res,409,'STALE_UPDATE');}
+    if(revision===Number.MAX_SAFE_INTEGER)throw new Error('INVALID_LOGO_REVISION');
     oldPath=row.logo_object_path;
-    if(input.action==='remove'){await client.query(`UPDATE brands SET logo_object_path=NULL,logo_mime_type=NULL,logo_source=NULL,logo_source_host=NULL,logo_updated_at=now(),logo_revision=logo_revision+1 WHERE id=$1`,[brandId]);}
+    let updated,expectedMetadata={logo_mime_type:null,logo_source:null,logo_source_host:null};
+    if(input.action==='remove'){stage='metadata_update';updated=await client.query(`UPDATE brands SET logo_object_path=NULL,logo_mime_type=NULL,logo_source=NULL,logo_source_host=NULL,logo_updated_at=now(),logo_revision=logo_revision+1 WHERE id=$1 AND logo_revision=$2::bigint`,[brandId,revision]);}
     else{
       let buffer,mimeType,source,sourceHost=null;
       if(input.action==='upload'){if(typeof input.image_base64!=='string'||input.image_base64.length>MAX_IMAGE_BYTES*1.4+16){await client.query('ROLLBACK');return failure(res,413,'FILE_TOO_LARGE');}buffer=Buffer.from(input.image_base64,'base64');mimeType=input.mime_type;validateImageBuffer(buffer,mimeType);source='uploaded';}
       else {if(row.logo_source==='uploaded'){await client.query('ROLLBACK');return failure(res,409,'UPLOADED_LOGO_PRESERVED');}const found=await discoverLogo(input.website,{logoOnly:!!input.candidate_url,candidateUrl:input.candidate_url});if(found.status!=='found'){await client.query('ROLLBACK');return failure(res,422,'LOGO_NOT_FOUND');}buffer=found.image.buffer;mimeType=found.image.mimeType;source='discovered';sourceHost=found.sourceHost;}
       if(input.action==='discover'&&input.candidate_url&&(!/^[a-f0-9]{64}$/.test(input.image_sha256||'')||createHash('sha256').update(buffer).digest('hex')!==input.image_sha256)){await client.query('ROLLBACK');return failure(res,409,'CANDIDATE_CHANGED');}
-      pendingPath=await logoStorage.upload({brandId,revision:Number(row.logo_revision)+1,buffer,mimeType});
-      await client.query(`UPDATE brands SET logo_object_path=$2,logo_mime_type=$3,logo_source=$4,logo_source_host=$5,logo_updated_at=now(),logo_revision=logo_revision+1 WHERE id=$1`,[brandId,pendingPath,mimeType,source,sourceHost]);
+      expectedMetadata={logo_mime_type:mimeType,logo_source:source,logo_source_host:sourceHost};
+      stage='storage_upload';
+      pendingPath=await logoStorage.upload({brandId,revision:revision+1,buffer,mimeType});
+      stage='metadata_update';
+      updated=await client.query(`UPDATE brands SET logo_object_path=$2,logo_mime_type=$3,logo_source=$4,logo_source_host=$5,logo_updated_at=now(),logo_revision=logo_revision+1 WHERE id=$1 AND logo_revision=$6::bigint`,[brandId,pendingPath,mimeType,source,sourceHost,revision]);
     }
-    const saved=(await client.query(`SELECT id,${LOGO_COLUMNS} FROM brands WHERE id=$1`,[brandId])).rows[0];const representation=projectLogo(saved);await client.query('COMMIT');committed=true;if(oldPath&&oldPath!==pendingPath)void logoStorage.remove(oldPath).catch(()=>{});return send(res,200,{contract:CONTRACT,request_id:input.request_id,logo:{brand_id:brandId,changed:true,...representation,source:saved.logo_source,updated_at:saved.logo_updated_at}});
-  }catch(error){if(!committed)await client.query('ROLLBACK').catch(()=>{});if(pendingPath&&!committed)await logoStorage.remove(pendingPath);const code=error?.code==='STORAGE_UNAVAILABLE'?'STORAGE_UNAVAILABLE':['unsupported_content_type','invalid_dimensions','invalid_image_signature','unsupported_image_type','invalid_image','empty_response'].includes(error?.code)?'UNSUPPORTED_FILE':'UPDATE_FAILED';return failure(res,code==='UNSUPPORTED_FILE'?415:code==='STORAGE_UNAVAILABLE'?503:500,code);}finally{client.release();}
+    if(updated.rowCount!==1)throw new Error('METADATA_UPDATE_FAILED');
+    stage='metadata_readback';
+    const saved=(await client.query(`SELECT id,${LOGO_COLUMNS} FROM brands WHERE id=$1`,[brandId])).rows[0];
+    const representation=projectLogo(saved);
+    if(saved.id!==brandId || representation.logo_revision!==revision+1 || saved.logo_object_path!==pendingPath || saved.logo_updated_at==null || Object.entries(expectedMetadata).some(([key,value])=>saved[key]!==value))throw new Error('INVALID_LOGO_READBACK');
+    // Project and validate before COMMIT: failures still roll back the metadata.
+    stage='response_projection';
+    const response={contract:CONTRACT,request_id:input.request_id,logo:{brand_id:brandId,changed:true,...representation,source:saved.logo_source,updated_at:saved.logo_updated_at}};
+    stage='metadata_update';
+    await client.query('COMMIT');committed=true;
+    if(oldPath&&oldPath!==pendingPath)void logoStorage.remove(oldPath).catch(()=>{console.error('[BRAND_LOGO_FAILURE]',{stage:'storage_cleanup'});});
+    stage='response_projection';
+    return send(res,200,response);
+  }catch(error){
+    console.error('[BRAND_LOGO_FAILURE]',{stage});
+    if(!committed){
+      await client.query('ROLLBACK').catch(()=>{});
+      if(pendingPath)await logoStorage.remove(pendingPath).catch(()=>{console.error('[BRAND_LOGO_FAILURE]',{stage:'storage_compensation'});});
+    }
+    const code=error?.code==='STORAGE_UNAVAILABLE'?'STORAGE_UNAVAILABLE'
+      :['unsupported_content_type','invalid_dimensions','invalid_image_signature','unsupported_image_type','invalid_image','empty_response'].includes(error?.code)?'UNSUPPORTED_FILE'
+      :stage==='metadata_update'?'UPDATE_FAILED':stage==='metadata_readback'?'READBACK_FAILED':stage==='response_projection'?'RESPONSE_INVALID':stage==='storage_upload'?'STORAGE_UNAVAILABLE':'DATABASE_UNAVAILABLE';
+    return failure(res,code==='UNSUPPORTED_FILE'?415:['STORAGE_UNAVAILABLE','DATABASE_UNAVAILABLE'].includes(code)?503:500,code);
+  }finally{client.release();}
 };

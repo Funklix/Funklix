@@ -3174,13 +3174,22 @@ function renderCanonicalBrandDetail() {
 }
 
 function reconcileConfirmedBrand(confirmed) {
+  const previous = canonicalBrandDetail.brand;
+  if (previous?.id === confirmed.id) {
+    if (previous.revision > confirmed.revision) return;
+    if (previous.logo_revision > confirmed.logo_revision) confirmed = { ...confirmed,
+      logo_url: previous.logo_url, logo_revision: previous.logo_revision,
+      logo_source: previous.logo_source, logo_updated_at: previous.logo_updated_at };
+  }
   canonicalBrandDetail.brand = confirmed;
   sidebarProfileCache.set(confirmed.id, confirmed.brand_core);
   const catalog = state.workspaceCatalog.value;
   const projection = { name: confirmed.name, revision: confirmed.revision, logo_url: confirmed.logo_url, logo_revision: confirmed.logo_revision };
   state.workspaceCatalog.value = Object.freeze({ ...catalog, workspaces: Object.freeze(catalog.workspaces.map(w => Object.freeze({ ...w,
-    brands: Object.freeze(w.brands.map(b => b.id === confirmed.id ? Object.freeze({ ...b, ...projection }) : b)) }))) });
-  state.brandCatalog.entries = state.brandCatalog.entries.map(b => b.id === confirmed.id ? { ...b, ...projection, updated_at: confirmed.updated_at } : b);
+    brands: Object.freeze(w.brands.map(b => b.id === confirmed.id ? Object.freeze({ ...b, ...projection,
+      ...(b.logo_revision > projection.logo_revision ? { logo_url: b.logo_url, logo_revision: b.logo_revision } : {}) }) : b)) }))) });
+  state.brandCatalog.entries = state.brandCatalog.entries.map(b => b.id === confirmed.id ? { ...b, ...projection, updated_at: confirmed.updated_at,
+    ...(b.logo_revision > projection.logo_revision ? { logo_url: b.logo_url, logo_revision: b.logo_revision } : {}) } : b);
   if (ephemeralBrandSwitcherSelection?.id === confirmed.id) ephemeralBrandSwitcherSelection = { ...ephemeralBrandSwitcherSelection, name: confirmed.name };
   el.brandWorkspaceDetailTitle.textContent = confirmed.name;
   // Run independent consumers even if one local renderer fails.

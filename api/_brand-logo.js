@@ -4,10 +4,23 @@ const { retrieveWebsiteText } = require('./_website-retrieval');
 
 const LOGO_COLUMNS = 'logo_object_path, logo_mime_type, logo_source, logo_revision, logo_updated_at, logo_source_host';
 function logoUrl(id, revision) { return `/api/brands/${encodeURIComponent(id)}/logo?revision=${revision}`; }
+// pg returns BIGINT as text. Never coerce null, whitespace, booleans or rounded values.
+function normalizeLogoRevision(value) {
+  if (typeof value === 'string' && /^(?:0|[1-9][0-9]*)$/.test(value)) value = Number(value);
+  if (!Number.isSafeInteger(value) || value < 0) throw new Error('INVALID_LOGO_REVISION');
+  return value;
+}
 function projectLogo(row) {
-  const revision=Number(row?.logo_revision||0), source=row?.logo_source;
-  if (!row?.logo_object_path) return { logo_url:null, logo_revision:revision };
-  if (!Number.isSafeInteger(revision)||revision<1||!['uploaded','discovered'].includes(source)||!ALLOWED_IMAGE_TYPES.has(row.logo_mime_type)) throw new Error('INVALID_LOGO_METADATA');
+  const revision=normalizeLogoRevision(row?.logo_revision), source=row?.logo_source;
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(row?.id || '')
+    || !(row.logo_source_host == null || (typeof row.logo_source_host === 'string' && row.logo_source_host.length <= 253))
+    || !(row.logo_updated_at == null || ((typeof row.logo_updated_at === 'string' || row.logo_updated_at instanceof Date) && Number.isFinite(new Date(row.logo_updated_at).getTime())))) throw new Error('INVALID_LOGO_METADATA');
+  if (row.logo_object_path == null) {
+    if (row.logo_mime_type != null || source != null || row.logo_source_host != null) throw new Error('INVALID_LOGO_METADATA');
+    return { logo_url:null, logo_revision:revision };
+  }
+  if (typeof row.logo_object_path !== 'string' || !row.logo_object_path.length || row.logo_object_path.length > 2048
+    || revision<1||!['uploaded','discovered'].includes(source)||!ALLOWED_IMAGE_TYPES.has(row.logo_mime_type)) throw new Error('INVALID_LOGO_METADATA');
   return { logo_url:logoUrl(row.id,revision), logo_revision:revision };
 }
 function attr(value,name){const match=String(value||'').match(new RegExp(`${name}\\s*=\\s*["']([^"']+)["']`,'i'));return match?.[1]?.trim()||'';}
@@ -27,4 +40,4 @@ async function discoverLogo(domain, deps={}){
   for(const candidate of candidates){try{const url=new URL(candidate.url);if(candidate.kind==='favicon'&&url.origin!==base.origin)continue;const image=await (deps.retrievePublicImage||retrievePublicImage)(url.href);return {status:'found',candidate,image,sourceHost:url.hostname.slice(0,253)};}catch{/* bounded candidate failure */}}
   return {status:'not_found'};
 }
-module.exports={LOGO_COLUMNS,MAX_IMAGE_BYTES,projectLogo,rankLogoCandidates,discoverLogo};
+module.exports={LOGO_COLUMNS,MAX_IMAGE_BYTES,normalizeLogoRevision,projectLogo,rankLogoCandidates,discoverLogo};

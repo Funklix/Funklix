@@ -10,18 +10,25 @@ const EMAIL = 'local-fixture@example.test', now = '2026-10-08T08:00:00.000Z';
 const clone = v => v === undefined ? undefined : JSON.parse(JSON.stringify(v));
 // Image safety checks require >=16 px. This local PNG has a real 32x32 IHDR.
 const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAM0lEQVR4nO3OMQEAMAjEwKdzFVYxrooMlouBXN3XP4udzTkAAAAAAAAAAAAAAAAAAECSDCTXAm0ec9xNAAAAAElFTkSuQmCC', 'base64');
-function runtime() {
+function runtime(options = {}) {
   const db = { brands: [], boards: [], commands: [], workspaceRole: 'owner', brandRole: null, membershipStatus: 'accepted', identityStatus: 'active', failPut: false, failConnect: false, queries: [] };
-  const objects = new Map(), logs = [], requests = [], storageRequests = [];
+  const objects = new Map(), logs = [], requests = [], storageRequests = [], events = [];
   let tx = null, missingSecret = false;
-  const rows = values => ({ rows: clone(values), rowCount: values.length });
+  const rows = values => ({ rows: clone(values.map(row => options.postgresLogo && Object.hasOwn(row, 'logo_revision') ? { ...row, logo_revision: typeof row.logo_revision === 'number' ? String(row.logo_revision) : row.logo_revision } : row)), rowCount: values.length });
   const state = () => tx || db;
   async function query(sql, args = []) {
-    sql = sql.replace(/\s+/g, ' ').trim(); db.queries.push(sql);
+    sql = sql.replace(/\s+/g, ' ').trim(); db.queries.push(sql); events.push(sql);
     const used = new Set([...sql.matchAll(/\$(\d+)/g)].map(m => +m[1]));
     for (let i = 1; i <= args.length; i++) if (!used.has(i)) { const error = new Error('untyped SQL parameter'); error.code = '42P18'; throw error; }
+    if (/LEFT JOIN brand_members/.test(sql) && /FOR UPDATE$/.test(sql)) {
+      const error = new Error('FOR UPDATE cannot be applied to the nullable side of an outer join'); error.code = '0A000'; throw error;
+    }
+    if (options.postgresLogo && /^SELECT id,logo_object_path/.test(sql)) {
+      if (db.failLogoReadback) throw new Error('local readback failure');
+      if (db.corruptLogoReadback) return rows([{ ...state().brands.find(b => b.id === args[0]), logo_revision: '01' }]);
+    }
     if (sql === 'BEGIN') { assert.equal(tx, null, 'No overlapping fixture transaction'); tx = clone({ brands: db.brands, boards: db.boards, commands: db.commands }); return rows([]); }
-    if (sql === 'COMMIT') { if (tx) Object.assign(db, tx); tx = null; return rows([]); }
+    if (sql === 'COMMIT') { if (db.failCommit) throw new Error('local commit failure'); if (tx) Object.assign(db, tx); tx = null; return rows([]); }
     if (sql === 'ROLLBACK') { tx = null; return rows([]); }
     if (sql.includes('pg_advisory_xact_lock')) return rows([]);
     if (sql.includes('FROM public.app_identities')) return rows([{ id: I, canonical_email: EMAIL, status: db.identityStatus, revision: 1 }]);
@@ -47,8 +54,11 @@ function runtime() {
     }
     if (/UPDATE brands SET logo_object_path/.test(sql)) {
       if (db.failLogoMetadata) throw new Error('local metadata write failure');
-      const brand = state().brands.find(b => b.id === args[0]);
-      Object.assign(brand, { logo_object_path: args[1] || null, logo_mime_type: args[2] || null, logo_source: args[3] || null, logo_source_host: args[4] || null, logo_updated_at: now, logo_revision: brand.logo_revision + 1 }); return rows([brand]);
+      const uploading = /logo_object_path=\$2/.test(sql);
+      const expected = uploading ? args[5] : args[1];
+      const brand = state().brands.find(b => b.id === args[0] && (expected === undefined || b.logo_revision === expected));
+      if (!brand || db.zeroLogoUpdate) return rows([]);
+      Object.assign(brand, { logo_object_path: uploading ? args[1] : null, logo_mime_type: uploading ? args[2] : null, logo_source: uploading ? args[3] : null, logo_source_host: uploading ? args[4] : null, logo_updated_at: now, logo_revision: brand.logo_revision + 1 }); return rows([brand]);
     }
     if (sql.includes('SELECT COUNT(*)::integer AS count FROM boards')) return rows([{count: state().boards.filter(b => b.brand_id === args[0]).length}]);
     if (/UPDATE boards SET brand_id = NULL/.test(sql)) { const affected = state().boards.filter(b => b.brand_id === args[0]); affected.forEach(b => { b.brand_id = null; }); return rows(affected); }
@@ -78,10 +88,10 @@ function runtime() {
     if (url === 'https://api.openai.com/v1/responses') return { ok: true, json: async () => ({ output_text: JSON.stringify({primaryArchetype:'Sage',secondaryArchetype:'Creator',primaryConfidence:90,secondaryConfidence:80,reasoning:'Local reasoning',signals:{toneSignals:['Clear']},recommendedVoice:'Clear',recommendedVisualDirection:'Blue'}) }) };
     if (url === 'https://api.openai.com/v1/chat/completions') return { ok: true, json: async () => ({ choices: [{ message: { content: JSON.stringify(suggestions) } }] }) };
     assert(url.startsWith('https://fixture.supabase.co/storage/v1/object/brand-logos'), 'Only the local storage adapter may be reached');
-    storageRequests.push(init.method);
+    storageRequests.push(init.method); events.push(`storage_${init.method}`);
     const key = url.split('/brand-logos/')[1];
-    if (init.method === 'POST') { objects.set(key, Buffer.from(init.body)); return { ok: true }; }
-    if (init.method === 'DELETE') { objects.delete(key); return { ok: true }; }
+    if (init.method === 'POST') { if (db.failStorageUpload) return { ok: false, status: 503 }; objects.set(key, Buffer.from(init.body)); return { ok: true }; }
+    if (init.method === 'DELETE') { if (db.failStorageDelete) return { ok: false, status: 503 }; assert(!state().brands.some(b => b.logo_object_path === key), 'Never delete a referenced object'); objects.delete(key); return { ok: true }; }
     const image = objects.get(key); return { ok: !!image, headers: { get: () => String(image?.length || 0) }, arrayBuffer: async () => image };
   }
   const modules = new Map();
@@ -104,7 +114,13 @@ function runtime() {
       if (relative === 'api/_brands-storage.js') return { ...result, ensureBrandsTable: async () => {} };
       return result;
     }
-    vm.runInNewContext(fs.readFileSync(location, 'utf8'), { module, exports: module.exports, require: req, process: { env }, Buffer, URL, AbortSignal, setTimeout, clearTimeout, fetch: externalFetch, console: { error: (...v) => logs.push(v), debug: (...v) => logs.push(v), log() {} } }, { filename: relativeName(location) });
+    let source = fs.readFileSync(location, 'utf8');
+    if (options.originalLogoLock && relativeName(location) === 'api/brands/[id]/logo.js') {
+      // Restore merged R5R3's lock clause and catch-all classification to reproduce its HTTP 500.
+      source = source.replace('FOR UPDATE OF b', 'FOR UPDATE')
+        .replace(/:stage==='metadata_update'\?[^;]+;/, ":'UPDATE_FAILED';");
+    }
+    vm.runInNewContext(source, { module, exports: module.exports, require: req, process: { env }, Buffer, URL, AbortSignal, setTimeout, clearTimeout, fetch: externalFetch, console: { error: (...v) => logs.push(v), debug: (...v) => logs.push(v), log() {} } }, { filename: relativeName(location) });
     return module.exports;
   }
   function relativeName(location) { return path.relative(ROOT, location); }
@@ -112,7 +128,7 @@ function runtime() {
   const handlers = { dna: load('api/discover-brand-dna.js'), avatar: load('api/generate-brand-avatar.js'), collection: load('api/brands/index.js'), item: load('api/brands/[id].js'), logo: load('api/brands/[id]/logo.js'), analyze: load('api/analyze-brand-domain.js'), project: load('api/projects.js'), board: load('api/boards/[id].js') };
   function seed() {
     const core = load('api/_project-command.js').core();
-    db.brands = [{ id: B, workspace_id: W, owner_email: EMAIL, name: 'Local Brand', brand_core: { ...core, brandCore: 'Original positioning' }, revision: 1, logo_revision: 0, created_at: now, updated_at: now }];
+    db.brands = [{ id: B, workspace_id: W, owner_email: EMAIL, name: 'Local Brand', brand_core: { ...core, brandCore: 'Original positioning' }, revision: 1, logo_revision: 0, logo_object_path: null, logo_mime_type: null, logo_source: null, logo_source_host: null, logo_updated_at: null, created_at: now, updated_at: now }];
     db.boards = [{ id: D, workspace_id: W, brand_id: B, name: 'Original Project', canvas_json: require('../../project-command').blankCanvas(now), brand_core_snapshot: { ...core, brandCore: 'Stable campaign snapshot' }, brand_core_source_revision: 1, brand_core_source_updated_at: now, brand_core_snapshot_copied_at: now, owner_email: EMAIL, owner_id: EMAIL, created_at: now, updated_at: now }];
   }
   seed();
@@ -120,12 +136,12 @@ function runtime() {
     const route = new URL(url, 'http://localhost'), id = route.pathname.split('/')[3];
     const kind = route.pathname === '/api/discover-brand-dna' ? 'dna' : route.pathname === '/api/generate-brand-avatar' ? 'avatar' : route.pathname === '/api/brands' ? 'collection' : route.pathname === '/api/projects' ? 'project' : route.pathname === '/api/analyze-brand-domain' ? 'analyze' : route.pathname.startsWith('/api/boards/') ? 'board' : route.pathname.endsWith('/logo') ? 'logo' : 'item';
     const req = { method, query: { id, ...Object.fromEntries(route.searchParams) }, body, headers: { cookie: user ? `funklix_session=${auth.createSessionToken(user)}` : '' } };
-    const res = { statusCode: 200, headers: {}, setHeader(k,v) { this.headers[k]=v; }, status(code) { this.statusCode=code;return this; }, json(value) { this.body=clone(value);return this; }, send(value) { this.body=value;return this; } };
+    const res = { statusCode: 200, headers: {}, setHeader(k,v) { this.headers[k]=v; }, status(code) { this.statusCode=code;return this; }, json(value) { if (db.failLogoResponse && value.contract === 'brand_logo_v1' && value.logo) throw new Error('local response transport failure'); this.body=clone(value);return this; }, send(value) { this.body=value;return this; } };
     requests.push({ method, path: route.pathname, body: clone(body) });
     if (missingSecret) delete env.SUPABASE_SERVICE_ROLE_KEY; else env.SUPABASE_SERVICE_ROLE_KEY = 'fictional-storage-token';
     await handlers[kind](req,res); return res;
   }
   function catalog() { return { contract: 'workspace_catalog_v1', workspaces: [{ id: W, name: 'Local Workspace', role: db.workspaceRole, revision: 1, brands: db.brands.map(b => ({ id: b.id, workspace_id: W, name: b.name, revision: b.revision, role: b.owner_email === EMAIL ? 'owner' : db.brandRole, logo_url: b.logo_object_path ? `/api/brands/${b.id}/logo?revision=${b.logo_revision}` : null, logo_revision: b.logo_revision })), boards: db.boards.map(b => ({ id: b.id, workspace_id: W, brand_id: b.brand_id, name: b.name, role: 'owner' })) }] }; }
-  return { db, request, load, catalog, objects, logs, requests, storageRequests, png, seed, suggestions, setMissingSecret(value) { missingSecret = value; }, env };
+  return { db, request, load, catalog, objects, logs, requests, storageRequests, events, png, seed, suggestions, setMissingSecret(value) { missingSecret = value; }, env };
 }
 module.exports = { runtime, W, B, D, I, EMAIL, now, png, clone };

@@ -81,7 +81,7 @@ async function checkLogoBoundary() {
     trace.push(sql);
     if (sql.includes('SELECT b.id')) return { rows: [{ ...savedRow, role }] };
     if (sql.includes('SELECT 1 FROM workspace_memberships')) return { rowCount: 1, rows: [{}] };
-    if (sql.includes('UPDATE brands SET logo_object_path=$2')) { savedRow = { ...savedRow, logo_object_path: args[1], logo_mime_type: args[2], logo_source: args[3], logo_revision: savedRow.logo_revision + 1 }; return { rowCount: 1 }; }
+    if (sql.includes('UPDATE brands SET logo_object_path=$2')) { savedRow = { ...savedRow, logo_object_path: args[1], logo_mime_type: args[2], logo_source: args[3], logo_source_host: args[4], logo_updated_at: '2026-10-09T09:11:00.000Z', logo_revision: savedRow.logo_revision + 1 }; return { rowCount: 1 }; }
     if (sql.startsWith('SELECT id,')) return { rows: [savedRow] };
     return { rows: [] };
   } };
@@ -99,7 +99,7 @@ async function checkLogoBoundary() {
   const input = { contract: 'brand_logo_v1', action: 'upload', expected_revision: 0, request_id: 'upload-1', workspace_id: W, mime_type: 'image/png', image_base64: png.toString('base64') };
   role = 'viewer'; assert.equal((await invoke(input)).code, 403); assert.equal(objects.size, 0);
   role = 'unrelated'; assert.equal((await invoke(input)).code, 403); assert.equal(objects.size, 0);
-  role = 'editor'; failure = true; assert.equal((await invoke(input)).code, 500); assert.equal(objects.size, 0); assert.equal(savedRow.logo_revision, 0);
+  role = 'editor'; failure = true; const unavailable = await invoke(input); assert.equal(unavailable.code, 503); assert.equal(unavailable.body.error.code, 'STORAGE_UNAVAILABLE'); assert.equal(objects.size, 0); assert.equal(savedRow.logo_revision, 0);
   failure = false; let result = await invoke(input); assert.equal(result.code, 200); assert.equal(objects.size, 1); assert.equal(result.body.logo.logo_revision, 1); assert(trace.includes('COMMIT'));
   assert.equal((await invoke(input)).code, 409); assert.equal(objects.size, 1);
   result = await invoke({ ...input, expected_revision: 1, action: 'discover', candidate_url: candidate.candidate_url, image_sha256: candidate.image_sha256 });
