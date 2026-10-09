@@ -84,7 +84,7 @@ assert.equal(profile.resolveEntry({ ...base, catalog: { workspaces: [] } }).kind
         history.replaceState({}, '', '/'); setSidebarCollapsed(false); renderWorkspaceSidebar();
       }, { data, board, selection, status, publicToken, W, D });
     }
-    async function visible(selector) { await page.locator(selector).waitFor({ state: 'visible' }); assert(await page.locator(selector).isVisible(), selector); }
+    async function visible(selector) { if (selector.includes('guided-brand-profile input[type=file]')) await page.locator('[data-profile-key="Brand Assets"]').click(); await page.locator(selector).waitFor({ state: 'visible' }); assert(await page.locator(selector).isVisible(), selector); }
     async function menuOpen() {
       const before = requests.length; await page.locator('#workspace-context-manage').click();
       await visible('#workspace-context-menu'); assert.equal(await page.locator('#workspace-context-menu').count(), 1);
@@ -161,6 +161,7 @@ assert.equal(profile.resolveEntry({ ...base, catalog: { workspaces: [] } }).kind
     assert.equal(await page.evaluate(() => JSON.stringify(state.brandCore)), snapshot, 'Logo write does not overwrite Board snapshot');
     assert(requests.filter(r => r.method === 'POST' && /logo/.test(r.path)).every(r => r.path === `/api/brands/${B}/logo`));
     await visible('[data-profile-key="Change logo"]'); await visible('[data-profile-key="Remove logo"]');
+    await page.locator('[data-profile-key="Overview"]').click();
     await page.locator('[data-profile-key="Analyze website"]').click();
     await page.waitForFunction(() => !!brandProfileController.state.candidate); await visible('[data-profile-key="Use this logo"]');
     await page.locator('[data-profile-key="Remove logo"]').click();
@@ -210,7 +211,7 @@ assert.equal(profile.resolveEntry({ ...base, catalog: { workspaces: [] } }).kind
       if (process.env.BW36_SCREENSHOTS && [1440, 320].includes(width)) await page.screenshot({ path: path.join(process.env.BW36_SCREENSHOTS, `${theme}-${width}.png`) });
     }
     await page.evaluate(() => { state.uiLanguage = 'de'; brandProfileController.render(); });
-    assert((await page.locator('.guided-brand-profile').innerText()).includes('Markengrundlagen'));
+    assert((await page.locator('.guided-brand-profile').innerText()).includes('Markenmaterialien'));
     await page.evaluate(() => renderWorkspaceSidebar()); await page.locator('#workspace-context-manage').click();
     assert.equal(await page.locator('#workspace-context-menu').getAttribute('aria-label'), 'Workspace-Aktionen');
     assert.equal(await page.locator('#workspace-context-menu [role=menuitem]').innerText(), 'Workspace umbenennen');

@@ -49,7 +49,10 @@ function runtime() {
       const brand = state().brands.find(b => b.id === args[0]);
       Object.assign(brand, { logo_object_path: args[1] || null, logo_mime_type: args[2] || null, logo_source: args[3] || null, logo_source_host: args[4] || null, logo_updated_at: now, logo_revision: brand.logo_revision + 1 }); return rows([brand]);
     }
+    if (sql.includes('SELECT COUNT(*)::integer AS count FROM boards')) return rows([{count: state().boards.filter(b => b.brand_id === args[0]).length}]);
     if (/UPDATE boards SET brand_id = NULL/.test(sql)) { const affected = state().boards.filter(b => b.brand_id === args[0]); affected.forEach(b => { b.brand_id = null; }); return rows(affected); }
+    if (sql.includes('FROM brand_documents WHERE board_id')) return rows([]);
+    if (/DELETE FROM boards WHERE id/.test(sql)) { const affected=state().boards.filter(b=>b.id===args[0]);state().boards=state().boards.filter(b=>b.id!==args[0]);return rows(affected); }
     if (/DELETE FROM brand_members/.test(sql)) return rows([]);
     if (/DELETE FROM brands/.test(sql)) { const affected = state().brands.filter(b => b.id === args[0] && b.owner_email === args[1]); state().brands = state().brands.filter(b => !affected.includes(b)); return rows(affected); }
     if (/FROM board_editors/.test(sql)) return rows([]);
@@ -70,6 +73,8 @@ function runtime() {
   const suggestions = { brandCore: 'Local website positioning', valueProposition: 'Local website benefit', toneOfVoice: ['Clear'], messagingPillars: ['Reliable'], personas: [{ name: 'Local audience', note: 'Local needs' }], contentGuidelines: ['Concise'], dosAndDonts: { dos: ['Be clear'], donts: [] }, brandVoiceExamples: { good: 'Clear copy', avoid: '' }, keywords: ['local'], brandAssets: { domain: 'https://example.test/', logo: '', colors: ['#123456'], typography: 'Sans', references: [] } };
   const website = { source: { url: 'https://example.test/' }, internalHtml: '<html><head><title>Local Brand</title><link rel="logo" href="/logo.png"></head><body><header><img class="logo" src="/logo.png"></header><h1>Reliable local Brand</h1><p>' + 'Useful local brand information. '.repeat(20) + '</p></body></html>' };
   async function externalFetch(url, init) {
+    if (url === 'https://api.openai.com/v1/images/generations') return { ok: true, json: async () => ({ data: [{ b64_json: png.toString('base64') }] }) };
+    if (url === 'https://api.openai.com/v1/responses') return { ok: true, json: async () => ({ output_text: JSON.stringify({primaryArchetype:'Sage',secondaryArchetype:'Creator',primaryConfidence:90,secondaryConfidence:80,reasoning:'Local reasoning',signals:{toneSignals:['Clear']},recommendedVoice:'Clear',recommendedVisualDirection:'Blue'}) }) };
     if (url === 'https://api.openai.com/v1/chat/completions') return { ok: true, json: async () => ({ choices: [{ message: { content: JSON.stringify(suggestions) } }] }) };
     assert(url.startsWith('https://fixture.supabase.co/storage/v1/object/brand-logos'), 'Only the local storage adapter may be reached');
     storageRequests.push(init.method);
@@ -89,6 +94,7 @@ function runtime() {
       if (!name.startsWith('.')) return localRequire(name);
       const resolved = localRequire.resolve(name), relative = path.relative(ROOT, resolved);
       if (relative === 'api/_boards-storage.js') return { pool, ensureBoardsTable: async () => {}, reconcileBrandRelationship: async () => {} };
+      if (relative === 'api/_image-storage.js') return { uploadGeneratedImage: async () => ({imageUrl:'https://example.test/generated-avatar.png'}) };
       if (relative === 'api/_document-records.js') return { pool, ensureDocumentTables: async () => {} };
       if (relative === 'api/_document-storage.js') return { deletePrivate: async () => { throw new Error('Document operations forbidden'); } };
       if (relative === 'api/_website-retrieval.js') { const real = localRequire(name); return { ...real, retrieveWebsiteText: async () => clone(website) }; }
@@ -102,7 +108,7 @@ function runtime() {
   }
   function relativeName(location) { return path.relative(ROOT, location); }
   const auth = load('api/_auth-session.js');
-  const handlers = { collection: load('api/brands/index.js'), item: load('api/brands/[id].js'), logo: load('api/brands/[id]/logo.js'), analyze: load('api/analyze-brand-domain.js'), project: load('api/projects.js'), board: load('api/boards/[id].js') };
+  const handlers = { dna: load('api/discover-brand-dna.js'), avatar: load('api/generate-brand-avatar.js'), collection: load('api/brands/index.js'), item: load('api/brands/[id].js'), logo: load('api/brands/[id]/logo.js'), analyze: load('api/analyze-brand-domain.js'), project: load('api/projects.js'), board: load('api/boards/[id].js') };
   function seed() {
     const core = load('api/_project-command.js').core();
     db.brands = [{ id: B, workspace_id: W, owner_email: EMAIL, name: 'Local Brand', brand_core: { ...core, brandCore: 'Original positioning' }, revision: 1, logo_revision: 0, created_at: now, updated_at: now }];
@@ -111,7 +117,7 @@ function runtime() {
   seed();
   async function request(method, url, body, user = { email: EMAIL }) {
     const route = new URL(url, 'http://localhost'), id = route.pathname.split('/')[3];
-    const kind = route.pathname === '/api/brands' ? 'collection' : route.pathname === '/api/projects' ? 'project' : route.pathname === '/api/analyze-brand-domain' ? 'analyze' : route.pathname.startsWith('/api/boards/') ? 'board' : route.pathname.endsWith('/logo') ? 'logo' : 'item';
+    const kind = route.pathname === '/api/discover-brand-dna' ? 'dna' : route.pathname === '/api/generate-brand-avatar' ? 'avatar' : route.pathname === '/api/brands' ? 'collection' : route.pathname === '/api/projects' ? 'project' : route.pathname === '/api/analyze-brand-domain' ? 'analyze' : route.pathname.startsWith('/api/boards/') ? 'board' : route.pathname.endsWith('/logo') ? 'logo' : 'item';
     const req = { method, query: { id, ...Object.fromEntries(route.searchParams) }, body, headers: { cookie: user ? `funklix_session=${auth.createSessionToken(user)}` : '' } };
     const res = { statusCode: 200, headers: {}, setHeader(k,v) { this.headers[k]=v; }, status(code) { this.statusCode=code;return this; }, json(value) { this.body=clone(value);return this; }, send(value) { this.body=value;return this; } };
     requests.push({ method, path: route.pathname, body: clone(body) });

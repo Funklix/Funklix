@@ -55,7 +55,6 @@
     note.textContent = model.supporting;
     avatar.replaceChildren();
     if (model.reusable && model.logo_url && root.FunklixBrandLogo) root.FunklixBrandLogo.render(avatar, { name: model.title, logo_url: model.logo_url });
-    const url = model.reusable && !model.logo_url ? avatarUrl(options.brandCore) : "";
     const fallback = () => {
       avatar.replaceChildren();
       const mark = avatar.ownerDocument.createElement("span");
@@ -65,13 +64,7 @@
     };
     avatar.setAttribute("aria-label", model.reusable ? `${model.title} Brand` : model.title);
     if (model.logo_url && root.FunklixBrandLogo) { /* shared helper already rendered it */ }
-    else if (url) {
-      const image = avatar.ownerDocument.createElement("img");
-      image.src = url;
-      image.alt = `${model.title} Brand`;
-      image.addEventListener("error", fallback, { once: true });
-      avatar.append(image);
-    } else fallback();
+    else fallback();
     if (status) {
       status.textContent = model.updateAvailable ? model.text.update : "";
       status.classList.toggle("hidden", !model.updateAvailable);

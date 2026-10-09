@@ -128,7 +128,8 @@
     "check:bw36.13r3r1": "node scripts/check-bw36-13r3r1-workspace-catalog-repair.js",
     "check:bw36.13r4": "node scripts/check-bw36-13r4-guided-brand-profile-setup.js",
     "check:bw36.13r4r1": "node scripts/check-bw36-13r4r1-brand-profile-entry-and-workspace-actions.js",
-    "check:bw36.13r5": "node scripts/check-bw36-13r5-brand-lifecycle-stability.js"
+    "check:bw36.13r5": "node scripts/check-bw36-13r5-brand-lifecycle-stability.js",
+    "check:bw36.13r5r2": "node scripts/check-bw36-13r5r2-brand-workspace-regression-recovery.js"
   },
   "devDependencies": {
     "playwright-core": "^1.56.1"

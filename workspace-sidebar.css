@@ -24,3 +24,6 @@
 .sidebar .workspace-context .workspace-context-group:has(#workspace-brand-manage:not([hidden])){display:grid}
 .app-shell.sidebar-collapsed #workspace-brand-trigger .workspace-context-name{display:none}
 @media(max-width:1300px) and (min-width:768px){#workspace-brand-trigger .workspace-context-name{display:none}}
+
+.workspace-brand-option-row{display:flex;align-items:center;min-width:0}.workspace-brand-option-row>.workspace-context-option{flex:1;min-width:0}.workspace-brand-row-actions{flex:0 0 44px;min-width:44px;min-height:44px;border:1px solid var(--fk-color-border-default);border-radius:8px;background:var(--fk-color-surface-input);color:var(--fk-color-text-primary);font:inherit}.workspace-brand-row-actions:focus-visible{outline:3px solid var(--fk-color-focus-ring);outline-offset:-3px}
+@media(forced-colors:active){.workspace-brand-row-actions{border-color:CanvasText}.workspace-brand-row-actions:focus-visible{outline-color:Highlight}}

@@ -1,3 +1,4 @@
+const { resolveGenerationBrand } = require('./_brand-generation-access');
 const { buildBrandBrainContext } = require('./_brand-brain-context');
 
 const ARCHETYPES = [
@@ -246,11 +247,15 @@ Rules:
 module.exports = async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
+  let input;
+  try { input = await resolveGenerationBrand(req, res); } catch { return res.status(503).json({ code: 'DATABASE_UNAVAILABLE' }); }
+  if (!input) return;
+
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) return res.status(500).json({ error: 'Server is missing OPENAI_API_KEY' });
 
   try {
-    const { boardId = '', brandBrainData = {}, refineGuidance = '', founderStoryContext, reassessmentContext } = req.body || {};
+    const { boardId = '', brandBrainData = {}, refineGuidance = '', founderStoryContext, reassessmentContext } = input;
     if (!hasMeaningfulBrandData(brandBrainData)) {
       return res.status(400).json({ error: 'Add Brand Brain details before discovering Brand DNA.' });
     }

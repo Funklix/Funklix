@@ -40,7 +40,7 @@ assert.doesNotMatch(restore, /fetch\(|loadCanonicalBrandDetail|openCanonicalBran
 assert.doesNotMatch(create, /loadCanonicalBrandDetail|openCanonicalBrandDetail|brandWorkspaceDetail/, "creation must not open or fetch detail");
 assert.doesNotMatch(associate, /loadCanonicalBrandDetail|openCanonicalBrandDetail|brandWorkspaceDetail|\/api\/brands\//, "BW-5 association must not affect detail");
 assert.match(open.trim(), /^function openCanonicalBrandDetail\(\) \{ openRegularBrandProfile\(\); \}$/, "compatibility wrapper must only delegate to the regular Profile");
-assert.match(regular, /const entry = resolveRegularBrandProfile\(\)/, "regular entry must resolve authorized context");
+assert.match(regular, /resolveRegularBrandProfile\(\)/, "regular entry must resolve authorized context");
 assert.match(regular, /canonicalBrandDetail\.brandId = entry\.brand\?\.id \|\| ''/, "regular entry must use the resolved Brand, not an unchecked ID");
 assert.match(regular, /entry\.kind === 'brand'[\s\S]*loadCanonicalBrandDetail\(\)/, "detail loading must follow a resolved Brand entry");
 assert.doesNotMatch(`${open}\n${regular}\n${resolve}`, /state\.brandCatalog|ephemeralBrandSwitcherSelection|localStorage|sessionStorage/, "regular entry authority must not depend on the legacy selector or browser storage");

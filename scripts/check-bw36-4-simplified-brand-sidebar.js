@@ -41,9 +41,7 @@ const elements = Object.fromEntries(["panel", "avatar", "name", "note", "status"
 sidebar.render(elements, campaign, { brandCore: { brandDNA: { avatar: { userApproved: true, imageUrl: "https://images.example/logo.png" } } } });
 assert.equal(elements.panel.dataset.brandState, "campaign");
 assert.equal(elements.name.textContent, "Acme 🚀");
-assert.equal(elements.avatar.children[0].src, "https://images.example/logo.png");
-elements.avatar.children[0].listener.fn();
-assert.equal(elements.avatar.children[0].textContent, "A🚀", "broken image must become a local Unicode-safe fallback");
+assert.equal(elements.avatar.children[0].textContent, "A🚀", "Brand identity without a logo uses initials, never the Brand Avatar");
 assert.equal(elements.open.textContent, "Open Brand Profile");
 assert.equal(elements.change.textContent, "Change campaign Brand");
 

@@ -2,11 +2,12 @@ const { isBrandId } = require('./_brand-access');
 const { pool, MAX_BRAND_NAME_LENGTH, ensureBrandsTable } = require('./_brands-storage');
 
 class BrandDeletionError extends Error {
-  constructor(status, code) {
+  constructor(status, code, boardCount = 0) {
     super(code);
     this.name = 'BrandDeletionError';
     this.status = status;
     this.code = code;
+    this.boardCount = boardCount;
   }
 }
 
@@ -29,14 +30,18 @@ async function deleteOwnedBrand({ brandId, ownerEmail, confirmationName, request
     if (!brand) throw new BrandDeletionError(404, 'BRAND_NOT_FOUND');
     if (confirmationName !== brand.name) throw new BrandDeletionError(409, 'CONFIRMATION_MISMATCH');
 
-    // Boards, their snapshots, Canvas nodes, and every Board-scoped durable record survive.
-    const detached = await client.query('UPDATE boards SET brand_id = NULL WHERE brand_id = $1', [brandId]);
+    // The locked Brand prevents concurrent foreign-key association inserts until commit.
+    // Current associations block deletion; never detach or cascade Boards.
+    const associated = await client.query('SELECT COUNT(*)::integer AS count FROM boards WHERE brand_id = $1', [brandId]);
+    const boardCount = Number(associated.rows[0].count);
+    if (!Number.isSafeInteger(boardCount) || boardCount < 0) throw new BrandDeletionError(500, 'BRAND_DELETE_FAILED');
+    if (boardCount > 0) throw new BrandDeletionError(409, 'BRAND_IN_USE', boardCount);
     // Memberships have no lifecycle outside their Canonical Brand.
     await client.query('DELETE FROM brand_members WHERE brand_id = $1', [brandId]);
     const deleted = await client.query('DELETE FROM brands WHERE id = $1 AND owner_email = $2', [brandId, ownerEmail]);
     if (deleted.rowCount !== 1) throw new Error('brand_delete_race');
     await client.query('COMMIT');
-    return { code: 'BRAND_DELETED', deletedBrandId: brandId, detachedBoardCount: detached.rowCount };
+    return { code: 'BRAND_DELETED', deletedBrandId: brandId, detachedBoardCount: 0 };
   } catch (error) {
     if (client) {
       try { await client.query('ROLLBACK'); } catch (_rollbackError) { /* original failure is authoritative */ }

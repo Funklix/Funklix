@@ -1,3 +1,4 @@
+// R5R2 updates only the approved logo/Avatar separation and dependent test fingerprints; historical SQL/auth remain pinned.
 'use strict';
 
 const assert = require('node:assert/strict');
@@ -169,8 +170,8 @@ test('R1 introduced no migration and its required historical files survive later
     'migrations/20260928_bw36_6_workspace_schema_foundation.sql': 'd7832add0dd280a05a420fad42c90b81929dae5e72eae9ccc5a7377b1d49a35c',
     'scripts/sql/bw36-7r1-workspace-identity-diagnostic.sql': '45b62b508f7b1c4dc0b553b52eddfce4fc890c7e2a6a713ea98a7401cf6561e8',
     'scripts/sql/bw36-7-workspace-backfill-preflight.sql': '617b23351d89a99966d7aa86c98bfd0dde0a02e7e94f90b2716c2b41baabd234',
-    'brand-sidebar.js': '10a42a42f4319eff9858f59333cb67b15d52ed22ea6b17b17000b5638bd6891f',
-    'scripts/check-bw36-4-simplified-brand-sidebar.js': '2d8cfe6e01c8e604bde5aff70c02872eb4c7ad2797c0082400ceeb3dcf7129a5',
+    'brand-sidebar.js': '42cd9ca38505a7e4755b888c494c73440a457e57bcc495059f9746bba02d1efb',
+    'scripts/check-bw36-4-simplified-brand-sidebar.js': '5617fb7227f1a5f2ce9efe4ecda660c6b2c89a822ec70585c8fd5088a6003e4b',
     'api/_auth-session.js': '2ee41ebe695a761c9aa05cc1c9a0df1a0dc81649f9150a6a083b6139c3e26e28',
     'api/_brand-access.js': '15f35ef6ab4e77a1fda5d07ecd24d5a85cf920d98a16beeb57f8d789990b214c',
     'api/_board-access.js': '84620c66037f2ff039c414032056b3e452f09e524cf481efa68c865cee59daef'

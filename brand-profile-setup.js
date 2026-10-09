@@ -7,7 +7,7 @@
   'use strict';
   const clone = value => JSON.parse(JSON.stringify(value));
   const object = value => !!value && typeof value === 'object' && !Array.isArray(value);
-  const SECTIONS = ['Brand Basics', 'Foundation', 'Audience', 'Voice & Messaging', 'Offers & Proof', 'Review'];
+  const SECTIONS = ['Overview', 'Brand DNA', 'Audience', 'Voice & Messaging', 'Offers & Proof', 'Brand Assets', 'Brand Avatar', 'Team and permissions', 'Campaign Sync', 'Review'];
   const FIELDS = Object.freeze({
     brandAssets: ['Brand Basics', 'Brand assets', 'assets'],
     brandCore: ['Foundation', 'Brand description', 'text'],
@@ -86,13 +86,16 @@
       website: options.website || options.brand.brand_core?.brandAssets?.domain || options.brand.brand_core?.website || '',
       section: 0, message: '', analysis: 'Not analyzed', logo: options.brand.logo_url ? 'Logo saved' : 'No logo yet. Initials are shown.',
       proposals: clone(options.pendingData?.proposals || {}), candidate: clone(options.pendingData?.candidate || null),
-      file: options.pendingData?.file || null, fileData: options.pendingData?.fileData || null, pending: '', dirty: !!options.website, deferred: false,
+      dnaPreflight: null, dnaDraft: null, avatarDraft: null, avatarDirection: '', file: options.pendingData?.file || null, fileData: options.pendingData?.fileData || null, pending: '', dirty: !!options.website, deferred: false,
       readOnly: options.brand.access?.canEditCanonicalBrand !== true || !['owner','admin','editor'].includes(options.brand.access?.role)
     };
     for (const [key, [, , type]] of Object.entries(FIELDS)) {
       if (type === 'assets') continue;
       if (!Object.hasOwn(state.core, key)) state.core[key] = type === 'text' ? '' : type === 'rules' ? { dos: [], donts: [] } : type === 'examples' ? { good: '', avoid: '' } : [];
     }
+    let baseline = stable({ name: state.name.trim(), website: String(options.brand.brand_core?.brandAssets?.domain || options.brand.brand_core?.website || '').trim(), core: state.core });
+    function draftSignature() { return stable({ name: state.name.trim(), website: state.website.trim(), core: state.core }); }
+    function contentDirty() { return draftSignature() !== baseline; }
     let notify = () => {};
     function current() {
       const live = getContext();
@@ -152,7 +155,7 @@
         const suggestions = filteredSuggestions(result.payload?.suggestions);
         if (!Object.values(suggestions).some(meaningful)) { state.proposals = {}; state.analysis = 'No usable information found'; state.message = 'No usable information found. You can fill in your Brand Profile manually.'; }
         else {
-          state.proposals = suggestions; state.analysis = 'Review website suggestions'; state.section = 5;
+          state.proposals = suggestions; state.analysis = 'Review website suggestions'; state.section = 9;
           // Filling an empty local draft is never a save or a replacement of confirmed data.
           if (!Object.keys(FIELDS).some(key => key !== 'brandAssets' && meaningful(state.core[key]))) {
             Object.assign(state.core, clone(suggestions)); state.proposals = {}; state.dirty = true;
@@ -169,22 +172,36 @@
         if (!name || name.length > 160) { state.message = 'Enter a Brand name between 1 and 160 characters.'; return false; }
         let domain = '';
         if (state.website.trim()) { try { domain = website(state.website); } catch { state.message = 'Enter a valid public HTTPS website.'; return false; } }
+        const submitted = draftSignature();
         const core = clone(state.core);
         if (object(core.brandAssets) || domain) core.brandAssets = { ...(object(core.brandAssets) ? core.brandAssets : {}), domain };
         const revision = state.brand.revision;
         const result = await jsonRequest(`/api/brands/${state.brand.id}`, 'PUT', { name, brand_core: core, revision });
         if (!result) return false;
         if (!result.response.ok) { state.message = errorText(result.response, 'The save was not confirmed. Your inputs are retained. Retry safely.', result.payload); return false; }
-        const brand = result.payload;
-        if (!validateBrand(brand, state.brand.id) || brand.revision !== revision + 1 || brand.name !== name
+        if (!validateBrand(result.payload, state.brand.id)) { state.message = 'The save response could not be verified. Your inputs are retained.'; return false; }
+        const brand = await verifyBrand();
+        if (!brand || !validateBrand(brand, state.brand.id) || brand.revision !== revision + 1 || brand.name !== name
           || stable(brand.brand_core) !== stable(core)) { state.message = 'The save response could not be verified. Your inputs are retained.'; return false; }
-        state.brand = brand; state.name = name; state.core = clone(core); state.dirty = false;
-        state.message = 'Brand Profile saved';
+        state.brand = brand;
+        // Inputs may change during an in-flight save. Clear only the submitted draft.
+        if (draftSignature() === submitted) { state.name = brand.name; state.core = clone(brand.brand_core); state.website = domain; baseline = draftSignature(); }
+        state.dirty = contentDirty();
+        state.message = state.dirty ? 'Brand Profile saved. Your newer edits are retained.' : 'Brand Profile saved';
         // Confirmation is authoritative. A later projection failure cannot undo it.
         try { await onSave(brand); }
         catch { state.message = 'Brand Profile saved. Refresh the view if the update is not visible everywhere yet.'; }
         return true;
       });
+    }
+    async function verifyBrand() {
+      const controller = new root.AbortController();
+      const timeout = root.setTimeout(() => controller.abort(), 12000);
+      try {
+        const response = await fetchImpl(`/api/brands/${state.brand.id}`, { signal: controller.signal, credentials: 'same-origin', cache: 'no-store', headers: { Accept: 'application/json' } });
+        const brand = await response.json().catch(() => null);
+        return current() && response.ok && validateBrand(brand, state.brand.id) ? brand : null;
+      } finally { root.clearTimeout(timeout); }
     }
     function stable(value) {
       if (Array.isArray(value)) return `[${value.map(stable).join(',')}]`;
@@ -209,9 +226,13 @@
           || logo.logo_revision !== revision + 1 || (action === 'remove' ? logo.logo_url !== null : logo.logo_url !== `/api/brands/${state.brand.id}/logo?revision=${logo.logo_revision}`)) {
           state.message = 'The logo save could not be verified. Retry or reload the latest Brand.'; return false;
         }
-        state.brand = { ...state.brand, logo_url: logo.logo_url, logo_revision: logo.logo_revision, logo_source: logo.source, logo_updated_at: logo.updated_at };
-        state.logo = action === 'remove' ? 'No logo yet. Initials are shown.' : 'Logo saved'; state.message = action === 'remove' ? 'Logo removed' : 'Logo saved'; state.candidate = null;
-        state.file = null; state.fileData = null;
+        const confirmed = await verifyBrand();
+        if (!confirmed || confirmed.logo_revision !== logo.logo_revision || confirmed.logo_url !== logo.logo_url) {
+          state.message = 'The logo save could not be verified. Retry or reload the latest Brand.'; return false;
+        }
+        state.brand = confirmed;
+        state.logo = action === 'remove' ? 'No logo yet. Initials are shown.' : 'Logo saved'; state.message = action === 'remove' ? 'Logo removed' : 'Logo saved'; if (action === 'discover') state.candidate = null;
+        state.file = null; state.fileData = null; state.candidate = null;
         try { await onLogo(state.brand.id, logo); }
         catch { state.message = 'Logo saved. Refresh the view if the update is not visible everywhere yet.'; }
         return true;
@@ -255,11 +276,59 @@
         if (!current()) return false;
         if (!response.ok || !validateBrand(brand, state.brand.id)) { state.message = errorText(response, 'Brand Profile could not be loaded. Retry.'); return false; }
         // Keep the unsaved draft for deliberate review against the latest revision.
-        state.brand = brand; state.readOnly = brand.access.canEditCanonicalBrand !== true || !['owner','admin','editor'].includes(brand.access.role);
+        state.brand = brand; baseline = stable({ name: brand.name.trim(), website: String(brand.brand_core?.brandAssets?.domain || brand.brand_core?.website || '').trim(), core: brand.brand_core }); state.dirty = contentDirty(); state.readOnly = brand.access.canEditCanonicalBrand !== true || !['owner','admin','editor'].includes(brand.access.role);
         state.message = 'Latest Brand loaded. Your unsaved inputs are retained; review them before saving.';
         try { await onSave(brand); } catch { state.message = 'Latest Brand loaded. Refresh the view if the update is not visible everywhere yet.'; }
         return true;
       });
+    }
+    function requestDna() {
+      if (!current() || state.readOnly || state.pending) return;
+      if (contentDirty()) { state.message = 'Save Brand Profile before generating DNA.'; changed(); return; }
+      state.dnaPreflight = options.dnaPreflight?.(state.core) || { status: 'usable' };
+      if (state.dnaPreflight.status === 'usable') return generateDna();
+      state.message = 'Review your Founder Story'; changed();
+    }
+    function generateDna() {
+      return run('Generating Brand DNA…', async () => {
+        if (contentDirty()) { state.message = 'Save Brand Profile before generating DNA.'; return false; }
+        const result = await jsonRequest('/api/discover-brand-dna', 'POST', { brandId: state.brand.id, revision: state.brand.revision,
+          brandBrainData: clone(state.core), refineGuidance: '', ...(options.founderContext?.(state.core, state.dnaPreflight) ? { founderStoryContext: options.founderContext(state.core, state.dnaPreflight) } : {}) });
+        if (!result?.response.ok || !result.payload?.primaryArchetype || !result.payload?.secondaryArchetype) {
+          state.message = result ? errorText(result.response, 'Brand DNA generation failed. Retry safely.', result.payload) : 'Brand DNA generation failed. Retry safely.'; return false;
+        }
+        state.dnaPreflight = null; state.dnaDraft = clone(result.payload); state.message = 'Review generated Brand DNA'; return true;
+      });
+    }
+    async function acceptDna() {
+      if (!current() || state.readOnly || state.pending || !state.dnaDraft) return false;
+      const previous = clone(state.core.brandDNA || {});
+      // A new strategy never silently replaces an accepted avatar or unknown fields.
+      state.core.brandDNA = { ...previous, ...clone(state.dnaDraft), avatar: previous.avatar, userApproved: true };
+      if (!previous.avatar) delete state.core.brandDNA.avatar;
+      state.dirty = true;
+      const saved = await save(); if (saved) state.dnaDraft = null; changed(); return saved;
+    }
+    function generateAvatar() {
+      return run('Generating Brand Avatar…', async () => {
+        if (contentDirty() || state.brand.brand_core?.brandDNA?.userApproved !== true) { state.message = 'Save and confirm Brand DNA before generating an avatar.'; return false; }
+        const result = await jsonRequest('/api/generate-brand-avatar', 'POST', { brandId: state.brand.id, revision: state.brand.revision,
+          brandBrainData: clone(state.brand.brand_core), brandDNA: clone(state.brand.brand_core.brandDNA), optionalUserDirection: state.avatarDirection });
+        if (!result?.response.ok || !/^https:\/\//.test(result.payload?.imageUrl || '')) {
+          state.message = result ? errorText(result.response, 'Avatar generation failed. Retry safely.', result.payload) : 'Avatar generation failed. Retry safely.'; return false;
+        }
+        state.avatarDraft = { ...clone(result.payload), userApproved: false }; state.message = 'Review generated Brand Avatar'; return true;
+      });
+    }
+    async function acceptAvatar() {
+      if (!current() || state.readOnly || state.pending || !state.avatarDraft) return false;
+      state.core.brandDNA = { ...state.core.brandDNA, avatar: { ...state.core.brandDNA?.avatar, ...clone(state.avatarDraft), userApproved: true } };
+      state.dirty = true;
+      const saved = await save(); if (saved) { state.avatarDraft = null; state.avatarDirection = ''; } changed(); return saved;
+    }
+    function discard() {
+      state.name = state.brand.name; state.core = clone(state.brand.brand_core); state.website = state.core.brandAssets?.domain || state.core.website || '';
+      baseline = draftSignature(); state.dirty = false; state.file = null; state.fileData = null; state.candidate = null; state.proposals = {}; state.dnaDraft = null; state.avatarDraft = null; state.avatarDirection = ''; state.dnaPreflight = null;
     }
     function refreshContext() {
       const live = getContext();
@@ -268,8 +337,9 @@
       return true;
     }
     return { state, current, refreshContext, analyze, save, upload, removeLogo, useLogo, chooseFile, applyProposal, reload,
-      subscribe(fn) { notify = fn; }, invalidate() { alive = false; state.file = null; state.fileData = null; state.candidate = null; state.proposals = {}; state.core = {}; state.website = ''; state.name = ''; },
-      dirty() { return state.dirty || (!state.deferred && !!(state.file || state.candidate || Object.keys(state.proposals).length)); }, busy() { return !!state.pending; } };
+      discard, requestDna, generateDna, acceptDna, generateAvatar, acceptAvatar, contentDirty,
+      subscribe(fn) { notify = fn; }, invalidate() { alive = false; state.file = null; state.fileData = null; state.candidate = null; state.proposals = {}; state.dnaDraft = null; state.avatarDraft = null; state.avatarDirection = ''; state.core = {}; state.website = ''; state.name = ''; },
+      dirty() { return contentDirty() || (!state.deferred && !!(state.file || state.candidate || state.dnaDraft || state.avatarDraft || state.avatarDirection || Object.keys(state.proposals).length)); }, busy() { return !!state.pending; } };
   }
 
   function mount(container, options) {
@@ -279,7 +349,7 @@
     function node(tag, text, parent) { const n = doc.createElement(tag); if (text) n.textContent = text; if (parent) parent.append(n); return n; }
     function button(key, parent, action, id = key) {
       const b = node('button', t(key), parent); b.type = 'button'; b.dataset.profileKey = id;
-      if (key === 'Save Brand Profile and continue' || (key === 'Confirm and save Brand Profile' && s.section !== 5)) b.className = 'fk-btn fk-btn-primary';
+      if (key === 'Save Brand Profile and continue' || (key === 'Confirm and save Brand Profile' && s.section !== 9)) b.className = 'fk-btn fk-btn-primary';
       b.disabled = !!s.pending || !!s.returning; b.addEventListener('click', action); return b;
     }
     function textField(label, value, parent, update, multiline = false, id = label) {
@@ -291,7 +361,7 @@
     }
     function readable(value, parent) {
       if (Array.isArray(value)) { const list = node('ul', '', parent); value.forEach(item => readable(item, node('li', '', list))); }
-      else if (object(value)) { Object.entries(value).forEach(([key, item]) => { if (meaningful(item)) { const line = node('div', '', parent); if (['name', 'note', 'description', 'benefit', 'evidence', 'good', 'avoid', 'dos', 'donts'].includes(key)) node('strong', t({ name: 'Name', note: 'Description', description: 'Description', benefit: 'Benefit', evidence: 'Evidence', good: 'Good example', avoid: 'Avoid', dos: 'Do', donts: 'Avoid' }[key]), line); readable(item, line); } }); }
+      else if (object(value)) { Object.entries(value).forEach(([key, item]) => { if (meaningful(item)) { const line = node('div', '', parent); node('strong', t({ name: 'Name', note: 'Description', description: 'Description', benefit: 'Benefit', evidence: 'Evidence', good: 'Good example', avoid: 'Avoid', dos: 'Do', donts: 'Avoid', toneSignals: 'Tone signals', missionSignals: 'Mission signals', audienceSignals: 'Audience signals', messagingSignals: 'Messaging signals', visualSignals: 'Visual signals' }[key] || key.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/[_-]+/g, ' ')), line); readable(item, line); } }); }
       else if (meaningful(value)) node('p', String(value), parent);
     }
     function fields(section, parent) {
@@ -336,7 +406,7 @@
           node('h4', t(label), parent); readable(s.core[key], parent);
         } else textField(label, type === 'list' ? (s.core[key] || []).join('\n') : s.core[key], parent, value => { s.core[key] = type === 'list' ? value.split('\n').map(line => line.trim()).filter(Boolean) : value; }, true);
       }
-      const modules = section === 'Foundation' ? ['mission', 'vision', 'values'] : section === 'Audience' ? ['audience', 'icp'] : section === 'Offers & Proof' ? ['product_knowledge', 'business_plan', 'pitch_deck', 'whitepaper'] : [];
+      const modules = section === 'Foundation' ? ['mission', 'vision', 'values', 'founder_story'] : section === 'Audience' ? ['audience', 'icp'] : section === 'Offers & Proof' ? ['product_knowledge', 'business_plan', 'pitch_deck', 'whitepaper'] : [];
       for (const type of modules) {
         const definition = options.moduleDefinition(type);
         if (!definition) continue;
@@ -350,6 +420,7 @@
           }, true);
         } else if (tile && meaningful(tile.content)) { count++; node('h4', t(definition.label), parent); readable(tile.content, parent); }
       }
+      if (section === 'Offers & Proof') for (const [key, label] of [['offers', 'Offers'], ['proof', 'Proof']]) if (meaningful(s.core[key])) { count++; node('h4', t(label), parent); readable(s.core[key], parent); }
       if (section === 'Offers & Proof' && meaningful(s.core.valueProposition)) { count++; node('h4', t('Value Proposition'), parent); readable(s.core.valueProposition, parent); }
       if (!count) node('p', t('No information in this section yet. Existing knowledge modules remain available in advanced options.'), parent);
     }
@@ -390,10 +461,10 @@
         textField('Brand name', s.name, section, value => { s.name = value; });
         textField('Website', s.website, section, value => { s.website = value; s.proposals = {}; s.candidate = null; s.analysis = 'Not analyzed'; });
         if (!s.readOnly) button('Analyze website', section, () => { void session.analyze(); });
-        logo(section); fields('Brand Basics', section);
-      } else if (s.section === 5) {
+        fields('Foundation', section);
+      } else if (s.section === 9) {
         const list = node('ul', '', section);
-        for (const key of SECTIONS.slice(0, 5)) {
+        for (const key of ['Brand Basics', 'Foundation', 'Audience', 'Voice & Messaging', 'Offers & Proof']) {
           const complete = key === 'Brand Basics' ? !!s.name.trim() && !!s.website.trim()
             : key === 'Offers & Proof' ? meaningful(s.core.valueProposition) || s.core.customTiles?.some(tile => ['product_knowledge','business_plan','pitch_deck','whitepaper'].includes(tile.moduleType) && meaningful(tile.content))
             : Object.entries(FIELDS).filter(([, [group]]) => group === key).some(([field]) => meaningful(s.core[field]));
@@ -406,6 +477,52 @@
           node('p', t('Website suggestion'), proposal); readable(value, proposal);
           if (!s.readOnly) button('Use suggestion', proposal, () => session.applyProposal(key), `proposal-${key}`);
         }
+      } else if (s.section === 1) {
+        const dna = s.dnaDraft || s.core.brandDNA || {};
+        if (options.renderDna) options.renderDna(section, dna);
+        for (const key of ['primaryArchetype', 'secondaryArchetype', 'personality', 'positioning', 'reasoning', 'recommendedVoice', 'recommendedVisualDirection']) {
+          const value = s.core.brandDNA?.[key];
+          if (value !== undefined && typeof value !== 'string') { node('h4', t({ primaryArchetype: 'Primary archetype', secondaryArchetype: 'Secondary archetype', personality: 'Brand personality', positioning: 'Positioning', reasoning: 'Reasoning', recommendedVoice: 'Recommended voice', recommendedVisualDirection: 'Recommended visual direction' }[key]), section); readable(value, section); continue; }
+          textField({ primaryArchetype: 'Primary archetype', secondaryArchetype: 'Secondary archetype', personality: 'Brand personality', positioning: 'Positioning', reasoning: 'Reasoning', recommendedVoice: 'Recommended voice', recommendedVisualDirection: 'Recommended visual direction' }[key], value, section, text => { (s.core.brandDNA ||= {})[key] = text; }, true, `dna-${key}`);
+        }
+        if (s.core.brandDNA?.signals) { node('h4', t('Brand signals'), section); readable(s.core.brandDNA.signals, section); }
+        for (const [key, label] of [['personality', 'Brand personality'], ['positioning', 'Positioning'], ['audiences', 'Audience']]) if (meaningful(s.core[key])) { node('h4', t(label), section); readable(s.core[key], section); }
+        fields('Foundation', section);
+        if (!s.readOnly) {
+          button('Generate Brand DNA', section, () => { void session.requestDna(); });
+          if (s.dnaPreflight && s.dnaPreflight.status !== 'usable') {
+            node('p', t('Your Founder Story helps explain your Brand DNA. Review it first or continue with the available information.'), section);
+            button('Continue anyway', section, () => { void session.generateDna(); });
+            const definition = options.moduleDefinition('founder_story');
+            if (definition) textField('Founder Story', s.core.customTiles?.find(tile => tile.moduleType === 'founder_story')?.content || '', section, value => {
+              let tile = s.core.customTiles?.find(tile => tile.moduleType === 'founder_story');
+              if (!tile) { tile = options.createTile('founder_story'); (s.core.customTiles ||= []).push(tile); } tile.content = value;
+            }, true);
+          }
+          if (s.dnaDraft) button('Save Brand DNA', section, () => { void session.acceptDna(); });
+        }
+      } else if (s.section === 5) { logo(section); fields('Brand Basics', section);
+      } else if (s.section === 6) {
+        const accepted = s.core.brandDNA?.avatar;
+        node('p', t('The Brand Avatar is your generated Brand advisor. The Brand Logo identifies your company.'), section);
+        for (const [avatar, label] of [[accepted, 'Saved Brand Avatar'], [s.avatarDraft, 'Review generated Brand Avatar']]) {
+          if (!avatar?.imageUrl || !/^(https:\/\/|\/)/.test(avatar.imageUrl)) continue;
+          node('h4', t(label), section);
+          const img = node('img', '', section); img.className = 'profile-brand-avatar'; img.alt = t('Brand Avatar'); img.src = avatar.imageUrl;
+          img.addEventListener('error', () => { img.remove(); node('p', t('Brand Avatar unavailable. Retry safely.'), section); }, { once: true });
+          if (avatar.prompt) { const details = node('details', '', section); node('summary', t('Avatar direction'), details); node('p', avatar.prompt, details); }
+        }
+        if (!accepted?.imageUrl) node('p', t('No Brand Avatar yet.'), section);
+        if (!s.readOnly) {
+          textField('Avatar direction', s.avatarDirection, section, value => { s.avatarDirection = value; }, true);
+          button(accepted?.imageUrl ? 'Regenerate Avatar' : 'Generate Avatar', section, () => { void session.generateAvatar(); });
+          if (s.avatarDraft) button('Save Avatar', section, () => { void session.acceptAvatar(); });
+        }
+      } else if (s.section === 7) { options.renderTeam?.(section, s.brand);
+        if (!s.brand.access.canManageBrandMembers) node('p', t('Your access is read-only'), section);
+      } else if (s.section === 8) {
+        node('p', t('Campaign snapshots change only after an explicit campaign update.'), section);
+        if (options.hasSnapshot?.()) button('Campaign Brand Snapshot', section, () => options.onSnapshot());
       } else fields(SECTIONS[s.section], section);
       const feedback = node('p', t(s.pending || s.message), container); feedback.setAttribute('role', 'status'); feedback.setAttribute('aria-live', 'polite');
       const actions = node('div', '', container); actions.className = 'profile-actions';
@@ -413,7 +530,7 @@
         button('Confirm and save Brand Profile', actions, () => { void session.save(); });
         button('Reload latest Brand', actions, () => { void session.reload(); });
       }
-      if (options.hasProject() || s.section === 5) button(options.hasProject() ? 'Save Brand Profile and continue' : 'Back', actions, async () => {
+      if (options.hasProject() || s.section === 9) button(options.hasProject() ? 'Save Brand Profile and continue' : 'Back', actions, async () => {
         if (options.hasProject() && !s.readOnly) {
           if (!await session.save()) return;
           // Optional unuploaded files/suggestions stay in the account's memory cache.
