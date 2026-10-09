@@ -1,3 +1,4 @@
+// R5R2 updates only the approved logo/Avatar separation and dependent test fingerprints; historical SQL/auth remain pinned.
 'use strict';
 
 const assert = require('node:assert/strict');
@@ -120,8 +121,8 @@ test('browser preference, UI, provider and AI boundaries are untouched', () => {
 });
 test('BW-36.6 migration and BW-36.4 sidebar remain byte-identical', () => {
   assert.equal(digest('migrations/20260928_bw36_6_workspace_schema_foundation.sql'), 'd7832add0dd280a05a420fad42c90b81929dae5e72eae9ccc5a7377b1d49a35c');
-  assert.equal(digest('brand-sidebar.js'), '10a42a42f4319eff9858f59333cb67b15d52ed22ea6b17b17000b5638bd6891f');
-  assert.equal(digest('scripts/check-bw36-4-simplified-brand-sidebar.js'), '2d8cfe6e01c8e604bde5aff70c02872eb4c7ad2797c0082400ceeb3dcf7129a5');
+  assert.equal(digest('brand-sidebar.js'), '42cd9ca38505a7e4755b888c494c73440a457e57bcc495059f9746bba02d1efb');
+  assert.equal(digest('scripts/check-bw36-4-simplified-brand-sidebar.js'), '5617fb7227f1a5f2ce9efe4ecda660c6b2c89a822ec70585c8fd5088a6003e4b');
 });
 test('package and Runtime Boot Safety register BW-36.7 immediately after BW-36.6', () => {
   assert.equal(pkg.scripts['check:bw36.7'], 'node scripts/check-bw36-7-workspace-backfill-preflight.js');

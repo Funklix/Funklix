@@ -21,15 +21,15 @@ const suggestions = { brandCore: 'Positioning', valueProposition: 'Benefit', per
 const response = (payload, status = 200) => ({ ok: status >= 200 && status < 300, status, json: async () => clone(payload) });
 function makeSession(overrides = {}) {
   let context = { account: {}, generation: 1, workspaceId: W, brandId: B, authorized: true };
-  const calls = [], saves = [], logos = [];
+  const calls = [], saves = [], logos = []; let persisted = clone(overrides.brand || brand);
   const options = { brand: clone(brand), getContext: () => context, validateBrand: value => value?.id === B && Number.isSafeInteger(value.revision) && value.access && value.brand_core,
     requestId: () => `test-${calls.length}`, onSave: value => saves.push(value), onLogo: (...args) => logos.push(args),
     fetchImpl: async (url, init) => {
       const body = init.body ? JSON.parse(init.body) : null; calls.push({ url, init, body });
       if (url === '/api/analyze-brand-domain') return response({ suggestions, logoDiscovery: candidate });
-      if (url.endsWith('/logo')) return response({ contract: 'brand_logo_v1', request_id: body.request_id, logo: { logo_url: `/api/brands/${B}/logo?revision=${body.expected_revision + 1}`, logo_revision: body.expected_revision + 1, source: body.action === 'upload' ? 'uploaded' : 'discovered' } });
-      if (init.method === 'PUT') return response({ ...brand, name: body.name, brand_core: body.brand_core, revision: body.revision + 1 });
-      return response({ ...brand, revision: 2 });
+      if (url.endsWith('/logo')) { persisted = { ...persisted, logo_url: `/api/brands/${B}/logo?revision=${body.expected_revision + 1}`, logo_revision: body.expected_revision + 1 }; return response({ contract: 'brand_logo_v1', request_id: body.request_id, logo: { logo_url: `/api/brands/${B}/logo?revision=${body.expected_revision + 1}`, logo_revision: body.expected_revision + 1, source: body.action === 'upload' ? 'uploaded' : 'discovered' } }); }
+      if (init.method === 'PUT') { persisted = { ...persisted, name: body.name, brand_core: body.brand_core, revision: body.revision + 1 }; return response(persisted); }
+      return response(persisted);
     }, ...overrides };
   return { options, session: profile.createSession(options), calls, saves, logos, change(value) { context = { ...context, ...value }; } };
 }
@@ -213,9 +213,9 @@ async function checkProfileUI() {
   for (const viewer of [false, true]) {
     const fixture = makeSession({ brand: { ...clone(brand), access: { role: viewer ? 'viewer' : 'owner', canEditCanonicalBrand: !viewer } } });
     const mounted = root.FunklixBrandProfileSetup.mount(host, { ...fixture.options, language: () => 'de', hasProject: () => true, onContinue() {}, onAdvanced() {}, moduleDefinition: registry.getModuleDefinition, createTile: type => ({ id: 'module-fixture', title: type, content: '', moduleType: type }) });
-    assert(host.textContent.includes('Markengrundlagen')); assert(host.textContent.includes('Fundament')); assert(!host.textContent.includes('Canonical')); assert(!host.textContent.includes('$.')); assert(!host.textContent.includes('"preserve"'));
+    assert(host.textContent.includes(language.t('Overview','de'))); assert(host.textContent.includes('Marken-DNA')); assert(!host.textContent.includes('Canonical')); assert(!host.textContent.includes('$.')); assert(!host.textContent.includes('"preserve"'));
     const buttons = host.querySelectorAll('button').map(n => n.textContent);
-    assert.equal(buttons.includes('Logo hochladen'), !viewer); assert.equal(buttons.includes('Website analysieren'), !viewer); assert.equal(buttons.includes('Markenprofil bestätigen und speichern'), !viewer);
+    assert.equal(buttons.includes('Markenmaterialien'), true); assert.equal(buttons.includes('Website analysieren'), !viewer); assert.equal(buttons.includes('Markenprofil bestätigen und speichern'), !viewer);
     if (viewer) { assert.equal(host.querySelectorAll('input').some(n => n.type === 'file'), false); assert(host.querySelectorAll('input').every(n => n.disabled)); }
     else {
       const nameInput = host.querySelectorAll('[data-profile-key]').find(n => n.dataset.profileKey === 'Brand name'); nameInput.focus(); mounted.render(); assert.equal(doc.activeElement.dataset.profileKey, 'Brand name');
@@ -242,7 +242,7 @@ async function checkProfileUI() {
   const flight = fixture.session.analyze(); assert.equal(fixture.session.analyze(), flight); await flight;
   assert.equal(fixture.calls.length, 1); assert.equal(fixture.saves.length, 0); assert.equal(fixture.logos.length, 0); assert.equal(fixture.session.state.core.brandCore, 'Positioning'); assert(profile.validCandidate(fixture.session.state.candidate)); assert.equal(fixture.session.state.core.unknown.preserve, true); assert.equal(fixture.session.state.core.brandAssets, undefined);
   await fixture.session.save(); assert.equal(fixture.saves.length, 1); assert.equal(fixture.calls[1].body.brand_core.brandAssets.domain, 'https://example.com/'); assert.equal(fixture.saves[0].brand_core.unknown.preserve, true);
-  await fixture.session.useLogo(); assert.equal(fixture.logos.length, 1); assert.equal(fixture.calls.at(-1).body.action, 'discover'); assert.equal(fixture.calls.at(-1).body.image_sha256, candidate.image_sha256);
+  await fixture.session.useLogo(); assert.equal(fixture.logos.length, 1); assert.equal(fixture.calls.findLast(c => c.init.method === 'POST').body.action, 'discover'); assert.equal(fixture.calls.findLast(c => c.init.method === 'POST').body.image_sha256, candidate.image_sha256);
   fixture = makeSession({ brand: { ...clone(brand), brand_core: { ...brand.brand_core, brandCore: 'Confirmed' } }, website: 'example.com' });
   await fixture.session.analyze(); assert.equal(fixture.session.state.core.brandCore, 'Confirmed'); assert.equal(fixture.session.state.proposals.brandCore, 'Positioning'); assert.equal(fixture.saves.length, 0); fixture.session.applyProposal('brandCore'); assert.equal(fixture.session.state.core.brandCore, 'Positioning'); assert.equal(fixture.saves.length, 0);
   fixture = makeSession({ website: 'example.com', fetchImpl: async () => response({ suggestions, logoDiscovery: { status: 'not_found' } }) });
@@ -251,7 +251,7 @@ async function checkProfileUI() {
   fixture = makeSession(); assert.equal(await fixture.session.chooseFile({ ...file, type: 'image/svg+xml' }, async () => ''), false);
   await fixture.session.chooseFile(file, async () => png.toString('base64')); assert.equal(fixture.calls.length, 0); await fixture.session.upload(); assert.equal(fixture.logos.length, 1); assert.equal(fixture.session.state.file, null); assert.equal(fixture.session.state.logo, 'Logo saved');
   let failUpload = true;
-  fixture = makeSession({ fetchImpl: async (_url, init) => { const body = JSON.parse(init.body); return failUpload ? response({ error: { code: 'UPDATE_FAILED' } }, 500) : response({ contract: 'brand_logo_v1', request_id: body.request_id, logo: { logo_url: `/api/brands/${B}/logo?revision=1`, logo_revision: 1, source: 'uploaded' } }); } });
+  fixture = makeSession({ fetchImpl: async (_url, init) => { if (!init.body) return response({ ...brand, logo_url: `/api/brands/${B}/logo?revision=1`, logo_revision: 1 }); const body = JSON.parse(init.body); return failUpload ? response({ error: { code: 'UPDATE_FAILED' } }, 500) : response({ contract: 'brand_logo_v1', request_id: body.request_id, logo: { logo_url: `/api/brands/${B}/logo?revision=1`, logo_revision: 1, source: 'uploaded' } }); } });
   await fixture.session.chooseFile(file, async () => png.toString('base64')); assert.equal(await fixture.session.upload(), false); assert.equal(fixture.session.state.file, file); assert.equal(fixture.session.state.brand.id, B); assert.equal(fixture.logos.length, 0); failUpload = false; assert.equal(await fixture.session.upload(), true);
   for (const change of [{ account: {} }, { generation: 2 }, { authorized: false }]) {
     let release; fixture = makeSession({ website: 'example.com', fetchImpl: () => new Promise(resolve => { release = resolve; }) }); const pending = fixture.session.analyze(); fixture.change(change); fixture.session.invalidate(); release(response({ suggestions, logoDiscovery: candidate })); await pending; assert.equal(fixture.session.state.candidate, null); assert.equal(fixture.session.state.fileData, null); assert.equal(fixture.session.state.website, ''); assert.equal(fixture.saves.length, 0);

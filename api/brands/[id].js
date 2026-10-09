@@ -33,7 +33,7 @@ module.exports = async function handler(req, res) {
       return res.status(200).json({ ok: true, requestId, ...result });
     } catch (error) {
       const failure = error instanceof BrandDeletionError ? error : new BrandDeletionError(500, 'BRAND_DELETE_FAILED');
-      return res.status(failure.status).json({ ok: false, code: failure.code, requestId });
+      return res.status(failure.status).json({ ok: false, code: failure.code, ...(failure.code === 'BRAND_IN_USE' ? { boardCount: failure.boardCount } : {}), requestId });
     }
   }
 

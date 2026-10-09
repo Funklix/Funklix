@@ -72,12 +72,35 @@
       nodes['workspace-context-trigger'].setAttribute('aria-expanded','false');nodes['workspace-brand-trigger'].setAttribute('aria-expanded','false');nodes['workspace-context-manage'].setAttribute('aria-expanded','false');nodes['workspace-brand-manage']?.setAttribute('aria-expanded','false');
       const target=returnFocus;surface=null;removeTransient();if(restore&&returnFocus?.isConnected)returnFocus.focus();
     }
+    function captureTarget(item) {
+      return Object.freeze({ ...item, workspace_id: model.workspace.id,
+        access: Object.freeze({ role: item.role, canDelete: item.role === 'owner', canEdit: ['owner','admin','editor'].includes(item.role) }),
+        association: Object.freeze({ boardCount: model.workspace.boards.filter(b => b.brand_id === item.id).length, revision: item.revision }) });
+    }
+    function openRowManagement(item, origin) {
+      if (host.hidden || host.dataset.status !== 'ready' || !model.brands.some(b => b.id === item.id && b.role === item.role)) return;
+      const target = captureTarget(item);
+      if (activeSurface()) close(false);
+      menu = doc.createElement('div'); menu.id = 'brand-context-menu'; menu.className = 'workspace-context-menu'; menu.setAttribute('role', 'menu'); menu.setAttribute('aria-label', `${t('brandActions')}: ${target.name}`);
+      const add = (text, action) => { const button = doc.createElement('button'); button.type = 'button'; button.className = 'workspace-context-menu-item'; button.setAttribute('role', 'menuitem'); button.textContent = text; button.addEventListener('click', () => beforeBrandAction(() => { close(false); action(); })); menu.append(button); };
+      add(t('openProfile'), () => options.onOpenBrand?.(target));
+      if (target.access.canDelete) add(t('deleteBrand'), () => options.onDeleteBrand?.(target, nodes['workspace-brand-trigger']));
+      menu.addEventListener('keydown', event => keyboard(event, menu));
+      doc.body.append(menu); surface = menu; returnFocus = nodes['workspace-brand-trigger']; position(menu, returnFocus, 220, true); menu.querySelector('button').focus();
+    }
     function option(item,selected,kind){
       const button=doc.createElement('button');button.type='button';button.className='workspace-context-option';button.setAttribute('role','option');button.setAttribute('aria-selected',String(selected));button.dataset[kind+'Id']=item.id;button.title=item.name;
       const icon=doc.createElement('span');icon.className=`workspace-context-avatar${kind==='brand'?' workspace-brand-avatar':''}`;avatar(icon,item);
       const label=doc.createElement('span');label.className='workspace-context-option-copy';const strong=doc.createElement('strong');strong.textContent=item.name;label.append(strong);
       if(kind==='workspace'){const small=doc.createElement('small');small.textContent=brandCountLabel(item.brands?.length||0,language());if(item.role==='viewer'||item.role==='member')small.title=t('readOnly');label.append(small);}
-      const check=doc.createElement('span');check.className='workspace-context-check';check.setAttribute('aria-hidden','true');check.textContent=selected?'✓':'';button.append(icon,label,check);return button;
+      const check=doc.createElement('span');check.className='workspace-context-check';check.setAttribute('aria-hidden','true');check.textContent=selected?'✓':'';button.append(icon,label,check);
+      if (kind === 'brand' && ['owner','admin','editor'].includes(item.role)) {
+        const row = doc.createElement('div'); row.className = 'workspace-brand-option-row'; row.title = item.name;
+        const actions = doc.createElement('button'); actions.type = 'button'; actions.className = 'workspace-brand-row-actions'; actions.textContent = '…'; actions.dataset.brandActionId = item.id; actions.setAttribute('aria-label', `${t('brandActions')}: ${item.name}`); actions.setAttribute('aria-haspopup', 'menu');
+        actions.addEventListener('click', event => { event.stopPropagation(); openRowManagement(item, actions); });
+        row.append(button, actions); return row;
+      }
+      return button;
     }
     function visibleOptions(container){return [...container.querySelectorAll('[role="option"]')].filter(item=>!item.hidden);}
     function openSelector(kind,trigger){
@@ -175,7 +198,7 @@
       const multipleBrands=model.brands.length>1&&!model.unbrandedBoard;nodes['workspace-brand-chevron'].hidden=!multipleBrands;nodes['workspace-brand-trigger'].disabled=input.status!=='ready'||!multipleBrands;nodes['workspace-brand-trigger'].setAttribute('aria-label',multipleBrands?t('chooseBrand'):brandName);host.hidden=input.signedIn===false;const brandManage=input.signedIn===true&&input.status==='ready'&&(canRename(model.workspace)||model.brand?.role==='owner');nodes['workspace-brand-manage'].hidden=!brandManage;nodes['workspace-brand-manage'].disabled=!brandManage;nodes['workspace-brand-manage'].setAttribute('aria-label',t('brandActions'));nodes['workspace-brand-manage'].title=t('brandActions');if(activeSurface()&&!preserveSurface)close(false);else updatePosition();return model;
     }
     function selectFrom(event,kind){const target=event.target.closest('[role="option"]');if(!target)return;if(kind==='workspace')Promise.resolve(options.onWorkspace?.(target.dataset.workspaceId)).then(accepted=>{if(accepted!==false)close();});else{const accepted=options.onBrand?.(target.dataset.brandId);if(accepted!==false)close();}}
-    function keyboard(event,container){const items=visibleOptions(container),index=items.indexOf(doc.activeElement);if(['ArrowDown','ArrowUp','Home','End'].includes(event.key)){event.preventDefault();const next=event.key==='Home'?0:event.key==='End'?items.length-1:(index+(event.key==='ArrowDown'?1:-1)+items.length)%items.length;items[next]?.focus();}if(event.key==='Enter'||event.key===' '){event.preventDefault();doc.activeElement?.click();}}
+    function keyboard(event,container){const items=[...container.querySelectorAll('[role=option], [role=menuitem], .workspace-brand-row-actions')].filter(item=>!item.hidden),index=items.indexOf(doc.activeElement);if(['ArrowDown','ArrowUp','Home','End'].includes(event.key)){event.preventDefault();const next=event.key==='Home'?0:event.key==='End'?items.length-1:(index+(event.key==='ArrowDown'?1:-1)+items.length)%items.length;items[next]?.focus();}if(event.key==='Enter'||event.key===' '){event.preventDefault();doc.activeElement?.click();}}
     nodes['workspace-context-trigger'].addEventListener('click',()=>openSelector('workspace',nodes['workspace-context-trigger']));nodes['workspace-context-manage'].addEventListener('click',openManagement);nodes['workspace-brand-trigger'].addEventListener('click',()=>openSelector('brand',nodes['workspace-brand-trigger']));
     nodes['workspace-brand-manage'].addEventListener('click',openBrandManagement);
     nodes['workspace-context-retry'].addEventListener('click',()=>options.onRetry?.());

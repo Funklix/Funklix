@@ -1,3 +1,4 @@
+// R5R2 updates only the approved logo/Avatar separation and dependent test fingerprints; historical SQL/auth remain pinned.
 'use strict';
 
 const assert = require('node:assert/strict');
@@ -139,9 +140,9 @@ test('current Brand, Board, shares, tokens and membership policies are not cut o
 });
 test('UI, BW-36.4 sidebar, compact bar and Canvas toolbar baselines are unchanged', () => {
   const expected = {
-    'brand-sidebar.js': '10a42a42f4319eff9858f59333cb67b15d52ed22ea6b17b17000b5638bd6891f',
+    'brand-sidebar.js': '42cd9ca38505a7e4755b888c494c73440a457e57bcc495059f9746bba02d1efb',
     'styles.css': 'b70d22f3dbca76c365037c6b6b07243c100317e1873339a53f091c3ad29f5582',
-    'scripts/check-bw36-4-simplified-brand-sidebar.js': '2d8cfe6e01c8e604bde5aff70c02872eb4c7ad2797c0082400ceeb3dcf7129a5',
+    'scripts/check-bw36-4-simplified-brand-sidebar.js': '5617fb7227f1a5f2ce9efe4ecda660c6b2c89a822ec70585c8fd5088a6003e4b',
     'scripts/check-bw36-2-compact-non-canvas-context-bar.js': '7d000ad953878f9c91abb3c46f66bb91750be4b0252e0452b8e02e95e02216c8',
     'scripts/check-bw36-1r1-canvas-toolbar-visibility-and-funnel-footer.js': '2a418644a2c5c3065a63968abb91cff287ecfbd465f939fccecc4ca9cfad2fc9'
   };

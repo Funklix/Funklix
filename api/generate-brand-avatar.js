@@ -1,3 +1,4 @@
+const { resolveGenerationBrand } = require('./_brand-generation-access');
 const { uploadGeneratedImage } = require("./_image-storage");
 const { buildBrandBrainContext } = require("./_brand-brain-context");
 
@@ -70,11 +71,15 @@ Final image style: semi-realistic symbolic figure, modern brand identity avatar,
 module.exports = async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
+  let input;
+  try { input = await resolveGenerationBrand(req, res); } catch { return res.status(503).json({ code: 'DATABASE_UNAVAILABLE' }); }
+  if (!input) return;
+
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) return res.status(500).json({ error: "Server is missing OPENAI_API_KEY" });
 
   try {
-    const { boardId = "", brandBrainData = {}, brandDNA = {}, optionalUserDirection = "" } = req.body || {};
+    const { boardId = "", brandBrainData = {}, brandDNA = {}, optionalUserDirection = "" } = input;
     if (!brandDNA?.primaryArchetype || !brandDNA?.userApproved) {
       return res.status(400).json({ error: "Accepted Brand DNA is required before generating a Brand Avatar." });
     }

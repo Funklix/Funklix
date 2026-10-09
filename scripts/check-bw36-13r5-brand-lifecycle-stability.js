@@ -71,8 +71,8 @@ async function boundaries() {
   const admin = {email:'unrelated-admin@example.test'}; r.db.brandRole='admin';
   assert.equal((await r.request('DELETE',`/api/brands/${B}`,{confirmationName:r.db.brands[0].name},admin)).statusCode,404);
   assert.equal((await r.request('DELETE',`/api/brands/${B}`,{confirmationName:'wrong'})).statusCode,409);
-  const deleted = await r.request('DELETE',`/api/brands/${B}`,{confirmationName:r.db.brands[0].name}); assert.equal(deleted.body.code,'BRAND_DELETED');
-  assert.equal(r.db.boards[0].brand_id,null); assert.deepEqual(r.db.boards[0].brand_core_snapshot,snapshot.brand_core_snapshot); assert.deepEqual(r.db.boards[0].canvas_json,snapshot.canvas_json);
+  const blocked = await r.request('DELETE',`/api/brands/${B}`,{confirmationName:r.db.brands[0].name}); assert.equal(blocked.body.code,'BRAND_IN_USE'); assert.equal(blocked.body.boardCount,1);
+  assert.equal(r.db.boards[0].brand_id,B); assert.deepEqual(r.db.boards[0].brand_core_snapshot,snapshot.brand_core_snapshot); assert.deepEqual(r.db.boards[0].canvas_json,snapshot.canvas_json);
   assert.equal((await r.request('GET',`/api/boards/${D}`)).statusCode,200);
   assert(!JSON.stringify(r.logs).includes(EMAIL)); assert(!JSON.stringify(r.logs).includes('private SQL'));
   assert(r.db.queries.every(sql => !/CREATE TABLE|ALTER TABLE|DROP TABLE/.test(sql)),'No migration or runtime schema change');
@@ -133,31 +133,31 @@ async function browserJourney() {
     await page.waitForFunction(()=>brandProfileController.state.logo==='Logo saved'); assert.equal(r.db.brands[0].logo_source,'discovered');
     while (await page.locator('[data-profile-key^="proposal-"]').count()) await page.locator('[data-profile-key^="proposal-"]').first().click();
     await clickKey('Remove logo'); await page.waitForFunction(()=>brandProfileController.state.message==='Logo removed');
-    await clickKey('Brand Basics');
+    await clickKey('Brand Assets');
     await page.locator('.guided-brand-profile input[type=file]').setInputFiles({name:'local-logo.png',mimeType:'image/png',buffer:png});
     r.setMissingSecret(true); await clickKey('Upload logo');
     await page.waitForFunction(()=>brandProfileController.state.message.includes('Logo storage is temporarily unavailable'));
     assert(await page.locator('.profile-logo-candidate').isVisible());
-    await clickKey('Foundation'); await page.locator('[data-profile-key="Brand description"]').fill('Saved with unavailable optional logo');
+    await clickKey('Overview'); await page.locator('[data-profile-key="Brand description"]').fill('Saved with unavailable optional logo');
     await clickKey('Confirm and save Brand Profile'); await page.waitForFunction(()=>!brandProfileController.state.dirty);
     assert.equal(await page.evaluate(()=>brandProfileController.dirty()),true,'Unsaved optional file remains protected after core save');
     await page.locator('#home-nav-btn').click();await page.getByRole('button',{name:'Save and continue',exact:true}).click();
     await page.waitForFunction(()=>state.activeView==='home');await page.locator('#brand-core-nav-btn').click();await ready();
     assert.equal(await page.evaluate(()=>brandProfileController.state.file.name),'local-logo.png','Optional file retained in account memory across navigation');
-    r.setMissingSecret(false);await clickKey('Brand Basics');assert(await page.locator('.profile-logo-candidate').isVisible());await clickKey('Upload logo');await page.waitForFunction(()=>brandProfileController.state.logo==='Logo saved');
+    r.setMissingSecret(false);await clickKey('Brand Assets');assert(await page.locator('.profile-logo-candidate').isVisible());await clickKey('Upload logo');await page.waitForFunction(()=>brandProfileController.state.logo==='Logo saved');
     const logoURL=`/api/brands/${B}/logo?revision=${r.db.brands[0].logo_revision}`;
     assert.equal(await page.locator('#workspace-brand-avatar img').getAttribute('src'),logoURL);
     await page.locator('#home-nav-btn').click();await page.locator('#brand-core-nav-btn').click();await ready();
     assert.equal(await page.locator('.profile-header .profile-logo img').getAttribute('src'),logoURL);
     await page.waitForFunction(()=>document.querySelector('.profile-header .profile-logo img')?.naturalWidth===32);
-    await clickKey('Foundation');await page.locator('[data-profile-key="Brand description"]').fill('Retained across a catalog refresh');
+    await clickKey('Overview');await page.locator('[data-profile-key="Brand description"]').fill('Retained across a catalog refresh');
     await page.evaluate(()=>{state.workspaceCatalog.status='stale';state.workspaceCatalog.generation++;renderCanonicalBrandDetail();});
     assert.equal(await page.evaluate(()=>brandProfileController.state.core.brandCore),'Retained across a catalog refresh');
     await clickKey('Confirm and save Brand Profile');assert.equal(await page.evaluate(()=>brandProfileController.state.core.brandCore),'Retained across a catalog refresh');
     await page.evaluate(()=>{state.workspaceCatalog.status='ready';renderCanonicalBrandDetail();});
     await clickKey('Confirm and save Brand Profile');await page.waitForFunction(()=>!brandProfileController.dirty());
     // An intentionally failing local renderer after a confirmed PUT remains saved.
-    await clickKey('Foundation');await page.locator('[data-profile-key="Brand description"]').fill('Saved despite local rendering failure');
+    await clickKey('Overview');await page.locator('[data-profile-key="Brand description"]').fill('Saved despite local rendering failure');
     await page.evaluate(()=>{globalThis.r5OriginalSidebar=renderWorkspaceSidebar;renderWorkspaceSidebar=()=>{throw new Error('deliberate reconciliation error');};});
     await clickKey('Confirm and save Brand Profile');await page.waitForFunction(()=>brandProfileController.state.message.startsWith('Brand Profile saved.'));
     assert.equal(await page.evaluate(()=>brandProfileController.dirty()),false);
@@ -168,7 +168,7 @@ async function browserJourney() {
     await page.locator('#brand-workspace-edit-core').fill(JSON.stringify(advancedCore));
     await page.locator('#home-nav-btn').click();await page.getByRole('button',{name:'Save and continue',exact:true}).click();
     await page.waitForFunction(()=>state.activeView==='home');assert.equal(r.db.brands[0].brand_core.brandCore,'Advanced confirmed profile');
-    await page.locator('#brand-core-nav-btn').click();await ready();await clickKey('Foundation');
+    await page.locator('#brand-core-nav-btn').click();await ready();await clickKey('Overview');
     // Dirty navigation: default/Escape keep editing, failed save stays, confirmed save waits.
     await page.locator('[data-profile-key="Brand description"]').fill('Retain complete draft');await page.locator('#home-nav-btn').click();
     await page.locator('#brand-leave-dialog').waitFor();assert.equal(await page.evaluate(()=>document.activeElement.textContent),'Keep editing');
@@ -179,7 +179,7 @@ async function browserJourney() {
     r.db.failPut=false;pausePut={};await page.getByRole('button',{name:'Save and continue',exact:true}).click();
     await page.waitForFunction(()=>brandProfileController.busy());assert.equal(await page.evaluate(()=>state.activeView),'brand-profile');
     assert(pausePut.release);pausePut.release();pausePut=null;await page.waitForFunction(()=>state.activeView==='home');assert.equal(r.db.brands[0].brand_core.brandCore,'Retain complete draft');
-    await page.locator('#brand-core-nav-btn').click();await ready();await clickKey('Foundation');await page.locator('[data-profile-key="Brand description"]').fill('Explicit discard only');
+    await page.locator('#brand-core-nav-btn').click();await ready();await clickKey('Overview');await page.locator('[data-profile-key="Brand description"]').fill('Explicit discard only');
     await page.locator('#home-nav-btn').click();assert.equal(await page.evaluate(()=>state.activeView),'brand-profile');await page.getByRole('button',{name:'Discard changes',exact:true}).click();
     await page.waitForFunction(()=>state.activeView==='home');assert.equal(r.db.brands[0].brand_core.brandCore,'Retain complete draft');
     // Sidebar create timeout: the first server response is deliberately lost, retry has the same ID.
@@ -198,9 +198,16 @@ async function browserJourney() {
     r.db.boards[0].brand_id=createdId;await page.evaluate(({createdId,D})=>{state.workspaceCatalog.value.workspaces[0].boards=state.workspaceCatalog.value.workspaces[0].boards.map(b=>b.id===D?{...b,brand_id:createdId}:b);}, {createdId,D});
     const stableBoard=clone(r.db.boards[0]);await page.locator('#workspace-brand-manage').click();await page.getByRole('menuitem',{name:'Delete Brand',exact:true}).click();
     await page.locator('#brand-delete-confirmation').fill('Sidebar Brand');await page.locator('#brand-delete-submit').click();
+    await page.waitForFunction(()=>document.querySelector('#brand-delete-feedback').textContent.includes('Reassign'));
+    assert.equal(r.db.boards[0].brand_id,createdId);assert.deepEqual(r.db.boards[0].canvas_json,stableBoard.canvas_json);assert.deepEqual(r.db.boards[0].brand_core_snapshot,stableBoard.brand_core_snapshot);
+    await page.locator('#brand-delete-cancel').click();
+    // Reassign first; only a Board-less Brand may then be deleted.
+    r.db.boards[0].brand_id=B;
+    await page.evaluate(({B,D})=>{state.workspaceCatalog.value.workspaces[0].boards=state.workspaceCatalog.value.workspaces[0].boards.map(b=>b.id===D?{...b,brand_id:B}:b);},{B,D});
+    await page.locator('#workspace-brand-manage').click();await page.getByRole('menuitem',{name:'Delete Brand',exact:true}).click();
+    await page.locator('#brand-delete-confirmation').fill('Sidebar Brand');await page.locator('#brand-delete-submit').click();
     await page.waitForFunction(id=>!state.workspaceCatalog.value.workspaces[0].brands.some(b=>b.id===id),createdId);
-    assert.equal(r.db.boards[0].brand_id,null);assert.deepEqual(r.db.boards[0].canvas_json,stableBoard.canvas_json);assert.deepEqual(r.db.boards[0].brand_core_snapshot,stableBoard.brand_core_snapshot);
-    assert.equal(await page.evaluate(id=>state.brandCatalog.entries.some(b=>b.id===id),createdId),false);assert.equal(await page.evaluate(()=>canonicalBrandDetail.status),'closed');
+    assert.equal(r.db.boards[0].brand_id,B);assert.equal(await page.evaluate(()=>canonicalBrandDetail.status),'closed');
     await page.evaluate(({D})=>{state.currentBoardId=D;state.boardBrandAssociation={...state.boardBrandAssociation,boardId:D,brandId:null};}, {D});
     await page.locator('#campaign-canvas-nav-btn').click();assert.equal(await page.evaluate(()=>state.activeView),'board');
     // Real project dialog -> real project handler -> saved profile -> exact Board read.
@@ -214,7 +221,7 @@ async function browserJourney() {
     const projectAttempts=r.requests.filter(q=>q.path==='/api/projects');assert.equal(projectAttempts.length,2);assert.deepEqual(projectAttempts[0].body,projectAttempts[1].body);
     const projectId=await page.evaluate(()=>projectSetupContext.outcome.board.id), projectBrandId=await page.evaluate(()=>canonicalBrandDetail.brandId);
     const beforeProjectCounts=[r.db.boards.length,r.db.brands.length], posts=r.requests.filter(q=>q.path==='/api/projects').length;
-    await clickKey('Foundation');await page.locator('[data-profile-key="Brand description"]').fill('Project reusable profile');r.db.failPut=true;await clickKey('Save Brand Profile and continue');
+    await clickKey('Overview');await page.locator('[data-profile-key="Brand description"]').fill('Project reusable profile');r.db.failPut=true;await clickKey('Save Brand Profile and continue');
     await page.waitForFunction(()=>brandProfileController.state.message.includes('database'));assert.equal(await page.evaluate(()=>!!projectSetupContext),true);assert.deepEqual([r.db.boards.length,r.db.brands.length],beforeProjectCounts);
     r.db.failPut=false;await clickKey('Save Brand Profile and continue');await page.waitForFunction(()=>!projectSetupContext);
     assert.equal(await page.evaluate(()=>state.currentBoardId),projectId);assert.equal(new URL(page.url()).pathname,`/boards/${projectId}`);assert.equal(r.db.brands.find(b=>b.id===projectBrandId).brand_core.brandCore,'Project reusable profile');
