@@ -12,6 +12,12 @@
   const STORAGE_KEY = "funklix.languagePreferences.v1";
   const LANGUAGE_NAMES = Object.freeze({ en: "English", de: "German", es: "Spanish" });
   const german = {
+    "Complete": "Vollständig", "Needs attention": "Ergänzung erforderlich", "Not started": "Noch nicht begonnen", "Not applicable": "Nicht zutreffend",
+    "Brand Logo": "Brand Logo", "Add logo": "Logo hinzufügen", "Open Brand Avatar": "Brand Avatar öffnen", "Create Brand Avatar": "Brand Avatar erstellen",
+    "Reload saved Brand": "Gespeicherte Brand neu laden", "Logo saved. Synchronization needed.": "Logo gespeichert. Synchronisierung erforderlich.",
+    "Logo saved on the server. Reload saved Brand to synchronize.": "Logo auf dem Server gespeichert. Lade die gespeicherte Brand zur Synchronisierung neu.",
+    "Brand Profile saved on the server. Reload saved Brand to synchronize. Your inputs are retained.": "Brand Profile auf dem Server gespeichert. Lade die gespeicherte Brand zur Synchronisierung neu. Deine Eingaben bleiben erhalten.",
+    "Saved on the server. Reload saved Brand to synchronize.": "Auf dem Server gespeichert. Lade die gespeicherte Brand zur Synchronisierung neu.",
     "Primary Archetype": "Primärer Archetyp", "Secondary Archetype": "Sekundärer Archetyp", "Why we think this": "Unsere Begründung", "Alternatives": "Alternativen",
     "No strong tone signal yet.": "Noch kein deutliches Tonalitätssignal.", "No strong mission signal yet.": "Noch kein deutliches Missionssignal.", "No strong audience signal yet.": "Noch kein deutliches Zielgruppensignal.", "No strong messaging signal yet.": "Noch kein deutliches Botschaftssignal.", "No strong visual signal yet.": "Noch kein deutliches visuelles Signal.",
     "Save Brand Profile before generating DNA.": "Speichere das Markenprofil, bevor du Marken-DNA generierst.",

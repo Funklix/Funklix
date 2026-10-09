@@ -3236,8 +3236,8 @@ function renderGuidedBrandProfile(detail) {
     founderContext: (core, preflight) => window.BrandDnaGenerationPreflight.buildUsableFounderStoryContext({ state: { brandCore: core }, preflight, identityApi: window.KnowledgeModuleIdentity }),
     renderTeam: (container, brand) => { if (brand.access.canManageBrandMembers) renderBrandTeamSection(container, brand); },
     onSave: reconcileConfirmedBrand,
-    onLogo: (id, logo) => {
-      const confirmed = { ...canonicalBrandDetail.brand, logo_url: logo.logo_url, logo_revision: logo.logo_revision, logo_source: logo.source, logo_updated_at: logo.updated_at };
+    onLogo: (id, logo, authoritative) => {
+      const confirmed = authoritative || { ...canonicalBrandDetail.brand, logo_url: logo.logo_url, logo_revision: logo.logo_revision, logo_source: logo.source, logo_updated_at: logo.updated_at };
       reconcileConfirmedBrand(confirmed);
     },
     hasSnapshot: () => Boolean(state.currentBoardId && state.boardAccess?.canViewBoardBrandCore && !state.publicBoardToken),

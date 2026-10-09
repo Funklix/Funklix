@@ -9,6 +9,16 @@ function validObject(value) {
   return value && typeof value === 'object' && !Array.isArray(value);
 }
 
+// Omitted canonical fields survive partial clients; explicit values remain editable.
+function mergeCore(saved, patch) {
+  const result = { ...saved };
+  for (const [key, value] of Object.entries(patch)) {
+    if (['__proto__', 'constructor', 'prototype'].includes(key)) continue;
+    result[key] = validObject(value) && validObject(saved?.[key]) ? mergeCore(saved[key], value) : value;
+  }
+  return result;
+}
+
 module.exports = async function handler(req, res) {
   const requestId = randomUUID();
   if (!['GET', 'PUT', 'DELETE'].includes(req.method)) return res.status(405).json({ ok: false, code: 'METHOD_NOT_ALLOWED', requestId });
@@ -56,12 +66,12 @@ module.exports = async function handler(req, res) {
     if (!resolved.brand) return res.status(404).json({ ok: false, code: 'BRAND_NOT_FOUND' });
     if (!resolved.access.canEditCanonicalBrand) return res.status(403).json({ ok: false, code: 'PERMISSION_DENIED' });
     // The creation fingerprint is server-owned and survives subsequent editing.
-    if (JSON.stringify(brandCore._creation) !== JSON.stringify(resolved.brand.brand_core?._creation)) return res.status(422).json({ ok: false, code: 'INVALID_BRAND_CORE' });
+    if (Object.hasOwn(brandCore, '_creation') && JSON.stringify(brandCore._creation) !== JSON.stringify(resolved.brand.brand_core?._creation)) return res.status(422).json({ ok: false, code: 'INVALID_BRAND_CORE' });
     const updated = await pool.query(
       `UPDATE brands SET name = $2, brand_core = $3::jsonb, revision = revision + 1, updated_at = NOW()
        WHERE id = $1 AND revision = $4
        RETURNING ${BRAND_COLUMNS}`,
-      [id, name, JSON.stringify(brandCore), revision]
+      [id, name, JSON.stringify(mergeCore(resolved.brand.brand_core, brandCore)), revision]
     );
     if (updated.rowCount === 0) {
       const { brand: current } = await getBrandAccess(id, user, { columns: 'id, revision, updated_at' });

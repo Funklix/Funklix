@@ -323,6 +323,8 @@ jobs:
         run: npm run check:bw36.13r5
       - name: Check Brand workspace regression recovery
         run: npm run check:bw36.13r5r2
+      - name: Check durable Brand logos and readiness
+        run: npm run check:bw36.13r5r3
       - name: Check dynamic AI Insights translations
         run: node scripts/check-bw25-1-dynamic-insights-translations.js
       - name: Check scoped German interface localization

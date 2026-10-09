@@ -50,3 +50,17 @@
 
 .profile-brand-avatar{width:min(320px,100%);height:auto;aspect-ratio:1;object-fit:contain;border-radius:16px;border:1px solid var(--fk-color-border-default)}
 .guided-brand-profile .brand-dna-score-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(200px,100%),1fr));gap:12px}
+
+/* Saved readiness and selection use separate visual cues. */
+.guided-brand-profile nav button[data-readiness=complete]{border-color:#23854b;background:color-mix(in srgb,#23854b 13%,var(--fk-color-surface-input))}
+.guided-brand-profile nav button[data-readiness=partial]{border-color:#b8860b;background:color-mix(in srgb,#b8860b 13%,var(--fk-color-surface-input))}
+.guided-brand-profile nav button[data-readiness=empty]{border-color:#cb4848;background:color-mix(in srgb,#cb4848 13%,var(--fk-color-surface-input))}
+.guided-brand-profile nav button[data-status-icon]::after{content:attr(data-status-icon);margin-inline-start:8px}
+.guided-brand-profile nav button[aria-current=step]{outline:2px solid var(--fk-color-focus-ring);outline-offset:2px;text-decoration:underline;text-underline-offset:4px}
+.profile-identity-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(240px,100%),1fr));gap:16px;min-width:0}
+.profile-identity-cards>section{display:grid;align-content:start;justify-items:start;gap:12px;padding:16px;border:1px solid var(--fk-color-border-default);border-radius:12px;min-width:0}
+.profile-official-logo,.profile-overview-avatar{width:96px;height:96px;object-fit:contain}
+@media(forced-colors:active){.guided-brand-profile nav button[data-readiness]{border-color:CanvasText;background:Canvas;color:CanvasText}.guided-brand-profile nav button[aria-current=step]{outline-color:Highlight}.profile-identity-cards>section{border-color:CanvasText}}
+
+.profile-official-logo{display:grid;place-items:center;overflow:hidden;border:1px solid var(--fk-color-border-default);border-radius:12px;background:var(--fk-color-surface-input)}
+.profile-official-logo img{max-width:100%;max-height:100%;object-fit:contain}
