@@ -25,6 +25,40 @@
     if (Array.isArray(value)) return value.some(meaningful);
     return object(value) && Object.values(value).some(meaningful);
   }
+  const STATUS = Object.freeze({ complete: 'Complete', partial: 'Needs attention', empty: 'Not started', neutral: 'Not applicable' });
+  function confirmedValue(value) {
+    if (typeof value === 'string') return !!value.trim() && !/^(?:not provided|not started|placeholder|n\/a|tbd|unknown|nicht angegeben|noch nicht begonnen)$/i.test(value.trim());
+    if (Array.isArray(value)) return value.some(confirmedValue);
+    return object(value) && Object.entries(value).some(([key, item]) => !['userApproved', 'revision', 'source', 'prompt'].includes(key) && confirmedValue(item));
+  }
+  function acceptedAvatar(brand) {
+    const dna = brand?.brand_core?.brandDNA, avatar = dna?.avatar;
+    return dna?.userApproved === true && avatar?.userApproved === true && typeof avatar.imageUrl === 'string'
+      && /^(https:\/\/|\/(?!\/))/.test(avatar.imageUrl) ? avatar : null;
+  }
+  function readiness(brand) {
+    const c = brand?.brand_core || {}, assets = c.brandAssets || {}, dna = c.brandDNA || {};
+    const logo = brand?.logo_url === `/api/brands/${brand?.id}/logo?revision=${brand?.logo_revision}` && Number.isSafeInteger(brand?.logo_revision) && brand.logo_revision > 0;
+    const module = type => c.customTiles?.find(tile => tile.moduleType === type)?.content;
+    const groups = [
+      [brand?.name, assets.domain || c.website, c.brandCore, c.valueProposition],
+      [dna.userApproved === true && dna.primaryArchetype, dna.userApproved === true && dna.secondaryArchetype],
+      [c.personas?.some(p => confirmedValue(p.name) && confirmedValue(p.note || p.description)) ? c.personas : null, module('icp') || module('audience')],
+      [c.toneOfVoice, c.messagingPillars, c.contentGuidelines, c.keywords, c.dosAndDonts, c.brandVoiceExamples],
+      [c.offers || module('product_knowledge'), c.proof || module('pitch_deck') || module('whitepaper')],
+      [logo ? 'persisted logo' : null, assets.colors, assets.typography],
+      [acceptedAvatar(brand)?.imageUrl]
+    ];
+    return SECTIONS.map((section, index) => {
+      const required = groups[index];
+      const count = required?.filter(confirmedValue).length || 0;
+      // Unaccepted DNA/Avatar information is partial, never complete.
+      const optional = [null, [dna.primaryArchetype, dna.secondaryArchetype, dna.personality, dna.positioning], [c.personas, module('audience'), module('icp')], null, [c.valueProposition, module('business_plan')], assets.references, dna.avatar?.imageUrl];
+      const any = count || confirmedValue(optional[index]);
+      const status = !required ? 'neutral' : count === required.length ? 'complete' : any ? 'partial' : 'empty';
+      return Object.freeze({ section, status, label: STATUS[status] });
+    });
+  }
   function website(value) {
     const text = String(value || '').trim();
     if (!text || text.length > 2048) throw new Error('website');
@@ -86,13 +120,17 @@
       website: options.website || options.brand.brand_core?.brandAssets?.domain || options.brand.brand_core?.website || '',
       section: 0, message: '', analysis: 'Not analyzed', logo: options.brand.logo_url ? 'Logo saved' : 'No logo yet. Initials are shown.',
       proposals: clone(options.pendingData?.proposals || {}), candidate: clone(options.pendingData?.candidate || null),
-      dnaPreflight: null, dnaDraft: null, avatarDraft: null, avatarDirection: '', file: options.pendingData?.file || null, fileData: options.pendingData?.fileData || null, pending: '', dirty: !!options.website, deferred: false,
+      dnaPreflight: null, dnaDraft: null, avatarDraft: null, avatarDirection: '', file: options.pendingData?.file || null, fileData: options.pendingData?.fileData || null, syncRequired: false, reconciliationWarning: false, pending: '', dirty: !!options.website, deferred: false,
       readOnly: options.brand.access?.canEditCanonicalBrand !== true || !['owner','admin','editor'].includes(options.brand.access?.role)
     };
-    for (const [key, [, , type]] of Object.entries(FIELDS)) {
-      if (type === 'assets') continue;
-      if (!Object.hasOwn(state.core, key)) state.core[key] = type === 'text' ? '' : type === 'rules' ? { dos: [], donts: [] } : type === 'examples' ? { good: '', avoid: '' } : [];
+    function editableCore(core) {
+      const value = clone(core);
+      for (const [key, [, , type]] of Object.entries(FIELDS)) {
+        if (type !== 'assets' && !Object.hasOwn(value, key)) value[key] = type === 'text' ? '' : type === 'rules' ? { dos: [], donts: [] } : type === 'examples' ? { good: '', avoid: '' } : [];
+      }
+      return value;
     }
+    state.core = editableCore(state.core);
     let baseline = stable({ name: state.name.trim(), website: String(options.brand.brand_core?.brandAssets?.domain || options.brand.brand_core?.website || '').trim(), core: state.core });
     function draftSignature() { return stable({ name: state.name.trim(), website: state.website.trim(), core: state.core }); }
     function contentDirty() { return draftSignature() !== baseline; }
@@ -118,6 +156,7 @@
       if (!current()) { state.message = 'Workspace or Brand context is no longer available.'; notify(); return Promise.resolve(false); }
       if (state.readOnly) return Promise.resolve(false);
       if (flight) return flight;
+      if (state.syncRequired && kind !== 'Loading Brand Profile…') { state.message = 'Saved on the server. Reload saved Brand to synchronize.'; changed(); return Promise.resolve(false); }
       if (state.pending || state.returning) return Promise.resolve(false);
       state.pending = kind; changed();
       flight = (async () => {
@@ -182,15 +221,16 @@
         if (!validateBrand(result.payload, state.brand.id)) { state.message = 'The save response could not be verified. Your inputs are retained.'; return false; }
         const brand = await verifyBrand();
         if (!brand || !validateBrand(brand, state.brand.id) || brand.revision !== revision + 1 || brand.name !== name
-          || stable(brand.brand_core) !== stable(core)) { state.message = 'The save response could not be verified. Your inputs are retained.'; return false; }
+          || stable(brand.brand_core) !== stable(core) || brand.logo_revision !== state.brand.logo_revision || brand.logo_url !== state.brand.logo_url) { state.brand = result.payload; state.syncRequired = true; state.message = 'Brand Profile saved on the server. Reload saved Brand to synchronize. Your inputs are retained.'; return false; }
         state.brand = brand;
         // Inputs may change during an in-flight save. Clear only the submitted draft.
-        if (draftSignature() === submitted) { state.name = brand.name; state.core = clone(brand.brand_core); state.website = domain; baseline = draftSignature(); }
+        if (draftSignature() === submitted) { state.name = brand.name; state.core = clone(brand.brand_core); state.website = domain; }
+        baseline = stable({ name: brand.name.trim(), website: domain, core: editableCore(brand.brand_core) });
         state.dirty = contentDirty();
         state.message = state.dirty ? 'Brand Profile saved. Your newer edits are retained.' : 'Brand Profile saved';
         // Confirmation is authoritative. A later projection failure cannot undo it.
-        try { await onSave(brand); }
-        catch { state.message = 'Brand Profile saved. Refresh the view if the update is not visible everywhere yet.'; }
+        try { await onSave(brand); state.reconciliationWarning = false; }
+        catch { state.reconciliationWarning = true; state.message = 'Brand Profile saved. Refresh the view if the update is not visible everywhere yet.'; }
         return true;
       });
     }
@@ -201,12 +241,12 @@
         const response = await fetchImpl(`/api/brands/${state.brand.id}`, { signal: controller.signal, credentials: 'same-origin', cache: 'no-store', headers: { Accept: 'application/json' } });
         const brand = await response.json().catch(() => null);
         return current() && response.ok && validateBrand(brand, state.brand.id) ? brand : null;
-      } finally { root.clearTimeout(timeout); }
+      } catch { return null; } finally { root.clearTimeout(timeout); }
     }
     function stable(value) {
       if (Array.isArray(value)) return `[${value.map(stable).join(',')}]`;
       if (object(value)) return `{${Object.keys(value).sort().map(key => `${JSON.stringify(key)}:${stable(value[key])}`).join(',')}}`;
-      return JSON.stringify(value);
+      return JSON.stringify(typeof value === 'string' ? value.trim() : value);
     }
     function logoMutation(action, extra) {
       return run('Uploading logo…', async () => {
@@ -222,20 +262,40 @@
           return false;
         }
         const logo = result.payload?.logo;
-        if (result.payload?.contract !== 'brand_logo_v1' || result.payload.request_id !== requestId || !logo
+        if ((logo?.brand_id != null && logo.brand_id !== state.brand.id) || (logo?.changed != null && typeof logo.changed !== 'boolean') || result.payload?.contract !== 'brand_logo_v1' || result.payload.request_id !== requestId || !logo
           || logo.logo_revision !== revision + 1 || (action === 'remove' ? logo.logo_url !== null : logo.logo_url !== `/api/brands/${state.brand.id}/logo?revision=${logo.logo_revision}`)) {
           state.message = 'The logo save could not be verified. Retry or reload the latest Brand.'; return false;
         }
+        // A valid committed response owns this logo revision even if the next read fails.
+        state.brand = { ...state.brand, ...logo, logo_source: logo.source, logo_updated_at: logo.updated_at };
+        state.file = null; state.fileData = null; state.candidate = null;
+        state.dirty = contentDirty();
         const confirmed = await verifyBrand();
         if (!confirmed || confirmed.logo_revision !== logo.logo_revision || confirmed.logo_url !== logo.logo_url) {
-          state.message = 'The logo save could not be verified. Retry or reload the latest Brand.'; return false;
+          state.syncRequired = true; state.logo = 'Logo saved. Synchronization needed.';
+          state.message = 'Logo saved on the server. Reload saved Brand to synchronize.'; return false;
         }
         state.brand = confirmed;
-        state.logo = action === 'remove' ? 'No logo yet. Initials are shown.' : 'Logo saved'; state.message = action === 'remove' ? 'Logo removed' : 'Logo saved'; if (action === 'discover') state.candidate = null;
-        state.file = null; state.fileData = null; state.candidate = null;
-        try { await onLogo(state.brand.id, logo); }
-        catch { state.message = 'Logo saved. Refresh the view if the update is not visible everywhere yet.'; }
+        try { await onLogo(state.brand.id, logo, confirmed); }
+        catch { state.reconciliationWarning = true; state.message = 'Logo saved. Refresh the view if the update is not visible everywhere yet.'; }
+        if (action !== 'remove' && !await verifyLogo(confirmed.logo_url)) {
+          state.syncRequired = true; state.logo = 'Logo saved. Synchronization needed.';
+          state.message = 'Logo saved on the server. Reload saved Brand to synchronize.'; return false;
+        }
+        state.logo = action === 'remove' ? 'No logo yet. Initials are shown.' : 'Logo saved';
+        if (!state.syncRequired && !state.reconciliationWarning) state.message = action === 'remove' ? 'Logo removed' : 'Logo saved';
         return true;
+      });
+    }
+    async function verifyLogo(url) {
+      if (!root.Image) {
+        try { return (await fetchImpl(url, { credentials: 'same-origin', cache: 'no-store' })).ok; } catch { return false; }
+      }
+      return new Promise(resolve => {
+        const image = new root.Image();
+        const timer = root.setTimeout(() => finish(false), 12000);
+        const finish = ok => { root.clearTimeout(timer); image.onload = image.onerror = null; resolve(current() && ok); };
+        image.onload = () => finish(image.naturalWidth > 0); image.onerror = () => finish(false); image.src = url;
       });
     }
     function upload() {
@@ -276,9 +336,11 @@
         if (!current()) return false;
         if (!response.ok || !validateBrand(brand, state.brand.id)) { state.message = errorText(response, 'Brand Profile could not be loaded. Retry.'); return false; }
         // Keep the unsaved draft for deliberate review against the latest revision.
-        state.brand = brand; baseline = stable({ name: brand.name.trim(), website: String(brand.brand_core?.brandAssets?.domain || brand.brand_core?.website || '').trim(), core: brand.brand_core }); state.dirty = contentDirty(); state.readOnly = brand.access.canEditCanonicalBrand !== true || !['owner','admin','editor'].includes(brand.access.role);
+        state.brand = brand; baseline = stable({ name: brand.name.trim(), website: String(brand.brand_core?.brandAssets?.domain || brand.brand_core?.website || '').trim(), core: editableCore(brand.brand_core) }); state.dirty = contentDirty(); state.readOnly = brand.access.canEditCanonicalBrand !== true || !['owner','admin','editor'].includes(brand.access.role);
+        state.syncRequired = !!brand.logo_url && !await verifyLogo(brand.logo_url);
+        state.logo = state.syncRequired ? 'Logo saved. Synchronization needed.' : brand.logo_url ? 'Logo saved' : 'No logo yet. Initials are shown.';
         state.message = 'Latest Brand loaded. Your unsaved inputs are retained; review them before saving.';
-        try { await onSave(brand); } catch { state.message = 'Latest Brand loaded. Refresh the view if the update is not visible everywhere yet.'; }
+        try { await onSave(brand); state.reconciliationWarning = false; } catch { state.reconciliationWarning = true; state.message = 'Latest Brand loaded. Refresh the view if the update is not visible everywhere yet.'; }
         return true;
       });
     }
@@ -450,14 +512,24 @@
       const header = node('section', '', container); header.className = 'profile-header';
       const mark = node('div', '', header); mark.className = 'profile-logo'; root.FunklixBrandLogo.render(mark, s.brand, { label: t('Brand logo') });
       const identity = node('div', '', header); node('h3', s.brand.name, identity);
-      node('p', s.website || t('No website yet'), identity);
-      node('p', t(meaningful(s.core.brandCore) && meaningful(s.core.personas) ? 'Good foundation' : 'Ready to complete'), identity);
+      node('p', s.brand.brand_core?.brandAssets?.domain || s.brand.brand_core?.website || t('No website yet'), identity);
+      const states = readiness(s.brand);
+      node('p', `${states.filter(r => r.status === 'complete').length}/7 ${t('Complete')}`, identity);
       if (s.readOnly) node('p', t('Your access is read-only'), container);
       const nav = node('nav', '', container); nav.setAttribute('aria-label', t('Brand Profile sections'));
-      SECTIONS.forEach((key, index) => { const b = button(key, nav, () => { s.section = index; render(); container.querySelector('h3[data-section-title]')?.focus(); }); b.setAttribute('aria-current', s.section === index ? 'step' : 'false'); });
+      SECTIONS.forEach((key, index) => { const r = states[index]; const b = button(key, nav, () => { s.section = index; render(); container.querySelector('h3[data-section-title]')?.focus(); }); b.dataset.readiness = r.status; b.title = `${t(key)}: ${t(r.label)}`; b.setAttribute('aria-label', t(key)); const status = node('span', t(r.label), nav); status.id = `brand-section-status-${index}`; status.hidden = true; b.setAttribute('aria-describedby', status.id); b.dataset.statusIcon = { complete: '✓', partial: '◐', empty: '○', neutral: '–' }[r.status]; b.setAttribute('aria-current', s.section === index ? 'step' : 'false'); });
       const section = node('section', '', container); section.className = 'profile-section';
       const title = node('h3', t(SECTIONS[s.section]), section); title.tabIndex = -1; title.dataset.sectionTitle = 'true';
       if (s.section === 0) {
+        const cards = node('div', '', section); cards.className = 'profile-identity-cards';
+        const logoCard = node('section', '', cards); node('h4', t('Brand Logo'), logoCard);
+        const official = node('div', '', logoCard); official.className = 'profile-official-logo'; root.FunklixBrandLogo.render(official, s.brand);
+        button(s.brand.logo_url ? 'Change logo' : 'Add logo', logoCard, () => { s.section = 5; render(); });
+        const avatarCard = node('section', '', cards); node('h4', t('Brand Avatar'), avatarCard);
+        const avatar = acceptedAvatar(s.brand);
+        if (avatar) { const img = node('img', '', avatarCard); img.className = 'profile-overview-avatar'; img.alt = t('Brand Avatar'); img.src = avatar.imageUrl; img.addEventListener('error', () => { img.remove(); node('p', t('Brand Avatar unavailable. Retry safely.'), avatarCard); }, { once: true }); }
+        else node('p', t('No Brand Avatar yet.'), avatarCard);
+        button(avatar ? 'Open Brand Avatar' : 'Create Brand Avatar', avatarCard, () => { s.section = 6; render(); });
         textField('Brand name', s.name, section, value => { s.name = value; });
         textField('Website', s.website, section, value => { s.website = value; s.proposals = {}; s.candidate = null; s.analysis = 'Not analyzed'; });
         if (!s.readOnly) button('Analyze website', section, () => { void session.analyze(); });
@@ -528,7 +600,7 @@
       const actions = node('div', '', container); actions.className = 'profile-actions';
       if (!s.readOnly) {
         button('Confirm and save Brand Profile', actions, () => { void session.save(); });
-        button('Reload latest Brand', actions, () => { void session.reload(); });
+        button(s.syncRequired || s.reconciliationWarning ? 'Reload saved Brand' : 'Reload latest Brand', actions, () => { void session.reload(); });
       }
       if (options.hasProject() || s.section === 9) button(options.hasProject() ? 'Save Brand Profile and continue' : 'Back', actions, async () => {
         if (options.hasProject() && !s.readOnly) {
@@ -584,5 +656,5 @@
     });
     dialog.showModal(); keep.focus();
   }
-  return Object.freeze({ SECTIONS, FIELDS, resolveEntry, meaningful, website, filteredSuggestions, validCandidate, createSession, mount, leaveDialog });
+  return Object.freeze({ SECTIONS, FIELDS, readiness, confirmedValue, acceptedAvatar, resolveEntry, meaningful, website, filteredSuggestions, validCandidate, createSession, mount, leaveDialog });
 }));

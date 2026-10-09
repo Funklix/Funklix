@@ -46,6 +46,7 @@ function runtime() {
       Object.assign(brand, { name: args[1], brand_core: JSON.parse(args[2]), revision: brand.revision + 1, updated_at: now }); return rows([brand]);
     }
     if (/UPDATE brands SET logo_object_path/.test(sql)) {
+      if (db.failLogoMetadata) throw new Error('local metadata write failure');
       const brand = state().brands.find(b => b.id === args[0]);
       Object.assign(brand, { logo_object_path: args[1] || null, logo_mime_type: args[2] || null, logo_source: args[3] || null, logo_source_host: args[4] || null, logo_updated_at: now, logo_revision: brand.logo_revision + 1 }); return rows([brand]);
     }
