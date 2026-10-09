@@ -327,6 +327,8 @@ jobs:
         run: npm run check:bw36.13r5r3
       - name: Check production Brand logo persistence
         run: npm run check:bw36.13r5r4
+      - name: Check Brand Profile decisions and deletion UX
+        run: npm run check:bw36.13r6
       - name: Check dynamic AI Insights translations
         run: node scripts/check-bw25-1-dynamic-insights-translations.js
       - name: Check scoped German interface localization

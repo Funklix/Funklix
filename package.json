@@ -131,6 +131,7 @@
     "check:bw36.13r5": "node scripts/check-bw36-13r5-brand-lifecycle-stability.js",
     "check:bw36.13r5r2": "node scripts/check-bw36-13r5r2-brand-workspace-regression-recovery.js",
     "check:bw36.13r5r3": "node scripts/check-bw36-13r5r3-durable-brand-logo-and-readiness.js",
+    "check:bw36.13r6": "node scripts/check-bw36-13r6-brand-profile-decision-and-deletion-ux.js",
     "check:bw36.13r5r4": "node scripts/check-bw36-13r5r4-brand-logo-persistence.js"
   },
   "devDependencies": {

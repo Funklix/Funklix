@@ -34,7 +34,7 @@ async function boundaries() {
     requestId: () => 'durable-logo', onSave() {}, onLogo() {} });
   let s = await make(); assert(!s.dirty());
   const file = { type: 'image/png', size: png.length, name: 'appics logo.png' };
-  await s.chooseFile(file, async () => png.toString('base64')); assert(s.state.fileData); assert(s.dirty());
+  await s.chooseFile(file, async () => png.toString('base64')); assert(s.state.fileData); assert(!s.dirty());
   r.db.failLogoMetadata = true; assert.equal(await s.upload(), false); assert.equal(r.objects.size, 0, 'Failed metadata commit compensates the new Storage object'); assert.equal(s.state.file, file); assert.equal(r.db.brands[0].logo_revision, 0);
   r.db.failLogoMetadata = false; assert(await s.upload()); assert.equal(r.objects.size, 1); assert.equal(s.state.file, null); assert.equal(s.state.fileData, null); assert(!s.dirty());
   const metadata = Object.fromEntries(Object.entries(r.db.brands[0]).filter(([key]) => key.startsWith('logo_')));

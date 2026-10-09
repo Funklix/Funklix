@@ -168,8 +168,8 @@ assert.equal(profile.resolveEntry({ ...base, catalog: { workspaces: [] } }).kind
     await page.waitForFunction(() => brandProfileController.state.message === 'Logo removed');
     await visible('[data-profile-key="Campaign Brand Snapshot"]');
     await page.locator('[data-profile-key="Campaign Brand Snapshot"]').click();
-    await visible('#brand-leave-dialog');
-    await page.getByRole('button', { name: 'Discard changes', exact: true }).click(); await visible('#brand-core-workspace');
+    assert.equal(await page.locator('#brand-leave-dialog').count(), 0, 'R6 website suggestions are retained without a profile save warning');
+    await visible('#brand-core-workspace');
     await page.evaluate(() => { state.brandCoreSelectedKey = 'brandAssets'; renderBrandCoreEditor(); });
     assert.equal(await page.locator('#brand-core-workspace input[type=file]').count(), 0);
     assert(!(await page.locator('#brand-core-workspace').innerText()).includes('temporarily unavailable'));
