@@ -42,8 +42,10 @@ assert(!/html\[data-theme="light"\][^{]*landing-page/.test(css), "Light Mode Lan
 assert(!new RegExp(`html\\[data-theme="dark"\\] \\.node(?!\\[data-node-role="landing-page"\\])[^\\{]*landing-preview`).test(css), "Shared Dark Mode Landing preview selector introduced");
 
 // Existing lifecycle, overlays, controls, geometry, selection, and connections stay intact.
+// BW-36.16 replaces the persisted compact toggle with the same render-only Details action.
+assert(!app.includes('node.compact = !node.compact'), 'Details must not mutate persisted compact flags');
 [
-  'nodeEl.classList.toggle("is-compact", !!node.compact)', 'node.compact = !node.compact',
+  'nodeEl.classList.toggle("is-compact", !!node.compact)', 'openAdaptiveCanvasDetails(node)',
   'nodeEl.classList.contains("content-expanded")', 'enableNodeDrag(nodeEl, node)',
   'state.edges', 'drawLinks()',
   'postit.classList.toggle("ai-review-postit", isAiReviewNote)', 'note.resolved = !note.resolved',

@@ -756,6 +756,7 @@ function applyBoardAccessFromServer(access, source = "server") {
 
 function updateReadOnlyNoticeVisibility() {
   synchronizeResponsibilityToolbar();
+  synchronizeAdaptiveCanvasToolbar();
   const isReadOnly = state.boardAccess?.canEdit === false;
   const readOnlyActionTitle = "View-only board. This action is disabled.";
   if (el.readonlyBoardNotice) {
@@ -8961,6 +8962,145 @@ function applyCampaignState(campaignState, statusText = "Restored", { memoryOnly
   state.isBoardLoading = false;
 }
 
+// BW-36.16: local presentation state; campaign/node content never enters this model.
+const adaptiveCanvasView = globalThis.TendraAdaptiveCanvasView.create();
+let adaptivePointerBusy = false, adaptiveIgnoreClick = null, adaptiveSuppressedSelection = null;
+let adaptiveGeometryFrame = null;
+function scheduleAdaptiveGeometry() {
+  if (adaptiveGeometryFrame !== null) return;
+  adaptiveGeometryFrame = requestAnimationFrame(() => {
+    adaptiveGeometryFrame = null;
+    if (state.activeView === 'board' && !state.isBoardLoading) drawLinks();
+  });
+}
+const adaptiveNodeResize = new ResizeObserver(scheduleAdaptiveGeometry);
+function synchronizeAdaptiveCanvasToolbar() {
+  const button = document.getElementById('canvas-compact-view-btn');
+  if (!button) return;
+  const forced = adaptiveCanvasView.snapshot().forced;
+  button.hidden = !state.currentBoardId || state.boardAccess?.canView !== true || state.isBoardLoading;
+  button.setAttribute('aria-pressed', String(forced));
+  button.setAttribute('aria-label', uiText('Compact view'));
+  button.querySelector('span:last-child').textContent = uiText('Compact view');
+  button.title = uiText(forced ? 'Return to automatic view' : 'Keep all nodes compact');
+}
+function initializeAdaptiveCanvasToolbar() {
+  const anchor = document.getElementById('campaign-responsibilities-btn');
+  if (!anchor || document.getElementById('canvas-compact-view-btn')) return;
+  const button = document.createElement('button');
+  button.id = 'canvas-compact-view-btn'; button.type = 'button';
+  button.className = 'fk-btn fk-btn-secondary';
+  button.innerHTML = '<span aria-hidden="true">▤</span><span data-i18n="Compact view"></span>';
+  button.addEventListener('click', () => {
+    adaptiveCanvasView.compact(!adaptiveCanvasView.snapshot().forced);
+    synchronizeAdaptiveCanvasView();
+  });
+  anchor.after(button);
+  synchronizeAdaptiveCanvasToolbar();
+  // The existing mobile Inspector covers the card after selection; retain its editing
+  // behavior and offer the same explicit render-only Details action in that surface.
+  const details = document.createElement('button');
+  details.id = 'inspector-canvas-details-btn'; details.type = 'button';
+  details.className = 'fk-btn fk-btn-secondary'; details.dataset.i18n = 'Show details';
+  details.textContent = uiText('Show details');
+  details.addEventListener('click', () => {
+    const node = getNode(state.selectedPrimary);
+    closeInspector(); openAdaptiveCanvasDetails(node);
+  });
+  el.inspectorMeta?.after(details);
+}
+function resetAdaptiveCanvasView() {
+  adaptiveCanvasView.reset();
+  el.canvas.removeAttribute("data-tendra-canvas-density");
+  adaptivePointerBusy = false; adaptiveIgnoreClick = adaptiveSuppressedSelection = null;
+  state.selectedIds.clear(); state.selectedPrimary = null;
+  el.zoomLayer?.querySelectorAll('.node[data-id]').forEach(card => {
+    card.classList.remove('selected');
+    card.dataset.adaptiveView = 'compact';
+  });
+  synchronizeAdaptiveCanvasToolbar();
+  scheduleAdaptiveGeometry();
+}
+function synchronizeAdaptiveCanvasView() {
+  const ids = state.nodes.map(node => node.id);
+  adaptiveCanvasView.prune(ids);
+  if (state.selectedPrimary && !ids.includes(state.selectedPrimary)) {
+    state.selectedIds.delete(state.selectedPrimary); state.selectedPrimary = null;
+  }
+  const active = document.activeElement;
+  const editing = !!active?.closest?.('#zoom-layer .node [contenteditable="true"], #zoom-layer .node input, #zoom-layer .node textarea, #zoom-layer .node select');
+  const paused = adaptivePointerBusy || !!state.activeConnection || !!state.connectorCreateMode || state.selectedIds.size > 1 || editing;
+  adaptiveCanvasView.pause(paused, ids);
+  const primary = ids.includes(state.selectedPrimary) && state.selectedPrimary !== adaptiveSuppressedSelection ? state.selectedPrimary : null;
+  if (primary !== adaptiveCanvasView.snapshot().selected) adaptiveCanvasView.select(primary);
+  let changed = false;
+  el.zoomLayer.querySelectorAll('.node[data-id]').forEach(card => {
+    const view = adaptiveCanvasView.view(card.dataset.id);
+    if (card.dataset.adaptiveView !== view) { card.dataset.adaptiveView = view; changed = true; }
+    card.classList.remove('is-compact');
+    const action = card.querySelector('.node-compact-toggle');
+    if (action && action.title !== uiText('Show details')) { action.title = uiText('Show details'); action.setAttribute('aria-label', action.title); }
+  });
+  synchronizeAdaptiveCanvasToolbar();
+  if (changed) scheduleAdaptiveGeometry();
+}
+function openAdaptiveCanvasDetails(node) {
+  if (!node?.id || !getNode(node.id) || state.boardAccess?.canView === false) return;
+  adaptiveSuppressedSelection = null;
+  selectCanvasNode(node);
+  adaptiveCanvasView.details(node.id);
+  synchronizeAdaptiveCanvasView();
+}
+function wireAdaptiveCanvasNode(card, node) {
+  card.dataset.adaptiveView = 'compact';
+  card.addEventListener('pointerenter', event => {
+    if (event.pointerType === 'touch') return;
+    adaptiveCanvasView.hover(node.id); synchronizeAdaptiveCanvasView();
+  });
+  card.addEventListener('pointerleave', () => {
+    if (adaptiveCanvasView.snapshot().hovered === node.id) adaptiveCanvasView.hover(null);
+    synchronizeAdaptiveCanvasView();
+  });
+  card.addEventListener('focusin', () => {
+    adaptiveCanvasView.focus(node.id); synchronizeAdaptiveCanvasView();
+  });
+  card.addEventListener('focusout', event => {
+    if (card.contains(event.relatedTarget)) return;
+    if (adaptiveCanvasView.snapshot().focused === node.id) adaptiveCanvasView.focus(null);
+    // focusout precedes document.activeElement settling on the next control.
+    queueMicrotask(synchronizeAdaptiveCanvasView);
+  });
+  card.addEventListener('keydown', event => {
+    if (event.target !== card || !['Enter', ' '].includes(event.key)) return;
+    event.preventDefault();
+    adaptiveSuppressedSelection = null;
+    if (event.key === 'Enter' && state.selectedPrimary === node.id) openAdaptiveCanvasDetails(node);
+    else selectCanvasNode(node);
+  });
+  adaptiveNodeResize.observe(card);
+}
+// Removed/inaccessible cards cannot retain presentation or resize subscriptions.
+new MutationObserver(records => {
+  records.forEach(record => record.removedNodes.forEach(card => {
+    if (card.nodeType === 1 && card.matches('.node')) adaptiveNodeResize.unobserve(card);
+  }));
+  synchronizeAdaptiveCanvasView();
+}).observe(el.zoomLayer, { childList: true });
+// Let inner surfaces consume Escape. Only Canvas/toolbar origins own this hierarchy.
+document.addEventListener('keydown', event => {
+  if (event.key !== 'Escape' || event.defaultPrevented) return;
+  const inner = event.target.closest?.('input,textarea,select,[contenteditable="true"],[role="dialog"],[role="menu"],.postit,.context-menu');
+  const modal = [...document.querySelectorAll('dialog[open], [role="dialog"], .context-menu, #floating-utilities-popover, #floating-filters-popover, #image-lightbox, #node-type-picker, .postit-emoji-picker, [role="menu"]')].some(surface => surface.getClientRects().length && !surface.classList.contains('hidden'));
+  if (inner || modal || state.activeConnection || state.connectorCreateMode || state.activeView !== 'board') return;
+  if (event.target !== document.body && !event.target.closest?.('#canvas,.canvas-toolbar')) return;
+  if (!adaptiveCanvasView.escape()) return;
+  event.preventDefault(); event.stopImmediatePropagation();
+  if (!adaptiveCanvasView.snapshot().selected) {
+    state.selectedIds.clear(); state.selectedPrimary = null;
+    updateSelectionClasses(); fillInspector(null);
+  } else synchronizeAdaptiveCanvasView();
+}, true);
+
 function updateCanvasDensityMenuState(root, mode) {
   root?.querySelectorAll?.("button[data-canvas-density-choice]").forEach((button) => {
     button.setAttribute("aria-checked", String(button.dataset.canvasDensityChoice === mode));
@@ -8992,8 +9132,9 @@ function schedulePostHydrationCanvasDensity(loadGeneration, boardId) {
       const density = globalThis.TendraOnePresentation?.canvasDensity;
       if (!density) return;
       let mode = density.DEFAULT_MODE;
-      try { mode = density.readPreference(localStorage); } catch (_) { mode = "compact"; }
+      // Adaptive Canvas always opens safely; retired global preferences are ignored.
       try { applyCanvasDensityPresentation(mode); } catch (_) { /* Density always fails open after hydration. */ }
+      if (typeof resetAdaptiveCanvasView === "function") resetAdaptiveCanvasView();
     }, 0);
   } catch (_) { /* Scheduling failure cannot reclassify successful Board access. */ }
 }
@@ -9164,6 +9305,7 @@ async function loadBoardFromUrlIfPresent(requestedBoardId = null) {
   const boardId = requestedBoardId || getBoardIdFromPath() || state.currentBoardId;
   if (!boardId) return false;
   const loadGeneration = state.boardLoadGeneration + 1;
+  resetAdaptiveCanvasView();
   state.boardLoadGeneration = loadGeneration;
   clearInspectorSectionRoute();
   const userEmail = (state.user?.email || "").trim().toLowerCase();
@@ -13880,6 +14022,7 @@ function updateSelectionClasses() {
   el.zoomLayer.querySelectorAll(".node").forEach((nodeEl) => {
     nodeEl.classList.toggle("selected", state.selectedIds.has(nodeEl.dataset.id));
   });
+  synchronizeAdaptiveCanvasView();
   updateInspectorActionVisibility();
   if (!state.selectedPrimary || (state.presenceEditingNodeId && !state.selectedIds.has(state.presenceEditingNodeId))) clearLocalEditingPresence({ notifyDelayMs: 250 });
   renderNodePresenceBadges();
@@ -14253,6 +14396,7 @@ function updateNodeCard(node) {
   nodeEl.style.filter = isConnected ? "grayscale(0)" : "grayscale(1) saturate(0)";
   nodeEl.classList.toggle("just-connected", !!node.justConnectedAt && Date.now() - node.justConnectedAt < 700);
   nodeEl.classList.toggle("is-compact", !!node.compact);
+  if (nodeEl.dataset.adaptiveView) nodeEl.classList.remove("is-compact");
   const matchesSearch = nodeMatchesSearchAndFilters(node);
   const hasSearchActive = !!state.nodeSearchQuery.trim() || Object.values(state.nodeFilters).some((set) => set.size > 0);
   nodeEl.classList.toggle("search-match", hasSearchActive && matchesSearch);
@@ -14266,8 +14410,8 @@ function updateNodeCard(node) {
   const editable = !isBoardReadOnly();
   const compactToggle = nodeEl.querySelector(".node-compact-toggle");
   if (compactToggle) {
-    compactToggle.textContent = node.compact ? "↗" : "−";
-    compactToggle.title = node.compact ? "Expand node" : "Compact view";
+    compactToggle.textContent = "↗";
+    compactToggle.title = uiText("Show details");
     compactToggle.setAttribute("aria-label", compactToggle.title);
   }
   updateNodeCommentBadge(node, nodeEl);
@@ -14881,11 +15025,6 @@ function buildUtilitiesPopoverHtml() {
   const canClaim = !!state.user?.email && !!(state.currentBoardId || getBoardIdFromPath()) && !state.currentBoardOwnerEmail;
   const ownedByYou = !!state.user?.email && !!state.currentBoardOwnerEmail && state.currentBoardOwnerEmail === state.user.email;
   const lastSaved = el.boardLastSaved?.textContent || '';
-  const density = globalThis.TendraOnePresentation?.canvasDensity;
-  const densityMode = density?.currentMode?.() || density?.DEFAULT_MODE || "compact";
-  const densityControls = state.currentBoardId && state.boardAccess?.canView !== false ? `<div class="filter-group canvas-density-control"><strong>Display density</strong><div class="node-filter-chips" role="menu" aria-label="Display density">
-    ${["compact", "standard", "detailed"].map((mode) => `<button type="button" role="menuitemradio" aria-checked="${String(densityMode === mode)}" data-canvas-density-choice="${mode}">${mode[0].toUpperCase()}${mode.slice(1)}</button>`).join("")}
-  </div></div>` : "";
   return `<div class="filter-group"><strong>Board</strong><div class="node-filter-chips">
     <button type="button" data-utility-action="save-board">Save Board</button>
     <button type="button" data-utility-action="duplicate-board">Duplicate Board</button>
@@ -14901,10 +15040,7 @@ function buildUtilitiesPopoverHtml() {
   <div class="filter-group"><strong>Layout</strong><div class="node-filter-chips">
     <button type="button" data-utility-action="fit-board">Fit to Board</button>
     <button type="button" data-utility-action="auto-arrange">Auto Arrange</button>
-    <button type="button" data-utility-action="compact-all">Compact All</button>
-    <button type="button" data-utility-action="expand-all">Expand All</button>
   </div></div>
-  ${densityControls}
   `;
 }
 
@@ -17011,10 +17147,12 @@ function renderNode(node) {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "");
 
+  wireAdaptiveCanvasNode(nodeEl, node);
   nodeEl.addEventListener("click", (event) => {
+    if (event.target.closest("button,input,textarea,select,a,[contenteditable='true']") || adaptivePointerBusy || adaptiveIgnoreClick === node.id) return;
+    adaptiveSuppressedSelection = null;
     collapseExpandedNodes(node.id);
-    const append = event.shiftKey;
-    if (append) {
+    if (event.shiftKey) {
       state.selectedIds.add(node.id);
       state.selectedPrimary = node.id;
       updateSelectionClasses();
@@ -17022,14 +17160,8 @@ function renderNode(node) {
     } else selectCanvasNode(node);
   });
   nodeEl.addEventListener("dblclick", (event) => {
-    if (event.target.closest("button,input,textarea,select,[contenteditable='true']")) return;
-    if (isBoardReadOnly()) {
-      setSaveStatus("Read-only board");
-      return;
-    }
-    node.compact = false;
-    updateNodeCard(node);
-    saveCampaignCanvasState();
+    if (event.pointerType === "touch" || event.target.closest("button,input,textarea,select,a,[contenteditable='true']") || adaptiveIgnoreClick === node.id) return;
+    openAdaptiveCanvasDetails(node);
   });
 
   nodeEl.querySelector(".connector-handle").addEventListener("pointerdown", (event) => {
@@ -17042,6 +17174,7 @@ function renderNode(node) {
 
     openTypePicker((type) => {
       state.connectorCreateMode = { fromId: node.id, type, start, current: start };
+      synchronizeAdaptiveCanvasView();
 
       const ghost = document.createElement("article");
       ghost.className = "node node-ghost";
@@ -17069,6 +17202,7 @@ function renderNode(node) {
         const nodeType = state.connectorCreateMode.type;
 
         state.connectorCreateMode = null;
+        synchronizeAdaptiveCanvasView();
         if (state.connectorGhostEl) {
           state.connectorGhostEl.remove();
           state.connectorGhostEl = null;
@@ -17105,22 +17239,7 @@ function renderNode(node) {
   compactToggle.className = "node-compact-toggle";
   compactToggle.addEventListener("click", (event) => {
     event.stopPropagation();
-    if (isBoardReadOnly()) {
-      setSaveStatus("Read-only board");
-      return;
-    }
-    const wasCompact = !!node.compact;
-    node.compact = !node.compact;
-    updateNodeCard(node);
-    if (wasCompact && !node.compact) {
-      requestAnimationFrame(() => {
-        const moved = resolveOverlapsAfterNodeExpand(node.id);
-        if (moved) drawLinks();
-        saveCampaignCanvasState();
-      });
-    } else {
-      saveCampaignCanvasState();
-    }
+    openAdaptiveCanvasDetails(node);
   });
   const headerActions = nodeEl.querySelector(".node-header-actions");
   (headerActions || nodeEl).appendChild(compactToggle);
@@ -17230,6 +17349,7 @@ function stopExistingNodeConnection() {
     state.activeConnectionPlaceHandler = null;
   }
   state.activeConnection = null;
+  synchronizeAdaptiveCanvasView();
   drawLinks();
 }
 
@@ -17238,6 +17358,7 @@ function startExistingNodeConnection(fromId) {
   const start = nodeBottomCenter(fromId);
   if (!start) return;
   state.activeConnection = { fromId, start, current: start };
+  synchronizeAdaptiveCanvasView();
 
   const move = (ev) => {
     if (!state.activeConnection) return;
@@ -17274,12 +17395,15 @@ function startExistingNodeConnection(fromId) {
 function enableNodeDrag(nodeEl, node) {
   nodeEl.addEventListener("pointerdown", (event) => {
     if (event.button !== 0) return;
-    if (event.target.closest("button,input,textarea,select")) return;
+    if (event.target.closest("button,input,textarea,select,a,[contenteditable='true']")) return;
     // Read-only guard: do not start node drag interactions when editing is disabled.
     if (state.boardAccess?.canEdit === false) return;
 
+    adaptivePointerBusy = true;
+    synchronizeAdaptiveCanvasView();
     if (!state.selectedIds.has(node.id)) {
-    selectCanvasNode(node);
+      if (event.shiftKey) { state.selectedIds.add(node.id); state.selectedPrimary = node.id; updateSelectionClasses(); }
+      else selectCanvasNode(node);
     }
 
     const moveIds = [...state.selectedIds];
@@ -17302,17 +17426,27 @@ function enableNodeDrag(nodeEl, node) {
     function up() {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointercancel", up);
       const moved = origins.some((o) => {
         const n = getNode(o.id);
         return n && (Math.abs(n.position.x - o.x) > 2 || Math.abs(n.position.y - o.y) > 2);
       });
-      if (moved) appendActivity("node_moved", { node: getNode(moveIds[0]) });
+      adaptivePointerBusy = false;
+      if (moved) {
+        adaptiveSuppressedSelection = state.selectedPrimary;
+        adaptiveIgnoreClick = node.id;
+        adaptiveCanvasView.clear();
+        setTimeout(() => { adaptiveIgnoreClick = null; }, 0);
+        appendActivity("node_moved", { node: getNode(moveIds[0]) });
+      }
+      synchronizeAdaptiveCanvasView();
       updateCanvasScrollSurfaceSize();
-      saveCampaignCanvasState();
+      if (moved) saveCampaignCanvasState();
     }
 
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", up);
   });
 }
 
@@ -17402,6 +17536,7 @@ function resolveAllNodeOverlaps() {
 
 function toggleListMode(showList) {
   const shouldShowList = typeof showList === "boolean" ? showList : !el.canvas.classList.contains("hidden");
+  resetAdaptiveCanvasView();
   el.canvas.classList.toggle("hidden", shouldShowList);
   el.boardListView.classList.toggle("hidden", !shouldShowList);
   if (shouldShowList) updateListView();
@@ -17707,6 +17842,7 @@ function closeInspector({ restoreFocus = true } = {}) {
 function setActiveView(view) {
   if (view !== 'brand-profile' && el.brandWorkspaceDetail?.open && !closeCanonicalBrandDetail({ restoreFocus: false, navigate: false, resume: () => setActiveView(view) })) return;
   globalThis.FunklixWorkspaceSidebarController?.close(false);
+  if (state.activeView !== view && (state.activeView === "board" || view === "board") && typeof resetAdaptiveCanvasView === "function") resetAdaptiveCanvasView();
   state.activeView = view;
   const isHome = view === "home";
   const isBrandCore = view === "brand-core";
@@ -18199,6 +18335,7 @@ document.addEventListener("click", (e) => {
 
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") {
+    if (e.defaultPrevented) return;
     closeLightbox();
     if (el.appShell?.dataset.inspectorMode === "overlay" && el.appShell.dataset.inspectorOpen === "true") closeInspector();
   }
@@ -18254,6 +18391,7 @@ el.uiLanguageSelect?.addEventListener("change", () => {
   state.uiLanguage = language?.setUiLanguage?.(el.uiLanguageSelect.value) || "en";
   translateInterface(document);
   refreshOpenInspectorLanguage();
+  synchronizeAdaptiveCanvasView();
   refreshInterfaceLanguage();
   window.FunklixTheme?.syncControls?.();
   renderWorkspaceSidebar();
@@ -18904,13 +19042,12 @@ el.propagateDescendantsButton.addEventListener("click", () => {
   fillInspector(node);
   saveCampaignCanvasState();
 });
+// Hidden legacy DOM hooks delegate to the same local toolbar authority.
 el.compactAllButton?.addEventListener("click", () => {
-  pushHistorySnapshot();
-  setCompactModeForAllNodes(true);
+  adaptiveCanvasView.compact(true); synchronizeAdaptiveCanvasView();
 });
 el.expandAllButton?.addEventListener("click", () => {
-  pushHistorySnapshot();
-  setCompactModeForAllNodes(false);
+  adaptiveCanvasView.compact(false); synchronizeAdaptiveCanvasView();
 });
 el.nodeSearchInput?.addEventListener("input", (event) => {
   state.nodeSearchQuery = event.target.value || "";
@@ -18984,6 +19121,7 @@ el.filtersToggleButton?.addEventListener("click", (event) => {
   syncPopoverActiveStates(popover);
 });
 initializeResponsibilityToolbar();
+initializeAdaptiveCanvasToolbar();
 el.utilitiesToggleButton?.addEventListener("click", (event) => {
   event.stopPropagation();
   const existing = document.getElementById("floating-utilities-popover");
@@ -18997,13 +19135,6 @@ el.utilitiesToggleButton?.addEventListener("click", (event) => {
   popover.style.top = `${rect.bottom + 8}px`;
   popover.style.left = `${Math.max(10, rect.right - 260)}px`;
   popover.addEventListener("click", (e) => {
-    const densityButton = e.target.closest("button[data-canvas-density-choice]");
-    if (densityButton) {
-      e.stopPropagation();
-      try { applyCanvasDensityPresentation(densityButton.dataset.canvasDensityChoice, { persist: true, menuRoot: popover }); } catch (_) { /* Presentation-only failure. */ }
-      closeUtilitiesPopover();
-      return;
-    }
     const btn = e.target.closest("button[data-utility-action]");
     if (!btn) return;
     if (btn.dataset.utilityAction === "duplicate-board") {
@@ -19062,7 +19193,9 @@ el.canvas.addEventListener("drop", (event) => {
 
 el.canvas.addEventListener("pointerdown", (event) => {
   if (event.button !== 0) return;
-  if (event.target.closest(".node, .context-menu, button, input, textarea, select")) return;
+  if (event.target.closest(".node, .context-menu, button, input, textarea, select, svg path, .postit, [role='dialog'], [role='menu']") || state.activeConnection || state.connectorCreateMode) return;
+  adaptivePointerBusy = true;
+  synchronizeAdaptiveCanvasView();
   collapseExpandedNodes();
 
   const appendSelection = event.shiftKey;
@@ -19128,7 +19261,9 @@ el.canvas.addEventListener("pointerdown", (event) => {
   function up() {
     window.removeEventListener("pointermove", move);
     window.removeEventListener("pointerup", up);
+    window.removeEventListener("pointercancel", up);
     box.remove();
+    adaptivePointerBusy = false;
     if (!panning) {
       const isEmptyCanvasClick = !hadPointerMove && !appendSelection;
       if (isEmptyCanvasClick) {
@@ -19141,10 +19276,12 @@ el.canvas.addEventListener("pointerdown", (event) => {
     } else {
       state.forcePanNextDrag = false;
     }
+    synchronizeAdaptiveCanvasView();
   }
 
   window.addEventListener("pointermove", move);
   window.addEventListener("pointerup", up);
+  window.addEventListener("pointercancel", up);
 });
 
 function centerBoardStartPosition() {

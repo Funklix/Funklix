@@ -25,6 +25,8 @@ jobs:
           node --check api/_campaign-responsibilities.js
           node --check scripts/check-bw36-15-campaign-team-responsibilities.js
           node --check scripts/check-bw36-15r1-responsibility-workspace-continuity.js
+          node --check adaptive-canvas-view.js
+          node --check scripts/check-bw36-16-adaptive-canvas-view-hierarchy.js
           node --check language.js
           node --check api/campaigns.js
           node --check api/_campaign-creation.js
@@ -350,6 +352,8 @@ jobs:
         run: npm run check:bw36.15
       - name: Check BW-36.15R1 responsibility workspace continuity
         run: npm run check:bw36.15r1
+      - name: Check BW-36.16 adaptive Canvas view hierarchy in Chromium
+        run: npm run check:bw36.16
       - name: Check dynamic AI Insights translations
         run: node scripts/check-bw25-1-dynamic-insights-translations.js
       - name: Check scoped German interface localization
