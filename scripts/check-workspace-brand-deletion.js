@@ -73,7 +73,8 @@ async function invoke(handler, { id = IDS.target, confirmationName = 'Invented A
   assert(app.includes('state.brandCatalog.entries = state.brandCatalog.entries.filter'), 'success removes only confirmed row');
   assert(app.includes('brandDeletion.status = "confirming"') && app.includes('setBrandDeletionPending(false)'), 'failure restores usable UI');
   assert(app.includes('remaining.length === 1 ? remaining[0].id : null') && app.includes('ephemeralBrandSwitcherSelection = null; void removeBrandSwitcherPreference'), 'confirmed deletion selects a unique remaining Brand or null and removes the old preference');
-  assert(html.includes('Boards, Board content, nodes, approvals, publications, social connections, and user accounts will remain available.'));
+  assert(!html.includes('id="brand-delete-confirmation"'), 'R6 confirmation is the deliberate destructive click');
+  assert(app.includes('This permanently deletes the Brand Profile, its members, and its saved Brand information. This action cannot be undone.'));
   assert(css.includes('background: color-mix(in srgb, var(--fk-color-surface-input) 72%, transparent)') && css.includes('.brand-switcher-details[open] .brand-switcher-summary'), 'selector uses token surfaces for default/open states');
   assert(!css.match(/\.brand-switcher-summary[\s\S]{0,500}background:\s*rgba\(255,\s*255,\s*255/), 'light-only trigger rule removed');
   console.log('Workspace Brand deletion and selector regression passed (19 contracts).');

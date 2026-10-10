@@ -64,3 +64,12 @@
 
 .profile-official-logo{display:grid;place-items:center;overflow:hidden;border:1px solid var(--fk-color-border-default);border-radius:12px;background:var(--fk-color-surface-input)}
 .profile-official-logo img{max-width:100%;max-height:100%;object-fit:contain}
+
+/* BW-36.13R6: blocked deletion remains prominent in both themes and narrow dialogs. */
+.brand-delete-dialog{box-sizing:border-box;max-height:calc(100dvh - 24px);overflow:auto;overflow-wrap:anywhere}
+.brand-delete-dialog [hidden]{display:none!important}
+.brand-delete-blocked,.profile-proposal-error{padding:12px;border:2px solid var(--fk-color-danger,#b42318);border-radius:8px;color:var(--fk-color-text-primary);background:color-mix(in srgb,var(--fk-color-danger,#b42318) 12%,var(--fk-color-surface-elevated));font-weight:600}
+.brand-delete-dialog .brand-delete-actions button{min-height:44px;white-space:normal;max-width:100%}
+.brand-delete-dialog :focus-visible{outline:3px solid var(--fk-color-focus-ring);outline-offset:3px}
+@media(max-width:480px){.brand-delete-dialog{padding:16px}.brand-delete-actions{display:grid;grid-template-columns:1fr}}
+@media(forced-colors:active){.brand-delete-blocked,.profile-proposal-error{border-color:CanvasText;background:Canvas;color:CanvasText}}

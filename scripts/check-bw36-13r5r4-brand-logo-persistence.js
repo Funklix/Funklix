@@ -112,7 +112,7 @@ async function browserState() {
   const s = profile.createSession({ brand, getContext: () => context, fetchImpl, requestId: () => 'logo-reconciliation',
     validateBrand: b => b.id === B && Number.isSafeInteger(b.logo_revision), onSave() {}, onLogo() { throw new Error('Local renderer failure'); } });
   await s.chooseFile({ name: 'logo.png', type: 'image/png', size: png.length }, async () => png.toString('base64'));
-  assert(s.dirty()); assert(await s.upload()); assert(!s.dirty()); assert.equal(s.state.file, null);
+  assert(!s.dirty()); assert(await s.upload()); assert(!s.dirty()); assert.equal(s.state.file, null);
   assert(s.state.message.startsWith('Logo saved.')); assert.equal(r.objects.size, 1);
   s.state.core.brandCore = 'Updated profile'; assert(await s.save()); assert.equal(r.db.brands[0].logo_revision, 1);
   assert.equal(r.db.brands[0].logo_object_path, `${B}/1.png`);

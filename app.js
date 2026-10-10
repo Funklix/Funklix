@@ -452,7 +452,8 @@ const el = {
   brandDeleteForm: document.getElementById("brand-delete-form"),
   brandDeleteTitle: document.getElementById("brand-delete-title"),
   brandDeleteDescription: document.getElementById("brand-delete-description"),
-  brandDeleteConfirmation: document.getElementById("brand-delete-confirmation"),
+  brandDeleteProjects: document.getElementById("brand-delete-projects"),
+  brandDeleteLogo: document.getElementById("brand-delete-logo"),
   brandDeleteFeedback: document.getElementById("brand-delete-feedback"),
   brandDeleteSubmit: document.getElementById("brand-delete-submit"),
   brandDeleteCancel: document.getElementById("brand-delete-cancel"),
@@ -3202,10 +3203,13 @@ function reconcileConfirmedBrand(confirmed) {
 
 function retainPendingBrandProfile() {
   const profile = brandProfileController?.state;
-  if (!profile) return;
-  if (profile.file || profile.candidate || Object.keys(profile.proposals).length) {
+  if (!profile || !brandProfileController.belongsToAccount(state.user)) return;
+  if (profile.file || profile.candidate || profile.dnaDraft || profile.avatarDraft || profile.avatarDirection || Object.keys(profile.proposals).length) {
     pendingBrandProfileData.set(profile.brand.id, { account: state.user, file: profile.file, fileData: profile.fileData,
-      candidate: profile.candidate ? clonePlainObject(profile.candidate) : null, proposals: clonePlainObject(profile.proposals) });
+      candidate: profile.candidate ? clonePlainObject(profile.candidate) : null, proposals: clonePlainObject(profile.proposals),
+      proposalChoices: clonePlainObject(profile.proposalChoices), proposalErrors: clonePlainObject(profile.proposalErrors),
+      autoKeys: profile.autoKeys.slice(), autoValues: clonePlainObject(profile.autoValues),
+      dnaDraft: profile.dnaDraft, avatarDraft: profile.avatarDraft, avatarDirection: profile.avatarDirection });
   } else pendingBrandProfileData.delete(profile.brand.id);
 }
 
@@ -3267,7 +3271,7 @@ async function continueBrandProfileProject() {
     await submitCanonicalBrandEditing({ preventDefault() {} });
     if (canonicalBrandDraftDirty()) return;
   }
-  if (brandProfileController?.state.dirty && !await brandProfileController.save()) return;
+  if (brandProfileController?.contentDirty() && !await brandProfileController.save()) return;
   if (brandProfileController) brandProfileController.state.deferred = true;
   if (context.account !== state.user || context.generation !== state.workspaceCatalog.generation) {
     el.brandWorkspaceDetailStatus.textContent = uiText('Workspace or Brand context is no longer available.'); return;
@@ -3843,19 +3847,55 @@ let brandDeletion = { status: "closed", brand: null, returnFocus: null };
 function setBrandDeletionPending(pending) {
   if (el.brandDeleteSubmit) el.brandDeleteSubmit.disabled = pending;
   if (el.brandDeleteCancel) el.brandDeleteCancel.disabled = pending;
-  if (el.brandDeleteConfirmation) el.brandDeleteConfirmation.disabled = pending;
+  if (el.brandDeleteProjects) el.brandDeleteProjects.disabled = pending;
+}
+
+function showBrandDeletionBlocked(count) {
+  brandDeletion.status = 'blocked';
+  setBrandDeletionPending(false);
+  el.brandDeleteSubmit.hidden = true;
+  el.brandDeleteProjects.hidden = false;
+  el.brandDeleteFeedback.classList.add('brand-delete-blocked');
+  const key = count === 1 ? 'This Brand is used by 1 project. Delete or assign that project to another Brand first.'
+    : Number.isSafeInteger(count) && count > 1 ? 'This Brand is used by {count} projects. Delete or assign those projects to another Brand first.'
+    : 'This Brand is used by projects. Delete or assign those projects to another Brand first.';
+  el.brandDeleteFeedback.textContent = uiFormat(key, { count });
+  if (el.brandDeleteDialog.open) el.brandDeleteProjects.focus();
 }
 
 function openBrandDeletion(brand, returnFocus) {
-  if (brand?.role !== "owner" || !el.brandDeleteDialog || brandDeletion.status === "submitting") return;
-  brandDeletion = { status: "confirming", brand: Object.freeze({ ...brand, access: Object.freeze({ ...(brand.access || {}), role: brand.role }) }), returnFocus };
+  if (brand?.role !== "owner" || !el.brandDeleteDialog || brandDeletion.status === "submitting" || !state.user) return;
+  const workspace = state.workspaceCatalog.status === 'ready' && state.workspaceCatalog.value?.workspaces.find(w => w.brands.some(b => b.id === brand.id && b.role === 'owner'));
+  if (!workspace) return;
+  const target = workspace.brands.find(b => b.id === brand.id);
+  brandDeletion = { status: "confirming", brand: Object.freeze({ ...target, access: Object.freeze({ ...(target.access || {}), role: target.role }) }), returnFocus, account: state.user, workspaceId: workspace.id };
   el.brandDeleteForm?.reset();
-  if (el.brandDeleteDescription) el.brandDeleteDescription.textContent = uiFormat('Delete the Workspace/Brand “{name}”? This cannot be undone.', { name: brand.name });
-  if (el.brandDeleteFeedback) el.brandDeleteFeedback.textContent = "";
-  setBrandDeletionPending(false);
   translateInterface(el.brandDeleteDialog);
+  el.brandDeleteTitle.textContent = uiFormat('Delete {name}?', { name: target.name });
+  el.brandDeleteDescription.textContent = uiText('This permanently deletes the Brand Profile, its members, and its saved Brand information. This action cannot be undone.');
+  window.FunklixBrandLogo.render(el.brandDeleteLogo, target, { label: uiText('Brand logo') });
+  el.brandDeleteFeedback.textContent = ''; el.brandDeleteFeedback.classList.remove('brand-delete-blocked');
+  el.brandDeleteSubmit.hidden = false; el.brandDeleteProjects.hidden = true;
+  setBrandDeletionPending(false);
+  const count = workspace.boards.filter(b => b.brand_id === target.id).length;
+  if (count) showBrandDeletionBlocked(count);
+  document.body.append(el.brandDeleteDialog);
   el.brandDeleteDialog.showModal();
-  el.brandDeleteTitle?.focus();
+  el.brandDeleteCancel.focus();
+}
+
+function viewBrandDeletionProjects() {
+  const deletion = brandDeletion;
+  if (deletion.status !== 'blocked' || deletion.account !== state.user) return;
+  const proceed = () => {
+    if (deletion.account !== state.user) return;
+    closeBrandDeletion({ restoreFocus: false });
+    // Use the existing authorized Brand filter and library, including non-active Brands.
+    ephemeralBrandSwitcherSelection = { id: deletion.brand.id, name: deletion.brand.name };
+    state.boardsLibraryRequest.scope = 'brand';
+    setActiveView('boards_library'); void loadBoardsLibrary(); renderBoardsLibraryControls();
+  };
+  if (guardBrandProfileLeave(proceed)) proceed();
 }
 
 function closeBrandDeletion({ restoreFocus = true } = {}) {
@@ -3873,12 +3913,10 @@ async function submitBrandDeletion(event) {
   const brand = brandDeletion.brand;
   const origin = brandDeletion.returnFocus;
   const account = state.user, generation = state.workspaceCatalog.generation;
-  const confirmationName = el.brandDeleteConfirmation?.value || "";
-  if (confirmationName !== brand.name) {
-    if (el.brandDeleteFeedback) el.brandDeleteFeedback.textContent = uiText("Enter the exact Brand name to continue.");
-    el.brandDeleteConfirmation?.focus();
-    return;
-  }
+  if (brandDeletion.account !== account || state.workspaceCatalog.status !== 'ready'
+    || !state.workspaceCatalog.value?.workspaces.find(w => w.id === brandDeletion.workspaceId)?.brands.some(b => b.id === brand.id && b.role === 'owner')) return;
+  // The deliberate second click confirms the captured row; the server still validates its name and relationships.
+  const confirmationName = brand.name;
   brandDeletion.status = "submitting";
   setBrandDeletionPending(true);
   if (el.brandDeleteFeedback) el.brandDeleteFeedback.textContent = uiText("Deleting Brand…");
@@ -3889,12 +3927,12 @@ async function submitBrandDeletion(event) {
     });
     let result = null;
     try { result = await response.json(); } catch (_error) { /* bounded generic failure below */ }
+    if (brandDeletion.brand !== brand || account !== state.user) return;
     if (!response.ok || result?.ok !== true || result?.code !== "BRAND_DELETED" || result?.deletedBrandId !== brand.id) {
       brandDeletion.status = "confirming";
       setBrandDeletionPending(false);
-      if (el.brandDeleteFeedback) el.brandDeleteFeedback.textContent = result?.code === 'BRAND_IN_USE' && Number.isSafeInteger(result.boardCount)
-        ? uiFormat('Brand still in use by {count} projects. Reassign those projects first.', { count: result.boardCount })
-        : uiText("The Brand could not be deleted. It remains available; try again.");
+      if (result?.code === 'BRAND_IN_USE') showBrandDeletionBlocked(result.boardCount);
+      else el.brandDeleteFeedback.textContent = uiText("The Brand could not be deleted. It remains available; try again.");
       return;
     }
     brandDeletion.status = "complete";
@@ -3916,11 +3954,12 @@ async function submitBrandDeletion(event) {
       if (ephemeralBrandSwitcherSelection?.id === brand.id) { ephemeralBrandSwitcherSelection = null; void removeBrandSwitcherPreference((state.user?.email || '').trim().toLowerCase()); }
       projectDialogController?.removeBrand?.(brand.id);
       renderBrandCatalog(); renderBoardBrandAssociation(); renderWorkspaceSidebar(); renderBoardsLibrary();
-      setSaveStatus(uiFormat('Workspace/Brand “{name}” was deleted. Boards remain available.', { name: brand.name }));
+      setSaveStatus(uiFormat('Brand “{name}” was deleted.', { name: brand.name }));
       if (origin?.isConnected) origin.focus();
     } catch { setSaveStatus(uiText('Brand deleted. Refresh the view if the update is not visible everywhere yet.')); }
 
   } catch (_error) {
+    if (brandDeletion.brand !== brand || account !== state.user) return;
     brandDeletion.status = "confirming";
     setBrandDeletionPending(false);
     if (el.brandDeleteFeedback) el.brandDeleteFeedback.textContent = uiText("The Brand could not be deleted. It remains available; try again.");
@@ -4855,6 +4894,7 @@ async function createSidebarBrand(input) {
 }
 
 function clearWorkspaceCatalog() {
+  if (el.brandDeleteDialog?.open) { brandDeletion.status = "closed"; closeBrandDeletion({ restoreFocus: false }); }
   pendingBrandProfileData.clear();
   showProjectLaunchFeedback(null);
   invalidateBoardCreationContext();
@@ -18199,6 +18239,14 @@ el.brandSwitcherCreateOpen?.addEventListener("click", openCanonicalBrandCreation
 el.brandSwitcherCreateForm?.addEventListener("submit", submitCanonicalBrandCreation);
 el.brandSwitcherCreateCancel?.addEventListener("click", () => resetCanonicalBrandCreation({ focusTrigger: true }));
 el.brandDeleteForm?.addEventListener("submit", submitBrandDeletion);
+el.brandDeleteProjects?.addEventListener('click', viewBrandDeletionProjects);
+el.brandDeleteDialog?.addEventListener('keydown', event => {
+  if (event.key !== 'Tab') return;
+  const buttons = [...el.brandDeleteDialog.querySelectorAll('button')].filter(b => !b.hidden && !b.disabled);
+  const first = buttons[0], last = buttons.at(-1);
+  if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+  else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+});
 el.brandDeleteCancel?.addEventListener("click", () => closeBrandDeletion());
 el.brandDeleteDialog?.addEventListener("cancel", (event) => { event.preventDefault(); closeBrandDeletion(); });
 el.boardBrandAssociationEdit?.addEventListener("click", openBoardBrandAssociation);

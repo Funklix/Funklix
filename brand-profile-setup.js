@@ -25,6 +25,12 @@
     if (Array.isArray(value)) return value.some(meaningful);
     return object(value) && Object.values(value).some(meaningful);
   }
+  function emptyValue(value) {
+    if (value == null) return true;
+    if (typeof value === 'string') return !value.trim();
+    if (Array.isArray(value)) return value.every(emptyValue);
+    return object(value) && Object.values(value).every(emptyValue);
+  }
   const STATUS = Object.freeze({ complete: 'Complete', partial: 'Needs attention', empty: 'Not started', neutral: 'Not applicable' });
   function confirmedValue(value) {
     if (typeof value === 'string') return !!value.trim() && !/^(?:not provided|not started|placeholder|n\/a|tbd|unknown|nicht angegeben|noch nicht begonnen)$/i.test(value.trim());
@@ -113,14 +119,14 @@
   }
   function createSession(options) {
     const { getContext, fetchImpl = root.fetch.bind(root), validateBrand, onSave, onLogo } = options;
-    const captured = getContext();
+    const captured = { ...getContext() };
     let alive = true, flight = null;
     const state = {
       brand: options.brand, name: options.brand.name, core: clone(options.brand.brand_core),
       website: options.website || options.brand.brand_core?.brandAssets?.domain || options.brand.brand_core?.website || '',
       section: 0, message: '', analysis: 'Not analyzed', logo: options.brand.logo_url ? 'Logo saved' : 'No logo yet. Initials are shown.',
       proposals: clone(options.pendingData?.proposals || {}), candidate: clone(options.pendingData?.candidate || null),
-      dnaPreflight: null, dnaDraft: null, avatarDraft: null, avatarDirection: '', file: options.pendingData?.file || null, fileData: options.pendingData?.fileData || null, syncRequired: false, reconciliationWarning: false, pending: '', dirty: !!options.website, deferred: false,
+      dnaPreflight: null, dnaDraft: clone(options.pendingData?.dnaDraft || null), avatarDraft: clone(options.pendingData?.avatarDraft || null), avatarDirection: options.pendingData?.avatarDirection || '', file: options.pendingData?.file || null, fileData: options.pendingData?.fileData || null, syncRequired: false, reconciliationWarning: false, pending: '', deferred: false,
       readOnly: options.brand.access?.canEditCanonicalBrand !== true || !['owner','admin','editor'].includes(options.brand.access?.role)
     };
     function editableCore(core) {
@@ -131,8 +137,23 @@
       return value;
     }
     state.core = editableCore(state.core);
-    let baseline = stable({ name: state.name.trim(), website: String(options.brand.brand_core?.brandAssets?.domain || options.brand.brand_core?.website || '').trim(), core: state.core });
-    function draftSignature() { return stable({ name: state.name.trim(), website: state.website.trim(), core: state.core }); }
+    let baseline = stable({ name: state.name.trim(), website: normalizedWebsite(options.brand.brand_core?.brandAssets?.domain || options.brand.brand_core?.website || ''), core: state.core });
+    function draftSignature() { return stable({ name: state.name.trim(), website: normalizedWebsite(state.website), core: editableCore(state.core) }); }
+    function rebaseDraft(previous, local, confirmed) {
+      if (stable(local) === stable(previous)) return confirmed === undefined ? undefined : clone(confirmed);
+      if (!object(local) || !object(confirmed)) return local;
+      const next = clone(local);
+      for (const key of new Set([...Object.keys(previous || {}), ...Object.keys(confirmed)])) {
+        const value = rebaseDraft(previous?.[key], local[key], confirmed[key]);
+        if (value === undefined) delete next[key]; else next[key] = value;
+      }
+      return next;
+    }
+    function normalizedWebsite(value) { try { return website(value); } catch { return String(value || '').trim(); } }
+    // Compatibility writes cannot latch the leaving guard after a confirmed save.
+    Object.defineProperty(state, 'dirty', { get: () => contentDirty(), set() {}, enumerable: true });
+    state.proposalErrors = clone(options.pendingData?.proposalErrors || {}); state.proposalChoices = clone(options.pendingData?.proposalChoices || {});
+    state.autoKeys = (options.pendingData?.autoKeys || []).slice(); state.autoValues = clone(options.pendingData?.autoValues || {}); state.addedCount = 0;
     function contentDirty() { return draftSignature() !== baseline; }
     let notify = () => {};
     function current() {
@@ -173,9 +194,88 @@
       if (!current()) return null;
       return { response, payload };
     }
+    function proposalValue(core, key, value) {
+      return object(core[key]) && object(value) ? { ...clone(core[key]), ...clone(value) } : clone(value);
+    }
+    function keepProposal(key) {
+      if (!current() || state.readOnly || state.pending) return;
+      delete state.proposals[key]; delete state.proposalErrors[key]; delete state.proposalChoices[key];
+      state.autoKeys = state.autoKeys.filter(item => item !== key);
+      changed();
+    }
+    async function persistSuggestions(keys, values = state.proposals) {
+      const previous = state.brand, core = clone(previous.brand_core);
+      keys = keys.filter(key => {
+        if (stable(proposalValue(core, key, values[key])) !== stable(core[key])) return true;
+        keepResolved(key); return false;
+      });
+      if (!keys.length) return true;
+      for (const key of keys) core[key] = proposalValue(core, key, values[key]);
+      let result;
+      try { result = await jsonRequest(`/api/brands/${previous.id}`, 'PUT', { name: previous.name, brand_core: core, revision: previous.revision }); }
+      catch {
+        state.message = 'The save was not confirmed. Your inputs are retained. Retry safely.';
+        for (const key of keys) state.proposalErrors[key] = state.message;
+        return false;
+      }
+      if (!result) return false;
+      if (!result.response.ok) {
+        state.message = errorText(result.response, 'The save was not confirmed. Your inputs are retained. Retry safely.', result.payload);
+        for (const key of keys) state.proposalErrors[key] = state.message;
+        if (result.response.status === 409) {
+          const latest = await verifyBrand();
+          if (latest) {
+            // Rebase only untouched draft fields. Keep genuine manual edits for their own save.
+            const prior = editableCore(previous.brand_core), local = editableCore(state.core), fresh = editableCore(latest.brand_core);
+            state.core = rebaseDraft(prior, local, fresh);
+            if (state.name.trim() === previous.name.trim()) state.name = latest.name;
+            if (normalizedWebsite(state.website) === normalizedWebsite(previous.brand_core?.brandAssets?.domain || previous.brand_core?.website)) state.website = latest.brand_core?.brandAssets?.domain || latest.brand_core?.website || '';
+            state.brand = latest;
+            baseline = stable({ name: latest.name.trim(), website: normalizedWebsite(latest.brand_core?.brandAssets?.domain || latest.brand_core?.website), core: fresh });
+            state.autoKeys = []; // Current values now require a deliberate new decision.
+            for (const key of keys) if (stable(proposalValue(latest.brand_core, key, state.proposals[key])) === stable(latest.brand_core[key])) keepResolved(key);
+            try { await onSave(latest); } catch { state.reconciliationWarning = true; }
+          }
+        }
+        return false;
+      }
+      const confirmed = await verifyBrand();
+      if (!validateBrand(result.payload, previous.id) || !confirmed || confirmed.revision !== previous.revision + 1
+        || confirmed.name !== previous.name || stable(confirmed.brand_core) !== stable(core)) {
+        state.syncRequired = true;
+        state.message = 'Brand Profile saved on the server. Reload saved Brand to synchronize. Your inputs are retained.';
+        for (const key of keys) state.proposalErrors[key] = state.message;
+        return false;
+      }
+      for (const key of keys) {
+        state.core[key] = rebaseDraft(editableCore(previous.brand_core)[key], state.core[key], confirmed.brand_core[key]);
+        if (key === 'brandAssets' && object(state.proposals[key])) {
+          for (const part of Object.keys(values[key])) if (stable(state.proposals[key][part]) === stable(values[key][part])) delete state.proposals[key][part];
+          if (!Object.keys(state.proposals[key]).length) keepResolved(key);
+        } else keepResolved(key);
+      }
+      state.brand = confirmed;
+      baseline = stable({ name: confirmed.name.trim(), website: normalizedWebsite(confirmed.brand_core?.brandAssets?.domain || confirmed.brand_core?.website), core: editableCore(confirmed.brand_core) });
+      try { await onSave(confirmed); } catch { state.reconciliationWarning = true; }
+      state.message = 'Brand Profile saved';
+      return true;
+    }
+    function keepResolved(key) { delete state.proposals[key]; delete state.proposalErrors[key]; delete state.proposalChoices[key]; }
     function applyProposal(key) {
-      if (!current() || state.readOnly || state.pending || !Object.hasOwn(state.proposals, key)) return;
-      state.core[key] = object(state.core[key]) && object(state.proposals[key]) ? { ...clone(state.core[key]), ...clone(state.proposals[key]) } : clone(state.proposals[key]); delete state.proposals[key]; state.dirty = true; changed();
+      if (!Object.hasOwn(state.proposals, key)) return Promise.resolve(false);
+      return run('Saving website suggestion…', async () => {
+        state.proposalChoices[key] = 'website'; changed();
+        return persistSuggestions([key]);
+      });
+    }
+    function retryAutomatic() {
+      return run('Saving website suggestion…', async () => {
+        const keys = state.autoKeys.filter(key => Object.hasOwn(state.proposals, key));
+        if (!keys.length) return false;
+        const saved = await persistSuggestions(keys, state.autoValues);
+        if (saved) { state.addedCount = keys.reduce((count, key) => count + (key === 'brandAssets' ? Object.keys(state.autoValues[key]).length : 1), 0); state.autoKeys = []; }
+        return saved;
+      });
     }
     function analyze() {
       return run('Analyzing website…', async () => {
@@ -192,14 +292,33 @@
           state.message = errorText(result.response, fallback, result.payload); return false;
         }
         const suggestions = filteredSuggestions(result.payload?.suggestions);
-        if (!Object.values(suggestions).some(meaningful)) { state.proposals = {}; state.analysis = 'No usable information found'; state.message = 'No usable information found. You can fill in your Brand Profile manually.'; }
-        else {
-          state.proposals = suggestions; state.analysis = 'Review website suggestions'; state.section = 9;
-          // Filling an empty local draft is never a save or a replacement of confirmed data.
-          if (!Object.keys(FIELDS).some(key => key !== 'brandAssets' && meaningful(state.core[key]))) {
-            Object.assign(state.core, clone(suggestions)); state.proposals = {}; state.dirty = true;
-          }
+        state.proposals = {}; state.proposalErrors = {}; state.proposalChoices = {}; state.autoKeys = []; state.autoValues = {}; state.addedCount = 0;
+        for (const [key, value] of Object.entries(suggestions)) {
+          if (!meaningful(value)) continue;
+          const proposed = proposalValue(state.brand.brand_core, key, value);
+          if (stable(proposed) === stable(state.brand.brand_core[key])) continue;
+          state.proposals[key] = value;
+          // Assets contain independent details; never replace existing colors or typography.
+          if (key === 'brandAssets') {
+            const empty = {}, conflict = {};
+            for (const [part, item] of Object.entries(value)) {
+              if (!meaningful(item)) continue;
+              if (emptyValue(state.brand.brand_core[key]?.[part]) && emptyValue(state.core[key]?.[part])) empty[part] = item;
+              else if (stable(item) !== stable(state.brand.brand_core[key]?.[part])) conflict[part] = item;
+            }
+            delete state.proposals[key];
+            if (Object.keys(empty).length) { state.proposals[key] = empty; state.autoKeys.push(key); }
+            state.assetConflicts = conflict;
+          } else if (emptyValue(state.brand.brand_core[key]) && emptyValue(state.core[key])) state.autoKeys.push(key);
         }
+        state.analysis = Object.values(suggestions).some(meaningful) ? 'Review website suggestions' : 'No usable information found'; state.section = 9;
+        if (state.autoKeys.length) {
+          const keys = state.autoKeys.slice();
+          state.autoValues = Object.fromEntries(keys.map(key => [key, clone(state.proposals[key])]));
+          if (await persistSuggestions(keys, state.autoValues)) { state.addedCount = keys.reduce((count, key) => count + (key === 'brandAssets' ? Object.keys(state.autoValues[key]).length : 1), 0); state.autoKeys = []; }
+        }
+        if (state.assetConflicts && Object.keys(state.assetConflicts).length) state.proposals.brandAssets = { ...(state.proposals.brandAssets || {}), ...state.assetConflicts };
+        state.assetConflicts = null;
         state.candidate = validCandidate(result.payload?.logoDiscovery) ? clone(result.payload.logoDiscovery) : null;
         state.logo = state.candidate ? state.brand.logo_source === 'uploaded' ? 'Your uploaded logo has priority. It was kept.' : 'Review the suggested logo' : 'No suitable logo found. Upload your own logo.';
         return true;
@@ -224,7 +343,7 @@
           || stable(brand.brand_core) !== stable(core) || brand.logo_revision !== state.brand.logo_revision || brand.logo_url !== state.brand.logo_url) { state.brand = result.payload; state.syncRequired = true; state.message = 'Brand Profile saved on the server. Reload saved Brand to synchronize. Your inputs are retained.'; return false; }
         state.brand = brand;
         // Inputs may change during an in-flight save. Clear only the submitted draft.
-        if (draftSignature() === submitted) { state.name = brand.name; state.core = clone(brand.brand_core); state.website = domain; }
+        if (draftSignature() === submitted) { state.name = brand.name; state.core = editableCore(brand.brand_core); state.website = domain; }
         baseline = stable({ name: brand.name.trim(), website: domain, core: editableCore(brand.brand_core) });
         state.dirty = contentDirty();
         state.message = state.dirty ? 'Brand Profile saved. Your newer edits are retained.' : 'Brand Profile saved';
@@ -335,8 +454,13 @@
         const brand = await response.json().catch(() => null);
         if (!current()) return false;
         if (!response.ok || !validateBrand(brand, state.brand.id)) { state.message = errorText(response, 'Brand Profile could not be loaded. Retry.'); return false; }
-        // Keep the unsaved draft for deliberate review against the latest revision.
-        state.brand = brand; baseline = stable({ name: brand.name.trim(), website: String(brand.brand_core?.brandAssets?.domain || brand.brand_core?.website || '').trim(), core: editableCore(brand.brand_core) }); state.dirty = contentDirty(); state.readOnly = brand.access.canEditCanonicalBrand !== true || !['owner','admin','editor'].includes(brand.access.role);
+        // Refresh untouched fields; preserve only genuine local edits against the latest baseline.
+        const previous = state.brand;
+        state.core = rebaseDraft(editableCore(previous.brand_core), state.core, editableCore(brand.brand_core));
+        if (state.name.trim() === previous.name.trim()) state.name = brand.name;
+        if (normalizedWebsite(state.website) === normalizedWebsite(previous.brand_core?.brandAssets?.domain || previous.brand_core?.website)) state.website = brand.brand_core?.brandAssets?.domain || brand.brand_core?.website || '';
+        for (const [key, value] of Object.entries(state.proposals)) if (stable(proposalValue(brand.brand_core, key, value)) === stable(brand.brand_core[key])) keepResolved(key);
+        state.brand = brand; baseline = stable({ name: brand.name.trim(), website: normalizedWebsite(brand.brand_core?.brandAssets?.domain || brand.brand_core?.website || ''), core: editableCore(brand.brand_core) }); state.dirty = contentDirty(); state.readOnly = brand.access.canEditCanonicalBrand !== true || !['owner','admin','editor'].includes(brand.access.role);
         state.syncRequired = !!brand.logo_url && !await verifyLogo(brand.logo_url);
         state.logo = state.syncRequired ? 'Logo saved. Synchronization needed.' : brand.logo_url ? 'Logo saved' : 'No logo yet. Initials are shown.';
         state.message = 'Latest Brand loaded. Your unsaved inputs are retained; review them before saving.';
@@ -389,7 +513,7 @@
       const saved = await save(); if (saved) { state.avatarDraft = null; state.avatarDirection = ''; } changed(); return saved;
     }
     function discard() {
-      state.name = state.brand.name; state.core = clone(state.brand.brand_core); state.website = state.core.brandAssets?.domain || state.core.website || '';
+      state.name = state.brand.name; state.core = editableCore(state.brand.brand_core); state.website = state.core.brandAssets?.domain || state.core.website || '';
       baseline = draftSignature(); state.dirty = false; state.file = null; state.fileData = null; state.candidate = null; state.proposals = {}; state.dnaDraft = null; state.avatarDraft = null; state.avatarDirection = ''; state.dnaPreflight = null;
     }
     function refreshContext() {
@@ -398,10 +522,10 @@
       captured.generation = live.generation;
       return true;
     }
-    return { state, current, refreshContext, analyze, save, upload, removeLogo, useLogo, chooseFile, applyProposal, reload,
+    return { state, current, belongsToAccount(account) { return account === captured.account; }, refreshContext, analyze, save, upload, removeLogo, useLogo, chooseFile, applyProposal, keepProposal, retryAutomatic, reload,
       discard, requestDna, generateDna, acceptDna, generateAvatar, acceptAvatar, contentDirty,
       subscribe(fn) { notify = fn; }, invalidate() { alive = false; state.file = null; state.fileData = null; state.candidate = null; state.proposals = {}; state.dnaDraft = null; state.avatarDraft = null; state.avatarDirection = ''; state.core = {}; state.website = ''; state.name = ''; },
-      dirty() { return contentDirty() || (!state.deferred && !!(state.file || state.candidate || state.dnaDraft || state.avatarDraft || state.avatarDirection || Object.keys(state.proposals).length)); }, busy() { return !!state.pending; } };
+      dirty() { return contentDirty(); }, busy() { return !!state.pending; } };
   }
 
   function mount(container, options) {
@@ -423,7 +547,7 @@
     }
     function readable(value, parent) {
       if (Array.isArray(value)) { const list = node('ul', '', parent); value.forEach(item => readable(item, node('li', '', list))); }
-      else if (object(value)) { Object.entries(value).forEach(([key, item]) => { if (meaningful(item)) { const line = node('div', '', parent); node('strong', t({ name: 'Name', note: 'Description', description: 'Description', benefit: 'Benefit', evidence: 'Evidence', good: 'Good example', avoid: 'Avoid', dos: 'Do', donts: 'Avoid', toneSignals: 'Tone signals', missionSignals: 'Mission signals', audienceSignals: 'Audience signals', messagingSignals: 'Messaging signals', visualSignals: 'Visual signals' }[key] || key.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/[_-]+/g, ' ')), line); readable(item, line); } }); }
+      else if (object(value)) { Object.entries(value).forEach(([key, item]) => { if (meaningful(item)) { const line = node('div', '', parent); node('strong', t({ colors: 'Colors', typography: 'Typography', references: 'References', domain: 'Website', name: 'Name', note: 'Description', description: 'Description', benefit: 'Benefit', evidence: 'Evidence', good: 'Good example', avoid: 'Avoid', dos: 'Do', donts: 'Avoid', toneSignals: 'Tone signals', missionSignals: 'Mission signals', audienceSignals: 'Audience signals', messagingSignals: 'Messaging signals', visualSignals: 'Visual signals' }[key] || key.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/[_-]+/g, ' ')), line); readable(item, line); } }); }
       else if (meaningful(value)) node('p', String(value), parent);
     }
     function fields(section, parent) {
@@ -545,9 +669,19 @@
         node('p', `${t('Website analysis')}: ${t(s.analysis)}`, section); logo(section);
         for (const [key, value] of Object.entries(s.proposals)) {
           const proposal = node('section', '', section); proposal.className = 'profile-proposal'; node('h4', t(FIELDS[key][1]), proposal);
-          node('p', t('Current value'), proposal); readable(s.core[key], proposal);
+          node('p', t('Current value'), proposal); readable(s.brand.brand_core[key], proposal);
           node('p', t('Website suggestion'), proposal); readable(value, proposal);
-          if (!s.readOnly) button('Use suggestion', proposal, () => session.applyProposal(key), `proposal-${key}`);
+          proposal.setAttribute('aria-busy', String(!!s.pending && s.proposalChoices[key] === 'website'));
+          if (!s.readOnly) {
+            button('Keep current', proposal, () => session.keepProposal(key), `keep-${key}`);
+            const use = button('Use website suggestion', proposal, () => { void session.applyProposal(key); }, `proposal-${key}`);
+            use.setAttribute('aria-pressed', String(s.proposalChoices[key] === 'website'));
+            if (s.pending && s.proposalChoices[key] === 'website') node('p', t('Saving website suggestion…'), proposal);
+            if (s.proposalErrors[key]) {
+              const error = node('p', t(s.proposalErrors[key]), proposal); error.className = 'profile-proposal-error'; error.setAttribute('role', 'alert');
+              button('Retry', proposal, () => { void session.applyProposal(key); }, `retry-${key}`);
+            }
+          }
         }
       } else if (s.section === 1) {
         const dna = s.dnaDraft || s.core.brandDNA || {};
@@ -596,6 +730,8 @@
         node('p', t('Campaign snapshots change only after an explicit campaign update.'), section);
         if (options.hasSnapshot?.()) button('Campaign Brand Snapshot', section, () => options.onSnapshot());
       } else fields(SECTIONS[s.section], section);
+      if (s.addedCount) node('p', t('{count} details added from the website.').replace('{count}', s.addedCount), container).setAttribute('role', 'status');
+      if (s.autoKeys.length && !s.pending) button('Retry adding website details', container, () => { void session.retryAutomatic(); });
       const feedback = node('p', t(s.pending || s.message), container); feedback.setAttribute('role', 'status'); feedback.setAttribute('aria-live', 'polite');
       const actions = node('div', '', container); actions.className = 'profile-actions';
       if (!s.readOnly) {
@@ -614,7 +750,10 @@
       });
       if (options.hasSnapshot?.()) button('Campaign Brand Snapshot', actions, () => options.onSnapshot());
       button('Advanced options', actions, () => options.onAdvanced(session));
-      if (focused) [...container.querySelectorAll('[data-profile-key]')].find(n => n.dataset.profileKey === focused)?.focus();
+      if (focused) {
+        const target = [...container.querySelectorAll('[data-profile-key]')].find(n => n.dataset.profileKey === focused);
+        (target || (focused.startsWith('keep-') || focused.startsWith('proposal-') || focused.startsWith('retry-') ? container.querySelector('.profile-proposal button') || title : null))?.focus();
+      }
     }
     session.subscribe(render); render();
     return { ...session, render, invalidate() { session.invalidate(); options.onBusy?.(false); } };

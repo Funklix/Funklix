@@ -12,6 +12,19 @@
   const STORAGE_KEY = "funklix.languagePreferences.v1";
   const LANGUAGE_NAMES = Object.freeze({ en: "English", de: "German", es: "Spanish" });
   const german = {
+    "Keep current": "Aktuellen Wert behalten",
+    "Use website suggestion": "Website-Vorschlag verwenden",
+    "Saving website suggestion…": "Website-Vorschlag wird gespeichert…",
+    "Retry adding website details": "Website-Angaben erneut ergänzen",
+    "{count} details added from the website.": "{count} Angaben von der Website ergänzt.",
+    "Delete {name}?": "{name} löschen?",
+    "Delete Brand": "Brand löschen",
+    "View projects": "Projekte anzeigen",
+    "This permanently deletes the Brand Profile, its members, and its saved Brand information. This action cannot be undone.": "Dadurch werden das Brand Profile, seine Mitglieder und die gespeicherten Brand-Informationen dauerhaft gelöscht. Diese Aktion kann nicht rückgängig gemacht werden.",
+    "This Brand is used by 1 project. Delete or assign that project to another Brand first.": "Diese Brand wird von 1 Projekt verwendet. Lösche das Projekt oder weise ihm zuerst eine andere Brand zu.",
+    "This Brand is used by {count} projects. Delete or assign those projects to another Brand first.": "Diese Brand wird von {count} Projekten verwendet. Lösche die Projekte oder weise ihnen zuerst eine andere Brand zu.",
+    "This Brand is used by projects. Delete or assign those projects to another Brand first.": "Diese Brand wird von Projekten verwendet. Lösche die Projekte oder weise ihnen zuerst eine andere Brand zu.",
+    "Brand “{name}” was deleted.": "Brand „{name}“ wurde gelöscht.",
     "Complete": "Vollständig", "Needs attention": "Ergänzung erforderlich", "Not started": "Noch nicht begonnen", "Not applicable": "Nicht zutreffend",
     "Brand Logo": "Brand Logo", "Add logo": "Logo hinzufügen", "Open Brand Avatar": "Brand Avatar öffnen", "Create Brand Avatar": "Brand Avatar erstellen",
     "Reload saved Brand": "Gespeicherte Brand neu laden", "Logo saved. Synchronization needed.": "Logo gespeichert. Synchronisierung erforderlich.",
