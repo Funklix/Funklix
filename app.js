@@ -5514,6 +5514,7 @@ function refreshLastSavedSnapshot() {
 }
 
 function detectDirtyFromSnapshot() {
+  if (campaignCreationController?.suspendAutosave) return;
   if (state.isBoardLoading) { return; }
   if (state.isBoardHydrating) { return; }
   if (state.initialServerLoadInFlight) { return; }
@@ -5540,6 +5541,7 @@ function clearAutosaveTimer() {
 }
 
 function scheduleAutosave() {
+  if (campaignCreationController?.suspendAutosave) return;
   if (state.isBoardLoading) { return; }
   if (state.isBoardHydrating) { return; }
   if (state.initialServerLoadInFlight) { return; }
@@ -6427,7 +6429,7 @@ function serializeState() {
   console.log("serialized images", selectedNode?.images || []);
   return serialized;
 }
-function saveCampaignCanvasState() { const campaignState = serializeState(); console.log("Saving campaignCanvasState", campaignState); localStorage.setItem(STORAGE_KEY, JSON.stringify(campaignState)); setSaveStatus("Saved"); renderCampaignIntelligence(); }
+function saveCampaignCanvasState() { if (campaignCreationController?.suspendAutosave) return; const campaignState = serializeState(); console.log("Saving campaignCanvasState", campaignState); localStorage.setItem(STORAGE_KEY, JSON.stringify(campaignState)); setSaveStatus("Saved"); renderCampaignIntelligence(); }
 function markUnsaved() {
   state.isDirty = true;
   state.autosavePausedUntilChange = false;
@@ -8909,6 +8911,7 @@ function schedulePostHydrationCanvasDensity(loadGeneration, boardId) {
 }
 
 async function saveBoardToServer(trigger = "manual") {
+  if (campaignCreationController?.suspendAutosave) return false;
   if (state.isBoardLoading || state.isBoardHydrating || state.initialServerLoadInFlight) {
     console.warn("[Funklix Save Guard] Save blocked while board is loading or hydrating", {
       trigger,
@@ -10827,7 +10830,8 @@ function resolveCampaignCreationContext() {
 }
 function campaignCreationIdentity() {
   return { account: state.user, boardId: state.currentBoardId, generation: state.boardLoadGeneration,
-    workspaceId: state.workspaceCatalog.activeWorkspaceId, brandId: state.boardBrandAssociation.brandId };
+    workspaceId: state.workspaceCatalog.activeWorkspaceId, brandId: state.boardBrandAssociation.brandId, canEdit: state.boardAccess?.canEdit,
+    accountEmail: state.user?.email, workspaceGeneration: state.workspaceCatalog.generation, associationBoardId: state.boardBrandAssociation.boardId, sessionBrandId: state.session.brandId, sessionWorkspaceId: state.session.workspaceId };
 }
 function openCreatedCampaign(outcome) {
   // The server has committed: adopt its identity and revision before rendering.
@@ -10854,10 +10858,10 @@ function showCampaignCreationFeedback(code) {
   const t = window.FunklixCampaignCreationDialog.copy(state.uiLanguage);
   const host = document.createElement('section'); host.id = 'campaign-creation-feedback'; host.className = 'campaign-creation-dialog'; host.setAttribute('role', 'alert');
   const message = document.createElement('p'); message.textContent = t[code] || t.CONFLICT; host.append(message);
-  const action = document.createElement('button'); action.type = 'button';
+  const action = document.createElement('button'); action.type = 'button'; action.className = 'fk-btn fk-btn-primary';
   action.textContent = code === 'BRAND_MISSING' ? t.assign : t.projects;
   action.addEventListener('click', () => { host.remove(); if (code === 'BRAND_MISSING') openBoardBrandAssociation(); else { setAppMode('canvas'); setActiveView('boards_library'); } });
-  host.append(action); const close = document.createElement('button'); close.type = 'button'; close.textContent = t.cancel; close.addEventListener('click', () => host.remove()); host.append(close);
+  host.append(action); const close = document.createElement('button'); close.type = 'button'; close.className = 'fk-btn fk-btn-secondary'; close.textContent = t.cancel; close.addEventListener('click', () => host.remove()); host.append(close);
   document.body.append(host); action.focus();
 }
 function openStableCampaignCreation() {
@@ -10865,11 +10869,50 @@ function openStableCampaignCreation() {
   let context;
   try { context = resolveCampaignCreationContext(); } catch (error) { showCampaignCreationFeedback(error.code); return; }
   document.getElementById('campaign-creation-feedback')?.remove();
-  let created = false;
-  const boundary = window.FunklixCampaignCreation.createBoundary({ context: campaignCreationIdentity, fetchImpl: fetch, open: outcome => { openCreatedCampaign(outcome); created = true; } });
+  let saved = false;
+  const boundary = window.FunklixCampaignCreation.createBoundary({ context: campaignCreationIdentity, fetchImpl: fetch,
+    onConfirmed: outcome => {
+      saved = true;
+      boundary.assertCurrent();
+      state.lastKnownUpdatedAt = outcome.board.updated_at;
+      state.isDirty = false;
+      refreshLastSavedSnapshot();
+    },
+    open: outcome => openCreatedCampaign(outcome) });
   campaignCreationController = window.FunklixCampaignCreationDialog.mount({ context, language: state.uiLanguage,
-    submit: input => { if (state.isDirty || state.isSaving) throw window.FunklixCampaignCreation.error('DIRTY'); return boundary.submit(input); },
-    onClose: () => { campaignCreationController = null; if (created) document.getElementById('node-title')?.focus(); } });
+    normalize: normalizeCampaignSetupOptions, counts: expectedCampaignV3NodeCounts,
+    submit: setup => {
+      const controller = campaignCreationController;
+      controller.suspendAutosave = true;
+      clearAutosaveTimer();
+      const originalCanvas = serializeState();
+      const requestId = crypto.randomUUID();
+      let command = null;
+      startCampaignV3Creation(controller.dialog, { ...setup, campaignLanguage: state.campaignLanguage }, {
+        assertCurrent: boundary.assertCurrent,
+        rollback: () => { boundary.assertCurrent(); applyCampaignState(originalCanvas, uiText('Saved'), { memoryOnly: true }); state.isDirty = false; },
+        persist: result => {
+          if (!command) command = window.FunklixCampaignCreation.request({
+            contract: window.FunklixCampaignCreation.CONTRACT, request_id: requestId,
+            board_id: context.board.id, workspace_id: context.workspace.id, brand_id: context.brand.id,
+            board_revision: context.board.updated_at, idea: setup.campaignIdea, context: setup.additionalContext,
+            setup: normalizeCampaignSetupOptions(setup), canvas_json: serializeState(),
+            campaign_node_ids: result.commitResult.createdNodes.map(n => n.id)
+          });
+          return boundary.submit(command);
+        },
+        confirmed: () => saved,
+        reopenRoute: `/boards/${context.board.id}`,
+        close: () => { controller.dialog.dataset.campaignV3Busy = 'false'; controller.close(); },
+        onReveal: result => {
+          controller.suspendAutosave = false;
+          controller.dialog.dataset.campaignV3Busy = 'false'; controller.close();
+          centerViewportOnCampaignV3Result(result);
+          document.getElementById('node-title')?.focus();
+        }
+      });
+    },
+    onClose: () => { campaignCreationController = null; } });
 }
 
 const CAMPAIGN_WORKER_STATUS = {
@@ -11504,7 +11547,7 @@ function defaultCampaignV3AISetup(overrides = {}) {
   });
   return {
     campaignIdea: cleanCampaignField(overrides.campaignIdea) || "Promote a premium networking experience for C-level executives.",
-    additionalContext: cleanCampaignField(overrides.additionalContext) || "Focus on trust, exclusivity, meaningful business relationships, and high-quality leads.",
+    additionalContext: typeof overrides.additionalContext === "string" ? cleanCampaignField(overrides.additionalContext) : "Focus on trust, exclusivity, meaningful business relationships, and high-quality leads.",
     ...normalized
   };
 }
@@ -12717,6 +12760,7 @@ async function runCampaignV3QualityRepairLoop(normalizedCampaign = [], qualityRe
   logCampaignV3RepairLoop("Repair targets:", diagnostics.targets);
 
   for (const target of targets) {
+    campaignContext.assertCurrent?.();
     logCampaignV3RepairLoop("Repairing node:", diagnostics.targets.find((item) => item.nodeIndex === target.nodeIndex));
     try {
       const repaired = await repairCampaignV3Node({
@@ -12725,6 +12769,7 @@ async function runCampaignV3QualityRepairLoop(normalizedCampaign = [], qualityRe
         issues: target.issues,
         campaignContext
       });
+      campaignContext.assertCurrent?.();
       const repairedNode = normalizeCampaignV3RepairedNodeFields(target.node, repaired);
       nodes = mergeRepairedCampaignV3Node(nodes, target.nodeIndex, repairedNode);
       diagnostics.repaired.push({
@@ -12936,6 +12981,7 @@ async function runCampaignV3AICompatibility(setupOverride = {}, options = {}) {
   try {
     reportStatus("Generating Campaign...");
     const apiPlan = await fetchGeneratedCampaignPlan(setup.campaignIdea, setup.additionalContext, setup);
+    options.assertCurrent?.();
     if (state.activeCampaignGeneration !== generationToken) return { ok: false, stale: true };
     const rawNodes = Array.isArray(apiPlan?.nodes) ? apiPlan.nodes : [];
     const emailNormalization = normalizeCampaignV3AIEmailNodes(rawNodes, setup);
@@ -12945,6 +12991,7 @@ async function runCampaignV3AICompatibility(setupOverride = {}, options = {}) {
     const landingFallback = normalizeCampaignV3AILandingFallback(socialNormalization.nodes, setup);
     const emailFallback = normalizeCampaignV3AIEmailFallback(landingFallback.nodes, setup);
     let normalizedNodes = emailFallback.nodes.map((node) => canonicalizeCampaignV3LandingPageFields(node));
+    reportStatus("Running quality checks...");
     let qualityDiagnostics = null;
     let initialQualityDiagnostics = null;
     let repairDiagnostics = null;
@@ -12995,7 +13042,7 @@ async function runCampaignV3AICompatibility(setupOverride = {}, options = {}) {
     }
     if (qualityDiagnostics?.ok === false) {
       try {
-        const repairLoop = await runCampaignV3QualityRepairLoop(normalizedNodes, qualityDiagnostics, buildCampaignV3RepairContext(normalizedNodes, setup));
+        const repairLoop = await runCampaignV3QualityRepairLoop(normalizedNodes, qualityDiagnostics, { ...buildCampaignV3RepairContext(normalizedNodes, setup), assertCurrent: options.assertCurrent });
         normalizedNodes = repairLoop.nodes;
         qualityDiagnostics = repairLoop.qualityResult;
         repairDiagnostics = repairLoop.diagnostics;
@@ -13047,6 +13094,7 @@ async function runCampaignV3AICompatibility(setupOverride = {}, options = {}) {
     logCampaignV3AIDiagnostics("Actual AI counts grouped by subtype", diagnosticBase.actualCountsBySubtype);
     logCampaignV3AIDiagnostics("First 20 returned nodes", firstTwentyNodes);
 
+    options.assertCurrent?.();
     if (state.activeCampaignGeneration !== generationToken) return { ok: false, stale: true };
     const planResult = campaignV3.buildCampaignV3PlanFromNodes(normalizedNodes, setup);
     const failedRules = planResult.ok ? [] : planResult.diagnostics.map((diagnostic) => diagnostic.code);
@@ -13074,6 +13122,7 @@ async function runCampaignV3AICompatibility(setupOverride = {}, options = {}) {
       return { ok: false, apiPlan, planResult, edges, layoutResult, diagnostics: layoutDiagnostics };
     }
 
+    options.assertCurrent?.();
     if (state.activeCampaignGeneration !== generationToken) return { ok: false, stale: true };
     reportStatus("Building Canvas...");
     const adapter = createCampaignV3RealCanvasAdapter();
@@ -13285,7 +13334,7 @@ function updateCampaignV3CreationProgress(overlay, activeIndex = 0) {
   scrollCampaignV3ActiveStepIntoView(overlay, activeItem);
 }
 
-function renderCampaignV3ReadyState(overlay, result = null) {
+function renderCampaignV3ReadyState(overlay, result = null, onReveal = null) {
   const modal = overlay.querySelector(".campaign-builder-modal");
   if (!modal) return;
   overlay.dataset.campaignV3Busy = "true";
@@ -13294,7 +13343,7 @@ function renderCampaignV3ReadyState(overlay, result = null) {
     <div class="campaign-v3-complete-shell" aria-live="polite">
       ${campaignV3AvatarMarkup({ complete: true })}
       <span class="campaign-builder-kicker">Campaign Creation Complete</span>
-      <h3>Campaign Ready</h3>
+      <h3>Your campaign is ready</h3>
       <p>Your Brand AI has created, checked and assembled your campaign.</p>
       <ul class="campaign-v3-summary-chips" aria-label="Campaign completion summary">
         <li>Strategy</li>
@@ -13304,22 +13353,22 @@ function renderCampaignV3ReadyState(overlay, result = null) {
         <li>Canvas Ready</li>
       </ul>
       <div class="campaign-builder-actions campaign-v3-complete-actions">
-        <button type="button" id="campaign-v3-reveal" class="campaign-v3-primary-button">Reveal Campaign</button>
+        <button type="button" id="campaign-v3-reveal" class="fk-btn fk-btn-primary">Reveal Campaign</button>
       </div>
     </div>`;
   prepareCampaignV3ModalScrolling(overlay);
   modal.querySelector("#campaign-v3-reveal")?.addEventListener("click", () => {
-    overlay.remove();
-    centerViewportOnCampaignV3Result(result);
+    if (onReveal) onReveal(result);
+    else { overlay.remove(); centerViewportOnCampaignV3Result(result); }
     setSaveStatus("Campaign generated successfully.");
   });
   translateInterface(modal);
 }
 
-function renderCampaignV3ErrorState(overlay, setup = {}, onRetry = null) {
+function renderCampaignV3ErrorState(overlay, setup = {}, onRetry = null, options = {}) {
   const modal = overlay.querySelector(".campaign-builder-modal");
   if (!modal) return;
-  overlay.dataset.campaignV3Busy = "false";
+  overlay.dataset.campaignV3Busy = options.generated ? "true" : "false";
   modal.classList.add("campaign-v3-creation-modal");
   modal.innerHTML = `
     <div class="campaign-v3-error-shell" aria-live="assertive">
@@ -13328,11 +13377,22 @@ function renderCampaignV3ErrorState(overlay, setup = {}, onRetry = null) {
       <h3>We couldn’t finish this campaign</h3>
       <p>Something interrupted generation. You can retry with the same settings or close this window and try again later.</p>
       <div class="campaign-builder-actions campaign-v3-error-actions">
-        <button type="button" id="campaign-v3-error-close" class="campaign-v3-secondary-button">Close</button>
-        <button type="button" id="campaign-v3-error-retry" class="campaign-v3-primary-button">Retry</button>
+        <button type="button" id="campaign-v3-error-close" class="fk-btn fk-btn-secondary">Close</button>
+        <button type="button" id="campaign-v3-error-retry" class="fk-btn fk-btn-primary">Retry</button>
       </div>
     </div>`;
-  modal.querySelector("#campaign-v3-error-close")?.addEventListener("click", () => overlay.remove());
+  if (options.message) modal.querySelector('p').textContent = options.message;
+  if (options.confirmed) {
+    modal.querySelector('h3').textContent = uiText('Your campaign is saved');
+    const link = document.createElement('a'); link.href = options.reopenRoute || `/boards/${state.currentBoardId}`;
+    link.className = 'fk-btn fk-btn-secondary'; link.textContent = uiText('Open campaign');
+    modal.querySelector('.campaign-builder-actions').append(link);
+  }
+  const retry = modal.querySelector('#campaign-v3-error-retry');
+  if (options.generated) retry.textContent = uiText(options.confirmed ? 'Open campaign' : 'Retry Save');
+  retry.disabled = !!options.blocked;
+  const close = modal.querySelector('#campaign-v3-error-close'); close.disabled = !!options.generated;
+  close.addEventListener('click', () => options.close ? options.close() : overlay.remove());
   modal.querySelector("#campaign-v3-error-retry")?.addEventListener("click", () => {
     if (typeof onRetry === "function") onRetry(setup);
   });
@@ -13340,127 +13400,68 @@ function renderCampaignV3ErrorState(overlay, setup = {}, onRetry = null) {
 }
 
 function openCampaignV3Modal() {
-  const overlay = document.createElement("div");
-  overlay.className = "campaign-builder-overlay";
-  overlay.innerHTML = `<div class="campaign-builder-modal fk-section">
-    <div class="campaign-builder-hero fk-card">
-      <span class="campaign-builder-kicker fk-badge">Campaign Generator V3</span>
-      <h3>Generate Campaign (V3)</h3>
-      <p>Use the feature-flagged V3 AI compatibility flow to build a deterministic campaign funnel on the canvas.</p>
-    </div>
-    <label class="campaign-builder-field campaign-builder-field-full fk-card">
-      <span>Campaign Idea</span>
-      <textarea class="fk-textarea" id="campaign-v3-idea" rows="5" placeholder="Launch a new service, promote a seasonal offer, or increase demo bookings..."></textarea>
-    </label>
-    <label class="campaign-builder-field campaign-builder-field-full fk-card">
-      <span>Additional Context</span>
-      <textarea class="fk-textarea" id="campaign-v3-context" rows="3" placeholder="Optional audience, timing, channel, or campaign notes..."></textarea>
-    </label>
-    <label class="campaign-builder-field campaign-builder-field-full fk-card">
-      <span>Channel</span>
-      <select class="fk-select" id="campaign-v3-channel"><option>LinkedIn</option><option>Facebook</option><option>X</option><option>Instagram</option><option>TikTok</option><option>Mixed</option></select>
-    </label>
-    <div class="campaign-builder-grid">
-      <label class="campaign-builder-field fk-card">
-        <span>Variations</span>
-        <input class="fk-input" id="campaign-v3-variations" type="number" min="1" max="10" value="3" />
-      </label>
-      <label class="campaign-builder-field fk-card">
-        <span>Posts per Variation</span>
-        <input class="fk-input" id="campaign-v3-posts" type="number" min="1" max="20" value="3" />
-      </label>
-    </div>
-    <div class="campaign-builder-grid">
-      <label class="campaign-builder-toggle fk-card"><input id="campaign-v3-include-landing" type="checkbox" checked /><span><strong>Landing Page</strong><small>Include Landing Page</small></span></label>
-      <label class="campaign-builder-toggle fk-card"><input id="campaign-v3-include-email" type="checkbox" checked /><span><strong>Email Campaign</strong><small>Include Email Campaign</small></span></label>
-    </div>
-    <p class="campaign-builder-status" data-campaign-v3-status></p>
-    <p class="campaign-builder-error" data-campaign-v3-error></p>
-    <div class="campaign-builder-actions"><button class="fk-btn fk-btn-ghost" type="button" id="campaign-v3-legacy">Use legacy generator</button><button class="fk-btn fk-btn-secondary" type="button" id="campaign-v3-cancel">Cancel</button><button class="fk-btn fk-btn-primary primary-add" type="button" id="campaign-v3-generate">Generate Campaign</button></div>
-  </div>`;
-  document.body.appendChild(overlay);
-  translateInterface(overlay);
+  return openStableCampaignCreation();
+}
 
-  const errorEl = overlay.querySelector("[data-campaign-v3-error]");
-  const closeModal = (force = false) => {
-    if (!force && overlay.dataset.campaignV3Busy === "true") return;
-    overlay.remove();
-  };
-  overlay.querySelector("#campaign-v3-legacy")?.addEventListener("click", () => {
-    closeModal(true);
-    openCreateCampaignModal();
-  });
-  overlay.querySelector("#campaign-v3-cancel")?.addEventListener("click", () => closeModal());
-  overlay.addEventListener("click", (event) => { if (event.target === overlay) closeModal(); });
-
-  overlay.querySelector("#campaign-v3-generate")?.addEventListener("click", async () => {
-    const setup = { ...campaignV3ModalSetupFromInputs(overlay), campaignLanguage: state.campaignLanguage };
-    if (!setup.campaignIdea) {
-      errorEl.textContent = uiText("Please enter a campaign idea.");
-      return;
-    }
-
-    const runGeneration = async (activeSetup) => {
-      const generationToken = Symbol("campaign-generation");
-      state.activeCampaignGeneration = generationToken;
-      renderCampaignV3CreationExperience(overlay, activeSetup);
+async function startCampaignV3Creation(overlay, setup, options) {
+  let result = null, running = false;
+  const runGeneration = async () => {
+    if (running) return;
+    running = true;
+    const generationToken = Symbol("campaign-generation");
+    state.activeCampaignGeneration = generationToken;
+    let activeStepIndex = 0, maxWorkingStepIndex = 2;
+    const generationExperienceStartedAt = Date.now();
+    let simulatedProgress = null;
+    try {
+      options.assertCurrent();
+      renderCampaignV3CreationExperience(overlay, setup);
       setCampaignV3ModalBusy(overlay, true);
       updateCampaignV3CreationProgress(overlay, 0);
-      setActiveView("board");
-      toggleListMode(false);
-
-      let activeStepIndex = 0;
-      let maxWorkingStepIndex = 2;
-      const generationExperienceStartedAt = Date.now();
-      const simulatedProgress = window.setInterval(() => {
-        const cappedWorkingStep = Math.min(maxWorkingStepIndex, 5);
-        if (activeStepIndex < cappedWorkingStep) {
-          activeStepIndex += 1;
-          updateCampaignV3CreationProgress(overlay, activeStepIndex);
-        }
-      }, 1050);
-
-      const stopSimulatedProgress = () => window.clearInterval(simulatedProgress);
-      let result = null;
-
-      try {
-        result = await runCampaignV3AICompatibility(activeSetup, { generationToken,
-          onStatus: (message) => {
-            maxWorkingStepIndex = Math.max(maxWorkingStepIndex, campaignV3StepIndexForStatus(message));
-            if (/building\s+canvas|canvas/i.test(message)) {
-              const statusEl = overlay.querySelector("[data-campaign-v3-live-status]");
-              if (statusEl) statusEl.textContent = uiText("Almost ready...");
-            }
-          }
+      setActiveView("board"); toggleListMode(false);
+      if (!result) {
+        simulatedProgress = window.setInterval(() => {
+          const cappedWorkingStep = Math.min(maxWorkingStepIndex, 5);
+          if (activeStepIndex < cappedWorkingStep) updateCampaignV3CreationProgress(overlay, ++activeStepIndex);
+        }, 1050);
+        const generated = await runCampaignV3AICompatibility(setup, { generationToken, assertCurrent: options.assertCurrent,
+          onStatus: message => { maxWorkingStepIndex = Math.max(maxWorkingStepIndex, campaignV3StepIndexForStatus(message)); }
         });
-        const minimumExperienceRemaining = Math.max(0, 4600 - (Date.now() - generationExperienceStartedAt));
-        if (minimumExperienceRemaining) await waitForCampaignV3ModalStep(minimumExperienceRemaining);
-      } finally {
-        stopSimulatedProgress();
-      }
-
-      if (state.activeCampaignGeneration !== generationToken) return;
-      if (result?.ok) {
-        for (let index = activeStepIndex + 1; index < CAMPAIGN_V3_CREATION_STEPS.length; index += 1) {
-          await waitForCampaignV3ModalStep(420);
-          updateCampaignV3CreationProgress(overlay, index);
+        options.assertCurrent();
+        if (!generated?.ok) {
+          options.rollback();
+          throw generated?.error || window.FunklixCampaignCreation.error('GENERATION_FAILED');
         }
-        await waitForCampaignV3ModalStep(360);
-        renderCampaignV3ReadyState(overlay, result);
-        return;
+        result = generated;
+        const remaining = Math.max(0, 4600 - (Date.now() - generationExperienceStartedAt));
+        if (remaining) await waitForCampaignV3ModalStep(remaining);
       }
-
-      renderCampaignV3ErrorState(overlay, activeSetup, runGeneration);
-    };
-
-    errorEl.textContent = "";
-    runGeneration(setup).catch((error) => {
-      console.error("[Funklix Campaign Generator V3] Modal generation experience failed", error);
-      renderCampaignV3ErrorState(overlay, setup, runGeneration);
-    });
-  });
-
-  return overlay;
+      window.clearInterval(simulatedProgress);
+      for (let index = activeStepIndex + 1; index < CAMPAIGN_V3_CREATION_STEPS.length; index += 1) {
+        options.assertCurrent();
+        await waitForCampaignV3ModalStep(420);
+        updateCampaignV3CreationProgress(overlay, index);
+      }
+      options.assertCurrent();
+      const status = overlay.querySelector('[data-campaign-v3-live-status]');
+      if (status) status.textContent = uiText('Saving campaign...');
+      await options.persist(result);
+      options.assertCurrent();
+      await waitForCampaignV3ModalStep(360);
+      renderCampaignV3ReadyState(overlay, result, options.onReveal);
+    } catch (error) {
+      const confirmed = options.confirmed();
+      const blocked = ['CONFLICT','STALE_REVISION','PERMISSION_DENIED','AUTHENTICATION_REQUIRED','BOARD_MISSING','BRAND_MISSING'].includes(error.code);
+      const message = confirmed ? uiText('Your campaign is saved. Try opening it again.')
+        : blocked ? window.FunklixCampaignCreationDialog.copy(state.uiLanguage)[error.code]
+        : result ? uiText('Campaign generated, but not saved yet.') : null;
+      renderCampaignV3ErrorState(overlay, setup, runGeneration, { generated: !!result, confirmed, blocked, message, reopenRoute: options.reopenRoute, close: options.close });
+    } finally {
+      window.clearInterval(simulatedProgress);
+      running = false;
+    }
+  };
+  await runGeneration();
 }
 
 async function debugRunCampaignV3AI(setupOverride = {}) {

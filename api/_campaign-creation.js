@@ -30,16 +30,19 @@ async function execute({db,user,canonicalEmail,input}){
     if(!access?.canEdit||access.role==='unowned')reject('PERMISSION_DENIED');
     if(!board.canvas_json||!Array.isArray(board.canvas_json.nodes)||!Array.isArray(board.canvas_json.edges)||!board.brand_core_snapshot||typeof board.brand_core_snapshot!=='object'||Array.isArray(board.brand_core_snapshot))reject('SAVE_FAILED');
     const fingerprint=crypto.createHash('sha256').update(JSON.stringify(input)).digest('hex');
-    const nodeId=`campaign-${input.request_id}`,previous=board.canvas_json.nodes.find(n=>n.id===nodeId);
+    const generated=contract.campaign(input.canvas_json,input.campaign_node_ids,input.setup);
+    const nodeId=generated.idea.id,previous=board.canvas_json.nodes.find(n=>n.id===nodeId);
     if(previous&&(previous.metadata?.creationFingerprint!==fingerprint||previous.metadata?.creationIdentity!==identity.identityId))reject('CONFLICT');
-    // A removed seed cannot be replayed: its original revision is now stale. Never replace the Canvas.
     if(!previous&&Date.parse(iso(board.updated_at))!==Date.parse(input.board_revision))reject('STALE_REVISION');
     let saved=board;
     if(!previous){
-      const maxY=board.canvas_json.nodes.reduce((y,n)=>Math.max(y,Number(n.position?.y)||0),-400);
-      const node={id:nodeId,type:'Idea',title:input.idea.slice(0,160),content:input.idea+(input.context?'\n\n'+input.context:''),status:'Draft',tags:[],variants:[],contentFormat:'1:1',audience:'',goal:input.idea,channel:'',funnelStage:'',tone:'',images:[],favoriteImageId:null,
-        social:{platform:'Instagram',caption:'',hashtags:[],preview:'',scheduledAt:''},imagePrompt:'',landingPage:{headerVisualPrompt:'',headerClaim:'',problem:'',solution:'',trust:'',cta:''},reactions:{},postits:[],compact:false,justConnectedAt:null,position:{x:80,y:maxY+480},metadata:{creationFingerprint:fingerprint,creationIdentity:identity.identityId}};
-      const canvas={...board.canvas_json,nodes:[...board.canvas_json.nodes,node],metadata:{...board.canvas_json.metadata,updatedAt:new Date().toISOString()}};
+      // Persist only the validated complete funnel; retain every existing asset and Brand snapshot.
+      const existing=new Set(board.canvas_json.nodes.map(n=>n.id));
+      if(generated.nodes.some(n=>existing.has(n.id)))reject('CONFLICT');
+      const nodes=generated.nodes.map(n=>n.id!==nodeId?n:{...n,metadata:{...n.metadata,creationFingerprint:fingerprint,creationIdentity:identity.identityId}});
+      const canvas={...board.canvas_json,nodeCounter:Math.max(board.canvas_json.nodeCounter||1,input.canvas_json.nodeCounter),
+        nodes:[...board.canvas_json.nodes,...nodes],edges:[...board.canvas_json.edges,...generated.edges],
+        metadata:{...board.canvas_json.metadata,updatedAt:new Date().toISOString()}};
       saved=(await client.query(`UPDATE public.boards SET canvas_json=$2::jsonb,updated_at=GREATEST(clock_timestamp(),updated_at + interval '1 millisecond') WHERE id=$1
         RETURNING id,name,workspace_id,brand_id,canvas_json,brand_core_snapshot,brand_core_source_revision,brand_core_source_updated_at,brand_core_snapshot_copied_at,created_at,updated_at`,[board.id,JSON.stringify(canvas)])).rows[0];
       if(!saved)reject('SAVE_FAILED');

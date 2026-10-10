@@ -12,6 +12,12 @@
   const STORAGE_KEY = "funklix.languagePreferences.v1";
   const LANGUAGE_NAMES = Object.freeze({ en: "English", de: "German", es: "Spanish" });
   const german = {
+    "Your campaign is ready": "Deine Kampagne ist bereit",
+    "Your campaign is saved": "Deine Kampagne ist gespeichert",
+    "Your campaign is saved. Try opening it again.": "Deine Kampagne ist gespeichert. Versuche, sie erneut zu öffnen.",
+    "Campaign generated, but not saved yet.": "Kampagne erstellt, aber noch nicht gespeichert.",
+    "Retry Save": "Speichern erneut versuchen",
+    "Saving campaign...": "Kampagne wird gespeichert…",
     "Keep current": "Aktuellen Wert behalten",
     "Use website suggestion": "Website-Vorschlag verwenden",
     "Saving website suggestion…": "Website-Vorschlag wird gespeichert…",

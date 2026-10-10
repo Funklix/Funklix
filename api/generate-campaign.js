@@ -16,7 +16,7 @@ function clampInteger(value, fallback, min, max) {
 }
 
 function normalizeChannel(channel = "LinkedIn") {
-  const allowed = new Set(["LinkedIn", "X", "Instagram", "TikTok", "Mixed"]);
+  const allowed = new Set(["LinkedIn", "Facebook", "X", "Instagram", "TikTok", "Mixed"]);
   return allowed.has(channel) ? channel : "LinkedIn";
 }
 

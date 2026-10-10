@@ -48,7 +48,7 @@
       if (!Number.isFinite(parsed)) return fallback;
       return Math.max(min, Math.min(max, parsed));
     };
-    const channel = ["LinkedIn", "X", "Instagram", "TikTok", "Mixed"].includes(setup.channel) ? setup.channel : "LinkedIn";
+    const channel = ["LinkedIn", "Facebook", "X", "Instagram", "TikTok", "Mixed"].includes(setup.channel) ? setup.channel : "LinkedIn";
     return {
       variationCount: clamp(setup.variationCount, 3, 1, 10),
       postsPerVariation: clamp(setup.postsPerVariation, 5, 1, 20),
