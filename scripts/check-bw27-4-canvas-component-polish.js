@@ -80,7 +80,10 @@ has(app, 'await navigator.clipboard.writeText(node.social.caption || "")');
 has(app, '[node.social.caption || "", node.social.preview || "", (node.social.hashtags || []).join(" ")]');
 has(app, 'el.inputs.caption.value = node.social.caption');
 has(app, 'compactToggle.className = "node-compact-toggle"');
-has(app, 'node.compact = !node.compact');
+// BW-36.16 keeps the existing control but makes its expansion render-only.
+has(app, 'openAdaptiveCanvasDetails(node)');
+assert(!app.includes('node.compact = !node.compact'), 'Details must not mutate persisted compact flags');
+has(app, "card.dataset.adaptiveView = view");
 has(app, 'if (key === "caption") node.social.caption =');
 assert(!/node\.social\.caption\s*=\s*[^;]*\.slice\(/.test(app), "Stored social caption is truncated");
 assert(!css.includes('html[data-theme="light"] .node[data-node-role="social-media-posting"]'), "Light Mode Social node was overridden");

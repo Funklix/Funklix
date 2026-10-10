@@ -102,7 +102,11 @@ assert(!functionSource(app, "applyCanvasDensityPresentation").match(/applyCampai
 assert(index.indexOf("/canvas-density.js") < index.indexOf("/app.js"));
 assert(css.includes('#canvas[data-tendra-canvas-density="compact"] #zoom-layer > .node'));
 assert(!css.includes('body[data-tendra-canvas-density') && !css.includes('html[data-tendra-canvas-density'));
-assert(app.includes('role="menuitemradio"') && app.includes('aria-checked='));
+// BW-36.16 replaces the obsolete global radio menu with one accessible toolbar switch.
+// Keep the historical activation, renderer isolation, storage and failure-safety checks above.
+assert(functionSource(app, "synchronizeAdaptiveCanvasToolbar").includes("'aria-pressed'"));
+assert(!functionSource(app, "buildUtilitiesPopoverHtml").includes("data-canvas-density-choice"));
+assert(!functionSource(app, "buildUtilitiesPopoverHtml").includes("compact-all"));
 
 // Portable historical proof: BW-33.3A established this exact unsafe lifecycle pattern.
 const unsafe = unsafeFixture.runUnsafeDensityLifecycle();

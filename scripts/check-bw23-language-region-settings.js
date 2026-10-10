@@ -28,10 +28,14 @@ assert.strictEqual(count(html + app, /id=["']ui-language-select["']/g), 1, "expe
 assert.strictEqual(count(html + app, /id=["']campaign-language-select["']/g), 1, "expected exactly one Campaign language selector");
 const utilities = app.slice(app.indexOf("function buildUtilitiesPopoverHtml"), app.indexOf("function closeUtilitiesPopover"));
 assert(!/language-preferences|ui-language-select|campaign-language-select/.test(utilities), "Utilities still exposes language controls");
-for (const label of ["Board", "View", "Layout", "Save Board", "Board View", "Fit to Board", "Auto Arrange", "Compact All", "Expand All"]) {
+for (const label of ["Board", "View", "Layout", "Save Board", "Board View", "Fit to Board", "Auto Arrange"]) {
   assert(utilities.includes(label), `Utilities lost ${label}`);
 }
 
+// BW-36.16 replaces redundant density commands with one local toolbar authority.
+assert(!utilities.includes('data-utility-action="compact-all"') && !utilities.includes('data-utility-action="expand-all"'));
+assert(app.includes("button.id = 'canvas-compact-view-btn'"));
+assert(app.includes("button.setAttribute('aria-pressed', String(forced))"));
 // Existing local language authority, validation, restoration, and independent setters remain intact.
 assert(language.includes('const STORAGE_KEY = "funklix.languagePreferences.v1"'), "language storage key changed");
 assert(language.includes('UI_LANGUAGES = Object.freeze(["en", "de"])'), "Interface allowlist changed");

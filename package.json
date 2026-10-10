@@ -136,7 +136,8 @@
     "check:bw36.13r5r4": "node scripts/check-bw36-13r5r4-brand-logo-persistence.js",
     "check:bw36.14r1": "node scripts/check-bw36-14r1-restore-complete-campaign-v3.js",
     "check:bw36.15": "node scripts/check-bw36-15-campaign-team-responsibilities.js",
-    "check:bw36.15r1": "node scripts/check-bw36-15r1-responsibility-workspace-continuity.js"
+    "check:bw36.15r1": "node scripts/check-bw36-15r1-responsibility-workspace-continuity.js",
+    "check:bw36.16": "node scripts/check-bw36-16-adaptive-canvas-view-hierarchy.js"
   },
   "devDependencies": {
     "playwright-core": "^1.56.1"

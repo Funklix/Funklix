@@ -1,0 +1,19 @@
+/* BW-36.16 reuses the density renderers per card. Dimensions change at a stable
+   top-left anchor; ResizeObserver refreshes links without layout persistence. */
+#canvas #zoom-layer > .node[data-adaptive-view="compact"] :is(.content,.node-expand-content,.image-strip,.tags,.ab-tests,.social-preview,.node-compact-summary,.content-pack-status,.node-ai-toolbar) { display: none !important; }
+#canvas #zoom-layer > .node[data-adaptive-view="compact"] { min-height: 0; }
+#canvas #zoom-layer > .node[data-adaptive-view="standard"] .content:not(.hidden):not(:focus) { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; max-height: 4.8em; overflow: hidden; }
+#canvas #zoom-layer > .node[data-adaptive-view="standard"] :is(.image-strip,.ab-tests) { display: none !important; }
+#canvas #zoom-layer > .node[data-adaptive-view="detailed"] .content:not(.hidden) { display: block; max-height: none; -webkit-line-clamp: unset; overflow: visible; }
+#canvas #zoom-layer > .node:is([data-adaptive-view="standard"],[data-adaptive-view="detailed"]) { z-index: 10; }
+#canvas #zoom-layer > .node[data-adaptive-view] { transition: none; touch-action: manipulation; }
+#canvas #zoom-layer > .node[data-adaptive-view]:focus-visible { outline: 2px solid var(--fk-color-primary-action); outline-offset: 3px; }
+.canvas-toolbar #canvas-compact-view-btn { box-sizing: border-box; min-width: 44px; min-height: 44px; max-width: 100%; gap: 6px; white-space: normal; overflow-wrap: anywhere; }
+.canvas-toolbar #canvas-compact-view-btn[hidden] { display: none; }
+.canvas-toolbar #canvas-compact-view-btn[aria-pressed="true"] { background: var(--fk-color-primary-subtle); color: var(--fk-color-primary-action); border-color: var(--fk-color-primary-action); }
+.canvas-toolbar #canvas-compact-view-btn:focus-visible { outline: 2px solid var(--fk-color-primary-action); outline-offset: 2px; }
+@media (max-width: 1100px) { .canvas-toolbar #canvas-compact-view-btn span:last-child { display: none; } }
+@media (forced-colors: active) {
+  .canvas-toolbar #canvas-compact-view-btn[aria-pressed="true"] { color: HighlightText; background: Highlight; border-color: Highlight; }
+  #canvas #zoom-layer > .node[data-adaptive-view]:focus-visible, .canvas-toolbar #canvas-compact-view-btn:focus-visible { outline-color: Highlight; }
+}
