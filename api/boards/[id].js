@@ -9,6 +9,7 @@ const { getBrandAccess, isBrandId } = require('../_brand-access');
 // Legacy BW-13 owner boundary was: FROM brands WHERE id = $1 AND owner_email = $2; BW-20 broadens it authoritatively.
 const { serializeBoardForAccess } = require('../_board-serializer');
 const { verifyPublicToken } = require('../_board-public-sharing');
+const { saveResponsibilities } = require('../_campaign-responsibilities');
 
 const BOARD_COLUMNS = 'id, name, canvas_json, brand_core_snapshot, brand_id, brand_core_source_revision, brand_core_source_updated_at, brand_core_snapshot_copied_at, brand_core_snapshot_backup, brand_core_backup_source_revision, brand_core_backup_source_updated_at, brand_core_backup_snapshot_copied_at, brand_core_snapshot_backup_created_at, created_at, updated_at, order_index, owner_id, owner_email, owner_name, owner_avatar, created_by';
 const BOARD_GET_COLUMNS = `${BOARD_COLUMNS}, public_view_enabled, public_view_token_hash`;
@@ -137,6 +138,9 @@ module.exports = async function handler(req, res) {
     await ensureBoardsTable();
 
     if (req.method === 'PUT') {
+      if (Object.prototype.hasOwnProperty.call(req.body || {}, 'responsibility_changes')) {
+        return await saveResponsibilities(req, res, id, getSessionUser(req));
+      }
       const { name = null, canvas_json = null, brand_core_snapshot = null, lastKnownUpdatedAt = null } = req.body || {};
       if (!canvas_json || typeof canvas_json !== 'object') {
         return res.status(400).json({ error: 'canvas_json is required' });

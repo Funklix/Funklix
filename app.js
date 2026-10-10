@@ -937,50 +937,103 @@ function mergeOwnerIdentityByPriority(email, identities = [], fallback = {}) {
   return result;
 }
 
+const responsibilityWorkspaceState = { roster: [], rosterContext: '', pending: null, confirmed: false, conflict: false };
+function responsibilityContext() {
+  return JSON.stringify([state.currentBoardId, state.boardBrandAssociation?.brandId, state.workspaceCatalog?.activeWorkspaceId, normalizeOwnerEmail(state.user?.email), state.boardLoadGeneration]);
+}
+function responsibilitySaveHeld() {
+  return !!responsibilityWorkspaceState.pending && responsibilityWorkspaceState.pending.context === responsibilityContext();
+}
 function getNodeOwnerOptions() {
+  if (!state.boardAccess?.canEdit || !state.user?.email || state.boardAccess.reason === 'public_viewer') return [];
   const options = [];
-  (Array.isArray(state.boardEditors) ? state.boardEditors : []).forEach((editor) => {
-    mergeOwnershipOption(options, {
-      email: editor?.email,
-      name: editor?.name || "",
-      avatar: editor?.avatar || "",
-      role: "Board editor",
-      source: "editor"
-    });
-  });
-
-  (Array.isArray(state.presenceViewers) ? state.presenceViewers : []).forEach((viewer) => {
-    if (!viewer?.email) return;
-    mergeOwnershipOption(options, {
-      email: viewer.email,
-      name: viewer.name,
-      avatar: viewer.avatar,
-      role: "Collaborator",
-      source: "presence"
-    });
-  });
-
-  const boardOwnerEmail = normalizeOwnerEmail(state.currentBoardOwnerEmail);
-  const currentUserEmail = normalizeOwnerEmail(state.user?.email);
-  mergeOwnershipOption(options, {
-    email: state.currentBoardOwnerEmail,
-    name: state.currentBoardOwnerName || (boardOwnerEmail && boardOwnerEmail === currentUserEmail ? state.user?.name : ""),
-    avatar: state.currentBoardOwnerAvatar || (boardOwnerEmail && boardOwnerEmail === currentUserEmail ? state.user?.avatar : ""),
-    role: "Board owner",
-    source: "boardOwner"
-  });
-
-  if (state.user?.email) {
-    mergeOwnershipOption(options, {
-      email: state.user.email,
-      name: state.user.name,
-      avatar: state.user.avatar,
-      role: state.boardAccess?.reason === "owner" ? "Board owner" : "Collaborator",
-      source: "currentUser"
-    });
-  }
-
+  const cached = responsibilityWorkspaceState.rosterContext === responsibilityContext() ? responsibilityWorkspaceState.roster : [];
+  cached.forEach(person => mergeOwnershipOption(options, person));
+  (Array.isArray(state.boardEditors) ? state.boardEditors : []).filter(editor => editor.role === 'editor').forEach(editor => mergeOwnershipOption(options, { ...editor, role: 'Board editor', source: 'editor' }));
+  const owner = findBoardOwnerIdentity(state.currentBoardOwnerEmail);
+  if (owner) mergeOwnershipOption(options, owner);
+  mergeOwnershipOption(options, { ...state.user, role: state.boardAccess.reason === 'owner' ? 'Board owner' : 'Board editor', source: 'currentUser' });
   return options;
+}
+async function loadResponsibilityPeople() {
+  const context = responsibilityContext(), boardId = state.currentBoardId;
+  if (!boardId || !state.boardAccess?.canEdit || !state.user?.email) throw new Error('Read-only project');
+  const response = await fetch(`/api/boards/${encodeURIComponent(boardId)}/editors?assignable=true`, { credentials: 'same-origin' });
+  const data = await response.json();
+  if (!response.ok || context !== responsibilityContext() || !state.boardAccess?.canEdit || !Array.isArray(data.people)) throw new Error('Team unavailable');
+  responsibilityWorkspaceState.roster = data.people;
+  responsibilityWorkspaceState.rosterContext = context;
+  refreshOwnershipDisplays();
+}
+async function persistResponsibilitySelection() {
+  const pending = responsibilityWorkspaceState.pending;
+  if (!pending || pending.context !== responsibilityContext() || !state.boardAccess?.canEdit || state.isSaving) throw new Error('Project changed');
+  state.isSaving = true;
+  try {
+    const response = await fetch(`/api/boards/${encodeURIComponent(pending.boardId)}`, { method: 'PUT', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: pending.body });
+    const data = await response.json();
+    if (pending.context !== responsibilityContext()) throw new Error('Project changed');
+    if (response.status === 409) { responsibilityWorkspaceState.conflict = true; throw Object.assign(new Error('Project changed'), { code: 'CONFLICT' }); }
+    if (!response.ok || data.id !== pending.boardId || !Number.isFinite(Date.parse(data.updated_at))) throw new Error('Not saved');
+    // Server success is authoritative, even if rendering or local storage fails next.
+    responsibilityWorkspaceState.confirmed = true;
+    state.lastKnownUpdatedAt = data.updated_at;
+    state.isDirty = false;
+    clearAutosaveTimer();
+    state.lastSavedSnapshot = pending.snapshot;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(serializeState()));
+    refreshOwnershipDisplays(); refreshNodeSearchUI(); refreshDashboardIfVisible();
+    setSaveStatus(uiText('Saved'));
+    responsibilityWorkspaceState.pending = null;
+  } finally { state.isSaving = false; }
+}
+async function assignCampaignResponsibilities(ids, chosenEmail) {
+  if (responsibilitySaveHeld() || state.isSaving || state.isBoardLoading || state.isBoardHydrating || campaignCreationController?.suspendAutosave || !state.boardAccess?.canEdit || !state.lastKnownUpdatedAt) throw new Error('Project unavailable');
+  const email = normalizeOwnerEmail(chosenEmail);
+  const owner = responsibilityWorkspaceState.rosterContext === responsibilityContext() ? responsibilityWorkspaceState.roster.find(p => normalizeOwnerEmail(p.email) === email) : null;
+  if (email && !owner) throw new Error('Person unavailable');
+  const nodes = ids.map(getNode).filter(Boolean).filter(n => normalizeOwnerEmail(n.ownerEmail) !== email);
+  if (!nodes.length) return;
+  clearAutosaveTimer();
+  // Hold snapshot autosaves before changing any Node or appending activity.
+  responsibilityWorkspaceState.pending = { context: responsibilityContext(), boardId: state.currentBoardId };
+  responsibilityWorkspaceState.confirmed = false; responsibilityWorkspaceState.conflict = false;
+  nodes.forEach(n => { setNodeOwner(n, owner); recordOwnerChangedActivity(n, owner); });
+  const canvas = serializeState();
+  responsibilityWorkspaceState.pending.body = JSON.stringify({ canvas_json: canvas, lastKnownUpdatedAt: state.lastKnownUpdatedAt, responsibility_changes: nodes.map(n => ({ id: n.id, email })) });
+  // Responsibilities save Canvas only. Keep the saved Brand baseline so independent
+  // unsaved Brand edits are still detected by the existing snapshot watcher.
+  const baselineBrand = state.lastSavedSnapshot ? JSON.parse(state.lastSavedSnapshot).brand_core_snapshot : serializeBrandCoreSnapshot();
+  responsibilityWorkspaceState.pending.snapshot = JSON.stringify({ canvas_json: canvas, brand_core_snapshot: baselineBrand });
+  state.isDirty = true;
+  refreshOwnershipDisplays(); refreshNodeSearchUI(); refreshDashboardIfVisible();
+  return persistResponsibilitySelection();
+}
+function openCampaignResponsibilities() {
+  if (!state.currentBoardId || state.boardAccess?.canView === false) return;
+  if (responsibilityWorkspaceState.pending && !responsibilitySaveHeld()) { responsibilityWorkspaceState.pending = null; responsibilityWorkspaceState.confirmed = false; responsibilityWorkspaceState.conflict = false; }
+  window.FunklixCampaignResponsibilities.mount({
+    text: uiText, nodes: () => state.nodes, edges: () => state.edges,
+    canEdit: () => state.boardAccess?.canEdit === true && !state.isBoardLoading,
+    canManage: () => state.boardAccess?.canEdit === true && canManageBoardEditors(),
+    people: () => responsibilityWorkspaceState.rosterContext === responsibilityContext() ? responsibilityWorkspaceState.roster : [],
+    loadPeople: loadResponsibilityPeople,
+    pending: responsibilitySaveHeld, confirmed: () => responsibilityWorkspaceState.confirmed,
+    conflict: () => responsibilityWorkspaceState.conflict,
+    selection: () => {
+      const changes = JSON.parse(responsibilityWorkspaceState.pending.body).responsibility_changes;
+      return { ids: changes.map(c => c.id), email: changes[0].email, single: changes.length === 1 };
+    },
+    assign: assignCampaignResponsibilities, retry: persistResponsibilitySelection,
+    invite: async (email, input) => { await addBoardEditor(email, input, 'editor'); if (state.boardEditorsStatus.isError) throw new Error('Invitation failed'); },
+    reload: async () => {
+      const boardId = state.currentBoardId;
+      if (await loadBoardFromUrlIfPresent(boardId) !== true) throw new Error('Reload failed');
+      responsibilityWorkspaceState.pending = null; responsibilityWorkspaceState.confirmed = false; responsibilityWorkspaceState.conflict = false;
+      await loadResponsibilityPeople();
+    },
+    returnFocus: document.getElementById('utilities-toggle-btn')
+  });
 }
 
 function resolveOwnerIdentity(owner = {}) {
@@ -2803,6 +2856,7 @@ function pulseRemoteNodeUpdate(nodeId) {
 }
 
 function mergeRemoteBoardState(remoteCanvasState, remoteUpdatedAt) {
+  if (responsibilitySaveHeld()) return false;
   const normalizedState = withBoardSchemaDefaults(remoteCanvasState);
   const incomingNodes = (normalizedState.nodes || []).map((node) => sanitizeNodeForPersistence(node));
   const activeEditingIds = getActivelyEditedNodeIds();
@@ -5514,6 +5568,7 @@ function refreshLastSavedSnapshot() {
 }
 
 function detectDirtyFromSnapshot() {
+  if (responsibilitySaveHeld()) return false;
   if (campaignCreationController?.suspendAutosave) return;
   if (state.isBoardLoading) { return; }
   if (state.isBoardHydrating) { return; }
@@ -5541,6 +5596,7 @@ function clearAutosaveTimer() {
 }
 
 function scheduleAutosave() {
+  if (responsibilitySaveHeld()) return false;
   if (campaignCreationController?.suspendAutosave) return;
   if (state.isBoardLoading) { return; }
   if (state.isBoardHydrating) { return; }
@@ -6429,7 +6485,7 @@ function serializeState() {
   console.log("serialized images", selectedNode?.images || []);
   return serialized;
 }
-function saveCampaignCanvasState() { if (campaignCreationController?.suspendAutosave) return; const campaignState = serializeState(); console.log("Saving campaignCanvasState", campaignState); localStorage.setItem(STORAGE_KEY, JSON.stringify(campaignState)); setSaveStatus("Saved"); renderCampaignIntelligence(); }
+function saveCampaignCanvasState() { if (responsibilitySaveHeld()) return; if (campaignCreationController?.suspendAutosave) return; const campaignState = serializeState(); console.log("Saving campaignCanvasState", campaignState); localStorage.setItem(STORAGE_KEY, JSON.stringify(campaignState)); setSaveStatus("Saved"); renderCampaignIntelligence(); }
 function markUnsaved() {
   state.isDirty = true;
   state.autosavePausedUntilChange = false;
@@ -8911,6 +8967,7 @@ function schedulePostHydrationCanvasDensity(loadGeneration, boardId) {
 }
 
 async function saveBoardToServer(trigger = "manual") {
+  if (responsibilitySaveHeld()) return false;
   if (campaignCreationController?.suspendAutosave) return false;
   if (state.isBoardLoading || state.isBoardHydrating || state.initialServerLoadInFlight) {
     console.warn("[Funklix Save Guard] Save blocked while board is loading or hydrating", {
@@ -13354,6 +13411,7 @@ function renderCampaignV3ReadyState(overlay, result = null, onReveal = null) {
       </ul>
       <div class="campaign-builder-actions campaign-v3-complete-actions">
         <button type="button" id="campaign-v3-reveal" class="fk-btn fk-btn-primary">Reveal Campaign</button>
+        <button type="button" id="campaign-v3-assign" class="fk-btn fk-btn-secondary">Assign responsibilities</button>
       </div>
     </div>`;
   prepareCampaignV3ModalScrolling(overlay);
@@ -13361,6 +13419,12 @@ function renderCampaignV3ReadyState(overlay, result = null, onReveal = null) {
     if (onReveal) onReveal(result);
     else { overlay.remove(); centerViewportOnCampaignV3Result(result); }
     setSaveStatus("Campaign generated successfully.");
+  });
+  modal.querySelector("#campaign-v3-assign")?.addEventListener("click", () => {
+    if (onReveal) onReveal(result);
+    else { overlay.remove(); centerViewportOnCampaignV3Result(result); }
+    setAppMode('canvas'); setActiveView('board'); toggleListMode(false);
+    openCampaignResponsibilities();
   });
   translateInterface(modal);
 }
@@ -14790,6 +14854,7 @@ function buildUtilitiesPopoverHtml() {
     ${["compact", "standard", "detailed"].map((mode) => `<button type="button" role="menuitemradio" aria-checked="${String(densityMode === mode)}" data-canvas-density-choice="${mode}">${mode[0].toUpperCase()}${mode.slice(1)}</button>`).join("")}
   </div></div>` : "";
   return `<div class="filter-group"><strong>Board</strong><div class="node-filter-chips">
+    <button type="button" class="fk-btn fk-btn-secondary" data-utility-action="campaign-responsibilities">Campaign responsibilities</button>
     <button type="button" data-utility-action="save-board">Save Board</button>
     <button type="button" data-utility-action="duplicate-board">Duplicate Board</button>
     <button type="button" data-utility-action="new-board">New Board</button>
@@ -15793,6 +15858,7 @@ function populateOwnerSelect(node) {
     const option = document.createElement("option");
     option.value = owner.email;
     option.textContent = `${uiText(owner.role || "Collaborator")}: ${owner.name || owner.email}`;
+    option.disabled = owner.role === "Current owner";
     option.dataset.ownerName = owner.name || "";
     option.dataset.ownerAvatar = owner.avatar || "";
     select.appendChild(option);
@@ -18907,6 +18973,9 @@ el.utilitiesToggleButton?.addEventListener("click", (event) => {
     }
     const btn = e.target.closest("button[data-utility-action]");
     if (!btn) return;
+    if (btn.dataset.utilityAction === "campaign-responsibilities") {
+      closeUtilitiesPopover(); openCampaignResponsibilities(); return;
+    }
     if (btn.dataset.utilityAction === "duplicate-board") {
       duplicateCurrentBoard();
       closeUtilitiesPopover();
