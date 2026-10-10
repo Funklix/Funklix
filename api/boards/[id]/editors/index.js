@@ -1,6 +1,7 @@
 const { pool, ensureBoardsTable } = require('../../../_boards-storage');
 const { getBoardAccess, normalizeEmail } = require('../../../_board-access');
 const { getSessionUser } = require('../../../_auth-session');
+const { assignablePeople } = require('../../../_campaign-responsibilities');
 
 function isValidEmail(email) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
@@ -18,6 +19,7 @@ async function listEditors(boardId) {
 }
 
 module.exports = async function handler(req, res) {
+  res.setHeader?.('Cache-Control', 'private, no-store');
   if (req.method !== 'GET' && req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -34,8 +36,12 @@ module.exports = async function handler(req, res) {
     const user = getSessionUser(req);
     if (!user?.email) return res.status(401).json({ error: 'Authentication required' });
 
-    const { board, access } = await getBoardAccess(id, user, { columns: 'id, owner_id, owner_email' });
+    const { board, access } = await getBoardAccess(id, user, { columns: 'id, owner_id, owner_email, owner_name, owner_avatar' });
     if (!board) return res.status(404).json({ error: 'Board not found' });
+    if (req.method === 'GET' && req.query.assignable === 'true') {
+      if (!access?.canEdit || access.publicView) return res.status(403).json({ error: 'Forbidden' });
+      return res.status(200).json({ people: await assignablePeople(board, user, access) });
+    }
     if (!access?.canManagePermissions) return res.status(403).json({ error: 'Forbidden' });
 
     if (req.method === 'GET') {
