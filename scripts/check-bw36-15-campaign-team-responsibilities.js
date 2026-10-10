@@ -177,6 +177,10 @@ async function browserChecks() {
           assert(await button.isVisible() && await button.isEnabled(), `Ready action usable: ${context}/${id}`);
           // Hit testing and scrolling use the real button without firing its action.
           await button.click({ trial: true });
+          // Trial hit testing starts the real hover transition. Wait for its
+          // completion before exact geometry checks; intermediate translations
+          // can round a 44px box to 43.99994px in Chromium's coordinates.
+          await button.evaluate(n => Promise.all(n.getAnimations().map(animation => animation.finished.catch(() => {}))));
           const box = await button.boundingBox();
           const bounds = await actions.boundingBox();
           assert(box.width >= 44 && box.height >= 44, `44px ready target: ${context}/${id}`);

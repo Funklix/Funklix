@@ -220,6 +220,7 @@ async function browserChecks() {
       assert.equal(await entry.getAttribute('title'), lang === 'de' ? 'Verantwortlichkeiten' : 'Responsibilities');
       assert(await toolbar.evaluate(n => n.scrollWidth <= n.clientWidth + 1), `Toolbar overflow ${context}`);
       await entry.click({ trial: true });
+      await entry.evaluate(n => Promise.all(n.getAnimations().map(animation => animation.finished.catch(() => {}))));
       const box = await entry.boundingBox();
       assert(box.width >= 44 && box.height >= 44 && box.x >= 0 && box.x + box.width <= width + 1, `Toolbar target/viewport ${context}`);
       await entry.focus(); await page.keyboard.press('Enter');
@@ -232,6 +233,7 @@ async function browserChecks() {
         const active = document.activeElement, style = getComputedStyle(active);
         return n.contains(active) && active.matches(':focus-visible') && style.outlineStyle !== 'none' && parseFloat(style.outlineWidth) > 0;
       }), `Visible keyboard focus ${context}`);
+      await dialog.locator('button:visible').evaluateAll(buttons => Promise.all(buttons.flatMap(button => button.getAnimations().map(animation => animation.finished.catch(() => {})))));
       const targets = await dialog.locator('button:visible').evaluateAll(buttons => buttons.map(b => ({label:b.textContent,height:b.getBoundingClientRect().height,minHeight:getComputedStyle(b).minHeight})));
       assert(targets.every(b => b.height >= 44), `44px dialog targets ${context}: ${JSON.stringify(targets)}`);
       await page.keyboard.press('Escape'); await dialog.waitFor({ state: 'detached' });
