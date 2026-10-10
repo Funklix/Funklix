@@ -9116,6 +9116,8 @@ async function loadBoardFromUrlIfPresent(requestedBoardId = null) {
     state.lastKnownUpdatedAt = data?.updated_at || null;
     state.boardBrandAssociation.brandId = data?.brand_visibility === "hidden" ? null : data.brand_id;
     state.boardBrandAssociation.boardId = String(data.id);
+    state.session.brandId = state.boardBrandAssociation.brandId;
+    refreshActiveWorkspaceContext();
     state.boardBrandAssociation.status = "idle";
     const backupCreatedAt = typeof data.brand_core_snapshot_backup_created_at === "string" && !Number.isNaN(Date.parse(data.brand_core_snapshot_backup_created_at)) ? data.brand_core_snapshot_backup_created_at : null;
     const restoreAvailable = data.brand_core_restore_available === true && !!backupCreatedAt;
@@ -10801,10 +10803,73 @@ function isCampaignV3Enabled() {
 }
 
 function openCampaignGeneratorEntry() {
-  if (isCampaignV3Enabled()) {
-    return openCampaignV3Modal();
-  }
-  return openCreateCampaignModal();
+  return openStableCampaignCreation();
+}
+
+let campaignCreationController = null;
+function resolveCampaignCreationContext() {
+  const fail = code => { throw window.FunklixCampaignCreation.error(code); };
+  if (!state.user || state.publicBoardToken) fail('AUTHENTICATION_REQUIRED');
+  if (!state.currentBoardId || state.isBoardLoading || state.isBoardHydrating) fail('BOARD_MISSING');
+  if (state.boardAccess?.canEdit !== true) fail('PERMISSION_DENIED');
+  const association = state.boardBrandAssociation;
+  if (association.boardId !== state.currentBoardId) fail('CONFLICT');
+  if (!association.brandId) fail('BRAND_MISSING');
+  if (state.workspaceCatalog.status !== 'ready') fail('CONFLICT');
+  const matches = state.workspaceCatalog.value?.workspaces.filter(w => w.boards.some(b => b.id === state.currentBoardId)) || [];
+  if (matches.length !== 1) fail('CONFLICT');
+  const workspace = matches[0], board = workspace.boards.find(b => b.id === state.currentBoardId);
+  const brand = workspace.brands.find(b => b.id === association.brandId);
+  if (!brand || board.brand_id !== brand.id || workspace.id !== state.workspaceCatalog.activeWorkspaceId) fail('CONFLICT');
+  if (state.isDirty || state.isSaving) fail('DIRTY');
+  if (!state.lastKnownUpdatedAt) fail('CONFLICT');
+  return { workspace, brand, board: { ...board, name: state.currentBoardName || board.name, updated_at: state.lastKnownUpdatedAt } };
+}
+function campaignCreationIdentity() {
+  return { account: state.user, boardId: state.currentBoardId, generation: state.boardLoadGeneration,
+    workspaceId: state.workspaceCatalog.activeWorkspaceId, brandId: state.boardBrandAssociation.brandId };
+}
+function openCreatedCampaign(outcome) {
+  // The server has committed: adopt its identity and revision before rendering.
+  clearAutosaveTimer();
+  window.history.replaceState({}, '', outcome.next_route);
+  state.currentBoardId = outcome.board.id; state.currentBoardName = outcome.board.name;
+  state.lastKnownUpdatedAt = outcome.board.updated_at;
+  state.workspaceCatalog.activeWorkspaceId = outcome.workspace.id;
+  state.workspaceCatalog.value = { ...state.workspaceCatalog.value, workspaces: state.workspaceCatalog.value.workspaces.map(w => w.id !== outcome.workspace.id ? w : { ...w, name: outcome.workspace.name, brands: w.brands.map(b => b.id !== outcome.brand.id ? b : { ...b, ...outcome.brand }), boards: w.boards.map(b => b.id !== outcome.board.id ? b : { ...b, name: outcome.board.name }) }) };
+  state.session.workspaceId = outcome.workspace.id; state.session.brandId = outcome.brand.id; state.session.boardId = outcome.board.id;
+  state.boardBrandAssociation.brandId = outcome.brand.id; state.boardBrandAssociation.boardId = outcome.board.id;
+  applyBoardAccessFromServer(outcome.board.access, 'campaign-creation');
+  state.authoritativeBoardBrandCore = { ...state.authoritativeBoardBrandCore, boardId: outcome.board.id, value: clonePlainObject(outcome.board.brand_core_snapshot), updatedAt: outcome.board.updated_at, provenance: normalizeBoardSnapshotProvenance(outcome.board), provenanceValid: hasValidBoardSnapshotProvenance(outcome.board) };
+  state.brandCore = normalizeBrandCoreState(clonePlainObject(outcome.board.brand_core_snapshot), { restoration: true });
+  applyCampaignState(outcome.board.canvas_json, uiText('Saved'), { memoryOnly: true });
+  state.isDirty = false;
+  setAppMode('canvas'); setActiveView('board'); toggleListMode(false);
+  const node = getNode(outcome.node_id);
+  if (node) { selectCanvasNode(node); centerViewportOnCampaignV3Result({ commitResult: { createdNodes: [node] } }); }
+  renderWorkspaceSidebar(); renderBoardBrandAssociation();
+}
+function showCampaignCreationFeedback(code) {
+  document.getElementById('campaign-creation-feedback')?.remove();
+  const t = window.FunklixCampaignCreationDialog.copy(state.uiLanguage);
+  const host = document.createElement('section'); host.id = 'campaign-creation-feedback'; host.className = 'campaign-creation-dialog'; host.setAttribute('role', 'alert');
+  const message = document.createElement('p'); message.textContent = t[code] || t.CONFLICT; host.append(message);
+  const action = document.createElement('button'); action.type = 'button';
+  action.textContent = code === 'BRAND_MISSING' ? t.assign : t.projects;
+  action.addEventListener('click', () => { host.remove(); if (code === 'BRAND_MISSING') openBoardBrandAssociation(); else { setAppMode('canvas'); setActiveView('boards_library'); } });
+  host.append(action); const close = document.createElement('button'); close.type = 'button'; close.textContent = t.cancel; close.addEventListener('click', () => host.remove()); host.append(close);
+  document.body.append(host); action.focus();
+}
+function openStableCampaignCreation() {
+  if (campaignCreationController?.dialog.isConnected) { campaignCreationController.dialog.focus(); return; }
+  let context;
+  try { context = resolveCampaignCreationContext(); } catch (error) { showCampaignCreationFeedback(error.code); return; }
+  document.getElementById('campaign-creation-feedback')?.remove();
+  let created = false;
+  const boundary = window.FunklixCampaignCreation.createBoundary({ context: campaignCreationIdentity, fetchImpl: fetch, open: outcome => { openCreatedCampaign(outcome); created = true; } });
+  campaignCreationController = window.FunklixCampaignCreationDialog.mount({ context, language: state.uiLanguage,
+    submit: input => { if (state.isDirty || state.isSaving) throw window.FunklixCampaignCreation.error('DIRTY'); return boundary.submit(input); },
+    onClose: () => { campaignCreationController = null; if (created) document.getElementById('node-title')?.focus(); } });
 }
 
 const CAMPAIGN_WORKER_STATUS = {

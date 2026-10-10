@@ -19,6 +19,11 @@ jobs:
           node --check knowledge-module-runtime-adapter.js
           node --check app.js
           node --check campaign-v3.js
+          node --check campaign-creation.js
+          node --check campaign-creation-dialog.js
+          node --check api/campaigns.js
+          node --check api/_campaign-creation.js
+          node --check scripts/check-bw36-14-stable-campaign-creation.js
       - name: Check browser script integrity
         run: node scripts/check-browser-script-integrity.js
       - name: Check BW-35.1 canonical posting schedule persistence
@@ -329,6 +334,10 @@ jobs:
         run: npm run check:bw36.13r5r4
       - name: Check Brand Profile decisions and deletion UX
         run: npm run check:bw36.13r6
+      - name: Check BW-36.12 Brand logo acquisition and projection
+        run: npm run check:bw36.12
+      - name: Check stable campaign creation and direct handoff in Chromium
+        run: npm run check:bw36.14
       - name: Check dynamic AI Insights translations
         run: node scripts/check-bw25-1-dynamic-insights-translations.js
       - name: Check scoped German interface localization
