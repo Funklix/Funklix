@@ -14,6 +14,7 @@
   const german = {
     "Saved": "Gespeichert", "Assign": "Zuweisen", "Admin": "Administration", "Email": "E-Mail",
     "Campaign responsibilities": "Kampagnen-Verantwortlichkeiten",
+    "Responsibilities": "Verantwortlichkeiten",
     "Assign responsibilities": "Verantwortlichkeiten zuweisen",
     "Responsible": "Verantwortlich",
     "Assign variation": "Variation zuweisen",

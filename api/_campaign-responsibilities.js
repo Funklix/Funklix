@@ -55,7 +55,9 @@ async function saveResponsibilities(req, res, id, user) {
     }
     // Replaying the exact saved snapshot after a lost response is already successful.
     const same = await client.query('SELECT id FROM boards WHERE id = $1 AND canvas_json = $2::jsonb', [id, JSON.stringify(canvas)]);
-    if (!same.rowCount && Date.parse(board.updated_at) !== Date.parse(revision)) {
+    // pg returns TIMESTAMPTZ as Date. Date.parse(Date) stringifies it and loses
+    // milliseconds; compare epoch values without that lossy conversion.
+    if (!same.rowCount && new Date(board.updated_at).getTime() !== new Date(revision).getTime()) {
       await client.query('ROLLBACK');
       return res.status(409).json({ error: 'Board update conflict', updated_at: board.updated_at });
     }
@@ -65,7 +67,11 @@ async function saveResponsibilities(req, res, id, user) {
       saved = result.rows[0];
     }
     await client.query('COMMIT');
-    return res.status(200).json({ id: saved.id, updated_at: saved.updated_at, access });
+    const affectedIds = new Set(changes.map(change => change.id));
+    const assignments = saved.canvas_json.nodes.filter(node => affectedIds.has(node.id)).map(node => ({
+      id: node.id, ownerEmail: node.ownerEmail || '', ownerName: node.ownerName || '', ownerAvatar: node.ownerAvatar || ''
+    }));
+    return res.status(200).json({ id: saved.id, updated_at: saved.updated_at, assignments, access });
   } catch (error) {
     await client.query('ROLLBACK').catch(() => {});
     throw error;

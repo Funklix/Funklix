@@ -755,6 +755,7 @@ function applyBoardAccessFromServer(access, source = "server") {
 }
 
 function updateReadOnlyNoticeVisibility() {
+  synchronizeResponsibilityToolbar();
   const isReadOnly = state.boardAccess?.canEdit === false;
   const readOnlyActionTitle = "View-only board. This action is disabled.";
   if (el.readonlyBoardNotice) {
@@ -978,9 +979,20 @@ async function persistResponsibilitySelection() {
     // Server success is authoritative, even if rendering or local storage fails next.
     responsibilityWorkspaceState.confirmed = true;
     state.lastKnownUpdatedAt = data.updated_at;
+    const changes = JSON.parse(pending.body).responsibility_changes;
+    if (!Array.isArray(data.assignments) || data.assignments.length !== changes.length
+      || changes.some(change => !data.assignments.some(assignment => assignment.id === change.id
+        && normalizeOwnerEmail(assignment.ownerEmail) === normalizeOwnerEmail(change.email)))) throw new Error('Saved assignment state unavailable');
+    const assignments = new Map(data.assignments.map(assignment => [assignment.id, assignment]));
+    state.nodes = state.nodes.map(node => {
+      const assignment = assignments.get(node.id);
+      return assignment ? { ...node, ownerEmail: normalizeOwnerEmail(assignment.ownerEmail),
+        ownerName: normalizeOwnerName(assignment.ownerName), ownerAvatar: normalizeOwnerAvatar(assignment.ownerAvatar) } : node;
+    });
+    const baselineBrand = JSON.parse(pending.snapshot).brand_core_snapshot;
     state.isDirty = false;
     clearAutosaveTimer();
-    state.lastSavedSnapshot = pending.snapshot;
+    state.lastSavedSnapshot = JSON.stringify({ canvas_json: serializeState(), brand_core_snapshot: baselineBrand });
     localStorage.setItem(STORAGE_KEY, JSON.stringify(serializeState()));
     refreshOwnershipDisplays(); refreshNodeSearchUI(); refreshDashboardIfVisible();
     setSaveStatus(uiText('Saved'));
@@ -988,7 +1000,7 @@ async function persistResponsibilitySelection() {
   } finally { state.isSaving = false; }
 }
 async function assignCampaignResponsibilities(ids, chosenEmail) {
-  if (responsibilitySaveHeld() || state.isSaving || state.isBoardLoading || state.isBoardHydrating || campaignCreationController?.suspendAutosave || !state.boardAccess?.canEdit || !state.lastKnownUpdatedAt) throw new Error('Project unavailable');
+  if (responsibilitySaveHeld() || state.isSaving || state.isBoardLoading || state.isBoardHydrating || campaignCreationController?.suspendAutosave || !state.boardAccess?.canEdit || state.publicBoardToken || state.boardAccess.reason === 'public_viewer' || !state.lastKnownUpdatedAt) throw new Error('Project unavailable');
   const email = normalizeOwnerEmail(chosenEmail);
   const owner = responsibilityWorkspaceState.rosterContext === responsibilityContext() ? responsibilityWorkspaceState.roster.find(p => normalizeOwnerEmail(p.email) === email) : null;
   if (email && !owner) throw new Error('Person unavailable');
@@ -1014,8 +1026,8 @@ function openCampaignResponsibilities() {
   if (responsibilityWorkspaceState.pending && !responsibilitySaveHeld()) { responsibilityWorkspaceState.pending = null; responsibilityWorkspaceState.confirmed = false; responsibilityWorkspaceState.conflict = false; }
   window.FunklixCampaignResponsibilities.mount({
     text: uiText, nodes: () => state.nodes, edges: () => state.edges,
-    canEdit: () => state.boardAccess?.canEdit === true && !state.isBoardLoading,
-    canManage: () => state.boardAccess?.canEdit === true && canManageBoardEditors(),
+    canEdit: () => state.boardAccess?.canEdit === true && !state.publicBoardToken && state.boardAccess.reason !== 'public_viewer' && !state.isBoardLoading,
+    canManage: () => state.boardAccess?.canEdit === true && !state.publicBoardToken && state.boardAccess.reason !== 'public_viewer' && canManageBoardEditors(),
     people: () => responsibilityWorkspaceState.rosterContext === responsibilityContext() ? responsibilityWorkspaceState.roster : [],
     loadPeople: loadResponsibilityPeople,
     pending: responsibilitySaveHeld, confirmed: () => responsibilityWorkspaceState.confirmed,
@@ -1032,8 +1044,28 @@ function openCampaignResponsibilities() {
       responsibilityWorkspaceState.pending = null; responsibilityWorkspaceState.confirmed = false; responsibilityWorkspaceState.conflict = false;
       await loadResponsibilityPeople();
     },
-    returnFocus: document.getElementById('utilities-toggle-btn')
+    returnFocus: document.getElementById('campaign-responsibilities-btn')
   });
+}
+
+function initializeResponsibilityToolbar() {
+  const anchor = document.getElementById('add-node-btn');
+  if (!anchor || document.getElementById('campaign-responsibilities-btn')) return;
+  const button = document.createElement('button');
+  button.id = 'campaign-responsibilities-btn'; button.type = 'button';
+  button.className = 'fk-btn fk-btn-secondary'; button.hidden = true;
+  button.dataset.i18n = 'Responsibilities'; button.dataset.i18nTitle = 'Responsibilities';
+  button.textContent = uiText('Responsibilities'); button.title = uiText('Responsibilities');
+  button.addEventListener('click', openCampaignResponsibilities);
+  anchor.after(button);
+}
+
+function synchronizeResponsibilityToolbar() {
+  const button = document.getElementById('campaign-responsibilities-btn');
+  if (!button) return;
+  // The existing Canvas topbar owns surface visibility; this action owns only
+  // active-project access and hydration visibility inside that toolbar.
+  button.hidden = !state.currentBoardId || state.boardAccess?.canView !== true || state.isBoardLoading;
 }
 
 function resolveOwnerIdentity(owner = {}) {
@@ -9230,6 +9262,7 @@ async function loadBoardFromUrlIfPresent(requestedBoardId = null) {
       state.initialServerLoadInFlight = false;
       state.isBoardLoading = false;
       state.isBoardHydrating = false;
+      synchronizeResponsibilityToolbar();
       renderBoardBrandAssociation();
     }
   }
@@ -14854,7 +14887,6 @@ function buildUtilitiesPopoverHtml() {
     ${["compact", "standard", "detailed"].map((mode) => `<button type="button" role="menuitemradio" aria-checked="${String(densityMode === mode)}" data-canvas-density-choice="${mode}">${mode[0].toUpperCase()}${mode.slice(1)}</button>`).join("")}
   </div></div>` : "";
   return `<div class="filter-group"><strong>Board</strong><div class="node-filter-chips">
-    <button type="button" class="fk-btn fk-btn-secondary" data-utility-action="campaign-responsibilities">Campaign responsibilities</button>
     <button type="button" data-utility-action="save-board">Save Board</button>
     <button type="button" data-utility-action="duplicate-board">Duplicate Board</button>
     <button type="button" data-utility-action="new-board">New Board</button>
@@ -18951,6 +18983,7 @@ el.filtersToggleButton?.addEventListener("click", (event) => {
   document.body.appendChild(popover);
   syncPopoverActiveStates(popover);
 });
+initializeResponsibilityToolbar();
 el.utilitiesToggleButton?.addEventListener("click", (event) => {
   event.stopPropagation();
   const existing = document.getElementById("floating-utilities-popover");
@@ -18973,9 +19006,6 @@ el.utilitiesToggleButton?.addEventListener("click", (event) => {
     }
     const btn = e.target.closest("button[data-utility-action]");
     if (!btn) return;
-    if (btn.dataset.utilityAction === "campaign-responsibilities") {
-      closeUtilitiesPopover(); openCampaignResponsibilities(); return;
-    }
     if (btn.dataset.utilityAction === "duplicate-board") {
       duplicateCurrentBoard();
       closeUtilitiesPopover();
