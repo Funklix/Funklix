@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 'use strict';
-const assert = require('node:assert/strict'), fs = require('node:fs'), path = require('node:path'), vm = require('node:vm'), cp = require('node:child_process');
+const assert = require('node:assert/strict'), fs = require('node:fs'), path = require('node:path'), vm = require('node:vm'), crypto = require('node:crypto');
 const { runtime, W, B, D, EMAIL, now, clone, png } = require('./fixtures/bw36-13r5-local-runtime');
 const model = require('../campaign-responsibilities'), v3 = require('../campaign-v3'), contract = require('../campaign-creation');
 let chromium; try { ({ chromium } = require('playwright-core')); } catch { ({ chromium } = require('/opt/codex/runtimes/cua/lib/node_modules/playwright-core')); }
@@ -58,11 +58,35 @@ function server(r) {
   return { call, api, access, editors, members, get writes() { return writes; }, set fail(value) { fail = value; } };
 }
 function protectedGenerator() {
-  const base = cp.execFileSync('git', ['show', '4806fd3:campaign-v3.js'], { cwd: ROOT, encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 }); assert.equal(fs.readFileSync(path.join(ROOT, 'campaign-v3.js'), 'utf8'), base);
-  for (const f of ['api/generate-campaign.js', 'api/_campaign-creation.js', 'campaign-creation.js', 'campaign-creation-dialog.js']) assert.equal(fs.readFileSync(path.join(ROOT, f), 'utf8'), cp.execFileSync('git', ['show', '4806fd3:' + f], { cwd: ROOT, encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 }));
-  const app = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8'), old = cp.execFileSync('git', ['show', '4806fd3:app.js'], { cwd: ROOT, encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 });
-  for (const [start, end] of [['async function runCampaignV3AICompatibility(', 'function centerViewportOnCampaignV3Result('], ['async function startCampaignV3Creation(', 'async function debugRunCampaignV3AI(']]) {
-    const extract = s => s.slice(s.indexOf(start), s.indexOf(end, s.indexOf(start) + 1)); assert.equal(extract(app), extract(old));
+  // SHA-256 of the exact UTF-8 sources/function slices previously compared to
+  // main at 4806fd3. Keep the byte guard effective in CI's depth-one checkout.
+  const digest = source => crypto.createHash('sha256').update(source).digest('hex');
+  const expected = {
+    "campaign-v3.js": "b9e05a42fcf85ec6f070da2473655d3ee64140b2a0a2c175afc1cd3bb3a5cf1c",
+    "api/generate-campaign.js": "2c6d40be342a8e5798f305059f95fc8f7b450f33cce438d24b17b9d6201c66bd",
+    "api/_campaign-creation.js": "bf2d53702cdabd2efeb0c7498e292d12a14a6a20139d1e126e60184f00f59123",
+    "campaign-creation.js": "4e14fd829b822f0efd2f83dac6e0fd407093c3f300b2e1e9f2bb750a5135388d",
+    "campaign-creation-dialog.js": "d114e098d4dc8c93105099e5d4f300f4a3ea7bd264bd1e55e0a6fdf5dbc51f53"
+};
+  for (const [file, hash] of Object.entries(expected)) {
+    assert.equal(digest(fs.readFileSync(path.join(ROOT, file), 'utf8')), hash, `Protected V3 source changed: ${file}`);
+  }
+  const app = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8');
+  for (const [start, end, hash] of [
+    [
+        "async function runCampaignV3AICompatibility(",
+        "function centerViewportOnCampaignV3Result(",
+        "840af153ee6527e57339176e6c421d5385dda0e2b5c1e7a44437a55b116cce5c"
+    ],
+    [
+        "async function startCampaignV3Creation(",
+        "async function debugRunCampaignV3AI(",
+        "e77246b4d865eb150769e03a44328c46fb0987fd53abeb53ddc59966017598e9"
+    ]
+]) {
+    const first = app.indexOf(start), last = app.indexOf(end, first + 1);
+    assert(first >= 0 && last > first, `Protected V3 function missing: ${start}`);
+    assert.equal(digest(app.slice(first, last)), hash, `Protected V3 function changed: ${start}`);
   }
   for (const file of ['campaign-responsibilities.js', 'api/_campaign-responsibilities.js']) assert.doesNotMatch(fs.readFileSync(path.join(ROOT, file), 'utf8'), /\b(?:alert|confirm|prompt)\s*\(/);
 }
@@ -86,7 +110,7 @@ async function serverChecks() {
   console.log('PASS production permission projection, invitation boundary, atomic save, rollback, replay, stale revision and revocation');
 }
 async function browserChecks() {
-  const r=runtime(), s=server(r); const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH || '/usr/bin/chromium',args:['--no-sandbox']});
+  const r=runtime(), s=server(r); const browser=await chromium.launch({...(process.env.CHROMIUM_PATH ? {executablePath:process.env.CHROMIUM_PATH} : fs.existsSync('/usr/bin/chromium') ? {executablePath:'/usr/bin/chromium'} : {}),args:['--no-sandbox']});
   try {
     const page=await browser.newPage({viewport:{width:1440,height:900}}); page.setDefaultTimeout(15000);
     const errors=[],dialogs=[],requests=[]; let writes=0;
@@ -109,7 +133,93 @@ async function browserChecks() {
       const file=path.resolve(ROOT,url.pathname==='/'||url.pathname.startsWith('/boards/')?'index.html':'.'+url.pathname);return route.fulfill(fs.existsSync(file)&&fs.statSync(file).isFile()?{path:file}:{body:''});
     });
     async function boot(){await page.goto(`http://localhost/boards/${D}`);await page.waitForFunction(()=>state.currentBoardId&&state.workspaceCatalog.status==='ready'&&!state.isBoardLoading);await page.evaluate(()=>{setAppMode('canvas');setActiveView('board');});}
-    await boot();await page.locator('#create-campaign-btn').click();const creation=page.locator('#campaign-creation-dialog');await creation.locator('#campaign-creation-idea').fill('Launch reliable local service');await creation.getByRole('button',{name:'Continue',exact:true}).click();await creation.locator('#campaign-v3-variations').fill('2');await creation.locator('#campaign-v3-posts').fill('3');await creation.getByRole('button',{name:'Generate Campaign',exact:true}).click();await creation.locator('#campaign-v3-assign').waitFor();assert(await creation.locator('#campaign-v3-reveal').isVisible());await creation.locator('#campaign-v3-assign').click();
+    const creation = page.locator('#campaign-creation-dialog');
+    async function generateToReady() {
+      await page.locator('#create-campaign-btn').click();
+      await creation.locator('#campaign-creation-idea').fill('Launch reliable local service');
+      await creation.getByRole('button', { name: 'Continue', exact: true }).click();
+      await creation.locator('#campaign-v3-variations').fill('2');
+      await creation.locator('#campaign-v3-posts').fill('3');
+      await creation.getByRole('button', { name: 'Generate Campaign', exact: true }).click();
+      await creation.locator('#campaign-v3-assign').waitFor();
+    }
+    await boot();
+    await generateToReady();
+    // Keep the real, server-confirmed V3 ready dialog alive through the same
+    // viewport matrix as BW-36.14R1, with both actual localized action labels.
+    for (const lang of ['en', 'de']) for (const theme of ['light', 'dark']) {
+      for (const width of [1440, 1024, 768, 480, 375, 320, 720]) {
+        const height = width === 720 ? 450 : 900;
+        await page.setViewportSize({ width, height });
+        await page.evaluate(({ lang, theme }) => {
+          language.setUiLanguage(lang); state.uiLanguage = lang;
+          document.documentElement.dataset.theme = theme;
+          translateInterface(document.getElementById('campaign-creation-dialog'));
+        }, { lang, theme });
+        const context = `${lang}/${theme}/${width}x${height}`;
+        const modal = creation.locator('.campaign-builder-modal');
+        const actions = modal.locator('.campaign-v3-complete-actions');
+        assert(await modal.evaluate(n => n.scrollWidth <= n.clientWidth + 1), `Ready modal overflow: ${context}`);
+        assert(await actions.evaluate(n => n.scrollWidth <= n.clientWidth + 1), `Ready actions overflow: ${context}`);
+        const rect = await creation.boundingBox();
+        assert(rect.x >= 0 && rect.x + rect.width <= width + 1, `Ready dialog viewport fit: ${context}`);
+        const boxes = [];
+        for (const [id, label] of [
+          ['campaign-v3-reveal', lang === 'de' ? 'Kampagne anzeigen' : 'Reveal Campaign'],
+          ['campaign-v3-assign', lang === 'de' ? 'Verantwortlichkeiten zuweisen' : 'Assign responsibilities']
+        ]) {
+          const button = creation.locator(`#${id}`);
+          assert.equal(await button.textContent(), label);
+          assert(await button.isVisible() && await button.isEnabled(), `Ready action usable: ${context}/${id}`);
+          // Hit testing and scrolling use the real button without firing its action.
+          await button.click({ trial: true });
+          const box = await button.boundingBox();
+          const bounds = await actions.boundingBox();
+          assert(box.width >= 44 && box.height >= 44, `44px ready target: ${context}/${id}`);
+          assert(box.x >= bounds.x - 1 && box.x + box.width <= bounds.x + bounds.width + 1, `Ready button fits: ${context}/${id}`);
+          boxes.push(box);
+        }
+        if (width <= 480) {
+          assert(boxes[1].y >= boxes[0].y + boxes[0].height, `Ready actions stack: ${context}`);
+          const bounds = await actions.boundingBox();
+          assert(boxes.every(b => Math.abs(b.width - bounds.width) <= 1), `Full-width mobile actions: ${context}`);
+        }
+        await creation.locator('#campaign-v3-reveal').focus();
+        await page.keyboard.press('Tab');
+        assert.equal(await page.evaluate(() => document.activeElement.id), 'campaign-v3-assign');
+        assert(await creation.locator('#campaign-v3-assign').evaluate(button => {
+          const style = getComputedStyle(button);
+          return button.matches(':focus-visible') && ((style.outlineStyle !== 'none' && parseFloat(style.outlineWidth) > 0) || style.boxShadow !== 'none');
+        }), `Visible keyboard focus: ${context}`);
+      }
+    }
+    // Accessibility media must retain the same two operable controls and fit.
+    await page.emulateMedia({ forcedColors: 'active', reducedMotion: 'reduce' });
+    await page.setViewportSize({ width: 320, height: 450 });
+    for (const id of ['campaign-v3-reveal', 'campaign-v3-assign']) {
+      await creation.locator(`#${id}`).click({ trial: true });
+    }
+    assert(await creation.locator('.campaign-builder-modal').evaluate(n => n.scrollWidth <= n.clientWidth + 1));
+    assert(await creation.locator('.campaign-v3-complete-actions').evaluate(n => n.scrollWidth <= n.clientWidth + 1));
+    await page.emulateMedia({ forcedColors: 'none', reducedMotion: 'no-preference' });
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.evaluate(() => { language.setUiLanguage('en'); state.uiLanguage = 'en'; document.documentElement.dataset.theme = 'light'; translateInterface(document.getElementById('campaign-creation-dialog')); });
+    const createdIds = await page.evaluate(() => state.nodes.map(n => n.id));
+    await creation.locator('#campaign-v3-reveal').focus();
+    await page.keyboard.press('Enter');
+    await creation.waitFor({ state: 'detached' });
+    assert.equal(page.url(), `http://localhost/boards/${D}`);
+    assert(await page.evaluate(({ boardId, ids }) => state.currentBoardId === boardId && state.activeView === 'board' && ids.every(id => getNode(id)), { boardId: D, ids: createdIds }));
+    assert.equal(await page.locator('#campaign-responsibilities').count(), 0);
+    console.log('PASS V3 ready: both EN/DE actions, modal/container fit, 44px targets, mobile stacking, keyboard focus, Light/Dark at all BW-36.14R1 widths including 720x450 reflow, accessibility media, actual Reveal opens the created campaign');
+    // A fresh isolated campaign runs through the same real generator/persistence
+    // path so the other ready action executes its established production callback.
+    r.seed();
+    await boot();
+    await generateToReady();
+    await creation.locator('#campaign-v3-assign').focus();
+    await page.keyboard.press('Enter');
+    await creation.waitFor({ state: 'detached' });
     const dialog=page.locator('#campaign-responsibilities');await dialog.waitFor();await page.waitForFunction(()=>document.getElementById('campaign-responsibilities').getAttribute('aria-busy')==='false');
     assert.equal(await dialog.locator('[data-responsibility-node]').count(),13);assert.equal(await dialog.locator('.responsibility-variation').count(),2);assert.equal(await dialog.getByRole('heading',{name:'Shared funnel assets'}).count(),1);
     const groups=await page.evaluate(()=>FunklixCampaignResponsibilities.structure(state.nodes,state.edges));assert(groups.campaigns[0].variations.every(v=>v.contents.length===1&&v.contents[0].posts.length===3));assert.equal(groups.campaigns[0].shared.length,2);

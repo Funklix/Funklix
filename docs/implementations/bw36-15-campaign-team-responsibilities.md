@@ -81,3 +81,23 @@ No historical test file was changed or relaxed. The manual acceptance below rema
 16. Test a failed save, Not saved, closing/reopening and Retry; verify no duplicate activity or mutation. Test a revision conflict and review after loading latest.
 17. Test desktop/mobile, Light/Dark, keyboard and short viewport height.
 18. Generate Campaign V3 again and verify the full original structure/quality/repair/animation behavior.
+
+## BW-36.15R1: completion-action reflow correction
+
+Existing delivery: PR #757, branch `codex/bw36-15-campaign-team-responsibilities`. This correction stays on that branch and PR.
+
+Verified root cause: Runtime Boot Safety run 38043172742 failed the unchanged BW-36.14R1 ready-state `modal.scrollWidth <= modal.clientWidth + 1` assertion before BW-36.15 could execute. The second completion action inherited `.campaign-builder-actions` as a non-wrapping flex row. Its buttons retained automatic intrinsic minimum widths; the parent grid's automatic column could widen beyond the modal. Production Chromium measurements before repair show the German 320px ready modal at **248px client width / 289px scroll width**, with a **289px action row** and `flex-wrap: nowrap`. Local English fitting did not protect the longer German label or CI's ready-state layout.
+
+The production repair is confined to V3 completion selectors in `campaign-creation-dialog.css`: a `minmax(0, 1fr)` grid column, `min-width: 0`, `max-width: 100%`, border-box sizing, wrapping action flex layout, full-label word wrapping and minimum 44px button heights. At viewport widths up to 480px the actions stack at full width. Existing button radius, colors, spacing, theme/focus styling and accessibility media are inherited. No text is hidden/truncated, no overflow clipping is added, and no broad button/modal overrides are introduced. Generation, topology, progress/avatar/loading, completion handlers, authorization, persistence, assignments and APIs are unchanged.
+
+The focused BW-36.15 check now keeps an actual server-confirmed V3 ready dialog open and checks both real EN/DE buttons at **1440, 1024, 768, 480, 375, 320 and 720×450** in Light/Dark. It asserts modal and action-container horizontal fit, full labels, 44px targets, mobile stacking, hit testing and visible keyboard focus. Forced colors/reduced motion retain fit and operability. Enter on the actual Reveal button opens the created campaign; a fresh isolated campaign exercises Enter on Assign responsibilities and then the original complete responsibility regression. Chromium selection also follows the existing R1 fallback so the fixture uses Playwright's installed browser when `/usr/bin/chromium` is absent in CI. The exact protected source/function comparisons use SHA-256 digests computed from the same `4806fd3` bytes, so CI's verified depth-one checkout does not need an unavailable ancestor commit; every prior byte invariant remains enforced.
+
+Correction files only:
+
+- `campaign-creation-dialog.css`
+- `scripts/check-bw36-15-campaign-team-responsibilities.js`
+- `docs/implementations/bw36-15-campaign-team-responsibilities.md`
+
+Required validation sequence: `npm run check:bw36.14r1`, then `npm run check:bw36.15`, browser-script integrity, changed-JavaScript syntax, `git diff --check`, then every Runtime Boot Safety workflow run step in its declared order, including its browser dependency setup. The existing BW-36.14R1 script/assertion is unchanged. Final command results are reported with the correction commit and existing PR.
+
+Migration/manual SQL/database or production-data changes: **none**.

@@ -26,3 +26,35 @@ html[data-theme="dark"] .campaign-creation-context .brand-logo{background:#2a304
 .campaign-creation-dialog input[type="checkbox"]{width:24px;height:24px}
 .campaign-creation-dialog .campaign-v3-creation-shell,.campaign-creation-dialog .campaign-v3-complete-shell,.campaign-creation-dialog .campaign-v3-error-shell{min-width:0}
 .campaign-creation-dialog .fk-btn{max-width:100%;white-space:normal}
+
+/* V3 completion owns two full-label actions; keep their intrinsic sizes inside
+   the grid shell instead of allowing a nowrap flex row to widen the modal. */
+.campaign-v3-creation-modal .campaign-v3-complete-shell {
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  grid-template-columns: minmax(0, 1fr);
+}
+.campaign-v3-creation-modal .campaign-v3-complete-actions {
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  flex-wrap: wrap;
+}
+.campaign-v3-creation-modal .campaign-v3-complete-actions > .fk-btn {
+  min-width: 0;
+  max-width: 100%;
+  min-height: 44px;
+  box-sizing: border-box;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 480px) {
+  .campaign-v3-creation-modal .campaign-v3-complete-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .campaign-v3-creation-modal .campaign-v3-complete-actions > .fk-btn {
+    width: 100%;
+  }
+}
