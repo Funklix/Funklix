@@ -35,7 +35,8 @@ for (const label of ["Board", "View", "Layout", "Save Board", "Board View", "Fit
 // BW-36.16 replaces redundant density commands with one local toolbar authority.
 assert(!utilities.includes('data-utility-action="compact-all"') && !utilities.includes('data-utility-action="expand-all"'));
 assert(app.includes("button.id = 'canvas-compact-view-btn'"));
-assert(app.includes("button.setAttribute('aria-pressed', String(forced))"));
+assert(app.includes("button.dataset.globalView = mode;"));
+assert(app.includes("button.setAttribute('aria-label', uiText(label))"));
 // Existing local language authority, validation, restoration, and independent setters remain intact.
 assert(language.includes('const STORAGE_KEY = "funklix.languagePreferences.v1"'), "language storage key changed");
 assert(language.includes('UI_LANGUAGES = Object.freeze(["en", "de"])'), "Interface allowlist changed");

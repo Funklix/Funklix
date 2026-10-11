@@ -8,12 +8,14 @@
 #canvas #zoom-layer > .node:is([data-adaptive-view="standard"],[data-adaptive-view="detailed"]) { z-index: 10; }
 #canvas #zoom-layer > .node[data-adaptive-view] { transition: none; touch-action: manipulation; }
 #canvas #zoom-layer > .node[data-adaptive-view]:focus-visible { outline: 2px solid var(--fk-color-primary-action); outline-offset: 3px; }
-.canvas-toolbar #canvas-compact-view-btn { box-sizing: border-box; min-width: 44px; min-height: 44px; max-width: 100%; gap: 6px; white-space: normal; overflow-wrap: anywhere; }
+.canvas-toolbar .toolbar-row2-left { min-width: 0; flex-wrap: wrap; }
+.canvas-toolbar #canvas-compact-view-btn { box-sizing: border-box; width: 44px; height: 44px; min-width: 44px; min-height: 44px; flex: 0 0 44px; padding: 10px; }
 .canvas-toolbar #canvas-compact-view-btn[hidden] { display: none; }
-.canvas-toolbar #canvas-compact-view-btn[aria-pressed="true"] { background: var(--fk-color-primary-subtle); color: var(--fk-color-primary-action); border-color: var(--fk-color-primary-action); }
+.canvas-toolbar #canvas-compact-view-btn:not([data-global-view="compact"]) { background: var(--fk-color-primary-subtle); color: var(--fk-color-primary-action); border-color: var(--fk-color-primary-action); }
 .canvas-toolbar #canvas-compact-view-btn:focus-visible { outline: 2px solid var(--fk-color-primary-action); outline-offset: 2px; }
-@media (max-width: 1100px) { .canvas-toolbar #canvas-compact-view-btn span:last-child { display: none; } }
+.canvas-toolbar #canvas-compact-view-btn svg { width: 22px; height: 22px; fill: currentColor; }
+.canvas-toolbar #campaign-responsibilities-btn { min-height: 44px; }
 @media (forced-colors: active) {
-  .canvas-toolbar #canvas-compact-view-btn[aria-pressed="true"] { color: HighlightText; background: Highlight; border-color: Highlight; }
+  .canvas-toolbar #canvas-compact-view-btn:not([data-global-view="compact"]) { color: HighlightText; background: Highlight; border-color: Highlight; }
   #canvas #zoom-layer > .node[data-adaptive-view]:focus-visible, .canvas-toolbar #canvas-compact-view-btn:focus-visible { outline-color: Highlight; }
 }

@@ -10,7 +10,7 @@ try { ({ chromium } = require('playwright-core')); }
 catch { ({ chromium } = require('/opt/codex/runtimes/cua/lib/node_modules/playwright-core')); }
 const ROOT = path.resolve(__dirname, '..');
 const OTHER = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
-async function check() {
+async function check({ refinement = false } = {}) {
   const r = runtime();
   r.db.boards[0].canvas_json.nodes = ['Idea','Content'].map((type,i) => ({
     id: `adaptive-${i ? 'b' : 'a'}`, type, title: `Asset ${i + 1}`, content: 'Existing content. '.repeat(35),
@@ -23,6 +23,7 @@ async function check() {
   r.db.boards.push({ ...clone(r.db.boards[0]), id: OTHER, name: 'Other Board' });
   const s = server(r);
   const errors = [], writes = [], forbidden = [], requests = [];
+  let sessionEmail = EMAIL;
   const browser = await chromium.launch({ ...(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH }
     : fs.existsSync('/usr/bin/chromium') ? { executablePath: '/usr/bin/chromium' } : {}), args: ['--no-sandbox'] });
   try {
@@ -35,7 +36,7 @@ async function check() {
       requests.push({ path: url.pathname, method: req.method() });
       if (/\/api\/(?:generate|refine|campaigns|ai|providers)/.test(url.pathname)) forbidden.push(url.pathname);
       if (url.pathname.startsWith('/api/') && !['GET','HEAD'].includes(req.method()) && !/presence|activity/.test(url.pathname)) writes.push(url.pathname);
-      if (url.pathname === '/api/auth/session') return route.fulfill({ json: { user: { email: EMAIL, name: 'Board Owner' } } });
+      if (url.pathname === '/api/auth/session') return route.fulfill({ json: { user: { email: sessionEmail, name: 'Board Owner' } } });
       if (url.pathname === '/api/workspaces') {
         const catalog = r.catalog(); catalog.request_id = '0123456789abcdef01234567';
         catalog.workspaces = catalog.workspaces.map(w => ({ ...w, avatar_url: null, locale: null,
@@ -65,10 +66,46 @@ async function check() {
     const allCompact = async () => { await view(a,'compact'); await view(b,'compact'); };
     const pick = async card => { await card.locator('.type').click(); await page.mouse.move(1200,700); };
     const double = async card => { await card.locator('.type').dblclick(); await page.mouse.move(1200,700); };
+    if (refinement) {
+      assert.equal(await page.locator('.canvas-toolbar-row.primary #campaign-responsibilities-btn, .canvas-toolbar-row.primary #canvas-compact-view-btn').count(),0);
+      assert.deepEqual(await page.locator('.toolbar-row2-left > button').evaluateAll(es => es.map(e => e.id)),
+        ['filters-toggle-btn','utilities-toggle-btn','campaign-responsibilities-btn','canvas-compact-view-btn']);
+      assert.equal(await responsibilities.textContent(),'Tasks');
+      assert.equal(await toggle.textContent(),''); assert.equal(await toggle.locator('svg').count(),1);
+      await responsibilities.click();
+      const workspace = page.locator('#campaign-responsibilities');
+      await workspace.waitFor();
+      await page.waitForFunction(() => document.getElementById('campaign-responsibilities').getAttribute('aria-busy') === 'false');
+      assert(await workspace.getByRole('heading',{name:'Campaign responsibilities',exact:true}).isVisible());
+      await page.keyboard.press('Escape'); await workspace.waitFor({state:'detached'});
+      assert.equal(await page.evaluate(() => document.activeElement.id),'campaign-responsibilities-btn');
+      console.log('PASS R1 exact two-row ownership/order, Tasks opens existing responsibility workspace, icon-only SVG');
+    }
+    if (refinement) {
+      await page.evaluate(() => {
+        window.presentationStorageWrites = [];
+        const original = Storage.prototype.setItem;
+        Storage.prototype.setItem = function(key,value) { window.presentationStorageWrites.push(key); return original.call(this,key,value); };
+      });
+      const before = await page.evaluate(() => ({nodes:JSON.stringify(state.nodes),edges:JSON.stringify(state.edges),dirty:state.isDirty}));
+      const dbBefore = clone(r.db.boards), requestIndex = requests.length;
+      for (const mode of ['standard','detailed','compact']) {
+        await toggle.click(); await view(a,mode); await view(b,mode);
+        if (mode !== 'compact') {
+          await pick(a); await b.hover(); await view(a,mode); await view(b,mode);
+          await pick(b); await a.hover(); await view(a,mode); await view(b,mode);
+        }
+      }
+      assert.deepEqual(await page.evaluate(() => ({nodes:JSON.stringify(state.nodes),edges:JSON.stringify(state.edges),dirty:state.isDirty})),before);
+      assert.deepEqual(clone(r.db.boards),dbBefore);
+      assert.deepEqual(await page.evaluate(() => window.presentationStorageWrites),[]);
+      assert.deepEqual(requests.slice(requestIndex).filter(r => r.path.startsWith('/api/') && !/presence|activity/.test(r.path)),[],'Global presentation performs zero API requests');
+      console.log('PASS R1 first cycle all nodes, selection/hover authority, zero API/storage/data mutations');
+    }
     const original = await page.evaluate(() => JSON.stringify(state.nodes));
     const saved = await page.evaluate(() => ({ board: localStorage.getItem('campaignCanvasState'), density: localStorage.getItem('tendra.canvasDensity.v1') }));
     const checkpoint = requests.length;
-    assert.equal(await toggle.getAttribute('aria-pressed'),'false'); await allCompact();
+    assert.equal(await toggle.getAttribute('data-global-view'),'compact'); await allCompact();
     await a.hover(); await view(a,'standard'); await view(b,'compact'); await geometry();
     await page.mouse.move(1200,700); await allCompact();
     await a.focus(); await view(a,'standard'); await responsibilities.focus(); await allCompact();
@@ -77,15 +114,29 @@ async function check() {
     await pick(b); await view(a,'compact'); await view(b,'standard');
     await page.keyboard.press('Escape'); await allCompact();
     assert.equal(await page.evaluate(() => state.selectedPrimary),null);
-    await pick(a); await toggle.click(); assert.equal(await toggle.getAttribute('aria-pressed'),'true'); await allCompact();
-    await b.hover(); await allCompact(); await b.focus(); await allCompact();
-    await toggle.click(); await view(a,'standard'); await view(b,'compact');
-    await toggle.click(); await double(b); assert.equal(await toggle.getAttribute('aria-pressed'),'false'); await view(b,'detailed');
-    await page.keyboard.press('Escape'); await view(b,'standard');
+    // Only the obsolete forced-Compact/Auto expectations are replaced.
+    await pick(a);
+    for (let repeat = 0; repeat < 2; repeat++) {
+      for (const mode of ['standard','detailed','compact']) {
+        await toggle.click();
+        assert.equal(await toggle.getAttribute('data-global-view'),mode);
+        await view(a,mode); await view(b,mode);
+        if (mode !== 'compact') {
+          await pick(a); await b.hover(); await view(a,mode); await view(b,mode);
+          await pick(b); await a.focus(); await view(a,mode); await view(b,mode);
+          await double(a); await view(a,mode); await view(b,mode);
+        }
+      }
+    }
+    await a.hover(); await view(a,'standard'); await view(b,'compact');
+    await page.mouse.move(1200,700); await allCompact();
+    await pick(a); await view(a,'standard'); await double(a); await view(a,'detailed');
+    await pick(b); await view(a,'compact'); await view(b,'standard');
     await page.keyboard.press('Escape'); await allCompact();
     await page.locator('#canvas').click({ position: { x: 100, y: 650 } }); await allCompact();
+    if (refinement) { await toggle.click(); await toggle.click(); await view(a,'detailed'); await view(b,'detailed'); }
     await page.evaluate(async other => { await loadBoardFromUrlIfPresent(other); }, OTHER);
-    await allCompact(); assert.equal(await toggle.getAttribute('aria-pressed'),'false');
+    await allCompact(); assert.equal(await toggle.getAttribute('data-global-view'),'compact');
     await page.evaluate(async id => { await loadBoardFromUrlIfPresent(id); }, D);
     await allCompact(); assert.equal(await page.evaluate(() => state.selectedPrimary), null);
     await page.evaluate(() => setActiveView('list')); await page.evaluate(() => setActiveView('board')); await allCompact();
@@ -93,7 +144,9 @@ async function check() {
     // Details button, keyboard-only selection and independent modal Escape ownership.
     await a.focus(); await page.keyboard.press('Space'); await view(a,'standard');
     await a.getByRole('button', { name: 'Show details', exact: true }).click(); await view(a,'detailed');
-    await toggle.click(); await allCompact(); await toggle.click(); await view(a,'detailed');
+    await toggle.click(); await view(a,'standard'); await view(b,'standard');
+    await toggle.click(); await view(a,'detailed'); await view(b,'detailed');
+    await toggle.click(); await allCompact(); await double(a); await view(a,'detailed');
     await responsibilities.click(); assert(await page.locator('#campaign-responsibilities').isVisible());
     await page.keyboard.press('Escape'); await view(a,'detailed');
     await a.focus(); await page.keyboard.press('Escape'); await view(a,'standard');
@@ -127,14 +180,40 @@ async function check() {
         assert(await toggle.isVisible()); assert(await responsibilities.isVisible());
         assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1),true, `Page overflow ${language}/${theme}/${width}`);
         assert.equal(await page.locator('.canvas-toolbar').evaluate(e => e.scrollWidth <= e.clientWidth + 1),true, `Toolbar overflow ${language}/${theme}/${width}`);
-        assert.equal(await toggle.getAttribute('aria-label'),language === 'de' ? 'Kompakte Ansicht' : 'Compact view');
+        assert.equal(await toggle.getAttribute('aria-label'),language === 'de' ? 'Node-Ansicht: Kompakt. Zu Standard wechseln' : 'Node view: Compact. Switch to Standard');
+        if (refinement) {
+          assert.equal(await responsibilities.textContent(),language === 'de' ? 'Aufgaben' : 'Tasks');
+          const taskName = language === 'de' ? 'Kampagnen-Verantwortlichkeiten verwalten' : 'Manage campaign responsibilities';
+          assert.equal(await responsibilities.getAttribute('aria-label'),taskName);
+          assert.equal(await responsibilities.getAttribute('title'),taskName);
+          const box = await toggle.boundingBox(); assert.equal(box.width,44); assert.equal(box.height,44);
+          for (const [mode,en,de,next] of [
+            ['compact','Compact','Kompakt','Standard'], ['standard','Standard','Standard',language === 'de' ? 'Detailliert' : 'Detailed'],
+            ['detailed','Detailed','Detailliert',language === 'de' ? 'Kompakt' : 'Compact']]) {
+            const expected = language === 'de' ? `Node-Ansicht: ${de}. Zu ${next} wechseln` : `Node view: ${en}. Switch to ${next}`;
+            assert.equal(await toggle.getAttribute('aria-label'),expected);
+            assert.equal(await toggle.getAttribute('title'),expected);
+            await page.keyboard.press('Tab'); await toggle.focus();
+            assert(await toggle.evaluate(e => e.matches(':focus-visible')));
+            assert.notEqual(await toggle.evaluate(e => getComputedStyle(e).outlineStyle),'none');
+            await page.keyboard.press(mode === 'standard' ? 'Enter' : 'Space');
+            const newMode = {compact:'standard',standard:'detailed',detailed:'compact'}[mode];
+            await view(a,newMode); await view(b,newMode);
+            assert.equal(await page.locator('#canvas-view-status').textContent(),language === 'de' ? `Node-Ansicht: ${{compact:'Kompakt',standard:'Standard',detailed:'Detailliert'}[newMode]}` : `Node view: ${{compact:'Compact',standard:'Standard',detailed:'Detailed'}[newMode]}`);
+          }
+          assert.equal(await page.locator('#canvas').evaluate(e => { const r=e.getBoundingClientRect(); return r.left >= -1 && r.right <= innerWidth + 1 && ['hidden','auto','scroll','clip'].includes(getComputedStyle(e).overflowX); }),true,`Infinite Canvas stays inside viewport ${language}/${theme}/${width}`);
+          const controls = await page.locator('.toolbar-row2-left > button').evaluateAll(es => es.map(e => { const r=e.getBoundingClientRect(); return {left:r.left,right:r.right,top:r.top,bottom:r.bottom}; }));
+          const peers = await page.locator('.toolbar-row2-right').evaluate(e => [...e.children].filter(c => c.getClientRects().length).map(c => {const r=c.getBoundingClientRect(); return {left:r.left,right:r.right,top:r.top,bottom:r.bottom};}));
+          assert(controls.every(c => peers.every(p => c.right <= p.left || p.right <= c.left || c.bottom <= p.top || p.bottom <= c.top)),`Overlap ${language}/${theme}/${width}`);
+        }
         assert((await toggle.boundingBox()).height >= 44);
       }
     }
     await page.emulateMedia({ reducedMotion: 'reduce', forcedColors: 'active' });
     await page.setViewportSize({width:640,height:450}); // 1280x900 at 200% equivalent reflow.
-    await toggle.focus(); await page.keyboard.press('Space'); assert.equal(await toggle.getAttribute('aria-pressed'),'true');
-    await page.keyboard.press('Space');
+    await toggle.focus(); await page.keyboard.press('Space'); assert.equal(await toggle.getAttribute('data-global-view'),'standard');
+    await page.keyboard.press('Enter'); assert.equal(await toggle.getAttribute('data-global-view'),'detailed');
+    await page.keyboard.press('Space'); assert.equal(await toggle.getAttribute('data-global-view'),'compact');
     assert.equal(await page.locator('.canvas-toolbar').evaluate(e => e.scrollWidth <= e.clientWidth + 1),true);
     await page.emulateMedia({ reducedMotion: 'no-preference', forcedColors: 'none' });
     console.log('PASS 44 responsive language/theme cases, 200%-equivalent reflow, reduced motion, forced colors, 44px target');
@@ -144,6 +223,9 @@ async function check() {
     // Read-only readers have the same render-only hierarchy and Details access.
     await page.evaluate(() => { window.originalAdaptiveAccess = {...state.boardAccess}; applyBoardAccessFromServer({...state.boardAccess,canEdit:false},'adaptive-reader'); });
     await pick(a); await view(a,'standard'); await double(a); await view(a,'detailed');
+    if (refinement) {
+      for (const mode of ['standard','detailed','compact']) { await toggle.click(); await view(a,mode); await view(b,mode); }
+    }
     await page.evaluate(() => { applyBoardAccessFromServer(window.originalAdaptiveAccess,'adaptive-owner'); resetAdaptiveCanvasView(); });
     assert.deepEqual(writes,[]);
     // Drag retains its established data mutation; it cannot open Standard from a click.
@@ -180,7 +262,21 @@ async function check() {
     await touch.locator('#inspector-close-btn').tap();
     await touch.locator('#canvas').tap({position:{x:10,y:10}}); await view(ta,'compact'); await view(tb,'compact');
     assert.deepEqual(errors,[]);
+    if (refinement) {
+      await toggle.click(); await toggle.click(); await view(a,'detailed');
+      sessionEmail = 'other-account@example.test';
+      await page.evaluate(() => loadSessionUser());
+      assert.equal(await toggle.getAttribute('data-global-view'),'compact'); await view(a,'compact');
+      assert.equal(await page.evaluate(() => state.selectedPrimary),null);
+      await toggle.click(); await view(a,'standard');
+      await page.locator('#auth-signout-btn').click();
+      await page.waitForFunction(() => !state.user);
+      assert.equal(await toggle.getAttribute('data-global-view'),'compact'); await view(a,'compact');
+      assert.deepEqual(errors,[]);
+      console.log('PASS R1 reader global cycle, account change and sign-out clear UI presentation');
+    }
     console.log('PASS touch selection, accessible Details and blank Canvas tap, zero touch console errors');
   } finally { await browser.close(); }
 }
-check().catch(error => { console.error(error); process.exitCode = 1; });
+module.exports = { check };
+if (require.main === module) check().catch(error => { console.error(error); process.exitCode = 1; });

@@ -2,7 +2,7 @@
 .campaign-responsibilities::backdrop { background: rgb(0 0 0 / 45%); }
 .canvas-toolbar #campaign-responsibilities-btn { box-sizing: border-box; min-width: 44px; min-height: 44px; max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
 .canvas-toolbar #campaign-responsibilities-btn[hidden] { display: none; }
-.canvas-toolbar .toolbar-group-left:has(#campaign-responsibilities-btn:not([hidden])) { flex-wrap: wrap; }
+.canvas-toolbar:has(#campaign-responsibilities-btn:not([hidden])) .toolbar-group-left { flex-wrap: wrap; }
 .campaign-responsibilities *, .campaign-responsibilities *::before { box-sizing: border-box; min-width: 0; }
 .campaign-responsibilities h2, .campaign-responsibilities h3, .campaign-responsibilities p { margin: 0 0 12px; overflow-wrap: anywhere; }
 .responsibility-header { display: flex; align-items: start; justify-content: space-between; gap: 12px; }

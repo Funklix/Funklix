@@ -216,8 +216,8 @@ async function browserChecks() {
         language.setUiLanguage(lang); state.uiLanguage = lang;
         document.documentElement.dataset.theme = theme; translateInterface(document.querySelector('.canvas-toolbar'));
       }, { lang, theme });
-      assert.equal(await entry.textContent(), lang === 'de' ? 'Verantwortlichkeiten' : 'Responsibilities');
-      assert.equal(await entry.getAttribute('title'), lang === 'de' ? 'Verantwortlichkeiten' : 'Responsibilities');
+      assert.equal(await entry.textContent(), lang === 'de' ? 'Aufgaben' : 'Tasks');
+      assert.equal(await entry.getAttribute('title'), lang === 'de' ? 'Kampagnen-Verantwortlichkeiten verwalten' : 'Manage campaign responsibilities');
       assert(await toolbar.evaluate(n => n.scrollWidth <= n.clientWidth + 1), `Toolbar overflow ${context}`);
       await entry.click({ trial: true });
       await entry.evaluate(n => Promise.all(n.getAnimations().map(animation => animation.finished.catch(() => {}))));
