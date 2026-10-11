@@ -1050,13 +1050,15 @@ function openCampaignResponsibilities() {
 }
 
 function initializeResponsibilityToolbar() {
-  const anchor = document.getElementById('add-node-btn');
+  const anchor = document.getElementById('utilities-toggle-btn');
   if (!anchor || document.getElementById('campaign-responsibilities-btn')) return;
   const button = document.createElement('button');
   button.id = 'campaign-responsibilities-btn'; button.type = 'button';
   button.className = 'fk-btn fk-btn-secondary'; button.hidden = true;
-  button.dataset.i18n = 'Responsibilities'; button.dataset.i18nTitle = 'Responsibilities';
-  button.textContent = uiText('Responsibilities'); button.title = uiText('Responsibilities');
+  button.dataset.i18n = 'Tasks'; button.dataset.i18nTitle = 'Manage campaign responsibilities';
+  button.dataset.i18nAriaLabel = 'Manage campaign responsibilities';
+  button.textContent = uiText('Tasks'); button.title = uiText('Manage campaign responsibilities');
+  button.setAttribute('aria-label', button.title);
   button.addEventListener('click', openCampaignResponsibilities);
   anchor.after(button);
 }
@@ -4877,6 +4879,7 @@ async function loadSessionUser() {
   renderAuthState();
   const currentUserEmail = typeof state.user?.email === "string" ? state.user.email.trim().toLowerCase() : "";
   if (previousUserEmail !== currentUserEmail) {
+    if (typeof resetAdaptiveCanvasView === "function") resetAdaptiveCanvasView();
     clearWorkspaceCatalog();
     state.boardSharing.generation += 1;
     state.boardSharing.lifecycle += 1;
@@ -8977,25 +8980,44 @@ const adaptiveNodeResize = new ResizeObserver(scheduleAdaptiveGeometry);
 function synchronizeAdaptiveCanvasToolbar() {
   const button = document.getElementById('canvas-compact-view-btn');
   if (!button) return;
-  const forced = adaptiveCanvasView.snapshot().forced;
+  const mode = adaptiveCanvasView.snapshot().mode;
+  const label = { compact: 'Node view: Compact. Switch to Standard', standard: 'Node view: Standard. Switch to Detailed', detailed: 'Node view: Detailed. Switch to Compact' }[mode];
   button.hidden = !state.currentBoardId || state.boardAccess?.canView !== true || state.isBoardLoading;
-  button.setAttribute('aria-pressed', String(forced));
-  button.setAttribute('aria-label', uiText('Compact view'));
-  button.querySelector('span:last-child').textContent = uiText('Compact view');
-  button.title = uiText(forced ? 'Return to automatic view' : 'Keep all nodes compact');
+  button.dataset.globalView = mode;
+  button.dataset.i18nAriaLabel = button.dataset.i18nTitle = label;
+  button.setAttribute('aria-label', uiText(label));
+  button.title = uiText(label);
+}
+function setGlobalCanvasView(mode) {
+  adaptiveCanvasView.setMode(mode);
+  if (mode === 'compact') {
+    state.selectedIds.clear(); state.selectedPrimary = null;
+    adaptiveSuppressedSelection = null;
+    updateSelectionClasses(); fillInspector(null);
+  }
+  synchronizeAdaptiveCanvasView();
+  const status = document.getElementById('canvas-view-status');
+  if (status) status.textContent = uiText({ compact: 'Node view: Compact', standard: 'Node view: Standard', detailed: 'Node view: Detailed' }[mode]);
 }
 function initializeAdaptiveCanvasToolbar() {
   const anchor = document.getElementById('campaign-responsibilities-btn');
   if (!anchor || document.getElementById('canvas-compact-view-btn')) return;
   const button = document.createElement('button');
   button.id = 'canvas-compact-view-btn'; button.type = 'button';
-  button.className = 'fk-btn fk-btn-secondary';
-  button.innerHTML = '<span aria-hidden="true">▤</span><span data-i18n="Compact view"></span>';
+  button.className = 'utility-muted fk-btn fk-btn-secondary fk-btn-icon';
+  // Reuse the established Canvas/view SVG from the compact context bar.
+  button.append(document.querySelector('.compact-context-icon svg').cloneNode(true));
+  button.firstChild.setAttribute('aria-hidden', 'true');
   button.addEventListener('click', () => {
-    adaptiveCanvasView.compact(!adaptiveCanvasView.snapshot().forced);
-    synchronizeAdaptiveCanvasView();
+    const next = { compact: 'standard', standard: 'detailed', detailed: 'compact' }[adaptiveCanvasView.snapshot().mode];
+    setGlobalCanvasView(next);
   });
   anchor.after(button);
+  const status = document.createElement('span');
+  status.id = 'canvas-view-status'; status.className = 'sr-only';
+  status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
+  status.setAttribute('aria-atomic', 'true');
+  button.after(status);
   synchronizeAdaptiveCanvasToolbar();
   // The existing mobile Inspector covers the card after selection; retain its editing
   // behavior and offer the same explicit render-only Details action in that surface.
@@ -9011,6 +9033,8 @@ function initializeAdaptiveCanvasToolbar() {
 }
 function resetAdaptiveCanvasView() {
   adaptiveCanvasView.reset();
+  const status = document.getElementById('canvas-view-status');
+  if (status) status.textContent = '';
   el.canvas.removeAttribute("data-tendra-canvas-density");
   adaptivePointerBusy = false; adaptiveIgnoreClick = adaptiveSuppressedSelection = null;
   state.selectedIds.clear(); state.selectedPrimary = null;
@@ -18592,6 +18616,7 @@ el.authSignoutButton?.addEventListener("click", async () => {
   state.documentSourceOperationByTileId.clear();
   state.documentSourceStateByTileId.clear();
   state.user = null;
+  resetAdaptiveCanvasView();
   clearWorkspaceCatalog();
   state.boardsLibraryRequest.controller?.abort();
   state.boardsLibraryRequest = { scope: "all", status: "idle", generation: state.boardsLibraryRequest.generation + 1, identity: "", controller: null };
@@ -19044,10 +19069,10 @@ el.propagateDescendantsButton.addEventListener("click", () => {
 });
 // Hidden legacy DOM hooks delegate to the same local toolbar authority.
 el.compactAllButton?.addEventListener("click", () => {
-  adaptiveCanvasView.compact(true); synchronizeAdaptiveCanvasView();
+  setGlobalCanvasView('compact');
 });
 el.expandAllButton?.addEventListener("click", () => {
-  adaptiveCanvasView.compact(false); synchronizeAdaptiveCanvasView();
+  setGlobalCanvasView('standard');
 });
 el.nodeSearchInput?.addEventListener("input", (event) => {
   state.nodeSearchQuery = event.target.value || "";

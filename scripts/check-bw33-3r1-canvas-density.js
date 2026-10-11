@@ -104,7 +104,9 @@ assert(css.includes('#canvas[data-tendra-canvas-density="compact"] #zoom-layer >
 assert(!css.includes('body[data-tendra-canvas-density') && !css.includes('html[data-tendra-canvas-density'));
 // BW-36.16 replaces the obsolete global radio menu with one accessible toolbar switch.
 // Keep the historical activation, renderer isolation, storage and failure-safety checks above.
-assert(functionSource(app, "synchronizeAdaptiveCanvasToolbar").includes("'aria-pressed'"));
+const toolbarState = functionSource(app, "synchronizeAdaptiveCanvasToolbar");
+assert(toolbarState.includes("'aria-label'"));
+for (const label of ['Node view: Compact. Switch to Standard', 'Node view: Standard. Switch to Detailed', 'Node view: Detailed. Switch to Compact']) assert(toolbarState.includes(label));
 assert(!functionSource(app, "buildUtilitiesPopoverHtml").includes("data-canvas-density-choice"));
 assert(!functionSource(app, "buildUtilitiesPopoverHtml").includes("compact-all"));
 
