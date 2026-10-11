@@ -139,9 +139,11 @@
     "check:bw36.15r1": "node scripts/check-bw36-15r1-responsibility-workspace-continuity.js",
     "check:bw36.16r1": "node scripts/check-bw36-16r1-toolbar-and-global-view-cycle.js",
     "check:bw36.16": "node scripts/check-bw36-16-adaptive-canvas-view-hierarchy.js",
-    "check:bw36.17": "node scripts/check-bw36-17-governed-brand-learnings.js"
+    "check:bw36.17": "node scripts/check-bw36-17-governed-brand-learnings.js",
+    "check:bw36.17r1": "node scripts/check-bw36-17r1-learning-provenance-schema.js"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "0.3.15",
     "playwright-core": "^1.56.1"
   }
 }
