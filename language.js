@@ -12,6 +12,8 @@
   const STORAGE_KEY = "funklix.languagePreferences.v1";
   const LANGUAGE_NAMES = Object.freeze({ en: "English", de: "German", es: "Spanish" });
   const german = {
+    "Brand Learnings": "Marken-Learnings",
+    "Learnings are temporarily unavailable.": "Learnings sind vorübergehend nicht verfügbar.",
     "Saved": "Gespeichert", "Assign": "Zuweisen", "Admin": "Administration", "Email": "E-Mail",
     "Campaign responsibilities": "Kampagnen-Verantwortlichkeiten",
     "Responsibilities": "Verantwortlichkeiten",

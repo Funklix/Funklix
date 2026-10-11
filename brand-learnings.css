@@ -1,0 +1,17 @@
+.brand-learnings,.brand-learning-dialog{min-width:0;overflow-wrap:anywhere;color:var(--fk-color-text-primary);}
+.learning-overview,.learning-actions{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0;}
+.learning-overview span{padding:8px 12px;border:1px solid var(--fk-color-border);border-radius:8px;}
+.learning-card{padding:20px;margin:16px 0;border:1px solid var(--fk-color-border);border-radius:12px;background:var(--fk-color-surface-elevated);}
+.learning-card h4{white-space:normal;margin-top:0;}
+.learning-card details{padding:8px 0;}.learning-card summary{cursor:pointer;min-height:44px;}
+.learning-rejected,.learning-archived{border-style:dashed;}
+.brand-learnings button,.brand-learning-dialog button{min-height:44px;max-width:100%;white-space:normal;}
+.brand-learnings button:focus-visible,.brand-learnings summary:focus-visible,.brand-learning-dialog :focus-visible{outline:2px solid var(--fk-color-accent,#7586ff);outline-offset:3px;}
+.brand-learning-dialog{box-sizing:border-box;width:min(600px,calc(100vw - 32px));max-height:calc(100dvh - 32px);overflow:auto;padding:24px;border:1px solid var(--fk-color-border);border-radius:16px;background:var(--fk-color-surface-elevated);}
+.brand-learning-dialog::backdrop{background:rgb(0 0 0 / .45);}
+.brand-learning-dialog label{display:block;margin:16px 0;}.brand-learning-dialog label span{display:block;margin-bottom:8px;}
+.brand-learning-dialog textarea{box-sizing:border-box;width:100%;min-width:0;resize:vertical;padding:12px;color:inherit;background:var(--fk-color-surface);border:1px solid var(--fk-color-border);border-radius:8px;font:inherit;}
+.brand-learning-dialog blockquote{margin:16px 0;padding:16px;border-left:3px solid var(--fk-color-border);}
+.learning-discard{border-top:1px solid var(--fk-color-border);margin-top:16px;}
+@media(max-width:480px){.brand-learning-dialog{padding:16px;}.learning-actions button{flex:1 1 140px;}.learning-card{padding:16px;}}
+@media(forced-colors:active){.learning-card,.brand-learning-dialog{border:1px solid CanvasText;}.brand-learnings :focus-visible,.brand-learning-dialog :focus-visible{outline:2px solid Highlight;}}

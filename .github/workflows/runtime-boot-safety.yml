@@ -28,6 +28,12 @@ jobs:
           node --check adaptive-canvas-view.js
           node --check scripts/check-bw36-16-adaptive-canvas-view-hierarchy.js
           node --check scripts/check-bw36-16r1-toolbar-and-global-view-cycle.js
+          node --check brand-learnings.js
+          node --check brand-profile-setup.js
+          node --check api/_brand-learnings.js
+          node --check api/brands/[id]/learnings.js
+          node --check scripts/check-bw36-17-governed-brand-learnings.js
+          node --check scripts/fixtures/bw36-17-local-runtime.js
           node --check language.js
           node --check api/campaigns.js
           node --check api/_campaign-creation.js
@@ -357,6 +363,8 @@ jobs:
         run: npm run check:bw36.16
       - name: Check BW-36.16R1 toolbar and global view cycle in Chromium
         run: npm run check:bw36.16r1
+      - name: Check BW-36.17 governed Brand Learnings in Chromium
+        run: npm run check:bw36.17
       - name: Check dynamic AI Insights translations
         run: node scripts/check-bw25-1-dynamic-insights-translations.js
       - name: Check scoped German interface localization
