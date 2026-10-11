@@ -138,7 +138,8 @@
     "check:bw36.15": "node scripts/check-bw36-15-campaign-team-responsibilities.js",
     "check:bw36.15r1": "node scripts/check-bw36-15r1-responsibility-workspace-continuity.js",
     "check:bw36.16r1": "node scripts/check-bw36-16r1-toolbar-and-global-view-cycle.js",
-    "check:bw36.16": "node scripts/check-bw36-16-adaptive-canvas-view-hierarchy.js"
+    "check:bw36.16": "node scripts/check-bw36-16-adaptive-canvas-view-hierarchy.js",
+    "check:bw36.17": "node scripts/check-bw36-17-governed-brand-learnings.js"
   },
   "devDependencies": {
     "playwright-core": "^1.56.1"

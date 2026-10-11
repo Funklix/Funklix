@@ -7,7 +7,7 @@
   'use strict';
   const clone = value => JSON.parse(JSON.stringify(value));
   const object = value => !!value && typeof value === 'object' && !Array.isArray(value);
-  const SECTIONS = ['Overview', 'Brand DNA', 'Audience', 'Voice & Messaging', 'Offers & Proof', 'Brand Assets', 'Brand Avatar', 'Team and permissions', 'Campaign Sync', 'Review'];
+  const SECTIONS = ['Overview', 'Brand DNA', 'Audience', 'Voice & Messaging', 'Offers & Proof', 'Brand Assets', 'Brand Avatar', 'Brand Learnings', 'Team and permissions', 'Campaign Sync', 'Review'];
   const FIELDS = Object.freeze({
     brandAssets: ['Brand Basics', 'Brand assets', 'assets'],
     brandCore: ['Foundation', 'Brand description', 'text'],
@@ -55,7 +55,8 @@
       [logo ? 'persisted logo' : null, assets.colors, assets.typography],
       [acceptedAvatar(brand)?.imageUrl]
     ];
-    return SECTIONS.map((section, index) => {
+    // Learnings has its own review counts; it does not change Brand setup readiness.
+    return SECTIONS.filter(section => section !== 'Brand Learnings').map((section, index) => {
       const required = groups[index];
       const count = required?.filter(confirmedValue).length || 0;
       // Unaccepted DNA/Avatar information is partial, never complete.
@@ -311,7 +312,7 @@
             state.assetConflicts = conflict;
           } else if (emptyValue(state.brand.brand_core[key]) && emptyValue(state.core[key])) state.autoKeys.push(key);
         }
-        state.analysis = Object.values(suggestions).some(meaningful) ? 'Review website suggestions' : 'No usable information found'; state.section = 9;
+        state.analysis = Object.values(suggestions).some(meaningful) ? 'Review website suggestions' : 'No usable information found'; state.section = SECTIONS.indexOf('Review');
         if (state.autoKeys.length) {
           const keys = state.autoKeys.slice();
           state.autoValues = Object.fromEntries(keys.map(key => [key, clone(state.proposals[key])]));
@@ -531,11 +532,12 @@
   function mount(container, options) {
     const session = createSession(options), s = session.state, doc = container.ownerDocument;
     let fileInput = null;
+    const learnings = root.FunklixBrandLearnings?.create({ brand: s.brand, document: doc, language: options.language, fetchImpl: options.fetchImpl, current: session.current });
     const t = key => root.FunklixLanguage.t(key, options.language());
     function node(tag, text, parent) { const n = doc.createElement(tag); if (text) n.textContent = text; if (parent) parent.append(n); return n; }
     function button(key, parent, action, id = key) {
       const b = node('button', t(key), parent); b.type = 'button'; b.dataset.profileKey = id;
-      if (key === 'Save Brand Profile and continue' || (key === 'Confirm and save Brand Profile' && s.section !== 9)) b.className = 'fk-btn fk-btn-primary';
+      if (key === 'Save Brand Profile and continue' || (key === 'Confirm and save Brand Profile' && SECTIONS[s.section] !== 'Review')) b.className = 'fk-btn fk-btn-primary';
       b.disabled = !!s.pending || !!s.returning; b.addEventListener('click', action); return b;
     }
     function textField(label, value, parent, update, multiline = false, id = label) {
@@ -641,10 +643,14 @@
       node('p', `${states.filter(r => r.status === 'complete').length}/7 ${t('Complete')}`, identity);
       if (s.readOnly) node('p', t('Your access is read-only'), container);
       const nav = node('nav', '', container); nav.setAttribute('aria-label', t('Brand Profile sections'));
-      SECTIONS.forEach((key, index) => { const r = states[index]; const b = button(key, nav, () => { s.section = index; render(); container.querySelector('h3[data-section-title]')?.focus(); }); b.dataset.readiness = r.status; b.title = `${t(key)}: ${t(r.label)}`; b.setAttribute('aria-label', t(key)); const status = node('span', t(r.label), nav); status.id = `brand-section-status-${index}`; status.hidden = true; b.setAttribute('aria-describedby', status.id); b.dataset.statusIcon = { complete: '✓', partial: '◐', empty: '○', neutral: '–' }[r.status]; b.setAttribute('aria-current', s.section === index ? 'step' : 'false'); });
+      SECTIONS.forEach((key, index) => { const r = states.find(item => item.section === key) || { status: 'neutral', label: STATUS.neutral }; const b = button(key, nav, () => { s.section = index; render(); container.querySelector('h3[data-section-title]')?.focus(); }); if (key === 'Brand Learnings') { b.textContent = 'Learnings'; b.setAttribute('aria-label', 'Learnings'); } b.dataset.readiness = r.status; b.title = `${t(key)}: ${t(r.label)}`; b.setAttribute('aria-label', t(key)); const status = node('span', t(r.label), nav); status.id = `brand-section-status-${index}`; status.hidden = true; b.setAttribute('aria-describedby', status.id); b.dataset.statusIcon = { complete: '✓', partial: '◐', empty: '○', neutral: '–' }[r.status]; b.setAttribute('aria-current', s.section === index ? 'step' : 'false'); });
       const section = node('section', '', container); section.className = 'profile-section';
-      const title = node('h3', t(SECTIONS[s.section]), section); title.tabIndex = -1; title.dataset.sectionTitle = 'true';
-      if (s.section === 0) {
+      const title = node('h3', SECTIONS[s.section] === 'Brand Learnings' ? 'Learnings' : t(SECTIONS[s.section]), section); title.tabIndex = -1; title.dataset.sectionTitle = 'true';
+      if (SECTIONS[s.section] === 'Brand Learnings') {
+        const library = node('div', '', section);
+        if (learnings) learnings.attach(library);
+        else node('p', t('Learnings are temporarily unavailable.'), library);
+      } else if (s.section === 0) {
         const cards = node('div', '', section); cards.className = 'profile-identity-cards';
         const logoCard = node('section', '', cards); node('h4', t('Brand Logo'), logoCard);
         const official = node('div', '', logoCard); official.className = 'profile-official-logo'; root.FunklixBrandLogo.render(official, s.brand);
@@ -658,7 +664,7 @@
         textField('Website', s.website, section, value => { s.website = value; s.proposals = {}; s.candidate = null; s.analysis = 'Not analyzed'; });
         if (!s.readOnly) button('Analyze website', section, () => { void session.analyze(); });
         fields('Foundation', section);
-      } else if (s.section === 9) {
+      } else if (SECTIONS[s.section] === 'Review') {
         const list = node('ul', '', section);
         for (const key of ['Brand Basics', 'Foundation', 'Audience', 'Voice & Messaging', 'Offers & Proof']) {
           const complete = key === 'Brand Basics' ? !!s.name.trim() && !!s.website.trim()
@@ -724,9 +730,9 @@
           button(accepted?.imageUrl ? 'Regenerate Avatar' : 'Generate Avatar', section, () => { void session.generateAvatar(); });
           if (s.avatarDraft) button('Save Avatar', section, () => { void session.acceptAvatar(); });
         }
-      } else if (s.section === 7) { options.renderTeam?.(section, s.brand);
+      } else if (SECTIONS[s.section] === 'Team and permissions') { options.renderTeam?.(section, s.brand);
         if (!s.brand.access.canManageBrandMembers) node('p', t('Your access is read-only'), section);
-      } else if (s.section === 8) {
+      } else if (SECTIONS[s.section] === 'Campaign Sync') {
         node('p', t('Campaign snapshots change only after an explicit campaign update.'), section);
         if (options.hasSnapshot?.()) button('Campaign Brand Snapshot', section, () => options.onSnapshot());
       } else fields(SECTIONS[s.section], section);
@@ -738,7 +744,7 @@
         button('Confirm and save Brand Profile', actions, () => { void session.save(); });
         button(s.syncRequired || s.reconciliationWarning ? 'Reload saved Brand' : 'Reload latest Brand', actions, () => { void session.reload(); });
       }
-      if (options.hasProject() || s.section === 9) button(options.hasProject() ? 'Save Brand Profile and continue' : 'Back', actions, async () => {
+      if (options.hasProject() || SECTIONS[s.section] === 'Review') button(options.hasProject() ? 'Save Brand Profile and continue' : 'Back', actions, async () => {
         if (options.hasProject() && !s.readOnly) {
           if (!await session.save()) return;
           // Optional unuploaded files/suggestions stay in the account's memory cache.
@@ -756,7 +762,7 @@
       }
     }
     session.subscribe(render); render();
-    return { ...session, render, invalidate() { session.invalidate(); options.onBusy?.(false); } };
+    return { ...session, render, invalidate() { learnings?.invalidate(); session.invalidate(); options.onBusy?.(false); } };
   }
   function leaveDialog({ document: doc = root.document, language, save, proceed }) {
     const existing = doc.getElementById('brand-leave-dialog');
