@@ -32,6 +32,7 @@ jobs:
           node --check brand-profile-setup.js
           node --check api/_brand-learnings.js
           node --check api/brands/[id]/learnings.js
+          node --check scripts/check-bw36-17r2-learning-provenance-recovery.js
           node --check scripts/check-bw36-17r1-learning-provenance-schema.js
           node --check scripts/check-bw36-17-governed-brand-learnings.js
           node --check scripts/fixtures/bw36-17-local-runtime.js
@@ -368,6 +369,8 @@ jobs:
         run: npm run check:bw36.17
       - name: Check BW-36.17R1 Learning provenance schema in disposable PostgreSQL
         run: npm run check:bw36.17r1
+      - name: Check BW-36.17R2 provenance recovery in disposable PostgreSQL
+        run: npm run check:bw36.17r2
       - name: Check dynamic AI Insights translations
         run: node scripts/check-bw25-1-dynamic-insights-translations.js
       - name: Check scoped German interface localization

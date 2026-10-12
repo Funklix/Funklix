@@ -162,7 +162,7 @@ async function invoke(options = {}, request = {}) {
       const changed = require('child_process').execFileSync('git', ['status', '--short', '--untracked-files=all'], { cwd: root, encoding: 'utf8' });
       // Later R3 commands and BW-36.17R1 provenance repair are additive; historical migrations stay unchanged.
       const unexpected = changed.split('\n').filter(Boolean).filter((line) => /migrations\//.test(line)
-        && !line.endsWith('migrations/20261001_bw36_12_brand_logo.sql') && !line.endsWith('migrations/20261006_bw36_13r3_project_commands.sql') && !line.endsWith('migrations/20261011_bw36_17r1_learning_provenance_schema.sql'));
+        && !line.endsWith('migrations/20261001_bw36_12_brand_logo.sql') && !line.endsWith('migrations/20261006_bw36_13r3_project_commands.sql') && !line.endsWith('migrations/20261011_bw36_17r1_learning_provenance_schema.sql') && !line.endsWith('migrations/20261012_bw36_17r2_learning_provenance_recovery.sql'));
       assert.deepEqual(unexpected, []);
     }
   });
