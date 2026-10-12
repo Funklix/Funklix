@@ -121,6 +121,51 @@ async function main() {
       assert(pg.notices.includes('bw36_17r2_already_ready'));
     } finally { await pg.close(); }
   });
+  // Missing + duplicate constraints keep the old aggregate sum/total unchanged.
+  // Exercise every expected relationship in both supported input states.
+  const relationships = [
+    ['brand_learnings', 'brand_learnings_brand_id_fkey', 'brand_id', 'brands(id) ON DELETE CASCADE'],
+    ['brand_learnings', 'brand_learnings_proposed_by_identity_id_fkey', 'proposed_by_identity_id', 'app_identities(id) ON DELETE RESTRICT'],
+    ['brand_learnings', 'brand_learnings_reviewed_by_identity_id_fkey', 'reviewed_by_identity_id', 'app_identities(id) ON DELETE RESTRICT'],
+    ['brand_learnings', 'brand_learnings_brand_id_supersedes_learning_id_fkey', 'brand_id,supersedes_learning_id', 'brand_learnings(brand_id,id)'],
+    ['brand_learning_events', 'brand_learning_events_brand_id_fkey', 'brand_id', 'brands(id) ON DELETE CASCADE'],
+    ['brand_learning_events', 'brand_learning_events_actor_identity_id_fkey', 'actor_identity_id', 'app_identities(id) ON DELETE RESTRICT'],
+    ['brand_learning_events', 'brand_learning_events_brand_id_learning_id_fkey', 'brand_id,learning_id', 'brand_learnings(brand_id,id) ON DELETE CASCADE']
+  ];
+  // Use the production relationship query to expose why sum=7 was insufficient:
+  // the cardinalities are 0,2,1,1,1,1,1, although the total remains seven.
+  const relationshipQuery = verification.slice(verification.indexOf('(SELECT bool_and(matches.n=1)'), verification.indexOf(' AS exact_ownership_relationships,'));
+  const aggregateWitness = 'SELECT ' + relationshipQuery.replace('bool_and(matches.n=1)', 'sum(matches.n)=7').replace('count(*)=7 FROM pg_constraint', 'count(*)=EXPECTED_TOTAL FROM pg_constraint') + ' AS old_aggregate_accepts';
+  const conflict = (missing, duplicate) => `ALTER TABLE ${missing[0]} DROP CONSTRAINT ${missing[1]}; ALTER TABLE ${duplicate[0]} ADD CONSTRAINT adversarial_duplicate FOREIGN KEY(${duplicate[2]}) REFERENCES ${duplicate[3]};`;
+  for (const completed of [false, true]) for (const missing of relationships) {
+    const duplicate = relationships[missing[2] === 'brand_id' ? (missing[0] === 'brand_learnings' ? 4 : 0) : (missing[2] === 'proposed_by_identity_id' ? 2 : 1)];
+    await test(`State ${completed ? 'B' : 'A'} rejects missing ${missing[1]} compensated by duplicate ${duplicate[1]}`, async () => {
+      const pg = await setup();
+      try {
+        const learning = await insert(pg); await event(pg, learning);
+        if (completed) await apply(pg, r1);
+        await pg.exec(conflict(missing, duplicate));
+        assert.equal((await pg.query(aggregateWitness.replace('EXPECTED_TOTAL', completed ? '7' : '8'))).rows[0].old_aggregate_accepts, true);
+        const current = (await pg.query(verification)).rows[0];
+        assert.equal(current.exact_ownership_relationships, false);
+        assert.equal(current.overall_readiness, 'not_ready');
+        const schema = await catalog(pg), before = await rows(pg);
+        await assert.rejects(() => apply(pg), /bw36_17r2_partial_or_conflicting_schema/);
+        assert.deepEqual(await catalog(pg), schema); assert.deepEqual(await rows(pg), before);
+      } finally { await pg.close(); }
+    });
+  }
+  await test('post-DDL missing-plus-duplicate FK drift fails final validation and rolls back schema/rows', async () => {
+    const pg = await setup();
+    try {
+      const learning = await insert(pg); await event(pg, learning);
+      const schema = await catalog(pg), before = await rows(pg);
+      const tampered = repair.replace('  -- Reinspect the exact final contract', conflict(relationships[2], relationships[1]) + '\n  -- Reinspect the exact final contract');
+      await assert.rejects(() => apply(pg, tampered), /bw36_17r2_partial_or_conflicting_schema/);
+      assert.deepEqual(await catalog(pg), schema); assert.deepEqual(await rows(pg), before);
+      await apply(pg); await readiness(pg);
+    } finally { await pg.close(); }
+  });
   const oldEvent = `ALTER TABLE brand_learning_events DROP CONSTRAINT brand_learning_events_snapshot_bounded;
     ALTER TABLE brand_learning_events ADD CHECK (${original.split('snapshot jsonb NOT NULL CHECK (')[1].split('),\n  created_at')[0]});`;
   const cases = [

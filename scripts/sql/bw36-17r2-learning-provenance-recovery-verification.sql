@@ -17,7 +17,7 @@ WITH fingerprints AS (
       WHERE c.conrelid IN ('public.brand_learnings'::regclass,'public.brand_learning_events'::regclass)
       AND c.contype='f' AND c.confrelid='public.brands'::regclass AND c.confdeltype='c' AND c.convalidated
       AND array_length(c.conkey,1)=1 AND a.attname='brand_id') AS brand_ownership_cascade,
-    (SELECT count(*)=7 FROM (VALUES
+    (SELECT bool_and(matches.n=1) FROM (VALUES
       ('public.brand_learnings',ARRAY['brand_id'],'public.brands',ARRAY['id'],'c'),
       ('public.brand_learnings',ARRAY['proposed_by_identity_id'],'public.app_identities',ARRAY['id'],'r'),
       ('public.brand_learnings',ARRAY['reviewed_by_identity_id'],'public.app_identities',ARRAY['id'],'r'),
@@ -26,10 +26,11 @@ WITH fingerprints AS (
       ('public.brand_learning_events',ARRAY['actor_identity_id'],'public.app_identities',ARRAY['id'],'r'),
       ('public.brand_learning_events',ARRAY['brand_id','learning_id'],'public.brand_learnings',ARRAY['brand_id','id'],'c')
       ) expected(rel,cols,target,target_cols,del)
-      JOIN pg_constraint c ON c.conrelid=to_regclass(expected.rel) AND c.contype='f' AND c.confrelid=to_regclass(expected.target)
-      WHERE ARRAY(SELECT a.attname::text FROM unnest(c.conkey) WITH ORDINALITY k(num,ord) JOIN pg_attribute a ON a.attrelid=c.conrelid AND a.attnum=k.num ORDER BY k.ord)=expected.cols
+      CROSS JOIN LATERAL (SELECT count(*) AS n FROM pg_constraint c
+      WHERE c.conrelid=to_regclass(expected.rel) AND c.contype='f' AND c.confrelid=to_regclass(expected.target)
+      AND ARRAY(SELECT a.attname::text FROM unnest(c.conkey) WITH ORDINALITY k(num,ord) JOIN pg_attribute a ON a.attrelid=c.conrelid AND a.attnum=k.num ORDER BY k.ord)=expected.cols
       AND ARRAY(SELECT a.attname::text FROM unnest(c.confkey) WITH ORDINALITY k(num,ord) JOIN pg_attribute a ON a.attrelid=c.confrelid AND a.attnum=k.num ORDER BY k.ord)=expected.target_cols
-      AND c.confdeltype::text=expected.del AND c.confupdtype='a' AND c.confmatchtype='s' AND c.convalidated AND NOT c.condeferrable AND NOT c.condeferred)
+      AND c.confdeltype::text=expected.del AND c.confupdtype='a' AND c.confmatchtype='s' AND c.convalidated AND NOT c.condeferrable AND NOT c.condeferred) matches)
       AND (SELECT count(*)=7 FROM pg_constraint WHERE conrelid IN ('public.brand_learnings'::regclass,'public.brand_learning_events'::regclass) AND contype='f') AS exact_ownership_relationships,
     (SELECT count(*)=3 FROM pg_attribute WHERE attrelid='public.brand_learnings'::regclass AND attname IN
       ('source_board_name_snapshot','source_node_title_snapshot','source_node_type_snapshot') AND atttypid='text'::regtype AND NOT attnotnull AND NOT attisdropped AND NOT atthasdef AND attgenerated='' AND attidentity='') AS nullable_snapshot_columns,
