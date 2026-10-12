@@ -2744,6 +2744,7 @@ function clearLocalEditingPresence({ notifyDelayMs = 250 } = {}) {
 
 function editingInfoFromTarget(target) {
   if (!target || !target.closest) return null;
+  if (target.closest('#propose-brand-learning-btn, [data-canvas-learning-proposal]')) return null;
   if (target.closest('.postit')) {
     const nodeEl = target.closest('.node[data-id]');
     return nodeEl?.dataset?.id ? { nodeId: nodeEl.dataset.id, field: 'postit' } : null;
@@ -3324,6 +3325,7 @@ function renderGuidedBrandProfile(detail) {
   }
   brandProfileController = window.FunklixBrandProfileSetup.mount(el.brandWorkspaceDetailContent, {
     pendingData: pendingBrandProfileData.get(brand.id)?.account === state.user ? pendingBrandProfileData.get(brand.id) : null,
+    initialSection: canonicalBrandDetail.initialSection,
     brand, website: projectSetupContext?.website || '', language: () => state.uiLanguage,
     getContext: () => ({ account: state.user, generation: state.workspaceCatalog.generation, brandId: canonicalBrandDetail.brandId,
       workspaceId: state.workspaceCatalog.activeWorkspaceId,
@@ -3750,6 +3752,7 @@ function openRegularBrandProfile(target = null) {
   const targetBrand = workspace?.brands.find(b => b.id === target?.id);
   const entry = targetBrand && !state.publicBoardToken ? { kind: 'brand', brand: targetBrand, workspace } : resolveRegularBrandProfile();
   if (!closeCanonicalBrandDetail({ restoreFocus: false, navigate: false, resume: () => openRegularBrandProfile(target) })) return;
+  canonicalBrandDetail.initialSection = target?.section === 'Brand Learnings' ? 'Brand Learnings' : null;
   brandProfilePage = { returnView: state.activeView === 'brand-profile' ? 'home' : state.activeView };
   canonicalBrandDetail.returnFocus = el.brandCoreButton;
   canonicalBrandDetail.userEmail = (state.user?.email || '').trim().toLowerCase();
@@ -4973,6 +4976,7 @@ async function createSidebarBrand(input) {
     state.currentBoardId = null; state.session.boardId = null; history.replaceState({}, '', '/');
     state.session.brandId = brand.id; ephemeralBrandSwitcherSelection = { id: brand.id, name: brand.name, restored: false };
     if (!closeCanonicalBrandDetail({ restoreFocus: false, navigate: false })) throw { code: 'LOCAL_PROJECTION_FAILED' };
+    canonicalBrandDetail.initialSection = null;
     brandProfilePage = { returnView: 'home' };
     canonicalBrandDetail = { ...canonicalBrandDetail, status: 'ready', brandId: brand.id, brand, userEmail: (account.email || '').trim().toLowerCase(), returnFocus: document.getElementById('workspace-brand-manage') };
     el.workspaceWrap.append(el.brandWorkspaceDetail); el.brandWorkspaceDetail.classList.add('profile-page-mode');
@@ -14066,7 +14070,44 @@ function collapseExpandedNodes(exceptNodeId = null) {
   });
 }
 
+function canvasLearningContext() {
+  const brandId = state.boardBrandAssociation?.brandId;
+  const brand = state.workspaceCatalog.value?.workspaces.flatMap(w => w.brands).find(b => b.id === brandId);
+  if (!brand || !['owner','admin','editor'].includes(brand.role || brand.access?.role) || state.workspaceCatalog.status !== 'ready'
+    || !state.user?.email || state.publicBoardToken || !state.currentBoardId || !state.lastKnownUpdatedAt
+    || state.boardAccess?.canView !== true || state.isDirty || state.isSaving || state.isBoardLoading || state.isBoardHydrating
+    || state.selectedIds.size !== 1 || !state.selectedPrimary || !state.lastSavedSnapshot) return null;
+  let saved;
+  try { saved = JSON.parse(state.lastSavedSnapshot).canvas_json?.nodes; } catch { return null; }
+  if (!Array.isArray(saved) || saved.filter(n => n.id === state.selectedPrimary).length !== 1) return null;
+  return { brandId, boardId:state.currentBoardId, nodeId:state.selectedPrimary, updatedAt:state.lastKnownUpdatedAt,
+    key:JSON.stringify([state.user?.email,state.workspaceCatalog.generation,state.boardLoadGeneration,state.currentBoardId,brandId,state.selectedPrimary]) };
+}
+let canvasLearningProposal = null;
+function updateCanvasLearningAction() {
+  const button = document.getElementById('propose-brand-learning-btn');
+  if (!button) return;
+  const eligible = !!canvasLearningContext();
+  button.hidden = button.disabled = !eligible;
+  button.style.display = eligible ? '' : 'none';
+  button.textContent = uiText('Propose Brand Learning');
+  canvasLearningProposal?.sync();
+}
+function openCanvasBrandLearnings(brandId) {
+  const workspace = state.workspaceCatalog.value?.workspaces.find(w => w.brands.some(b => b.id === brandId));
+  if (!workspace) return;
+  openRegularBrandProfile({id:brandId,workspace_id:workspace.id,section:'Brand Learnings'});
+}
+function initializeCanvasLearningAction() {
+  canvasLearningProposal = window.FunklixCanvasLearningProposal?.create({document,language:() => state.uiLanguage,
+    context:canvasLearningContext,openBrand:openCanvasBrandLearnings,focus:() => document.getElementById('propose-brand-learning-btn')?.focus()});
+  document.getElementById('propose-brand-learning-btn')?.addEventListener('click',() => void canvasLearningProposal?.open());
+  // Eligibility also changes without selection events (autosave, revocation, account changes).
+  setInterval(updateCanvasLearningAction,250);
+}
+
 function updateInspectorActionVisibility() {
+  updateCanvasLearningAction();
   const selectedCount = state.selectedIds.size;
   const hasSingleNode = selectedCount === 1 && !!state.selectedPrimary;
   const hasMultipleNodes = selectedCount > 1;
@@ -20216,3 +20257,5 @@ else void bootApp();
 // BW-32.2.3: the server projection is the sole source of LinkedIn actions.
 globalThis.LinkedInSettings?.initialize({document,fetchImpl:fetch.bind(globalThis),location,history,translate:value=>language?.t?.(value)||value});
 globalThis.FacebookSettings=globalThis.FacebookSettings?.initialize({document,fetchImpl:fetch.bind(globalThis),location,history,translate:value=>language?.t?.(value)||value})||globalThis.FacebookSettings;
+
+initializeCanvasLearningAction();

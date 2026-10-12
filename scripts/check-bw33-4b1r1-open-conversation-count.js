@@ -34,6 +34,37 @@ function functionSource(source, name) {
 }
 const hash = (value) => crypto.createHash("sha256").update(value).digest("hex");
 const inspectorHtml = index.slice(index.indexOf('<aside class="inspector" id="inspector-panel"'), index.indexOf("</aside>", index.indexOf('<aside class="inspector" id="inspector-panel"')) + 8);
+// BW-36.18 permits exactly this initially inert Node Actions control. Validate the
+// complete insertion and its location before excluding only its line from the
+// historical hash; every other byte of the Inspector remains frozen.
+const learningButtonInsertion = '            <button id="propose-brand-learning-btn" class="fk-btn fk-btn-secondary" type="button" hidden disabled style="display:none" data-i18n="Propose Brand Learning">Propose Brand Learning</button>\n';
+function historicalInspectorHtml(html) {
+  assert.strictEqual((html.match(/propose-brand-learning-btn/g) || []).length, 1, "exactly one approved BW-36.18 Inspector control required");
+  const start = html.indexOf('<aside class="inspector" id="inspector-panel"');
+  const end = html.indexOf("</aside>", start);
+  assert(start >= 0 && end > start, "Inspector boundary missing");
+  const inspector = html.slice(start, end + 8);
+  const location = '<section class="inspector-section">\n            <h3 class="inspector-section-title" data-i18n="Node Actions">Node Actions</h3>\n'
+    + learningButtonInsertion + '            <button id="disconnect-selected-btn"';
+  const formStart = inspector.indexOf('<form id="node-form"');
+  const formEnd = inspector.indexOf("</form>", formStart);
+  const control = inspector.indexOf(location);
+  assert(formStart >= 0 && control > formStart && control < formEnd, "approved BW-36.18 control markup/location changed");
+  return inspector.replace(learningButtonInsertion, "");
+}
+const historicalInspector = historicalInspectorHtml(index);
+// Prove that the exception cannot conceal missing, duplicated, changed or moved
+// controls, including a duplicate outside the Inspector.
+for (const invalid of [
+  index.replace(learningButtonInsertion, ""),
+  index.replace(learningButtonInsertion, learningButtonInsertion.repeat(2)),
+  index + learningButtonInsertion,
+  ...['type="button"', 'hidden', 'disabled', 'style="display:none"', 'class="fk-btn fk-btn-secondary"', 'data-i18n="Propose Brand Learning"', '>Propose Brand Learning</button>'].map(attribute =>
+    index.replace(learningButtonInsertion, learningButtonInsertion.replace(attribute, attribute === 'type="button"' ? 'type="submit"' : ""))),
+  index.replace(learningButtonInsertion, "").replace('<h3 class="inspector-section-title" data-i18n="AI Actions">AI Actions</h3>\n',
+    '<h3 class="inspector-section-title" data-i18n="AI Actions">AI Actions</h3>\n' + learningButtonInsertion),
+  index.replace(learningButtonInsertion, "") + learningButtonInsertion
+]) assert.throws(() => historicalInspectorHtml(invalid), /approved BW-36\.18/, "unsafe Inspector exception accepted");
 const frozen = {
   selectCanvasNode: "d20b606b35f30ef3eb2fd385fcb63273c5dcb41e34f907718b1f1e361ecad61b",
   fillInspector: "27f52513d773bda6a84b0f68fa236bdcfd9e7df566debcdb439aa6222ded8e96",
@@ -42,7 +73,7 @@ const frozen = {
   inspectorHtml: "0965ebb7d448e42f57c6e2c4a4f8991be1f2e0cd14dc9cfa7aaa2f121b03eace"
 };
 for (const [name, expected] of Object.entries(frozen)) {
-  const value = name === "inspectorHtml" ? inspectorHtml : functionSource(app, name);
+  const value = name === "inspectorHtml" ? historicalInspector : functionSource(app, name);
   assert.strictEqual(hash(value), expected, `frozen Inspector boundary changed: ${name}`);
 }
 

@@ -357,7 +357,7 @@
     "AI Actions": "KI-Aktionen", "A/B variants (comma-separated)": "A/B-Varianten (kommagetrennt)", "Improve with AI": "Mit KI verbessern",
     "Generate Next Step": "Nächsten Schritt erstellen", "Review Node": "Knoten prüfen", "Regenerate": "Neu erstellen", "Regenerate for platform": "Für Plattform neu erstellen",
     "Add to Posting Calendar": "Zum Posting-Kalender hinzufügen", "Scheduled": "Geplant", "Scheduled: {date} • {time}": "Geplant: {date} • {time}",
-    "Generate Full Content Pack": "Vollständiges Content-Paket erstellen", "Node Actions": "Knotenaktionen", "Disconnect node": "Knoten trennen",
+    "Generate Full Content Pack": "Vollständiges Content-Paket erstellen", "Node Actions": "Knotenaktionen", "Propose Brand Learning": "Markenwissen vorschlagen", "Disconnect node": "Knoten trennen",
     "Disconnect selected": "Auswahl trennen", "Propagate to descendants": "An nachfolgende Knoten übertragen", "Delete node": "Knoten löschen",
     "Delete selected nodes": "Ausgewählte Knoten löschen", "Connected Context": "Verbundener Kontext", "Parents: {count} · Children: {children}": "Eltern: {count} · Kinder: {children}",
     "Parent": "Elternknoten", "Child": "Kindknoten", "No images uploaded.": "Keine Bilder hochgeladen.", "Image preview": "Bildvorschau", "Image": "Bild",
