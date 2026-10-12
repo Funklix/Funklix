@@ -148,7 +148,15 @@ async function check({ refinement = false } = {}) {
     await toggle.click(); await view(a,'detailed'); await view(b,'detailed');
     await toggle.click(); await allCompact(); await double(a); await view(a,'detailed');
     await responsibilities.click(); assert(await page.locator('#campaign-responsibilities').isVisible());
-    await page.keyboard.press('Escape'); await view(a,'detailed');
+    // Loading intentionally prevents native dialog cancellation; wait for the fixture's
+    // team request to finish before testing Escape ownership.
+    await page.waitForFunction(() => document.getElementById('campaign-responsibilities').getAttribute('aria-busy') === 'false');
+    await page.keyboard.press('Escape');
+    // Native dialog cancellation queues close/removal and focus restoration. Settle that
+    // lifecycle before transferring focus back to Canvas for the next Escape.
+    await page.locator('#campaign-responsibilities').waitFor({state:'detached'});
+    assert.equal(await page.evaluate(() => document.activeElement.id),'campaign-responsibilities-btn');
+    await view(a,'detailed');
     await a.focus(); await page.keyboard.press('Escape'); await view(a,'standard');
     await page.keyboard.press('Escape'); await allCompact();
     await a.focus(); await page.keyboard.press('Enter'); await page.keyboard.press('Enter'); await view(a,'detailed');
