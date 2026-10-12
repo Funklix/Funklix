@@ -16,7 +16,11 @@ function createHandler({db,env=process.env,fetchImpl=fetch}={}) {
       const query=req.query||{},brandId=query.id;
       if(!isBrandId(brandId)||Object.keys(query).some(k=>!['id','workspace_id'].includes(k))||Object.values(query).some(v=>typeof v!=='string'))fail('INVALID_REQUEST');
       // Binding is to the actual verified signed token, not browser identity fields.
-      const session=(req.headers?.cookie||'').split(';').map(x=>x.trim()).find(x=>x.startsWith('funklix_session='))||'';
+      // Match _auth-session's decoded, last-cookie-wins parsing exactly. Binding
+      // to the first duplicate cookie would allow reuse across distinct sessions.
+      const session=Object.fromEntries((req.headers?.cookie||'').split(';').map(x=>x.trim()).filter(Boolean).map(p=>{
+        const i=p.indexOf('=');return [p.slice(0,i),decodeURIComponent(p.slice(i+1))];
+      })).funklix_session;
       const args={db:pool,user,brandId,session,env,fetchImpl};
       if(req.method==='GET') {
         if(!isBrandId(query.workspace_id))fail('INVALID_REQUEST');

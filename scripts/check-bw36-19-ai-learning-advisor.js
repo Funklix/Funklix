@@ -89,6 +89,11 @@ async function contracts() {
    assert.equal((await g.request({action:'validate',receipt:expired})).body.error.code,'INVALID_RECEIPT');
    const h=advisorRuntime();h.board.canvas_json.nodes.push({id:'deleted',type:'Content',content:'Never send deleted material',deleted:true});
    const data=await h.service.readScope(h.r.pool,h.args.user,B,h.scope);assert(!data.sources.some(s=>s.node_id==='deleted'));assert(data.coverage.excluded.includes('inactive_node'));
+   const k=advisorRuntime(),auth=k.r.base.load('api/_auth-session.js');
+   const one='funklix_session=shared-invalid-prefix; '+k.session;
+   const minted=await k.request({action:'analyze',scope:k.scope},one);assert.equal(minted.statusCode,200);
+   const other='funklix_session=shared-invalid-prefix; '+ 'funklix_session='+auth.createSessionToken({email:EMAIL,name:'another signed session'});
+   assert.equal((await k.request({action:'validate',receipt:minted.body.receipt},other)).body.error.code,'INVALID_RECEIPT');
  });
  await test('single text Node adoption, receipt forgery/session isolation, stale adoption and atomic event rollback',async()=>{
    const f=advisorRuntime(),out=await f.request({action:'analyze',scope:f.scope});
