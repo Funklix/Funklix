@@ -30,10 +30,10 @@ async function setup() {
     CREATE TABLE public.app_identities(id uuid PRIMARY KEY,canonical_email text,status text,revision bigint);
     CREATE TABLE public.brands(id uuid PRIMARY KEY,owner_email text,name text,revision bigint);
     CREATE TABLE public.brand_members(brand_id uuid REFERENCES brands(id) ON DELETE CASCADE,email text,role text,name text,UNIQUE(brand_id,email));
-    CREATE TABLE public.boards(id uuid PRIMARY KEY,brand_id uuid REFERENCES brands(id));`);
+    CREATE TABLE public.boards(id uuid PRIMARY KEY,brand_id uuid REFERENCES brands(id),workspace_id uuid,name text,canvas_json jsonb,updated_at timestamptz,owner_id text,owner_email text);`);
   await pg.query('INSERT INTO app_identities VALUES ($1,$2,$3,1)', [I, EMAIL, 'active']);
   await pg.query('INSERT INTO brands VALUES ($1,$2,$3,1)', [B, EMAIL, 'Invented Brand']);
-  await pg.query('INSERT INTO boards VALUES ($1,$2)', [BOARD, B]);
+  await pg.query('INSERT INTO boards(id,brand_id) VALUES ($1,$2)', [BOARD, B]);
   await pg.exec(original);
   return pg;
 }

@@ -10,7 +10,7 @@
     add:['Add learning','Learning hinzufügen'], review:['Needs review','Prüfung erforderlich'], approved:['Approved','Bestätigt'],
     rejected:['Rejected','Abgelehnt'], archived:['Archived','Archiviert'], all:['All','Alle'], active:['Review and approved','Prüfung und bestätigte Learnings'],
     empty:['No learnings yet. Add a proposal to build confirmed Brand knowledge.','Noch keine Learnings. Mit einem Vorschlag bestätigtes Markenwissen aufbauen.'],
-    emptyFilter:['No learnings in this view.','Keine Learnings in dieser Ansicht.'], manual:['Manual','Manuell'],
+    emptyFilter:['No learnings in this view.','Keine Learnings in dieser Ansicht.'], manual:['Manual','Manuell'], observation:['Campaign observation','Kampagnenbeobachtung'], sourceUnavailable:['Source unavailable','Quelle nicht verfügbar'],
     statement:['Learning statement','Learning-Aussage'], evidence:['Evidence / context (optional)','Belege / Kontext (optional)'],
     save:['Save proposal','Vorschlag speichern'], cancel:['Cancel','Abbrechen'], edit:['Edit','Bearbeiten'],
     update:['Propose update','Aktualisierung vorschlagen'], approve:['Approve learning','Learning bestätigen'],
@@ -95,7 +95,7 @@
         const field = (key, value, max) => { const label = node('label','',dialog); node('span',t(key),label); const el = node('textarea','',label); el.value = value || ''; el.rows = key === 'statement' ? 4:3; el.maxLength = max; el.dataset.learningField = key; el.required = key === 'statement'; return el; };
         statement = field('statement',row?.statement,8000); evidence = field('evidence',row?.evidence_summary,16000);
         if (action === 'update') node('p',t('successor'),dialog);
-      } else { node('blockquote',row.statement,dialog); node('p',t('manual'),dialog); node('p',t(action === 'approve' ? 'consequence' : action === 'archive' ? 'archiveConsequence':'rejectConsequence'),dialog); }
+      } else { node('blockquote',row.statement,dialog); node('p',t(row.source_type === 'campaign_observation' ? 'observation':'manual'),dialog); node('p',t(action === 'approve' ? 'consequence' : action === 'archive' ? 'archiveConsequence':'rejectConsequence'),dialog); }
       const feedback = node('p','',dialog); feedback.setAttribute('role','status'); feedback.setAttribute('aria-live','polite');
       feedback.id='brand-learning-dialog-feedback';
       if (editing) { statement.setAttribute('aria-describedby',feedback.id); evidence.setAttribute('aria-describedby',feedback.id); }
@@ -176,7 +176,8 @@
         const card=node('article','',host); card.className=`learning-card learning-${row.status}`; card.dataset.learningId=row.id;
         const title=node('h4',row.statement,card); title.id=`learning-title-${row.id}`; card.setAttribute('aria-labelledby',title.id);
         node('p',t(row.status === 'proposed' ? 'review':row.status),card);
-        node('p',`${t('manual')} · ${person(row.proposer)} · ${date(row.created_at)}`,card);
+        node('p',`${t(row.source_type === 'campaign_observation' ? 'observation':'manual')} · ${person(row.proposer)} · ${date(row.created_at)}`,card);
+        if (row.source_type === 'campaign_observation') node('p',row.source_context?.available ? `${row.source_context.board_name} · ${row.source_context.node_title}` : t('sourceUnavailable'),card);
         if (row.updated_at !== row.created_at) node('p',date(row.updated_at),card);
         if (row.reviewed_at) node('p',`${person(row.reviewer)} · ${date(row.reviewed_at)}`,card);
         if (row.evidence_summary) node('p',row.evidence_summary,card);

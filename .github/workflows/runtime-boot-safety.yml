@@ -29,6 +29,10 @@ jobs:
           node --check scripts/check-bw36-16-adaptive-canvas-view-hierarchy.js
           node --check scripts/check-bw36-16r1-toolbar-and-global-view-cycle.js
           node --check brand-learnings.js
+          node --check canvas-learning-proposal.js
+          node --check api/brands/[id]/learning-source.js
+          node --check scripts/check-bw36-18-governed-learning-provenance.js
+          node --check scripts/fixtures/bw36-18-browser.js
           node --check brand-profile-setup.js
           node --check api/_brand-learnings.js
           node --check api/brands/[id]/learnings.js
@@ -371,6 +375,8 @@ jobs:
         run: npm run check:bw36.17r1
       - name: Check BW-36.17R2 provenance recovery in disposable PostgreSQL
         run: npm run check:bw36.17r2
+      - name: Check BW-36.18 governed Learning source capture
+        run: npm run check:bw36.18
       - name: Check dynamic AI Insights translations
         run: node scripts/check-bw25-1-dynamic-insights-translations.js
       - name: Check scoped German interface localization
