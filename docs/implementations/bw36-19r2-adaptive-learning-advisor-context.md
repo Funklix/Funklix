@@ -176,7 +176,7 @@ Board changes are still excluded. There is no automatic Canvas or Brand mutation
 - `scripts/check-bw36-19r2-adaptive-learning-advisor-context.js` and
   `scripts/fixtures/bw36-19r2-browser.js`: realistic saved-Canvas/adaptive/security
   regressions and browser recovery checks.
-- Four historical dependency-inventory assertions (BW-16, BW-36.1R1, BW-36.2, BW-36.6): include the approved pinned tokenizer; their behavioral/security assertions remain intact.
+- Four historical dependency-inventory assertions (BW-16, BW-36.1R1, BW-36.2, BW-36.6): include the approved pinned tokenizer; their behavioral/security assertions remain intact. BW-36.7R3 also updates the dependent test-file fingerprint while retaining every SQL/authorization pin.
 - This new implementation record.
 
 ## Regression results
@@ -206,8 +206,10 @@ Board changes are still excluded. There is no automatic Canvas or Brand mutation
   assertion that only `@vercel/blob` and `pg` can exist. Investigation found the
   same historical snapshot in BW-36.1R1, BW-36.2 and BW-36.6. All four assertions
   now retain their exact inventory check with pinned `js-tiktoken@1.0.21` included;
-  no authentication or authorization behavior was weakened. All four focused
-  regressions passed after correction. Final GitHub run status is verified and
+  no authentication or authorization behavior was weakened. The next GitHub run (`38413986825`) revealed BW-36.7R3's dependent hash of the updated test; that test-only fingerprint was corrected without changing SQL or authorization pins. All four focused
+  regressions and the dependent BW-36.7R3 check passed after correction. A fresh
+  full local run of the final dependency/test set passed **171/171 workflow steps**
+  without failures. Final GitHub run status is verified and
   reported with PR delivery, rather than inferred from the earlier local run.
 - Historical BW-36.17/R1/R2, BW-36.18, Brand/Workspace, Canvas/Post-it/Inspector,
   AI Brain and Insights checks are included in that workflow and passed.
