@@ -1,3 +1,4 @@
+// BW-36.19R2 updates only the pinned tokenizer inventory and the two corresponding test-file fingerprints.
 // R5R2 updates only the approved logo/Avatar separation and dependent test fingerprints; historical SQL/auth remain pinned.
 'use strict';
 
@@ -143,8 +144,8 @@ test('UI, BW-36.4 sidebar, compact bar and Canvas toolbar baselines are unchange
     'brand-sidebar.js': '42cd9ca38505a7e4755b888c494c73440a457e57bcc495059f9746bba02d1efb',
     'styles.css': 'b70d22f3dbca76c365037c6b6b07243c100317e1873339a53f091c3ad29f5582',
     'scripts/check-bw36-4-simplified-brand-sidebar.js': '5617fb7227f1a5f2ce9efe4ecda660c6b2c89a822ec70585c8fd5088a6003e4b',
-    'scripts/check-bw36-2-compact-non-canvas-context-bar.js': '7d000ad953878f9c91abb3c46f66bb91750be4b0252e0452b8e02e95e02216c8',
-    'scripts/check-bw36-1r1-canvas-toolbar-visibility-and-funnel-footer.js': '2a418644a2c5c3065a63968abb91cff287ecfbd465f939fccecc4ca9cfad2fc9'
+    'scripts/check-bw36-2-compact-non-canvas-context-bar.js': '326a63061ce9381c4d3554c9d8f8d1fe20a04407514b8a05d793ee386948a034',
+    'scripts/check-bw36-1r1-canvas-toolbar-visibility-and-funnel-footer.js': '230385a667a2b548d096848af5c24943d0e0047cde61faef47b6c69c5d42812e'
   };
   for (const [file, digest] of Object.entries(expected)) assert.equal(sha(file), digest, file);
 });
@@ -155,7 +156,7 @@ test('registration is immediately after BW-36.4 with no dependency change', () =
   assert.equal(pkg.scripts['check:bw36.6'], 'node scripts/check-bw36-6-workspace-schema-foundation.js');
   assert.ok(workflow.indexOf('check:bw36.6') > workflow.indexOf('check:bw36.4'));
   assert.ok(workflow.indexOf('check:bw36.6') < workflow.indexOf('dynamic AI Insights'));
-  assert.deepEqual(pkg.dependencies, { '@vercel/blob': 'latest', pg: '^8.13.1' });
+  assert.deepEqual(pkg.dependencies, { '@vercel/blob': 'latest', 'js-tiktoken': '1.0.21', pg: '^8.13.1' });
 });
 
 process.stdout.write(`BW-36.6 Workspace schema foundation: ${passed} deterministic groups passed; zero database, provider, AI, or network requests.\n`);

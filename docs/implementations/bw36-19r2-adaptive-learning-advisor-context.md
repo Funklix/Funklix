@@ -176,6 +176,7 @@ Board changes are still excluded. There is no automatic Canvas or Brand mutation
 - `scripts/check-bw36-19r2-adaptive-learning-advisor-context.js` and
   `scripts/fixtures/bw36-19r2-browser.js`: realistic saved-Canvas/adaptive/security
   regressions and browser recovery checks.
+- Four historical dependency-inventory assertions (BW-16, BW-36.1R1, BW-36.2, BW-36.6): include the approved pinned tokenizer; their behavioral/security assertions remain intact.
 - This new implementation record.
 
 ## Regression results
@@ -198,8 +199,16 @@ Board changes are still excluded. There is no automatic Canvas or Brand mutation
   installation completed separately. The initial run had a Campaign V3 browser
   timeout and exposed an R2 tokenizer fallback bug. The R2 bug was fixed and its
   complete suite passed; Campaign V3 passed independently on both the changed
-  branch and an untouched-main worktree. Across the run and focused rechecks,
-  every workflow step passed. This is not a claim of an entirely green first run.
+  branch and an untouched-main worktree. The tokenizer dependency was added after
+  early dependency-inventory checks had already run, so this local aggregate was
+  not a full verification of the final dependency set.
+- GitHub Runtime Boot Safety run `38413521999` on PR #768 caught BW-16's stale
+  assertion that only `@vercel/blob` and `pg` can exist. Investigation found the
+  same historical snapshot in BW-36.1R1, BW-36.2 and BW-36.6. All four assertions
+  now retain their exact inventory check with pinned `js-tiktoken@1.0.21` included;
+  no authentication or authorization behavior was weakened. All four focused
+  regressions passed after correction. Final GitHub run status is verified and
+  reported with PR delivery, rather than inferred from the earlier local run.
 - Historical BW-36.17/R1/R2, BW-36.18, Brand/Workspace, Canvas/Post-it/Inspector,
   AI Brain and Insights checks are included in that workflow and passed.
 - Syntax and `git diff --check` passed. All provider calls were mocked; SQL tests
