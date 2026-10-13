@@ -33,9 +33,12 @@ function advisorRuntime() {
     confidence:'medium',confidence_reason:'The source is explicit but performance is unverified.',evidence_class:'explicit_statement',decision_status:'unresolved',
     sources:[{ref:'s2',excerpt:'Use a clear next step.'}],limitations:['Campaign evidence needs human review before Brand-wide use.'],related_learning_ids:[],relationship:'new'}]};
   const args={db:r.pool,user:{email:EMAIL},brandId:B,scope,session,env:r.base.env,fetchImpl};
-  async function request(body,cookie=session,query={id:B}) {
+  async function request(body,cookie=session,query={id:B},headers={}) {
     const res={statusCode:200,headers:{},setHeader(k,v){this.headers[k]=v;},status(s){this.statusCode=s;return this;},json(v){this.body=clone(v);return this;}};
-    await route({method:body?'POST':'GET',query:body?query:{...query,workspace_id:W},body,headers:{cookie}},res);return res;
+    if(headers.accept==='application/x-ndjson') {
+      res.stream='';res.write=value=>{res.stream+=value;};res.end=()=>res;
+    }
+    await route({method:body?'POST':'GET',query:body?query:{...query,workspace_id:W},body,headers:{cookie,...headers}},res);return res;
   }
   return {r,config,service,args,request,scope,board,session};
 }

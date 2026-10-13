@@ -1,6 +1,7 @@
 {
   "dependencies": {
     "@vercel/blob": "latest",
+    "js-tiktoken": "1.0.21",
     "pg": "^8.13.1"
   },
   "scripts": {
@@ -144,7 +145,8 @@
     "check:bw36.17r2": "node scripts/check-bw36-17r2-learning-provenance-recovery.js",
     "check:bw36.18": "node scripts/check-bw36-18-governed-learning-provenance.js",
     "check:bw36.19": "node scripts/check-bw36-19-ai-learning-advisor.js",
-    "check:bw36.19r1": "node scripts/check-bw36-19r1-existing-board-compatibility.js"
+    "check:bw36.19r1": "node scripts/check-bw36-19r1-existing-board-compatibility.js",
+    "check:bw36.19r2": "node scripts/check-bw36-19r2-adaptive-learning-advisor-context.js"
   },
   "devDependencies": {
     "@electric-sql/pglite": "0.3.15",
