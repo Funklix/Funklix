@@ -532,7 +532,7 @@
   function mount(container, options) {
     const session = createSession(options), s = session.state, doc = container.ownerDocument;
     let fileInput = null;
-    const learnings = root.FunklixBrandLearnings?.create({ brand: s.brand, document: doc, language: options.language, fetchImpl: options.fetchImpl, current: session.current });
+    const learnings = root.FunklixBrandLearnings?.create({ brand: s.brand, workspaceId:options.getContext().workspaceId, document: doc, language: options.language, fetchImpl: options.fetchImpl, current: session.current });
     const t = key => root.FunklixLanguage.t(key, options.language());
     function node(tag, text, parent) { const n = doc.createElement(tag); if (text) n.textContent = text; if (parent) parent.append(n); return n; }
     function button(key, parent, action, id = key) {

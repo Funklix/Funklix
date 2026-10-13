@@ -48,6 +48,7 @@
   function create(options) {
     const doc = options.document || root.document, fetchImpl = options.fetchImpl || root.fetch.bind(root);
     let host, alive = true, loaded = false, busy = false, data = null, error = '', filter = 'active', offset = 0, dialog = null;
+    const advisor = root.FunklixLearningAdvisor?.create({ ...options, connected:() => !!host?.isConnected, reload:() => load() });
     const t = key => (COPY[key] || COPY.INTERNAL_ERROR)[options.language() === 'de' ? 1 : 0];
     const node = (tag, text, parent) => { const el = doc.createElement(tag); if (text) el.textContent = text; parent?.append(el); return el; };
     function button(key, parent, action) {
@@ -165,7 +166,14 @@
       if (!data) return;
       const overview=node('div','',host); overview.className='learning-overview';
       for (const status of ['proposed','approved','archived']) node('span',`${t(status === 'proposed' ? 'review':status)}: ${data.counts[status] || 0}`,overview);
-      if (data.can_write) button('add',host,() => open(null,'create')); else node('p',t('readonly'),host);
+      if (data.can_write) {
+        button('add',host,() => open(null,'create'));
+        if (advisor && options.workspaceId) {
+          const find = node('button',root.FunklixLearningAdvisor.COPY.find[options.language()==='de'?1:0],host);
+          find.type='button'; find.className='fk-btn fk-btn-secondary'; find.dataset.learningAdvisorOpen='true';
+          find.addEventListener('click',() => void advisor.open());
+        }
+      } else node('p',t('readonly'),host);
       const filters=node('div','',host); filters.className='learning-actions';
       for (const value of ['active','proposed','approved','rejected','archived','all']) {
         const b=button(value === 'proposed' ? 'review':value,filters,() => { filter=value; offset=0; void load(); }); b.setAttribute('aria-pressed',String(filter === value));
@@ -197,7 +205,7 @@
       if (data.has_more) button('more',host,() => { offset+=50; void load(); });
     }
     return { attach(parent) { host=parent; render(); if (!loaded && !busy && !error) void load(); },
-      invalidate() { alive=false; if (dialog) { dialog.close(); dialog.remove(); dialog=null; } host=null; data=null; }, load };
+      invalidate() { alive=false; advisor?.invalidate(); if (dialog) { dialog.close(); dialog.remove(); dialog=null; } host=null; data=null; }, load };
   }
   return Object.freeze({ create, normalized, COPY });
 }));

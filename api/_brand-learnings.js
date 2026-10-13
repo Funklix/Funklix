@@ -237,12 +237,14 @@ async function mutate(client, brand, actor, input) {
     return project(result.rows[0]);
   }
 }
-async function operate({ db, user, brandId, input, filter = 'all', offset = 0 }) {
+async function operate({ db, user, brandId, input, filter = 'all', offset = 0, beforeMutation }) {
   if (!isBrandId(brandId) || !STATUSES.includes(filter) || !Number.isInteger(offset) || offset < 0 || offset > 10000) fail('INVALID_REQUEST');
   const client = await db.connect();
   try {
     await client.query('BEGIN');
     const { brand, identity } = await authorize(client, user, brandId, !!input);
+    // Internal server hook: Advisor freshness must share the Learning write transaction.
+    if (input && beforeMutation) await beforeMutation({ client, brand, identity });
     if (input?.source) input.provenance = await validateSource(client,user,brand,input.source);
     const learning = input ? await mutate(client, brand, identity.identityId, input) : undefined;
     const library = await readLibrary(client, brandId, filter, offset, user, brand);
@@ -265,4 +267,4 @@ function boundedError(error) {
   if (['ECONNREFUSED','ETIMEDOUT','57P01','57P03','40001','40P01','53300','55P03'].includes(error?.code)) return new LearningError('DATABASE_UNAVAILABLE',503);
   return new LearningError('INTERNAL_ERROR',500);
 }
-module.exports = { LearningError, normalizeText, statementKey, revision, inputRequest, project, operate, boundedError, sourceRequest, previewSource };
+module.exports = { LearningError, normalizeText, statementKey, revision, inputRequest, project, operate, boundedError, sourceRequest, previewSource, authorize };

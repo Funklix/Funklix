@@ -142,7 +142,8 @@
     "check:bw36.17": "node scripts/check-bw36-17-governed-brand-learnings.js",
     "check:bw36.17r1": "node scripts/check-bw36-17r1-learning-provenance-schema.js",
     "check:bw36.17r2": "node scripts/check-bw36-17r2-learning-provenance-recovery.js",
-    "check:bw36.18": "node scripts/check-bw36-18-governed-learning-provenance.js"
+    "check:bw36.18": "node scripts/check-bw36-18-governed-learning-provenance.js",
+    "check:bw36.19": "node scripts/check-bw36-19-ai-learning-advisor.js"
   },
   "devDependencies": {
     "@electric-sql/pglite": "0.3.15",

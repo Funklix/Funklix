@@ -5,7 +5,7 @@ const fs = require('node:fs'), path = require('node:path'), vm = require('node:v
 const { createRequire } = require('node:module'), { randomUUID } = require('node:crypto');
 const { runtime, B, I, EMAIL, clone } = require('./bw36-13r5-local-runtime');
 const ROOT = path.resolve(__dirname,'../..');
-function learningRuntime() {
+function learningRuntime({queryExtension,fetchImpl} = {}) {
   const base = runtime(), auth = base.load('api/_auth-session.js');
   const db = { learnings:[], events:[], role:'owner', identity:'active', missingSchema:false, failEvent:false, failCommit:false, queries:[] };
   let tx, queue = Promise.resolve();
@@ -16,6 +16,7 @@ function learningRuntime() {
     if (sql === 'BEGIN') { tx=clone({learnings:db.learnings,events:db.events}); return rows([]); }
     if (sql === 'ROLLBACK') { tx=null; return rows([]); }
     if (sql === 'COMMIT') { if(db.failCommit)throw Object.assign(new Error('private failure'),{code:'ECONNREFUSED'}); Object.assign(db,tx);tx=null;return rows([]); }
+    if (queryExtension) { const result=await queryExtension(sql,args,{db,base}); if(result) return result; }
     if (sql.includes('FROM public.app_identities') && !sql.includes('brand_learnings') && !sql.includes('brand_learning_events')) {
       return rows(db.identity === 'missing' ? [] : db.identity === 'ambiguous' ? [{},{}] : [{id:I,canonical_email:EMAIL,status:db.identity,revision:'1'}]);
     }
@@ -70,7 +71,7 @@ function learningRuntime() {
       if(['api/_auth-session.js','api/_brand-access.js','api/_app-identity.js'].includes(resolved))return base.load(resolved);
       return load(resolved);
     }
-    vm.runInNewContext(fs.readFileSync(file,'utf8'),{module,exports:module.exports,require:req,process:{env:base.env},Buffer,console},{filename:relative});return module.exports;
+    vm.runInNewContext(fs.readFileSync(file,'utf8'),{module,exports:module.exports,require:req,process:{env:base.env},Buffer,console,AbortController,setTimeout,clearTimeout,fetch:fetchImpl || (()=>{throw new Error('External network forbidden');})},{filename:relative});return module.exports;
   }
   const previewRoute=load('api/brands/[id]/learning-source.js'), route=load('api/brands/[id]/learnings.js'), service=load('api/_brand-learnings.js');
   const requests=[];
@@ -80,6 +81,6 @@ function learningRuntime() {
     const res={statusCode:200,headers:{},setHeader(k,v){this.headers[k]=v;},status(s){this.statusCode=s;return this;},json(body){this.body=clone(body);return this;}};
     requests.push({method,url,body:clone(body)});await (parsed.pathname.endsWith('/learning-source')?previewRoute:route)(req,res);return res;
   }
-  return {base,db,service,request,requests};
+  return {base,db,service,request,requests,load,pool};
 }
 module.exports={learningRuntime};

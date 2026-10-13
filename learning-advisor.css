@@ -1,0 +1,9 @@
+.learning-advisor-dialog { width: min(680px, calc(100vw - 32px)); box-sizing: border-box; }
+.learning-advisor-dialog select { width:100%; padding:10px; color:inherit; background:var(--fk-color-surface-input, Canvas); border:1px solid var(--fk-color-border, GrayText); border-radius:8px; }
+.learning-advisor-dialog label { display:block; margin:12px 0; }
+.learning-advisor-dialog label > span { overflow-wrap:anywhere; }
+.learning-advisor-dialog input[type=checkbox] { width:auto; margin-inline-end:8px; }
+.learning-advisor-dialog blockquote { margin-inline:12px; white-space:pre-wrap; overflow-wrap:anywhere; }
+.learning-advisor-dialog .learning-card { margin-block:12px; overflow-wrap:anywhere; }
+.learning-advisor-dialog textarea { box-sizing:border-box; width:100%; }
+.advisor-threads { max-height:240px; overflow:auto; }
