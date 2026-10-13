@@ -46,6 +46,8 @@
     excluded:['Excluded source categories','Ausgeschlossene Quellenkategorien'],
     private_document:['Private document','Privates Dokument'],draft_or_unallowlisted_module:['Draft or unsupported module','Entwurfs- oder nicht unterstütztes Modul'],
     inactive_node:['Inactive Node','Inaktiver Knoten'],unsupported_node:['Unsupported Node type','Nicht unterstützter Knotentyp'],discussion:['Excluded discussion','Ausgeschlossene Diskussion'],deleted_discussion:['Deleted discussion','Gelöschte Diskussion'],
+    unsupported_field:['Unsupported optional text field','Nicht unterstütztes optionales Textfeld'],unsupported_discussion:['Unsupported optional discussion data','Nicht unterstützte optionale Diskussionsdaten'],
+    partialThreads:['Some discussion content was excluded. Coverage is limited; included threads were not truncated.','Einige Diskussionsinhalte wurden ausgeschlossen. Die Abdeckung ist begrenzt; einbezogene Threads wurden nicht gekürzt.'],
     WORKSPACE_ACCESS_DENIED:['Current Workspace membership is required.','Aktuelle Workspace-Mitgliedschaft ist erforderlich.'],
     SOURCE_UNAVAILABLE:['The selected saved source is unavailable.','Die ausgewählte gespeicherte Quelle ist nicht verfügbar.'],
     SOURCE_ACCESS_DENIED:['Access to the selected saved source was denied.','Zugriff auf die ausgewählte gespeicherte Quelle wurde verweigert.'],
@@ -95,7 +97,7 @@
       finally{busy=false;}
     }
     function coverage(value,parent){
-      el('p',options.language()==='de'?'Vollständige Threads im gewählten Umfang; keine gekürzten Threads. Nur erlaubte Textfelder und begrenzte akzeptierte Module. Fehlende Felder beweisen keine Wissenslücke.':'Whole threads in selected scope; no truncated threads. Allowlisted text fields and bounded accepted modules only. Missing fields do not prove a knowledge gap.',parent);
+      el('p',value.complete_threads===false?t('partialThreads'):options.language()==='de'?'Vollständige Threads im gewählten Umfang; keine gekürzten Threads. Nur erlaubte Textfelder und begrenzte akzeptierte Module. Fehlende Felder beweisen keine Wissenslücke.':'Whole threads in selected scope; no truncated threads. Allowlisted text fields and bounded accepted modules only. Missing fields do not prove a knowledge gap.',parent);
       const categories=[...new Set(value.excluded||[])].map(k=>t(k));
       el('p',t('excluded')+': '+(categories.join(', ')||'0'),parent);
     }

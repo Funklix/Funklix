@@ -4,8 +4,9 @@ const {advisorRuntime}=require('./bw36-19-advisor-runtime');
 const {B,W,EMAIL,clone}=require('./bw36-13r5-local-runtime');
 let chromium;try{({chromium}=require('playwright-core'));}catch{({chromium}=require('/opt/codex/runtimes/cua/lib/node_modules/playwright-core'));}
 const ROOT=path.resolve(__dirname,'../..');
-async function browserChecks(){
+async function browserChecks({canvas,expectedThreads=1,hydrationCanvases=[]}={}){
  const f=advisorRuntime(),{r}=f,base=r.base,errors=[],traffic=[];
+ if(canvas)f.board.canvas_json=clone(canvas);
  const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH||'/usr/bin/chromium',args:['--no-sandbox']});
  try{
   const page=await browser.newPage({viewport:{width:1440,height:900}});page.setDefaultTimeout(12000);page.on('pageerror',e=>errors.push(e.message));
@@ -28,6 +29,14 @@ async function browserChecks(){
   },{catalog:base.catalog(),W,B,EMAIL});
   await page.locator('#brand-core-nav-btn').click();await page.waitForFunction(()=>!!brandProfileController&&canonicalBrandDetail.status==='ready');
   await page.locator('[data-profile-key="Brand Learnings"]').click();
+  if(canvas) {
+   for(const historical of hydrationCanvases) {
+    const restored=await page.evaluate(canvas=>{applyCampaignState(canvas,'Synthetic historical Board',{memoryOnly:true});return serializeState();},historical);
+    assert.deepEqual(restored.edges,historical.edges);assert.deepEqual(restored.nodes.map(n=>[n.id,n.type]),historical.nodes.map(n=>[n.id,n.type]));
+   }
+   const persisted=await page.evaluate(canvas=>{applyCampaignState(canvas,'Synthetic saved Board',{memoryOnly:true});return serializeState();},canvas);
+   assert.deepEqual(persisted.edges,canvas.edges,'Production Canvas hydration/serialization retains canonical tuple relationships');
+  }
   const find=page.locator('[data-learning-advisor-open]'),dialog=page.locator('dialog[data-learning-advisor]');
   const action=k=>dialog.locator('[data-advisor-action="'+k+'"]');
   const snapshot=()=>page.evaluate(()=>JSON.stringify({nodes:state.nodes,edges:state.edges,undo:state.undoStack,history:state.history,dirty:state.isDirty,saved:state.lastSavedSnapshot,activity:state.activityFeed,presence:state.presenceEditingNodeId,storage:{...localStorage}}));
@@ -38,7 +47,8 @@ async function browserChecks(){
   await dialog.locator('select').selectOption(f.board.id);await page.waitForFunction(()=>!document.querySelector('[data-advisor-action="analyze"]').disabled);
   assert.equal(f.config.providerCalls.length,0);assert.equal(await page.locator('#node-form dialog').count(),0);
   const initial=await snapshot();
-  await dialog.locator('[data-advisor-discussions]').check();await dialog.locator('[data-advisor-thread]').waitFor();await dialog.locator('[data-advisor-thread]').uncheck();
+  await dialog.locator('[data-advisor-discussions]').check();await dialog.locator('[data-advisor-thread]').first().waitFor();
+  assert.equal(await dialog.locator('[data-advisor-thread]').count(),expectedThreads);await dialog.locator('[data-advisor-thread]').first().uncheck();
   await action('analyze').click();await action('review').waitFor();assert.equal(f.config.providerCalls.length,1);
   assert(!f.config.providerCalls[0].body.input[1].content.includes('slogan'));assert.equal(await snapshot(),initial);
   await action('review').click();const statement=dialog.locator('[data-advisor-field="statement"]');await statement.fill('Human-reviewed browser guidance');
@@ -52,6 +62,18 @@ async function browserChecks(){
    assert(await dialog.evaluate(n=>n.scrollWidth<=n.clientWidth+1),'No horizontal overflow');
    await action('cancel').focus();await page.keyboard.press('Tab');assert.equal(await page.evaluate(()=>document.activeElement.tagName),'SELECT');
    await page.keyboard.press('Escape');await dialog.waitFor({state:'detached'});
+  }
+  if(canvas) {
+   const notes=clone(f.board.canvas_json.nodes[0].postits);f.board.canvas_json.nodes[0].postits='Unsupported optional data';
+   for(const language of ['en','de']) {
+    await page.evaluate(language=>{state.uiLanguage=FunklixLanguage.setUiLanguage(language);brandProfileController.render();},language);
+    const calls=f.config.providerCalls.length;await find.click();await dialog.locator('select option[value="'+f.board.id+'"]').waitFor({state:'attached'});
+    await dialog.locator('select').selectOption(f.board.id);await page.waitForFunction(()=>!document.querySelector('[data-advisor-action="analyze"]').disabled);
+    assert((await dialog.textContent()).includes(language==='de'?'Die Abdeckung ist begrenzt':'Coverage is limited'));
+    assert((await dialog.textContent()).includes(language==='de'?'Nicht unterstützte optionale Diskussionsdaten':'Unsupported optional discussion data'));
+    assert.equal(f.config.providerCalls.length,calls);await action('cancel').click();
+   }
+   f.board.canvas_json.nodes[0].postits=notes;
   }
   await page.setViewportSize({width:1440,height:900});await page.evaluate(()=>{state.uiLanguage=FunklixLanguage.setUiLanguage('en');brandProfileController.render();});
   await find.click();await dialog.locator('select option[value="'+f.board.id+'"]').waitFor({state:'attached'});await dialog.locator('select').selectOption(f.board.id);await page.waitForFunction(()=>!document.querySelector('[data-advisor-action="analyze"]').disabled);

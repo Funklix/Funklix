@@ -3,7 +3,7 @@ const assert=require('node:assert/strict'),fs=require('node:fs');
 const {PGlite}=require('@electric-sql/pglite');
 const {B,W,I,EMAIL}=require('./bw36-13r5-local-runtime');
 const advisor=require('../../api/_learning-advisor');
-async function databaseChecks(){
+async function databaseChecks({canvas:savedCanvas}={}){
  const pg=new PGlite(),boardId='77777777-7777-4777-8777-777777777777',time='2026-10-12T10:00:00.123456Z';
  let failEvent=false;
  const db={connect:async()=>({query:(q,a)=>{if(failEvent&&q.includes('INSERT INTO public.brand_learning_events'))throw new Error('Injected rollback');return pg.query(q,a);},release(){}})};
@@ -20,7 +20,7 @@ async function databaseChecks(){
   await pg.query('INSERT INTO workspaces VALUES ($1,$2)',[W,'active']);
   await pg.query('INSERT INTO workspace_memberships VALUES ($1,$2,$3)',[W,I,'accepted']);
   await pg.query('INSERT INTO brands VALUES ($1,$2,$3,1,$4,$5::jsonb)',[B,EMAIL,'Fixture Brand',W,JSON.stringify({brandCore:'Useful marketing.'})]);
-  const canvas={schemaVersion:1,nodes:[{id:'node-1',type:'Content',title:'CTA',content:'Use a clear next step.'}],edges:[]};
+  const canvas=savedCanvas||{schemaVersion:1,nodes:[{id:'node-1',type:'Content',title:'CTA',content:'Use a clear next step.'}],edges:[]};
   await pg.query('INSERT INTO boards VALUES ($1,$2,$3,$4,$5::jsonb,NULL,1,$6,NULL,$7)',[boardId,B,W,'Saved Board',JSON.stringify(canvas),time,EMAIL]);
   for(const file of ['20261011_bw36_17_governed_brand_learnings.sql','20261011_bw36_17r1_learning_provenance_schema.sql','20261012_bw36_17r2_learning_provenance_recovery.sql'])await pg.exec(fs.readFileSync('migrations/'+file,'utf8'));
   const scope={workspace_id:W,board_id:boardId,expected_brand_revision:'1',expected_board_updated_at:time,include_discussions:false,excluded_threads:[],language:'en'};
