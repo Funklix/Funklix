@@ -22,7 +22,9 @@ function scopeRequest(v) {
 function text(v,max=2000) {
   if(v == null || v === '') return '';
   if(typeof v!=='string') fail('UNSUPPORTED_SOURCE',422);
-  if(v.length>max || /[\u0000-\u0008\u000b\u000c\u000e-\u001f]/u.test(v)) fail('CONTEXT_OVERFLOW',413);
+  if(v.length>max) fail('CONTEXT_OVERFLOW',413);
+  if(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f]/u.test(v)
+    || /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/u.test(v)) fail('UNSUPPORTED_SOURCE',422);
   return v;
 }
 function values(v) {
@@ -35,16 +37,24 @@ const PROFILE_FIELDS = ['brandCore','valueProposition','offer','coreOffer','tone
 const NODE_TYPES = new Set(['Idea','Campaign Variation','Content','Social Media Posting','Social Media Post','Landing Page','Email Campaign','Visual Concept','Image Brief']);
 function extract(brand,board,learnings,scope) {
   const sources=[],threads=[],excluded=[];
+  let completeThreads=true;
   const add=(kind,body,extra={}) => { if(body) sources.push({ref:'s'+(sources.length+1),kind,text:body,...extra}); };
+  const field=v=>{const body=values(v);if(v!=null&&v!==''&&!body&&(!Array.isArray(v)||v.length))excluded.push('unsupported_field');return body;};
   function profile(core,kind) {
+    if(core==null) return;
     if(!plain(core)) fail('UNSUPPORTED_SOURCE',422);
-    for(const k of PROFILE_FIELDS) add(kind,values(core[k]),{field:k});
-    for(const k of ['dosAndDonts','brandVoiceExamples']) if(plain(core[k])) for(const f of k==='dosAndDonts'?['dos','donts']:['good','avoid']) add(kind,values(core[k][f]),{field:k+'.'+f});
+    for(const k of PROFILE_FIELDS) add(kind,field(core[k]),{field:k});
+    for(const k of ['dosAndDonts','brandVoiceExamples']) if(plain(core[k])) for(const f of k==='dosAndDonts'?['dos','donts']:['good','avoid']) add(kind,field(core[k][f]),{field:k+'.'+f});
+    for(const k of ['personas','customTiles']) {
+      if(Array.isArray(core[k])&&core[k].length>100) fail('CONTEXT_OVERFLOW',413);
+      if(core[k]!=null&&!Array.isArray(core[k])) excluded.push('unsupported_field');
+    }
     if(Array.isArray(core.personas)) for(const p of core.personas) {
-      const body=typeof p==='string'?text(p):plain(p)?['name','role','description','needs','painPoints','motivations'].map(k=>values(p[k])).filter(Boolean).join(' | '):'';
+      const body=typeof p==='string'?text(p):plain(p)?['name','role','description','needs','painPoints','motivations'].map(k=>field(p[k])).filter(Boolean).join(' | '):'';
+      if(!plain(p)&&typeof p!=='string') excluded.push('unsupported_field');
       add(kind,body,{field:'personas'});
     }
-    if(plain(core.brandDNA)) add(kind,['primaryArchetype','secondaryArchetype','reasoning'].map(k=>values(core.brandDNA[k])).filter(Boolean).join(' | '),{field:'brandDNA',approval:core.brandDNA.userApproved===true?'human_approved':'draft'});
+    if(plain(core.brandDNA)) add(kind,['primaryArchetype','secondaryArchetype','reasoning'].map(k=>field(core.brandDNA[k])).filter(Boolean).join(' | '),{field:'brandDNA',approval:core.brandDNA.userApproved===true?'human_approved':'draft'});
     if(Array.isArray(core.customTiles)) for(const tile of core.customTiles) {
       if(['pitch_deck','whitepaper'].includes(tile?.moduleType)) { excluded.push('private_document'); continue; }
       const accepted=projectAcceptedStrategyModule(tile);
@@ -53,30 +63,41 @@ function extract(brand,board,learnings,scope) {
     }
   }
   profile(brand.brand_core,'canonical_profile');
-  if(board.brand_core_snapshot) profile(board.brand_core_snapshot,'campaign_snapshot');
+  profile(board.brand_core_snapshot,'campaign_snapshot');
   const canvas=board.canvas_json;
-  if(!plain(canvas)||!Array.isArray(canvas.nodes)||!Array.isArray(canvas.edges)||canvas.nodes.length>100||canvas.edges.length>300
-    || (canvas.schemaVersion!=null&&canvas.schemaVersion!==1)
+  // Canvas hydration defaults absent collections to empty. Persisted relationships
+  // are [fromId,toId] tuples (addEdge/serializeState), not provider edge objects.
+  if(!plain(canvas)) fail('UNSUPPORTED_SOURCE',422);
+  const nodes=canvas.nodes===undefined?[]:canvas.nodes,rawEdges=canvas.edges===undefined?[]:canvas.edges;
+  if(!Array.isArray(nodes)||!Array.isArray(rawEdges)
+    || (canvas.schemaVersion!=null&&canvas.schemaVersion!==1&&canvas.schemaVersion!=='1')
     || (canvas.version!=null&&!['1','2','3'].includes(String(canvas.version)))) fail('UNSUPPORTED_SOURCE',422);
+  if(nodes.length>100||rawEdges.length>300) fail('CONTEXT_OVERFLOW',413);
   const ids=new Set();
-  for(const n of canvas.nodes) {
-    if(!plain(n)||typeof n.id!=='string'||!n.id||n.id.length>200||ids.has(n.id)) fail('UNSUPPORTED_SOURCE',422);
+  for(const n of nodes) {
+    if(!plain(n)||typeof n.id!=='string'||n.id.length>200||!n.id.trim()||ids.has(n.id)
+      || /[\u0000-\u001f\u007f-\u009f]/u.test(n.id)
+      || /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/u.test(n.id)) fail('UNSUPPORTED_SOURCE',422);
     ids.add(n.id);
-    if(n.deleted===true||n.archived===true||n.active===false) {excluded.push('inactive_node');continue;}
-    if(!NODE_TYPES.has(n.type)) {excluded.push('unsupported_node');continue;}
-    const body=['title','content','description','body'].map(k=>values(n[k])).filter(Boolean);
-    if(plain(n.social)) for(const k of ['caption','text','platform']) if(values(n.social[k])) body.push(values(n.social[k]));
+    if(n.deleted===true||n.archived===true||n.active===false) {excluded.push('inactive_node');if(n.postits?.length)completeThreads=false;continue;}
+    if(!NODE_TYPES.has(n.type)) {excluded.push('unsupported_node');if(n.postits?.length)completeThreads=false;continue;}
+    const body=['title','content','description','body'].map(k=>field(n[k])).filter(Boolean);
+    if(plain(n.social)) for(const k of ['caption','text','platform']) {const value=field(n.social[k]);if(value)body.push(value);}
     add('canvas_node',body.join('\n'),{node_id:n.id,node_type:n.type,origin:'unknown'});
-    if(n.postits!=null&&(!Array.isArray(n.postits)||n.postits.length>100)) fail('UNSUPPORTED_SOURCE',422);
+    if(n.postits!=null&&!Array.isArray(n.postits)) {excluded.push('unsupported_discussion');completeThreads=false;continue;}
+    if(n.postits?.length>100) fail('CONTEXT_OVERFLOW',413);
     for(const [index,root] of (n.postits||[]).entries()) {
       const key=n.id+':'+index;
-      if(!plain(root)||root.deleted===true) {excluded.push('deleted_discussion');continue;}
-      const title=typeof root.text==='string'?root.text.slice(0,100):'';
+      if(!plain(root)||root.deleted===true) {excluded.push(plain(root)?'deleted_discussion':'unsupported_discussion');completeThreads=false;continue;}
+      const title=typeof root.text==='string'?text(Array.from(root.text.slice(0,200)).slice(0,100).join('')):'';
       threads.push({key,node_id:n.id,title,ai:root.source==='ai_review'||root.authorEmail==='ai@funklix.local'||root.authorName==='AI Review'});
       if(!scope.include_discussions||scope.excluded_threads.includes(key)) {excluded.push('discussion');continue;}
       let count=0;
       function walk(msg,depth,parentAI=false) {
-        if(!plain(msg)||depth>4||++count>40||msg.deleted===true||msg.replies!=null&&!Array.isArray(msg.replies)) fail('UNSUPPORTED_THREAD',422);
+        if(!plain(msg)||depth>4||++count>40) fail('UNSUPPORTED_THREAD',422);
+        // Exclude the entire deleted subtree; never resurrect its descendants.
+        if(msg.deleted===true) {excluded.push('deleted_discussion');completeThreads=false;return;}
+        if(msg.replies!=null&&!Array.isArray(msg.replies)) fail('UNSUPPORTED_THREAD',422);
         const ai=msg.source==='ai_review'||msg.authorEmail==='ai@funklix.local'||msg.authorName==='AI Review';
         add(depth?'canvas_reply':'postit',text(msg.text),{node_id:n.id,thread:key,depth,attribution:ai?'ai_generated':'human_attributed_unverified',
           parent_ai:parentAI,resolved:msg.resolved===true,created_at:typeof msg.createdAt==='string'&&Number.isFinite(Date.parse(msg.createdAt))?msg.createdAt:null});
@@ -86,14 +107,22 @@ function extract(brand,board,learnings,scope) {
     }
   }
   if(scope.excluded_threads.some(k=>!threads.some(t=>t.key===k))) fail('STALE_SOURCE',409);
-  for(const e of canvas.edges) if(!plain(e)||!ids.has(e.from)||!ids.has(e.to)) fail('UNSUPPORTED_SOURCE',422);
-  const edges=canvas.edges.map(e=>({from:e.from,to:e.to}));
+  const edges=rawEdges.map(e=>{
+    // Retain BW-36.19's object form as a compatibility input; reject mixed or
+    // ambiguous endpoints rather than coercing IDs or guessing relationships.
+    const tuple=Array.isArray(e)&&e.length===2;
+    if(!tuple&&(!plain(e)||!Object.hasOwn(e,'from')||!Object.hasOwn(e,'to')
+      || ['source','target','fromIndex','toIndex'].some(k=>Object.hasOwn(e,k)))) fail('UNSUPPORTED_SOURCE',422);
+    const from=tuple?e[0]:e.from,to=tuple?e[1]:e.to;
+    if(!ids.has(from)||!ids.has(to)) fail('UNSUPPORTED_SOURCE',422);
+    return {from,to};
+  });
   for(const l of learnings) {
     const kind=l.status==='approved'?'approved_learning':'proposed_learning';
     add(kind,text(l.statement),{learning_id:l.id,revision:String(l.revision)});
     add(kind,text(l.evidence_summary,4000),{learning_id:l.id,revision:String(l.revision),field:'evidence_summary'});
   }
-  return {sources,threads,edges,coverage:{complete_threads:true,truncated_threads:0,excluded,limitations:['Allowlisted text fields only; omitted fields are not evidence of absence.','Accepted strategy modules use existing bounded projections.','Mutable authors and timestamps are not verified; resolution is not approval.']}};
+  return {sources,threads,edges,coverage:{complete_threads:completeThreads,truncated_threads:0,excluded,limitations:['Allowlisted text fields only; omitted fields are not evidence of absence.','Accepted strategy modules use existing bounded projections.','Mutable authors and timestamps are not verified; resolution is not approval.']}};
 }
 // All reads/locks finish before inference. A second transaction authorizes the entire
 // synthesis again; changing one essential source suppresses the entire result.
