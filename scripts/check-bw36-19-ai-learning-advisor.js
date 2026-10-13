@@ -47,7 +47,7 @@ async function contracts() {
  });
  await test('one bounded Responses request, no tools/retries/store, source-backed temporary suggestions',async()=>{
    const f=advisorRuntime(),out=await f.request({action:'analyze',scope:f.scope});assert.equal(out.statusCode,200,JSON.stringify(out.body));
-   const req=f.config.providerCalls[0].body;assert.equal(req.model,'gpt-4o-mini');assert.equal(req.store,false);assert.equal(req.max_output_tokens,2000);assert(!req.tools);assert(req.text.format.strict);
+   const req=f.config.providerCalls[0].body;assert.equal(req.model,'gpt-4o-mini');assert.equal(req.store,false);assert.equal(req.max_output_tokens,8192);assert(!req.tools);assert(req.text.format.strict);
    assert.equal(f.config.providerCalls.length,1);assert.equal(out.body.suggestions[0].mode,'single_node');assert.equal(out.body.suggestions[0].approval_required,true);
    const receipt=JSON.parse(Buffer.from(out.body.receipt.split('.')[0],'base64url'));assert(!JSON.stringify(receipt).includes('Use a clear'));assert(!JSON.stringify(receipt).includes('slogan'));
  });

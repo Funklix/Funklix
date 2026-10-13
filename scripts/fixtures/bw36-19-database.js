@@ -28,7 +28,7 @@ async function databaseChecks({canvas:savedCanvas}={}){
    evidence_class:'explicit_statement',decision_status:'unresolved',sources:[{ref:'s2',excerpt:'Use a clear next step.'}],limitations:['Review campaign scope.'],related_learning_ids:[],relationship:'new'};
   let calls=0,onProvider=null;
   const args={db,user:{email:EMAIL},brandId:B,scope,session:'signed-fixture-session',env:{OPENAI_API_KEY:'mock-only',AUTH_SECRET:'fixture-only'},fetchImpl:async()=>{
-   calls++;if(onProvider)await onProvider();return {ok:true,status:200,text:async()=>JSON.stringify({output_text:JSON.stringify({language:'en',suggestions:[suggestion]})})};
+   calls++;if(onProvider)await onProvider();return {ok:true,status:200,text:async()=>JSON.stringify({status:'completed',output_text:JSON.stringify({language:'en',suggestions:[suggestion]})})};
   }};
   const count=async()=>Number((await pg.query('SELECT count(*) n FROM brand_learnings')).rows[0].n);
   const before=(await pg.query('SELECT canvas_json FROM boards')).rows[0].canvas_json;

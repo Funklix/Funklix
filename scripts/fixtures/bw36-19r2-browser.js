@@ -41,7 +41,7 @@ async function browserChecks(){
    await action('cancel').focus();await page.keyboard.press('Tab');assert.equal(await page.evaluate(()=>document.activeElement.tagName),'SELECT');
    await page.keyboard.press('Escape');assert.equal(await page.evaluate(()=>document.activeElement.id),'open');
   }
-  f.config.providerFailure=null;f.r.base.env.OPENAI_LEARNING_ADVISOR_MODEL='test-context-model';f.r.base.env.OPENAI_LEARNING_ADVISOR_CONTEXT_TOKENS='12000';f.r.base.env.OPENAI_LEARNING_ADVISOR_TOKEN_ENCODING='o200k_base';
+  f.config.providerFailure=null;f.r.base.env.OPENAI_LEARNING_ADVISOR_MODEL='test-context-model';f.r.base.env.OPENAI_LEARNING_ADVISOR_CONTEXT_TOKENS='18192';f.r.base.env.OPENAI_LEARNING_ADVISOR_TOKEN_ENCODING='o200k_base';
   for(let i=0;i<45;i++)f.board.canvas_json.nodes.push({id:'large-'+i,type:'Content',content:'Persisted strategic evidence '+i+'. '+('Detail '+i+' ').repeat(300)});
   f.config.onProvider=()=>{
    const input=JSON.parse(f.config.providerCalls.at(-1).body.input[1].content);

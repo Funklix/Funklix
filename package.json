@@ -146,7 +146,8 @@
     "check:bw36.18": "node scripts/check-bw36-18-governed-learning-provenance.js",
     "check:bw36.19": "node scripts/check-bw36-19-ai-learning-advisor.js",
     "check:bw36.19r1": "node scripts/check-bw36-19r1-existing-board-compatibility.js",
-    "check:bw36.19r2": "node scripts/check-bw36-19r2-adaptive-learning-advisor-context.js"
+    "check:bw36.19r2": "node scripts/check-bw36-19r2-adaptive-learning-advisor-context.js",
+    "check:bw36.19r4": "node scripts/check-bw36-19r4-learning-advisor-output-reliability.js"
   },
   "devDependencies": {
     "@electric-sql/pglite": "0.3.15",

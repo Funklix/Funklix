@@ -11,7 +11,7 @@ function larger() {
  f.board.canvas_json.nodes[2].type='Campaign Variation';
  for(let i=0;i<36;i++)f.board.canvas_json.nodes.push({id:'large-'+i,type:'Content',title:'Evidence '+i,content:'Persisted campaign evidence '+i+'. '+('Careful strategic detail '+i+' ').repeat(110),postits:[]});
  f.board.canvas_json.edges.push(...Array.from({length:36},(_,i)=>['node-1','large-'+i]));
- f.r.base.env.OPENAI_LEARNING_ADVISOR_MODEL='test-context-model';f.r.base.env.OPENAI_LEARNING_ADVISOR_CONTEXT_TOKENS='12000';f.r.base.env.OPENAI_LEARNING_ADVISOR_TOKEN_ENCODING='o200k_base';
+ f.r.base.env.OPENAI_LEARNING_ADVISOR_MODEL='test-context-model';f.r.base.env.OPENAI_LEARNING_ADVISOR_CONTEXT_TOKENS='18192';f.r.base.env.OPENAI_LEARNING_ADVISOR_TOKEN_ENCODING='o200k_base';
  f.config.onProvider=()=>{
    const input=JSON.parse(f.config.providerCalls.at(-1).body.input[1].content);
    if(input.candidates){f.config.output={language:'en',suggestions:input.candidates.slice(0,1)};return;}
