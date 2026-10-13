@@ -3,5 +3,8 @@
     { "source": "/boards", "destination": "/index.html" },
     { "source": "/boards/:id", "destination": "/index.html" },
     { "source": "/brands/:id/setup", "destination": "/index.html" }
-  ]
+  ],
+  "functions": {
+    "api/brands/*/learning-advisor.js": { "maxDuration": 300 }
+  }
 }

@@ -37,13 +37,13 @@ async function contracts() {
    root.resolved=false;d=await f.service.readScope(f.r.pool,f.args.user,B,{...f.scope,include_discussions:true});assert(d.sources.find(s=>s.kind==='postit').resolved===false);
    d=await f.service.readScope(f.r.pool,f.args.user,B,{...f.scope,include_discussions:true,excluded_threads:['node-1:0']});assert(!d.sources.some(s=>s.kind==='postit'||s.kind==='canvas_reply'));
  });
- await test('unsupported schemas, duplicate Node IDs, context overflow and excessive nesting fail without partial analysis',async()=>{
-   for(const change of [f=>f.board.canvas_json.schemaVersion=99,f=>f.board.canvas_json.nodes.push(clone(f.board.canvas_json.nodes[0])),f=>f.board.canvas_json.nodes[0].content='x'.repeat(3000)]){
+ await test('unsupported schemas and duplicate Node IDs fail; long text and nested replies are supported',async()=>{
+   for(const change of [f=>f.board.canvas_json.schemaVersion=99,f=>f.board.canvas_json.nodes.push(clone(f.board.canvas_json.nodes[0]))]){
      const f=advisorRuntime();change(f);assert((await f.request({action:'analyze',scope:f.scope})).statusCode>=400);assert.equal(f.config.providerCalls.length,0);
    }
    const f=advisorRuntime();let p=f.board.canvas_json.nodes[0].postits[0];for(let i=0;i<6;i++){p.replies=[{text:'Nested'}];p=p.replies[0];}
-   assert.equal((await f.request({action:'analyze',scope:{...f.scope,include_discussions:true}})).body.error.code,'UNSUPPORTED_THREAD');
-   assert.equal(f.config.providerCalls.length,0);
+   assert.equal((await f.request({action:'analyze',scope:{...f.scope,include_discussions:true}})).statusCode,200);
+   assert.equal(f.config.providerCalls.length,1);
  });
  await test('one bounded Responses request, no tools/retries/store, source-backed temporary suggestions',async()=>{
    const f=advisorRuntime(),out=await f.request({action:'analyze',scope:f.scope});assert.equal(out.statusCode,200,JSON.stringify(out.body));
@@ -81,7 +81,7 @@ async function contracts() {
  await test('freshness between preparation and dispatch, signed expiry and independent model configuration',async()=>{
    const f=advisorRuntime();f.config.onScope=n=>{if(n===2)f.board.canvas_json.nodes[0].content='Changed before dispatch';};
    assert.equal((await f.request({action:'analyze',scope:f.scope})).body.error.code,'STALE_SOURCE');assert.equal(f.config.providerCalls.length,0);
-   const g=advisorRuntime();g.r.base.env.OPENAI_LEARNING_ADVISOR_MODEL='configured-fixture-model';
+   const g=advisorRuntime();g.r.base.env.OPENAI_LEARNING_ADVISOR_MODEL='configured-fixture-model';g.r.base.env.OPENAI_LEARNING_ADVISOR_CONTEXT_TOKENS='128000';g.r.base.env.OPENAI_LEARNING_ADVISOR_TOKEN_ENCODING='o200k_base';
    const out=await g.request({action:'analyze',scope:g.scope});assert.equal(g.config.providerCalls[0].body.model,'configured-fixture-model');
    const payload=JSON.parse(Buffer.from(out.body.receipt.split('.')[0],'base64url'));payload.expires=0;
    const body=Buffer.from(JSON.stringify(payload)).toString('base64url');

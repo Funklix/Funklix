@@ -157,7 +157,7 @@ check("no dependency, migration, provider, AI, or mutation boundary was added", 
   assert.match(workflow, /run: npm run check:bw36\.1r1/);
   const productionDelta = `${visibilitySource}\n${css.match(/\.journey-nav\{position:static;[^}]+\}/)?.[0] || ""}`;
   assert.doesNotMatch(productionDelta, /fetch|XMLHttpRequest|provider|openai|anthropic|INSERT|UPDATE|DELETE|migration|schedule|approval|publication|social/i);
-  assert.deepEqual(pkg.dependencies, { "@vercel/blob": "latest", pg: "^8.13.1" }, "runtime dependencies remain at the restored baseline");
+  assert.deepEqual(pkg.dependencies, { "@vercel/blob": "latest", "js-tiktoken": "1.0.21", pg: "^8.13.1" }, "runtime dependencies retain the restored baseline plus the pinned Advisor tokenizer");
 });
 
 assert.ok(checks >= 13, `expected focused coverage, received ${checks}`);

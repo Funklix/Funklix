@@ -21,8 +21,8 @@
     expired:['These suggestions expired or their authorized context changed. Analyze again.','Diese Vorschläge sind abgelaufen oder ihr berechtigter Kontext wurde geändert. Analysiere erneut.'],
     unavailable:['The analysis could not be completed. No automatic retry was made.','Die Analyse konnte nicht abgeschlossen werden. Es gab keinen automatischen Neuversuch.'],
     CONTEXT_OVERFLOW:['The selected context exceeds the input budget. Exclude discussions or choose a smaller Board. No incomplete thread was analyzed.','Der ausgewählte Kontext überschreitet das Eingabebudget. Schließe Diskussionen aus oder wähle ein kleineres Board. Es wurde kein unvollständiger Thread analysiert.'],
-    STALE_SOURCE:['Saved sources changed. Reopen the Advisor to load current sources; edited text is retained until you close.','Gespeicherte Quellen wurden geändert. Öffne den Berater erneut für aktuelle Quellen; bearbeiteter Text bleibt bis zum Schließen erhalten.'],
-    STALE_BRAND_REVISION:['The Brand changed. Reopen the Advisor to load current sources.','Die Marke wurde geändert. Öffne den Berater erneut für aktuelle Quellen.'],
+    STALE_SOURCE:['Saved sources changed. Reload saved sources, then analyze again. Your selected Board and discussion options are retained.','Gespeicherte Quellen wurden geändert. Lade die gespeicherten Quellen neu und analysiere erneut. Board-Auswahl und Diskussionsoptionen bleiben erhalten.'],
+    STALE_BRAND_REVISION:['The Brand changed. Reload saved sources, then analyze again.','Die Marke wurde geändert. Lade die gespeicherten Quellen neu und analysiere erneut.'],
     PROVIDER_UNAVAILABLE:['The existing OpenAI configuration is unavailable.','Die bestehende OpenAI-Konfiguration ist nicht verfügbar.'],
     PROVIDER_TIMEOUT:['Analysis timed out. No automatic retry was made.','Zeitlimit überschritten. Es gab keinen automatischen Neuversuch.'],
     PROVIDER_RATE_LIMITED:['OpenAI rejected the request due to its rate limit. No automatic retry was made.','OpenAI hat die Anfrage wegen seines Ratenlimits abgelehnt. Es gab keinen automatischen Neuversuch.'],
@@ -30,6 +30,16 @@
     OUTPUT_LANGUAGE_MISMATCH:['OpenAI returned the wrong language. No suggestions were released.','OpenAI lieferte die falsche Sprache. Es wurden keine Vorschläge freigegeben.'],
     UNSUPPORTED_SOURCE:['This saved Board schema or source is not supported.','Dieses gespeicherte Board-Schema oder diese Quelle wird nicht unterstützt.'],
     UNSUPPORTED_THREAD:['A thread exceeds supported nesting or size. Exclude it before analysis.','Ein Thread überschreitet die unterstützte Tiefe oder Größe. Schließe ihn vor der Analyse aus.'],
+    processing:['Larger analyses can require several OpenAI requests, more API usage and additional time. Analysis starts only when you press Analyze.','Größere Analysen können mehrere OpenAI-Anfragen, mehr API-Nutzung und zusätzliche Zeit erfordern. Die Analyse startet erst, wenn du auf Analysieren klickst.'],
+    pass:['Analyzing source group','Quellengruppe wird analysiert'],consolidating:['Consolidating validated findings…','Validierte Ergebnisse werden zusammengeführt…'],
+    planned:['OpenAI requests planned','OpenAI-Anfragen geplant'],requests:['OpenAI requests used','Verwendete OpenAI-Anfragen'],
+    refresh:['Reload saved sources','Gespeicherte Quellen neu laden'],
+    MODEL_CONTEXT_UNCONFIGURED:['The configured model needs a verified context-token setting on the server. Ask the administrator to configure it, then retry.','Für das konfigurierte Modell ist eine verifizierte Kontext-Token-Einstellung auf dem Server erforderlich. Bitte die Administration um die Einstellung und versuche es erneut.'],
+    THREAD_CONTEXT_EXCEEDED:['One complete discussion cannot fit this model request. Exclude that whole thread or analyze with a model whose verified context supports it. No suggestions were released.','Eine vollständige Diskussion passt nicht in eine Anfrage dieses Modells. Schließe den ganzen Thread aus oder nutze ein Modell mit ausreichend verifiziertem Kontext. Es wurden keine Vorschläge freigegeben.'],
+    SOURCE_CONTEXT_EXCEEDED:['A source or the consolidation evidence cannot fit the configured model context. Choose a smaller Board or exclude discussions, then retry. No suggestions were released.','Eine Quelle oder die zusammenzuführenden Belege passen nicht in den konfigurierten Modellkontext. Wähle ein kleineres Board oder schließe Diskussionen aus und versuche es erneut. Es wurden keine Vorschläge freigegeben.'],
+    ANALYSIS_RUNTIME_EXCEEDED:['This analysis exceeds the server execution window. Choose a smaller Board or exclude discussions, then retry. No partial result was released.','Diese Analyse überschreitet die Ausführungszeit des Servers. Wähle ein kleineres Board oder schließe Diskussionen aus und versuche es erneut. Es wurde kein Teilergebnis freigegeben.'],
+    ANALYSIS_CANCELLED:['Analysis was cancelled. Retry explicitly when ready.','Die Analyse wurde abgebrochen. Starte bei Bedarf ausdrücklich erneut.'],
+    selection:['All selected source groups were processed. Up to five suggestions were selected; this is not an exhaustive knowledge inventory.','Alle ausgewählten Quellengruppen wurden verarbeitet. Bis zu fünf Vorschläge wurden ausgewählt; dies ist kein vollständiges Wissensinventar.'],
     confidence:['Extraction confidence','Extraktionskonfidenz'],low:['Low','Niedrig'],medium:['Medium','Mittel'],high:['High','Hoch'],
     learning_candidate:['Potential Learning','Mögliches Learning'],decision_candidate:['Decision statement','Entscheidungsaussage'],correction:['Correction','Korrektur'],
     knowledge_gap:['Knowledge gap','Wissenslücke'],potential_conflict:['Potential conflict','Möglicher Konflikt'],learning_update_candidate:['Learning update','Learning-Aktualisierung'],
@@ -55,35 +65,64 @@
   };
   function create(options) {
     const doc=options.document||root.document;
-    let dialog=null,origin=null,busy=false,alive=true,generation=0,data=null,editing=null,scope=null,meta=null,monitor=null,expiry=null;
+    let dialog=null,origin=null,busy=false,alive=true,generation=0,data=null,editing=null,scope=null,meta=null,monitor=null,expiry=null,activeController=null;
     const t=k=>(COPY[k]||root.FunklixBrandLearnings?.COPY[k]||COPY.unavailable)[options.language()==='de'?1:0];
     const el=(tag,value,parent)=>{const n=doc.createElement(tag);if(value)n.textContent=value;parent?.append(n);return n;};
     const button=(key,parent,fn)=>{const b=el('button',t(key),parent);b.type='button';b.className='fk-btn fk-btn-secondary';b.dataset.advisorAction=key;b.addEventListener('click',fn);return b;};
     const current=()=>alive&&options.current()&&options.connected();
     async function request(body) {
-      const controller=new root.AbortController(),timer=root.setTimeout(()=>controller.abort(),35000),g=generation;
+      const controller=new root.AbortController(),timer=root.setTimeout(()=>controller.abort(),body?.action==='analyze'?300000:35000),g=generation;activeController=controller;
       try{
         const url='/api/brands/'+options.brand.id+'/learning-advisor'+(body?'':'?workspace_id='+encodeURIComponent(options.workspaceId));
         const r=await (options.fetchImpl||root.fetch.bind(root))(url,{method:body?'POST':'GET',credentials:'same-origin',cache:'no-store',signal:controller.signal,
-          headers:{Accept:'application/json',...(body?{'Content-Type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{})});
-        const result=await r.json().catch(()=>null);
+          headers:{Accept:body?.action==='analyze'?'application/x-ndjson':'application/json',...(body?{'Content-Type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{})});
+        let result;
+        if(r.headers?.get('content-type')?.includes('application/x-ndjson')&&r.body) {
+          const reader=r.body.getReader(),decoder=new root.TextDecoder();let buffer='',terminal=false;
+          while(true) {
+            const {done,value}=await reader.read();buffer+=decoder.decode(value||new Uint8Array(),{stream:!done});
+            if(buffer.length>128000)throw Object.assign(new Error(),{code:'INVALID_OUTPUT'});
+            let newline;
+            while((newline=buffer.indexOf('\n'))>=0) {
+              const line=buffer.slice(0,newline);buffer=buffer.slice(newline+1);if(!line.trim())continue;
+              const event=JSON.parse(line);
+              if(!dialog||!current()||g!==generation)throw Object.assign(new Error(),{code:'expired'});
+              if(event.error)throw Object.assign(new Error(),{code:event.error.code});
+              if(event.progress&&!terminal)progress(event.progress);
+              if(event.result){if(terminal)throw new Error();result=event.result;terminal=true;}
+            }
+            if(done){if(buffer.trim()||!terminal)throw Object.assign(new Error(),{code:'unavailable'});break;}
+          }
+        } else result=await r.json().catch(()=>null);
         if(!dialog||!current()||g!==generation)throw Object.assign(new Error(),{code:'expired'});
         if(!r.ok)throw Object.assign(new Error(),{code:result?.error?.code||'unavailable'});
         if(!result||!['brand_learning_advisor_v1','brand_learnings_v1'].includes(result.contract))throw new Error();
         return result;
-      }finally{root.clearTimeout(timer);}
+      }catch(e){if(e.name==='AbortError')throw Object.assign(new Error(),{code:'PROVIDER_TIMEOUT'});throw e;}finally{root.clearTimeout(timer);if(activeController===controller)activeController=null;}
     }
     function clear(){data=null;editing=null;if(controls)controls.hidden=false;root.clearTimeout(expiry);}
-    function close(){generation++;clear();root.clearInterval(monitor);dialog?.close();dialog?.remove();dialog=null;busy=false;doc.removeEventListener('visibilitychange',resume);root.removeEventListener('focus',resume);if(origin?.isConnected)origin.focus();}
+    function close(){generation++;activeController?.abort();clear();root.clearInterval(monitor);dialog?.close();dialog?.remove();dialog=null;busy=false;doc.removeEventListener('visibilitychange',resume);root.removeEventListener('focus',resume);if(origin?.isConnected)origin.focus();}
     function discard(action){
       if(!editing?.dirty){action();return;}
       if(dialog.querySelector('[data-advisor-discard]'))return;
       const box=el('div','',dialog);box.dataset.advisorDiscard='true';el('p',t('discard'),box);
       button('keep',box,()=>{box.remove();editing?.statement.focus();});button('discardAction',box,action).focus();
     }
-    function cancel(){if(!busy)discard(close);}
+    function cancel(){discard(close);}
     let feedback,controls,results,select,discussion,threadList;
-    function message(code){feedback.textContent=t(code);}
+    function message(code){
+      const state=['preview','loading'].includes(code)?'progress':code==='saved'?'info':'error';
+      feedback.className='advisor-feedback advisor-feedback-'+state;feedback.dataset.state=state;
+      feedback.setAttribute('role',state==='error'?'alert':'status');feedback.setAttribute('aria-live',state==='error'?'assertive':'polite');
+      feedback.replaceChildren();
+      const icon=el('span',state==='error'?'⚠':state==='progress'?'◌':'ⓘ',feedback);icon.setAttribute('aria-hidden','true');
+      el('span',t(code),feedback);
+    }
+    function progress(value){
+      if(!['analyzing','consolidating'].includes(value.stage)||!Number.isSafeInteger(value.completed)||!Number.isSafeInteger(value.total)||value.total<1||value.completed<0||value.completed>value.total)return;
+      message('loading');feedback.lastElementChild.textContent=value.stage==='consolidating'?t('consolidating'):t('pass')+' '+(value.completed+1)+' / '+value.total;
+      if(Number.isSafeInteger(value.planned_requests)&&value.planned_requests>1)feedback.lastElementChild.textContent+=' · '+value.planned_requests+' '+t('planned');
+    }
     async function validate(){
       if(!data||data.expires<=Date.now())throw Object.assign(new Error(),{code:'expired'});
       await request({action:'validate',receipt:data.receipt});
@@ -97,12 +136,13 @@
       finally{busy=false;}
     }
     function coverage(value,parent){
-      el('p',value.complete_threads===false?t('partialThreads'):options.language()==='de'?'Vollständige Threads im gewählten Umfang; keine gekürzten Threads. Nur erlaubte Textfelder und begrenzte akzeptierte Module. Fehlende Felder beweisen keine Wissenslücke.':'Whole threads in selected scope; no truncated threads. Allowlisted text fields and bounded accepted modules only. Missing fields do not prove a knowledge gap.',parent);
+      if(value.complete_threads===false){const warning=el('div','',parent);warning.className='advisor-feedback advisor-feedback-warning';warning.setAttribute('role','status');const icon=el('span','⚠',warning);icon.setAttribute('aria-hidden','true');el('span',t('partialThreads'),warning);}
+      else el('p',options.language()==='de'?'Vollständige Threads im gewählten Umfang; keine gekürzten Threads. Nur erlaubte Textfelder und begrenzte akzeptierte Module. Fehlende Felder beweisen keine Wissenslücke.':'Whole threads in selected scope; no truncated threads. Allowlisted text fields and bounded accepted modules only. Missing fields do not prove a knowledge gap.',parent);
       const categories=[...new Set(value.excluded||[])].map(k=>t(k));
       el('p',t('excluded')+': '+(categories.join(', ')||'0'),parent);
     }
     function renderResults(){
-      results.replaceChildren();results.hidden=false;el('p',t('advisory'),results);coverage(data.coverage,results);
+      results.replaceChildren();results.hidden=false;el('p',t('advisory'),results);coverage(data.coverage,results);if(data.coverage.analysis_complete)el('p',t('selection'),results);if(Number.isSafeInteger(data.metadata?.provider_requests))el('p',data.metadata.provider_requests+' '+t('requests'),results);
       if(!data.suggestions.length)el('p',t('empty'),results);
       for(const s of data.suggestions){
         const card=el('article','',results);card.className='learning-card';el('h3',t(s.type),card);el('p',s.statement,card);el('p',s.rationale,card);
@@ -144,7 +184,8 @@
       const back=button('back',actions,()=>{if(!busy)discard(()=>{editing=null;controls.hidden=false;renderResults();});});
       statement.focus();
     }
-    async function refreshScope(){
+    async function refreshScope(preserve=false){
+      const excluded=preserve?[...(scope?.excluded_threads||[])]:[];
       generation++;const flight=generation;clear();results.replaceChildren();threadList.replaceChildren();if(!select.value){scope=null;return;}
       const board=meta.boards.find(b=>b.id===select.value);if(!board)return;
       scope={workspace_id:options.workspaceId,board_id:board.id,expected_brand_revision:meta.brand.revision,expected_board_updated_at:board.updated_at,include_discussions:discussion.checked,excluded_threads:[],language:options.language()};
@@ -154,11 +195,12 @@
         if(discussion.checked){
           el('p',t('discussionDisclosure'),threadList);
           for(const thread of preview.threads){
-            const label=el('label','',threadList),check=el('input','',label);check.type='checkbox';check.checked=true;check.dataset.advisorThread=thread.key;
+            const label=el('label','',threadList),check=el('input','',label);check.type='checkbox';check.checked=!excluded.includes(thread.key);check.dataset.advisorThread=thread.key;
             el('span',thread.node_id+' · '+thread.title+(thread.ai?' · '+t('ai'):''),label);
             check.addEventListener('change',()=>{clear();results.replaceChildren();scope.excluded_threads=[...threadList.querySelectorAll('input')].filter(x=>!x.checked).map(x=>x.dataset.advisorThread);});
           }
         }
+        scope.excluded_threads=discussion.checked?[...threadList.querySelectorAll('input')].filter(x=>!x.checked).map(x=>x.dataset.advisorThread):[];
         coverage(preview.coverage,threadList);feedback.textContent='';
       }catch(e){if(flight===generation&&dialog){scope=null;message(e.code||'unavailable');}}
       finally{if(flight===generation&&dialog){busy=false;analyze.disabled=!scope;}}
@@ -167,8 +209,8 @@
     async function open(){
       if(dialog||!current())return;
       origin=doc.activeElement;generation++;const language=options.language();dialog=el('dialog');dialog.className='brand-learning-dialog learning-advisor-dialog';dialog.dataset.learningAdvisor='true';dialog.setAttribute('aria-label',t('title'));doc.body.append(dialog);
-      el('h2',t('title'),dialog);const receivingBrand=el('p',options.brand.name,dialog);el('p',t('scope'),dialog);el('p',t('disclosure'),dialog);
-      feedback=el('p',t('preview'),dialog);feedback.setAttribute('role','status');feedback.setAttribute('aria-live','polite');
+      el('h2',t('title'),dialog);const receivingBrand=el('p',options.brand.name,dialog);el('p',t('scope'),dialog);el('p',t('disclosure'),dialog);const processing=el('p',t('processing'),dialog);processing.className='advisor-context';
+      feedback=el('div','',dialog);message('preview');feedback.setAttribute('role','status');feedback.setAttribute('aria-live','polite');
       controls=el('div','',dialog);
       const label=el('label','',controls);el('span',t('board'),label);select=el('select','',label);select.dataset.advisorBoard='true';el('option',t('choose'),select).value='';
       const opt=el('label','',controls);discussion=el('input','',opt);discussion.type='checkbox';discussion.checked=false;discussion.dataset.advisorDiscussions='true';el('span',t('discussions'),opt);
@@ -182,7 +224,15 @@
           data=result;feedback.textContent='';renderResults();expiry=root.setTimeout(()=>{clear();results.replaceChildren();message('expired');},Math.max(0,data.expires-Date.now()));
         }catch(e){message(e.code||'unavailable');}finally{busy=false;if(dialog){analyze.disabled=!scope;select.disabled=discussion.disabled=false;threadList.querySelectorAll('input').forEach(n=>n.disabled=false);}}
       });analyze.disabled=true;
-      results=el('div','',dialog);const closeButton=button('cancel',dialog,cancel);
+      button('refresh',controls,async()=>{
+        if(busy||!select.value)return;busy=true;analyze.disabled=true;
+        try{const latest=await request();if(latest.brand?.id!==options.brand.id||!Array.isArray(latest.boards))throw new Error();const selected=select.value;meta=latest;
+          select.replaceChildren();el('option',t('choose'),select).value='';for(const board of meta.boards)el('option',board.name,select).value=board.id;select.value=selected;
+          if(!meta.boards.some(b=>b.id===select.value)){scope=null;threadList.replaceChildren();throw Object.assign(new Error(),{code:'SOURCE_UNAVAILABLE'});}
+          await refreshScope(true);
+        }catch(e){message(e.code||'unavailable');}finally{busy=false;if(dialog)analyze.disabled=!scope;}
+      });
+      results=el('div','',dialog);const footer=el('div','',dialog);footer.className='advisor-footer';const closeButton=button('cancel',footer,cancel);
       select.addEventListener('change',()=>void refreshScope());discussion.addEventListener('change',()=>void refreshScope());
       dialog.addEventListener('cancel',e=>{e.preventDefault();cancel();});
       dialog.addEventListener('keydown',e=>{

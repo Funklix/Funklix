@@ -33,8 +33,7 @@ function createHandler({db,env=process.env,fetchImpl=fetch}={}) {
             JOIN public.brands b ON b.workspace_id=w.id WHERE w.id=$1 AND b.id=$3 AND w.status='active'
             AND m.identity_id=$2 AND m.status='accepted' FOR SHARE OF w,m,b`,[query.workspace_id,identity.identityId,brandId])).rows[0];
           if(!membership)fail('WORKSPACE_ACCESS_DENIED',403);
-          const rows=(await client.query('SELECT id,name,updated_at FROM public.boards WHERE brand_id=$1 AND workspace_id=$2 ORDER BY name,id LIMIT 101',[brandId,query.workspace_id])).rows;
-          if(rows.length>100)fail('CONTEXT_OVERFLOW',413);
+          const rows=(await client.query('SELECT id,name,updated_at FROM public.boards WHERE brand_id=$1 AND workspace_id=$2 ORDER BY name,id',[brandId,query.workspace_id])).rows;
           const boards=[];
           for(const row of rows){const {access}=await getBoardAccess(row.id,user,{client});if(access?.canRead&&!access.publicView)boards.push(row);}
           await client.query('COMMIT');
@@ -42,13 +41,24 @@ function createHandler({db,env=process.env,fetchImpl=fetch}={}) {
         }catch(e){await client.query('ROLLBACK').catch(()=>{});throw e;}finally{client.release();}
       }
       const body=req.body;
-      if(!body||typeof body!=='object'||Array.isArray(body)||Buffer.byteLength(JSON.stringify(body))>24000)fail('INVALID_REQUEST');
+      if(!body||typeof body!=='object'||Array.isArray(body)||Buffer.byteLength(JSON.stringify(body))>64000)fail('INVALID_REQUEST');
       const keys=body.action==='adopt'?['action','receipt','suggestion_id','statement','evidence_summary']:
         body.action==='validate'?['action','receipt']:['action','scope'];
       if(Object.keys(body).length!==keys.length||keys.some(k=>!Object.hasOwn(body,k)))fail('INVALID_REQUEST');
       if(body.action==='preview'||body.action==='analyze') {
         const scope=advisor.scopeRequest(body.scope);
-        if(body.action==='analyze')return res.status(200).json(await advisor.analyze({...args,scope}));
+        if(body.action==='analyze') {
+          // Opt-in streaming exposes real server stages, never elapsed-time guesses.
+          if(req.headers?.accept==='application/x-ndjson'&&typeof res.write==='function') {
+            let cancelled=false;res.on?.('close',()=>{cancelled=true;});
+            res.status(200);res.setHeader('Content-Type','application/x-ndjson');
+            const send=value=>{if(!cancelled)res.write(JSON.stringify(value)+'\n');};
+            try {const result=await advisor.analyze({...args,scope,onProgress:progress=>send({progress}),isCancelled:()=>cancelled});send({result});}
+            catch(e){const safe=learning.boundedError(e);send({error:{code:safe.code}});}
+            return res.end();
+          }
+          return res.status(200).json(await advisor.analyze({...args,scope}));
+        }
         // Preview lists whole threads without extracting their reply bodies, so even
         // unsupported/oversized threads can be explicitly excluded before analysis.
         const data=await advisor.readScope(pool,user,brandId,{...scope,include_discussions:false,excluded_threads:[]});
@@ -62,3 +72,6 @@ function createHandler({db,env=process.env,fetchImpl=fetch}={}) {
 }
 module.exports=createHandler();
 module.exports.createHandler=createHandler;
+
+// 20 seconds remain for extraction, authorization, delivery and cleanup.
+module.exports.config={maxDuration:300};

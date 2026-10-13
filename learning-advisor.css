@@ -7,3 +7,16 @@
 .learning-advisor-dialog .learning-card { margin-block:12px; overflow-wrap:anywhere; }
 .learning-advisor-dialog textarea { box-sizing:border-box; width:100%; }
 .advisor-threads { max-height:240px; overflow:auto; }
+
+.learning-advisor-dialog { max-height:calc(100dvh - 32px); overflow-y:auto; overscroll-behavior:contain; }
+.advisor-context { padding:12px; border-inline-start:3px solid var(--fk-color-border, GrayText); background:var(--fk-color-surface-input, Canvas); }
+.advisor-feedback { display:flex; gap:10px; align-items:flex-start; overflow-wrap:anywhere; }
+.advisor-feedback:empty { display:none; }
+.advisor-feedback-error { padding:12px; border:2px solid var(--fk-color-danger, #b42318); border-radius:8px; background:var(--fk-color-surface-input, Canvas); }
+.advisor-feedback-error > span:first-child { color:var(--fk-color-danger, #b42318); font-size:1.25em; }
+.advisor-feedback-progress { padding:12px; border-inline-start:3px solid var(--fk-color-accent, Highlight); }
+.advisor-footer { position:sticky; bottom:-24px; padding-block:12px; background:var(--fk-color-surface-elevated, Canvas); }
+.learning-advisor-dialog [data-advisor-action=analyze] { width:100%; margin-block:12px; }
+.learning-advisor-dialog button { white-space:normal; }
+
+.advisor-feedback-warning { padding:12px; border-inline-start:3px solid var(--fk-color-warning, #b45309); background:var(--fk-color-surface-input, Canvas); }

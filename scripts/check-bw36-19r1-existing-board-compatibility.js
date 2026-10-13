@@ -86,11 +86,11 @@ async function main() {
     h=>h.r.base.db.brands[0].brand_core.personas=Array.from({length:101},()=>({name:'Persona'}))
   ]) {
     const h=advisorRuntime();h.board.canvas_json=campaignBoard();mutate(h);
-    response=await h.request({action:'preview',scope:h.scope});assert.equal(response.statusCode,413);assert.equal(response.body.error.code,'CONTEXT_OVERFLOW');
+    response=await h.request({action:'preview',scope:h.scope});assert.equal(response.statusCode,200,'R2 supports former arbitrary structural/text limits');
     assert.equal(h.config.providerCalls.length,0);
   }
   const budget=advisorRuntime();budget.board.canvas_json.nodes[0].content='漢'.repeat(1900);
-  assert.equal((await budget.request({action:'analyze',scope:budget.scope})).body.error.code,'CONTEXT_OVERFLOW');assert.equal(budget.config.providerCalls.length,0);
+  budget.config.output.suggestions=[];assert.equal((await budget.request({action:'analyze',scope:budget.scope})).statusCode,200);assert.equal(budget.config.providerCalls.length,1);
   const thread=advisorRuntime();thread.board.canvas_json.nodes[0].postits[0].replies={malformed:true};
   assert.equal((await thread.request({action:'preview',scope:{...thread.scope,include_discussions:true}})).statusCode,200);
   assert.equal((await thread.request({action:'analyze',scope:{...thread.scope,include_discussions:true}})).body.error.code,'UNSUPPORTED_THREAD');
@@ -109,7 +109,7 @@ async function main() {
   root.replies=Array.from({length:39},()=>({text:'Reply'}));
   await messages.service.readScope(messages.r.pool,messages.args.user,messages.args.brandId,{...messages.scope,include_discussions:true});
   root.replies.push({text:'One too many'});
-  assert.equal((await messages.request({action:'analyze',scope:{...messages.scope,include_discussions:true}})).body.error.code,'UNSUPPORTED_THREAD');assert.equal(messages.config.providerCalls.length,0);
+  assert.equal((await messages.request({action:'analyze',scope:{...messages.scope,include_discussions:true}})).statusCode,200);assert.equal(messages.config.providerCalls.length,1);
   for(const [mutate,code] of [
     [h=>h.board.updated_at='2026-10-13T00:00:00Z','STALE_SOURCE'],
     [h=>h.board.brand_id=h.scope.workspace_id,'SOURCE_UNAVAILABLE'],

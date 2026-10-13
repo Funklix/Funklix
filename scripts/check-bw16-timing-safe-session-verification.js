@@ -17,7 +17,7 @@ assert.match(authSource, /return `\$\{body\}\.\$\{sign\(body\)\}`/);
 assert.match(authSource, /const TTL_SECONDS = 60 \* 60 \* 24 \* 14/);
 assert.match(authSource, /const SESSION_COOKIE = 'funklix_session'/);
 assert.match(authSource, /Path=\/; HttpOnly; SameSite=Lax; Max-Age=\$\{TTL_SECONDS\}/);
-assert.deepStrictEqual(Object.keys(JSON.parse(packageSource).dependencies).sort(), ['@vercel/blob', 'pg']);
+assert.deepStrictEqual(Object.keys(JSON.parse(packageSource).dependencies).sort(), ['@vercel/blob', 'js-tiktoken', 'pg']);
 assert.match(oauthStartSource, /randomBytes\(16\)\.toString\('hex'\)/);
 assert.match(oauthCallbackSource, /state !== cookies\.funklix_oauth_state/);
 
