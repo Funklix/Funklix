@@ -10,7 +10,7 @@ function advisorRuntime() {
     if(config.onProvider)await config.onProvider();
     if(config.providerFailure==='timeout')throw Object.assign(new Error('private'),{name:'AbortError'});
     const status=config.providerFailure||200;
-    return {ok:status===200,status,text:async()=>JSON.stringify({status:'completed',output_text:JSON.stringify(config.output)})};
+    return {ok:status===200,status,text:async()=>config.providerRaw??JSON.stringify(config.providerEnvelope??{status:'completed',output_text:JSON.stringify(config.output)})};
   };
   r=learningRuntime({fetchImpl,queryExtension:async(sql,args,{db,base})=>{
     if(sql.includes('FROM public.workspaces'))return rows(config.membership&&args[0]===W&&args[1]===I&&(!args[2]||args[2]===B)?[{id:W}]:[]);
