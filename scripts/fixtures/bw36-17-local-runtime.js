@@ -16,7 +16,7 @@ function learningRuntime({queryExtension,fetchImpl} = {}) {
     if (sql === 'BEGIN') { tx=clone({learnings:db.learnings,events:db.events}); return rows([]); }
     if (sql === 'ROLLBACK') { tx=null; return rows([]); }
     if (sql === 'COMMIT') { if(db.failCommit)throw Object.assign(new Error('private failure'),{code:'ECONNREFUSED'}); Object.assign(db,tx);tx=null;return rows([]); }
-    if (queryExtension) { const result=await queryExtension(sql,args,{db,base}); if(result) return result; }
+    if (queryExtension) { const result=await queryExtension(sql,args,{db,base,transaction:state()}); if(result) return result; }
     if (sql.includes('FROM public.app_identities') && !sql.includes('brand_learnings') && !sql.includes('brand_learning_events')) {
       return rows(db.identity === 'missing' ? [] : db.identity === 'ambiguous' ? [{},{}] : [{id:I,canonical_email:EMAIL,status:db.identity,revision:'1'}]);
     }

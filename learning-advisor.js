@@ -14,6 +14,7 @@
     manual:['Create a human-authored manual proposal. Profile-only or multi-source evidence cannot be stored as structured provenance. You take responsibility for the edited Brand-wide statement.','Erstelle einen menschlich verfassten manuellen Vorschlag. Reine Profilbelege oder mehrere Quellen können nicht als strukturierte Herkunft gespeichert werden. Du übernimmst Verantwortung für die bearbeitete markenweite Aussage.'],
     successor:['Propose an update through the existing successor workflow. It inherits the original provenance and cannot store a new multi-source evidence ledger. The original stays approved until human approval of the successor.','Schlage eine Aktualisierung über den bestehenden Nachfolgeprozess vor. Sie übernimmt die ursprüngliche Herkunft und kann kein neues Quellenverzeichnis speichern. Das Original bleibt bis zur menschlichen Bestätigung des Nachfolgers bestätigt.'],
     statement:['Human-reviewed statement','Menschlich geprüfte Aussage'],evidence:['Minimized evidence / context (optional)','Minimierte Belege / Kontext (optional)'],
+    proposed:['Proposed','Vorgeschlagen'],selectSuggestion:['Select suggestion','Vorschlag auswählen'],reviewSelected:['Review selected','Auswahl prüfen'],previous:['Previous','Zurück'],next:['Next','Weiter'],remove:['Remove from selection','Aus Auswahl entfernen'],saveSelected:['Save selected as proposals','Auswahl als Vorschläge speichern'],confirm:['Confirm save','Speichern bestätigen'],confirmText:['Save all reviewed items as proposals? Human approval remains separate. All items save together; if one fails, none are saved.','Alle geprüften Einträge als Vorschläge speichern? Die menschliche Bestätigung bleibt separat. Alle Einträge werden gemeinsam gespeichert; bei einem Fehler wird keiner gespeichert.'],notSaved:['No selected proposals were saved.','Kein ausgewählter Vorschlag wurde gespeichert.'],capacity:['Context exceeds the 4000-character storage limit. Review and shorten the editable text before saving; nothing has been silently removed.','Der Kontext überschreitet die Speichergrenze von 4000 Zeichen. Prüfe und kürze den bearbeitbaren Text vor dem Speichern; nichts wurde stillschweigend entfernt.'],aiContext:['AI interpretation (not verified evidence)','KI-Interpretation (kein verifizierter Beleg)'],verifiedContext:['Validated saved-source excerpt (does not verify the claim)','Validierter Auszug aus gespeicherter Quelle (bestätigt die Aussage nicht)'],limitedContext:['Source references are limited; complete provenance is not stored.','Quellenverweise sind begrenzt; die vollständige Herkunft wird nicht gespeichert.'],noEvidence:['Unverified: no validated supporting evidence is available.','Unverifiziert: keine validierten unterstützenden Belege verfügbar.'],
     save:['Save as proposed','Als Vorschlag speichern'],back:['Back to suggestions','Zurück zu Vorschlägen'],
     saved:['Saved as proposed. Review and approve in Brand Profile Learnings.','Als Vorschlag gespeichert. Prüfe und bestätige es in den Learnings des Markenprofils.'],
     empty:['No useful suggestions were found in this selected scope.','Im ausgewählten Umfang wurden keine nützlichen Vorschläge gefunden.'],
@@ -66,8 +67,28 @@
     SOURCE_ACCESS_DENIED:['Access to the selected saved source was denied.','Zugriff auf die ausgewählte gespeicherte Quelle wurde verweigert.'],
     INVALID_RECEIPT:['This analysis is unavailable for the current session. Analyze again.','Diese Analyse ist für die aktuelle Sitzung nicht verfügbar. Analysiere erneut.']
   };
+  // Pure formatting of completed, server-validated analysis. No inference or
+  // browser-generated source identifiers; retain full text for explicit review.
+  function evidenceContext(s,language='en') {
+    const t=k=>COPY[k][language==='de'?1:0],parts=[];
+    if(s.rationale)parts.push(t('aiContext')+': '+s.rationale);
+    const sources=s.provenance_status==='unverified'?[]:(s.sources||[]);
+    if(!sources.length)parts.push(t('noEvidence'));
+    for(const source of sources) {
+      if(!source.excerpt)continue;
+      const description=[COPY[source.kind]?.[language==='de'?1:0],source.node_title,source.field].filter(Boolean).join(' · ');
+      parts.push(t('verifiedContext')+(description?' — '+description:'')+': '+source.excerpt);
+      if(source.attribution)parts.push(COPY[source.attribution==='ai_generated'?'ai':'human'][language==='de'?1:0]);
+      if(source.resolved!=null)parts.push(COPY[source.resolved?'resolved':'open'][language==='de'?1:0]);
+    }
+    parts.push(t('limitedContext'));
+    for(const limitation of s.limitations||[])if(limitation&&!parts.includes(limitation))parts.push(limitation);
+    return parts.join('\n\n');
+  }
+  const normalized=value=>value.normalize('NFKC').replace(/\s+/gu,' ').trim();
   function create(options) {
     const doc=options.document||root.document;
+    const selected=new Set(),proposed=new Set(),drafts=new Map();let reviewIds=[],reviewIndex=0,reviewBulk=false,blocked=false;
     let dialog=null,origin=null,busy=false,alive=true,generation=0,data=null,editing=null,scope=null,meta=null,monitor=null,expiry=null,activeController=null;
     const t=k=>(COPY[k]||root.FunklixBrandLearnings?.COPY[k]||COPY.unavailable)[options.language()==='de'?1:0];
     const el=(tag,value,parent)=>{const n=doc.createElement(tag);if(value)n.textContent=value;parent?.append(n);return n;};
@@ -103,8 +124,8 @@
         return result;
       }catch(e){if(e.name==='AbortError')throw Object.assign(new Error(),{code:'PROVIDER_TIMEOUT'});throw e;}finally{root.clearTimeout(timer);if(activeController===controller)activeController=null;}
     }
-    function clear(){data=null;editing=null;if(controls)controls.hidden=false;root.clearTimeout(expiry);}
-    function close(){generation++;activeController?.abort();clear();root.clearInterval(monitor);dialog?.close();dialog?.remove();dialog=null;busy=false;doc.removeEventListener('visibilitychange',resume);root.removeEventListener('focus',resume);if(origin?.isConnected)origin.focus();}
+    function clear(){data=null;editing=null;selected.clear();proposed.clear();drafts.clear();reviewIds=[];blocked=false;if(controls)controls.hidden=false;root.clearTimeout(expiry);}
+    function close(){generation++;activeController?.abort();clear();root.clearInterval(monitor);dialog?.close();dialog?.remove();dialog=null;busy=false;doc.removeEventListener('visibilitychange',resume);root.removeEventListener('focus',resume);if(origin?.isConnected)origin.focus();else if(current())doc.querySelector('[data-learning-advisor-open]')?.focus();}
     function discard(action){
       if(!editing?.dirty){action();return;}
       if(dialog.querySelector('[data-advisor-discard]'))return;
@@ -114,7 +135,7 @@
     function cancel(){discard(close);}
     let feedback,controls,results,select,discussion,threadList;
     function message(code){
-      const state=['preview','loading'].includes(code)?'progress':code==='saved'?'info':'error';
+      const state=['preview','loading'].includes(code)?'progress':['saved','notSaved'].includes(code)?'info':'error';
       feedback.className='advisor-feedback advisor-feedback-'+state;feedback.dataset.state=state;
       feedback.setAttribute('role',state==='error'?'alert':'status');feedback.setAttribute('aria-live',state==='error'?'assertive':'polite');
       feedback.replaceChildren();
@@ -147,8 +168,9 @@
     function renderResults(){
       results.replaceChildren();results.hidden=false;el('p',t('advisory'),results);coverage(data.coverage,results);if(data.coverage.analysis_complete)el('p',t('selection'),results);if(Number.isSafeInteger(data.metadata?.provider_requests))el('p',data.metadata.provider_requests+' '+t('requests'),results);
       if(!data.suggestions.length)el('p',t('empty'),results);
+      const reviewSelected=button('reviewSelected',results,()=>startReview(data.suggestions.filter(s=>selected.has(s.id)),true));reviewSelected.disabled=!selected.size||blocked;
       for(const s of data.suggestions){
-        const card=el('article','',results);card.className='learning-card';el('h3',s.title||t(s.type),card);el('p',s.statement,card);
+        const card=el('article','',results);card.className='learning-card';card.dataset.advisorSuggestion=s.id;el('h3',s.title||t(s.type),card);el('p',s.statement,card);
         el('h4',t('why'),card);el('p',s.rationale,card);
         if(s.provenance_status==='unverified')el('p',t('unverified'),card);
         const evidence=el('details','',card);el('summary',t('support'),evidence);
@@ -161,31 +183,81 @@
         }
 
         el('p',t(s.mode==='successor'?'successor':s.mode==='manual'?'manual':'provenance'),card);
-        if(s.relationship!=='exact_duplicate')button('review',card,async()=>{
-          if(busy)return;busy=true;
-          try{await validate();edit(s);}catch(e){clear();results.replaceChildren();message(e.code||'expired');}finally{busy=false;}
-        });
+        const unavailable=s.relationship==='exact_duplicate'||blocked;
+        el('p',t(proposed.has(s.id)?'proposed':blocked?'expired':unavailable?'exact_duplicate':'new'),card);
+        const label=el('label','',card),check=el('input','',label);check.type='checkbox';check.dataset.advisorSelect=s.id;
+        check.checked=selected.has(s.id);check.disabled=unavailable||proposed.has(s.id);el('span',t('selectSuggestion'),label);
+        check.addEventListener('change',()=>{if(check.checked)selected.add(s.id);else selected.delete(s.id);reviewSelected.disabled=!selected.size||blocked;});
+        const review=button('review',card,()=>startReview([s],false));review.disabled=unavailable||proposed.has(s.id);
       }
     }
+    async function startReview(suggestions,bulk){
+      if(busy||blocked||!suggestions.length)return;busy=true;
+      try{await validate();reviewIds=suggestions.map(s=>s.id);reviewIndex=0;reviewBulk=bulk;edit(suggestions[0]);}
+      catch(e){clear();results.replaceChildren();message(e.code||'expired');}finally{busy=false;}
+    }
+    function capture(){
+      if(editing)drafts.set(editing.id,{statement:editing.statement.value,evidence:editing.evidence.value,dirty:editing.dirty});
+    }
+    function returnToList(){editing=null;controls.hidden=false;renderResults();results.querySelector('button:not(:disabled)')?.focus();}
     function edit(s){
-      controls.hidden=true;results.replaceChildren();el('h3',t('review'),results);
+      controls.hidden=true;results.replaceChildren();results.hidden=false;el('h3',s.title||t('review'),results);
+      if(reviewBulk)el('p',(reviewIndex+1)+' / '+reviewIds.length,results);
       el('p',t(s.mode==='successor'?'successor':s.mode==='manual'?'manual':'provenance'),results);
-      const field=(key,value,max)=>{const label=el('label','',results);el('span',t(key),label);const area=el('textarea','',label);area.value=value;area.maxLength=max;area.rows=4;area.dataset.advisorField=key;return area;};
-      const statement=field('statement',s.statement,2000),evidence=field('evidence','',4000);
-      editing={statement,dirty:false};for(const n of [statement,evidence])n.addEventListener('input',()=>{editing.dirty=true;});
+      const draft=drafts.get(s.id)||{statement:s.statement,evidence:evidenceContext(s,options.language()),dirty:false};
+      const field=(key,value)=>{const label=el('label','',results);el('span',t(key),label);const area=el('textarea','',label);area.value=value;area.rows=4;area.dataset.advisorField=key;return area;};
+      const statement=field('statement',draft.statement),evidence=field('evidence',draft.evidence);
+      const capacity=el('p','',results);capacity.setAttribute('role','status');
+      const showCapacity=()=>{capacity.textContent=Array.from(normalized(evidence.value)).length>4000?t('capacity'):'';};showCapacity();
+      editing={id:s.id,statement,evidence,dirty:draft.dirty||[...drafts.values()].some(d=>d.dirty)};
+      for(const n of [statement,evidence])n.addEventListener('input',()=>{editing.dirty=true;showCapacity();});
       const actions=el('div','',results);actions.className='learning-actions';
-      const save=button('save',actions,async()=>{
-        if(busy||!editing)return;
-        busy=true;save.disabled=true;back.disabled=true;
-        try{
-          await validate();
-          const result=await request({action:'adopt',receipt:data.receipt,suggestion_id:s.id,statement:statement.value,evidence_summary:evidence.value});
-          if(result.learning?.status!=='proposed')throw new Error();
-          clear();controls.hidden=false;results.replaceChildren();message('saved');void options.reload?.();
-        }catch(e){message(e.code||'unavailable');}finally{busy=false;if(save.isConnected){save.disabled=false;back.disabled=false;}}
+      if(reviewBulk){
+        const navigate=delta=>{if(busy)return;capture();reviewIndex+=delta;edit(data.suggestions.find(s=>s.id===reviewIds[reviewIndex]));};
+        const previous=button('previous',actions,()=>navigate(-1));previous.disabled=reviewIndex===0;
+        const next=button('next',actions,()=>navigate(1));next.disabled=reviewIndex===reviewIds.length-1;
+        button('remove',actions,()=>{if(busy)return;capture();selected.delete(s.id);reviewIds.splice(reviewIndex,1);if(!reviewIds.length)returnToList();else{reviewIndex=Math.min(reviewIndex,reviewIds.length-1);edit(data.suggestions.find(s=>s.id===reviewIds[reviewIndex]));}});
+      }
+      button(reviewBulk?'saveSelected':'save',actions,()=>{
+        if(busy||blocked)return;capture();
+        const items=reviewIds.map(id=>{
+          const candidate=data.suggestions.find(s=>s.id===id),draft=drafts.get(id)||{statement:candidate.statement,evidence:evidenceContext(candidate,options.language())};
+          return {suggestion_id:id,statement:draft.statement,evidence_summary:draft.evidence};
+        });
+        const keys=new Set();
+        for(const item of items){
+          const text=normalized(item.statement),context=normalized(item.evidence_summary),key=text.toLowerCase();
+          if(!text||Array.from(text).length>2000||Array.from(context).length>4000){message('INVALID_STATEMENT');return;}
+          if(keys.has(key)){message('DUPLICATE_PROPOSAL');return;}keys.add(key);
+        }
+        if(!reviewBulk){void saveItems(items,false);return;}
+        if(results.querySelector('[data-advisor-confirm]'))return;
+        const box=el('section','',results);box.dataset.advisorConfirm='true';el('p',t('confirmText'),box);
+        for(const item of items){el('h4',item.statement,box);el('p',item.evidence_summary,box);}
+        // Freeze the reviewed payload while the explicit final confirmation is visible.
+        results.querySelectorAll('button,textarea').forEach(n=>n.disabled=true);
+        button('confirm',box,()=>void saveItems(items,true)).focus();
+        button('keep',box,()=>edit(s));
       });
-      const back=button('back',actions,()=>{if(!busy)discard(()=>{editing=null;controls.hidden=false;renderResults();});});
-      statement.focus();
+      button('back',actions,()=>{if(!busy)discard(()=>{drafts.clear();returnToList();});});statement.focus();
+    }
+    async function saveItems(items,bulk){
+      if(busy||blocked||!editing)return;busy=true;
+      results.querySelectorAll('button,textarea').forEach(n=>n.disabled=true);
+      try{
+        await validate();
+        const result=await request(bulk?{action:'adopt_selected',receipt:data.receipt,items}:{action:'adopt',receipt:data.receipt,...items[0]});
+        const saved=bulk?result.results:[{suggestion_id:items[0].suggestion_id,status:result.learning?.status}];
+        if(!result.review_session||saved?.length!==items.length||saved.some(item=>item.status!=='proposed'))throw new Error();
+        data.receipt=result.review_session.receipt; // Original expiry timer stays authoritative.
+        for(const item of saved){proposed.add(item.suggestion_id);selected.delete(item.suggestion_id);drafts.delete(item.suggestion_id);}
+        returnToList();message('saved');void options.reload?.();
+      }catch(e){
+        blocked=['expired','INVALID_RECEIPT','STALE_SOURCE','STALE_BRAND_REVISION','BRAND_ACCESS_DENIED','WORKSPACE_ACCESS_DENIED','SOURCE_ACCESS_DENIED','SOURCE_UNAVAILABLE','IDENTITY_INVALID','AUTHENTICATION_REQUIRED'].includes(e.code);
+        if(current()&&dialog&&data&&editing){capture();edit(data.suggestions.find(s=>s.id===editing.id));message(e.code||'unavailable');
+          if(bulk)for(const item of items)el('p',item.statement+' — '+t('notSaved'),results);
+          if(blocked)results.querySelectorAll('button').forEach(n=>{if(n.dataset.advisorAction!=='back')n.disabled=true;});}
+      }finally{busy=false;}
     }
     async function refreshScope(preserve=false){
       const excluded=preserve?[...(scope?.excluded_threads||[])]:[];
@@ -252,5 +324,5 @@
     }
     return {open,invalidate(){alive=false;close();}};
   }
-  root.FunklixLearningAdvisor=Object.freeze({create,COPY});
+  root.FunklixLearningAdvisor=Object.freeze({create,COPY,evidenceContext});
 }(typeof globalThis!=='undefined'?globalThis:window));

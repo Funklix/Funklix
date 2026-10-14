@@ -12,13 +12,13 @@ function advisorRuntime() {
     const status=config.providerFailure||200;
     return {ok:status===200,status,text:async()=>config.providerRaw??JSON.stringify(config.providerEnvelope??{status:'completed',output_text:JSON.stringify(config.output)})};
   };
-  r=learningRuntime({fetchImpl,queryExtension:async(sql,args,{db,base})=>{
+  r=learningRuntime({fetchImpl,queryExtension:async(sql,args,{db,base,transaction})=>{
     if(sql.includes('FROM public.workspaces'))return rows(config.membership&&args[0]===W&&args[1]===I&&(!args[2]||args[2]===B)?[{id:W}]:[]);
     if(sql.startsWith('SELECT id,name,revision,workspace_id,brand_core')) {
       config.scopeReads++;if(config.onScope)await config.onScope(config.scopeReads);
       const b=base.db.brands.find(b=>b.id===args[0]);return rows(b?[{id:b.id,name:b.name,revision:String(b.revision),workspace_id:b.workspace_id,brand_core:b.brand_core||{}}]:[]);
     }
-    if(sql.startsWith('SELECT id,status,statement,evidence_summary,revision'))return rows(db.learnings.filter(l=>l.brand_id===args[0]&&['approved','proposed'].includes(l.status)).map(l=>({id:l.id,status:l.status,statement:l.statement,evidence_summary:l.evidence_summary,revision:l.revision})));
+    if(sql.startsWith('SELECT id,status,statement,evidence_summary,revision'))return rows(transaction.learnings.filter(l=>l.brand_id===args[0]&&['approved','proposed'].includes(l.status)).map(l=>({id:l.id,status:l.status,statement:l.statement,evidence_summary:l.evidence_summary,revision:l.revision})));
     if(sql.startsWith('SELECT id,name,updated_at FROM public.boards'))return rows(base.db.boards.filter(b=>b.brand_id===args[0]&&b.workspace_id===args[1]).map(b=>({id:b.id,name:b.name,updated_at:b.updated_at})));
   }});
   r.base.env.OPENAI_API_KEY='mock-only';

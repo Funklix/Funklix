@@ -237,16 +237,24 @@ async function mutate(client, brand, actor, input) {
     return project(result.rows[0]);
   }
 }
-async function operate({ db, user, brandId, input, filter = 'all', offset = 0, beforeMutation }) {
+async function operate({ db, user, brandId, input, inputs, filter = 'all', offset = 0, beforeMutation, afterMutation }) {
   if (!isBrandId(brandId) || !STATUSES.includes(filter) || !Number.isInteger(offset) || offset < 0 || offset > 10000) fail('INVALID_REQUEST');
   const client = await db.connect();
   try {
     await client.query('BEGIN');
-    const { brand, identity } = await authorize(client, user, brandId, !!input);
+    const writes = inputs || (input ? [input] : []);
+    const { brand, identity } = await authorize(client, user, brandId, writes.length > 0);
     // Internal server hook: Advisor freshness must share the Learning write transaction.
-    if (input && beforeMutation) await beforeMutation({ client, brand, identity });
-    if (input?.source) input.provenance = await validateSource(client,user,brand,input.source);
-    const learning = input ? await mutate(client, brand, identity.identityId, input) : undefined;
+    if (writes.length && beforeMutation) await beforeMutation({ client, brand, identity });
+    const saved = [];
+    for (const write of writes) {
+      if (write.source) write.provenance = await validateSource(client,user,brand,write.source);
+      saved.push(await mutate(client, brand, identity.identityId, write));
+    }
+    const learning = input ? saved[0] : undefined;
+    // Internal hooks run under the same authorization/source locks and roll back
+    // together with every proposal and its event if receipt renewal fails.
+    const extra = afterMutation ? await afterMutation({ client, brand, identity, saved }) : {};
     const library = await readLibrary(client, brandId, filter, offset, user, brand);
     if (learning?.source_type === 'campaign_observation') {
       const row = (await client.query('SELECT * FROM public.brand_learnings WHERE brand_id=$1 AND id=$2', [brandId,learning.id])).rows[0];
@@ -254,7 +262,7 @@ async function operate({ db, user, brandId, input, filter = 'all', offset = 0, b
     }
     await client.query('COMMIT');
     return { contract:'brand_learnings_v1', brand: { id:brand.id, name:brand.name, revision:String(brand.revision) },
-      can_write:brandCapabilities(brand.role).canEditCanonicalBrand, ...library, ...(learning ? { learning } : {}) };
+      can_write:brandCapabilities(brand.role).canEditCanonicalBrand, ...library, ...(learning ? { learning } : {}), ...extra };
   } catch (error) {
     try { await client.query('ROLLBACK'); } catch { /* original error is authoritative */ }
     throw error;
