@@ -4,6 +4,11 @@ const { isBrandId, brandCapabilities } = require('../../_brand-access');
 const { getBoardAccess } = require('../../_board-access');
 const learning = require('../../_brand-learnings');
 const advisor = require('../../_learning-advisor');
+function batchFailure(body,code) {
+  if(body?.action!=='adopt_selected')return {};
+  const items=Array.isArray(body.items)&&body.items.length<=advisor.LIMITS.suggestions?body.items:[];
+  return {atomic:true,results:items.map(item=>({suggestion_id:/^suggestion-[1-5]$/.test(item?.suggestion_id)?item.suggestion_id:null,status:'not_saved',error:{code}}))};
+}
 function createHandler({db,env=process.env,fetchImpl=fetch}={}) {
   return async function handler(req,res) {
     res.setHeader?.('Cache-Control','private, no-store');
@@ -42,7 +47,7 @@ function createHandler({db,env=process.env,fetchImpl=fetch}={}) {
       }
       const body=req.body;
       if(!body||typeof body!=='object'||Array.isArray(body)||Buffer.byteLength(JSON.stringify(body))>64000)fail('INVALID_REQUEST');
-      const keys=body.action==='adopt'?['action','receipt','suggestion_id','statement','evidence_summary']:
+      const keys=body.action==='adopt_selected'?['action','receipt','items']:body.action==='adopt'?['action','receipt','suggestion_id','statement','evidence_summary']:
         body.action==='validate'?['action','receipt']:['action','scope'];
       if(Object.keys(body).length!==keys.length||keys.some(k=>!Object.hasOwn(body,k)))fail('INVALID_REQUEST');
       if(body.action==='preview'||body.action==='analyze') {
@@ -66,8 +71,9 @@ function createHandler({db,env=process.env,fetchImpl=fetch}={}) {
       }
       if(body.action==='validate'){await advisor.checkReceipt({...args,receipt:body.receipt});return res.status(200).json({contract:advisor.CONTRACT,freshness:'validated'});}
       if(body.action==='adopt')return res.status(201).json(await advisor.adopt({...args,receipt:body.receipt,suggestionId:body.suggestion_id,statement:body.statement,evidence:body.evidence_summary}));
+      if(body.action==='adopt_selected')return res.status(201).json(await advisor.adoptSelected({...args,receipt:body.receipt},body.items));
       fail('INVALID_REQUEST');
-    } catch(e) {const safe=learning.boundedError(e);return res.status(safe.status).json({contract:advisor.CONTRACT,error:{code:safe.code}});}
+    } catch(e) {const safe=learning.boundedError(e);return res.status(safe.status).json({contract:advisor.CONTRACT,error:{code:safe.code},...batchFailure(req.body,safe.code)});}
   };
 }
 module.exports=createHandler();

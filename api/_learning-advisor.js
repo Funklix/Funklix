@@ -491,11 +491,31 @@ async function checkReceipt({db,user,brandId,receipt,session,env=process.env,cli
   return {p,data};
 }
 async function adopt(args) {
-  const {p,data}=await checkReceipt(args);
-  const candidate=p.candidates.find(c=>c.id===args.suggestionId);if(!candidate)fail('INVALID_RECEIPT',403);
-  const body={statement:args.statement,evidence_summary:args.evidence};
-  const input=candidate.mode==='successor'?learning.inputRequest({...body,action:'edit',learning_id:candidate.target.id,expected_revision:candidate.target.revision},false)
-    :learning.inputRequest({...body,expected_brand_revision:data.brand.revision,...(candidate.mode==='single_node'?{source:{board_id:data.board.id,node_id:candidate.node_id,expected_board_updated_at:data.board.source_updated_at}}:{})},true);
-  return learning.operate({db:args.db,user:args.user,brandId:args.brandId,input,beforeMutation:({client,brand,identity})=>checkReceipt({...args,client,authorized:{brand,identity}})});
+  return adoptSelected(args,[{suggestion_id:args.suggestionId,statement:args.statement,evidence_summary:args.evidence}],false);
 }
-module.exports={CONTRACT,GENERATION_CONTRACT,LIMITS,SCHEMA,LEGACY_SCHEMA,scopeRequest,extract,readScope,analyze,adopt,checkReceipt,validateOutput,parseProvider,readProviderResponse,OUTPUT_BOUND,RESPONSE_BOUND,modelConstraints,prepare,providerInput,fits};
+async function adoptSelected(args,items,bulk=true) {
+  const {p,data}=await checkReceipt(args);
+  if(!Array.isArray(items)||!items.length||items.length>p.candidates.length)fail('INVALID_REQUEST');
+  const ids=new Set(),keys=new Set();
+  const inputs=items.map(item=>{
+    exact(item,['suggestion_id','statement','evidence_summary']);
+    const candidate=p.candidates.find(c=>c.id===item.suggestion_id);
+    if(!candidate||ids.has(candidate.id))fail('INVALID_RECEIPT',403);ids.add(candidate.id);
+    const body={statement:item.statement,evidence_summary:item.evidence_summary};
+    const input=candidate.mode==='successor'?learning.inputRequest({...body,action:'edit',learning_id:candidate.target.id,expected_revision:candidate.target.revision},false)
+      :learning.inputRequest({...body,expected_brand_revision:data.brand.revision,...(candidate.mode==='single_node'?{source:{board_id:data.board.id,node_id:candidate.node_id,expected_board_updated_at:data.board.source_updated_at}}:{})},true);
+    if(keys.has(input.key))fail('DUPLICATE_PROPOSAL',409);keys.add(input.key);return input;
+  });
+  return learning.operate({db:args.db,user:args.user,brandId:args.brandId,...(bulk?{inputs}:{input:inputs[0]}),
+    beforeMutation:({client,brand,identity})=>checkReceipt({...args,client,authorized:{brand,identity}}),
+    afterMutation:async({client,brand,identity,saved})=>{
+      // Only this transaction's governed writes advance the fingerprint. Never
+      // refresh an arbitrary stale receipt, or extend its original expiry.
+      const next=await loadScope(client,args.user,args.brandId,p.scope,{brand,identity});
+      if(p.expires<=Date.now())fail('INVALID_RECEIPT',403);
+      const receipt=sign({...p,fingerprint:next.fingerprint,candidates:p.candidates.filter(c=>!ids.has(c.id))},args.env||process.env);
+      return {review_session:{receipt,expires:p.expires},...(bulk?{atomic:true,results:items.map((item,i)=>({suggestion_id:item.suggestion_id,status:'proposed',learning:saved[i]}))}:{})};
+    }});
+}
+module.exports={CONTRACT,GENERATION_CONTRACT,LIMITS,SCHEMA,LEGACY_SCHEMA,scopeRequest,extract,readScope,analyze,adopt,adoptSelected,checkReceipt,validateOutput,parseProvider,readProviderResponse,OUTPUT_BOUND,RESPONSE_BOUND,modelConstraints,prepare,providerInput,fits};
+
