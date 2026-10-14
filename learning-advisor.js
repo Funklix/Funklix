@@ -8,8 +8,8 @@
     discussions:['Include persisted Post-its and all their replies (optional)','Gespeicherte Post-its und alle zugehörigen Antworten einbeziehen (optional)'],
     discussionDisclosure:['Included discussions and replies will also be sent to OpenAI. Uncheck any whole thread to exclude it.','Einbezogene Diskussionen und Antworten werden ebenfalls an OpenAI gesendet. Entferne den Haken, um einen ganzen Thread auszuschließen.'],
     analyze:['Analyze selected sources','Ausgewählte Quellen analysieren'],loading:['Analyzing selected sources…','Ausgewählte Quellen werden analysiert…'],
-    preview:['Loading authorized source scope…','Berechtigter Quellenumfang wird geladen…'],cancel:['Close','Schließen'],review:['Review proposal','Vorschlag prüfen'],
-    advisory:['Temporary advice expires after 10 minutes; human approval is required. Confidence describes extraction, not a probability of truth.','Vorübergehende Empfehlungen laufen nach 10 Minuten ab; menschliche Bestätigung ist erforderlich. Konfidenz beschreibt die Extraktion, keine Wahrheitswahrscheinlichkeit.'],
+    preview:['Loading authorized source scope…','Berechtigter Quellenumfang wird geladen…'],cancel:['Close','Schließen'],review:['Propose as Brand Learning','Als Brand Learning vorschlagen'],
+    advisory:['Temporary advice expires after 10 minutes; human approval is required. Supporting sources do not independently verify a suggestion.','Vorübergehende Empfehlungen laufen nach 10 Minuten ab; menschliche Bestätigung ist erforderlich. Unterstützende Quellen verifizieren einen Vorschlag nicht unabhängig.'],
     provenance:['This proposal preserves one primary Board/Node only. Discussion excerpts and complete evidence are not stored as a durable ledger.','Dieser Vorschlag bewahrt nur einen primären Board-/Knotenverweis. Diskussionsauszüge und vollständige Belege werden nicht als dauerhaftes Quellenverzeichnis gespeichert.'],
     manual:['Create a human-authored manual proposal. Profile-only or multi-source evidence cannot be stored as structured provenance. You take responsibility for the edited Brand-wide statement.','Erstelle einen menschlich verfassten manuellen Vorschlag. Reine Profilbelege oder mehrere Quellen können nicht als strukturierte Herkunft gespeichert werden. Du übernimmst Verantwortung für die bearbeitete markenweite Aussage.'],
     successor:['Propose an update through the existing successor workflow. It inherits the original provenance and cannot store a new multi-source evidence ledger. The original stays approved until human approval of the successor.','Schlage eine Aktualisierung über den bestehenden Nachfolgeprozess vor. Sie übernimmt die ursprüngliche Herkunft und kann kein neues Quellenverzeichnis speichern. Das Original bleibt bis zur menschlichen Bestätigung des Nachfolgers bestätigt.'],
@@ -24,6 +24,9 @@
     STALE_SOURCE:['Saved sources changed. Reload saved sources, then analyze again. Your selected Board and discussion options are retained.','Gespeicherte Quellen wurden geändert. Lade die gespeicherten Quellen neu und analysiere erneut. Board-Auswahl und Diskussionsoptionen bleiben erhalten.'],
     STALE_BRAND_REVISION:['The Brand changed. Reload saved sources, then analyze again.','Die Marke wurde geändert. Lade die gespeicherten Quellen neu und analysiere erneut.'],
     PROVIDER_UNAVAILABLE:['The existing OpenAI configuration is unavailable.','Die bestehende OpenAI-Konfiguration ist nicht verfügbar.'],
+    PROVIDER_INCOMPLETE:['OpenAI did not finish the response. No suggestions were released. Retry explicitly; ask the administrator to check output-token settings if it persists.','OpenAI hat die Antwort nicht abgeschlossen. Es wurden keine Vorschläge freigegeben. Versuche es ausdrücklich erneut; bitte bei anhaltendem Fehler die Administration, die Ausgabe-Token-Einstellungen zu prüfen.'],
+    PROVIDER_REFUSED:['OpenAI declined this request. No suggestions were released. Review the selected content before retrying.','OpenAI hat diese Anfrage abgelehnt. Es wurden keine Vorschläge freigegeben. Prüfe die ausgewählten Inhalte vor einem erneuten Versuch.'],
+    PROVIDER_FAILED:['OpenAI could not complete the request. Retry explicitly; ask the administrator to check provider configuration if it persists.','OpenAI konnte die Anfrage nicht abschließen. Versuche es ausdrücklich erneut; bitte bei anhaltendem Fehler die Administration, die Anbieterkonfiguration zu prüfen.'],
     PROVIDER_TIMEOUT:['Analysis timed out. No automatic retry was made.','Zeitlimit überschritten. Es gab keinen automatischen Neuversuch.'],
     PROVIDER_RATE_LIMITED:['OpenAI rejected the request due to its rate limit. No automatic retry was made.','OpenAI hat die Anfrage wegen seines Ratenlimits abgelehnt. Es gab keinen automatischen Neuversuch.'],
     INVALID_OUTPUT:['OpenAI returned unusable evidence or output. No suggestions were released.','OpenAI lieferte unbrauchbare Belege oder Ausgaben. Es wurden keine Vorschläge freigegeben.'],
@@ -40,7 +43,7 @@
     ANALYSIS_RUNTIME_EXCEEDED:['This analysis exceeds the server execution window. Choose a smaller Board or exclude discussions, then retry. No partial result was released.','Diese Analyse überschreitet die Ausführungszeit des Servers. Wähle ein kleineres Board oder schließe Diskussionen aus und versuche es erneut. Es wurde kein Teilergebnis freigegeben.'],
     ANALYSIS_CANCELLED:['Analysis was cancelled. Retry explicitly when ready.','Die Analyse wurde abgebrochen. Starte bei Bedarf ausdrücklich erneut.'],
     selection:['All selected source groups were processed. Up to five suggestions were selected; this is not an exhaustive knowledge inventory.','Alle ausgewählten Quellengruppen wurden verarbeitet. Bis zu fünf Vorschläge wurden ausgewählt; dies ist kein vollständiges Wissensinventar.'],
-    confidence:['Extraction confidence','Extraktionskonfidenz'],low:['Low','Niedrig'],medium:['Medium','Mittel'],high:['High','Hoch'],
+    sourcePreview:['Saved source preview; human review must assess whether it supports the suggestion.','Vorschau der gespeicherten Quelle; menschliche Prüfung muss beurteilen, ob sie den Vorschlag stützt.'],why:['Why this matters','Warum das wichtig ist'],support:['Available supporting sources','Verfügbare unterstützende Quellen'],unverified:['Unverified draft: supporting references are missing or invalid. Manual human proposal only.','Unverifizierter Entwurf: Quellenverweise fehlen oder sind ungültig. Nur manueller menschlicher Vorschlag.'],confidence:['Extraction confidence','Extraktionskonfidenz'],low:['Low','Niedrig'],medium:['Medium','Mittel'],high:['High','Hoch'],
     learning_candidate:['Potential Learning','Mögliches Learning'],decision_candidate:['Decision statement','Entscheidungsaussage'],correction:['Correction','Korrektur'],
     knowledge_gap:['Knowledge gap','Wissenslücke'],potential_conflict:['Potential conflict','Möglicher Konflikt'],learning_update_candidate:['Learning update','Learning-Aktualisierung'],
     hypothesis:['Hypothesis','Hypothese'],explicit_statement:['Explicit statement','Explizite Aussage'],canonical_knowledge:['Canonical knowledge','Kanonisches Wissen'],
@@ -145,18 +148,18 @@
       results.replaceChildren();results.hidden=false;el('p',t('advisory'),results);coverage(data.coverage,results);if(data.coverage.analysis_complete)el('p',t('selection'),results);if(Number.isSafeInteger(data.metadata?.provider_requests))el('p',data.metadata.provider_requests+' '+t('requests'),results);
       if(!data.suggestions.length)el('p',t('empty'),results);
       for(const s of data.suggestions){
-        const card=el('article','',results);card.className='learning-card';el('h3',t(s.type),card);el('p',s.statement,card);el('p',s.rationale,card);
-        el('p',t('confidence')+': '+t(s.confidence)+' — '+s.confidence_reason,card);
-        el('p',t(s.evidence_class)+' · '+t(s.decision_status)+' · '+t(s.relationship),card);
-        if(s.related_learning_ids.length)el('p',t('related')+': '+s.related_learning_ids.join(', '),card);
-        const evidence=el('details','',card);el('summary',t('evidence'),evidence);
+        const card=el('article','',results);card.className='learning-card';el('h3',s.title||t(s.type),card);el('p',s.statement,card);
+        el('h4',t('why'),card);el('p',s.rationale,card);
+        if(s.provenance_status==='unverified')el('p',t('unverified'),card);
+        const evidence=el('details','',card);el('summary',t('support'),evidence);
         for(const source of s.sources){
+          if(source.excerpt_origin==='server_source_preview')el('p',t('sourcePreview'),evidence);
           el('p',t(source.kind)+(source.node_id?' · '+source.node_id:'')+(source.field?' · '+source.field:''),evidence);
           if(source.attribution)el('p',t(source.attribution==='ai_generated'?'ai':'human'),evidence);
           if(source.resolved!=null)el('p',t(source.resolved?'resolved':'open'),evidence);
           el('blockquote',source.excerpt,evidence);
         }
-        el('p',t('limitations'),card);for(const limit of s.limitations)el('p',limit,card);
+
         el('p',t(s.mode==='successor'?'successor':s.mode==='manual'?'manual':'provenance'),card);
         if(s.relationship!=='exact_duplicate')button('review',card,async()=>{
           if(busy)return;busy=true;

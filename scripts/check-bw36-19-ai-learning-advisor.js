@@ -51,15 +51,16 @@ async function contracts() {
    assert.equal(f.config.providerCalls.length,1);assert.equal(out.body.suggestions[0].mode,'single_node');assert.equal(out.body.suggestions[0].approval_required,true);
    const receipt=JSON.parse(Buffer.from(out.body.receipt.split('.')[0],'base64url'));assert(!JSON.stringify(receipt).includes('Use a clear'));assert(!JSON.stringify(receipt).includes('slogan'));
  });
- await test('invented refs/excerpts/types/consensus, invalid output, duplicate suggestion and wrong language rejected',async()=>{
+ await test('invented refs/excerpts/types/consensus, invalid output and wrong language rejected',async()=>{
    for(const change of [
      o=>o.suggestions[0].sources[0].ref='invented',o=>o.suggestions[0].sources[0].excerpt='Invented quote',o=>o.suggestions[0].type='auto_approve',
-     o=>o.suggestions[0].decision_status='confirmed_consensus',o=>o.suggestions[0].extra='forged',o=>o.suggestions.push(clone(o.suggestions[0])),
+     o=>o.suggestions[0].decision_status='confirmed_consensus',o=>o.suggestions[0].extra='forged',
      o=>o.language='de',o=>o.suggestions[0].statement='Das ist für die Marke und die Kunden nicht der richtige Weg.',
      o=>o.suggestions[0].statement='The team has agreed on this consensus.'
    ]){const f=advisorRuntime();change(f.config.output);const out=await f.request({action:'analyze',scope:f.scope});assert.equal(out.statusCode,502,JSON.stringify(out.body));assert.equal(f.config.providerCalls.length,1);}
  });
  await test('exact duplicates and conflicts/updates require valid existing Learning context',async()=>{
+   const repeated=advisorRuntime();repeated.config.output.suggestions.push(clone(repeated.config.output.suggestions[0]));const deduped=await repeated.request({action:'analyze',scope:repeated.scope});assert.equal(deduped.statusCode,200);assert.equal(deduped.body.suggestions.length,1);
    const f=advisorRuntime();f.r.db.learnings.push({id:B,brand_id:B,status:'approved',statement:'Use a clear next step.',revision:'1'});
    const out=await f.request({action:'analyze',scope:f.scope});assert.equal(out.body.suggestions[0].relationship,'exact_duplicate');
    const g=advisorRuntime();g.config.output.suggestions[0].type='potential_conflict';assert.equal((await g.request({action:'analyze',scope:g.scope})).statusCode,502);
