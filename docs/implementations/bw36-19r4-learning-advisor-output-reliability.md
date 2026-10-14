@@ -175,7 +175,7 @@ Original implementation local validation (not GitHub CI completion):
 | Check | Result |
 | --- | --- |
 | `npm run check:bw36.19r4` | Nine production-shaped groups passed; mocked providers only |
-| `npm run check:bw36.19` | 14 API/security groups, real disposable PGlite and Chromium passed |
+| `npm run check:bw36.19` | 13 API/security groups, real disposable PGlite and Chromium passed |
 | `npm run check:bw36.19r1` | Existing canonical/historical saved Board, disposable database and Chromium checks passed |
 | `npm run check:bw36.19r2` | Eight adaptive context/security groups and streaming Chromium checks passed |
 | Full Runtime Boot Safety | All **172 validation run steps / 215 command lines** passed, including relevant historical BW-26 language and BW-36.17/18 governance regressions |
@@ -279,7 +279,8 @@ local executions of approximately **61–78 seconds**, including a 500 ms delay 
 held callbacks. It covers launch, navigation, actions, mocks and teardown. On
 expiry it prints the last stage and resource counts, marks exit status nonzero,
 releases every held request, attempts browser cleanup, and forces exit 1 after
-five seconds if work is still unresolved. An expired test never reports success.
+five seconds if work is still unresolved. An expired test never reports success. The completion message is emitted only
+after teardown succeeds, so a cleanup timeout cannot print a passed result.
 
 Individual request-arrival waits retain a 15-second bound. Normal failure cleanup
 has a separate ten-second deadline and a nonzero forced-exit fallback if cleanup
@@ -302,11 +303,33 @@ independent final safety net for the whole command, including the server checks.
   the intentionally broken browser scenario.
 - Independently rerun BW-36.19R4 (nine groups), BW-36.19, R1 and R2: passed,
   including disposable PGlite and Chromium. All provider calls were mocked.
-- Full local Runtime Boot Safety and complete GitHub workflow: results pending
-  at the first repair push; final conclusions will be appended after completion.
+- Full local Runtime Boot Safety: all **172 validation run steps / 215 command
+  lines passed**, including BW-36.14, Canvas BW-36.15/16 and governed Learning
+  BW-36.17/18. Dependencies were already installed; the complete syntax block
+  was also verified using GitHub's fail-fast `bash -e` semantics.
+- Complete GitHub Runtime Boot Safety:
+  [run 38530704400](https://github.com/Funklix/Funklix/actions/runs/38530704400),
+  repair commit `0a3975c090a8d634b8f7329bd7abb01cd99af44c`, concluded
+  **success**. All 177 recorded job steps, including setup, dependency install,
+  every validation step and cleanup, concluded success; no step was skipped.
+  The Campaign V3 Chromium fixture took **63.1 seconds** and ended with zero
+  pending routes, zero held requests and zero pages. GitHub actually selected
+  **Chromium 154.0.8037.0 / Playwright 1.64.0**, despite downloading Chromium 156
+  during dependency installation. That distinction was not observable in the
+  cancelled run's old fixture logs.
+- Final isolated rerun after moving the completion message after teardown:
+  all assertions and cleanup passed in **60.2 seconds**. This preserves the
+  121 original assertion calls and prevents a teardown timeout from printing a
+  passed browser result. The final push will receive its own complete GitHub
+  workflow check before delivery.
+- Held-save watchdog fault test: at 45 seconds the diagnostic showed one pending
+  route, one held request and one page; cleanup completed at 45.3 seconds with
+  all three counts zero, and the intentionally unresolved test exited 1 within
+  its five-second hard-exit allowance. No success message was emitted.
 
-The specific historical stall remains uncertain until a failure records its
-checkpoint. The diagnostic watchdog bounds that uncertainty and fails visibly.
+The specific historical stall remains uncertain: the successful instrumented
+run substantiates recovery of the workflow, not the exact cause of the old hang.
+A future failure will record its checkpoint. The diagnostic watchdog bounds that uncertainty and fails visibly.
 Local Chromium differs from CI, so local successes alone do not establish CI
 readiness. No production SQL, paid OpenAI request, replacement PR or merge was
 performed.

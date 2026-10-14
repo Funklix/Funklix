@@ -95,7 +95,7 @@ async function browser({baseline=false,requestDelayMs=0,timeoutMs=180000}={}){
     void cleanup().then(()=>checkpoint('watchdog_cleanup_complete'),e=>console.error('BW-36.14R1 watchdog cleanup failed:',e.message));
     forceExit=setTimeout(()=>process.exit(1),5000);
   },timeoutMs);
-  let failure;
+  let failure,successMessage;
   try{
     browser=await chromium.launch({...(process.env.CHROMIUM_PATH?{executablePath:process.env.CHROMIUM_PATH}:fs.existsSync('/usr/bin/chromium')?{executablePath:'/usr/bin/chromium'}:{}),args:['--no-sandbox']});
     fs.mkdirSync('work',{recursive:true});
@@ -184,7 +184,7 @@ async function browser({baseline=false,requestDelayMs=0,timeoutMs=180000}={}){
     await brief();await dialog.locator('#campaign-v3-variations').fill('11');await dialog.getByRole('button',{name:'Generate Campaign',exact:true}).click();assert(await dialog.getByText('Choose 1–10 variations and 1–20 posts per variation.').isVisible());assert.equal(ai.length,0);await dialog.getByRole('button',{name:'Cancel',exact:true}).click();
     await page.evaluate(()=>state.uiLanguage=language.setUiLanguage('de'));await open();assert(await dialog.getByRole('heading',{name:'Kampagne erstellen',exact:true}).isVisible());await page.keyboard.press('Escape');await page.evaluate(()=>state.uiLanguage=language.setUiLanguage('en'));
     await page.emulateMedia({forcedColors:'active',reducedMotion:'reduce'});await page.setViewportSize({width:320,height:280});await brief();await dialog.getByRole('button',{name:'Generate Campaign',exact:true}).scrollIntoViewIfNeeded();assert(await dialog.getByRole('button',{name:'Generate Campaign',exact:true}).isVisible());await page.keyboard.press('Escape');await page.emulateMedia({forcedColors:'none',reducedMotion:'no-preference'});await page.setViewportSize({width:1440,height:900});
-    if(baseline){if(expired)throw new Error('BW-36.14R1 watchdog expired');assert.deepEqual(errors,[]);assert.deepEqual(dialogs,[]);console.log('BW-36.14 context/logo/roles/singleton/two-step DOM/themes/reflow regression passed.');return;}
+    if(baseline){if(expired)throw new Error('BW-36.14R1 watchdog expired');assert.deepEqual(errors,[]);assert.deepEqual(dialogs,[]);successMessage='BW-36.14 context/logo/roles/singleton/two-step DOM/themes/reflow regression passed.';return;}
     await page.evaluate(()=>{
       window.r1Trace={steps:[],quality:0,repair:0,scroll:0,commit:0};
       const q=evaluateCampaignV3Quality;evaluateCampaignV3Quality=(...args)=>{window.r1Trace.quality++;return q(...args);};
@@ -227,11 +227,11 @@ async function browser({baseline=false,requestDelayMs=0,timeoutMs=180000}={}){
     }
     assert.deepEqual(errors,[]);assert.deepEqual(dialogs,[]);assert.equal(r.storageRequests.length,0);assert.deepEqual(boardWrites,[]);
     if(expired)throw new Error('BW-36.14R1 watchdog expired');checkpoint('assertions_complete');
-    console.log('BW-36.14R1 Chromium passed: 13 nodes / 17 edges, real V3 adapter, quality/repair, nine animated steps/avatar/scroll, AI retry, save-only retry, confirmed reconciliation retry, immutable response replay, refresh hydration, context changes, themes/reflow, zero external calls.');
+    successMessage='BW-36.14R1 Chromium passed: 13 nodes / 17 edges, real V3 adapter, quality/repair, nine animated steps/avatar/scroll, AI retry, save-only retry, confirmed reconciliation retry, immutable response replay, refresh hydration, context changes, themes/reflow, zero external calls.';
   }catch(e){failure=e;checkpoint('failure:'+stage);throw e;}
   finally{
     checkpoint('teardown');let cleanupTimer;
-    try{await Promise.race([cleanup(),new Promise((_,reject)=>cleanupTimer=setTimeout(()=>reject(new Error('BW-36.14R1 browser cleanup exceeded 10 seconds')),10000))]);checkpoint('teardown_complete');}
+    try{await Promise.race([cleanup(),new Promise((_,reject)=>cleanupTimer=setTimeout(()=>reject(new Error('BW-36.14R1 browser cleanup exceeded 10 seconds')),10000))]);checkpoint('teardown_complete');if(!failure&&!expired&&successMessage)console.log(successMessage);}
     catch(e){cleanupFailed=true;console.error('BW-36.14R1 cleanup failure:',e.message);process.exitCode=1;forceExit||=setTimeout(()=>process.exit(1),1000);if(!failure)throw e;}
     finally{clearTimeout(cleanupTimer);clearTimeout(watchdog);if(!expired&&!cleanupFailed)clearTimeout(forceExit);}
   }
