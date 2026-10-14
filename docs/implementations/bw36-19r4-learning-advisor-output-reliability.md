@@ -170,7 +170,7 @@ PGlite SQL, receipt/adoption rollback and Chromium flows. Their mocks now includ
 completed Responses status and their token/context assertions reflect the new
 reservation. Runtime Boot Safety registers R4 syntax and behavioral checks.
 
-Final validation:
+Original implementation local validation (not GitHub CI completion):
 
 | Check | Result |
 | --- | --- |
@@ -211,3 +211,102 @@ alignment, affected R4 and R2 suites were rerun.
 6. Disposable PGlite and mocked lifecycle races do not establish multi-process
    production database contention behavior. Authorization/locking semantics and
    adoption logic are unchanged. No SQL or Canvas mutation was added.
+
+
+## Repair of cancelled GitHub Runtime Boot Safety (PR #769)
+
+### Evidence and diagnosis
+
+The exact cancelled run is
+[38479204944](https://github.com/Funklix/Funklix/actions/runs/38479204944),
+job `115577362210`, at original head `c5a7e2c`. Step 160 ran
+`npm run check:bw36.14r1`. Its server success message was logged at
+2026-10-13 22:41:14 UTC. There was no Chromium completion or application assertion
+message before cancellation at 2026-10-14 04:40:08 UTC. The runner then terminated
+the surviving npm, Node and Chrome processes. Subsequent Canvas/Learning/Advisor
+steps were skipped. The original GitHub workflow **did not pass**.
+
+An isolated trace of the original browser fixture completed all assertions and
+teardown in approximately 62 seconds on local Chromium 151 / Playwright 1.64.0.
+The cancelled CI setup downloaded Chromium 156 (revision 1248); its actual selected
+browser version was not logged. The new fixture logs both versions. Downloading
+that CI Chromium locally was rejected by the environment network policy for
+`cdn.playwright.dev`; no alternate route was used to bypass that restriction.
+
+A controlled 500 ms delay before the held AI request registered its resolver
+reproduced a concrete defect in the original test: the fixed 100 ms sleep ended
+before `aiHold.release` existed, and the unchanged request-registration assertion
+failed. The original fixture also assigned each resolver onto a mutable shared
+object, did not release held requests in `finally`, and awaited `browser.close()`
+without a deadline. These are evidenced synchronization/cleanup gaps, not
+application behavior changes.
+
+**The exact operation responsible for the original six-hour stall is unresolved.**
+The delayed-request assertion reproduced a fixture race but did not reproduce
+six hours of blocked teardown locally. It would be incorrect to label the old
+cancellation an application regression, proven Chromium flakiness, or a confirmed
+specific deadlock. No production regression was observed in the successful
+original trace or repeated repaired tests. No shared persistent provider/database
+resource was used by this fixture; all requests were local mocks. The instrumented
+GitHub run is required to establish whether the complete workflow now succeeds.
+
+### Three changed files and rationale
+
+- `scripts/check-bw36-14r1-restore-complete-campaign-v3.js`: use explicit
+  request-arrival promises instead of 100 ms registration guesses; capture each
+  held gate before awaiting; release all waiting/future callbacks with one stable
+  promise; abort held AI/save routes during cleanup before any fixture save;
+  unregister handlers, close contexts and close Chromium with bounded cleanup.
+  Emit stage checkpoints, elapsed time, pending/held counts, open-page count and
+  browser/Playwright versions. No source payloads, prompts or provider output are
+  included in checkpoints.
+- `.github/workflows/runtime-boot-safety.yml`: add `timeout-minutes: 5` only to the
+  complete Campaign V3 browser step. All tests and later workflow steps remain.
+- This implementation document: correct the distinction between earlier local
+  validation and cancelled GitHub CI, and record evidence, behavior and results.
+
+The original access, persistence, generation, quality/repair, duplicate-submit,
+rollback, immutable replay, reconciliation, hydration, identity-revocation,
+13-node/17-edge, theme/reflow and zero-external-call assertions remain. The held
+request assertion still verifies that the handler actually arrived (`started`),
+now after waiting on its arrival signal. Product code, historical migrations and
+architecture documents are untouched.
+
+### Failing watchdog and cleanup behavior
+
+The Chromium fixture has a **180-second** watchdog, chosen against successful
+local executions of approximately **61–78 seconds**, including a 500 ms delay for
+held callbacks. It covers launch, navigation, actions, mocks and teardown. On
+expiry it prints the last stage and resource counts, marks exit status nonzero,
+releases every held request, attempts browser cleanup, and forces exit 1 after
+five seconds if work is still unresolved. An expired test never reports success.
+
+Individual request-arrival waits retain a 15-second bound. Normal failure cleanup
+has a separate ten-second deadline and a nonzero forced-exit fallback if cleanup
+itself stalls. Cleanup is idempotent and preserves the original assertion error.
+Only teardown route errors are ignored after handlers have been removed; test
+assertions are not converted to success. The five-minute workflow timeout is an
+independent final safety net for the whole command, including the server checks.
+
+### Verification status
+
+- Original traced isolation: passed, approximately 62 seconds.
+- Repaired isolated runs: three normal runs passed (61.3, 68.3 and 72.7 seconds).
+- Delayed-request isolation: all unchanged assertions passed (77.5 seconds),
+  including the case that failed the original fixed-sleep fixture.
+- Assertion-failure injection while AI was held: exited 1; teardown reached zero
+  pending routes, zero held requests and zero pages in approximately 0.3 seconds.
+- Deliberately unresolved-operation watchdog injection: exited 1 within the
+  configured test timeout plus its five-second fallback; cleanup diagnostics
+  confirmed browser resources were closed. This is a negative test, not a pass of
+  the intentionally broken browser scenario.
+- Independently rerun BW-36.19R4 (nine groups), BW-36.19, R1 and R2: passed,
+  including disposable PGlite and Chromium. All provider calls were mocked.
+- Full local Runtime Boot Safety and complete GitHub workflow: results pending
+  at the first repair push; final conclusions will be appended after completion.
+
+The specific historical stall remains uncertain until a failure records its
+checkpoint. The diagnostic watchdog bounds that uncertainty and fails visibly.
+Local Chromium differs from CI, so local successes alone do not establish CI
+readiness. No production SQL, paid OpenAI request, replacement PR or merge was
+performed.

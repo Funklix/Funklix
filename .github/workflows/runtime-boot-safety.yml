@@ -373,6 +373,7 @@ jobs:
       - name: Check stable campaign creation and direct handoff in Chromium
         run: npm run check:bw36.14
       - name: Check complete Campaign V3 generation in Chromium
+        timeout-minutes: 5
         run: npm run check:bw36.14r1
       - name: Check BW-36.15 guided campaign responsibilities
         run: npm run check:bw36.15

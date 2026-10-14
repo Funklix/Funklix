@@ -68,50 +68,82 @@ async function server(){
   r=fixture();const seed={id:'existing-user-idea',type:'Idea',content:'Keep this user asset',position:{x:10,y:10}};r.db.boards[0].canvas_json.nodes.push(seed);assert.equal((await r.call(input())).statusCode,201);assert.deepEqual(clone(r.db.boards[0].canvas_json.nodes[0]),seed);
   console.log('BW-36.14R1 server: production signed auth/access/transaction/rollback, roles, conflict/stale, concurrent replay, lost commit, deleted campaign and confirmed reconciliation recovery passed.');
 }
-async function browser({baseline=false}={}){
-  const r=fixture(),browser=await chromium.launch({...(process.env.CHROMIUM_PATH?{executablePath:process.env.CHROMIUM_PATH}:fs.existsSync('/usr/bin/chromium')?{executablePath:'/usr/bin/chromium'}:{}),args:['--no-sandbox']});
-  fs.mkdirSync('work',{recursive:true});
+async function browser({baseline=false,requestDelayMs=0,timeoutMs=180000}={}){
+  const started=Date.now(),r=fixture(),holds=new Set();
+  let browser,page,closing=false,expired=false,stage='launch',pendingRoutes=0,forceExit,cleanupPromise,cleanupFailed=false;
+  const checkpoint=value=>{stage=value;console.log(JSON.stringify({test:'BW-36.14R1 Chromium',stage,elapsed_ms:Date.now()-started,pending_routes:pendingRoutes,held_requests:[...holds].filter(h=>h.started&&!h.released).length,pages:browser?.contexts().reduce((n,c)=>n+c.pages().length,0)||0}));};
+  const heldRequest=kind=>{
+    let ready,release;const requested=new Promise(resolve=>ready=resolve),released=new Promise(resolve=>release=resolve);
+    const hold={kind,started:false,released:false,async wait(){
+      if(requestDelayMs)await new Promise(resolve=>setTimeout(resolve,requestDelayMs));
+      hold.started=true;ready();checkpoint('held_'+kind+'_request');await released;
+    },release(){hold.released=true;release();},async waitUntilRequested(){
+      let timer;try{await Promise.race([requested,new Promise((_,reject)=>timer=setTimeout(()=>reject(new Error('Timed out waiting for held '+kind+' fixture request')),15000))]);}finally{clearTimeout(timer);}
+    }};holds.add(hold);return hold;
+  };
+  const cleanup=()=>cleanupPromise||=(async()=>{
+    closing=true;for(const hold of holds)hold.release();
+    // Remove handlers without waiting for held callbacks; those have already been
+    // released and abort before any fixture save. Ignore only teardown route errors.
+    await page?.unrouteAll({behavior:'ignoreErrors'});
+    for(const context of browser?.contexts()||[])await context.close();
+    await browser?.close();
+  })();
+  const watchdog=setTimeout(()=>{
+    expired=true;checkpoint('watchdog_expired:'+stage);process.exitCode=1;
+    console.error('BW-36.14R1 Chromium test timeout after '+timeoutMs+'ms; failing, releasing fixtures and closing browser.');
+    void cleanup().then(()=>checkpoint('watchdog_cleanup_complete'),e=>console.error('BW-36.14R1 watchdog cleanup failed:',e.message));
+    forceExit=setTimeout(()=>process.exit(1),5000);
+  },timeoutMs);
+  let failure;
   try{
-    const page=await browser.newPage({viewport:{width:1440,height:900}});page.setDefaultTimeout(15000);
+    browser=await chromium.launch({...(process.env.CHROMIUM_PATH?{executablePath:process.env.CHROMIUM_PATH}:fs.existsSync('/usr/bin/chromium')?{executablePath:'/usr/bin/chromium'}:{}),args:['--no-sandbox']});
+    fs.mkdirSync('work',{recursive:true});
+    checkpoint('browser_launched');console.log('BW-36.14R1 Chromium versions: Playwright '+require('playwright-core/package.json').version+', browser '+browser.version());
+    page=await browser.newPage({viewport:{width:1440,height:900}});page.setDefaultTimeout(15000);
     const errors=[],dialogs=[],posts=[],ai=[],repairs=[],boardWrites=[];
     let aiFail=false,aiHold=null,saveHold=null,invalidResponse=false;
     page.on('pageerror',e=>errors.push(e.message));page.on('dialog',d=>{dialogs.push(d.type());void d.dismiss();});
     await page.route('**/*',async route=>{
+      pendingRoutes++;try{
       const req=route.request(),url=new URL(req.url());assert.equal(url.hostname,'localhost','Fixtures forbid every external call');
       if(url.pathname==='/api/generate-campaign'){
-        ai.push(req.postDataJSON());if(aiHold)await new Promise(resolve=>aiHold.release=resolve);
-        if(aiFail)return route.fulfill({status:503,json:{error:'Local AI failure'}});
-        const nodes=v3.createCampaignV3MockNodes(req.postDataJSON(),'grouped');const incomplete=nodes.find(n=>n.type==='Content');incomplete.content='';incomplete.description='';return route.fulfill({json:{nodes}});
+        ai.push(req.postDataJSON());const hold=aiHold;if(hold)await hold.wait();
+        if(closing)return await route.abort();
+        if(aiFail)return await route.fulfill({status:503,json:{error:'Local AI failure'}});
+        const nodes=v3.createCampaignV3MockNodes(req.postDataJSON(),'grouped');const incomplete=nodes.find(n=>n.type==='Content');incomplete.content='';incomplete.description='';return await route.fulfill({json:{nodes}});
       }
       if(url.pathname==='/api/refine-node'){
         const body=req.postDataJSON();repairs.push(body);const n=body.currentContent;
-        return route.fulfill({json:{title:n.title,content:n.content||'Local business owners can save time with dependable service. Learn how our process supports predictable delivery and book a consultation.',caption:n.social?.caption||n.content}});
+        return await route.fulfill({json:{title:n.title,content:n.content||'Local business owners can save time with dependable service. Learn how our process supports predictable delivery and book a consultation.',caption:n.social?.caption||n.content}});
       }
       if(url.pathname==='/api/campaigns'){
-        posts.push(req.postDataJSON());if(saveHold)await new Promise(resolve=>saveHold.release=resolve);
-        const res=await r.call(req.postDataJSON());return route.fulfill({status:res.statusCode,json:invalidResponse?{broken:true}:res.body});
+        posts.push(req.postDataJSON());const hold=saveHold;if(hold)await hold.wait();
+        if(closing)return await route.abort();
+        const res=await r.call(req.postDataJSON());return await route.fulfill({status:res.statusCode,json:invalidResponse?{broken:true}:res.body});
       }
-      if(url.pathname==='/api/auth/session')return route.fulfill({json:{user:{email:EMAIL}}});
+      if(url.pathname==='/api/auth/session')return await route.fulfill({json:{user:{email:EMAIL}}});
       if(url.pathname==='/api/workspaces'){
         const c=r.catalog();c.request_id='0123456789abcdef01234567';
-        c.workspaces=c.workspaces.map(w=>({...w,avatar_url:null,locale:null,brands:w.brands.map(({workspace_id,...b})=>b),boards:w.boards.map(({workspace_id,...b})=>b)}));return route.fulfill({json:c});
+        c.workspaces=c.workspaces.map(w=>({...w,avatar_url:null,locale:null,brands:w.brands.map(({workspace_id,...b})=>b),boards:w.boards.map(({workspace_id,...b})=>b)}));return await route.fulfill({json:c});
       }
-      if(url.pathname==='/api/brands')return route.fulfill({json:{brands:r.catalog().workspaces[0].brands.map(b=>({...b,created_at:now,updated_at:now}))}});
+      if(url.pathname==='/api/brands')return await route.fulfill({json:{brands:r.catalog().workspaces[0].brands.map(b=>({...b,created_at:now,updated_at:now}))}});
       if(url.pathname===`/api/boards/${D}`){
         if(req.method()!=='GET')boardWrites.push(req.method());
-        return route.fulfill({json:(await r.request(req.method(),url.pathname,req.postDataJSON())).body});
+        return await route.fulfill({json:(await r.request(req.method(),url.pathname,req.postDataJSON())).body});
       }
-      if(url.pathname===`/api/brands/${B}/logo`||url.pathname==='/fixture-avatar.png')return route.fulfill({contentType:'image/png',body:png});
-      if(url.pathname.startsWith('/api/'))return route.fulfill({json:{boards:r.db.boards,members:[],editors:[],nodes:[],presence:[]}});
+      if(url.pathname===`/api/brands/${B}/logo`||url.pathname==='/fixture-avatar.png')return await route.fulfill({contentType:'image/png',body:png});
+      if(url.pathname.startsWith('/api/'))return await route.fulfill({json:{boards:r.db.boards,members:[],editors:[],nodes:[],presence:[]}});
       const file=path.resolve(ROOT,url.pathname==='/'||url.pathname.startsWith('/boards/')?'index.html':'.'+url.pathname);
-      return route.fulfill(fs.existsSync(file)&&fs.statSync(file).isFile()?{path:file}:{body:''});
+      return await route.fulfill(fs.existsSync(file)&&fs.statSync(file).isFile()?{path:file}:{body:''});
+      }finally{pendingRoutes--;}
     });
     const boot=async()=>{
       await page.goto(`http://localhost/boards/${D}`);
       await page.waitForFunction(()=>state.currentBoardId&&state.workspaceCatalog.status==='ready'&&!state.isBoardLoading);
       await page.evaluate(()=>{setAppMode('canvas');setActiveView('board');state.isDirty=false;window.testViews=[];const original=setActiveView;setActiveView=v=>{window.testViews.push(v);return original(v);};});
     };
-    await boot();
+    checkpoint('boot');await boot();checkpoint('context_access_and_reflow');
     const dialog=page.locator('#campaign-creation-dialog'),cta=page.locator('#create-campaign-btn');
     const open=async()=>{await cta.click();await dialog.waitFor();};
     const brief=async()=>{await open();await dialog.locator('#campaign-creation-idea').fill('Launch a reliable local service');await dialog.locator('#campaign-creation-context').fill('Reach business owners seeking time savings');await dialog.getByRole('button',{name:'Continue',exact:true}).click();};
@@ -152,7 +184,7 @@ async function browser({baseline=false}={}){
     await brief();await dialog.locator('#campaign-v3-variations').fill('11');await dialog.getByRole('button',{name:'Generate Campaign',exact:true}).click();assert(await dialog.getByText('Choose 1–10 variations and 1–20 posts per variation.').isVisible());assert.equal(ai.length,0);await dialog.getByRole('button',{name:'Cancel',exact:true}).click();
     await page.evaluate(()=>state.uiLanguage=language.setUiLanguage('de'));await open();assert(await dialog.getByRole('heading',{name:'Kampagne erstellen',exact:true}).isVisible());await page.keyboard.press('Escape');await page.evaluate(()=>state.uiLanguage=language.setUiLanguage('en'));
     await page.emulateMedia({forcedColors:'active',reducedMotion:'reduce'});await page.setViewportSize({width:320,height:280});await brief();await dialog.getByRole('button',{name:'Generate Campaign',exact:true}).scrollIntoViewIfNeeded();assert(await dialog.getByRole('button',{name:'Generate Campaign',exact:true}).isVisible());await page.keyboard.press('Escape');await page.emulateMedia({forcedColors:'none',reducedMotion:'no-preference'});await page.setViewportSize({width:1440,height:900});
-    if(baseline){assert.deepEqual(errors,[]);assert.deepEqual(dialogs,[]);console.log('BW-36.14 context/logo/roles/singleton/two-step DOM/themes/reflow regression passed.');return;}
+    if(baseline){if(expired)throw new Error('BW-36.14R1 watchdog expired');assert.deepEqual(errors,[]);assert.deepEqual(dialogs,[]);console.log('BW-36.14 context/logo/roles/singleton/two-step DOM/themes/reflow regression passed.');return;}
     await page.evaluate(()=>{
       window.r1Trace={steps:[],quality:0,repair:0,scroll:0,commit:0};
       const q=evaluateCampaignV3Quality;evaluateCampaignV3Quality=(...args)=>{window.r1Trace.quality++;return q(...args);};
@@ -162,40 +194,47 @@ async function browser({baseline=false}={}){
       const commit=CampaignGeneratorV3.commitCampaignV3PlanToCanvas;CampaignGeneratorV3.commitCampaignV3PlanToCanvas=(...args)=>{window.r1Trace.commit++;return commit(...args);};
       state.brandCore.brandDNA={userApproved:true,avatar:{userApproved:true,imageUrl:'/fixture-avatar.png'}};
     });
-    await structure();aiFail=true;await generate();await dialog.locator('#campaign-v3-error-retry').waitFor();assert.equal(await page.evaluate(()=>state.nodes.length),0);assert.equal(posts.length,0);
+    checkpoint('generation_and_save_failures');await structure();aiFail=true;await generate();await dialog.locator('#campaign-v3-error-retry').waitFor();assert.equal(await page.evaluate(()=>state.nodes.length),0);assert.equal(posts.length,0);
     aiFail=false;r.options.saveFail=true;await dialog.locator('#campaign-v3-error-retry').click();
     await dialog.getByText('Campaign generated, but not saved yet.',{exact:true}).waitFor();
     assert.deepEqual(await counts(),expected);assert.equal(ai.length,2);assert.equal(posts.length,1);assert.equal(r.db.boards[0].canvas_json.nodes.length,0);assert.equal(await dialog.locator('#campaign-v3-reveal').count(),0);
     assert.equal(await dialog.locator('#campaign-v3-error-retry').innerText(),'Retry Save');assert(await dialog.locator('#campaign-v3-error-close').isDisabled());
-    await page.screenshot({path:'work/bw36-14r1-save-retry.png'});await checkReflow();r.options.saveFail=false;saveHold={};
+    await page.screenshot({path:'work/bw36-14r1-save-retry.png'});await checkReflow();r.options.saveFail=false;saveHold=heldRequest('save');checkpoint('save_retry_held');
     await dialog.locator('#campaign-v3-error-retry').click();await page.waitForFunction(()=>document.querySelector('[data-campaign-v3-live-status]')?.textContent==='Saving campaign...');
     await page.waitForFunction(()=>window.r1Trace.commit===1);assert.equal(await dialog.locator('.campaign-v3-avatar img').count(),1);
     assert.equal(await dialog.locator('[data-campaign-v3-step]').count(),9);assert.equal(await dialog.locator('#campaign-v3-reveal').count(),0);
     await page.keyboard.press('Escape');assert.equal(await dialog.count(),1);
-    await checkReflow();await page.screenshot({path:'work/bw36-14r1-loading.png'});await page.waitForTimeout(100);assert(saveHold.release);saveHold.release();saveHold=null;await dialog.locator('#campaign-v3-reveal').waitFor();assert(await dialog.getByRole('heading',{name:'Your campaign is ready'}).isVisible());await checkReflow();await page.screenshot({path:'work/bw36-14r1-ready.png'});await reveal();await page.waitForTimeout(4500);assert.deepEqual(boardWrites,[]);
+    await checkReflow();await page.screenshot({path:'work/bw36-14r1-loading.png'});await saveHold.waitUntilRequested();assert(saveHold.started);saveHold.release();saveHold=null;checkpoint('save_released_and_reveal');await dialog.locator('#campaign-v3-reveal').waitFor();assert(await dialog.getByRole('heading',{name:'Your campaign is ready'}).isVisible());await checkReflow();await page.screenshot({path:'work/bw36-14r1-ready.png'});await reveal();await page.waitForTimeout(4500);assert.deepEqual(boardWrites,[]);
     assert.equal(ai.length,2);assert.equal(posts.length,2);assert.deepEqual(posts[0],posts[1]);assert.equal(r.writes(),1);
     assert.deepEqual(await counts(),expected);assert.equal(r.db.boards[0].canvas_json.nodes.length,13);assert.equal(r.db.boards[0].canvas_json.edges.length,17);
     const trace=await page.evaluate(()=>window.r1Trace);assert(trace.quality>0);assert(trace.repair>0);assert(repairs.length>0);assert(trace.scroll>=9);assert.equal(trace.commit,1);assert.deepEqual([...new Set(trace.steps)].sort(),[0,1,2,3,4,5,6,7,8]);
     assert.equal(page.url(),`http://localhost/boards/${D}`);assert(!(await page.evaluate(()=>window.testViews)).includes('boards_library'));assert.deepEqual(boardWrites,[]);
     await page.screenshot({path:'work/bw36-14r1-complete-canvas.png'});
-    await page.reload();await page.waitForFunction(()=>state.currentBoardId&&!state.isBoardLoading&&state.workspaceCatalog.status==='ready');assert.deepEqual(await counts(),expected);assert.equal(await page.evaluate(()=>state.edges.length),17);
+    checkpoint('refresh_and_reconciliation');await page.reload();await page.waitForFunction(()=>state.currentBoardId&&!state.isBoardLoading&&state.workspaceCatalog.status==='ready');assert.deepEqual(await counts(),expected);assert.equal(await page.evaluate(()=>state.edges.length),17);
     await page.evaluate(()=>{setAppMode('canvas');setActiveView('board');state.isDirty=false;window.originalOpen=openCreatedCampaign;openCreatedCampaign=()=>{throw new Error('Fixture local reconciliation failure');};});
     await structure();await generate();await dialog.getByText('Your campaign is saved. Try opening it again.',{exact:true}).waitFor();const sent=posts.length,generated=ai.length;assert.equal(r.writes(),2);assert(await dialog.getByRole('link',{name:'Open campaign',exact:true}).isVisible());
     await page.evaluate(()=>openCreatedCampaign=window.originalOpen);await dialog.locator('#campaign-v3-error-retry').click();await reveal();assert.equal(posts.length,sent);assert.equal(ai.length,generated);
     // Double-submit through the actual form/button during a delayed AI request.
-    await structure();aiHold={};await dialog.getByRole('button',{name:'Generate Campaign',exact:true}).evaluate(b=>{const f=b.form;b.click();b.click();f.requestSubmit();f.requestSubmit();});await page.waitForTimeout(100);
+    checkpoint('double_submit');await structure();aiHold=heldRequest('ai');await dialog.getByRole('button',{name:'Generate Campaign',exact:true}).evaluate(b=>{const f=b.form;b.click();b.click();f.requestSubmit();f.requestSubmit();});await aiHold.waitUntilRequested();
     const aiCount=ai.length;await page.evaluate(()=>{el.createCampaignButton.click();el.createCampaignButton.click();});assert.equal(await dialog.count(),1);assert.equal(ai.length,aiCount);
-    await page.keyboard.press('Escape');assert.equal(await dialog.count(),1);assert(aiHold.release);aiHold.release();aiHold=null;await reveal();assert.equal(ai.length,aiCount);assert.equal(r.writes(),3);
+    await page.keyboard.press('Escape');assert.equal(await dialog.count(),1);assert(aiHold.started);aiHold.release();aiHold=null;await reveal();assert.equal(ai.length,aiCount);assert.equal(r.writes(),3);
     // An unusable save response replays only the immutable complete save, never AI.
-    invalidResponse=true;await structure();await generate();await dialog.getByText('Campaign generated, but not saved yet.',{exact:true}).waitFor();const retryInput=posts.at(-1),beforeAi=ai.length;invalidResponse=false;await dialog.locator('#campaign-v3-error-retry').click();await reveal();assert.deepEqual(posts.at(-1),retryInput);assert.equal(ai.length,beforeAi);assert.equal(r.writes(),4);
+    checkpoint('immutable_save_replay');invalidResponse=true;await structure();await generate();await dialog.getByText('Campaign generated, but not saved yet.',{exact:true}).waitFor();const retryInput=posts.at(-1),beforeAi=ai.length;invalidResponse=false;await dialog.locator('#campaign-v3-error-retry').click();await reveal();assert.deepEqual(posts.at(-1),retryInput);assert.equal(ai.length,beforeAi);assert.equal(r.writes(),4);
     // A changed identity while awaiting AI may not commit or persist stale nodes.
-    for(const mutate of [()=>state.boardLoadGeneration++,()=>state.user={...state.user},()=>state.workspaceCatalog.activeWorkspaceId='other',()=>state.boardBrandAssociation.brandId='other',()=>state.session.brandId='other',()=>state.user.email='other@example.test',()=>state.workspaceCatalog.generation++]){
-      await page.reload();await page.waitForFunction(()=>state.currentBoardId&&!state.isBoardLoading&&state.workspaceCatalog.status==='ready');await page.evaluate(()=>{setAppMode('canvas');setActiveView('board');state.isDirty=false;});
-      const before=await page.evaluate(()=>state.nodes.length),savedCount=posts.length;await structure();aiHold={};await generate();await page.waitForTimeout(100);await page.evaluate(mutate);assert(aiHold.release);aiHold.release();aiHold=null;await dialog.locator('#campaign-v3-error-close').waitFor();assert.equal(await page.evaluate(()=>state.nodes.length),before);assert.equal(posts.length,savedCount);assert(await dialog.locator('#campaign-v3-error-retry').isDisabled());await dialog.locator('#campaign-v3-error-close').click();
+    let mutationIndex=0;for(const mutate of [()=>state.boardLoadGeneration++,()=>state.user={...state.user},()=>state.workspaceCatalog.activeWorkspaceId='other',()=>state.boardBrandAssociation.brandId='other',()=>state.session.brandId='other',()=>state.user.email='other@example.test',()=>state.workspaceCatalog.generation++]){
+      checkpoint('identity_mutation_'+mutationIndex++);await page.reload();await page.waitForFunction(()=>state.currentBoardId&&!state.isBoardLoading&&state.workspaceCatalog.status==='ready');await page.evaluate(()=>{setAppMode('canvas');setActiveView('board');state.isDirty=false;});
+      const before=await page.evaluate(()=>state.nodes.length),savedCount=posts.length;await structure();aiHold=heldRequest('ai');await generate();await aiHold.waitUntilRequested();await page.evaluate(mutate);assert(aiHold.started);aiHold.release();aiHold=null;await dialog.locator('#campaign-v3-error-close').waitFor();assert.equal(await page.evaluate(()=>state.nodes.length),before);assert.equal(posts.length,savedCount);assert(await dialog.locator('#campaign-v3-error-retry').isDisabled());await dialog.locator('#campaign-v3-error-close').click();
     }
     assert.deepEqual(errors,[]);assert.deepEqual(dialogs,[]);assert.equal(r.storageRequests.length,0);assert.deepEqual(boardWrites,[]);
+    if(expired)throw new Error('BW-36.14R1 watchdog expired');checkpoint('assertions_complete');
     console.log('BW-36.14R1 Chromium passed: 13 nodes / 17 edges, real V3 adapter, quality/repair, nine animated steps/avatar/scroll, AI retry, save-only retry, confirmed reconciliation retry, immutable response replay, refresh hydration, context changes, themes/reflow, zero external calls.');
-  }finally{await browser.close();}
+  }catch(e){failure=e;checkpoint('failure:'+stage);throw e;}
+  finally{
+    checkpoint('teardown');let cleanupTimer;
+    try{await Promise.race([cleanup(),new Promise((_,reject)=>cleanupTimer=setTimeout(()=>reject(new Error('BW-36.14R1 browser cleanup exceeded 10 seconds')),10000))]);checkpoint('teardown_complete');}
+    catch(e){cleanupFailed=true;console.error('BW-36.14R1 cleanup failure:',e.message);process.exitCode=1;forceExit||=setTimeout(()=>process.exit(1),1000);if(!failure)throw e;}
+    finally{clearTimeout(cleanupTimer);clearTimeout(watchdog);if(!expired&&!cleanupFailed)clearTimeout(forceExit);}
+  }
 }
 module.exports={server,browser};
 if(require.main===module)(async()=>{await server();await browser();})().catch(e=>{console.error(e);process.exitCode=1;});
