@@ -28,7 +28,7 @@ After success all saved candidates display Proposed, other candidates remain acc
 
 ## Transaction and security boundaries
 
-The internal governed Learning operation accepts an input set and an after-mutation hook; existing HTTP Learning mutations still supply their single input. The Advisor's strict `adopt_selected` request validates every candidate against the signed receipt and applies existing text normalization before writing. Duplicate IDs and normalized statements within a batch are rejected. Every item passes through existing `mutate()` duplicate, revision, successor and event logic; each source-backed item also uses the existing current source authorization/precision checks.
+The internal governed Learning operation accepts an input set and an after-mutation hook; existing HTTP Learning mutations still supply their single input. The Advisor's strict `adopt_selected` request validates every candidate against the signed receipt and applies existing text normalization before writing. Duplicate IDs and normalized statements within a batch are rejected. The existing single-proposal request byte boundary scales with the intrinsic five-candidate analysis capacity for the batch, so valid long Unicode context across selected items is not restricted to a single-item payload size. Every item passes through existing `mutate()` duplicate, revision, successor and event logic; each source-backed item also uses the existing current source authorization/precision checks.
 
 One database transaction locks the Brand for writing, revalidates signed receipt/actor and current Workspace/source scope under authorization locks, writes each independently validated proposal/event, derives the next receipt, and commits. The shared scope authorization stays locked for the entire batch. Any candidate, source, revision, duplicate, event, receipt-renewal or commit failure rolls back every item and event. Success reports each item's Proposed state and Learning; failures report every submitted bounded candidate as Not saved, with the bounded failure code. There is no partial-success claim.
 
@@ -40,13 +40,13 @@ All output remains proposed. Manual proposals have manual provenance; source-bac
 
 - Full context prefill, AI/literal-source distinction, missing/unverified evidence, no truncation and EN/DE formatting.
 - Actual API/service continuation after a single save, unchanged expiry, consumed IDs, no second provider call, human edits and event persistence.
-- Duplicate normalized statements/IDs, existing library changes, invalid statements/candidates, forged/expired receipts, stale sources, Brand changes, revoked membership, event/commit failure and mixed manual/source/successor semantics.
-- Chromium review controls in EN/DE, light/dark, desktop/375/320 widths, overflow notice, independent edits, confirmation, focus, Tab/Escape and preserved session.
+- Duplicate normalized statements/IDs, existing library changes, invalid statements/candidates and malformed IDs, long Unicode batch context, forged/expired receipts, stale sources, Brand changes, revoked membership, event/commit failure and mixed manual/source/successor semantics.
+- Chromium review controls in EN/DE, light/dark, desktop/375/320 widths, overflow notice, independent edits, unavailable/Proposed states, confirmation, focus, Tab/Escape and preserved session.
 - Real HTTP handlers, Chromium and disposable PGlite: durable reload, Board/discussion continuity, selection/deselection/removal, second-event atomic rollback, retained edits and successful retry, and unchanged Canvas/Profile data.
 
 The historical SQL assertion suites are unchanged. The external database doubles now expose transaction-visible Learning rows to Advisor scope reads, matching PostgreSQL visibility for renewed fingerprints; no historical assertion was weakened. Providers are mocked and all database records are disposable synthetic fixtures.
 
-Historical Advisor/Brand Learning regressions and full Runtime Boot Safety results will be recorded after completion.
+Historical focused regressions `check:bw36.17`, `check:bw36.17r1`, `check:bw36.17r2`, `check:bw36.18`, `check:bw36.19`, `check:bw36.19r1`, `check:bw36.19r2`, `check:bw36.19r4` and `check:bw36.19r5` all passed. Full Runtime Boot Safety then passed all 174 executable workflow steps locally, including the final R6 changes, syntax and browser script integrity. Dependencies were installed separately and system Chromium supplied the browser runtime; the checkout/install setup steps are not counted as regression checks. No historical assertion was weakened, no paid OpenAI requests were made, and no production SQL was executed. GitHub runs the same workflow for PR #771.
 
 ## Deployment and remaining limitations
 

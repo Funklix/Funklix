@@ -7,7 +7,7 @@ const advisor = require('../../_learning-advisor');
 function batchFailure(body,code) {
   if(body?.action!=='adopt_selected')return {};
   const items=Array.isArray(body.items)&&body.items.length<=advisor.LIMITS.suggestions?body.items:[];
-  return {atomic:true,results:items.map(item=>({suggestion_id:/^suggestion-[1-5]$/.test(item?.suggestion_id)?item.suggestion_id:null,status:'not_saved',error:{code}}))};
+  return {atomic:true,results:items.map(item=>({suggestion_id:typeof item?.suggestion_id==='string'&&/^suggestion-[1-5]$/.test(item.suggestion_id)?item.suggestion_id:null,status:'not_saved',error:{code}}))};
 }
 function createHandler({db,env=process.env,fetchImpl=fetch}={}) {
   return async function handler(req,res) {
@@ -46,7 +46,10 @@ function createHandler({db,env=process.env,fetchImpl=fetch}={}) {
         }catch(e){await client.query('ROLLBACK').catch(()=>{});throw e;}finally{client.release();}
       }
       const body=req.body;
-      if(!body||typeof body!=='object'||Array.isArray(body)||Buffer.byteLength(JSON.stringify(body))>64000)fail('INVALID_REQUEST');
+      // A batch can carry the existing per-proposal text capacity for every
+      // candidate from the bounded analysis; do not impose a single-item cap.
+      const requestLimit=body?.action==='adopt_selected'?64000*advisor.LIMITS.suggestions:64000;
+      if(!body||typeof body!=='object'||Array.isArray(body)||Buffer.byteLength(JSON.stringify(body))>requestLimit)fail('INVALID_REQUEST');
       const keys=body.action==='adopt_selected'?['action','receipt','items']:body.action==='adopt'?['action','receipt','suggestion_id','statement','evidence_summary']:
         body.action==='validate'?['action','receipt']:['action','scope'];
       if(Object.keys(body).length!==keys.length||keys.some(k=>!Object.hasOwn(body,k)))fail('INVALID_REQUEST');

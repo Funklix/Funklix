@@ -518,4 +518,3 @@ async function adoptSelected(args,items,bulk=true) {
     }});
 }
 module.exports={CONTRACT,GENERATION_CONTRACT,LIMITS,SCHEMA,LEGACY_SCHEMA,scopeRequest,extract,readScope,analyze,adopt,adoptSelected,checkReceipt,validateOutput,parseProvider,readProviderResponse,OUTPUT_BOUND,RESPONSE_BOUND,modelConstraints,prepare,providerInput,fits};
-

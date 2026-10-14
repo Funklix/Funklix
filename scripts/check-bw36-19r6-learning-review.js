@@ -25,10 +25,11 @@ async function contracts(){
  assert.equal((await f.request({action:'adopt',receipt:first.body.review_session.receipt,...items(a)[0]})).statusCode,403);
  const second=await f.request({action:'adopt',receipt:first.body.review_session.receipt,...items(a)[1]});assert.equal(second.statusCode,201,JSON.stringify(second.body));
  assert.equal(f.config.providerCalls.length,1);assert.equal(f.r.db.events.length,2);assert.equal(f.r.db.learnings[1].evidence_summary,'Edited context 1');
- for(const invalid of ['duplicate','id_duplicate','candidate','statement','existing','event','commit','stale','revoked','expiry','forged','source','brand']){
+ for(const invalid of ['duplicate','id_duplicate','malformed_id','candidate','statement','existing','event','commit','stale','revoked','expiry','forged','source','brand']){
   const g=batch(),a=await analyze(g),selected=items(a);let receipt=a.receipt;
   if(invalid==='duplicate')selected[1].statement='  HUMAN reviewed 0 ';
   if(invalid==='id_duplicate')selected[1].suggestion_id=selected[0].suggestion_id;
+  if(invalid==='malformed_id')selected[1].suggestion_id={toString:'invalid',valueOf:'invalid'};
   if(invalid==='candidate')selected[1].suggestion_id='forged';
   if(invalid==='statement')selected[1].statement='';
   if(invalid==='existing'){await g.r.request('POST','/api/brands/'+B+'/learnings',{statement:selected[1].statement,expected_brand_revision:'1'});}
@@ -46,6 +47,9 @@ async function contracts(){
   const before=clone(g.r.db.learnings),events=clone(g.r.db.events),out=await g.request({action:'adopt_selected',receipt,items:selected});
   assert(out.statusCode>=400,invalid);assert.equal(out.body.atomic,true);assert(out.body.results.every(r=>r.status==='not_saved'));assert.deepEqual(g.r.db.learnings,before);assert.deepEqual(g.r.db.events,events);
  }
+ const wide=batch();while(wide.config.output.suggestions.length<5){const s=clone(wide.config.output.suggestions[0]);s.statement='Distinct guidance '+wide.config.output.suggestions.length;wide.config.output.suggestions.push(s);}
+ const full=await analyze(wide),unicodeItems=items(full).map(item=>({...item,evidence_summary:'🙂'.repeat(4000)}));
+ assert(Buffer.byteLength(JSON.stringify(unicodeItems))>64000);assert.equal((await wide.request({action:'adopt_selected',receipt:full.receipt,items:unicodeItems})).statusCode,201);
  // Independent provenance routes in one governed transaction.
  const g=batch();g.config.output.suggestions[1].sources=[{ref:'s1',excerpt:'Make marketing useful.'}];
  const original=(await g.r.request('POST','/api/brands/'+B+'/learnings',{statement:'Original knowledge',expected_brand_revision:'1'})).body.learning;

@@ -125,7 +125,7 @@
       }catch(e){if(e.name==='AbortError')throw Object.assign(new Error(),{code:'PROVIDER_TIMEOUT'});throw e;}finally{root.clearTimeout(timer);if(activeController===controller)activeController=null;}
     }
     function clear(){data=null;editing=null;selected.clear();proposed.clear();drafts.clear();reviewIds=[];blocked=false;if(controls)controls.hidden=false;root.clearTimeout(expiry);}
-    function close(){generation++;activeController?.abort();clear();root.clearInterval(monitor);dialog?.close();dialog?.remove();dialog=null;busy=false;doc.removeEventListener('visibilitychange',resume);root.removeEventListener('focus',resume);if(origin?.isConnected)origin.focus();}
+    function close(){generation++;activeController?.abort();clear();root.clearInterval(monitor);dialog?.close();dialog?.remove();dialog=null;busy=false;doc.removeEventListener('visibilitychange',resume);root.removeEventListener('focus',resume);if(origin?.isConnected)origin.focus();else if(current())doc.querySelector('[data-learning-advisor-open]')?.focus();}
     function discard(action){
       if(!editing?.dirty){action();return;}
       if(dialog.querySelector('[data-advisor-discard]'))return;
