@@ -69,7 +69,7 @@ async function check({ refinement = false } = {}) {
     if (refinement) {
       assert.equal(await page.locator('.canvas-toolbar-row.primary #campaign-responsibilities-btn, .canvas-toolbar-row.primary #canvas-compact-view-btn').count(),0);
       assert.deepEqual(await page.locator('.toolbar-row2-left > button').evaluateAll(es => es.map(e => e.id)),
-        ['filters-toggle-btn','utilities-toggle-btn','campaign-responsibilities-btn','canvas-compact-view-btn']);
+        ['filters-toggle-btn','utilities-toggle-btn','campaign-responsibilities-btn','canvas-compact-view-btn','canvas-learn-btn']);
       assert.equal(await responsibilities.textContent(),'Tasks');
       assert.equal(await toggle.textContent(),''); assert.equal(await toggle.locator('svg').count(),1);
       await responsibilities.click();

@@ -283,9 +283,9 @@
       finally{if(flight===generation&&dialog){busy=false;analyze.disabled=!scope;}}
     }
     let analyze;
-    async function open(){
+    async function open({boardId,returnFocus}={}){
       if(dialog||!current())return;
-      origin=doc.activeElement;generation++;const language=options.language();dialog=el('dialog');dialog.className='brand-learning-dialog learning-advisor-dialog';dialog.dataset.learningAdvisor='true';dialog.setAttribute('aria-label',t('title'));doc.body.append(dialog);
+      origin=returnFocus||doc.activeElement;generation++;const language=options.language();dialog=el('dialog');dialog.className='brand-learning-dialog learning-advisor-dialog';dialog.dataset.learningAdvisor='true';dialog.setAttribute('aria-label',t('title'));doc.body.append(dialog);
       const header=el('header','',dialog);header.className='advisor-header';
       const motif=el('span','✦',header);motif.className='advisor-motif';motif.setAttribute('aria-hidden','true');
       const eyebrow=el('p',t('studio'),header);eyebrow.className='advisor-eyebrow';el('h2',t('title'),header);el('p',t('benefit'),header);
@@ -326,8 +326,13 @@
       dialog.showModal();closeButton.focus({preventScroll:true});dialog.scrollTop=0;busy=true;
       monitor=root.setInterval(()=>{if(dialog&&(!current()||options.language()!==language))close();},250);
       doc.addEventListener('visibilitychange',resume);root.addEventListener('focus',resume);
-      try{meta=await request();if(meta.brand?.id!==options.brand.id||!Array.isArray(meta.boards))throw new Error();receivingBrand.textContent=meta.brand.name;for(const board of meta.boards)el('option',board.name,select).value=board.id;feedback.textContent='';}
-      catch(e){message(e.code||'unavailable');}finally{busy=false;}
+      try{meta=await request();if(meta.brand?.id!==options.brand.id||!Array.isArray(meta.boards))throw new Error();receivingBrand.textContent=meta.brand.name;for(const board of meta.boards)el('option',board.name,select).value=board.id;feedback.textContent='';
+        if(boardId){
+          if(!meta.boards.some(board=>board.id===boardId))throw Object.assign(new Error(),{code:'SOURCE_UNAVAILABLE'});
+          select.value=boardId;await refreshScope();
+        }
+      }
+      catch(e){if(dialog&&current())message(e.code||'unavailable');}finally{busy=false;}
     }
     return {open,invalidate(){alive=false;close();}};
   }

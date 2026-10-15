@@ -409,6 +409,8 @@ jobs:
         run: npm run check:bw36.19r6
       - name: Check BW-36.19R7 Advisor visual states and accessibility in Chromium (provider-free)
         run: node scripts/check-bw36-19r7-advisor-visual.js
+      - name: Check BW-36.19R8 Canvas Learn entry in Chromium (provider-free)
+        run: npm run check:bw36.19r8
       - name: Check dynamic AI Insights translations
         run: node scripts/check-bw25-1-dynamic-insights-translations.js
       - name: Check scoped German interface localization
