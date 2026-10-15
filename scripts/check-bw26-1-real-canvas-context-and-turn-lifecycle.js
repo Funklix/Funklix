@@ -41,7 +41,7 @@ assert(!app.slice(app.indexOf('function aiBrainCanvasProjection'), app.indexOf('
 async function proveProviderBoundary() {
   const stub = (file, exports) => { const resolved = require.resolve(path.join(__dirname, '..', file)); require.cache[resolved] = { id: resolved, filename: resolved, loaded: true, exports }; };
   stub('api/_auth-session.js', { getSessionUser: () => ({ email: 'editor@example.com' }) });
-  stub('api/_board-access.js', { getBoardAccess: async () => ({ board: { id: 'board', name: 'TLDR', brand_core_snapshot: {}, updated_at: 'now' }, access: { canEdit: true } }) });
+  stub('api/_board-access.js', { getBoardAccess: async () => ({ board: { id: 'board', owner_id: null, owner_email: null, name: 'TLDR', brand_core_snapshot: {}, updated_at: 'now' }, access: { canEdit: true } }) });
   stub('api/_brand-access.js', { getBrandAccess: async () => ({}), isBrandId: () => true });
   stub('api/_ai-brain-diagnostics.js', { analyzeCanvas: () => ({ version: 1 }) });
   delete require.cache[require.resolve('../api/ai-brain/advice')];
