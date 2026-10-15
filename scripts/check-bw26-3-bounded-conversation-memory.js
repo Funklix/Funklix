@@ -25,6 +25,7 @@ async function proveBoundary() {
   stub('api/_board-access.js', { getBoardAccess: async () => ({ board: { id: 'board', owner_id: null, owner_email: null, name: 'Board', brand_core_snapshot: {}, updated_at: 'now' }, access: { canEdit: true } }) });
   stub('api/_brand-access.js', { getBrandAccess: async () => ({}), isBrandId: () => true });
   stub('api/_ai-brain-diagnostics.js', { analyzeCanvas: () => ({ version: 1 }) });
+  require('./fixtures/bw26-advice-database')();
   delete require.cache[require.resolve('../api/ai-brain/advice')];
   const handler = require('../api/ai-brain/advice'); const calls = [];
   const previousFetch = global.fetch; const previousKey = process.env.OPENAI_API_KEY; process.env.OPENAI_API_KEY = 'test';

@@ -6020,6 +6020,26 @@ const AI_BRAIN_PROPOSAL_ERROR_CODES = new Set(["proposal_route_unavailable", "pr
 function aiBrainProposalText(key, languageCode = state.uiLanguage) { return (AI_BRAIN_PROPOSAL_TEXT[languageCode] || AI_BRAIN_PROPOSAL_TEXT.en)[key] || key; }
 function aiBrainText(key) { return (AI_BRAIN_TEXT[state.uiLanguage] || AI_BRAIN_TEXT.en)[key] || key; }
 function aiBrainTurnText(turn, key) { return (AI_BRAIN_TEXT[turn?.responseLanguage] || AI_BRAIN_TEXT[state.uiLanguage] || AI_BRAIN_TEXT.en)[key] || key; }
+const AI_BRAIN_LEARNING_TEXT = Object.freeze({
+  en: { title: "Approved Brand Learnings supplied as context", explanation: "These Learnings were supplied to the AI Brain. They were not necessarily used in every sentence.", partial: "Some relevant Learnings did not fit within the model’s context capacity.", advice_context_changed: "Context or access changed. Retry with current context.", advice_context_too_large: "This context exceeds the model’s capacity. Reduce the Canvas or start a new conversation.", model_context_unconfigured: "The model’s context configuration needs administrator review.", learning_context_unavailable: "Brand Learning context is temporarily unavailable. Please retry." },
+  de: { title: "Freigegebene Brand Learnings als Kontext bereitgestellt", explanation: "Diese Learnings wurden dem AI Brain bereitgestellt. Sie wurden nicht unbedingt in jedem Satz verwendet.", partial: "Einige relevante Learnings passten nicht in das Kontextfenster des Modells.", advice_context_changed: "Kontext oder Zugriff hat sich geändert. Versuche es mit aktuellem Kontext erneut.", advice_context_too_large: "Dieser Kontext überschreitet die Modellkapazität. Reduziere den Canvas oder starte eine neue Unterhaltung.", model_context_unconfigured: "Die Kontextkonfiguration des Modells muss administrativ geprüft werden.", learning_context_unavailable: "Der Brand-Learning-Kontext ist gerade nicht verfügbar. Bitte versuche es erneut." }
+});
+function aiBrainLearningText(turn, key) { return (AI_BRAIN_LEARNING_TEXT[turn?.responseLanguage] || AI_BRAIN_LEARNING_TEXT.en)[key]; }
+function renderAiBrainLearningContext(advisor, turn) {
+  const supplied = turn.approvedLearnings;
+  if (!Array.isArray(supplied?.items) || !supplied.items.length) return;
+  const details = document.createElement("details"); details.className = "ai-brain-learning-context";
+  const summary = document.createElement("summary"); summary.textContent = aiBrainLearningText(turn, "title");
+  const explanation = document.createElement("p"); explanation.textContent = aiBrainLearningText(turn, "explanation");
+  const list = document.createElement("ul");
+  supplied.items.forEach(item => {
+    if (typeof item?.statement !== "string" || !/^L[1-9][0-9]*$/.test(item.ref)) return;
+    const li = document.createElement("li"); li.dataset.userContent = "true"; li.textContent = item.statement; list.appendChild(li);
+  });
+  details.append(summary, explanation, list);
+  if (supplied.coverage?.partial) { const partial = document.createElement("p"); partial.textContent = aiBrainLearningText(turn, "partial"); details.appendChild(partial); }
+  advisor.appendChild(details);
+}
 function aiBrainRequestContextIdentity() {
   return `${aiBrainIdentity()}|${state.boardAccess?.canEdit === true}|${state.selectedPrimary || ""}|${JSON.stringify(state.nodes.map((node) => [node.id, node.type, node.title, node.content, node.status, node.audience, node.channel, node.funnelStage, node.tone, node.social, node.landingPage]))}|${JSON.stringify(state.edges)}`;
 }
@@ -6180,7 +6200,7 @@ function renderAiBrainTranscript(transcript) {
     user.append(userLabel, question);
     if (turn.status === "pending") { const pending = document.createElement("small"); pending.textContent = aiBrainText("pending"); user.appendChild(pending); }
     if (turn.status === "failed") {
-      const failure = document.createElement("small"); failure.textContent = `${aiBrainTurnText(turn, "failed")}: ${aiBrainTurnText(turn, turn.errorCode || "generic")}`;
+      const failure = document.createElement("small"); failure.textContent = `${aiBrainTurnText(turn, "failed")}: ${aiBrainLearningText(turn, turn.errorCode) || aiBrainTurnText(turn, turn.errorCode || "generic")}`;
       const retry = document.createElement("button"); retry.type = "button"; retry.dataset.aiBrainRetry = turn.id; retry.textContent = aiBrainText("retry");
       const current = document.createElement("small"); current.textContent = aiBrainText("current"); user.append(failure, retry, current);
     }
@@ -6191,6 +6211,7 @@ function renderAiBrainTranscript(transcript) {
     const advisorLabel = document.createElement("strong"); advisorLabel.className = "ai-brain-speaker"; advisorLabel.textContent = uiText("AI Brain");
     const formatted = document.createElement("div"); formatted.className = "ai-brain-formatted-answer"; renderAiBrainFormattedAnswer(formatted, turn.answer);
     advisor.append(createAiBrainAdvisorAvatar(turn.advisorIdentity), advisorLabel, formatted);
+    renderAiBrainLearningContext(advisor, turn);
     if (turn.responseLanguage) { const disclosure = document.createElement("small"); disclosure.className = "ai-brain-response-language"; disclosure.textContent = AI_BRAIN_TEXT[turn.responseLanguage]?.responseLanguage || AI_BRAIN_TEXT.en.responseLanguage; advisor.appendChild(disclosure); }
     if (Array.isArray(turn.assumptions) && turn.assumptions.length) {
       const section = document.createElement("section"); section.className = "ai-brain-assumptions";
@@ -6254,7 +6275,7 @@ async function requestAiBrainAdvice(event, retryTurnId = null) {
     if (data.context?.response_language !== responseLanguage) { const error = new Error("AI Brain response language identity mismatch"); error.code = "response_language_mismatch"; throw error; }
     const scope = [`Board Brand Core`, data.context?.canonicalBrandCore ? "Canonical Brand Core" : null, `${data.context?.canvasNodes || 0} Canvas nodes`].filter(Boolean).join(" · ");
     const assumptions = Array.isArray(data.assumptions) ? data.assumptions.filter((value) => typeof value === "string").slice(0, 20) : [];
-    state.aiBrain = { ...state.aiBrain, status: "success", controller: null, messages: state.aiBrain.messages.map((item) => item.id === turn.id ? { ...item, status: "success", answer: data.answer, responseLanguage, assumptions, referenceResolution: data.context?.reference_resolution || "none", proposal: null, meta: `${scope}. ${data.disclaimer}` } : item) };
+    state.aiBrain = { ...state.aiBrain, status: "success", controller: null, messages: state.aiBrain.messages.map((item) => item.id === turn.id ? { ...item, status: "success", answer: data.answer, responseLanguage, assumptions, approvedLearnings: data.context?.approved_learnings || null, referenceResolution: data.context?.reference_resolution || "none", proposal: null, meta: `${scope}. ${data.disclaimer}` } : item) };
   } catch (error) {
     if (error?.name === "AbortError" || state.aiBrain.requestId !== requestId) return;
     state.aiBrain = { ...state.aiBrain, status: "error", controller: null, messages: state.aiBrain.messages.map((item) => item.id === turn.id ? { ...item, status: "failed", errorCode: error.code || "generic" } : item) };

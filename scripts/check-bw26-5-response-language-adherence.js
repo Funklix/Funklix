@@ -14,6 +14,7 @@ stub('api/_auth-session.js', { getSessionUser: () => ({ email: 'editor@example.c
 stub('api/_board-access.js', { getBoardAccess: async () => ({ board: { id: 'board', owner_id: null, owner_email: null, name: 'Calima', brand_core_snapshot: {}, updated_at: 'now' }, access: { canEdit: true } }) });
 stub('api/_brand-access.js', { getBrandAccess: async () => ({}), isBrandId: () => true });
 stub('api/_ai-brain-diagnostics.js', { analyzeCanvas: () => ({ version: 1, items: [] }) });
+require('./fixtures/bw26-advice-database')();
 delete require.cache[require.resolve('../api/ai-brain/advice')];
 const handler = require('../api/ai-brain/advice');
 const { providerMessages, responseLanguageMismatch } = handler;
