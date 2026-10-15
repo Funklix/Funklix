@@ -19188,6 +19188,7 @@ el.filtersToggleButton?.addEventListener("click", (event) => {
 });
 initializeResponsibilityToolbar();
 initializeAdaptiveCanvasToolbar();
+window.FunklixCanvasLearningAdvisor?.mount({ getState: () => state, language: () => state.uiLanguage });
 el.utilitiesToggleButton?.addEventListener("click", (event) => {
   event.stopPropagation();
   const existing = document.getElementById("floating-utilities-popover");

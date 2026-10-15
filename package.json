@@ -5,6 +5,7 @@
     "pg": "^8.13.1"
   },
   "scripts": {
+    "check:bw36.19r8": "node scripts/check-bw36-19r8-canvas-learn-entry.js",
     "check:bw36.19r6": "node scripts/check-bw36-19r6-learning-review.js",
     "check:bw36.14": "node scripts/check-bw36-14-stable-campaign-creation.js",
     "check:bw35.1": "node scripts/check-bw35-1-canonical-posting-schedule-persistence.js",
