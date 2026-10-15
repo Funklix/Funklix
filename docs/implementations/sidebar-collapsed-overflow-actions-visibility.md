@@ -26,5 +26,11 @@ Validation:
   Both menus open again after expansion; Escape restores the originating control.
   No page errors.
 - Sidebar/Workspace/Brand checks BW-36.4, BW-36.10 and BW-36.11R1 passed.
-- Full Runtime Boot Safety results recorded below after completion.
+- Full Runtime Boot Safety: all 223 validation commands passed, including the
+  Workspace/Brand lifecycle browser regressions, script syntax/integrity,
+  Campaign, Canvas, Learning Advisor, localization and browser-global checks.
+  Two CI setup commands failed locally (default npm installation and Playwright
+  browser installation); dependencies were instead installed successfully using
+  the writable workspace npm cache, and the suite used system Chromium. Browser
+  checks ran with the network-enabled execution profile for local socket access.
 - `git diff --check` passed.
