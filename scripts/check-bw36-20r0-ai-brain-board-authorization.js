@@ -13,7 +13,10 @@ const owner = { id: 'private-owner-id', email: 'private-owner@example.invalid' }
 const stranger = { id: 'stranger', email: 'stranger@example.invalid' };
 const source = fs.readFileSync(path.join(ROOT, 'api/ai-brain/advice.js'), 'utf8');
 const legacySource = source.replace('id, name, owner_id, owner_email, brand_id,', 'id, name, brand_id,')
-  .replace(/    \/\/ Missing ownership columns[\s\S]*?(?=    if \(!access\?\.canEdit\))/, '');
+  .replace(/    \/\/ Missing ownership columns[\s\S]*?(?=    if \(!access\?\.canEdit\))/, '')
+  // Reproduce the original single-read route, before freshness integration existed.
+  .replace('await learningContext.capture({ boardId, user })', '({ board, canonical, learnings: [] })')
+  .replaceAll('await learningContext.revalidate({ data, selected: prepared.selected, user });', '');
 
 function runtime({ user = stranger, board = {}, member = null, brandRole = null, projectionFault = null, routeSource = source, providerAnswer = 'Advice' } = {}) {
   const saved = { id: BOARD, name: 'Private campaign', owner_id: owner.id, owner_email: owner.email,
@@ -22,8 +25,12 @@ function runtime({ user = stranger, board = {}, member = null, brandRole = null,
   const queries = [], calls = [], resolutions = [], cache = new Map();
   const rows = (values) => ({ rows: values, rowCount: values.length });
   async function query(sql, args) {
-    sql = sql.replace(/\s+/g, ' ').trim(); queries.push({ sql, args });
-    assert.match(sql, /^SELECT /, 'Advice must not write application data');
+    sql = sql.replace(/\s+/g, ' ').replace(/\bpublic\./g, '').trim(); queries.push({ sql, args });
+    assert.match(sql, /^(SELECT |BEGIN|SET LOCAL|COMMIT|ROLLBACK)/, 'Advice must not write application data');
+    if (/^(BEGIN|SET LOCAL|COMMIT|ROLLBACK)/.test(sql)) return rows([]);
+    if (sql.includes('FROM app_identities')) return rows([{ id: '44444444-4444-4444-8444-444444444444', canonical_email: user.email.trim().toLowerCase(), status: 'active', revision: '1' }]);
+    if (sql.includes('FROM brand_members')) return rows(brandRole && brandRole !== 'owner' ? [{ role: brandRole }] : []);
+    if (sql.includes('FROM brand_learnings')) return rows([]);
     if (sql.includes(' FROM boards WHERE')) {
       assert.equal(args[0], BOARD);
       // Returning the stored row wholesale would hide the original projection defect.
@@ -44,7 +51,7 @@ function runtime({ user = stranger, board = {}, member = null, brandRole = null,
       if (!brandRole) return rows([]);
       return rows(sql.includes('AS brand_access_role')
         ? [{ id: BRAND, name: 'Canonical brand', brand_core: { canonical: 'Authorized core' }, revision: '7', updated_at: '2026-10-15', brand_access_role: brandRole }]
-        : [{ role: brandRole }]);
+        : [{ id: BRAND, name: 'Canonical brand', revision: '7', role: brandRole }]);
     }
     throw new Error(`Unexpected SQL: ${sql}`);
   }
@@ -56,7 +63,7 @@ function runtime({ user = stranger, board = {}, member = null, brandRole = null,
       if (!name.startsWith('.')) return local(name);
       const resolved = path.relative(ROOT, local.resolve(name));
       if (resolved === 'api/_auth-session.js') return { getSessionUser: () => user };
-      if (resolved === 'api/_boards-storage.js') return { pool: { query } };
+      if (resolved === 'api/_boards-storage.js') return { pool: { query, connect: async () => ({ query, release() {} }) } };
       if (resolved === 'api/_brands-storage.js') return { pool: { query }, ensureBrandsTable: async () => {} };
       return load(resolved);
     }
