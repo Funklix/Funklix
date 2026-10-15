@@ -1,6 +1,7 @@
 (function(root) {
   'use strict';
   const COPY={
+    studio:['Brand Intelligence','Brand Intelligence'],benefit:['Turn saved knowledge into your next Brand Learning.','Aus gespeichertem Wissen wird dein nächstes Brand Learning.'],receiving:['Receiving Brand','Empfangende Marke'],privacy:['Sources, privacy & API usage','Quellen, Datenschutz & API-Nutzung'],consent:['Selected saved sources are sent to OpenAI only when you press Analyze.','Ausgewählte gespeicherte Quellen werden erst beim Klick auf Analysieren an OpenAI gesendet.'],sourceDraft:['Original AI suggestion · read only','Ursprünglicher KI-Vorschlag · schreibgeschützt'],
     find:['Find Learning suggestions','Learning-Vorschläge finden'],title:['AI Learning Advisor','KI-Learning-Berater'],
     board:['Select one saved Board','Ein gespeichertes Board auswählen'],choose:['Choose a Board','Board auswählen'],
     scope:['Only saved, authorized Profile and Board text plus approved/proposed Learnings are analyzed. Unsaved edits are excluded.','Analysiert werden nur gespeicherte, berechtigte Profil- und Board-Texte sowie bestätigte/vorgeschlagene Learnings. Ungespeicherte Änderungen sind ausgeschlossen.'],
@@ -136,7 +137,7 @@
     let feedback,controls,results,select,discussion,threadList;
     function message(code){
       const state=['preview','loading'].includes(code)?'progress':['saved','notSaved'].includes(code)?'info':'error';
-      feedback.className='advisor-feedback advisor-feedback-'+state;feedback.dataset.state=state;
+      feedback.className='advisor-feedback advisor-feedback-'+state;feedback.dataset.state=state;feedback.dataset.stage=code;
       feedback.setAttribute('role',state==='error'?'alert':'status');feedback.setAttribute('aria-live',state==='error'?'assertive':'polite');
       feedback.replaceChildren();
       const icon=el('span',state==='error'?'⚠':state==='progress'?'◌':'ⓘ',feedback);icon.setAttribute('aria-hidden','true');
@@ -144,7 +145,7 @@
     }
     function progress(value){
       if(!['analyzing','consolidating'].includes(value.stage)||!Number.isSafeInteger(value.completed)||!Number.isSafeInteger(value.total)||value.total<1||value.completed<0||value.completed>value.total)return;
-      message('loading');feedback.lastElementChild.textContent=value.stage==='consolidating'?t('consolidating'):t('pass')+' '+(value.completed+1)+' / '+value.total;
+      message('loading');feedback.dataset.stage=value.stage;feedback.lastElementChild.textContent=value.stage==='consolidating'?t('consolidating'):t('pass')+' '+(value.completed+1)+' / '+value.total;
       if(Number.isSafeInteger(value.planned_requests)&&value.planned_requests>1)feedback.lastElementChild.textContent+=' · '+value.planned_requests+' '+t('planned');
     }
     async function validate(){
@@ -166,11 +167,11 @@
       el('p',t('excluded')+': '+(categories.join(', ')||'0'),parent);
     }
     function renderResults(){
-      results.replaceChildren();results.hidden=false;el('p',t('advisory'),results);coverage(data.coverage,results);if(data.coverage.analysis_complete)el('p',t('selection'),results);if(Number.isSafeInteger(data.metadata?.provider_requests))el('p',data.metadata.provider_requests+' '+t('requests'),results);
+      results.replaceChildren();results.className='advisor-results';results.hidden=false;el('p',t('advisory'),results);coverage(data.coverage,results);if(data.coverage.analysis_complete)el('p',t('selection'),results);if(Number.isSafeInteger(data.metadata?.provider_requests))el('p',data.metadata.provider_requests+' '+t('requests'),results);
       if(!data.suggestions.length)el('p',t('empty'),results);
       const reviewSelected=button('reviewSelected',results,()=>startReview(data.suggestions.filter(s=>selected.has(s.id)),true));reviewSelected.disabled=!selected.size||blocked;
       for(const s of data.suggestions){
-        const card=el('article','',results);card.className='learning-card';card.dataset.advisorSuggestion=s.id;el('h3',s.title||t(s.type),card);el('p',s.statement,card);
+        const card=el('article','',results);card.className='learning-card';card.dataset.advisorSuggestion=s.id;if(COPY[s.type]){const type=el('span',t(s.type),card);type.className='advisor-type';}el('h3',s.title||t(s.type),card);const statement=el('p',s.statement,card);statement.className='advisor-statement';
         el('h4',t('why'),card);el('p',s.rationale,card);
         if(s.provenance_status==='unverified')el('p',t('unverified'),card);
         const evidence=el('details','',card);el('summary',t('support'),evidence);
@@ -182,9 +183,9 @@
           el('blockquote',source.excerpt,evidence);
         }
 
-        el('p',t(s.mode==='successor'?'successor':s.mode==='manual'?'manual':'provenance'),card);
+        const provenance=el('p',t(s.mode==='successor'?'successor':s.mode==='manual'?'manual':'provenance'),card);provenance.className='advisor-provenance';
         const unavailable=s.relationship==='exact_duplicate'||blocked;
-        el('p',t(proposed.has(s.id)?'proposed':blocked?'expired':unavailable?'exact_duplicate':'new'),card);
+        const status=el('p',t(proposed.has(s.id)?'proposed':blocked?'expired':unavailable?'exact_duplicate':'new'),card);status.className='advisor-card-status'+(proposed.has(s.id)?' advisor-card-proposed':'');
         const label=el('label','',card),check=el('input','',label);check.type='checkbox';check.dataset.advisorSelect=s.id;
         check.checked=selected.has(s.id);check.disabled=unavailable||proposed.has(s.id);el('span',t('selectSuggestion'),label);
         check.addEventListener('change',()=>{if(check.checked)selected.add(s.id);else selected.delete(s.id);reviewSelected.disabled=!selected.size||blocked;});
@@ -201,12 +202,13 @@
     }
     function returnToList(){editing=null;controls.hidden=false;renderResults();results.querySelector('button:not(:disabled)')?.focus();}
     function edit(s){
-      controls.hidden=true;results.replaceChildren();results.hidden=false;el('h3',s.title||t('review'),results);
-      if(reviewBulk)el('p',(reviewIndex+1)+' / '+reviewIds.length,results);
+      controls.hidden=true;results.replaceChildren();results.className='advisor-review';results.hidden=false;el('h3',s.title||t('review'),results);
+      if(reviewBulk){const position=el('p',(reviewIndex+1)+' / '+reviewIds.length,results);position.className='advisor-review-position';}
       el('p',t(s.mode==='successor'?'successor':s.mode==='manual'?'manual':'provenance'),results);
       const draft=drafts.get(s.id)||{statement:s.statement,evidence:evidenceContext(s,options.language()),dirty:false};
       const field=(key,value)=>{const label=el('label','',results);el('span',t(key),label);const area=el('textarea','',label);area.value=value;area.rows=4;area.dataset.advisorField=key;return area;};
       const statement=field('statement',draft.statement),evidence=field('evidence',draft.evidence);
+      const source=el('details','',results);source.className='advisor-source-draft';el('summary',t('sourceDraft'),source);el('blockquote',s.statement,source);el('p',t('aiContext')+': '+s.rationale,source);
       const capacity=el('p','',results);capacity.setAttribute('role','status');
       const showCapacity=()=>{capacity.textContent=Array.from(normalized(evidence.value)).length>4000?t('capacity'):'';};showCapacity();
       editing={id:s.id,statement,evidence,dirty:draft.dirty||[...drafts.values()].some(d=>d.dirty)};
@@ -284,12 +286,16 @@
     async function open(){
       if(dialog||!current())return;
       origin=doc.activeElement;generation++;const language=options.language();dialog=el('dialog');dialog.className='brand-learning-dialog learning-advisor-dialog';dialog.dataset.learningAdvisor='true';dialog.setAttribute('aria-label',t('title'));doc.body.append(dialog);
-      el('h2',t('title'),dialog);const receivingBrand=el('p',options.brand.name,dialog);el('p',t('scope'),dialog);el('p',t('disclosure'),dialog);const processing=el('p',t('processing'),dialog);processing.className='advisor-context';
+      const header=el('header','',dialog);header.className='advisor-header';
+      const motif=el('span','✦',header);motif.className='advisor-motif';motif.setAttribute('aria-hidden','true');
+      const eyebrow=el('p',t('studio'),header);eyebrow.className='advisor-eyebrow';el('h2',t('title'),header);el('p',t('benefit'),header);
+      const identity=el('div','',header);identity.className='advisor-brand';el('span',t('receiving'),identity);const receivingBrand=el('strong',options.brand.name,identity);
       feedback=el('div','',dialog);message('preview');feedback.setAttribute('role','status');feedback.setAttribute('aria-live','polite');
-      controls=el('div','',dialog);
+      controls=el('div','',dialog);controls.className='advisor-controls';
       const label=el('label','',controls);el('span',t('board'),label);select=el('select','',label);select.dataset.advisorBoard='true';el('option',t('choose'),select).value='';
       const opt=el('label','',controls);discussion=el('input','',opt);discussion.type='checkbox';discussion.checked=false;discussion.dataset.advisorDiscussions='true';el('span',t('discussions'),opt);
       threadList=el('div','',controls);threadList.className='advisor-threads';
+      const consent=el('p',t('consent'),controls);consent.className='advisor-consent';
       analyze=button('analyze',controls,async()=>{
         if(busy||!scope)return;busy=true;analyze.disabled=select.disabled=discussion.disabled=true;
         threadList.querySelectorAll('input').forEach(n=>n.disabled=true);clear();results.replaceChildren();message('loading');
@@ -307,6 +313,7 @@
           await refreshScope(true);
         }catch(e){message(e.code||'unavailable');}finally{busy=false;if(dialog)analyze.disabled=!scope;}
       });
+      const disclosure=el('details','',dialog);disclosure.className='advisor-disclosure';el('summary',t('privacy'),disclosure);el('p',t('scope'),disclosure);el('p',t('disclosure'),disclosure);const processing=el('p',t('processing'),disclosure);processing.className='advisor-context';
       results=el('div','',dialog);const footer=el('div','',dialog);footer.className='advisor-footer';const closeButton=button('cancel',footer,cancel);
       select.addEventListener('change',()=>void refreshScope());discussion.addEventListener('change',()=>void refreshScope());
       dialog.addEventListener('cancel',e=>{e.preventDefault();cancel();});
@@ -316,7 +323,7 @@
         const ns=[...dialog.querySelectorAll('button,input,select,textarea,summary')].filter(n=>!n.disabled&&n.getClientRects().length),first=ns[0],last=ns.at(-1);
         if(e.shiftKey&&doc.activeElement===first||!e.shiftKey&&doc.activeElement===last){e.preventDefault();(e.shiftKey?last:first)?.focus();}
       });
-      dialog.showModal();closeButton.focus();busy=true;
+      dialog.showModal();closeButton.focus({preventScroll:true});dialog.scrollTop=0;busy=true;
       monitor=root.setInterval(()=>{if(dialog&&(!current()||options.language()!==language))close();},250);
       doc.addEventListener('visibilitychange',resume);root.addEventListener('focus',resume);
       try{meta=await request();if(meta.brand?.id!==options.brand.id||!Array.isArray(meta.boards))throw new Error();receivingBrand.textContent=meta.brand.name;for(const board of meta.boards)el('option',board.name,select).value=board.id;feedback.textContent='';}

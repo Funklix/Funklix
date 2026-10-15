@@ -1,0 +1,290 @@
+[
+  {
+    "theme": "light",
+    "width": 1280,
+    "state": "initial",
+    "filename": "light-1280-initial.png"
+  },
+  {
+    "theme": "light",
+    "width": 1280,
+    "state": "preparation",
+    "filename": "light-1280-preparation.png"
+  },
+  {
+    "theme": "light",
+    "width": 1280,
+    "state": "analyzing",
+    "filename": "light-1280-analyzing.png"
+  },
+  {
+    "theme": "light",
+    "width": 1280,
+    "state": "consolidating",
+    "filename": "light-1280-consolidating.png"
+  },
+  {
+    "theme": "light",
+    "width": 1280,
+    "state": "results",
+    "filename": "light-1280-results.png"
+  },
+  {
+    "theme": "light",
+    "width": 1280,
+    "state": "evidence",
+    "filename": "light-1280-evidence.png"
+  },
+  {
+    "theme": "light",
+    "width": 1280,
+    "state": "bulk-selection",
+    "filename": "light-1280-bulk-selection.png"
+  },
+  {
+    "theme": "light",
+    "width": 1280,
+    "state": "review",
+    "filename": "light-1280-review.png"
+  },
+  {
+    "theme": "light",
+    "width": 1280,
+    "state": "confirmation",
+    "filename": "light-1280-confirmation.png"
+  },
+  {
+    "theme": "light",
+    "width": 1280,
+    "state": "success",
+    "filename": "light-1280-success.png"
+  },
+  {
+    "theme": "light",
+    "width": 1280,
+    "state": "error",
+    "filename": "light-1280-error.png"
+  },
+  {
+    "theme": "light",
+    "width": 1280,
+    "state": "forced-colors",
+    "filename": "light-1280-forced-colors.png"
+  },
+  {
+    "theme": "light",
+    "width": 375,
+    "state": "initial",
+    "filename": "light-375-initial.png"
+  },
+  {
+    "theme": "light",
+    "width": 375,
+    "state": "preparation",
+    "filename": "light-375-preparation.png"
+  },
+  {
+    "theme": "light",
+    "width": 375,
+    "state": "analyzing",
+    "filename": "light-375-analyzing.png"
+  },
+  {
+    "theme": "light",
+    "width": 375,
+    "state": "consolidating",
+    "filename": "light-375-consolidating.png"
+  },
+  {
+    "theme": "light",
+    "width": 375,
+    "state": "results",
+    "filename": "light-375-results.png"
+  },
+  {
+    "theme": "light",
+    "width": 375,
+    "state": "evidence",
+    "filename": "light-375-evidence.png"
+  },
+  {
+    "theme": "light",
+    "width": 375,
+    "state": "bulk-selection",
+    "filename": "light-375-bulk-selection.png"
+  },
+  {
+    "theme": "light",
+    "width": 375,
+    "state": "review",
+    "filename": "light-375-review.png"
+  },
+  {
+    "theme": "light",
+    "width": 375,
+    "state": "confirmation",
+    "filename": "light-375-confirmation.png"
+  },
+  {
+    "theme": "light",
+    "width": 375,
+    "state": "success",
+    "filename": "light-375-success.png"
+  },
+  {
+    "theme": "light",
+    "width": 375,
+    "state": "error",
+    "filename": "light-375-error.png"
+  },
+  {
+    "theme": "light",
+    "width": 375,
+    "state": "forced-colors",
+    "filename": "light-375-forced-colors.png"
+  },
+  {
+    "theme": "dark",
+    "width": 1280,
+    "state": "initial",
+    "filename": "dark-1280-initial.png"
+  },
+  {
+    "theme": "dark",
+    "width": 1280,
+    "state": "preparation",
+    "filename": "dark-1280-preparation.png"
+  },
+  {
+    "theme": "dark",
+    "width": 1280,
+    "state": "analyzing",
+    "filename": "dark-1280-analyzing.png"
+  },
+  {
+    "theme": "dark",
+    "width": 1280,
+    "state": "consolidating",
+    "filename": "dark-1280-consolidating.png"
+  },
+  {
+    "theme": "dark",
+    "width": 1280,
+    "state": "results",
+    "filename": "dark-1280-results.png"
+  },
+  {
+    "theme": "dark",
+    "width": 1280,
+    "state": "evidence",
+    "filename": "dark-1280-evidence.png"
+  },
+  {
+    "theme": "dark",
+    "width": 1280,
+    "state": "bulk-selection",
+    "filename": "dark-1280-bulk-selection.png"
+  },
+  {
+    "theme": "dark",
+    "width": 1280,
+    "state": "review",
+    "filename": "dark-1280-review.png"
+  },
+  {
+    "theme": "dark",
+    "width": 1280,
+    "state": "confirmation",
+    "filename": "dark-1280-confirmation.png"
+  },
+  {
+    "theme": "dark",
+    "width": 1280,
+    "state": "success",
+    "filename": "dark-1280-success.png"
+  },
+  {
+    "theme": "dark",
+    "width": 1280,
+    "state": "error",
+    "filename": "dark-1280-error.png"
+  },
+  {
+    "theme": "dark",
+    "width": 1280,
+    "state": "forced-colors",
+    "filename": "dark-1280-forced-colors.png"
+  },
+  {
+    "theme": "dark",
+    "width": 375,
+    "state": "initial",
+    "filename": "dark-375-initial.png"
+  },
+  {
+    "theme": "dark",
+    "width": 375,
+    "state": "preparation",
+    "filename": "dark-375-preparation.png"
+  },
+  {
+    "theme": "dark",
+    "width": 375,
+    "state": "analyzing",
+    "filename": "dark-375-analyzing.png"
+  },
+  {
+    "theme": "dark",
+    "width": 375,
+    "state": "consolidating",
+    "filename": "dark-375-consolidating.png"
+  },
+  {
+    "theme": "dark",
+    "width": 375,
+    "state": "results",
+    "filename": "dark-375-results.png"
+  },
+  {
+    "theme": "dark",
+    "width": 375,
+    "state": "evidence",
+    "filename": "dark-375-evidence.png"
+  },
+  {
+    "theme": "dark",
+    "width": 375,
+    "state": "bulk-selection",
+    "filename": "dark-375-bulk-selection.png"
+  },
+  {
+    "theme": "dark",
+    "width": 375,
+    "state": "review",
+    "filename": "dark-375-review.png"
+  },
+  {
+    "theme": "dark",
+    "width": 375,
+    "state": "confirmation",
+    "filename": "dark-375-confirmation.png"
+  },
+  {
+    "theme": "dark",
+    "width": 375,
+    "state": "success",
+    "filename": "dark-375-success.png"
+  },
+  {
+    "theme": "dark",
+    "width": 375,
+    "state": "error",
+    "filename": "dark-375-error.png"
+  },
+  {
+    "theme": "dark",
+    "width": 375,
+    "state": "forced-colors",
+    "filename": "dark-375-forced-colors.png"
+  }
+]

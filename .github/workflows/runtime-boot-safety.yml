@@ -407,6 +407,8 @@ jobs:
         run: npm run check:bw36.19r5
       - name: Check BW-36.19R6 Learning review and atomic batch adoption (mocked OpenAI)
         run: npm run check:bw36.19r6
+      - name: Check BW-36.19R7 Advisor visual states and accessibility in Chromium (provider-free)
+        run: node scripts/check-bw36-19r7-advisor-visual.js
       - name: Check dynamic AI Insights translations
         run: node scripts/check-bw25-1-dynamic-insights-translations.js
       - name: Check scoped German interface localization
