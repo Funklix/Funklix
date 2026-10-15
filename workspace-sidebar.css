@@ -12,9 +12,10 @@
 @media(prefers-reduced-motion:reduce){.workspace-context *,.workspace-context-popover,.workspace-context-menu,.workspace-rename-dialog{transition:none!important;scroll-behavior:auto!important}}
 /* BW-36.12 logos stay square and contained; transparent artwork is never cropped. */
 .workspace-brand-avatar{border-radius:9px}.workspace-brand-avatar img,.brand-logo img{display:block;width:100%;height:100%;object-fit:contain}.brand-logo-initials{display:grid;place-items:center;width:100%;height:100%}
-/* Preserve compact action slots while hiding their controls from view and focus. */
+/* Collapsed identities have one icon row; action controls reserve no grid slots. */
 .app-shell.sidebar-collapsed .workspace-context-identity-row{grid-template-columns:1fr}
-.app-shell.sidebar-collapsed .workspace-context-manage:not([hidden]){display:grid;justify-self:center;visibility:hidden}
+.app-shell.sidebar-collapsed #workspace-context .workspace-context-manage{display:none}
+.app-shell.sidebar-collapsed .workspace-context:not(:has(.workspace-create-action:not([hidden]))) .workspace-context-group:not(:first-child){display:grid}
 @media(max-width:1300px) and (min-width:768px){.workspace-context-identity-row{grid-template-columns:1fr}.workspace-context-manage:not([hidden]){display:grid;justify-self:center}}
 @media(max-width:767px){.sidebar>.workspace-context:has(.workspace-context-manage:not([hidden])){width:88px}.workspace-context .workspace-context-manage:not([hidden]){display:grid;background:var(--fk-color-surface-elevated);border-color:var(--fk-color-border)}.workspace-context-identity-row{grid-template-columns:44px 44px}}
 @media(max-width:767px){.sidebar>#workspace-context:not([hidden]){display:block}}
@@ -24,6 +25,8 @@
 .sidebar .workspace-context .workspace-context-group:has(#workspace-brand-manage:not([hidden])){display:grid}
 .app-shell.sidebar-collapsed #workspace-brand-trigger .workspace-context-name{display:none}
 @media(max-width:1300px) and (min-width:768px){#workspace-brand-trigger .workspace-context-name{display:none}}
+/* The mobile action-only Brand wrapper also becomes an icon row when collapsed. */
+@media(max-width:767px){.app-shell.sidebar-collapsed .sidebar>#workspace-context:not([hidden]):not(:has(.workspace-create-action:not([hidden]))){display:grid;width:44px;height:auto;gap:10px}.app-shell.sidebar-collapsed #workspace-context #workspace-brand-trigger{display:flex}}
 
 .workspace-brand-option-row{display:flex;align-items:center;min-width:0}.workspace-brand-option-row>.workspace-context-option{flex:1;min-width:0}.workspace-brand-row-actions{flex:0 0 44px;min-width:44px;min-height:44px;border:1px solid var(--fk-color-border-default);border-radius:8px;background:var(--fk-color-surface-input);color:var(--fk-color-text-primary);font:inherit}.workspace-brand-row-actions:focus-visible{outline:3px solid var(--fk-color-focus-ring);outline-offset:-3px}
 @media(forced-colors:active){.workspace-brand-row-actions{border-color:CanvasText}.workspace-brand-row-actions:focus-visible{outline-color:Highlight}}
