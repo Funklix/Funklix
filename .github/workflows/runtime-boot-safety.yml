@@ -162,6 +162,8 @@ jobs:
         run: node scripts/check-bw25-honest-ai-insights-baseline.js
       - name: Check read-only AI Brain advisor
         run: node scripts/check-bw26-read-only-ai-brain.js
+      - name: Check AI Brain Board authorization with real access helpers (mocked OpenAI)
+        run: node scripts/check-bw36-20r0-ai-brain-board-authorization.js
       - name: Check real Canvas context and turn lifecycle
         run: node scripts/check-bw26-1-real-canvas-context-and-turn-lifecycle.js
       - name: Check safe AI Brain response formatting

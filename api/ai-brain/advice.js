@@ -77,9 +77,14 @@ module.exports = async function handler(req, res) {
 
   try {
     const { board, access } = await getBoardAccess(boardId, user, {
-      columns: 'id, name, brand_id, brand_core_snapshot, brand_core_source_revision, brand_core_source_updated_at, updated_at'
+      columns: 'id, name, owner_id, owner_email, brand_id, brand_core_snapshot, brand_core_source_revision, brand_core_source_updated_at, updated_at'
     });
     if (!board) return res.status(404).json({ error: 'Board not found' });
+    // Missing ownership columns must never be treated as a genuinely unowned Board.
+    if (!['owner_id', 'owner_email'].every((key) => Object.prototype.hasOwnProperty.call(board, key)
+      && (board[key] === null || typeof board[key] === 'string'))) {
+      return res.status(500).json({ error: 'AI Brain could not provide advice' });
+    }
     if (!access?.canEdit) return res.status(403).json({ error: 'AI Brain advice is unavailable for read-only access' });
 
     const validated = validateCanvasContext(canvas, selectedNodeId);
