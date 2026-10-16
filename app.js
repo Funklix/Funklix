@@ -4976,7 +4976,7 @@ function updateHeaderVisualControl(selectedNode) {
   // Shared Inspector controls outlive their target node. Release only the
   // current owner; its late response must not reset a newer request's control.
   if (headerVisualOperation && !headerVisualOperation.current()) {
-    btn.textContent = headerVisualOperation.label;
+    btn.textContent = uiText("Generate Header Visual");
     headerVisualOperation = null;
   }
   btn.disabled = !!headerVisualOperation || selectedNode?.type !== "Landing Page" || isBoardReadOnly();
@@ -19445,7 +19445,7 @@ el.generateHeaderVisualButton.addEventListener("click", async () => {
   updateHeaderVisualControl(node);
   if (headerVisualOperation) return;
   const mutation = beginPendingNodeMutation(node);
-  const operation = { current: mutation.current, label: btn.textContent };
+  const operation = { current: mutation.current };
   headerVisualOperation = operation;
   btn.disabled = true;
   btn.textContent = "Generating...";
@@ -19480,7 +19480,7 @@ el.generateHeaderVisualButton.addEventListener("click", async () => {
     }
   } finally {
     if (headerVisualOperation === operation) {
-      btn.textContent = operation.label;
+      btn.textContent = uiText("Generate Header Visual");
       headerVisualOperation = null;
       updateHeaderVisualControl(state.selectedIds.size === 1 ? getNode(state.selectedPrimary) : null);
     }

@@ -267,6 +267,30 @@ async function main() {
         assert.equal(await f.page.evaluate(() => state.nodes[0].images.length), outcome === 'success' ? 1 : 0);
         await f.close();
       });
+      for (const deleted of [false, true]) await check('header locale change with ' + (deleted ? 'deletion and reselection' : 'normal completion') + ' restores current-language label after ' + outcome, async () => {
+        const f = await fixture(); await prepareAi(f, 'header');
+        const btn = f.page.locator('#generate-header-visual-btn');
+        const hold = f.hold(p => p === '/api/generate-image', reply);
+        await startAi(f, 'header'); await hold.started.promise;
+        await f.page.evaluate(() => {
+          el.uiLanguageSelect.value = 'de'; el.uiLanguageSelect.dispatchEvent(new Event('change'));
+        });
+        if (deleted) {
+          await f.page.evaluate(() => {
+            removeNode(state.selectedPrimary);
+            const node = createNode({ type: 'Landing Page', initial: { title: 'Replacement' }, position: { x: 400, y: 0 } });
+            fillInspector(node); clearAutosaveTimer();
+          });
+          await f.page.evaluate(() => new Promise(resolve => setTimeout(resolve, 300)));
+          assert.equal(await btn.textContent(), 'Header-Bild erstellen'); assert.equal(await btn.isDisabled(), false);
+          await observeMutations(f);
+        }
+        hold.release.resolve(); await settleAi(f);
+        if (deleted) await noStaleMutations(f);
+        assert.equal(await btn.textContent(), 'Header-Bild erstellen'); assert.equal(await btn.isDisabled(), false);
+        assert.equal(await f.page.evaluate(() => state.nodes[0].images.length), !deleted && outcome === 'success' ? 1 : 0);
+        await f.close();
+      });
       await check('invalidated header late ' + outcome + ' cannot regain ownership after editability returns', async () => {
         const f = await fixture(); await prepareAi(f, 'header');
         const btn = f.page.locator('#generate-header-visual-btn'), label = await btn.textContent();
