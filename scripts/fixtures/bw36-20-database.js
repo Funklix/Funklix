@@ -45,6 +45,7 @@ async function fixture() {
     vm.runInNewContext(fs.readFileSync(filename, 'utf8'), { module, exports: module.exports, require: requireFixture,
       Buffer, console, AbortController, setTimeout, clearTimeout, process: { env: f.env },
       fetch: async (url, options) => {
+        assertProviderRequest(url, options);
         if (f.active) throw new Error('Locks held during inference');
         f.calls.push(JSON.parse(options.body));
         if (f.onProvider) await f.onProvider();
@@ -89,3 +90,9 @@ async function fixture() {
   return f;
 }
 module.exports = { fixture };
+
+function assertProviderRequest(url, options) {
+  const assert = require('node:assert/strict');
+  assert.equal(url, 'https://api.openai.com/v1/responses');
+  assert.equal(JSON.parse(options.body).store, false, 'Every Advice request must disable provider storage');
+}

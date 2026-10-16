@@ -149,6 +149,7 @@ module.exports = async function handler(req, res) {
         headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           model: prepared.constraints.model,
+          store: false,
           max_output_tokens: prepared.constraints.outputTokens,
           input: prepared.input
         })

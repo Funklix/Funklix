@@ -22,6 +22,7 @@ jobs:
           node --check app.js
           node --check api/_ai-brain-learning-context.js
           node --check scripts/check-bw36-20-approved-learning-ai-brain.js
+          node --check scripts/check-bw36-20r1-learning-integration-review-fixes.js
           node --check scripts/fixtures/bw36-20-database.js
           node --check scripts/fixtures/bw36-20-browser.js
           node --check campaign-v3.js
@@ -369,6 +370,8 @@ jobs:
           npx playwright-core install --with-deps chromium
       - name: Check approved Brand Learnings in Advice (disposable PostgreSQL, mocked OpenAI)
         run: node scripts/check-bw36-20-approved-learning-ai-brain.js
+      - name: Check BW-36.20R1 provider storage and revalidation errors (mocked OpenAI)
+        run: node scripts/check-bw36-20r1-learning-integration-review-fixes.js
       - name: Check Brand Profile entry and Workspace actions in Chromium
         run: npm run check:bw36.13r4r1
       - name: Check BW-36.13R5 Brand lifecycle stability
