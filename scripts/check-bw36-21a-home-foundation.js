@@ -51,6 +51,7 @@ async function browserChecks() {
   const r = runtime(); r.db.boards[0].name = 'The next chapter';
   r.db.boards[0].canvas_json.nodes = [{ id: 'saved-idea', type: 'Idea', title: 'Saved idea', content: 'An existing campaign', status: 'Draft', position: { x: 20, y: 20 }, tags: [], images: [], postits: [], variants: [], reactions: {}, social: {}, landingPage: {} }];
   let signedIn = true, available = catalog(), failure = false, collectionFailure = false, collectionDenied = false, delayed = false, release;
+  const boardLoads = [];
   const errors = [], writes = [], provider = [], detail = [], requests = [];
   async function pageAt(route = '/', preferences = {}) {
     const page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, ...preferences });
@@ -70,6 +71,13 @@ async function browserChecks() {
       }
       if (url.pathname.startsWith('/api/boards/') && !/presence|editors|sharing|access/.test(url.pathname)) {
         detail.push(url.pathname);
+        const pending = boardLoads.shift();
+        if (pending) {
+          pending.started();
+          await pending.ready;
+          if (pending.abort) return interception.abort(typeof pending.abort === 'string' ? pending.abort : 'timedout');
+          return interception.fulfill(pending.response);
+        }
         const response = await r.request(req.method(), url.pathname, req.postDataJSON());
         return interception.fulfill({ status: response.statusCode, json: response.body });
       }
@@ -203,6 +211,99 @@ async function browserChecks() {
     await page.reload(); await page.waitForFunction(() => state.currentBoardId && !state.isBoardLoading);
     assert.equal(await page.evaluate(() => state.nodes[0].id), 'saved-idea');
     await page.goBack(); await page.locator('#home-workspace-select').waitFor(); await page.close();
+    // Exercise the real loader and Home controller, with only transport mocked.
+    function deferredLoad(response, abort = false) {
+      let release, started;
+      const ready = new Promise(resolve => { release = resolve; });
+      const seen = new Promise(resolve => { started = resolve; });
+      boardLoads.push({ response, abort, ready, started });
+      return { release, seen };
+    }
+    const begin = (page, id, key) => page.evaluate(({ id, key }) => {
+      // Match route navigation without replacing the test document.
+      history.replaceState({}, '', '/boards/' + id);
+      setActiveView('board');
+      window[key] = loadBoardFromUrlIfPresent(id);
+    }, { id, key });
+    const showHome = async page => {
+      await page.locator('#home-nav-btn').click();
+      await home(page).locator('.home-board-card').first().waitFor();
+      // Settle optional metadata before completion: it must not mask a missing
+      // loader notification by causing an unrelated Home redraw afterwards.
+      await home(page).locator('time').first().waitFor();
+    };
+    async function expectLoading(page, loading) {
+      const actual = await page.evaluate(() => {
+        const host = document.querySelector('#home-foundation');
+        const buttons = [...host.querySelectorAll('[data-home-action="board"]')];
+        return { disabled: buttons.map(b => b.disabled),
+          notice: host.textContent.includes('A Board is loading. Please wait before opening another.') };
+      });
+      assert(actual.disabled.length > 0);
+      assert(actual.disabled.every(value => value === loading), 'Board actions immediately reflect completed loading state');
+      assert.equal(actual.notice, loading, 'Loading explanation immediately reflects completed loading state');
+    }
+    const valid = (id = D) => ({ ...clone(r.db.boards[0]), id,
+      access: { canView: true, canEdit: true, canViewBoardBrandCore: true, role: 'owner' } });
+    for (const [label, response, abort] of [
+      ['request failure', { status: 503, json: { error: 'Fixture failure' } }],
+      ['invalid association', { json: { ...valid(), brand_id: 'invalid' } }],
+      ['wrong Board identity', { json: valid(D2) }],
+      ['invalid Canvas', { json: { ...valid(), canvas_json: { nodes: 'invalid' } } }],
+      ['malformed JSON', { contentType: 'application/json', body: '{' }],
+      ['transport timeout', null, true],
+      ['transport termination', null, 'aborted'],
+      ['success', { json: valid() }]
+    ]) {
+      page = await pageAt(); await selectW(page);
+      // Root boot clears its loading flag after Home's first render.
+      await expectLoading(page, false);
+      const pending = deferredLoad(response, abort);
+      await begin(page, D, 'recoveryLoad'); await pending.seen;
+      await showHome(page); await expectLoading(page, true);
+      assert.equal(await page.evaluate(() => state.initialServerLoadInFlight), true);
+      pending.release();
+      const loaded = await page.evaluate(() => window.recoveryLoad);
+      assert.equal(loaded, label === 'success', label);
+      await expectLoading(page, false);
+      assert.deepEqual(await page.evaluate(() => [state.isBoardLoading, state.isBoardHydrating, state.initialServerLoadInFlight]), [false, false, false]);
+      // Retry uses the same loader; actions must stay disabled until it finishes.
+      const retry = deferredLoad({ json: valid() });
+      await begin(page, D, 'retryLoad'); await retry.seen;
+      await showHome(page); await expectLoading(page, true);
+      retry.release(); assert.equal(await page.evaluate(() => window.retryLoad), true);
+      await expectLoading(page, false);
+      assert.equal(await page.evaluate(() => state.nodes[0].id), 'saved-idea');
+      await page.close();
+      console.log('PASS Home loading recovery and retry: ' + label);
+    }
+    for (const oldFails of [false, true]) {
+      page = await pageAt(); await selectW(page);
+      const old = deferredLoad(oldFails ? { status: 503, json: {} } : { json: valid() });
+      await begin(page, D, 'oldLoad'); await old.seen;
+      const latest = deferredLoad({ json: valid(D2) });
+      await begin(page, D2, 'latestLoad'); await latest.seen;
+      await showHome(page); await expectLoading(page, true);
+      old.release(); assert.equal(await page.evaluate(() => window.oldLoad), false);
+      await expectLoading(page, true); // stale finally cannot enable current actions
+      latest.release(); assert.equal(await page.evaluate(() => window.latestLoad), true);
+      await expectLoading(page, false);
+      const snapshot = await page.evaluate(() => JSON.stringify({ id: state.currentBoardId, nodes: state.nodes, core: state.brandCore }));
+      assert.equal(await page.evaluate(() => state.currentBoardId), D2);
+      // Complete a newer request before the older response arrives.
+      const stale = deferredLoad({ json: valid() });
+      await begin(page, D, 'staleLoad'); await stale.seen;
+      const winner = deferredLoad({ json: valid(D2) });
+      await begin(page, D2, 'winnerLoad'); await winner.seen;
+      await showHome(page); await expectLoading(page, true);
+      winner.release(); assert.equal(await page.evaluate(() => window.winnerLoad), true);
+      await expectLoading(page, false);
+      stale.release(); assert.equal(await page.evaluate(() => window.staleLoad), false);
+      await expectLoading(page, false);
+      assert.equal(await page.evaluate(() => JSON.stringify({ id: state.currentBoardId, nodes: state.nodes, core: state.brandCore })), snapshot);
+      await page.close();
+    }
+    console.log('PASS rapid switching, stale success/failure during active load, and late stale completion preserve current Canvas and actions');
     assert.deepEqual(errors, []); assert.deepEqual(provider, []); assert.deepEqual(writes, [], 'Home renders and opens do not write Board/Brand/Canvas data');
     console.log('PASS catalog failure/retry, no Workspace, active Board priority, persisted Brand guard, dirty Canvas preservation, saved Board route/reload/Back, zero provider calls or writes');
   } finally { if (release) release(); await browser.close(); }

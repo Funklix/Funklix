@@ -9431,7 +9431,6 @@ async function loadBoardFromUrlIfPresent(requestedBoardId = null) {
     if (data?.access?.role !== "public_viewer") localStorage.setItem(STORAGE_KEY, JSON.stringify(normalizedCanvasState));
     startPresenceLite();
     startBoardRefreshPolling();
-    refreshDashboardIfVisible();
     schedulePostHydrationCanvasDensity(loadGeneration, data.id);
     return true;
   } catch (error) {
@@ -9459,6 +9458,7 @@ async function loadBoardFromUrlIfPresent(requestedBoardId = null) {
       state.isBoardHydrating = false;
       synchronizeResponsibilityToolbar();
       renderBoardBrandAssociation();
+      refreshDashboardIfVisible();
     }
   }
 }
@@ -20293,7 +20293,10 @@ async function bootApp() {
   drawLinks();
   // URL/server-loaded boards refresh snapshot after applyCampaignState(); avoid capturing pre-load snapshot while in-flight.
   if (!state.initialServerLoadInFlight) refreshLastSavedSnapshot();
-  if (!state.initialServerLoadInFlight) state.isBoardLoading = false;
+  if (!state.initialServerLoadInFlight) {
+    state.isBoardLoading = false;
+    refreshDashboardIfVisible();
+  }
   startAutosaveWatcher();
   bindEditingPresenceTracking();
   startPresenceLite();
