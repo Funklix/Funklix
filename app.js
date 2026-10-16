@@ -4969,6 +4969,21 @@ function renderWorkspaceSidebar() {
 let workspaceSelectionGeneration = 0;
 const workspaceExitOperations = new Set();
 
+function beginPendingNodeMutation(node) {
+  // Hold normal Workspace exit until the real operation settles. Identity also
+  // rejects retirement/reload by another owner; node IDs can repeat across Boards.
+  const operation = Symbol('pendingNodeMutation');
+  const account = state.user, email = account?.email;
+  const boardId = state.currentBoardId, generation = state.boardLoadGeneration;
+  workspaceExitOperations.add(operation);
+  return {
+    current: () => state.user === account && state.user?.email === email
+      && state.currentBoardId === boardId && state.boardLoadGeneration === generation
+      && getNode(node.id) === node && !isBoardReadOnly(),
+    finish: () => workspaceExitOperations.delete(operation)
+  };
+}
+
 function workspaceSwitchBlockedReason() {
   if (state.isBoardLoading || state.isBoardHydrating || state.initialServerLoadInFlight) return 'Wait for the Board to finish loading before switching Workspaces.';
   if (state.isSaving || state.conflictModalOpen || state.boardBrandAssociation.status === 'submitting'
@@ -5121,6 +5136,7 @@ function retireBoardForWorkspaceSwitch() {
   state.brandCatalog = { status: 'idle', entries: [], requestId: state.brandCatalog.requestId + 1, userEmail: '' };
   sidebarProfileCache.clear(); pendingBrandProfileData.clear();
   applyCampaignState(blankCanvasState(), '', { memoryOnly: true });
+  el.generateHeaderVisualButton.textContent = uiText('Generate Header Visual');
   fillInspector(null); refreshNodeSearchUI();
   if (el.boardShareLinkText) el.boardShareLinkText.textContent = '';
   if (el.boardLastSaved) el.boardLastSaved.textContent = '';
@@ -6105,6 +6121,14 @@ async function createSuggestedNodeFromAnalysis(suggestion) {
   const base = state.nodes[state.nodes.length - 1];
   const pos = base ? { x: base.position.x + 340, y: base.position.y + 40 } : { x: 620, y: 420 };
   const node = createNode({ type: suggestion.recommendedNodeType, position: pos });
+  if (!node) return;
+  const mutation = beginPendingNodeMutation(node);
+  try {
+  const refine = async (target, instruction) => {
+    const result = await refineNodeWithAI(target, instruction);
+    if (!mutation.current()) throw new Error('Retired node generation');
+    return result;
+  };
   node.title = suggestion.title;
   node.content = suggestion.description;
   node.audience = suggestion.suggestedStrategy?.audience || "";
@@ -6124,7 +6148,7 @@ async function createSuggestedNodeFromAnalysis(suggestion) {
   try {
     const contextPrompt = `Campaign context: ${getCampaignContextSummary()}. Suggestion reason: ${suggestion.reason}.`;
     if (node.type === "Content") {
-      const refined = await refineNodeWithAI(node, `Write a specific trust-building or conversion-supporting content brief. ${contextPrompt}`);
+      const refined = await refine(node, `Write a specific trust-building or conversion-supporting content brief. ${contextPrompt}`);
       node.title = refined?.title || node.title;
       node.content = refined?.content || node.content;
       node.imagePrompt = buildContentImagePrompt(node.title, node.content);
@@ -6132,20 +6156,20 @@ async function createSuggestedNodeFromAnalysis(suggestion) {
     if (node.type === "Social Media Posting") {
       node.social.platform = suggestion.suggestedStrategy?.channel || "LinkedIn";
       const guide = platformPromptGuidance(node.social.platform);
-      const caption = await refineNodeWithAI(node, `Create a high-quality ${node.social.platform} caption aligned to campaign context. ${guide} ${contextPrompt} Return in caption.`);
-      const cta = await refineNodeWithAI(node, `Create a conversion-focused CTA aligned to campaign context. ${guide} ${contextPrompt} Return in content.`);
-      const hashtags = await refineNodeWithAI(node, `${structuredHashtagPrompt(node.social.platform)} ${guide} ${contextPrompt}`);
+      const caption = await refine(node, `Create a high-quality ${node.social.platform} caption aligned to campaign context. ${guide} ${contextPrompt} Return in caption.`);
+      const cta = await refine(node, `Create a conversion-focused CTA aligned to campaign context. ${guide} ${contextPrompt} Return in content.`);
+      const hashtags = await refine(node, `${structuredHashtagPrompt(node.social.platform)} ${guide} ${contextPrompt}`);
       node.social.caption = (caption?.caption || caption?.content || node.social.caption || "").trim();
       node.social.preview = (cta?.content || cta?.caption || "Learn more").trim();
       node.social.hashtags = finalizeGeneratedHashtags(hashtags?.caption || hashtags?.content || "", node.social.platform);
       node.content = node.social.caption;
     }
     if (node.type === "Landing Page") {
-      const claim = await refineNodeWithAI(node, `Write a specific conversion headline for the landing page. ${contextPrompt} Return in content.`);
-      const problem = await refineNodeWithAI(node, `Write the ICP problem statement clearly and specifically. ${contextPrompt} Return in content.`);
-      const solution = await refineNodeWithAI(node, `Write the solution/value proposition clearly and specifically. ${contextPrompt} Return in content.`);
-      const trust = await refineNodeWithAI(node, `Write trust-building copy without fake metrics/testimonials unless provided in context. ${contextPrompt} Return in content.`);
-      const cta = await refineNodeWithAI(node, `Write a concise conversion CTA line. ${contextPrompt} Return in content.`);
+      const claim = await refine(node, `Write a specific conversion headline for the landing page. ${contextPrompt} Return in content.`);
+      const problem = await refine(node, `Write the ICP problem statement clearly and specifically. ${contextPrompt} Return in content.`);
+      const solution = await refine(node, `Write the solution/value proposition clearly and specifically. ${contextPrompt} Return in content.`);
+      const trust = await refine(node, `Write trust-building copy without fake metrics/testimonials unless provided in context. ${contextPrompt} Return in content.`);
+      const cta = await refine(node, `Write a concise conversion CTA line. ${contextPrompt} Return in content.`);
       node.landingPage = {
         headerVisualPrompt: buildContentImagePrompt(node.title, solution?.content || node.content),
         headerClaim: claim?.content || node.title,
@@ -6157,6 +6181,7 @@ async function createSuggestedNodeFromAnalysis(suggestion) {
       node.content = [node.landingPage.headerClaim, node.landingPage.solution].filter(Boolean).join(" — ");
     }
   } catch (_error) {
+    if (!mutation.current()) return;
     if (node.type === "Content") node.imagePrompt = buildContentImagePrompt(node.title, node.content);
     if (node.type === "Social Media Posting") {
       node.social.platform = suggestion.suggestedStrategy?.channel || "LinkedIn";
@@ -6177,6 +6202,7 @@ async function createSuggestedNodeFromAnalysis(suggestion) {
   renderCampaignCanvasFromStateIfNeeded();
   saveCampaignCanvasState();
   setSaveStatus("Suggested node created");
+  } finally { mutation.finish(); }
 }
 
 function renderCampaignIntelligence() {
@@ -15050,20 +15076,31 @@ function updateNodeCard(node) {
     });
 
     const regen = async (instruction, key, btn) => {
+      if (isBoardReadOnly() || getNode(node.id) !== node) return;
+      const mutation = beginPendingNodeMutation(node);
       btn.disabled = true;
       const original = btn.textContent;
       btn.textContent = "...";
       try {
         const refined = await refineNodeWithAI(node, `${instruction} ${platformPromptGuidance(node.social.platform || "LinkedIn")}`);
+        if (!mutation.current()) return;
         if (key === "caption") node.social.caption = (refined?.caption || refined?.content || "").trim() || node.social.caption;
         if (key === "cta") node.social.preview = (refined?.content || refined?.caption || "").trim() || node.social.preview;
         if (key === "hashtags") node.social.hashtags = finalizeGeneratedHashtags(refined?.caption || refined?.content || "", node.social.platform || "LinkedIn");
         updateNodeCard(node);
         fillInspector(node);
         saveCampaignCanvasState();
+      } catch (error) {
+        if (mutation.current()) {
+          console.error('Social regeneration failed', error);
+          setSaveStatus("Could not refine node right now. Please try again.");
+        }
       } finally {
-        btn.disabled = false;
-        btn.textContent = original;
+        if (mutation.current()) {
+          btn.disabled = false;
+          btn.textContent = original;
+        }
+        mutation.finish();
       }
     };
     const regenCaption = document.createElement("button");
@@ -18376,10 +18413,16 @@ let contentWorkspaceFocusNodeId = "";
 let facebookWorkspaceRefreshGeneration = 0;
 async function refreshFacebookWorkspaceSnapshot() {
   const generation = ++facebookWorkspaceRefreshGeneration;
+  const boardId = state.currentBoardId, boardGeneration = state.boardLoadGeneration, account = state.user;
+  const current = () => {
+    if (generation !== facebookWorkspaceRefreshGeneration) return false;
+    return boardId === state.currentBoardId && boardGeneration === state.boardLoadGeneration && account === state.user;
+  };
   await globalThis.FacebookSettings?.refresh?.();
+  if (!current()) return;
   const facebookNodes=state.nodes.filter(node=>String(node?.social?.platform||node?.channel||'').toLowerCase()==='facebook');
-  await Promise.all(facebookNodes.map(async node=>{const clientRequestId=`reconcile_${Date.now().toString(36)}_${String(node.id).replace(/[^A-Za-z0-9_-]/g,'').slice(0,32)}`;try{const response=await fetch(`/api/social-publishing/facebook/publication?boardId=${encodeURIComponent(state.currentBoardId)}&nodeId=${encodeURIComponent(node.id)}&clientRequestId=${encodeURIComponent(clientRequestId)}`,{credentials:'same-origin',headers:{accept:'application/json'}});if(!response.ok)return;const parsed=await readAuthoritativeJson(response),raw=parsed.value||{};if(parsed.valid&&raw.client_request_id===clientRequestId)window.FunklixContentWorkspace?.reconcileFacebookPublication?.(node.id,{ok:raw.ok,status:raw.status,provider:raw.provider,jobState:raw.job_state,externalPostState:raw.external_post_state,finalized:raw.finalized,duplicateDeliveryPrevented:raw.duplicate_delivery_prevented,externalUrl:raw.external_url,publishedAt:raw.published_at,destination:raw.destination});}catch(_){/* A failed read never makes a finalized post publishable during this render. */}}));
-  if (generation !== facebookWorkspaceRefreshGeneration || state.activeView !== "content_workspace") return;
+  await Promise.all(facebookNodes.map(async node=>{const clientRequestId=`reconcile_${Date.now().toString(36)}_${String(node.id).replace(/[^A-Za-z0-9_-]/g,'').slice(0,32)}`;try{const response=await fetch(`/api/social-publishing/facebook/publication?boardId=${encodeURIComponent(state.currentBoardId)}&nodeId=${encodeURIComponent(node.id)}&clientRequestId=${encodeURIComponent(clientRequestId)}`,{credentials:'same-origin',headers:{accept:'application/json'}});if(!response.ok)return;const parsed=await readAuthoritativeJson(response),raw=parsed.value||{};if(current()&&getNode(node.id)===node&&parsed.valid&&raw.client_request_id===clientRequestId)window.FunklixContentWorkspace?.reconcileFacebookPublication?.(node.id,{ok:raw.ok,status:raw.status,provider:raw.provider,jobState:raw.job_state,externalPostState:raw.external_post_state,finalized:raw.finalized,duplicateDeliveryPrevented:raw.duplicate_delivery_prevented,externalUrl:raw.external_url,publishedAt:raw.published_at,destination:raw.destination});}catch(_){/* A failed read never makes a finalized post publishable during this render. */}}));
+  if (!current() || state.activeView !== "content_workspace") return;
   renderContentWorkspace();
 }
 
@@ -19385,6 +19428,7 @@ el.generateHeaderVisualButton.addEventListener("click", async () => {
   const node = getNode(state.selectedPrimary);
   if (!node || node.type !== "Landing Page") return;
   if (!node.landingPage?.headerVisualPrompt?.trim()) return;
+  const mutation = beginPendingNodeMutation(node);
   const btn = el.generateHeaderVisualButton;
   const original = btn.textContent;
   btn.disabled = true;
@@ -19405,6 +19449,7 @@ el.generateHeaderVisualButton.addEventListener("click", async () => {
     });
     if (!response.ok) throw new Error("Header visual failed");
     const data = await response.json();
+    if (!mutation.current()) return;
     const imageUrl = data?.imageUrl || data?.url || "";
     if (!imageUrl) throw new Error("Empty image URL");
     node.images = Array.isArray(node.images) ? node.images : [];
@@ -19412,9 +19457,17 @@ el.generateHeaderVisualButton.addEventListener("click", async () => {
     updateNodeCard(node);
     fillInspector(node);
     saveCampaignCanvasState();
+  } catch (error) {
+    if (mutation.current()) {
+      console.error('Header visual generation failed', error);
+      setSaveStatus("Could not generate image right now. Please try again.");
+    }
   } finally {
-    btn.disabled = false;
-    btn.textContent = original;
+    if (mutation.current()) {
+      btn.disabled = false;
+      btn.textContent = original;
+    }
+    mutation.finish();
   }
 });
 el.generatePostingVisualButton.addEventListener("click", async () => {
