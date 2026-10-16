@@ -184,6 +184,7 @@ const state = {
   ,lastLocalSaveAt: null
   ,remoteMergeSkippedNodeIds: new Set()
   ,presenceSelectionPingTimer: null
+  ,presencePingContext: null
   ,presencePingInFlight: false
   ,presencePendingPingAfterInFlight: false
   ,presenceSelectedNodeIdLastQueued: undefined
@@ -1359,6 +1360,9 @@ async function loadBoardSharingStatus() {
 }
 
 async function writeBoardSharing(action) {
+  const exitOperation = Symbol('writeBoardSharing');
+  workspaceExitOperations.add(exitOperation);
+  try {
   const boardId = state.currentBoardId;
   if (!boardId || state.boardAccess?.reason !== "owner" || state.boardSharing.status === "writing") return;
   const lifecycle = state.boardSharing.lifecycle;
@@ -1377,9 +1381,13 @@ async function writeBoardSharing(action) {
     if (generation === state.boardSharing.generation) state.boardSharing = { ...state.boardSharing, status: "reload-required", rawToken: null };
   }
   renderOpenShareEditorPanel();
+  } finally { workspaceExitOperations.delete(exitOperation); }
 }
 
 async function loadBoardEditors({ silent = false } = {}) {
+  const exitOperation = Symbol('loadBoardEditors');
+  workspaceExitOperations.add(exitOperation);
+  try {
   const boardId = state.currentBoardId || getBoardIdFromPath();
   if (!boardId || !state.boardAccess?.canManagePermissions) {
     state.boardEditors = [];
@@ -1402,9 +1410,13 @@ async function loadBoardEditors({ silent = false } = {}) {
     refreshOwnershipDisplays();
     renderOpenShareEditorPanel();
   }
+  } finally { workspaceExitOperations.delete(exitOperation); }
 }
 
 async function addBoardEditor(email, input = null, role = "viewer") {
+  const exitOperation = Symbol('addBoardEditor');
+  workspaceExitOperations.add(exitOperation);
+  try {
   const boardId = state.currentBoardId || getBoardIdFromPath();
   if (!boardId || !state.boardAccess?.canManagePermissions) return;
   const normalizedEmail = typeof email === "string" ? email.trim().toLowerCase() : "";
@@ -1429,9 +1441,13 @@ async function addBoardEditor(email, input = null, role = "viewer") {
   } catch (error) {
     setBoardEditorsStatus(permissionErrorMessage(error?.message || "Could not add editor"), true);
   }
+  } finally { workspaceExitOperations.delete(exitOperation); }
 }
 
 async function removeBoardEditor(email) {
+  const exitOperation = Symbol('removeBoardEditor');
+  workspaceExitOperations.add(exitOperation);
+  try {
   const boardId = state.currentBoardId || getBoardIdFromPath();
   if (!boardId || !state.boardAccess?.canManagePermissions) return;
   const normalizedEmail = typeof email === "string" ? email.trim().toLowerCase() : "";
@@ -1447,6 +1463,7 @@ async function removeBoardEditor(email) {
   } catch (error) {
     setBoardEditorsStatus(permissionErrorMessage(error?.message || "Could not remove editor"), true);
   }
+  } finally { workspaceExitOperations.delete(exitOperation); }
 }
 
 async function copyCurrentBoardLink() {
@@ -1536,6 +1553,9 @@ function showShareLinkToast(copied = true) {
 
 
 async function saveBoardAsNew(payload) {
+  const exitOperation = Symbol('saveBoardAsNew');
+  workspaceExitOperations.add(exitOperation);
+  try {
   if (!state.user?.email) {
     setAuthMessage("Sign in with Google to duplicate this board.");
     setSaveStatus("Sign in with Google to duplicate this board.");
@@ -1552,6 +1572,7 @@ async function saveBoardAsNew(payload) {
     throw new Error('Sign in with Google to duplicate this board.');
   }
   if (!response.ok) throw new Error(data?.error || 'Failed to save board');
+  if (typeof data?.id !== 'string' || !data.id || !Number.isFinite(Date.parse(data.updated_at))) throw new Error('Board save was not confirmed');
 
   const newId = data?.id;
   if (newId) {
@@ -1565,10 +1586,12 @@ async function saveBoardAsNew(payload) {
     const nextPath = `/boards/${newId}`;
     if (window.location.pathname !== nextPath) window.history.pushState({}, '', nextPath);
     setSharePanelState(newId, data?.updated_at ? new Date(data.updated_at) : new Date(), data?.owner_email || null, data?.owner_name || null, data?.owner_avatar || null);
-    state.isDirty = false;
-    setSaveStatus('Saved');
-    refreshLastSavedSnapshot();
+    state.canvasMetadata = { ...state.canvasMetadata, ...payload.canvas_json?.metadata };
+    state.lastSavedSnapshot = JSON.stringify({ canvas_json: payload.canvas_json, brand_core_snapshot: payload.brand_core_snapshot });
+    state.isDirty = buildLastSavedSnapshot() !== state.lastSavedSnapshot;
+    setSaveStatus(state.isDirty ? 'Unsaved changes' : 'Saved');
   }
+  } finally { workspaceExitOperations.delete(exitOperation); }
 }
 
 function buildDuplicateBoardName() {
@@ -1580,6 +1603,9 @@ function buildDuplicateBoardName() {
 }
 
 async function duplicateCurrentBoard() {
+  const exitOperation = Symbol('duplicateCurrentBoard');
+  workspaceExitOperations.add(exitOperation);
+  try {
   if (!state.user?.email) {
     setAuthMessage("Sign in with Google to duplicate this board.");
     setSaveStatus("Sign in with Google to duplicate this board.");
@@ -1633,6 +1659,7 @@ async function duplicateCurrentBoard() {
     setSaveStatus(error?.message || 'Duplicate failed');
     return false;
   }
+  } finally { workspaceExitOperations.delete(exitOperation); }
 }
 
 
@@ -2640,6 +2667,8 @@ function startBoardRefreshPolling() {
 }
 
 async function pingPresenceLite() {
+  const generation = state.boardLoadGeneration, account = state.user;
+  const current = () => generation === state.boardLoadGeneration && account === state.user;
   const boardId = state.currentBoardId || getBoardIdFromPath();
   const selectedNodeId = state.selectedPrimary || null;
   const editingNodeId = state.presenceEditingNodeId || null;
@@ -2653,10 +2682,12 @@ async function pingPresenceLite() {
     clearNodePresenceBadges();
     return;
   }
-  if (state.presencePingInFlight) {
+  if (state.presencePingInFlight && state.presencePingContext?.generation === generation && state.presencePingContext?.account === account) {
     state.presencePendingPingAfterInFlight = true;
     return;
   }
+  const pingContext = { generation, account };
+  state.presencePingContext = pingContext;
   state.presencePingInFlight = true;
   try {
     const response = await fetch(`/api/boards/presence/${encodeURIComponent(boardId)}`, {
@@ -2666,7 +2697,7 @@ async function pingPresenceLite() {
     });
     if (!response.ok) throw new Error('presence unavailable');
     const data = await response.json();
-    if ((state.currentBoardId || getBoardIdFromPath()) !== boardId || !state.user?.email) return;
+    if (!current() || (state.currentBoardId || getBoardIdFromPath()) !== boardId || !state.user?.email) return;
     state.presenceSelectedNodeIdLastSent = selectedNodeId;
     state.presencePayloadSignatureLastSent = buildPresencePayloadSignature();
     state.presenceViewers = Array.isArray(data?.viewers) ? data.viewers : [];
@@ -2677,12 +2708,15 @@ async function pingPresenceLite() {
     scheduleCollaboratorCursorRender();
     applyFollowModeFromPresence();
   } catch (_error) {
+    if (!current()) return;
     state.presenceViewers = [];
     refreshOwnershipDisplays();
     renderPresenceLite();
     clearNodePresenceBadges();
   } finally {
+    if (state.presencePingContext !== pingContext) return;
     state.presencePingInFlight = false;
+    if (!current()) return;
     if (state.presencePendingPingAfterInFlight) {
       state.presencePendingPingAfterInFlight = false;
       notifyPresenceSelectionMaybe(120);
@@ -3008,7 +3042,7 @@ async function pollBoardForRemoteChanges() {
   } catch (error) {
     console.debug('[Funklix Collaboration] Passive board refresh skipped', error);
   } finally {
-    state.boardRefreshInFlight = false;
+    if (loadGeneration === state.boardLoadGeneration) state.boardRefreshInFlight = false;
   }
 }
 
@@ -4370,6 +4404,9 @@ function cancelBoardBrandCoreOperation() {
 }
 
 async function submitBoardBrandCoreOperation() {
+  const exitOperation = Symbol('submitBoardBrandCoreOperation');
+  workspaceExitOperations.add(exitOperation);
+  try {
   const comparison = boardBrandCoreComparison;
   const operation = comparison.operation;
   if (!operation || comparison.operationController || !boardBrandCoreOperationEligible(operation, comparison)) {
@@ -4416,6 +4453,7 @@ async function submitBoardBrandCoreOperation() {
     comparison.operationController = null; comparison.operation = null; comparison.requiresReload = true;
     comparison.operationMessage = "The network outcome is uncertain. Reload the authoritative Board before any retry or restore."; renderBoardBrandCoreComparison();
   }
+  } finally { workspaceExitOperations.delete(exitOperation); }
 }
 
 function beginCanonicalBrandCoreInitialization() {
@@ -4445,6 +4483,9 @@ function initializationHttpMessage(status) {
 }
 
 async function submitCanonicalBrandCoreInitialization() {
+  const exitOperation = Symbol('submitCanonicalBrandCoreInitialization');
+  workspaceExitOperations.add(exitOperation);
+  try {
   const comparison = boardBrandCoreComparison;
   if (!comparison.confirming || comparison.initializationController || !canonicalInitializationEligible(comparison)) {
     comparison.confirming = false;
@@ -4512,6 +4553,7 @@ async function submitCanonicalBrandCoreInitialization() {
     comparison.initializationMessage = "The initialization outcome was not confirmed. Reload the authoritative Canonical Brand before another attempt.";
     renderBoardBrandCoreComparison();
   }
+  } finally { workspaceExitOperations.delete(exitOperation); }
 }
 
 
@@ -4922,28 +4964,175 @@ function renderWorkspaceSidebar() {
   if (typeof homeFoundationController !== 'undefined') homeFoundationController?.sync();
 }
 
+// These counters belong to the existing Workspace/Board lifecycle. They do not
+// cancel writes: operations without a safe cancellation contract must settle.
+let workspaceSelectionGeneration = 0;
+const workspaceExitOperations = new Set();
+
+function workspaceSwitchBlockedReason() {
+  if (state.isBoardLoading || state.isBoardHydrating || state.initialServerLoadInFlight) return 'Wait for the Board to finish loading before switching Workspaces.';
+  if (state.isSaving || state.conflictModalOpen || state.boardBrandAssociation.status === 'submitting'
+    || boardBrandCoreComparison.operation || boardBrandCoreComparison.initializationController || boardBrandCoreComparison.operationController) return 'Finish the Board save or conflict decision before switching Workspaces.';
+  if (postingScheduleQueueDepth > 0 || [...approvalPersistenceByNode.values()].some(status => ['saving', 'verifying'].includes(status))) return 'Wait for the current Board operation to finish before switching Workspaces.';
+  if (responsibilitySaveHeld()) return 'Save or retry the pending responsibilities before switching Workspaces.';
+  if (campaignCreationController?.suspendAutosave || workspaceExitOperations.size
+    || state.boardCreation.status === 'pending' || firstWorkspaceCreation) return 'Wait for the current Board operation to finish before switching Workspaces.';
+  if (brandProfileController?.busy() || canonicalBrandDetail.status === 'submitting') return 'Wait for the Brand Profile operation to finish before switching Workspaces.';
+  return '';
+}
+
 async function selectSessionWorkspace(workspaceId) {
-  if (!guardBrandProfileLeave(() => selectSessionWorkspace(workspaceId))) return false;
-  if (!closeCanonicalBrandDetail({ restoreFocus: false })) return false;
-  const catalog = state.workspaceCatalog.value;
-  const target = catalog?.workspaces?.find((item) => item.id === workspaceId);
-  if (!target || state.workspaceCatalog.status !== "ready") return false;
-  const activeBoardId = state.currentBoardId || getBoardIdFromPath() || null;
-  const activeBoard = catalog.workspaces.flatMap((item) => item.boards).find((item) => item.id === activeBoardId);
-  if (activeBoard && activeBoard.workspace_id !== workspaceId) {
-    if (!closeCanonicalBrandDetail({ restoreFocus: false })) return false;
-    state.currentBoardId = null; state.session.boardId = null; state.currentBoardName = "";
-    history.replaceState({}, "", "/");
-    setActiveView("home");
-  }
+  const attempt = ++workspaceSelectionGeneration;
+  showUnsavedLeaveModal.cancelWorkspace?.();
+  document.getElementById('workspace-switch-status')?.remove();
+  const sidebarStatus = document.getElementById('workspace-context-status');
+  if (sidebarStatus) sidebarStatus.textContent = '';
+  const account = state.user;
+  const email = (account?.email || '').trim().toLowerCase();
+  const lifecycle = state.workspaceCatalog;
+  const catalog = lifecycle.value;
+  const target = catalog?.workspaces?.find(item => item.id === workspaceId);
+  if (!email || lifecycle.identity !== email || lifecycle.status !== 'ready' || !target) return false;
+  if (workspaceId === lifecycle.activeWorkspaceId) return true;
+  const origin = { workspaceId: lifecycle.activeWorkspaceId, boardId: state.currentBoardId, path: location.pathname,
+    load: state.boardLoadGeneration, save: state.latestSaveRequestId, association: state.boardBrandAssociation.generation,
+    catalogGeneration: lifecycle.generation };
+  const current = () => attempt === workspaceSelectionGeneration && account === state.user
+    && email === (state.user?.email || '').trim().toLowerCase() && state.workspaceCatalog === lifecycle
+    && lifecycle.value?.workspaces.some(item => item.id === workspaceId) && lifecycle.status === 'ready' && lifecycle.identity === email
+    && lifecycle.generation === origin.catalogGeneration && lifecycle.activeWorkspaceId === origin.workspaceId
+    && state.currentBoardId === origin.boardId && location.pathname === origin.path
+    && state.boardLoadGeneration === origin.load && state.latestSaveRequestId === origin.save
+    && state.boardBrandAssociation.generation === origin.association;
+  const report = message => {
+    const text = uiText(message);
+    setSaveStatus(text);
+    if (sidebarStatus) sidebarStatus.textContent = text;
+    const home = document.getElementById('home-foundation');
+    if (state.activeView === 'home' && home) {
+      let status = document.getElementById('workspace-switch-status');
+      if (!status) { status = document.createElement('p'); status.id = 'workspace-switch-status'; status.className = 'home-intro'; status.setAttribute('role', 'status'); home.prepend(status); }
+      status.textContent = text;
+    }
+  };
+  const blocked = () => {
+    const reason = workspaceSwitchBlockedReason();
+    if (reason) report(reason);
+    return Boolean(reason);
+  };
+  if (blocked()) return false;
+  const proceed = async () => {
+    if (!current() || blocked()) return false;
+    // Detect edits that have not yet reached the existing one-second watcher.
+    detectDirtyFromSnapshot();
+    const snapshot = buildLastSavedSnapshot();
+    if (state.isDirty && !await showUnsavedLeaveModal({ workspace: true })) return false;
+    if (!current() || blocked() || buildLastSavedSnapshot() !== snapshot) return false;
+    let authorized;
+    try {
+      // Do not adopt a refreshed catalog until exit is authorized. A failed read
+      // leaves the outgoing Board, Canvas and Workspace completely intact.
+      const response = await fetch('/api/auth/session', { credentials: 'same-origin', cache: 'no-store' });
+      const session = await response.json();
+      if (!response.ok || (session?.user?.email || '').trim().toLowerCase() !== email || !current() || blocked()) return false;
+      authorized = await window.FunklixWorkspaceCatalog.load(fetch);
+    } catch (_) {
+      if (current()) report('Workspace access could not be verified. Try again when you are online.');
+      return false;
+    }
+    if (!current() || blocked() || buildLastSavedSnapshot() !== snapshot) return false;
+    const confirmedTarget = authorized.workspaces.find(item => item.id === workspaceId);
+    if (!confirmedTarget) { report('This Workspace is no longer accessible.'); return false; }
+    if (!closeCanonicalBrandDetail({ restoreFocus: false, navigate: false })) return false;
+    retireBoardForWorkspaceSwitch();
+    lifecycle.value = authorized;
+    lifecycle.generation += 1;
+    lifecycle.activeWorkspaceId = workspaceId;
+    state.session.workspaceId = workspaceId;
+    state.session.brandId = confirmedTarget.brands.length === 1 ? confirmedTarget.brands[0].id : null;
+    history.replaceState({}, '', '/');
+    setAppMode('canvas');
+    setActiveView('home');
+    renderWorkspaceSidebar(); renderBoardsLibrary(); refreshDashboardIfVisible();
+    return true;
+  };
+  // Resume this captured attempt after the existing Profile Save/Discard guard;
+  // never recursively create an attempt with a different outgoing context.
+  if (!guardBrandProfileLeave(() => { void proceed(); })) return false;
+  return proceed();
+}
+
+function retireBoardForWorkspaceSwitch() {
+  clearAutosaveTimer(); stopPresenceLite(); stopBoardRefreshPolling();
+  state.boardLoadGeneration += 1;
+  state.latestSaveRequestId += 1;
+  state.activeCampaignGeneration = null;
+  publishingLifecycleGeneration += 1;
+  facebookWorkspaceRefreshGeneration += 1;
+  contentPlanningFeedbackAttempt += 1;
   invalidateBoardCreationContext();
-  state.workspaceCatalog.activeWorkspaceId = workspaceId;
-  state.session.workspaceId = workspaceId;
-  const currentBrand = target.brands.find((item) => item.id === state.session.brandId);
-  state.session.brandId = currentBrand?.id || (target.brands.length === 1 ? target.brands[0].id : null);
-  if (!state.session.brandId) ephemeralBrandSwitcherSelection = null;
-  renderWorkspaceSidebar(); renderBoardsLibrary();
-  return true;
+  campaignCreationController?.close();
+  invalidateAiBrainRequest();
+  resetBrandBrainForBoardHydration();
+  invalidateBoardBrandAssociation({ clearBoard: true });
+  closePostitEmojiPicker({ reason: 'workspace-switch' }); closeLightbox();
+  closeInspector({ restoreFocus: false }); clearInspectorSectionRoute();
+  resetAdaptiveCanvasView(); stopExistingNodeConnection();
+  state.connectorCreateMode = null; state.connectorGhostEl?.remove(); state.connectorGhostEl = null;
+  state.contextNodeId = null;
+  document.getElementById('campaign-responsibilities')?.close();
+  dismissShareLinkToast();
+  closeFounderStoryWebsiteImport(activeFounderStoryWebsiteImport, { restoreFocus: false });
+  document.querySelectorAll('[data-workspace-board-preview]').forEach(preview => preview.remove());
+  state.currentBoardId = null; state.session.boardId = null; state.currentBoardName = '';
+  state.currentBoardOwnerEmail = null; state.currentBoardOwnerName = null; state.currentBoardOwnerAvatar = null;
+  setSharePanelState(null, null, null, null, null);
+  state.boardAccess = { canView: false, canEdit: false, canViewBoardBrandCore: false, canManagePermissions: false,
+    canViewPresence: false, canRename: false, canDelete: false, reason: 'no-board' };
+  state.publicBoardToken = null;
+  state.boardSharing = { status: 'idle', enabled: false, createdAt: null, rawToken: null,
+    generation: state.boardSharing.generation + 1, lifecycle: state.boardLoadGeneration, boardId: '', identity: '' };
+  state.boardEditors = []; state.boardEditorsLoading = false; state.boardEditorsStatus = { message: '', isError: false };
+  state.presenceViewers = []; state.presencePingInFlight = false; state.presencePingContext = null; state.presenceNodeSignature = '';
+  clearCollaboratorCursors(); renderPresenceLite();
+  Object.assign(responsibilityWorkspaceState, { roster: [], rosterContext: '', pending: null, confirmed: false, conflict: false });
+  state.authoritativeBoardBrandCore = { boardId: '', loadGeneration: state.boardLoadGeneration, value: {},
+    provenance: null, provenanceValid: false, updatedAt: null, restoreAvailable: false, backupCreatedAt: null };
+  state.isSaving = false; state.isBoardHydrating = false; state.initialServerLoadInFlight = false;
+  state.conflictModalOpen = false; state.autosavePausedUntilChange = false;
+  state.lastKnownUpdatedAt = null; state.lastLocalSaveAt = null;
+  Object.assign(state.runtimeDiagnostics, { canvasSource: 'empty/default state', pathBoardId: null, lastBlockedAutosave: null,
+    localDraft: { exists: false, restored: false, reason: 'workspace-switch' },
+    boardOwnership: { hasBrandOwner: false, brandId: null, source: 'none', reason: 'no-board-loaded' } });
+  approvalPersistenceByNode.clear(); approvalNormalizationByNode.clear();
+  state.history = []; state.inspectorDismissedNodeId = null; state.inspectorSelectionSnapshot = null;
+  state.hashtagDraftByNode = {}; state.insightsDiagnosticSnapshot = null;
+  state.nodeSearchQuery = '';
+  Object.values(state.nodeFilters).forEach(filter => filter.clear());
+  state.brandCoreSelectedKey = 'brandCore';
+  state.founderStoryAcceptanceHandled.clear(); state.founderStoryAcceptanceInFlight.clear();
+  state.analysisRefreshing = false; state.analysisLastUpdatedAt = null; state.analysisError = '';
+  state.boardsLibraryRequest.controller?.abort();
+  // Increment the existing object too: late requests hold a reference to it.
+  state.boardsLibraryRequest.generation += 1;
+  state.boardsLibraryRequest = { scope: 'all', status: 'idle', generation: state.boardsLibraryRequest.generation, identity: '', controller: null };
+  state.boardsLibrary = [];
+  brandSwitcherPreferenceGeneration += 1; ephemeralBrandSwitcherSelection = null;
+  state.brandCatalog = { status: 'idle', entries: [], requestId: state.brandCatalog.requestId + 1, userEmail: '' };
+  sidebarProfileCache.clear(); pendingBrandProfileData.clear();
+  applyCampaignState(blankCanvasState(), '', { memoryOnly: true });
+  fillInspector(null); refreshNodeSearchUI();
+  if (el.boardShareLinkText) el.boardShareLinkText.textContent = '';
+  if (el.boardLastSaved) el.boardLastSaved.textContent = '';
+  state.canvasMetadata = { createdAt: null, updatedAt: null };
+  refreshLastSavedSnapshot();
+  // Only the unscoped local Canvas projection is removed; saved Boards and
+  // per-Board Brand storage remain owned by their existing persistence paths.
+  try { localStorage.removeItem(STORAGE_KEY); } catch (_) { /* storage may be unavailable */ }
+  document.body.classList.remove('public-board-view');
+  renderBrandCoreTiles(); renderBrandCoreEditor(); renderBrandCatalog();
+  renderBoardBrandAssociation(); updateReadOnlyNoticeVisibility();
+  renderAiBrain(); renderContentWorkspace(); updateCanvasLearningAction();
 }
 
 function selectSessionBrand(brandId) {
@@ -6500,6 +6689,9 @@ function isValidInsightsDiagnostic(analysis) {
 }
 
 async function regenerateSocialForPlatform(node, triggerBtn = null) {
+  const exitOperation = Symbol('regenerateSocialForPlatform');
+  workspaceExitOperations.add(exitOperation);
+  try {
   if (isBoardReadOnly()) {
     setSaveStatus("Read-only board");
     return;
@@ -6531,6 +6723,7 @@ async function regenerateSocialForPlatform(node, triggerBtn = null) {
       triggerBtn.textContent = originalText;
     }
   }
+  } finally { workspaceExitOperations.delete(exitOperation); }
 }
 
 function serializeState() {
@@ -7805,6 +7998,9 @@ function showStrategyConfirm(title, message, confirmLabel) {
 }
 
 async function applyStrategyModuleDraft(tile, currentDraft) {
+  const exitOperation = Symbol('applyStrategyModuleDraft');
+  workspaceExitOperations.add(exitOperation);
+  try {
   if (activeStrategyModulePersistence.has(tile?.id)) return false;
   activeStrategyModulePersistence.add(tile.id);
   const config = getStrategyModuleConfig(tile); const data = normalizeStrategyModuleData(tile);
@@ -7836,6 +8032,7 @@ async function applyStrategyModuleDraft(tile, currentDraft) {
   activeStrategyModulePersistence.delete(tile.id);
   renderBrandCoreTiles(); renderBrandCoreEditor();
   return true;
+  } finally { workspaceExitOperations.delete(exitOperation); }
 }
 
 function setStrategyEditorMessage(message, tone = "") {
@@ -7843,6 +8040,9 @@ function setStrategyEditorMessage(message, tone = "") {
 }
 
 async function generateStrategyModuleDraft(tile) {
+  const exitOperation = Symbol('generateStrategyModuleDraft');
+  workspaceExitOperations.add(exitOperation);
+  try {
   const config = getStrategyModuleConfig(tile); const tileId = getCustomTileStableId(tile); const boardId = getCurrentBrandBrainBoardId(); const generationUserEmail = String(state.user?.email || "").toLowerCase();
   if (!config || !tileId || !boardId || activeStrategyModuleGenerations.has(tileId)) return;
   const data = normalizeStrategyModuleData(tile); const requestId = createKnowledgeModuleInstanceId();
@@ -7860,6 +8060,7 @@ async function generateStrategyModuleDraft(tile) {
     if (activeStrategyModuleGenerations.get(tileId)?.requestId !== requestId) return;
     const latest = normalizeStrategyModuleData(tile); latest.pendingGeneration = null; latest.lifecycle = { status: "error", updatedAt: new Date().toISOString(), lastError: error?.message || "Draft generation failed" }; saveStrategyModuleData(tile, latest); renderBrandCoreTiles(); renderBrandCoreEditor();
   } finally { if (activeStrategyModuleGenerations.get(tileId)?.requestId === requestId) activeStrategyModuleGenerations.delete(tileId); }
+  } finally { workspaceExitOperations.delete(exitOperation); }
 }
 
 const FOUNDER_STORY_FIELD_DEFINITIONS = Object.freeze([
@@ -7970,6 +8171,9 @@ function documentSourceQuery(tile, extra = {}) {
 }
 
 async function loadDocumentSourceMetadata(tile, { force = false } = {}) {
+  const exitOperation = Symbol('loadDocumentSourceMetadata');
+  workspaceExitOperations.add(exitOperation);
+  try {
   const params = documentSourceRequestParams(tile);
   if (!params.boardId || !params.tileId || !params.sourceType || (!force && getDocumentSourceState(tile).loading)) return;
   const requestId = createKnowledgeModuleInstanceId();
@@ -7988,6 +8192,7 @@ async function loadDocumentSourceMetadata(tile, { force = false } = {}) {
     setDocumentSourceState(tile, { loading: false, error: error?.message || "Document state could not be loaded." });
     if (getCustomTileByRuntimeKey(state.brandCoreSelectedKey).tile?.id === tile.id) renderBrandCoreEditor();
   }
+  } finally { workspaceExitOperations.delete(exitOperation); }
 }
 
 function validateDocumentSourceFileSelection(file) {
@@ -8000,6 +8205,9 @@ function validateDocumentSourceFileSelection(file) {
 }
 
 async function uploadDocumentSource(tile) {
+  const exitOperation = Symbol('uploadDocumentSource');
+  workspaceExitOperations.add(exitOperation);
+  try {
   const current = getDocumentSourceState(tile); const file = current.selectedFile;
   const selectionError = validateDocumentSourceFileSelection(file);
   if (selectionError) { setDocumentSourceState(tile, { error: selectionError }); renderBrandCoreEditor(); return; }
@@ -8024,9 +8232,13 @@ async function uploadDocumentSource(tile) {
     if (state.documentSourceOperationByTileId.get(tile.id)?.requestId === requestId) state.documentSourceOperationByTileId.delete(tile.id);
     if (getCustomTileByRuntimeKey(state.brandCoreSelectedKey).tile?.id === tile.id) renderBrandCoreEditor(); renderBrandCoreTiles();
   }
+  } finally { workspaceExitOperations.delete(exitOperation); }
 }
 
 async function deleteDocumentSource(tile, { removeTileAfter = false } = {}) {
+  const exitOperation = Symbol('deleteDocumentSource');
+  workspaceExitOperations.add(exitOperation);
+  try {
   const current = getDocumentSourceState(tile); const document = current.document; const identity = documentSourceRequestParams(tile);
   if (state.documentSourceOperationByTileId.has(tile.id)) state.documentSourceOperationByTileId.get(tile.id)?.controller?.abort();
   if (!document && !removeTileAfter) return true;
@@ -8041,6 +8253,7 @@ async function deleteDocumentSource(tile, { removeTileAfter = false } = {}) {
     return true;
   } catch (error) { if (state.documentSourceOperationByTileId.get(tile.id)?.requestId === requestId) setDocumentSourceState(tile, { status: document ? "uploaded" : "upload_error", document, error: error?.message || "Delete failed." }); return false; }
   finally { if (state.documentSourceOperationByTileId.get(tile.id)?.requestId === requestId) state.documentSourceOperationByTileId.delete(tile.id); if (!removeTileAfter) { renderBrandCoreEditor(); renderBrandCoreTiles(); } }
+  } finally { workspaceExitOperations.delete(exitOperation); }
 }
 
 function formatDocumentBytes(value) {
@@ -8250,6 +8463,9 @@ function openFounderStoryGeneratedReview({ narrative, requestContext }) {
 }
 
 async function generateFounderStoryNarrative(tile) {
+  const exitOperation = Symbol('generateFounderStoryNarrative');
+  workspaceExitOperations.add(exitOperation);
+  try {
   if (state.founderStoryGeneration?.inFlight) return;
   const tileId = getMeaningfulFounderStoryValue(tile?.id);
   if (!tileId || !isFounderStoryCustomTile(tile)) return;
@@ -8297,6 +8513,7 @@ async function generateFounderStoryNarrative(tile) {
     state.founderStoryGeneration = { inFlight: false, request: null };
     if (button) { button.disabled = false; button.textContent = "Generate Founder Story"; }
   }
+  } finally { workspaceExitOperations.delete(exitOperation); }
 }
 
 const FOUNDER_STORY_IMPORT_MAX_VALUE_LENGTH = 1600;
@@ -8431,6 +8648,9 @@ function renderFounderStoryWebsiteImportReview(controller, fields) {
 }
 
 async function startFounderStoryWebsiteImport(controller) {
+  const exitOperation = Symbol('startFounderStoryWebsiteImport');
+  workspaceExitOperations.add(exitOperation);
+  try {
   const context = assertFounderStoryWebsiteImportContext(controller);
   if (!context.ok || controller.inFlight) return;
   const input = controller.card.querySelector("[data-founder-story-import-url]");
@@ -8464,6 +8684,7 @@ async function startFounderStoryWebsiteImport(controller) {
     error.textContent = getFounderStoryImportError(failure.payload, failure.stage === "retrieval" ? "That webpage could not be retrieved." : "The AI service could not map this page right now.");
     button.disabled = false; button.textContent = "Try import again";
   } finally { controller.inFlight = false; }
+  } finally { workspaceExitOperations.delete(exitOperation); }
 }
 
 function openFounderStoryWebsiteImport(tile, returnFocus) {
@@ -9273,6 +9494,7 @@ async function saveBoardToServer(trigger = "manual") {
       body: JSON.stringify(payload)
     });
     const data = await response.json();
+    if (saveRequestId !== state.latestSaveRequestId) return false;
     if (response.status === 401 && !isUpdate) {
       setAuthMessage("Sign in with Google to create a board.");
       setSaveStatus("Sign in with Google to create a board.");
@@ -9291,6 +9513,7 @@ async function saveBoardToServer(trigger = "manual") {
       state.conflictModalOpen = true;
       clearAutosaveTimer();
       const action = await showBoardConflictModal();
+      if (saveRequestId !== state.latestSaveRequestId) return false;
       state.conflictModalOpen = false;
       if (action === 'load_latest') {
         state.autosavePausedUntilChange = false;
@@ -9306,6 +9529,8 @@ async function saveBoardToServer(trigger = "manual") {
       return;
     }
     if (!response.ok) throw new Error(data?.error || 'Failed to save board');
+    if (typeof data?.id !== 'string' || !data.id || (isUpdate && data.id !== currentBoardId)
+      || !Number.isFinite(Date.parse(data.updated_at))) throw new Error('Board save was not confirmed');
     if (saveRequestId !== state.latestSaveRequestId) {
       console.warn('[Funklix Save Guard] Ignored stale save completion');
       return;
@@ -9321,14 +9546,16 @@ async function saveBoardToServer(trigger = "manual") {
     state.lastKnownUpdatedAt = data?.updated_at || new Date().toISOString();
 
     const shareUrl = `${window.location.origin}/boards/${returnedId}`;
-    state.isDirty = false;
-    setSaveStatus('Saved');
     state.canvasMetadata = {
       ...(state.canvasMetadata || {}),
       createdAt: state.canvasMetadata?.createdAt || canvasStateForSave.metadata?.createdAt || null,
       updatedAt: saveTimestamp
     };
-    refreshLastSavedSnapshot();
+    // Acknowledgment covers only the submitted payload. Later edits must remain
+    // dirty so a Workspace exit cannot silently discard work never sent.
+    state.lastSavedSnapshot = JSON.stringify({ canvas_json: canvasStateForSave, brand_core_snapshot: payload.brand_core_snapshot });
+    state.isDirty = buildLastSavedSnapshot() !== state.lastSavedSnapshot;
+    setSaveStatus(state.isDirty ? 'Unsaved changes' : 'Saved');
     setSharePanelState(returnedId, new Date(), data?.owner_email || state.currentBoardOwnerEmail || null, data?.owner_name || state.currentBoardOwnerName || null, data?.owner_avatar || state.currentBoardOwnerAvatar || null);
     applyBoardAccessFromServer(data?.access, "saveBoardToServer");
     refreshDashboardIfVisible();
@@ -9449,7 +9676,7 @@ async function loadBoardFromUrlIfPresent(requestedBoardId = null) {
       state.boardBrandAssociation.message = "";
       renderBoardBrandAssociation();
     }
-    setSaveStatus('This Board is private or the public link is no longer valid.');
+    if (loadGeneration === state.boardLoadGeneration) setSaveStatus('This Board is private or the public link is no longer valid.');
     return false;
   } finally {
     if (loadGeneration === state.boardLoadGeneration) {
@@ -9576,6 +9803,9 @@ function showFounderStoryCompleteRecommendation() {
 }
 
 async function continueAfterPersistedFounderStoryAcceptance(tile, acceptanceEventKey) {
+  const exitOperation = Symbol('continueAfterPersistedFounderStoryAcceptance');
+  workspaceExitOperations.add(exitOperation);
+  try {
   if (!acceptanceEventKey) return false;
   if (state.founderStoryAcceptanceInFlight.has(acceptanceEventKey) || state.founderStoryAcceptanceHandled.has(acceptanceEventKey)) return true;
   state.founderStoryAcceptanceInFlight.add(acceptanceEventKey);
@@ -9602,13 +9832,18 @@ async function continueAfterPersistedFounderStoryAcceptance(tile, acceptanceEven
   } finally {
     state.founderStoryAcceptanceInFlight.delete(acceptanceEventKey);
   }
+  } finally { workspaceExitOperations.delete(exitOperation); }
 }
 
 async function persistFounderStoryAcceptance(tile, acceptanceEventKey) {
+  const exitOperation = Symbol('persistFounderStoryAcceptance');
+  workspaceExitOperations.add(exitOperation);
+  try {
   saveBrandBrainState();
   const persisted = await saveBoardToServer("founder-story-apply");
   if (persisted !== true) return false;
   return continueAfterPersistedFounderStoryAcceptance(tile, acceptanceEventKey);
+  } finally { workspaceExitOperations.delete(exitOperation); }
 }
 
 function loadBrandBrainState() {
@@ -9751,6 +9986,9 @@ function brandDomainErrorCopy(code, status) {
   return brandDomainImportCopy('extraction');
 }
 async function analyzeBrandDomainFromEditor() {
+  const exitOperation = Symbol('analyzeBrandDomainFromEditor');
+  workspaceExitOperations.add(exitOperation);
+  try {
   const domainInput = el.brandEditorPanel.querySelector("#bc-domain");
   const analyzeButton = el.brandEditorPanel.querySelector("#bc-analyze-domain");
   const domainUrl = domainInput?.value?.trim();
@@ -9813,9 +10051,13 @@ async function analyzeBrandDomainFromEditor() {
       analyzeButton.textContent = originalLabel;
     }
   }
+  } finally { workspaceExitOperations.delete(exitOperation); }
 }
 
 async function replacePrimaryBrandLogo(file) {
+  const exitOperation = Symbol('replacePrimaryBrandLogo');
+  workspaceExitOperations.add(exitOperation);
+  try {
   if (!BRAND_LOGO_MUTATIONS_ENABLED) return false;
   if (!file || !["image/png", "image/jpeg", "image/webp", "image/gif"].includes(file.type) || file.size > 2 * 1024 * 1024) {
     alert("Choose a PNG, JPEG, WebP, or GIF logo up to 2 MB.");
@@ -9840,6 +10082,7 @@ async function replacePrimaryBrandLogo(file) {
     renderBrandCoreEditor();
     alert(error?.message || "Could not persist the logo.");
   }
+  } finally { workspaceExitOperations.delete(exitOperation); }
 }
 
 
@@ -10239,6 +10482,9 @@ function getAcceptedBrandDna() {
 }
 
 async function generateBrandAvatar(optionalUserDirection = "") {
+  const exitOperation = Symbol('generateBrandAvatar');
+  workspaceExitOperations.add(exitOperation);
+  try {
   const brandDNA = getAcceptedBrandDna();
   if (!brandDNA || state.brandAvatarLoading) return;
   state.brandAvatarLoading = true;
@@ -10274,9 +10520,13 @@ async function generateBrandAvatar(optionalUserDirection = "") {
     state.brandAvatarLoading = false;
     renderBrandDnaCard();
   }
+  } finally { workspaceExitOperations.delete(exitOperation); }
 }
 
 async function acceptBrandAvatar() {
+  const exitOperation = Symbol('acceptBrandAvatar');
+  workspaceExitOperations.add(exitOperation);
+  try {
   const avatar = normalizeBrandAvatar(state.brandCore?.brandDNA?.avatar);
   if (!avatar?.imageUrl || !getAcceptedBrandDna() || state.brandFoundationTransitionInFlight) return;
   state.brandFoundationTransitionInFlight = true;
@@ -10286,6 +10536,7 @@ async function acceptBrandAvatar() {
   state.brandFoundationTransitionInFlight = false;
   renderBrandDnaCard();
   if (persisted === true) showFirstCampaignRecommendation();
+  } finally { workspaceExitOperations.delete(exitOperation); }
 }
 
 function editBrandAvatarPrompt() {
@@ -10299,6 +10550,9 @@ function editBrandAvatarPrompt() {
 }
 
 async function discoverBrandDna(refineGuidance = "", requestContext = {}) {
+  const exitOperation = Symbol('discoverBrandDna');
+  workspaceExitOperations.add(exitOperation);
+  try {
   if (state.brandDnaLoading) return;
   state.brandDnaLoading = true;
   renderBrandDnaCard();
@@ -10325,6 +10579,7 @@ async function discoverBrandDna(refineGuidance = "", requestContext = {}) {
     state.brandDnaLoading = false;
     renderBrandDnaCard();
   }
+  } finally { workspaceExitOperations.delete(exitOperation); }
 }
 
 function refineBrandDna() {
@@ -10337,6 +10592,9 @@ function refineBrandDna() {
 }
 
 async function acceptBrandDna() {
+  const exitOperation = Symbol('acceptBrandDna');
+  workspaceExitOperations.add(exitOperation);
+  try {
   const result = state.brandDnaDraft || state.brandCore?.brandDNA;
   if (!result?.primaryArchetype || state.brandFoundationTransitionInFlight) return;
   state.brandFoundationTransitionInFlight = true;
@@ -10350,6 +10608,7 @@ async function acceptBrandDna() {
   renderBrandCoreTiles();
   renderBrandCoreEditor();
   if (persisted === true) showBrandAvatarRecommendation();
+  } finally { workspaceExitOperations.delete(exitOperation); }
 }
 
 function showBrandAvatarRecommendation() {
@@ -11813,9 +12072,13 @@ async function generateCampaignChainProgressively(plan, { onStatus = null, setup
   }
 }
 async function generateCampaignFromIdea(ideaText, contextText, providedPlan = null, options = {}) {
+  const exitOperation = Symbol('generateCampaignFromIdea');
+  workspaceExitOperations.add(exitOperation);
+  try {
   const setupOptions = normalizeCampaignSetupOptions(options.setupOptions || providedPlan?.setup || {});
   const plan = providedPlan || await fetchGeneratedCampaignPlan(ideaText, contextText, setupOptions);
   return generateCampaignChainProgressively(plan, { ...options, setupOptions });
+  } finally { workspaceExitOperations.delete(exitOperation); }
 }
 
 function getCampaignV3Api() {
@@ -13757,7 +14020,10 @@ async function startCampaignV3Creation(overlay, setup, options) {
 }
 
 async function debugRunCampaignV3AI(setupOverride = {}) {
-  return runCampaignV3AICompatibility(setupOverride);
+  const exitOperation = Symbol('debugRunCampaignV3AI');
+  workspaceExitOperations.add(exitOperation);
+  try { return await runCampaignV3AICompatibility(setupOverride); }
+  finally { workspaceExitOperations.delete(exitOperation); }
 }
 
 if (typeof window !== "undefined") {
@@ -15479,6 +15745,9 @@ function renderInspectorAiWorkspace(node) {
 }
 
 async function startAiReviewFixFromPostit({ node, note, item, index, button = null }) {
+  const exitOperation = Symbol('startAiReviewFixFromPostit');
+  workspaceExitOperations.add(exitOperation);
+  try {
   if (!node || !note) return;
   if (isBoardReadOnly()) {
     setSaveStatus("Read-only board");
@@ -15526,6 +15795,7 @@ async function startAiReviewFixFromPostit({ node, note, item, index, button = nu
     fillInspector(node);
     focusAiWorkspace();
   }
+  } finally { workspaceExitOperations.delete(exitOperation); }
 }
 
 function renderAiReviewImprovementAction({ row, node, note, item, index }) {
@@ -16468,6 +16738,9 @@ async function refineNodeWithAI(node, instruction) {
 }
 
 async function runInlineRefine(node, instruction, triggerBtn = null) {
+  const exitOperation = Symbol('runInlineRefine');
+  workspaceExitOperations.add(exitOperation);
+  try {
   if (isBoardReadOnly()) {
     setSaveStatus("Read-only board");
     return;
@@ -16496,9 +16769,13 @@ async function runInlineRefine(node, instruction, triggerBtn = null) {
     toolbarButtons.forEach((btn) => { btn.disabled = false; });
     if (triggerBtn) triggerBtn.textContent = originalText;
   }
+  } finally { workspaceExitOperations.delete(exitOperation); }
 }
 
 async function generateFullContentPack(node, triggerBtn = null, mode = "auto") {
+  const exitOperation = Symbol('generateFullContentPack');
+  workspaceExitOperations.add(exitOperation);
+  try {
   if (isBoardReadOnly()) {
     setSaveStatus("Read-only board");
     return;
@@ -16572,15 +16849,20 @@ async function generateFullContentPack(node, triggerBtn = null, mode = "auto") {
     updateInspectorActionVisibility();
     console.log("generation loading cleared");
   }
+  } finally { workspaceExitOperations.delete(exitOperation); }
 }
 
 async function handleGenerateFullContentPack(contentNodeId) {
+  const exitOperation = Symbol('handleGenerateFullContentPack');
+  workspaceExitOperations.add(exitOperation);
+  try {
   const node = getNode(contentNodeId);
   if (!node || node.type !== "Content") return;
   console.log("Full pack clicked");
   const connectedSocialNodes = getConnectedSocialPostingNodes(node.id);
   console.log("Existing social nodes:", connectedSocialNodes.length);
   await generateFullContentPack(node, el.generateFullPackButton, "new");
+  } finally { workspaceExitOperations.delete(exitOperation); }
 }
 
 function getNextStepNodeType(nodeType = "") {
@@ -16716,6 +16998,9 @@ function addAiReviewPostitToNode(node, review) {
 }
 
 async function reviewNodeWithAI(node, triggerBtn = null) {
+  const exitOperation = Symbol('reviewNodeWithAI');
+  workspaceExitOperations.add(exitOperation);
+  try {
   if (!node) return null;
   if (isBoardReadOnly()) {
     setSaveStatus("Read-only board");
@@ -16742,6 +17027,7 @@ async function reviewNodeWithAI(node, triggerBtn = null) {
       triggerBtn.textContent = originalText;
     }
   }
+  } finally { workspaceExitOperations.delete(exitOperation); }
 }
 
 async function fetchGeneratedNextStep(node) {
@@ -16786,6 +17072,9 @@ function applyGeneratedNextStepContent(node, generated = {}) {
 }
 
 async function generateNextStepFromNode(sourceNode, triggerBtn = null) {
+  const exitOperation = Symbol('generateNextStepFromNode');
+  workspaceExitOperations.add(exitOperation);
+  try {
   if (!sourceNode) return null;
   if (isBoardReadOnly()) {
     setSaveStatus("Read-only board");
@@ -16831,9 +17120,13 @@ async function generateNextStepFromNode(sourceNode, triggerBtn = null) {
       triggerBtn.textContent = originalText;
     }
   }
+  } finally { workspaceExitOperations.delete(exitOperation); }
 }
 
 async function generateImageForNode(node) {
+  const exitOperation = Symbol('generateImageForNode');
+  workspaceExitOperations.add(exitOperation);
+  try {
   if (isBoardReadOnly()) {
     setSaveStatus("Read-only board");
     return;
@@ -16896,6 +17189,7 @@ async function generateImageForNode(node) {
     button.textContent = originalLabel;
     updateInspectorActionVisibility();
   }
+  } finally { workspaceExitOperations.delete(exitOperation); }
 }
 
 function getParentContentNode(nodeId) {
@@ -16905,6 +17199,9 @@ function getParentContentNode(nodeId) {
 }
 
 async function generatePostingVisualForNode(node) {
+  const exitOperation = Symbol('generatePostingVisualForNode');
+  workspaceExitOperations.add(exitOperation);
+  try {
   if (isBoardReadOnly()) {
     setSaveStatus("Read-only board");
     return;
@@ -16980,9 +17277,11 @@ async function generatePostingVisualForNode(node) {
     button.textContent = originalLabel;
     updateInspectorActionVisibility();
   }
+  } finally { workspaceExitOperations.delete(exitOperation); }
 }
 
 async function runImproveNodeFlow(node) {
+  const boardId = state.currentBoardId, generation = state.boardLoadGeneration, account = state.user;
   if (isBoardReadOnly()) {
     setSaveStatus("Read-only board");
     return;
@@ -17017,6 +17316,7 @@ async function runImproveNodeFlow(node) {
       <button type="button" id="improve-ai-run" disabled>Improve</button>
     </div>
   </div>`;
+  overlay.dataset.workspaceBoardPreview = 'true';
   document.body.appendChild(overlay);
 
   const optionWrap = overlay.querySelector("#improve-ai-options");
@@ -17077,6 +17377,7 @@ async function runImproveNodeFlow(node) {
   cancelBtn.addEventListener("click", () => overlay.remove());
 
   runBtn.addEventListener("click", async () => {
+    if (boardId !== state.currentBoardId || generation !== state.boardLoadGeneration || account !== state.user) { overlay.remove(); return; }
     const instruction = selectedLabel === "Custom" ? customInput.value.trim() : selectedInstruction;
     if (!instruction) return;
     const originalLabel = el.improveNodeButton.textContent;
@@ -17088,6 +17389,8 @@ async function runImproveNodeFlow(node) {
     optionWrap.style.pointerEvents = "none";
     customInput.disabled = true;
     startThinking();
+    const exitOperation = Symbol('runImproveNodeFlow');
+    workspaceExitOperations.add(exitOperation);
     try {
       const refined = await refineNodeWithAI(node, instruction);
       node.title = refined?.title || node.title;
@@ -17112,6 +17415,7 @@ async function runImproveNodeFlow(node) {
       customInput.disabled = false;
       stopThinking();
     } finally {
+      workspaceExitOperations.delete(exitOperation);
       el.improveNodeButton.disabled = false;
       el.improveNodeButton.textContent = originalLabel;
     }
@@ -18047,6 +18351,9 @@ async function preflightLinkedInPublish(input) {
   return result;
 }
 async function publishLinkedInNow(input) {
+  const exitOperation = Symbol('publishLinkedInNow');
+  workspaceExitOperations.add(exitOperation);
+  try {
   const provider=String(getNode(input.nodeId)?.social?.platform||'').toLowerCase()==='facebook'?'facebook':'linkedin';
   const response = await fetch(`/api/social-publishing/${provider}/publish`, { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json", "x-client-request-id": input.clientRequestId }, body: JSON.stringify(input) });
   const parsed=await readAuthoritativeJson(response),raw=parsed.value||{};
@@ -18054,6 +18361,7 @@ async function publishLinkedInNow(input) {
   const result=projection?projection.result:{...raw,clientRequestId:raw.client_request_id,serverRequestId:raw.server_request_id,jobId:raw.job_id,providerAttemptId:raw.provider_attempt_id,jobState:raw.job_state,providerAttemptState:raw.provider_attempt_state,publishedAt:raw.published_at,externalUrl:raw.external_url};
   if(!parsed.valid||(projection?!projection.valid:result.clientRequestId!==input.clientRequestId||typeof result.status!=="string"))throw Object.assign(new Error(projection?.category||parsed.category||'response_contract_invalid'),{jobId:result.jobId||"",serverRequestId:result.serverRequestId||""});
   return result;
+  } finally { workspaceExitOperations.delete(exitOperation); }
 }
 async function readFacebookEngagement(input){const clientRequestId=`engagement_${Date.now().toString(36)}_${Math.random().toString(36).slice(2,9)}`;const response=await fetch(`/api/social-publishing/facebook/engagement?boardId=${encodeURIComponent(input.boardId)}&nodeId=${encodeURIComponent(input.nodeId)}&clientRequestId=${encodeURIComponent(clientRequestId)}`,{credentials:"same-origin",headers:{accept:"application/json"}});const parsed=await readAuthoritativeJson(response),raw=parsed.value||{};if(!parsed.valid||raw.client_request_id!==clientRequestId)return{ok:false,status:raw.status||"provider_temporarily_unavailable"};return{ok:raw.ok===true,status:raw.status,metrics:raw.metrics,refreshedAt:raw.refreshed_at,reconnectRequired:raw.reconnect_required===true};}
 async function readLinkedInPublicationStatus(jobId){const response=await fetch(`/api/social-publishing/jobs/${encodeURIComponent(jobId)}`,{credentials:"same-origin",headers:{accept:"application/json"}});const parsed=await readAuthoritativeJson(response),raw=parsed.value||{},result={...raw,serverRequestId:raw.server_request_id,jobId:raw.job_id,providerAttemptId:raw.provider_attempt_id,jobState:raw.job_state,providerAttemptState:raw.provider_attempt_state,publishedAt:raw.published_at,externalUrl:raw.external_url};if(!parsed.valid||result.jobId!==jobId||typeof result.status!=="string")throw new Error(parsed.category);return result;}
@@ -19753,12 +20061,37 @@ function navigateCreatedProject(outcome) {
 }
 
 function showUnsavedLeaveModal() {
+  const { workspace = false } = arguments[0] || {};
   return new Promise((resolve) => {
     const overlay = document.createElement('div');
     overlay.className = 'brand-confirm-modal';
     overlay.innerHTML = `<div class="brand-confirm-card"><h3>You have unsaved changes</h3><p>Creating a new board will leave this board. Make sure your current changes are saved before continuing.</p><div class="brand-confirm-actions"><button type="button" id="leave-cancel">Cancel</button><button type="button" class="primary-add" id="leave-continue">Continue</button></div></div>`;
+    if (workspace) {
+      overlay.querySelector('h3').textContent = uiText('Switch Workspace?');
+      overlay.querySelector('p').textContent = uiText('Switching Workspaces discards unsaved Canvas changes. Cancel and save this Board first if you want to keep them. Switching does not save changes.');
+      overlay.querySelector('#leave-continue').textContent = uiText('Discard and switch');
+      overlay.querySelector('#leave-cancel').textContent = uiText('Cancel');
+    }
+    overlay.setAttribute('role', 'dialog'); overlay.setAttribute('aria-modal', 'true');
+    overlay.setAttribute('aria-label', overlay.querySelector('h3').textContent);
+    const previousFocus = document.activeElement;
     document.body.appendChild(overlay);
-    const close = (v) => { overlay.remove(); resolve(v); };
+    const escape = event => {
+      if (event.key === 'Escape') { event.preventDefault(); close(false); }
+      if (event.key === 'Tab') {
+        event.preventDefault();
+        const cancel = overlay.querySelector('#leave-cancel'), discard = overlay.querySelector('#leave-continue');
+        (document.activeElement === cancel ? discard : cancel).focus();
+      }
+    };
+    const close = (v) => {
+      if (showUnsavedLeaveModal.cancelWorkspace === cancelWorkspace) showUnsavedLeaveModal.cancelWorkspace = null;
+      document.removeEventListener('keydown', escape); overlay.remove(); previousFocus?.focus?.(); resolve(v);
+    };
+    const cancelWorkspace = () => close(false);
+    if (workspace) showUnsavedLeaveModal.cancelWorkspace = cancelWorkspace;
+    document.addEventListener('keydown', escape);
+    overlay.querySelector('#leave-cancel').focus();
     overlay.addEventListener('click', (e) => { if (e.target === overlay) close(false); });
     overlay.querySelector('#leave-cancel').addEventListener('click', () => close(false));
     overlay.querySelector('#leave-continue').addEventListener('click', () => close(true));

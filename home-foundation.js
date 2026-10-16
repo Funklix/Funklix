@@ -88,7 +88,12 @@
       const placeholder = node('option', '', t('Choose a Workspace')); placeholder.value = ''; placeholder.disabled = true; select.append(placeholder);
       for (const w of c.catalog.workspaces) { const option = node('option', '', w.name); option.value = w.id; select.append(option); }
       select.value = m.workspace?.id || '';
-      select.addEventListener('change', () => { const id = select.value; if (model(context()).ready) void actions.workspace(id); });
+      select.addEventListener('change', () => {
+        const id = select.value;
+        // Keep the confirmed context visible while leave/access checks run.
+        select.value = model(context()).workspace?.id || '';
+        if (model(context()).ready) void actions.workspace(id);
+      });
       if (c.catalog.workspaces.length) { nav.append(label, select); host.append(nav); }
       if (!m.workspace) {
         host.append(message(c.catalog.workspaces.length ? 'Choose your working context' : 'Your first Workspace starts here',

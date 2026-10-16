@@ -12,6 +12,17 @@
   const STORAGE_KEY = "funklix.languagePreferences.v1";
   const LANGUAGE_NAMES = Object.freeze({ en: "English", de: "German", es: "Spanish" });
   const german = {
+    "Switch Workspace?": "Workspace wechseln?",
+    "Switching Workspaces discards unsaved Canvas changes. Cancel and save this Board first if you want to keep them. Switching does not save changes.": "Beim Workspace-Wechsel werden ungespeicherte Canvas-Änderungen verworfen. Brich ab und speichere zuerst dieses Board, wenn du sie behalten möchtest. Der Wechsel speichert keine Änderungen.",
+    "Discard and switch": "Verwerfen und wechseln",
+    "Wait for the Board to finish loading before switching Workspaces.": "Warte, bis das Board vollständig geladen ist, bevor du den Workspace wechselst.",
+    "Finish the Board save or conflict decision before switching Workspaces.": "Schließe das Speichern des Boards oder die Konfliktentscheidung ab, bevor du den Workspace wechselst.",
+    "Save or retry the pending responsibilities before switching Workspaces.": "Speichere die ausstehenden Zuständigkeiten oder versuche es erneut, bevor du den Workspace wechselst.",
+    "Wait for the current Board operation to finish before switching Workspaces.": "Warte, bis der aktuelle Board-Vorgang abgeschlossen ist, bevor du den Workspace wechselst.",
+    "Wait for the Brand Profile operation to finish before switching Workspaces.": "Warte, bis der Brand-Profile-Vorgang abgeschlossen ist, bevor du den Workspace wechselst.",
+    "Workspace access could not be verified. Try again when you are online.": "Der Workspace-Zugriff konnte nicht geprüft werden. Versuche es erneut, wenn du online bist.",
+    "This Workspace is no longer accessible.": "Dieser Workspace ist nicht mehr zugänglich.",
+
     "Create project": "Projekt erstellen",
     "YOUR CREATIVE WORKSPACE": "DEIN KREATIVER WORKSPACE",
     "A home for your next idea.": "Ein Zuhause für deine nächste Idee.",
