@@ -1,0 +1,62 @@
+[
+  {
+    "viewport": 1440,
+    "theme": "light",
+    "language": "en",
+    "large": false,
+    "accentTextContrast": 7.046906118350439,
+    "width": 1120,
+    "scroll": 1120,
+    "overflow": []
+  },
+  {
+    "viewport": 1440,
+    "theme": "dark",
+    "language": "de",
+    "large": false,
+    "accentTextContrast": 6.240336154402789,
+    "width": 1120,
+    "scroll": 1120,
+    "overflow": []
+  },
+  {
+    "viewport": 375,
+    "theme": "light",
+    "language": "en",
+    "large": false,
+    "accentTextContrast": 7.046906118350439,
+    "width": 343,
+    "scroll": 343,
+    "overflow": []
+  },
+  {
+    "viewport": 320,
+    "theme": "dark",
+    "language": "de",
+    "large": false,
+    "accentTextContrast": 6.240336154402789,
+    "width": 288,
+    "scroll": 288,
+    "overflow": []
+  },
+  {
+    "viewport": 768,
+    "theme": "system",
+    "language": "en",
+    "large": false,
+    "accentTextContrast": 6.240336154402789,
+    "width": 647.9375,
+    "scroll": 648,
+    "overflow": []
+  },
+  {
+    "viewport": 720,
+    "theme": "light",
+    "language": "de",
+    "large": true,
+    "accentTextContrast": 7.046906118350439,
+    "width": 676.8125,
+    "scroll": 677,
+    "overflow": []
+  }
+]

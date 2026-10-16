@@ -3151,6 +3151,7 @@ let brandProfileAdvanced = false;
 let brandProfilePage = null;
 let sidebarBrandProjection = null;
 let workspaceSidebarController = null;
+let homeFoundationController = null;
 const sidebarProfileCache = new Map();
 const pendingBrandProfileData = new Map();
 
@@ -4918,6 +4919,7 @@ function renderWorkspaceSidebar() {
     state.session.workspaceId = model.activeWorkspaceId;
     state.session.brandId = model.activeBrandId;
   }
+  if (typeof homeFoundationController !== 'undefined') homeFoundationController?.sync();
 }
 
 async function selectSessionWorkspace(workspaceId) {
@@ -5013,6 +5015,7 @@ function loadAuthorizedWorkspaceCatalog(identity = (state.user?.email || "").tri
   const confirmed = current.identity === identity ? current.value : null;
   const lifecycle = { status: confirmed ? "refreshing" : "loading", value: confirmed, activeWorkspaceId: confirmed ? current.activeWorkspaceId : null, error: null, generation, identity, promise: null };
   state.workspaceCatalog = lifecycle;
+  if (typeof homeFoundationController !== 'undefined') homeFoundationController?.sync();
   lifecycle.promise = window.FunklixWorkspaceCatalog.load().then((catalog) => {
     if (state.workspaceCatalog !== lifecycle || lifecycle.generation !== generation || identity !== (state.user?.email || "").trim().toLowerCase()) return null;
     lifecycle.status = "ready"; lifecycle.value = catalog; lifecycle.promise = null;
@@ -7422,6 +7425,7 @@ function renderDashboardContinueWorking() {
 }
 
 function refreshDashboardIfVisible() {
+  if (typeof homeFoundationController !== 'undefined' && homeFoundationController) { homeFoundationController.sync(); return; }
   if (!el.dashboardView || el.dashboardView.classList.contains("hidden")) return;
   renderDashboardHero();
   renderDashboardContinueWorking();
@@ -17930,6 +17934,7 @@ function setActiveView(view) {
   globalThis.FunklixWorkspaceSidebarController?.close(false);
   if (state.activeView !== view && (state.activeView === "board" || view === "board") && typeof resetAdaptiveCanvasView === "function") resetAdaptiveCanvasView();
   state.activeView = view;
+  if (typeof homeFoundationController !== 'undefined') homeFoundationController?.sync();
   const isHome = view === "home";
   const isBrandCore = view === "brand-core";
   el.dashboardView?.classList.toggle("hidden", !isHome);
@@ -17954,7 +17959,7 @@ function setActiveView(view) {
   renderCompactContextBar(view);
   el.cycleViewButton.textContent =
     view === "home" ? "Home" : view === "board" ? "Board View" : view === "list" ? "List View" : view === "calendar" ? "Calendar View" : view === "content_workspace" ? "Content Workspace" : view === "boards_library" ? "Boards" : view === "insights" ? "Insights" : view === "funnel_simulator" ? "Funnel Simulator" : view === "ai_brain" ? "AI Brain" : "Brand Core";
-  if (isHome) {
+  if (isHome && !(typeof homeFoundationController !== 'undefined' && homeFoundationController)) {
     renderDashboardHero();
     renderDashboardContinueWorking();
     renderDashboardBrandEvolution();
@@ -18388,6 +18393,30 @@ workspaceSidebarController = window.FunklixWorkspaceSidebar?.create({
   onRetry: retryWorkspaceCatalog
 }) || null;
 globalThis.FunklixWorkspaceSidebarController = workspaceSidebarController;
+homeFoundationController = window.FunklixHomeFoundation?.create({
+  host: document.getElementById('home-foundation'), text: uiText,
+  context: () => ({ account: state.user, identity: state.workspaceCatalog.identity,
+    catalog: state.workspaceCatalog.value, status: state.workspaceCatalog.status,
+    generation: state.workspaceCatalog.generation, workspaceId: state.workspaceCatalog.activeWorkspaceId,
+    brandId: state.session.brandId, boardId: state.currentBoardId || getBoardIdFromPath(),
+    boardGeneration: state.boardLoadGeneration, view: state.activeView, language: state.uiLanguage,
+    publicToken: state.publicBoardToken, loading: state.isBoardLoading || state.initialServerLoadInFlight }),
+  actions: {
+    workspace: selectSessionWorkspace, brand: selectSessionBrand, profile: openRegularBrandProfile,
+    retry: retryWorkspaceCatalog,
+    accessLost: () => { clearWorkspaceCatalog(); void retryWorkspaceCatalog(); },
+    workspaceCreate: origin => workspaceSidebarController?.openCreate(origin),
+    brands: () => workspaceSidebarController?.openBrandManagement(),
+    signin: () => el.googleSigninButton?.click(),
+    create: () => el.boardsCreateButton?.click(), boards: () => el.boardsNavButton?.click(),
+    board: id => {
+      if (id === (state.currentBoardId || getBoardIdFromPath())) el.campaignCanvasNavButton?.click();
+      // Same full-route navigation used by the Board library's data-open-board
+      // handler: browser leave behavior, auth and hydration stay loader-owned.
+      else window.location.href = `/boards/${id}`;
+    }
+  }
+}) || null;
 renderWorkspaceSidebar();
 
 // Events

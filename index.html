@@ -11,6 +11,7 @@
     <script src="/theme-bootstrap.js"></script>
     <link rel="stylesheet" href="/styles.css" />
     <link rel="stylesheet" href="/workspace-sidebar.css" />
+    <link rel="stylesheet" href="/home-foundation.css" />
     <link rel="stylesheet" href="/ai-brain-learning-context.css" />
     <style>
       .canvas-toolbar { display: grid; grid-template-rows: auto auto; gap: 8px; width: 100%; min-width: 0; box-sizing: border-box; overflow: visible; }
@@ -487,8 +488,9 @@
           </div>
         </div>
 
-        <section id="dashboard-view" class="dashboard-view hidden" aria-labelledby="dashboard-title">
+        <section id="dashboard-view" class="dashboard-view home-foundation-page hidden" aria-label="Home">
           <div class="mission-control">
+            <div id="home-foundation"></div>
             <section class="mission-hero fk-section" aria-labelledby="dashboard-title">
               <div id="dashboard-hero-avatar" class="mission-avatar" aria-hidden="true">
                 <span id="dashboard-hero-avatar-initial">B</span>
@@ -596,7 +598,7 @@
               <section class="mission-card fk-card">
                 <div class="dashboard-card-header fk-card-header">
                   <span class="dashboard-kicker fk-badge">Live Campaigns</span>
-                  <h2 class="dashboard-card-title">No deployed campaigns yet</h2>
+                  <h2 class="dashboard-card-title">Campaign status unavailable</h2>
                 </div>
                 <p class="mission-muted">Live campaign status will appear here after deployment data exists. No fake analytics are shown.</p>
               </section>
@@ -604,12 +606,10 @@
               <section class="mission-card fk-card">
                 <div class="dashboard-card-header fk-card-header">
                   <span class="dashboard-kicker fk-badge">Team Activity</span>
-                  <h2 class="dashboard-card-title">Meaningful updates</h2>
+                  <h2 class="dashboard-card-title">No connected activity feed</h2>
                 </div>
                 <div class="mission-activity-list">
-                  <span>AI suggestion accepted</span>
-                  <span>Asset approved</span>
-                  <span>Campaign deployed</span>
+                  <span>Workspace activity is not available here. Open a Board to review its saved work.</span>
                 </div>
               </section>
             </div>
@@ -975,6 +975,7 @@
     <script src="/campaign-responsibilities.js"></script>
     <script src="/workspace-sidebar.js"></script>
     <script src="/canvas-learning-advisor.js"></script>
+    <script src="/home-foundation.js"></script>
     <script src="/app.js"></script>
   </body>
 </html>
