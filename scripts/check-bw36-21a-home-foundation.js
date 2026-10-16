@@ -158,6 +158,7 @@ async function browserChecks() {
     await page.waitForFunction(() => document.querySelector('#home-foundation [aria-labelledby="home-continue-title"]'));
     while (!release) await new Promise(resolve => setTimeout(resolve, 10));
     await page.locator('#home-workspace-select').selectOption(W2); release(); release = null;
+    await page.waitForFunction(id => state.workspaceCatalog.activeWorkspaceId === id, W2);
     assert.equal(await home(page).locator('.home-board-card').count(), 0); assert(!(await home(page).innerText()).includes('Atelier North'));
     await page.evaluate(() => { state.user = { email: 'new-account@example.test' }; renderAuthState(); });
     assert(!(await home(page).innerText()).includes('Studio North')); assert.equal(await home(page).locator('.home-brand-card').count(), 0);
