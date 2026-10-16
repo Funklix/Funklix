@@ -5,7 +5,7 @@ const crypto = require('node:crypto');
 const { pool } = require('./_boards-storage');
 const { getBoardAccess, normalizeEmail } = require('./_board-access');
 const { getBrandAccess } = require('./_brand-access');
-const { authorize } = require('./_brand-learnings');
+const { authorize, LearningError } = require('./_brand-learnings');
 
 const VERSION = 'approved_brand_learnings_v1';
 const BOARD_COLUMNS = 'id, name, owner_id, owner_email, brand_id, brand_core_snapshot, brand_core_source_revision, brand_core_source_updated_at, updated_at';
@@ -105,7 +105,16 @@ async function revalidate({ data, selected, user, db = pool }) {
         }
       }
     });
-  } catch (_) { fail('advice_context_changed', 409); }
+  } catch (error) {
+    if (error instanceof AdviceContextError) throw error;
+    // Only confirmed authorization changes are stale context. Transport, lock,
+    // schema and unexpected failures remain bounded unavailability, with no details.
+    if (error instanceof LearningError && ['AUTHENTICATION_REQUIRED', 'IDENTITY_INVALID',
+      'BRAND_UNAVAILABLE', 'BRAND_ACCESS_DENIED'].includes(error.code)) {
+      fail('advice_context_changed', 409);
+    }
+    fail('learning_context_unavailable');
+  }
 }
 
 const STOP = new Set(('a an and are as at be by for from how i in is it of on or that the this to we what which with would you your '
