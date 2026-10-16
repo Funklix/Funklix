@@ -28,10 +28,12 @@ async function main() {
       if (url.pathname.startsWith('/api/') && method !== 'GET' && !url.pathname.includes('/presence/')) f.writes.push({ path: url.pathname, method, body: req.postDataJSON() });
       const pending = f.pending.find(x => !x.used && x.match(url.pathname, method));
       if (pending) {
-        pending.used = true; pending.started.resolve(); await pending.release.promise;
+        pending.used = true; pending.requestUrl = url.href; pending.started.resolve(); await pending.release.promise;
         if (pending.abort) return intercept.abort('failed');
         return intercept.fulfill(pending.response);
       }
+      if (f.aiResponses?.[url.pathname]) return intercept.fulfill(f.aiResponses[url.pathname]);
+      if (url.pathname === '/generated-header.png') return intercept.fulfill({ contentType: 'image/png', body: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jV1sAAAAASUVORK5CYII=', 'base64') });
       if (url.pathname === '/api/auth/session') return intercept.fulfill({ json: { user: f.signedIn ? { email: EMAIL, name: 'Local User' } : null } });
       if (url.pathname === '/api/workspaces') return intercept.fulfill(f.failCatalog ? { status: 503, json: {} } : { json: f.catalog });
       if (url.pathname === '/api/boards' && method === 'GET') return intercept.fulfill({ json: { boards: r.db.boards } });
@@ -86,7 +88,227 @@ async function main() {
     assert.equal(data.view, 'home'); assert.equal(data.path, '/'); assert.equal(data.snapshot, true);
     assert(!(await f.page.locator('#home-foundation').innerText()).includes('Outgoing confidential'));
   }
+  const generatedImage = 'http://localhost/generated-header.png';
+  const aiReply = { title: 'Generated title', content: 'Generated copy', caption: 'Generated caption #Marketing', imageUrl: generatedImage };
+  async function prepareAi(f, kind) {
+    await f.page.evaluate(kind => {
+      const node = state.nodes[0];
+      node.type = kind === 'header' ? 'Landing Page' : kind.startsWith('social') ? 'Social Media Posting' : 'Content';
+      node.social = { platform: 'LinkedIn', caption: 'Original caption', preview: 'Original CTA', hashtags: ['#Original'] };
+      node.landingPage = { headerVisualPrompt: 'Original visual prompt' };
+      updateNodeCard(node); state.selectedPrimary = node.id; state.selectedIds = new Set([node.id]); fillInspector(node);
+      updateInspectorActionVisibility(); refreshLastSavedSnapshot(); state.isDirty = false; clearAutosaveTimer();
+    }, kind);
+    f.writes.length = 0;
+    f.aiResponses = { '/api/refine-node': { json: aiReply } };
+  }
+  async function startAi(f, kind) {
+    await f.page.evaluate(kind => {
+      if (kind === 'header') el.generateHeaderVisualButton.click();
+      else if (kind.startsWith('social')) {
+        const label = { social: 'Regenerate Caption', 'social-cta': 'Regenerate CTA', 'social-hashtags': 'Regenerate Hashtags' }[kind];
+        [...el.zoomLayer.querySelectorAll('button')].find(b => b.textContent === label).click();
+      } else window.pendingSuggestion = createSuggestedNodeFromAnalysis({ recommendedNodeType: kind === 'suggest-social' ? 'Social Media Posting' : kind === 'suggest-landing' ? 'Landing Page' : 'Content', title: 'Suggested content', description: 'Suggested description', reason: 'Local evidence', suggestedStrategy: { channel: 'LinkedIn' } });
+    }, kind);
+  }
+  const aiEndpoint = kind => kind === 'header' ? '/api/generate-image' : '/api/refine-node';
+  const settleAi = f => f.page.waitForFunction(() => workspaceExitOperations.size === 0);
+  async function observeMutations(f) {
+    await f.page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    await f.page.evaluate(() => {
+      window.staleCalls = [];
+      for (const name of ['updateNodeCard', 'fillInspector', 'saveCampaignCanvasState', 'addEdge', 'setSaveStatus', 'renderCampaignCanvasFromStateIfNeeded']) {
+        const original = window[name]; window[name] = (...args) => { window.staleCalls.push(name); return original(...args); };
+      }
+      window.retiredSnapshot = JSON.stringify(serializeState());
+    });
+  }
+  async function noStaleMutations(f) {
+    assert.deepEqual(await f.page.evaluate(() => window.staleCalls), []);
+    assert.equal(await f.page.evaluate(() => JSON.stringify(serializeState()) === window.retiredSnapshot), true);
+    assert.equal(await f.page.evaluate(() => state.autosaveTimer), null);
+    assert.equal(await f.page.evaluate(() => !window.outgoingAiNode || JSON.stringify(window.outgoingAiNode) === window.outgoingAiSnapshot), true);
+  }
   try {
+    for (const kind of ['social', 'social-cta', 'social-hashtags', 'header', 'suggest', 'suggest-social', 'suggest-landing']) {
+      await check(kind + ' real AI response holds Workspace exit, preserves output and Cancel retains it', async () => {
+        const f = await fixture(); await prepareAi(f, kind);
+        const hold = f.hold(p => p === aiEndpoint(kind), { json: aiReply });
+        await startAi(f, kind); await hold.started.promise;
+        const before = await scope(f.page);
+        assert.equal(await f.page.evaluate(id => selectSessionWorkspace(id), W2), false);
+        assert.equal(await scope(f.page), before);
+        hold.release.resolve(); await settleAi(f);
+        const output = await f.page.evaluate(kind => kind === 'header' ? state.nodes[0].images.at(-1).url : kind === 'social' ? state.nodes[0].social.caption : kind === 'social-cta' ? state.nodes[0].social.preview : kind === 'social-hashtags' ? state.nodes[0].social.hashtags.join(' ') : state.nodes.at(-1).content, kind);
+        assert.match(output, kind === 'header' ? /generated-header\.png$/ : /Generated|Marketing/);
+        const completed = await scope(f.page);
+        await begin(f.page); await f.page.locator('#leave-cancel').click();
+        assert.equal(await f.page.evaluate(() => window.switchResult), false); assert.equal(await scope(f.page), completed);
+        await begin(f.page); await f.page.locator('#leave-continue').click(); await cleanExit(f);
+        await f.page.waitForTimeout(3100);
+        assert.equal(f.writes.filter(w => /^\/api\/boards/.test(w.path)).length, 0);
+        await f.close();
+      });
+      for (const outcome of ['success', 'failure']) await check(kind + ' stale ' + outcome + ' cannot mutate a new Board with the same node ID', async () => {
+        const f = await fixture(); await prepareAi(f, kind);
+        const hold = f.hold(p => p === aiEndpoint(kind), outcome === 'failure' ? { status: 503, json: { error: 'Local generation failure' } } : { json: aiReply });
+        await startAi(f, kind); await hold.started.promise;
+        const retiredId = await f.page.evaluate(() => { window.outgoingAiNode = state.nodes.at(-1); window.outgoingAiSnapshot = JSON.stringify(window.outgoingAiNode); return window.outgoingAiNode.id; });
+        // Normal navigation is held. Also exercise retirement from another lifecycle
+        // owner, followed by the real loader with an overlapping node ID.
+        await f.page.evaluate(() => { retireBoardForWorkspaceSwitch(); history.replaceState({}, '', '/'); });
+        f.r.db.boards[0].canvas_json.nodes[0].id = retiredId;
+        await f.page.evaluate(id => loadBoardFromUrlIfPresent(id), SHARED);
+        await f.page.evaluate(() => { clearAutosaveTimer(); stopPresenceLite(); stopBoardRefreshPolling(); });
+        await observeMutations(f); const writes = f.writes.length;
+        hold.release.resolve(); await settleAi(f);
+        await noStaleMutations(f);
+        assert.equal(f.writes.length, writes, 'Stale suggestion must not dispatch its next AI stage or save');
+        assert.equal(await f.page.evaluate(() => state.currentBoardId), SHARED);
+        assert.equal(await f.page.evaluate(() => state.nodes[0].title), 'Outgoing confidential idea');
+        await f.close();
+      });
+      await check(kind + ' failed generation releases its hold and preserves existing failure behavior', async () => {
+        const f = await fixture(); await prepareAi(f, kind);
+        const hold = f.hold(p => p === aiEndpoint(kind), { status: 503, json: { error: 'Local generation failure' } });
+        const before = await scope(f.page); await startAi(f, kind); await hold.started.promise;
+        assert.equal(await f.page.evaluate(id => selectSessionWorkspace(id), W2), false);
+        hold.release.resolve(); await settleAi(f);
+        if (kind.startsWith('suggest')) {
+          // Analysis suggestions intentionally retain their existing local fallback.
+          assert.equal(await f.page.evaluate(() => state.nodes.length), 2);
+          await begin(f.page); await f.page.locator('#leave-continue').click();
+        } else {
+          assert.equal(await scope(f.page), before);
+          assert.equal(await f.page.evaluate(id => selectSessionWorkspace(id), W2), true);
+        }
+        await cleanExit(f); await f.close();
+      });
+    }
+    for (const stage of [1, 2, 3, 4]) await check('multi-stage landing suggestion rejects retirement at stage ' + (stage + 1), async () => {
+      const f = await fixture(); await prepareAi(f, 'suggest-landing');
+      const holds = Array.from({ length: stage + 1 }, () => f.hold(p => p === '/api/refine-node', { json: aiReply }));
+      await startAi(f, 'suggest-landing');
+      for (let i = 0; i < stage; i++) { await holds[i].started.promise; holds[i].release.resolve(); }
+      await holds[stage].started.promise;
+      await f.page.evaluate(() => { retireBoardForWorkspaceSwitch(); history.replaceState({}, '', '/'); });
+      await observeMutations(f); const writes = f.writes.length;
+      holds[stage].release.resolve(); await settleAi(f); await noStaleMutations(f);
+      assert.equal(f.writes.length, writes); await f.close();
+    });
+    await check('catalog refresh keeps a valid Board generation result', async () => {
+      const f = await fixture(); await prepareAi(f, 'social');
+      const hold = f.hold(p => p === '/api/refine-node', { json: aiReply });
+      await startAi(f, 'social'); await hold.started.promise;
+      await f.page.evaluate(() => { state.workspaceCatalog = { ...state.workspaceCatalog, activeWorkspaceId: null, generation: state.workspaceCatalog.generation + 1 }; });
+      hold.release.resolve(); await settleAi(f);
+      assert.match(await f.page.evaluate(() => state.nodes[0].social.caption), /Generated/); await f.close();
+    });
+    for (const invalidation of ['account', 'generation', 'node']) await check('social completion rejects changed ' + invalidation + ' identity', async () => {
+      const f = await fixture(); await prepareAi(f, 'social');
+      const hold = f.hold(p => p === '/api/refine-node', { json: aiReply });
+      await startAi(f, 'social'); await hold.started.promise;
+      await f.page.evaluate(invalidation => {
+        if (invalidation === 'account') state.user = { ...state.user, email: 'changed@test.invalid' };
+        if (invalidation === 'generation') state.boardLoadGeneration++;
+        if (invalidation === 'node') state.nodes[0] = { ...state.nodes[0] };
+      }, invalidation);
+      await observeMutations(f); hold.release.resolve(); await settleAi(f); await noStaleMutations(f); await f.close();
+    });
+    for (const kind of ['refine', 'review', 'image', 'next-step', 'platform', 'full-pack', 'posting-visual']) await check('existing ' + kind + ' asynchronous node mutation still holds Workspace exit', async () => {
+      const f = await fixture(); await prepareAi(f, 'suggest');
+      const endpoint = { refine: '/api/refine-node', review: '/api/review-node', image: '/api/generate-image', 'next-step': '/api/generate-next-step', platform: '/api/refine-node', 'full-pack': '/api/refine-node', 'posting-visual': '/api/generate-posting-visual' }[kind];
+      const hold = f.hold(p => p === endpoint, { status: 503, json: { error: 'Local generation failure' } });
+      await f.page.evaluate(kind => {
+        const node = state.nodes[0];
+        if (kind === 'platform') { node.type = 'Social Media Posting'; updateNodeCard(node); }
+        let target = node;
+        if (kind === 'posting-visual') { node.images = [{ id: 'source', url: 'http://localhost/generated-header.png' }]; target = createNode({ type: 'Social Media Posting', initial: { title: 'Local visual' }, position: { x: 400, y: 0 } }); addEdge(node.id, target.id); }
+        window.existingMutation = kind === 'posting-visual' ? generatePostingVisualForNode(target) : kind === 'refine' ? runInlineRefine(node, 'Local instruction') : kind === 'review' ? reviewNodeWithAI(node) : kind === 'image' ? generateImageForNode(node) : kind === 'next-step' ? generateNextStepFromNode(node) : kind === 'platform' ? regenerateSocialForPlatform(node) : generateFullContentPack(node);
+        window.existingMutation = window.existingMutation.catch(() => null);
+      }, kind);
+      await hold.started.promise;
+      assert.equal(await f.page.evaluate(id => selectSessionWorkspace(id), W2), false);
+      hold.release.resolve(); await f.page.evaluate(() => window.existingMutation); await settleAi(f);
+      await f.close();
+    });
+    for (const retired of [false, true]) await check('Facebook publication reconciliation respects ' + (retired ? 'retired' : 'current') + ' Board identity', async () => {
+      const f = await fixture(); await prepareAi(f, 'social');
+      await f.page.evaluate(() => { state.nodes[0].social.platform = 'Facebook'; window.FacebookSettings.refresh = async () => {}; });
+      const hold = f.hold(p => p === '/api/social-publishing/facebook/publication', { json: {} });
+      await f.page.evaluate(() => { window.facebookRefresh = refreshFacebookWorkspaceSnapshot(); }); await hold.started.promise;
+      if (retired) {
+        await f.page.evaluate(() => { retireBoardForWorkspaceSwitch(); history.replaceState({}, '', '/'); });
+        await f.page.evaluate(id => loadBoardFromUrlIfPresent(id), SHARED);
+      }
+      await f.page.evaluate(() => {
+        clearAutosaveTimer(); stopPresenceLite(); stopBoardRefreshPolling(); window.reconcileCalls = [];
+        window.FunklixContentWorkspace = { ...window.FunklixContentWorkspace, reconcileFacebookPublication: (...args) => window.reconcileCalls.push(args) };
+      });
+      // Match the real wire contract so the test reaches reconciliation if the
+      // lifecycle check is removed.
+      hold.response = { headers: { 'content-type': 'application/json', 'x-request-id': 'local-publication' }, json: { contract_version: 'bw32.3.9-v1', server_request_id: 'local-publication', client_request_id: new URL(hold.requestUrl).searchParams.get('clientRequestId'), ok: true, status: 'published', provider: 'facebook', finalized: true } };
+      hold.release.resolve(); await f.page.evaluate(() => window.facebookRefresh);
+      assert.equal(await f.page.evaluate(() => window.reconcileCalls.length), retired ? 0 : 1); await f.close();
+    });
+    await check('retired header response leaves a newer header generation and its controls untouched', async () => {
+      const f = await fixture(); await prepareAi(f, 'header');
+      const originalLabel = await f.page.locator('#generate-header-visual-btn').textContent();
+      const old = f.hold(p => p === '/api/generate-image', { json: aiReply });
+      await startAi(f, 'header'); await old.started.promise;
+      await f.page.evaluate(() => { retireBoardForWorkspaceSwitch(); history.replaceState({}, '', '/'); });
+      f.r.db.boards[0].canvas_json.nodes[0].type = 'Landing Page';
+      f.r.db.boards[0].canvas_json.nodes[0].social = { platform: 'LinkedIn', caption: '', preview: '', hashtags: [] };
+      f.r.db.boards[0].canvas_json.nodes[0].landingPage = { headerVisualPrompt: 'Incoming header prompt' };
+      await f.page.evaluate(id => loadBoardFromUrlIfPresent(id), SHARED);
+      await f.page.evaluate(() => { stopPresenceLite(); stopBoardRefreshPolling(); clearAutosaveTimer(); state.selectedPrimary = state.nodes[0].id; state.selectedIds = new Set([state.selectedPrimary]); fillInspector(state.nodes[0]); });
+      assert.equal(await f.page.locator('#generate-header-visual-btn').textContent(), originalLabel);
+      const fresh = f.hold(p => p === '/api/generate-image', { json: { imageUrl: generatedImage + '?incoming=1' } });
+      await startAi(f, 'header'); await fresh.started.promise; await observeMutations(f);
+      old.release.resolve(); await f.page.waitForFunction(() => workspaceExitOperations.size === 1);
+      await noStaleMutations(f);
+      assert.equal(await f.page.locator('#generate-header-visual-btn').textContent(), 'Generating...');
+      assert.equal(await f.page.locator('#generate-header-visual-btn').isDisabled(), true);
+      fresh.release.resolve(); await settleAi(f);
+      assert.equal(await f.page.evaluate(() => state.nodes[0].images.length), 1);
+      assert.equal(await f.page.evaluate(() => state.nodes[0].images[0].url), generatedImage + '?incoming=1');
+      assert.equal(await f.page.locator('#generate-header-visual-btn').textContent(), originalLabel); await f.close();
+    });
+    for (const kind of ['social', 'header']) await check(kind + ' completion remains valid after cancelling an open Workspace confirmation', async () => {
+      const f = await fixture(); await prepareAi(f, kind); await dirty(f.page);
+      await begin(f.page); await f.page.locator('#leave-cancel').waitFor();
+      const hold = f.hold(p => p === aiEndpoint(kind), { json: aiReply });
+      await startAi(f, kind); await hold.started.promise;
+      await f.page.locator('#leave-cancel').click();
+      assert.equal(await f.page.evaluate(() => window.switchResult), false);
+      hold.release.resolve(); await settleAi(f);
+      assert.equal(await f.page.evaluate(() => state.currentBoardId), D);
+      assert.equal(await f.page.evaluate(() => state.workspaceCatalog.activeWorkspaceId), W);
+      assert.equal(await f.page.evaluate(kind => kind === 'header' ? state.nodes[0].images.length : state.nodes[0].social.caption.includes('Generated'), kind), kind === 'header' ? 1 : true);
+      await f.close();
+    });
+    await check('late Facebook settings refresh cannot start reconciliation for a replacement Board', async () => {
+      const f = await fixture(); await prepareAi(f, 'social');
+      await f.page.evaluate(() => {
+        state.nodes[0].social.platform = 'Facebook'; refreshLastSavedSnapshot();
+        window.FacebookSettings.refresh = () => new Promise(resolve => { window.releaseSettings = resolve; });
+        window.facebookRefresh = refreshFacebookWorkspaceSnapshot();
+      });
+      assert.equal(await f.page.evaluate(id => selectSessionWorkspace(id), W2), true); await cleanExit(f);
+      f.r.db.boards[0].canvas_json.nodes[0].type = 'Social Media Posting';
+      f.r.db.boards[0].canvas_json.nodes[0].social = { platform: 'Facebook', caption: 'Incoming caption', preview: '', hashtags: [] };
+      f.aiResponses['/api/social-publishing/facebook/publication'] = { json: {} };
+      await f.page.evaluate(id => loadBoardFromUrlIfPresent(id), SHARED);
+      await f.page.evaluate(() => { clearAutosaveTimer(); stopPresenceLite(); stopBoardRefreshPolling(); });
+      await f.page.waitForFunction(() => !state.presencePingInFlight && !state.boardRefreshInFlight);
+      await f.page.evaluate(() => {
+        window.originalFetch = window.fetch; window.lateReconciliationReads = [];
+        window.fetch = (...args) => { window.lateReconciliationReads.push(args[0]); return window.originalFetch(...args); };
+        window.releaseSettings();
+      });
+      await f.page.evaluate(() => window.facebookRefresh);
+      assert.deepEqual(await f.page.evaluate(() => window.lateReconciliationReads), []); await f.close();
+    });
     await check('clean saved Board retires state, permissions, snapshot and local projection without persistence writes', async () => {
       const f = await fixture(), persisted = clone(f.r.db.boards);
       assert.equal(await f.page.evaluate(id => selectSessionWorkspace(id), W2), true); await cleanExit(f);
