@@ -433,5 +433,7 @@ jobs:
         run: npm run check:bw25.2
       - name: Check BW-36.21A-R2.2 multiple Workspaces and direct Brand navigation
         run: npm run check:bw36.21ar2.2
+      - name: Check BW-36.21A-R2.3 Brand and Board context consistency
+        run: npm run check:bw36.21ar2.3
       - name: Check Knowledge Module browser globals
         run: node scripts/check-knowledge-module-browser-globals.js

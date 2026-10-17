@@ -3029,6 +3029,7 @@ async function pollBoardForRemoteChanges() {
     if (data?.brand_id === null || typeof data?.brand_id === "string") {
       invalidateBoardBrandAssociation();
       state.boardBrandAssociation.brandId = data.brand_id;
+      state.boardBrandAssociation.visibility = data.brand_visibility === 'hidden' ? 'hidden' : data.brand_id === null ? 'unbranded' : 'visible';
       state.boardBrandAssociation.boardId = String(data.id);
       renderBoardBrandAssociation();
     }
@@ -4670,6 +4671,8 @@ function invalidateBoardBrandAssociation({ clearBoard = false, loadingBoardId = 
   const current = state.boardBrandAssociation;
   state.boardBrandAssociation = {
     brandId: clearBoard ? null : current.brandId,
+    visibility: clearBoard ? null : current.visibility,
+    hydratedGeneration: clearBoard || loadingBoardId ? null : current.hydratedGeneration,
     boardId: loadingBoardId || (clearBoard ? "" : current.boardId),
     status: loadingBoardId ? "loading" : "idle",
     generation: current.generation + 1,
@@ -4867,6 +4870,7 @@ async function submitBoardBrandAssociation(event) {
       return;
     }
     association.brandId = data.brand_id;
+    association.visibility = data.brand_id === null ? 'unbranded' : 'visible';
     association.boardId = boardId;
     association.status = "saved";
     association.intendedBrandId = null;
@@ -4972,6 +4976,62 @@ function renderWorkspaceSidebar() {
     }
   }
   if (typeof homeFoundationController !== 'undefined') homeFoundationController?.sync();
+  renderBrandBoardContextNotice();
+}
+
+function brandBoardNavigationContext() {
+  const boardId = state.currentBoardId || getBoardIdFromPath();
+  const association = state.boardBrandAssociation;
+  const hydrated = boardId && association.boardId === boardId && !state.isBoardLoading && !state.isBoardHydrating
+    && state.boardAccess?.canView === true && (association.hydratedGeneration === state.boardLoadGeneration
+      || (state.authoritativeBoardBrandCore.boardId === boardId && state.authoritativeBoardBrandCore.loadGeneration === state.boardLoadGeneration));
+  return { account: state.user, identity: state.workspaceCatalog.identity,
+    catalog: state.workspaceCatalog.value, status: state.workspaceCatalog.status,
+    workspaceId: state.workspaceCatalog.activeWorkspaceId, brandId: selectedBrandPreferenceId(), boardId,
+    openBoard: hydrated ? { name: state.currentBoardName || uiText('Current Board'), brandId: association.brandId, canEdit: state.boardAccess.canEdit,
+      unassigned: association.visibility === 'unbranded' && !association.brandId } : null,
+    publicToken: state.publicBoardToken };
+}
+
+function openSelectedBrandBoards() {
+  el.boardsNavButton?.click();
+  setBoardsLibraryScope('brand');
+}
+
+function renderBrandBoardContextNotice() {
+  const host = document.getElementById('brand-board-context-notice');
+  if (!host || !window.FunklixHomeFoundation) return;
+  const context = brandBoardNavigationContext();
+  if (!['board', 'list'].includes(state.activeView)) context.openBoard = null;
+  window.FunklixHomeFoundation.renderContextNotice(host, context, uiText, {
+    continue: () => el.campaignCanvasNavButton?.click(), boards: openSelectedBrandBoards, profile: openRegularBrandProfile
+  });
+}
+
+async function adoptLoadedBoardBrandPreference(board, origin) {
+  // Hydration must succeed first. A pending catalog read may authorize display,
+  // but cannot confer membership through the Board response itself.
+  if (origin.catalog.promise) await origin.catalog.promise;
+  if (state.user !== origin.account || state.user?.email !== origin.email
+    || state.workspaceCatalog !== origin.catalog || state.workspaceCatalog.status !== 'ready'
+    || state.workspaceCatalog.identity !== (origin.email || '').trim().toLowerCase()
+    || origin.workspaceGeneration !== state.workspaceCatalog.generation
+    || origin.preference !== brandSwitcherPreferenceGeneration || state.publicBoardToken
+    || origin.load !== state.boardLoadGeneration || state.currentBoardId !== board.id
+    || state.boardAccess?.canView !== true || state.boardBrandAssociation.hydratedGeneration !== origin.load
+    || state.boardBrandAssociation.boardId !== board.id
+    || state.boardBrandAssociation.brandId !== (board.brand_visibility === 'hidden' ? null : board.brand_id)
+    || board.id !== (getBoardIdFromPath() || state.currentBoardId)) return;
+  refreshActiveWorkspaceContext();
+  const workspace = state.workspaceCatalog.value?.workspaces.find(w => w.id === state.workspaceCatalog.activeWorkspaceId);
+  const associated = board.brand_visibility !== 'hidden' && workspace?.brands.find(b => b.id === board.brand_id);
+  const applicable = workspace && (!board.workspace_id || board.workspace_id === workspace.id)
+    && (board.workspace_id === workspace.id || workspace.boards.some(b => b.id === board.id));
+  const selected = applicable ? associated : null;
+  brandSwitcherPreferenceGeneration += 1;
+  ephemeralBrandSwitcherSelection = selected ? { id: selected.id, name: selected.name, restored: false } : null;
+  state.session.brandId = selected?.id || null;
+  renderWorkspaceSidebar(); handleWorkspaceBrandSelectionChange({ invalidateCreation: false });
 }
 
 // These counters belong to the existing Workspace/Board lifecycle. They do not
@@ -6428,7 +6488,7 @@ function renderAiBrainFormattedAnswer(container, answer) {
 }
 function captureAiBrainAdvisorIdentity(requestId = state.aiBrain.requestId) {
   const displayName = String(resolveBrandWorkspaceDisplayName() || "Tendra One AI Brain").trim().slice(0, 80);
-  const approved = getSafeDashboardAvatarImageUrl(getApprovedBrandAvatarUrl());
+  const approved = getSafeDashboardAvatarImageUrl(getApprovedBrandAvatarUrl(state.brandCore));
   return Object.freeze({ avatarSource: approved || "", fallback: approved ? "brand-avatar" : "funklix-brain", label: displayName, boardId: String(state.currentBoardId || ""), brandId: String(state.boardBrandAssociation?.brandId || ""), lifecycle: state.boardLoadGeneration, requestId });
 }
 function createAiBrainAdvisorAvatar(identity = captureAiBrainAdvisorIdentity()) {
@@ -9646,6 +9706,8 @@ async function loadBoardFromUrlIfPresent(requestedBoardId = null) {
   const boardId = requestedBoardId || getBoardIdFromPath() || state.currentBoardId;
   if (!boardId) return false;
   const loadGeneration = state.boardLoadGeneration + 1;
+  const navigationOrigin = { account: state.user, email: state.user?.email, catalog: state.workspaceCatalog,
+    preference: brandSwitcherPreferenceGeneration, workspaceGeneration: state.workspaceCatalog.generation, load: loadGeneration };
   resetAdaptiveCanvasView();
   state.boardLoadGeneration = loadGeneration;
   clearInspectorSectionRoute();
@@ -9666,12 +9728,14 @@ async function loadBoardFromUrlIfPresent(requestedBoardId = null) {
   renderBrandCoreTiles();
   renderBrandCoreEditor();
   debugBrandBrainScope("board-load-start", { boardId, storageKey: brandBrainStorageKey(boardId) });
+  let hydratedBoard = null;
   try {
     const response = await fetch(`/api/boards/${boardId}`, { headers: boardReadHeaders() });
     const data = await response.json();
     if (!response.ok) throw new Error(data?.error || 'Failed to load board');
     const stillCurrent = loadGeneration === state.boardLoadGeneration
       && boardId === (getBoardIdFromPath() || state.currentBoardId)
+      && state.user === navigationOrigin.account
       && userEmail === (state.user?.email || "").trim().toLowerCase();
     if (!stillCurrent) return false;
     if (String(data?.id || "") !== String(boardId) || (data?.brand_visibility !== "hidden" && !isValidBoardBrandId(data?.brand_id))) {
@@ -9690,6 +9754,7 @@ async function loadBoardFromUrlIfPresent(requestedBoardId = null) {
     renderCompactContextBar();
     state.lastKnownUpdatedAt = data?.updated_at || null;
     state.boardBrandAssociation.brandId = data?.brand_visibility === "hidden" ? null : data.brand_id;
+    state.boardBrandAssociation.visibility = data?.brand_visibility === 'hidden' ? 'hidden' : data.brand_id === null ? 'unbranded' : 'visible';
     state.boardBrandAssociation.boardId = String(data.id);
     refreshActiveWorkspaceContext();
     state.boardBrandAssociation.status = "idle";
@@ -9719,6 +9784,8 @@ async function loadBoardFromUrlIfPresent(requestedBoardId = null) {
     startPresenceLite();
     startBoardRefreshPolling();
     schedulePostHydrationCanvasDensity(loadGeneration, data.id);
+    state.boardBrandAssociation.hydratedGeneration = loadGeneration;
+    hydratedBoard = data;
     return true;
   } catch (error) {
     if (loadGeneration === state.boardLoadGeneration && boardId === (getBoardIdFromPath() || state.currentBoardId)) {
@@ -9743,9 +9810,16 @@ async function loadBoardFromUrlIfPresent(requestedBoardId = null) {
       state.initialServerLoadInFlight = false;
       state.isBoardLoading = false;
       state.isBoardHydrating = false;
+      if (hydratedBoard) {
+        // Optional navigation rendering cannot turn successful Canvas hydration
+        // into a Board access failure or clear its authoritative snapshot.
+        try { await adoptLoadedBoardBrandPreference(hydratedBoard, navigationOrigin); }
+        catch (_) { console.warn('[Funklix Navigation] Board Brand preference could not be updated.'); }
+      }
       synchronizeResponsibilityToolbar();
       renderBoardBrandAssociation();
       refreshDashboardIfVisible();
+      renderWorkspaceSidebar();
     }
   }
 }
@@ -13838,7 +13912,7 @@ function campaignV3ProgressSummary(setup = {}) {
 }
 
 function campaignV3AvatarMarkup({ complete = false } = {}) {
-  const avatarUrl = getApprovedBrandAvatarUrl();
+  const avatarUrl = getApprovedBrandAvatarUrl(state.brandCore);
   return `
     <div class="campaign-v3-avatar-wrap ${complete ? "is-complete" : ""}">
       <div class="campaign-v3-avatar-orbit" aria-hidden="true"></div>
@@ -14126,7 +14200,7 @@ function updateCampaignEstimate(overlay) {
 function createCampaignLoadingOverlay(setup = {}) {
   const overlay = document.createElement("div");
   overlay.className = "campaign-loading-overlay";
-  const avatarUrl = getApprovedBrandAvatarUrl();
+  const avatarUrl = getApprovedBrandAvatarUrl(state.brandCore);
   overlay.innerHTML = `
     <div class="campaign-loading-card">
       <div class="campaign-loading-avatar">${avatarUrl ? `<img src="${avatarUrl}" alt="Brand Avatar" />` : `<span>🤖</span>`}</div>
@@ -17027,8 +17101,8 @@ function formatAiReviewComment(review = {}) {
   ].filter((line) => line !== null).join("\n").trim();
 }
 
-function getApprovedBrandAvatarUrl() {
-  const core = state.activeView === 'brand-profile' && canonicalBrandDetail.status === 'ready' ? canonicalBrandDetail.brand?.brand_core : state.brandCore;
+function getApprovedBrandAvatarUrl(boardCore = null) {
+  const core = boardCore || (state.activeView === 'brand-profile' && canonicalBrandDetail.status === 'ready' ? canonicalBrandDetail.brand?.brand_core : state.brandCore);
   const brandDNA = core?.brandDNA;
   const avatar = brandDNA?.avatar;
   return brandDNA?.userApproved && avatar?.userApproved && avatar?.imageUrl ? avatar.imageUrl : "";
@@ -17043,7 +17117,7 @@ function addAiReviewPostitToNode(node, review) {
     id: `postit-${state.postitCounter++}`,
     authorName: "AI Review",
     authorEmail: "ai@funklix.local",
-    authorAvatar: getApprovedBrandAvatarUrl(),
+    authorAvatar: getApprovedBrandAvatarUrl(state.brandCore),
     user: "AI Review",
     time: nowString(),
     createdAt,
@@ -17061,7 +17135,7 @@ function addAiReviewPostitToNode(node, review) {
   updateNodeCard(node);
   const entry = appendActivity("ai_reviewed_node", { node, userName: "AI" });
   if (entry) {
-    entry.user = { name: "AI", email: "ai@funklix.local", avatar: getApprovedBrandAvatarUrl() };
+    entry.user = { name: "AI", email: "ai@funklix.local", avatar: getApprovedBrandAvatarUrl(state.brandCore) };
     renderActivityFeed();
   }
   saveCampaignCanvasState();
@@ -18309,6 +18383,7 @@ function setActiveView(view) {
   globalThis.FunklixWorkspaceSidebarController?.close(false);
   if (state.activeView !== view && (state.activeView === "board" || view === "board") && typeof resetAdaptiveCanvasView === "function") resetAdaptiveCanvasView();
   state.activeView = view;
+  renderBrandBoardContextNotice();
   if (typeof homeFoundationController !== 'undefined') homeFoundationController?.sync();
   const isHome = view === "home";
   const isBrandCore = view === "brand-core";
@@ -18790,7 +18865,7 @@ workspaceSidebarController = window.FunklixWorkspaceSidebar?.create({
 globalThis.FunklixWorkspaceSidebarController = workspaceSidebarController;
 homeFoundationController = window.FunklixHomeFoundation?.create({
   host: document.getElementById('home-foundation'), text: uiText,
-  context: () => ({ account: state.user, identity: state.workspaceCatalog.identity,
+  context: () => ({ ...brandBoardNavigationContext(), account: state.user, identity: state.workspaceCatalog.identity,
     catalog: state.workspaceCatalog.value, status: state.workspaceCatalog.status,
     generation: state.workspaceCatalog.generation, workspaceId: state.workspaceCatalog.activeWorkspaceId,
     brandId: state.session.brandId, boardId: state.currentBoardId || getBoardIdFromPath(),
@@ -18803,7 +18878,7 @@ homeFoundationController = window.FunklixHomeFoundation?.create({
     workspaceCreate: origin => workspaceSidebarController?.openCreate(origin),
     brands: () => workspaceSidebarController?.openBrandManagement(),
     signin: () => el.googleSigninButton?.click(),
-    create: () => el.boardsCreateButton?.click(), boards: () => el.boardsNavButton?.click(),
+    create: () => el.boardsCreateButton?.click(), boards: () => el.boardsNavButton?.click(), brandBoards: openSelectedBrandBoards,
     board: id => {
       if (id === (state.currentBoardId || getBoardIdFromPath())) el.campaignCanvasNavButton?.click();
       // Same full-route navigation used by the Board library's data-open-board
@@ -20357,8 +20432,8 @@ function setBoardsLibraryScope(scope) {
   void loadBoardsLibrary();
 }
 
-function handleWorkspaceBrandSelectionChange() {
-  invalidateBoardCreationContext();
+function handleWorkspaceBrandSelectionChange({ invalidateCreation = true } = {}) {
+  if (invalidateCreation) invalidateBoardCreationContext();
   renderBoardsLibraryControls();
   if (state.boardsLibraryRequest.scope !== 'brand') return;
   if (!getResolvedWorkspaceBrand()) {

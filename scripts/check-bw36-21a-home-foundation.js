@@ -28,7 +28,7 @@ function composition() {
   const order = clone(metadata);
   assert.deepEqual(model(c, metadata).boards.map(b => b.id), [D, D2, D3]);
   assert.deepEqual(metadata, order, 'Collection/manual library ordering is untouched');
-  assert.deepEqual(model({ ...c, boardId: null }, metadata).boards.map(b => b.id), [D2, D, D3]);
+  assert.deepEqual(model({ ...c, boardId: null }, metadata).boards.map(b => b.id), [D, D2, D3]);
   assert(model(c, metadata).partial); assert.equal(model(c, []).boards.length, 3);
   assert.equal(model(c, [{ id: D3, updated_at: 'invalid' }]).boards.find(b => b.id === D3).savedAt, undefined);
   assert.equal(model(c, metadata, 'brand').boards.length, 1);
@@ -42,7 +42,7 @@ function composition() {
   }
   const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
   assert(!/AI suggestion accepted|Asset approved|Campaign deployed|No deployed campaigns yet/.test(html));
-  console.log('PASS authorized composition, active priority, server dates, missing metadata, stable manual ordering, hidden associations and identity boundaries');
+  console.log('PASS authorized composition, Brand priority, server dates, missing metadata, stable manual ordering, hidden associations and identity boundaries');
 }
 
 async function browserChecks() {
