@@ -28,6 +28,7 @@ async function main() {
       if (u.pathname === '/api/workspaces') {
         if (method === 'GET') { f.gets++; return route.fulfill({ json: f.catalog }); }
         const body = q.postDataJSON(); f.posts.push(body);
+        if(f.conflict)return route.fulfill({status:409,json:{contract:'workspace_create_v2',error:{code:'WORKSPACE_CREATE_CONFLICT'}}});
         const existing = f.catalog.workspaces.find(w => w.id === body.workspace_id);
         const workspace = { id: body.workspace_id, name: body.name, role: 'owner', revision: 1, brands: [], boards: [] };
         if (!existing) f.catalog.workspaces.push({ ...workspace, avatar_url: null, locale: 'en' });
@@ -134,6 +135,16 @@ async function main() {
       assert.equal(f.posts.length, 1); await form.getByRole('button', { name: 'Cancel' }).click();
       form = await openCreate(f); await form.getByText('Workspace created.', { exact: true }).waitFor();
       assert.equal(f.posts.length, 2); assert.deepEqual(f.posts[0], f.posts[1]); assert.equal(f.catalog.workspaces.length, 2); await f.close();
+    });
+    await check('definitive UUID conflict refreshes access and allows an explicit fresh creation', async () => {
+      const f=await fixture(),p=f.page;f.conflict=true;
+      const gets=f.gets;let form=await openCreate(f,'Conflicting request');
+      await form.getByText('This creation cannot be replayed.',{exact:false}).waitFor();
+      await p.waitForFunction(()=>state.workspaceCatalog.status==='ready');assert(f.gets>gets);
+      await form.getByRole('button',{name:'Cancel'}).click();f.conflict=false;
+      form=await openCreate(f,'Deliberately new Workspace');await form.getByText('Workspace created.',{exact:true}).waitFor();
+      assert.equal(f.posts.length,2);assert.notEqual(f.posts[0].workspace_id,f.posts[1].workspace_id);
+      assert.equal(f.posts[1].name,'Deliberately new Workspace');await f.close();
     });
     await check('first Workspace activates automatically through the same dialog', async () => {
       const f = await fixture({ empty: true }), form = await openCreate(f); await form.getByText('Workspace created.', { exact: true }).waitFor();
