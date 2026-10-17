@@ -11,7 +11,7 @@ async function main() {
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || '/usr/bin/chromium', args: ['--no-sandbox'] });
   let passed = 0;
   async function check(name, run) { await run(); passed++; console.log('PASS ' + name); }
-  async function fixture({ association = B, singleton = false, empty = false, role = 'owner', shared = false, catalogDelay = false, rich = false, inaccessible = false, readOnly = false } = {}) {
+  async function fixture({ association = B, singleton = false, empty = false, role = 'owner', shared = false, catalogDelay = false, rich = false, inaccessible = false, readOnly = false, catalogPending = false, catalogFailure = null, allowSave = false } = {}) {
     const r = runtime(); r.db.boards[0].brand_id = association === 'hidden' ? null : association; if(association==='hidden')r.db.boards[0].brand_visibility='hidden';
     r.db.boards[0].canvas_json.nodes = [{id:'saved-r22-node',type:'Idea',title:'Saved Board A',content:'Preserve this campaign',position:{x:10,y:10},images:[],tags:[],postits:[],variants:[],reactions:{},social:{},landingPage:{}}];
     if (!singleton) r.db.brands.push({ ...clone(r.db.brands[0]), id: Y, name: 'Navigation Brand Y' });
@@ -31,14 +31,23 @@ async function main() {
     if (empty) c.workspaces = [];
     if (shared) c.workspaces[0].boards = [];
     const f = { r, catalog: c, writes: [], errors: [], posts: [], gets: 0, timeout: false, hold: null };
+    if (catalogPending) f.catalogHold = defer();
+    f.failCatalog = catalogFailure === '503';
     const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } }); f.page = page; page.setDefaultTimeout(12000);
     page.on('pageerror', e => f.errors.push(e.message));
+    await page.addInitScript(() => {
+      const interval = window.setInterval;
+      window.setInterval = function(callback, ...args) {
+        if (callback.name === 'detectDirtyFromSnapshot') window.autosaveWatcherStarted = true;
+        return interval.call(this, callback, ...args);
+      };
+    });
     await page.route('**/*', async route => {
       const q = route.request(), u = new URL(q.url()), method = q.method(); assert.equal(u.hostname, 'localhost');
       if (u.pathname.startsWith('/api/') && method !== 'GET' && !u.pathname.includes('/presence/')) f.writes.push({ path: u.pathname, method });
       if (u.pathname === '/api/auth/session') return route.fulfill({ json: { user: { email: EMAIL } } });
       if (u.pathname === '/api/workspaces') {
-        if (method === 'GET') { f.gets++; if(catalogDelay)await new Promise(r=>setTimeout(r,200));if(f.catalogHold)await f.catalogHold.promise;return route.fulfill(f.failCatalog?{status:503,json:{error:{code:'DATABASE_UNAVAILABLE'}}}:{json:f.catalog}); }
+        if (method === 'GET') { f.gets++; if(catalogDelay)await new Promise(r=>setTimeout(r,200));if(f.catalogHold)await f.catalogHold.promise;if(catalogFailure==='network')return route.abort('failed');return route.fulfill(f.failCatalog?{status:503,json:{error:{code:'DATABASE_UNAVAILABLE'}}}:{json:f.catalog}); }
         const body = q.postDataJSON(); f.posts.push(body);
         if(f.conflict)return route.fulfill({status:409,json:{contract:'workspace_create_v2',error:{code:'WORKSPACE_CREATE_CONFLICT'}}});
         const existing = f.catalog.workspaces.find(w => w.id === body.workspace_id);
@@ -51,10 +60,15 @@ async function main() {
       if (u.pathname === '/api/boards') return route.fulfill({ json: { boards: r.db.boards } });
       if (u.pathname.startsWith('/api/boards/presence/')) return route.fulfill({ json: { viewers: [] } });
       if (/\/editors|\/sharing/.test(u.pathname)) return route.fulfill({ json: { editors: [] } });
-      if (u.pathname === '/api/boards/' + D) {
+      if (u.pathname === '/api/boards/' + D || u.pathname === '/api/boards/' + Y) {
+        if (method === 'PUT' && allowSave) {
+          const body = q.postDataJSON();
+          Object.assign(r.db.boards[0], {canvas_json: body.canvas_json, updated_at: new Date().toISOString()});
+          return route.fulfill({json: clone(r.db.boards[0])});
+        }
         assert.equal(method, 'GET', 'Navigation cannot mutate a Board');
         if (f.boardHold) { const hold=f.boardHold; f.boardHold=null; hold.started.resolve(); await hold.release.promise; if(hold.response)return route.fulfill({json:hold.response}); }
-        const board = clone(r.db.boards[0]); board.brand_id = association === 'hidden' ? null : association;if(association==='hidden')board.brand_visibility='hidden';
+        const board = clone(r.db.boards[0]); board.id = u.pathname.split('/').pop(); board.brand_id = association === 'hidden' ? null : board.id === Y ? Y : association;if(association==='hidden')board.brand_visibility='hidden';
         board.access = { role: readOnly?'viewer':'owner', canView: true, canEdit: !readOnly, canViewBoardBrandCore: !readOnly, canViewPresence: false };
         return route.fulfill({ json: board });
       }
@@ -65,7 +79,8 @@ async function main() {
       return route.fulfill({ contentType: file.endsWith('.html') ? 'text/html' : file.endsWith('.css') ? 'text/css' : file.endsWith('.svg') ? 'image/svg+xml' : file.endsWith('.png') ? 'image/png' : file.endsWith('.ico') ? 'image/x-icon' : 'application/javascript', body: fs.existsSync(file) ? fs.readFileSync(file) : '' });
     });
     await page.goto('http://localhost' + (empty ? '/' : '/boards/' + D));
-    await page.waitForFunction(() => state.workspaceCatalog.status === 'ready' && !state.isBoardLoading && !state.isBoardHydrating);
+    await page.waitForFunction(() => window.autosaveWatcherStarted && !state.isBoardLoading && !state.isBoardHydrating);
+    if (!catalogPending) await page.waitForFunction(failed => state.workspaceCatalog.status === (failed ? 'error' : 'ready'), Boolean(catalogFailure));
     await page.evaluate(() => { clearAutosaveTimer(); stopPresenceLite(); stopBoardRefreshPolling(); setSidebarCollapsed(false); });
     f.writes = [];
     f.snapshot = () => page.evaluate(() => JSON.stringify({ id: state.currentBoardId, nodes: state.nodes, edges: state.edges, association: state.boardBrandAssociation, snapshot: state.authoritativeBoardBrandCore, core: state.brandCore, dirty: state.isDirty, revision: state.lastKnownUpdatedAt }));
@@ -98,6 +113,106 @@ async function main() {
       assert.equal(await p.evaluate(()=>selectedBrandPreferenceId()),B);
       if(!catalogDelay){f.r.db.boards[0].workspace_id=W2;await p.reload();await settle(p);assert.equal(await p.evaluate(()=>selectedBrandPreferenceId()),null,'A conflicting response Workspace cannot borrow stale catalog association authority');}
       assert.deepEqual(f.writes,[]);await f.close();
+    });
+    for (const failure of [null, '503', 'network']) await check('deferred catalog ' + (failure || 'success') + ' cannot block boot, rendering or an ordinary autosave', async () => {
+      const f = await fixture({catalogPending:true, catalogFailure:failure, allowSave:true}), p = f.page;
+      assert.equal(await p.evaluate(() => state.workspaceCatalog.status), 'loading');
+      assert.equal(await p.locator('.node').count(), 1);
+      assert.equal(await p.evaluate(() => state.activeView), 'board');
+      assert.equal(await p.evaluate(() => selectedBrandPreferenceId()), null);
+      assert.deepEqual(f.writes, []);
+      const before = await canvas(p);
+      if (failure) {
+        f.catalogHold.resolve();
+        await p.waitForFunction(() => state.workspaceCatalog.status === 'error');
+        assert.equal(await canvas(p), before);
+        assert.equal(await p.evaluate(() => selectedBrandPreferenceId()), null);
+      }
+      // Change ordinary Canvas data; let the real watcher detect and save it.
+      await p.evaluate(() => { state.nodes[0].title = 'Edited while catalog unavailable'; });
+      await p.waitForFunction(() => !state.isDirty && !state.isSaving && state.lastSavedSnapshot.includes('Edited while catalog unavailable'));
+      assert.deepEqual(f.writes, [{path:'/api/boards/'+D, method:'PUT'}]);
+      assert.equal(f.r.db.boards[0].canvas_json.nodes[0].title, 'Edited while catalog unavailable');
+      f.writes = [];
+      const edited = await canvas(p);
+      if (!failure) {
+        f.catalogHold.resolve();
+        await p.waitForFunction(B => selectedBrandPreferenceId() === B, B);
+        assert.equal(await canvas(p), edited);
+      }
+      assert.deepEqual(f.writes, []);
+      await f.close();
+    });
+    await check('never-settling catalog leaves boot, hydration and autosave watcher complete', async () => {
+      const f = await fixture({catalogPending:true}), p = f.page;
+      assert.equal(await p.evaluate(() => state.workspaceCatalog.status), 'loading');
+      assert.equal(await p.evaluate(() => state.initialServerLoadInFlight), false);
+      assert.equal(await p.locator('.node').count(), 1);
+      assert.deepEqual(f.writes, []);
+      await f.close(); // No catalog release: success cannot depend on eventual settlement.
+    });
+    for (const change of ['board', 'same-board-generation', 'selection', 'workspace', 'account', 'visibility']) await check('late catalog revalidates ' + change + ' before preference adoption', async () => {
+      const f = await fixture({catalogPending:true}), p = f.page;
+      await p.evaluate(() => { window.pendingCatalogForTest = state.workspaceCatalog.promise; });
+      if (change === 'board') {
+        assert.equal(await p.evaluate(Y => { history.replaceState({}, '', '/boards/'+Y); return loadBoardFromUrlIfPresent(Y); }, Y), true);
+      } else if (change === 'same-board-generation') {
+        const hold = holdBoard(f);
+        hold.response = {...clone(f.r.db.boards[0]), brand_id:Y, access:{role:'owner',canView:true,canEdit:true,canViewBoardBrandCore:true}};
+        const load = p.evaluate(D => loadBoardFromUrlIfPresent(D), D);
+        await hold.started.promise; hold.release.resolve();
+        assert.equal(await load, true);
+      } else if (change === 'selection') {
+        // The explicit neutral Brand choice remains available during catalog loading.
+        assert.equal(await p.evaluate(() => clearEphemeralBrandSwitcherSelection()), true);
+      } else if (change === 'workspace') {
+        await p.evaluate(() => { retireBoardForWorkspaceSwitch(); state.workspaceCatalog.generation++; });
+      } else if (change === 'account') {
+        await p.evaluate(() => { state.user = {email:'replacement@example.test'}; clearWorkspaceCatalog(); });
+      } else {
+        f.catalog.workspaces[0].brands = f.catalog.workspaces[0].brands.filter(b => b.id !== B);
+        f.catalog.workspaces[0].boards[0].brand_id = null;
+      }
+      const before = await canvas(p);
+      f.catalogHold.resolve();
+      // Await the actual catalog + reconciliation microtasks, without a timing guess.
+      await p.evaluate(async () => { await window.pendingCatalogForTest; await Promise.resolve(); });
+      if (change === 'board' || change === 'same-board-generation') {
+        await p.waitForFunction(Y => selectedBrandPreferenceId() === Y, Y);
+        assert.equal(await p.evaluate(() => state.currentBoardId), change === 'board' ? Y : D);
+      } else {
+        assert.equal(await p.evaluate(() => selectedBrandPreferenceId()), null);
+      }
+      assert.equal(await canvas(p), before);
+      assert.deepEqual(f.writes, []);
+      await f.close();
+    });
+    await check('explicit Brand Y selection wins over a pending catalog refresh', async () => {
+      const f = await fixture(), p = f.page;
+      const hold = holdBoard(f), load = p.evaluate(D => loadBoardFromUrlIfPresent(D), D);
+      await hold.started.promise;
+      assert.equal(await p.evaluate(Y => selectSessionBrand(Y), Y), true);
+      f.catalogHold = defer();
+      await p.evaluate(() => { void retryWorkspaceCatalog(); });
+      hold.release.resolve();
+      assert.equal(await load, true);
+      const before = await canvas(p);
+      f.catalogHold.resolve();
+      await p.evaluate(async () => { await state.workspaceCatalog.promise; await Promise.resolve(); });
+      assert.equal(await p.evaluate(() => selectedBrandPreferenceId()), Y);
+      assert.equal(await canvas(p), before);
+      assert.deepEqual(f.writes, []);
+      await f.close();
+    });
+    await check('deferred hidden independently shared Board never borrows visible Brand authority', async () => {
+      const f = await fixture({catalogPending:true, association:'hidden', shared:true, singleton:true}), p = f.page;
+      const before = await canvas(p);
+      f.catalogHold.resolve();
+      await p.evaluate(async () => { await state.workspaceCatalog.promise; await Promise.resolve(); });
+      assert.equal(await p.evaluate(() => selectedBrandPreferenceId()), null);
+      assert.equal(await canvas(p), before);
+      assert.deepEqual(f.writes, []);
+      await f.close();
     });
     await check('selection mismatch, actual labels, same Canvas/snapshot, campaign/Brain authority, return to X clears notice',async()=>{
       const f=await fixture(),p=f.page,before=await canvas(p);await pick(p,Y);

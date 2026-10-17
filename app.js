@@ -5009,8 +5009,8 @@ function renderBrandBoardContextNotice() {
 }
 
 async function adoptLoadedBoardBrandPreference(board, origin) {
-  // Hydration must succeed first. A pending catalog read may authorize display,
-  // but cannot confer membership through the Board response itself.
+  // Optional navigation reconciliation runs independently of Board startup.
+  // Only the catalog can authorize Brand visibility after hydration succeeds.
   if (origin.catalog.promise) await origin.catalog.promise;
   if (state.user !== origin.account || state.user?.email !== origin.email
     || state.workspaceCatalog !== origin.catalog || state.workspaceCatalog.status !== 'ready'
@@ -9813,8 +9813,11 @@ async function loadBoardFromUrlIfPresent(requestedBoardId = null) {
       if (hydratedBoard) {
         // Optional navigation rendering cannot turn successful Canvas hydration
         // into a Board access failure or clear its authoritative snapshot.
-        try { await adoptLoadedBoardBrandPreference(hydratedBoard, navigationOrigin); }
-        catch (_) { console.warn('[Funklix Navigation] Board Brand preference could not be updated.'); }
+        // Never await the optional catalog here: boot must reach rendering and
+        // startAutosaveWatcher even if /api/workspaces never settles.
+        void adoptLoadedBoardBrandPreference(hydratedBoard, navigationOrigin).catch(() => {
+          console.warn('[Funklix Navigation] Board Brand preference could not be updated.');
+        });
       }
       synchronizeResponsibilityToolbar();
       renderBoardBrandAssociation();
