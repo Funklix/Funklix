@@ -26,7 +26,7 @@ async function main() {
       if (u.pathname.startsWith('/api/') && method !== 'GET' && !u.pathname.includes('/presence/')) f.writes.push({ path: u.pathname, method });
       if (u.pathname === '/api/auth/session') return route.fulfill({ json: { user: { email: EMAIL } } });
       if (u.pathname === '/api/workspaces') {
-        if (method === 'GET') { f.gets++; return route.fulfill({ json: f.catalog }); }
+        if (method === 'GET') { f.gets++;if(f.catalogHold)await f.catalogHold.promise;return route.fulfill(f.failCatalog?{status:503,json:{error:{code:'DATABASE_UNAVAILABLE'}}}:{json:f.catalog}); }
         const body = q.postDataJSON(); f.posts.push(body);
         if(f.conflict)return route.fulfill({status:409,json:{contract:'workspace_create_v2',error:{code:'WORKSPACE_CREATE_CONFLICT'}}});
         const existing = f.catalog.workspaces.find(w => w.id === body.workspace_id);
@@ -128,6 +128,28 @@ async function main() {
       await p.getByRole('button', { name: 'Discard and switch', exact: true }).click();
       await p.waitForFunction(id => state.workspaceCatalog.activeWorkspaceId === id, id);
       assert.equal(await p.evaluate(() => state.currentBoardId), null); assert.equal(await p.evaluate(() => state.nodes.length), 0); await f.close();
+    });
+    await check('first explicit switch waits for the delayed post-create catalog refresh', async () => {
+      const f=await fixture(),p=f.page;f.catalogHold=defer();
+      const form=await openCreate(f);await form.getByText('Workspace created.',{exact:true}).waitFor();
+      assert.equal(await p.evaluate(()=>state.workspaceCatalog.status),'refreshing');
+      await form.getByRole('button',{name:'Switch to new Workspace'}).click();
+      assert(await form.locator('[type=submit]').isDisabled());
+      assert((await form.locator('[role=status]').innerText()).includes('Checking access'));
+      assert.equal(await p.evaluate(()=>state.workspaceCatalog.activeWorkspaceId),W);
+      f.catalogHold.resolve();await p.waitForFunction(id=>state.workspaceCatalog.activeWorkspaceId===id,f.posts[0].workspace_id);
+      assert.equal(await p.locator('#workspace-create-dialog').count(),0);assert.equal(f.posts.length,1);await f.close();
+    });
+    await check('failed post-create refresh gives feedback and retries switching without another POST', async () => {
+      const f=await fixture(),p=f.page;f.failCatalog=true;
+      const form=await openCreate(f);await form.getByText('Workspace created.',{exact:true}).waitFor();
+      await p.waitForFunction(()=>state.workspaceCatalog.status==='stale');
+      await form.getByRole('button',{name:'Switch to new Workspace'}).click();
+      await form.getByText('Workspace created. Access could not be refreshed.',{exact:false}).waitFor();
+      assert.equal(await p.evaluate(()=>state.workspaceCatalog.activeWorkspaceId),W);
+      f.failCatalog=false;await form.getByRole('button',{name:'Switch to new Workspace'}).click();
+      await p.waitForFunction(id=>state.workspaceCatalog.activeWorkspaceId===id,f.posts[0].workspace_id);
+      assert.equal(f.posts.length,1);await f.close();
     });
     await check('timeout/lost response retries immutable UUID and name even after dialog dismissal', async () => {
       const f = await fixture(), p = f.page; f.timeout = true;

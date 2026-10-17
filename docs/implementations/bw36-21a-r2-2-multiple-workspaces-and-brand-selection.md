@@ -38,7 +38,7 @@ The Workspace primary key is the durable deduplication key. Identical concurrent
 
 The application captures the account object/email and catalog object/generation for the outstanding request. Obsolete or cross-account completions reject rather than announcing success or adopting state. The dialog retains immutable UUID/name/request ID across uncertain retries and dismissal/reopening in the same session. Duplicate submits are disabled and application single-flight rejects a competing creation. A definitive UUID conflict refreshes the catalog and retires the failed attempt, so closing/reopening the dialog can deliberately start a fresh creation. Uncertain network failures retain the original UUID. An account replacement or email change retires the dialog/attempt's authority.
 
-After confirmed reconciliation, `retryWorkspaceCatalog` deliberately leaves its ready short-circuit and performs the authorized GET. A refresh preserves an explicitly selected Workspace and revalidates the resulting context. A refresh failure cannot reinterpret a confirmed commit as an uncertain POST or trigger another creation. The existing catalog remains the only authorized Workspace membership projection.
+After confirmed reconciliation, `retryWorkspaceCatalog` deliberately leaves its ready short-circuit and performs the authorized GET. A refresh preserves an explicitly selected Workspace and revalidates the resulting context. The explicit switch waits for an outstanding post-create refresh before entering the protected lifecycle. If the read fails, the dialog keeps the confirmed creation, announces localized retry feedback and retries the authorized GET on another switch attempt, without another POST. Account identity is rechecked after that wait. A refresh failure cannot reinterpret a confirmed commit as an uncertain POST or trigger another creation. The existing catalog remains the only authorized Workspace membership projection.
 
 ## Three separate Brand identities
 
@@ -62,13 +62,22 @@ Existing DOM IDs, selectors, body-owned popovers, search, focus return and keybo
 
 Final local results: PASS. Initial failures were corrected and the affected suites rerun; the complete workflow and all retained assertions were exercised. All browser transport uses intercepted disposable fixtures and mocked providers. No paid provider calls or production data/SQL writes are performed.
 
-- `npm run check:bw36.21ar2.2`: **PASS**, 12 server/client groups and 16 Chromium groups, plus separately verified representative screenshot capture.
+- `npm run check:bw36.21ar2.2`: **PASS**, 12 server/client groups and 18 Chromium groups, plus separately verified representative screenshot capture.
 - The server suite also runs with `BW36_R22_LOCAL_POSTGRES=1` against an isolated loopback PostgreSQL database created and dropped by that run. Production connection variables are not used by that mode.
 - Focused coverage includes first/additional Workspace creation, member/viewer entitlement, same/different UUID concurrency, creator/input collision, replay/timeout, rollback, identity failures, v1 compatibility, malformed confirmation, populated reconciliation and account retirement.
 - Browser coverage includes actual populated Boards and exact Canvas/association/snapshot equality, branded/unbranded/hidden associations, selected Y and Board X campaign authority, Home All/Brand filters, explicit and regular Profile navigation, read-only viewers, reload, selectors at desktop/tablet/phone widths, search/keyboard focus, dirty Cancel/Discard switching, first activation, immutable retry after dismissal, cross-Workspace and logout rejection.
 - Existing R2.1/R1/R2 lifecycle coverage retains all 96 groups. Existing authorization, Brand lifecycle, logo, Profile decisions, project/campaign and Learning assertions are retained. Older fixture catalogs now carry their authenticated account identity, and context-reset fixtures initialize the existing navigation preference owner consistently. Only intentionally changed navigation/persistence expectations are updated, and formerly automatic Profile transitions now use the explicit nav action.
 - Complete Runtime Boot Safety: **PASS, 182/182 validation blocks**, including the new R2.2 gate. This is the consolidated result after initial failures were fixed and their affected validation blocks rerun; no failed assertion is waived. Dependencies and system Chromium are local setup; the CI browser installer remains unchanged. Local `--with-deps` installation requires root, so the installed system Chromium is used instead.
 - Final syntax, browser-script integrity (44 local classic scripts) and `git diff --check`: **PASS**.
+
+## Codex review feedback
+
+The automated review of `cbff228391` reported two P2 recovery issues on [PR #787](https://github.com/Funklix/Funklix/pull/787):
+
+- [Definitive creation conflicts retained the failed attempt](https://github.com/Funklix/Funklix/pull/787#discussion_r4302364436): fixed in `f3a3553`. The conflict refreshes access and retires the immutable attempt, while an uncertain transport failure retains it. A real dialog close/reopen regression verifies a deliberately new UUID/name can then succeed.
+- [Switch could be clicked before post-create refresh settled](https://github.com/Funklix/Funklix/pull/787#discussion_r4302364434): the switch now awaits that refresh, remains visibly pending, rechecks account identity and then enters the existing guarded lifecycle. A failed read gives localized feedback and a switch retry refreshes access without another POST. Delayed-success and failed-read/retry Chromium cases cover both paths.
+
+The final focused suite passes after both corrections. Remote CI and review of subsequent commits are reported on the PR; the fixes are not a claim that the bot independently reviewed the new head.
 
 ## Representative browser evidence
 

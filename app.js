@@ -18775,7 +18775,15 @@ workspaceSidebarController = window.FunklixWorkspaceSidebar?.create({
   onDeleteBrand: (brand, origin) => openBrandDeletion(brand, origin),
   onRename: renameSessionWorkspace,
   onCreate: createFirstSessionWorkspace,
-  onSwitchCreated: selectSessionWorkspace,
+  onSwitchCreated: async workspaceId => {
+    const account = state.user, email = (account?.email || '').trim().toLowerCase();
+    const catalog = state.workspaceCatalog;
+    if (catalog.promise) await catalog.promise;
+    else if (catalog.status !== 'ready') await retryWorkspaceCatalog();
+    if (state.user !== account || email !== (state.user?.email || '').trim().toLowerCase()) throw { code: 'STALE_OPERATION' };
+    if (state.workspaceCatalog.status !== 'ready') throw { code: 'CATALOG_UNAVAILABLE' };
+    return selectSessionWorkspace(workspaceId);
+  },
   creationIdentity: () => state.user,
   onRetry: retryWorkspaceCatalog
 }) || null;
