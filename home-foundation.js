@@ -11,17 +11,48 @@
     const brand = workspace?.brands.find(b => b.id === context.brandId) || null;
     const dates = new Map();
     for (const item of metadata) {
-      // Never use Canvas/default timestamps, collection names or associations.
+      // Never use Canvas/default timestamps, collection names or Brand IDs.
       const time = typeof item?.updated_at === 'string' && item.updated_at.trim() ? Date.parse(item.updated_at) : NaN;
-      if (typeof item?.id === 'string' && Number.isFinite(time)) dates.set(item.id, { time, savedAt: item.updated_at });
+      if (typeof item?.id === 'string') dates.set(item.id, {
+        ...(Number.isFinite(time) ? { time, savedAt: item.updated_at } : {}),
+        unassigned: item.unassigned === true
+      });
     }
     const boards = (workspace?.boards || []).filter(b => filter !== 'brand' || (brand && b.brand_id === brand.id))
       .map((board, index) => ({ ...board, brand: workspace.brands.find(b => b.id === board.brand_id) || null,
         active: board.id === context.boardId, index, ...dates.get(board.id) }))
-      .sort((a, b) => Number(b.active) - Number(a.active) || (b.time ?? -Infinity) - (a.time ?? -Infinity) || a.index - b.index);
+      .map(board => ({ ...board, group: !brand ? 'neutral' : board.brand?.id === brand.id ? 'connected' : board.brand ? 'other' : 'unassociated' }))
+      .sort((a, b) => (brand ? ['connected', 'other', 'unassociated'].indexOf(a.group) - ['connected', 'other', 'unassociated'].indexOf(b.group) : 0)
+        || (b.time ?? -Infinity) - (a.time ?? -Infinity) || a.index - b.index);
     return { ready, workspace, brand, boards, partial: boards.some(b => !b.savedAt),
       canCreate: Boolean(workspace && (['owner', 'admin'].includes(workspace.role)
         || workspace.brands.some(b => ['owner', 'admin', 'editor'].includes(b.role)))) };
+  }
+
+  // Both surfaces consume the same access-safe projection. No association or
+  // canonical Core is inferred from navigation preference or collection data.
+  function renderContextNotice(host, context, t, actions) {
+    const m = model(context), open = context.openBoard;
+    const boardBrand = m.workspace?.brands.find(b => b.id === open?.brandId);
+    const visible = Boolean(m.brand && open && (!boardBrand || boardBrand.id !== m.brand.id));
+    const focus = host.contains(host.ownerDocument.activeElement) ? host.ownerDocument.activeElement.dataset.contextAction : null;
+    host.hidden = !visible; host.replaceChildren();
+    if (!visible) return;
+    host.className = 'brand-board-context-notice';
+    const p = host.ownerDocument.createElement('p'); p.setAttribute('role', 'status');
+    const template = boardBrand ? 'Viewing {selected}. Your open Campaign Canvas belongs to {brand}.'
+      : open.unassigned ? 'Viewing {selected}. Your open Campaign Canvas has no Brand connected.'
+      : 'Viewing {selected}. The Brand association of your open Campaign Canvas is not available.';
+    p.textContent = t(template).replace(/\{(selected|brand)\}/g, (_, key) => key === 'selected' ? m.brand.name : boardBrand?.name || '');
+    const board = host.ownerDocument.createElement('span'); board.textContent = `${t('Currently open')}: ${open.name}`;
+    const controls = host.ownerDocument.createElement('div');
+    for (const [label, key] of [[open.canEdit === false ? 'Continue viewing the open Board' : 'Continue editing the open Board', 'continue'], ['Open Boards for selected Brand', 'boards'], ['Open selected Brand Profile', 'profile']]) {
+      const button = host.ownerDocument.createElement('button'); button.type = 'button'; button.className = 'fk-btn fk-btn-secondary';
+      button.textContent = t(label); button.dataset.contextAction = key;
+      button.addEventListener('click', () => actions[key](m.brand)); controls.append(button);
+    }
+    host.append(p, board, controls);
+    if (focus) host.querySelector(`[data-context-action="${focus}"]`)?.focus({ preventScroll: true });
   }
 
   function sameScope(a, b) {
@@ -65,6 +96,7 @@
     function draw() {
       const c = context(), m = model(c, rows, filter);
       const focused = host.contains(doc.activeElement) ? doc.activeElement.dataset.homeFocus : null;
+      const focusedContext = host.contains(doc.activeElement) ? doc.activeElement.dataset.contextAction : null;
       host.replaceChildren(); host.setAttribute('aria-busy', String(status === 'loading' || ['idle', 'loading', 'refreshing'].includes(c.status) && !!c.account));
       const hero = node('header', 'home-hero');
       const copy = node('div', 'home-hero-copy');
@@ -121,6 +153,9 @@
         orientation.append(node('p', 'home-note', t(c.boardId ? 'Select a Brand for navigation. The open Board keeps its saved Brand association.' : 'Select a Brand for context, or explore all visible Boards below.')));
       }
       host.append(orientation);
+      const contextNotice = node('aside'); contextNotice.dataset.homeContext = 'true';
+      renderContextNotice(contextNotice, c, t, { continue: () => actions.board(c.boardId), boards: actions.brandBoards, profile: actions.profile });
+      host.append(contextNotice);
       const section = node('section', 'home-continue'); section.setAttribute('aria-labelledby', 'home-continue-title');
       const top = node('div', 'home-section-heading'); const h2 = node('h2', '', t('Continue Working')); h2.id = 'home-continue-title';
       const controls = node('div', 'home-actions'); controls.append(button('Browse Boards', 'boards'));
@@ -141,12 +176,22 @@
         'Saved Boards available to you in this Workspace will appear here.', m.canCreate ? button('Create project', 'create') : button('Browse Boards', 'boards')));
       else {
         const list = node('ul', 'home-board-list');
+        let group = null;
         for (const board of m.boards) {
+          if (m.brand && board.group !== group) {
+            group = board.group;
+            const heading = node('li', 'home-board-group-heading');
+            heading.setAttribute('role', 'presentation');
+            heading.append(node('h3', '', t(group === 'connected' ? 'Connected Boards' : group === 'other' ? 'Other Boards' : 'Boards without a visible Brand')));
+            list.append(heading);
+          }
           const card = node('li', 'home-board-card'); card.classList.toggle('is-current', board.active);
           const mark = node('div', 'home-board-mark'); mark.append(identity(board.brand || { name: board.name }));
-          mark.append(node('span', 'home-eyebrow', t(board.active ? 'CURRENT BOARD' : 'SAVED BOARD'))); card.append(mark);
+          mark.append(node('span', 'home-eyebrow', t(board.active ? 'Currently open' : 'SAVED BOARD'))); card.append(mark);
           card.append(node('h3', '', board.name));
-          card.append(node('p', 'home-board-brand', board.brand?.name || t('No visible Brand association')));
+          const distinction = board.group === 'connected' ? 'Connected Board' : board.group === 'other' ? 'Other Brand Board' : '';
+          if (distinction) card.append(node('span', 'home-board-group', t(distinction)));
+          card.append(node('p', 'home-board-brand', board.brand?.name || t(board.unassigned ? 'No Brand connected' : 'No visible Brand association')));
           const saved = node('p', 'home-board-date');
           if (board.savedAt) { const time = node('time', '', new Intl.DateTimeFormat(c.language === 'de' ? 'de-DE' : 'en-GB', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(board.time))); time.dateTime = board.savedAt; saved.append(t('Last edited') + ' ', time); }
           else saved.textContent = t('Modification time unavailable');
@@ -161,6 +206,7 @@
       if (c.loading) section.append(node('p', 'home-note', t('A Board is loading. Please wait before opening another.')));
       host.append(section);
       if (focused) Array.from(host.querySelectorAll('[data-home-focus]')).find(e => e.dataset.homeFocus === focused)?.focus({ preventScroll: true });
+      if (focusedContext) contextNotice.querySelector(`[data-context-action="${focusedContext}"]`)?.focus({ preventScroll: true });
     }
     function invalidate() { request?.controller.abort(); request = null; rows = []; status = 'idle'; }
     function sync() {
@@ -185,7 +231,8 @@
         // Retain only permitted IDs and valid saved dates, never collection Core,
         // names, ownership, Canvas JSON or hidden Brand display projections.
         const allowed = new Set(model(current).workspace.boards.map(b => b.id));
-        rows = payload.boards.filter(b => allowed.has(b?.id)).map(b => ({ id: b.id, updated_at: b.updated_at })); status = 'ready';
+        rows = payload.boards.filter(b => allowed.has(b?.id)).map(b => ({ id: b.id, updated_at: b.updated_at,
+          unassigned: b.brand_visibility !== 'hidden' && Object.hasOwn(b, 'brand_id') && b.brand_id === null })); status = 'ready';
       } catch (error) {
         if (request !== token || !sameScope(current, context()) || error.name === 'AbortError') return;
         rows = []; status = 'error';
@@ -211,6 +258,6 @@
     });
     return Object.freeze({ sync, dispose() { disposed = true; invalidate(); host.replaceChildren(); } });
   }
-  root.FunklixHomeFoundation = Object.freeze({ model, sameScope, create });
+  root.FunklixHomeFoundation = Object.freeze({ model, sameScope, renderContextNotice, create });
   if (typeof module === 'object' && module.exports) module.exports = root.FunklixHomeFoundation;
 }(typeof globalThis !== 'undefined' ? globalThis : window));

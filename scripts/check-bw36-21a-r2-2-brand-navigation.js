@@ -97,7 +97,7 @@ async function main() {
       await p.waitForFunction(Y => canonicalBrandDetail.status === 'ready' && canonicalBrandDetail.brandId === Y, Y);
       await p.locator('#campaign-canvas-nav-btn').click(); assert.equal(await f.snapshot(), before);
       await p.evaluate(D => loadBoardFromUrlIfPresent(D), D); assert.equal(await p.evaluate(() => state.boardBrandAssociation.brandId), B);
-      assert.equal(await p.evaluate(() => state.session.brandId), Y); assert.deepEqual(f.writes, []); await f.close();
+      assert.equal(await p.evaluate(() => state.session.brandId), B, 'R2.3 reload adopts saved Board Brand'); assert.deepEqual(f.writes, []); await f.close();
     });
     await check('viewer singleton Profile is independently accessible and mobile selectors remain reachable', async () => {
       const f = await fixture({ singleton: true, role: 'viewer' }), p = f.page;

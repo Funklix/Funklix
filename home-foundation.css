@@ -51,3 +51,17 @@
   #home-foundation .home-board-card { padding: 20px; }
 }
 @media (prefers-reduced-motion: reduce) { #home-foundation * { transition: none !important; animation: none !important; } }
+
+/* R2.3: context information uses the same calm treatment on Home and Canvas. */
+.brand-board-context-notice[hidden] { display: none; }
+.brand-board-context-notice { margin: 16px; padding: 14px 18px; border: 1px solid var(--fk-color-border-subtle, var(--fk-border)); border-radius: 16px; background: var(--fk-color-surface-elevated, var(--fk-surface)); color: var(--fk-color-text-primary, var(--fk-text)); max-width: 100%; min-width: 0; overflow-wrap: anywhere; }
+#home-foundation .brand-board-context-notice { margin: 24px 0 0; }
+.brand-board-context-notice p { margin: 0 0 4px; font-size: .875rem; line-height: 1.5; }
+.brand-board-context-notice > span { color: var(--fk-color-text-secondary, var(--fk-text-muted)); font-size: .8rem; }
+.brand-board-context-notice > div { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.brand-board-context-notice button { min-height: 44px; white-space: normal; text-align: start; }
+.brand-board-context-notice button:focus-visible { outline: 3px solid var(--fk-color-focus-ring, #7257e8); outline-offset: 3px; }
+#home-foundation .home-board-group-heading { grid-column: 1 / -1; list-style: none; padding-top: 12px; color: var(--fk-color-text-secondary, var(--fk-text-muted)); }
+#home-foundation .home-board-group-heading h3 { font-size: .85rem; }
+#home-foundation .home-board-group { font-size: .75rem; color: var(--home-ink); }
+@media (max-width: 600px) { .brand-board-context-notice { margin: 8px; padding: 12px; } .brand-board-context-notice button { flex: 1 1 180px; } }

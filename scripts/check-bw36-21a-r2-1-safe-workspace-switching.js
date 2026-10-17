@@ -139,6 +139,10 @@ async function main() {
         assert.equal(await f.page.evaluate(id => selectSessionWorkspace(id), W2), false);
         assert.equal(await scope(f.page), before);
         hold.release.resolve(); await settleAi(f);
+        // Settle the real dirty watcher for this valid foreground output before
+        // testing Workspace decisions. Its ordinary autosave is not the pending
+        // response under test and must not race the fixture's discard path.
+        await f.page.evaluate(() => { detectDirtyFromSnapshot(); clearAutosaveTimer(); });
         const output = await f.page.evaluate(kind => kind === 'header' ? state.nodes[0].images.at(-1).url : kind === 'social' ? state.nodes[0].social.caption : kind === 'social-cta' ? state.nodes[0].social.preview : kind === 'social-hashtags' ? state.nodes[0].social.hashtags.join(' ') : state.nodes.at(-1).content, kind);
         assert.match(output, kind === 'header' ? /generated-header\.png$/ : /Generated|Marketing/);
         const completed = await scope(f.page);
@@ -344,7 +348,9 @@ async function main() {
           if (next === 'request-new-first') {
             fresh.release.resolve(); await f.page.waitForFunction(() => workspaceExitOperations.size === 1);
             assert.equal(await btn.textContent(), label); assert.equal(await btn.isDisabled(), false);
-            await f.page.evaluate(() => clearAutosaveTimer());
+            // The fresh response legitimately changed Canvas. Observe that
+            // change before attributing subsequent activity to the old response.
+            await f.page.evaluate(() => { detectDirtyFromSnapshot(); clearAutosaveTimer(); });
           }
           await observeMutations(f); const writes = f.writes.length;
           old.release.resolve();
