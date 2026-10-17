@@ -95,7 +95,7 @@ function documentFixture() {
   doc.body = doc.createElement('body'); doc.activeElement = doc.createElement('button'); return doc;
 }
 function loadBrowser(doc) {
-  const root = { document: doc, innerWidth: 1200, innerHeight: 800, addEventListener() {}, FunklixProjectCommand: command };
+  const root = { crypto: require('node:crypto'), document: doc, innerWidth: 1200, innerHeight: 800, addEventListener() {}, FunklixProjectCommand: command };
   for (const file of ['workspace-catalog.js', 'workspace-sidebar.js', 'project-dialog.js']) vm.runInNewContext(fs.readFileSync(file, 'utf8'), { globalThis: root });
   return root;
 }

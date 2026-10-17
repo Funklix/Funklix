@@ -3110,6 +3110,7 @@ async function persistBrandSwitcherPreference(userEmail, brandId, generation) {
 }
 
 async function restoreBrandSwitcherPreference(userEmail, entries, requestId, generation) {
+  if (state.workspaceCatalog) return; // R2.2 selection is session-scoped; ignore legacy browser hints.
   const key = await brandSwitcherPreferenceKey(userEmail);
   if (!key || generation !== brandSwitcherPreferenceGeneration) return;
   let parsed = null;
@@ -3151,7 +3152,12 @@ function renderEphemeralBrandSwitcherSelection() {
 }
 
 function selectedBrandPreferenceId() {
-  return ephemeralBrandSwitcherSelection?.id || null;
+  const catalog = state.workspaceCatalog;
+  if (!state.user?.email || state.publicBoardToken || catalog.status !== 'ready'
+    || catalog.identity !== state.user.email.trim().toLowerCase()) return null;
+  const workspace = catalog.value?.workspaces.find(w => w.id === catalog.activeWorkspaceId);
+  const id = ephemeralBrandSwitcherSelection?.id || state.session.brandId;
+  return workspace?.brands.some(b => b.id === id) ? id : null;
 }
 
 function clearEphemeralBrandSwitcherSelection({ close = false, persist = false } = {}) {
@@ -3159,6 +3165,8 @@ function clearEphemeralBrandSwitcherSelection({ close = false, persist = false }
   if (!closeCanonicalBrandDetail({ restoreFocus: false, resume: () => clearEphemeralBrandSwitcherSelection({ close, persist }) })) return false;
   brandSwitcherPreferenceGeneration += 1;
   ephemeralBrandSwitcherSelection = null;
+  state.session.brandId = null;
+  renderWorkspaceSidebar();
   renderEphemeralBrandSwitcherSelection();
   handleWorkspaceBrandSelectionChange();
   if (persist && userEmail) void removeBrandSwitcherPreference(userEmail);
@@ -3169,12 +3177,8 @@ function clearEphemeralBrandSwitcherSelection({ close = false, persist = false }
 function selectEphemeralBrandFromSwitcher(brand) {
   const userEmail = typeof state.user?.email === "string" ? state.user.email.trim().toLowerCase() : "";
   if (!userEmail || state.brandCatalog.status !== "success" || !state.brandCatalog.entries.some(({ id }) => id === brand.id)) return;
-  if (!closeCanonicalBrandDetail({ restoreFocus: false, resume: () => selectEphemeralBrandFromSwitcher(brand) })) return;
-  const generation = ++brandSwitcherPreferenceGeneration;
-  ephemeralBrandSwitcherSelection = { id: brand.id, name: brand.name.trim(), restored: false };
-  void persistBrandSwitcherPreference(userEmail, brand.id, generation);
+  if (!selectSessionBrand(brand.id)) return;
   renderEphemeralBrandSwitcherSelection();
-  handleWorkspaceBrandSelectionChange();
   renderBrandCatalog();
   if (el.brandSwitcherDetails) el.brandSwitcherDetails.open = false;
 }
@@ -3752,6 +3756,9 @@ async function loadCanonicalBrandDetail() {
 }
 
 function resolveRegularBrandProfile() {
+  const workspace = state.workspaceCatalog.value?.workspaces.find(w => w.id === state.workspaceCatalog.activeWorkspaceId);
+  const brand = workspace?.brands.find(b => b.id === state.session.brandId);
+  if (state.user?.email && !state.publicBoardToken && state.workspaceCatalog.status === 'ready' && brand) return { kind: 'brand', brand, workspace };
   return window.FunklixBrandProfileSetup.resolveEntry({
     signedIn: Boolean(state.user?.email), publicToken: state.publicBoardToken,
     status: state.workspaceCatalog.status, catalog: state.workspaceCatalog.value,
@@ -3775,7 +3782,7 @@ function renderBrandProfileEntryState(detail) {
       const choose = document.createElement('button'); choose.type = 'button'; choose.className = 'fk-btn fk-btn-secondary'; choose.textContent = brand.name;
       choose.addEventListener('click', () => {
         if (!selectSessionBrand(brand.id)) return;
-        canonicalBrandDetail.brandId = brand.id; void loadCanonicalBrandDetail();
+        openRegularBrandProfile(brand);
       });
       el.brandWorkspaceDetailContent.append(choose);
     }
@@ -3785,6 +3792,7 @@ function renderBrandProfileEntryState(detail) {
 function openRegularBrandProfile(target = null) {
   const workspace = target && state.workspaceCatalog.value?.workspaces.find(w => w.id === target.workspace_id);
   const targetBrand = workspace?.brands.find(b => b.id === target?.id);
+  if (target && (!targetBrand || workspace.id !== state.workspaceCatalog.activeWorkspaceId || state.workspaceCatalog.status !== 'ready' || !state.user?.email || state.publicBoardToken)) return;
   const entry = targetBrand && !state.publicBoardToken ? { kind: 'brand', brand: targetBrand, workspace } : resolveRegularBrandProfile();
   if (!closeCanonicalBrandDetail({ restoreFocus: false, navigate: false, resume: () => openRegularBrandProfile(target) })) return;
   canonicalBrandDetail.initialSection = target?.section === 'Brand Learnings' ? 'Brand Learnings' : null;
@@ -4128,7 +4136,7 @@ async function loadCanonicalBrandCatalog({ force = false } = {}) {
         state.brandCatalog.status = "success";
         state.brandCatalog.entries = data.brands.map(({ id, name, revision, created_at, updated_at, role }) => ({ id, name, revision, created_at, updated_at, role }));
         const hadSelectionBeforeValidation = Boolean(ephemeralBrandSwitcherSelection);
-        if (ephemeralBrandSwitcherSelection && !state.brandCatalog.entries.some(({ id }) => id === ephemeralBrandSwitcherSelection.id)) {
+        if (ephemeralBrandSwitcherSelection && !state.workspaceCatalog.value && !state.brandCatalog.entries.some(({ id }) => id === ephemeralBrandSwitcherSelection.id)) {
           const staleBrandId = ephemeralBrandSwitcherSelection.id;
           clearEphemeralBrandSwitcherSelection();
           void removeBrandSwitcherPreference(userEmail, staleBrandId);
@@ -4950,16 +4958,18 @@ function renderWorkspaceSidebar() {
   if (!workspaceSidebarController || !window.FunklixWorkspaceSidebar) return;
   const catalog = state.workspaceCatalog.value;
   const activeBoardId = state.currentBoardId || getBoardIdFromPath() || null;
-  const associationBrandId = activeBoardId && state.boardBrandAssociation.boardId === activeBoardId ? state.boardBrandAssociation.brandId : null;
   const model = workspaceSidebarController.render({
     signedIn: Boolean(state.user), status: state.workspaceCatalog.status, catalog,
     activeWorkspaceId: state.workspaceCatalog.activeWorkspaceId, boardId: activeBoardId,
-    brandId: associationBrandId || state.session.brandId
+    brandId: selectedBrandPreferenceId()
   });
   if (state.workspaceCatalog.status === "ready") {
     state.workspaceCatalog.activeWorkspaceId = model.activeWorkspaceId;
     state.session.workspaceId = model.activeWorkspaceId;
     state.session.brandId = model.activeBrandId;
+    if (ephemeralBrandSwitcherSelection && !model.brands.some(b => b.id === ephemeralBrandSwitcherSelection.id)) {
+      brandSwitcherPreferenceGeneration += 1; ephemeralBrandSwitcherSelection = null;
+    }
   }
   if (typeof homeFoundationController !== 'undefined') homeFoundationController?.sync();
 }
@@ -5168,13 +5178,13 @@ function selectSessionBrand(brandId) {
   if (!guardBrandProfileLeave(() => selectSessionBrand(brandId))) return false;
   const selectedWorkspace = state.workspaceCatalog.value?.workspaces?.find((item) => item.id === state.workspaceCatalog.activeWorkspaceId);
   const selected = selectedWorkspace?.brands.find((item) => item.id === brandId);
-  if (!selected || (state.currentBoardId || getBoardIdFromPath())) return false;
-  const reopen = !!el.brandWorkspaceDetail?.open;
-  if (!closeCanonicalBrandDetail({ restoreFocus: false, navigate: !reopen })) return false;
+  if (!state.user?.email || state.publicBoardToken || state.workspaceCatalog.status !== 'ready'
+    || state.workspaceCatalog.identity !== state.user.email.trim().toLowerCase() || !selected) return false;
+  if (!closeCanonicalBrandDetail({ restoreFocus: false })) return false;
+  brandSwitcherPreferenceGeneration += 1;
   state.session.brandId = selected.id;
   ephemeralBrandSwitcherSelection = { id: selected.id, name: selected.name, restored: false };
   renderWorkspaceSidebar(); renderBoardBrandAssociation(); handleWorkspaceBrandSelectionChange();
-  if (reopen) openRegularBrandProfile();
   return true;
 }
 
@@ -5208,6 +5218,7 @@ async function createSidebarBrand(input) {
 }
 
 function clearWorkspaceCatalog() {
+  brandSwitcherPreferenceGeneration += 1; ephemeralBrandSwitcherSelection = null;
   if (el.brandDeleteDialog?.open) { brandDeletion.status = "closed"; closeBrandDeletion({ restoreFocus: false }); }
   pendingBrandProfileData.clear();
   showProjectLaunchFeedback(null);
@@ -5221,6 +5232,7 @@ function clearWorkspaceCatalog() {
 }
 
 function retryWorkspaceCatalog() {
+  if (state.workspaceCatalog.status === 'ready' && !state.workspaceCatalog.promise) state.workspaceCatalog.status = 'stale';
   return loadAuthorizedWorkspaceCatalog((state.user?.email||"").trim().toLowerCase());
 }
 
@@ -5238,7 +5250,7 @@ function loadAuthorizedWorkspaceCatalog(identity = (state.user?.email || "").tri
     if (state.workspaceCatalog !== lifecycle || lifecycle.generation !== generation || identity !== (state.user?.email || "").trim().toLowerCase()) return null;
     lifecycle.status = "ready"; lifecycle.value = catalog; lifecycle.promise = null;
     lifecycle.activeWorkspaceId = window.FunklixWorkspaceCatalog.deriveActiveWorkspaceId(catalog, {
-      boardId: state.currentBoardId || getBoardIdFromPath(), brandId: state.session.brandId
+      boardId: state.currentBoardId || getBoardIdFromPath(), activeWorkspaceId: current.activeWorkspaceId, brandId: state.session.brandId
     });
     state.session.workspaceId = lifecycle.activeWorkspaceId;
     renderWorkspaceSidebar();
@@ -5257,7 +5269,7 @@ function loadAuthorizedWorkspaceCatalog(identity = (state.user?.email || "").tri
 function refreshActiveWorkspaceContext() {
   if (state.workspaceCatalog.status !== "ready" || !state.workspaceCatalog.value) return;
   state.workspaceCatalog.activeWorkspaceId = window.FunklixWorkspaceCatalog.deriveActiveWorkspaceId(state.workspaceCatalog.value, {
-    boardId: state.currentBoardId || getBoardIdFromPath(), brandId: state.session.brandId
+    boardId: state.currentBoardId || getBoardIdFromPath(), activeWorkspaceId: state.workspaceCatalog.activeWorkspaceId, brandId: state.session.brandId
   });
   state.session.workspaceId = state.workspaceCatalog.activeWorkspaceId;
   renderWorkspaceSidebar();
@@ -5272,22 +5284,32 @@ async function renameSessionWorkspace(workspace, name) {
 }
 
 let firstWorkspaceCreation = null;
-function createFirstSessionWorkspace(name) {
-  const lifecycle = state.workspaceCatalog;
-  const identity = (state.user?.email || "").trim().toLowerCase();
-  if (!identity || lifecycle.status !== "ready" || lifecycle.value?.workspaces?.length !== 0) {
-    return Promise.reject(Object.assign(new Error("Workspace creation is unavailable"), { code: "REQUEST_INVALID" }));
+function createFirstSessionWorkspace(name, input) {
+  const lifecycle = state.workspaceCatalog, account = state.user;
+  const identity = (account?.email || "").trim().toLowerCase();
+  if (!identity || lifecycle.identity !== identity || lifecycle.status !== "ready" || !input?.workspace_id) {
+    return Promise.reject(Object.assign(new Error("Workspace creation is unavailable"), { code: "STALE_OPERATION" }));
   }
-  if (firstWorkspaceCreation?.identity === identity && firstWorkspaceCreation.generation === lifecycle.generation) return firstWorkspaceCreation.promise;
-  const requestId = `create-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,10)}`;
-  const operation = { identity, generation: lifecycle.generation, promise: null };
-  operation.promise = window.FunklixWorkspaceCatalog.create(name, requestId).then((result) => {
-    if (state.workspaceCatalog !== lifecycle || lifecycle.generation !== operation.generation || identity !== (state.user?.email || "").trim().toLowerCase()) return null;
+  if (firstWorkspaceCreation?.account === account && firstWorkspaceCreation.promise) {
+    if (firstWorkspaceCreation.input.workspace_id === input.workspace_id) return firstWorkspaceCreation.promise;
+    return Promise.reject(Object.assign(new Error('Creation pending'), { code: 'CREATE_PENDING' }));
+  }
+  const operation = { account, input, generation: lifecycle.generation, promise: null };
+  const current = () => state.user === account && identity === (state.user?.email || '').trim().toLowerCase()
+    && state.workspaceCatalog === lifecycle && lifecycle.generation === operation.generation && lifecycle.status === 'ready' && lifecycle.identity === identity;
+  operation.promise = window.FunklixWorkspaceCatalog.create(name, input.request_id, fetch, input.workspace_id).then((result) => {
+    if (!current()) throw Object.assign(new Error('Creation context changed'), { code: 'STALE_OPERATION' });
+    const activateFirst = lifecycle.value.workspaces.length === 0 && !lifecycle.activeWorkspaceId;
     lifecycle.value = window.FunklixWorkspaceCatalog.reconcileCreate(lifecycle.value, result);
-    lifecycle.activeWorkspaceId = result.workspace.id;
-    state.session.workspaceId = result.workspace.id;
-    state.session.brandId = null;
+    if (activateFirst) {
+      lifecycle.activeWorkspaceId = result.workspace.id;
+      state.session.workspaceId = result.workspace.id;
+      state.session.brandId = null;
+    }
     renderWorkspaceSidebar();
+    // A real authorized GET follows confirmation; its failure cannot turn a
+    // confirmed commit into an uncertain POST or a duplicate creation.
+    void retryWorkspaceCatalog();
     return result.workspace;
   }).finally(() => { if (firstWorkspaceCreation === operation) firstWorkspaceCreation = null; });
   firstWorkspaceCreation = operation;
@@ -6834,8 +6856,8 @@ function resolveBoardPersistenceTarget() {
 function syncRuntimeSessionFromLegacy(source = "legacy-runtime") {
   const legacyBoardId = resolveExistingBoardId() || null;
   state.session = {
-    workspaceId: null,
-    brandId: null,
+    workspaceId: state.workspaceCatalog.activeWorkspaceId || null,
+    brandId: selectedBrandPreferenceId(),
     boardId: legacyBoardId,
     source,
     isInitialized: true
@@ -9669,7 +9691,6 @@ async function loadBoardFromUrlIfPresent(requestedBoardId = null) {
     state.lastKnownUpdatedAt = data?.updated_at || null;
     state.boardBrandAssociation.brandId = data?.brand_visibility === "hidden" ? null : data.brand_id;
     state.boardBrandAssociation.boardId = String(data.id);
-    state.session.brandId = state.boardBrandAssociation.brandId;
     refreshActiveWorkspaceContext();
     state.boardBrandAssociation.status = "idle";
     const backupCreatedAt = typeof data.brand_core_snapshot_backup_created_at === "string" && !Number.isNaN(Date.parse(data.brand_core_snapshot_backup_created_at)) ? data.brand_core_snapshot_backup_created_at : null;
@@ -11424,7 +11445,7 @@ function openCreatedCampaign(outcome) {
   state.lastKnownUpdatedAt = outcome.board.updated_at;
   state.workspaceCatalog.activeWorkspaceId = outcome.workspace.id;
   state.workspaceCatalog.value = { ...state.workspaceCatalog.value, workspaces: state.workspaceCatalog.value.workspaces.map(w => w.id !== outcome.workspace.id ? w : { ...w, name: outcome.workspace.name, brands: w.brands.map(b => b.id !== outcome.brand.id ? b : { ...b, ...outcome.brand }), boards: w.boards.map(b => b.id !== outcome.board.id ? b : { ...b, name: outcome.board.name }) }) };
-  state.session.workspaceId = outcome.workspace.id; state.session.brandId = outcome.brand.id; state.session.boardId = outcome.board.id;
+  state.session.workspaceId = outcome.workspace.id; state.session.boardId = outcome.board.id;
   state.boardBrandAssociation.brandId = outcome.brand.id; state.boardBrandAssociation.boardId = outcome.board.id;
   applyBoardAccessFromServer(outcome.board.access, 'campaign-creation');
   state.authoritativeBoardBrandCore = { ...state.authoritativeBoardBrandCore, boardId: outcome.board.id, value: clonePlainObject(outcome.board.brand_core_snapshot), updatedAt: outcome.board.updated_at, provenance: normalizeBoardSnapshotProvenance(outcome.board), provenanceValid: hasValidBoardSnapshotProvenance(outcome.board) };
@@ -18754,6 +18775,8 @@ workspaceSidebarController = window.FunklixWorkspaceSidebar?.create({
   onDeleteBrand: (brand, origin) => openBrandDeletion(brand, origin),
   onRename: renameSessionWorkspace,
   onCreate: createFirstSessionWorkspace,
+  onSwitchCreated: selectSessionWorkspace,
+  creationIdentity: () => state.user,
   onRetry: retryWorkspaceCatalog
 }) || null;
 globalThis.FunklixWorkspaceSidebarController = workspaceSidebarController;
@@ -19793,8 +19816,8 @@ el.homeNavButton?.addEventListener("click", () => {
   setAppMode("canvas");
   setActiveView("home");
 });
-el.brandCoreButton.addEventListener("click", openRegularBrandProfile);
-document.getElementById('campaign-snapshot-open-profile')?.addEventListener('click', openRegularBrandProfile);
+el.brandCoreButton.addEventListener("click", () => openRegularBrandProfile());
+document.getElementById('campaign-snapshot-open-profile')?.addEventListener('click', () => openRegularBrandProfile());
 el.campaignCanvasNavButton.addEventListener("click", () => {
   setAppMode("canvas");
   setActiveView("board");
@@ -20283,9 +20306,8 @@ async function createNewBoardFlow() {
 }
 
 function getResolvedWorkspaceBrand() {
-  const email = (state.user?.email || '').trim().toLowerCase();
-  if (!email || state.brandCatalog.status !== 'success' || state.brandCatalog.userEmail !== email) return null;
-  return state.brandCatalog.entries.find(({ id }) => id === ephemeralBrandSwitcherSelection?.id) || null;
+  const id = selectedBrandPreferenceId();
+  return state.workspaceCatalog.value?.workspaces.find(w => w.id === state.workspaceCatalog.activeWorkspaceId)?.brands.find(b => b.id === id) || null;
 }
 
 function getBoardsLibraryIdentity(scope = state.boardsLibraryRequest.scope) {
@@ -20302,7 +20324,7 @@ function renderBoardsLibraryControls() {
   });
   const email = (state.user?.email || '').trim().toLowerCase();
   const resolved = getResolvedWorkspaceBrand();
-  const unavailable = !email || state.brandCatalog.status !== 'success' || !resolved;
+  const unavailable = !email || state.workspaceCatalog.status !== 'ready' || !resolved;
   if (el.boardsScopeBrand) {
     el.boardsScopeBrand.disabled = unavailable;
     el.boardsScopeBrand.title = !email ? 'Sign in to filter by a selected Brand.'

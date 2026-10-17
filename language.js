@@ -23,6 +23,8 @@
     "Workspace access could not be verified. Try again when you are online.": "Der Workspace-Zugriff konnte nicht geprüft werden. Versuche es erneut, wenn du online bist.",
     "This Workspace is no longer accessible.": "Dieser Workspace ist nicht mehr zugänglich.",
 
+    "Create Workspace": "Workspace erstellen",
+    "Select a Brand for navigation. The open Board keeps its saved Brand association.": "Wähle eine Brand für die Navigation. Die gespeicherte Brand-Zuordnung des offenen Boards bleibt erhalten.",
     "Create project": "Projekt erstellen",
     "YOUR CREATIVE WORKSPACE": "DEIN KREATIVER WORKSPACE",
     "A home for your next idea.": "Ein Zuhause für deine nächste Idee.",

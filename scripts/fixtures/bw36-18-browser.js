@@ -23,7 +23,7 @@ async function browserChecks(){
   });
   await page.goto('http://localhost/');await page.waitForFunction(()=>typeof state!=='undefined'&&!!workspaceSidebarController);
   await page.evaluate(({catalog,board,email,W})=>{
-   state.user={email,name:'Fixture'};state.workspaceCatalog={...state.workspaceCatalog,status:'ready',value:catalog,generation:10,activeWorkspaceId:W};
+   state.user={email,name:'Fixture'};state.workspaceCatalog={...state.workspaceCatalog,identity:email,status:'ready',value:catalog,generation:10,activeWorkspaceId:W};
    state.currentBoardId=board.id;state.lastKnownUpdatedAt=board.updated_at;state.boardBrandAssociation={brandId:board.brand_id};state.boardAccess={canView:true,canRead:true,canEdit:true,role:'owner'};
    state.nodes=board.canvas_json.nodes;state.edges=[];state.selectedIds=new Set(['node-1']);state.selectedPrimary='node-1';state.isDirty=false;state.isBoardLoading=false;state.isBoardHydrating=false;state.initialServerLoadInFlight=false;
    state.session.workspaceId=W;state.session.brandId=board.brand_id;state.brandCatalog={...state.brandCatalog,status:'success',userEmail:email,entries:catalog.workspaces[0].brands};setActiveView('board');setSidebarCollapsed(false);renderAuthState();state.nodes.forEach(renderNode);fillInspector(state.nodes[0]);refreshLastSavedSnapshot();updateInspectorActionVisibility();

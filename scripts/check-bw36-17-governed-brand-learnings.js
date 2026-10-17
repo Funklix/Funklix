@@ -76,7 +76,7 @@ async function browserChecks() {
         const file=path.resolve(ROOT,url.pathname==='/'?'index.html':'.'+url.pathname);return route.fulfill(fs.existsSync(file)&&fs.statSync(file).isFile()?{path:file}:{body:''});
       });
       await page.goto('http://localhost/');await page.waitForFunction(()=>typeof state!=='undefined'&&!!workspaceSidebarController);
-      await page.evaluate(({catalog,W,B,EMAIL})=>{state.user={email:EMAIL};state.workspaceCatalog={...state.workspaceCatalog,value:catalog,status:'ready',activeWorkspaceId:W};state.session.workspaceId=W;state.session.brandId=B;state.currentBoardId=null;state.session.boardId=null;state.publicBoardToken=null;state.brandCatalog={...state.brandCatalog,status:'success',userEmail:EMAIL,entries:catalog.workspaces[0].brands};state.boardAccess={canView:true,canEdit:true,canViewBoardBrandCore:true};state.isDirty=false;setActiveView('home');setSidebarCollapsed(false);renderWorkspaceSidebar();},{catalog:base.catalog(),W,B,EMAIL});
+      await page.evaluate(({catalog,W,B,EMAIL})=>{state.user={email:EMAIL};state.workspaceCatalog={...state.workspaceCatalog,identity:EMAIL,value:catalog,status:'ready',activeWorkspaceId:W};state.session.workspaceId=W;state.session.brandId=B;state.currentBoardId=null;state.session.boardId=null;state.publicBoardToken=null;state.brandCatalog={...state.brandCatalog,status:'success',userEmail:EMAIL,entries:catalog.workspaces[0].brands};state.boardAccess={canView:true,canEdit:true,canViewBoardBrandCore:true};state.isDirty=false;setActiveView('home');setSidebarCollapsed(false);renderWorkspaceSidebar();},{catalog:base.catalog(),W,B,EMAIL});
       return page;
     }
     const context=await browser.newContext({viewport:{width:1440,height:900}}),page=await boot(context);

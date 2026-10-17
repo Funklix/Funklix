@@ -30,3 +30,20 @@
 
 .workspace-brand-option-row{display:flex;align-items:center;min-width:0}.workspace-brand-option-row>.workspace-context-option{flex:1;min-width:0}.workspace-brand-row-actions{flex:0 0 44px;min-width:44px;min-height:44px;border:1px solid var(--fk-color-border-default);border-radius:8px;background:var(--fk-color-surface-input);color:var(--fk-color-text-primary);font:inherit}.workspace-brand-row-actions:focus-visible{outline:3px solid var(--fk-color-focus-ring);outline-offset:-3px}
 @media(forced-colors:active){.workspace-brand-row-actions{border-color:CanvasText}.workspace-brand-row-actions:focus-visible{outline-color:Highlight}}
+
+/* R2.2: navigation stays reachable for all roles, including compact mobile. */
+@media(max-width:767px){
+ .sidebar>#workspace-context:not([hidden]){display:flex;align-items:center;gap:4px;width:auto;max-width:calc(100vw - 16px)}
+ #workspace-context .workspace-context-group{display:block}
+ #workspace-context .workspace-context-group .workspace-context-identity-row{display:flex}
+ .sidebar>#workspace-context .workspace-context-group #workspace-context-trigger,.sidebar>#workspace-context .workspace-context-group #workspace-brand-trigger{display:flex;width:44px;min-width:44px}
+ #workspace-context .workspace-context-copy,#workspace-context .workspace-context-chevron,#workspace-context .workspace-context-label{display:none}
+}
+.workspace-brand-option-row[hidden]{display:none}
+@media(max-width:1300px) and (min-width:768px){
+ .sidebar #workspace-context .workspace-context-group{display:grid}
+}
+
+.workspace-create-dialog .workspace-rename-status[data-outcome=confirmed]{color:var(--fk-color-text-primary)}
+
+@media(max-width:767px){.sidebar>#workspace-context:not([hidden]) .workspace-context-group:nth-child(2) .workspace-context-identity-row{display:flex}}

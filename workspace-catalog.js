@@ -56,6 +56,7 @@
     const workspaces = catalog?.workspaces || []; const byId = new Map(workspaces.map((workspace) => [workspace.id, workspace]));
     const board = workspaces.flatMap((workspace) => workspace.boards).find((item) => item.id === context.boardId);
     if (board && byId.has(board.workspace_id)) return board.workspace_id;
+    if (byId.has(context.activeWorkspaceId)) return context.activeWorkspaceId;
     const brand = workspaces.flatMap((workspace) => workspace.brands).find((item) => item.id === context.brandId);
     if (brand && byId.has(brand.workspace_id)) return brand.workspace_id;
     return workspaces.length === 1 ? workspaces[0].id : null;
@@ -83,31 +84,36 @@
     return validateUpdate(payload);
   }
   function createError(code,stage) { const error=new Error('Workspace creation failed');error.code=code;error.stage=stage;return error; }
-  function buildCreateRequest(name,requestId) {
+  function buildCreateRequest(name,requestId,workspaceId) {
     const checked=root.FunklixWorkspaceName?.validateWorkspaceName(name);
     if(!checked?.ok)throw createError('WORKSPACE_NAME_INVALID',checked?.reason||'name');
     if(!/^[A-Za-z0-9._:-]{1,64}$/.test(requestId||''))throw createError('REQUEST_INVALID','request');
-    return {contract:'workspace_create_v1',request_id:requestId,name:checked.name};
+    if(workspaceId !== undefined && !id(workspaceId))throw createError('REQUEST_INVALID','request');
+    return {contract:workspaceId ? 'workspace_create_v2' : 'workspace_create_v1',request_id:requestId,name:checked.name,...(workspaceId ? {workspace_id:workspaceId.toLowerCase()} : {})};
   }
-  function validateCreate(payload,requestId) {
+  function validateCreate(payload,requestId,workspaceId) {
     const workspace=payload?.workspace;
     if(!payload||Object.keys(payload).some(k=>!['contract','request_id','ok','created','workspace'].includes(k))
-      ||payload.contract!=='workspace_create_v1'||payload.request_id!==requestId||payload.ok!==true||typeof payload.created!=='boolean'
+      ||payload.contract!==(workspaceId ? 'workspace_create_v2' : 'workspace_create_v1')||payload.request_id!==requestId||payload.ok!==true||typeof payload.created!=='boolean'
       ||!workspace||Object.keys(workspace).some(k=>!['id','name','role','revision','brands','boards'].includes(k))
-      ||!id(workspace.id)||!text(workspace.name,160)||workspace.role!=='owner'||!Number.isSafeInteger(workspace.revision)||workspace.revision<0
+      ||(workspaceId && workspace.id!==workspaceId.toLowerCase())||!id(workspace.id)||!text(workspace.name,160)||workspace.role!=='owner'||!Number.isSafeInteger(workspace.revision)||workspace.revision<0
       ||!Array.isArray(workspace.brands)||workspace.brands.length||!Array.isArray(workspace.boards)||workspace.boards.length)throw createError('RESPONSE_INVALID','response');
     return Object.freeze({created:payload.created,workspace:Object.freeze({...workspace,brands:Object.freeze([]),boards:Object.freeze([])})});
   }
-  async function create(name,requestId,fetchImpl=root.fetch.bind(root)) {
-    const body=buildCreateRequest(name,requestId);
+  async function create(name,requestId,fetchImpl=root.fetch.bind(root),workspaceId) {
+    const body=buildCreateRequest(name,requestId,workspaceId);
     const response=await fetchImpl('/api/workspaces',{method:'POST',credentials:'same-origin',headers:{Accept:'application/json','Content-Type':'application/json'},body:JSON.stringify(body)});
     const payload=await response.json().catch(()=>{throw createError('RESPONSE_INVALID','response');});
     if(!response.ok)throw createError(payload?.error?.code||'INTERNAL_ERROR',payload?.error?.stage||'response');
-    return validateCreate(payload,requestId);
+    const confirmed=validateCreate(payload,requestId,workspaceId);
+    if(workspaceId && confirmed.workspace.name!==body.name)throw createError('RESPONSE_INVALID','response');
+    return confirmed;
   }
   function reconcileCreate(catalog,created) {
-    if(!catalog||!Array.isArray(catalog.workspaces)||catalog.workspaces.length||!created?.workspace)throw createError('RESPONSE_INVALID','reconciliation');
-    return Object.freeze({...catalog,workspaces:Object.freeze([created.workspace])});
+    if(!catalog||!Array.isArray(catalog.workspaces)||!created?.workspace)throw createError('RESPONSE_INVALID','reconciliation');
+    const existing=catalog.workspaces.find(w=>w.id===created.workspace.id);
+    // A replay is an acknowledgment, never a descendant replacement.
+    return existing ? catalog : Object.freeze({...catalog,workspaces:Object.freeze([...catalog.workspaces,created.workspace])});
   }
   function patch(catalog, updated) {
     const index=catalog?.workspaces?.findIndex(item=>item.id===updated?.id);
