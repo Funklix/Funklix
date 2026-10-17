@@ -4968,6 +4968,19 @@ function renderWorkspaceSidebar() {
 // cancel writes: operations without a safe cancellation contract must settle.
 let workspaceSelectionGeneration = 0;
 const workspaceExitOperations = new Set();
+let headerVisualOperation = null;
+
+function updateHeaderVisualControl(selectedNode) {
+  const btn = el.generateHeaderVisualButton;
+  if (!btn) return;
+  // Shared Inspector controls outlive their target node. Release only the
+  // current owner; its late response must not reset a newer request's control.
+  if (headerVisualOperation && !headerVisualOperation.current()) {
+    btn.textContent = uiText("Generate Header Visual");
+    headerVisualOperation = null;
+  }
+  btn.disabled = !!headerVisualOperation || selectedNode?.type !== "Landing Page" || isBoardReadOnly();
+}
 
 function beginPendingNodeMutation(node) {
   // Hold normal Workspace exit until the real operation settles. Identity also
@@ -14468,7 +14481,7 @@ function updateInspectorActionVisibility() {
   el.generateImageButton.disabled = !showGenerateImage;
   el.generatePostingVisualButton.disabled = !showGeneratePostingVisual;
   el.generateFullPackButton.disabled = !showGenerateImage || !!selectedNode && getContentPackLoading(selectedNode.id);
-  if (el.generateHeaderVisualButton) el.generateHeaderVisualButton.disabled = !(selectedNode?.type === "Landing Page");
+  updateHeaderVisualControl(selectedNode);
   el.propagateDescendantsButton.disabled = !hasSingleNode;
   el.disconnectSelectedButton.disabled = !(selectedCount > 0);
 }
@@ -19428,9 +19441,12 @@ el.generateHeaderVisualButton.addEventListener("click", async () => {
   const node = getNode(state.selectedPrimary);
   if (!node || node.type !== "Landing Page") return;
   if (!node.landingPage?.headerVisualPrompt?.trim()) return;
-  const mutation = beginPendingNodeMutation(node);
   const btn = el.generateHeaderVisualButton;
-  const original = btn.textContent;
+  updateHeaderVisualControl(node);
+  if (headerVisualOperation) return;
+  const mutation = beginPendingNodeMutation(node);
+  const operation = { current: mutation.current };
+  headerVisualOperation = operation;
   btn.disabled = true;
   btn.textContent = "Generating...";
   try {
@@ -19449,7 +19465,7 @@ el.generateHeaderVisualButton.addEventListener("click", async () => {
     });
     if (!response.ok) throw new Error("Header visual failed");
     const data = await response.json();
-    if (!mutation.current()) return;
+    if (headerVisualOperation !== operation || !mutation.current()) return;
     const imageUrl = data?.imageUrl || data?.url || "";
     if (!imageUrl) throw new Error("Empty image URL");
     node.images = Array.isArray(node.images) ? node.images : [];
@@ -19458,14 +19474,15 @@ el.generateHeaderVisualButton.addEventListener("click", async () => {
     fillInspector(node);
     saveCampaignCanvasState();
   } catch (error) {
-    if (mutation.current()) {
+    if (headerVisualOperation === operation && mutation.current()) {
       console.error('Header visual generation failed', error);
       setSaveStatus("Could not generate image right now. Please try again.");
     }
   } finally {
-    if (mutation.current()) {
-      btn.disabled = false;
-      btn.textContent = original;
+    if (headerVisualOperation === operation) {
+      btn.textContent = uiText("Generate Header Visual");
+      headerVisualOperation = null;
+      updateHeaderVisualControl(state.selectedIds.size === 1 ? getNode(state.selectedPrimary) : null);
     }
     mutation.finish();
   }

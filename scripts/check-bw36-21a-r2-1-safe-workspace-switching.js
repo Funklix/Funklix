@@ -251,6 +251,117 @@ async function main() {
       hold.release.resolve(); await f.page.evaluate(() => window.facebookRefresh);
       assert.equal(await f.page.evaluate(() => window.reconcileCalls.length), retired ? 0 : 1); await f.close();
     });
+    for (const outcome of ['success', 'failure']) {
+      const reply = outcome === 'failure' ? { status: 503, json: { error: 'Local header failure' } } : { json: aiReply };
+      await check('header ' + outcome + ' restores idle controls in the valid context', async () => {
+        const f = await fixture(); await prepareAi(f, 'header');
+        const btn = f.page.locator('#generate-header-visual-btn'), label = await btn.textContent();
+        const hold = f.hold(p => p === '/api/generate-image', reply);
+        await startAi(f, 'header'); await hold.started.promise;
+        assert.equal(await btn.textContent(), 'Generating...'); assert.equal(await btn.isDisabled(), true);
+        // Inspector refreshes must preserve a valid request's disabled state.
+        await f.page.evaluate(() => fillInspector(state.nodes[0]));
+        assert.equal(await btn.isDisabled(), true);
+        hold.release.resolve(); await settleAi(f);
+        assert.equal(await btn.textContent(), label); assert.equal(await btn.isDisabled(), false);
+        assert.equal(await f.page.evaluate(() => state.nodes[0].images.length), outcome === 'success' ? 1 : 0);
+        await f.close();
+      });
+      for (const deleted of [false, true]) await check('header locale change with ' + (deleted ? 'deletion and reselection' : 'normal completion') + ' restores current-language label after ' + outcome, async () => {
+        const f = await fixture(); await prepareAi(f, 'header');
+        const btn = f.page.locator('#generate-header-visual-btn');
+        const hold = f.hold(p => p === '/api/generate-image', reply);
+        await startAi(f, 'header'); await hold.started.promise;
+        await f.page.evaluate(() => {
+          el.uiLanguageSelect.value = 'de'; el.uiLanguageSelect.dispatchEvent(new Event('change'));
+        });
+        if (deleted) {
+          await f.page.evaluate(() => {
+            removeNode(state.selectedPrimary);
+            const node = createNode({ type: 'Landing Page', initial: { title: 'Replacement' }, position: { x: 400, y: 0 } });
+            fillInspector(node); clearAutosaveTimer();
+          });
+          await f.page.evaluate(() => new Promise(resolve => setTimeout(resolve, 300)));
+          assert.equal(await btn.textContent(), 'Header-Bild erstellen'); assert.equal(await btn.isDisabled(), false);
+          await observeMutations(f);
+        }
+        hold.release.resolve(); await settleAi(f);
+        if (deleted) await noStaleMutations(f);
+        assert.equal(await btn.textContent(), 'Header-Bild erstellen'); assert.equal(await btn.isDisabled(), false);
+        assert.equal(await f.page.evaluate(() => state.nodes[0].images.length), !deleted && outcome === 'success' ? 1 : 0);
+        await f.close();
+      });
+      await check('invalidated header late ' + outcome + ' cannot regain ownership after editability returns', async () => {
+        const f = await fixture(); await prepareAi(f, 'header');
+        const btn = f.page.locator('#generate-header-visual-btn'), label = await btn.textContent();
+        const old = f.hold(p => p === '/api/generate-image', reply);
+        await startAi(f, 'header'); await old.started.promise;
+        await f.page.evaluate(() => { state.boardAccess.canEdit = false; updateInspectorActionVisibility(); });
+        assert.equal(await btn.textContent(), label); assert.equal(await btn.isDisabled(), true);
+        await f.page.evaluate(() => { state.boardAccess.canEdit = true; updateInspectorActionVisibility(); });
+        assert.equal(await btn.isDisabled(), false);
+        const fresh = f.hold(p => p === '/api/generate-image', { json: { imageUrl: generatedImage + '?fresh=1' } });
+        await startAi(f, 'header'); await fresh.started.promise; await observeMutations(f);
+        old.release.resolve(); await f.page.waitForFunction(() => workspaceExitOperations.size === 1);
+        await noStaleMutations(f);
+        assert.equal(await btn.textContent(), 'Generating...'); assert.equal(await btn.isDisabled(), true);
+        fresh.release.resolve(); await settleAi(f);
+        assert.equal(await f.page.evaluate(() => state.nodes[0].images.length), 1);
+        assert.equal(await f.page.evaluate(() => state.nodes[0].images[0].url), generatedImage + '?fresh=1');
+        assert.equal(await btn.textContent(), label); assert.equal(await btn.isDisabled(), false);
+        await f.close();
+      });
+      for (const next of ['none', 'selection', 'request-old-first', 'request-new-first']) {
+        await check('deleted header late ' + outcome + ' with ' + next + ' recovers only its own control', async () => {
+          const f = await fixture(); await prepareAi(f, 'header');
+          const btn = f.page.locator('#generate-header-visual-btn'), label = await btn.textContent();
+          const old = f.hold(p => p === '/api/generate-image', reply);
+          await startAi(f, 'header'); await old.started.promise;
+          await f.page.evaluate(() => {
+            window.outgoingAiNode = state.nodes[0];
+            removeNode(state.selectedPrimary);
+            window.outgoingAiSnapshot = JSON.stringify(window.outgoingAiNode);
+            clearAutosaveTimer(); stopPresenceLite(); stopBoardRefreshPolling();
+          });
+          assert.equal(await btn.textContent(), label); assert.equal(await btn.isDisabled(), true);
+          if (next !== 'none') {
+            await f.page.evaluate(() => {
+              const node = createNode({ type: 'Landing Page', initial: { title: 'New landing' }, position: { x: 400, y: 0 } });
+              node.landingPage.headerVisualPrompt = 'New visual prompt';
+              state.selectedPrimary = node.id; state.selectedIds = new Set([node.id]); fillInspector(node);
+              clearAutosaveTimer(); refreshLastSavedSnapshot(); state.isDirty = false;
+            });
+            assert.equal(await btn.textContent(), label); assert.equal(await btn.isDisabled(), false);
+            // Let createNode's 30ms visibility repair and 280ms entrance finish
+            // before attributing render calls to the deferred response.
+            await f.page.evaluate(() => new Promise(resolve => setTimeout(resolve, 300)));
+          }
+          let fresh;
+          if (next.startsWith('request')) {
+            fresh = f.hold(p => p === '/api/generate-image', { json: { imageUrl: generatedImage + '?fresh=1' } });
+            await startAi(f, 'header'); await fresh.started.promise;
+          }
+          if (next === 'request-new-first') {
+            fresh.release.resolve(); await f.page.waitForFunction(() => workspaceExitOperations.size === 1);
+            assert.equal(await btn.textContent(), label); assert.equal(await btn.isDisabled(), false);
+            await f.page.evaluate(() => clearAutosaveTimer());
+          }
+          await observeMutations(f); const writes = f.writes.length;
+          old.release.resolve();
+          await f.page.waitForFunction(count => workspaceExitOperations.size === count, next === 'request-old-first' ? 1 : 0);
+          await noStaleMutations(f);
+          await f.page.waitForTimeout(3100);
+          assert.equal(f.writes.length, writes, 'Invalidated response must not autosave');
+          if (next === 'request-old-first') {
+            assert.equal(await btn.textContent(), 'Generating...'); assert.equal(await btn.isDisabled(), true);
+            fresh.release.resolve(); await settleAi(f);
+          }
+          assert.equal(await btn.textContent(), label); assert.equal(await btn.isDisabled(), next === 'none');
+          if (fresh) assert.equal(await f.page.evaluate(() => state.nodes[0].images[0].url), generatedImage + '?fresh=1');
+          await f.close();
+        });
+      }
+    }
     await check('retired header response leaves a newer header generation and its controls untouched', async () => {
       const f = await fixture(); await prepareAi(f, 'header');
       const originalLabel = await f.page.locator('#generate-header-visual-btn').textContent();
