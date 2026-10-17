@@ -70,12 +70,13 @@ assert.equal(profile.resolveEntry({ ...base, catalog: { workspaces: [] } }).kind
     });
     await page.goto('http://localhost/');
     await page.waitForFunction(() => typeof state !== 'undefined' && state.activeView === 'home' && !!workspaceSidebarController);
-    async function context({ workspaceRole = 'owner', brandRole = 'editor', board = true, selection = B2, brands = true, status = 'ready', publicToken = null } = {}) {
+    async function context({ workspaceRole = 'owner', brandRole = 'editor', board = true, selection = B, brands = true, status = 'ready', publicToken = null } = {}) {
       role = brandRole;
       const data = catalog(workspaceRole, brandRole); if (!brands) data.workspaces[0].brands = [];
       await page.evaluate(({ data, board, selection, status, publicToken, W, D }) => {
         closeCanonicalBrandDetail({ restoreFocus: false });
         state.user = { email: 'fixture@example.com' }; state.publicBoardToken = publicToken;
+        ephemeralBrandSwitcherSelection = null; state.workspaceCatalog.identity = 'fixture@example.com';
         state.workspaceCatalog.value = data; state.workspaceCatalog.status = status;
         state.workspaceCatalog.activeWorkspaceId = W; state.session.brandId = selection;
         state.currentBoardId = board ? D : null;
@@ -83,6 +84,7 @@ assert.equal(profile.resolveEntry({ ...base, catalog: { workspaces: [] } }).kind
         state.boardBrandAssociation = { ...state.boardBrandAssociation, boardId: board ? D : null, brandId: board ? data.workspaces[0].boards[0].brand_id : null };
         history.replaceState({}, '', '/'); setSidebarCollapsed(false); renderWorkspaceSidebar();
       }, { data, board, selection, status, publicToken, W, D });
+      if (status === 'ready') await page.waitForFunction(() => document.getElementById('home-foundation')?.getAttribute('aria-busy') !== 'true');
     }
     async function visible(selector) { if (selector.includes('guided-brand-profile input[type=file]')) await page.locator('[data-profile-key="Brand Assets"]').click(); await page.locator(selector).waitFor({ state: 'visible' }); assert(await page.locator(selector).isVisible(), selector); }
     async function menuOpen() {
@@ -134,11 +136,15 @@ assert.equal(profile.resolveEntry({ ...base, catalog: { workspaces: [] } }).kind
     }
     await context(); await menuOpen(); await page.evaluate(() => { state.workspaceCatalog.value.workspaces[0].role = 'viewer'; renderWorkspaceSidebar(); });
     assert.equal(await page.locator('#workspace-context-menu').count(), 0, 'Revocation closes ready menu');
+    // R2.2 regular Profile follows selected Y while the saved Board remains X.
+    await context({ selection: B2 }); await page.locator('#brand-core-nav-btn').click();
+    await page.waitForFunction(B2 => canonicalBrandDetail.status === 'ready' && canonicalBrandDetail.brandId === B2, B2);
+    assert.equal(await page.evaluate(() => state.boardBrandAssociation.brandId), B);
     // Required real sidebar-to-existing-Brand flow, using full app.js.
     for (const brandRole of ['owner', 'admin', 'editor']) {
       await context({ brandRole }); await page.locator('#brand-core-nav-btn').click();
       await visible('.profile-page-mode .guided-brand-profile input[type=file]');
-      assert.equal(await page.evaluate(() => canonicalBrandDetail.brandId), B, 'Board association outranks session Brand');
+      assert.equal(await page.evaluate(() => canonicalBrandDetail.brandId), B, 'Explicit navigation Brand targets regular Profile');
       assert.equal(await page.evaluate(() => state.activeView), 'brand-profile');
       assert(!(await page.locator('#brand-core-workspace').isVisible()));
     }

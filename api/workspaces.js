@@ -10,11 +10,12 @@ const { validateWorkspaceName } = require('../workspace-name');
 const CONTRACT = 'workspace_catalog_v1';
 const UPDATE_CONTRACT = 'workspace_update_v1';
 const CREATE_CONTRACT = 'workspace_create_v1';
+const CREATE_V2_CONTRACT = 'workspace_create_v2';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const IDENTITY_SELECT = 'SELECT id, canonical_email, status, revision FROM public.app_identities WHERE canonical_email = $1 ORDER BY id LIMIT 2';
 const ERROR_STATUS = Object.freeze({ METHOD_NOT_ALLOWED: 405, AUTHENTICATION_REQUIRED: 401, SESSION_INVALID: 401,
   IDENTITY_INVALID: 422, IDENTITY_DISABLED: 403, IDENTITY_AMBIGUOUS: 409, WORKSPACE_SCHEMA_UNAVAILABLE: 503,
-  WORKSPACE_CATALOG_CONFLICT: 409, REQUEST_INVALID: 400, WORKSPACE_NAME_INVALID: 422, WORKSPACE_ALREADY_EXISTS: 409,
+  WORKSPACE_CATALOG_CONFLICT: 409, REQUEST_INVALID: 400, WORKSPACE_NAME_INVALID: 422, WORKSPACE_ALREADY_EXISTS: 409, WORKSPACE_CREATE_CONFLICT: 409,
   DATABASE_UNAVAILABLE: 503, RESPONSE_INVALID: 500, INTERNAL_ERROR: 500 });
 const UPDATE_ERROR_STATUS = Object.freeze({ WORKSPACE_NOT_FOUND:404, MEMBERSHIP_REQUIRED:403, PERMISSION_DENIED:403,
   INVALID_WORKSPACE_NAME:422, WORKSPACE_CHANGED:409, DATABASE_UNAVAILABLE:503, RESPONSE_INVALID:500, INTERNAL_ERROR:500 });
@@ -46,11 +47,12 @@ function updateRequest(body) {
 }
 function createRequest(body) {
   const keys = body && typeof body === 'object' && !Array.isArray(body) ? Object.keys(body) : [];
-  if (keys.length !== 3 || keys.some((key) => !['contract','request_id','name'].includes(key))
-    || body.contract !== CREATE_CONTRACT || typeof body.name !== 'string'
+  const v2 = body?.contract === CREATE_V2_CONTRACT;
+  if (keys.length !== (v2 ? 4 : 3) || keys.some((key) => !(v2 ? ['contract','request_id','name','workspace_id'] : ['contract','request_id','name']).includes(key))
+    || ![CREATE_CONTRACT, CREATE_V2_CONTRACT].includes(body.contract) || (v2 && !UUID.test(body.workspace_id || '')) || typeof body.name !== 'string'
     || typeof body.request_id !== 'string' || !/^[A-Za-z0-9._:-]{1,64}$/.test(body.request_id)) return null;
   const checked = validateWorkspaceName(body.name);
-  return checked.ok ? { requestId: body.request_id, name: checked.name } : { requestId: body.request_id, invalidName: true };
+  return checked.ok ? { requestId: body.request_id, name: checked.name, ...(v2 ? { workspaceId: body.workspace_id.toLowerCase() } : {}) } : { requestId: body.request_id, invalidName: true };
 }
 
 async function createFirstWorkspace({ db, canonicalEmail, input }) {
@@ -58,7 +60,7 @@ async function createFirstWorkspace({ db, canonicalEmail, input }) {
   try {
     await client.query('BEGIN');
     await client.query(`SELECT pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended($1, 3613))`, [canonicalEmail]);
-    const identityResult = await client.query(IDENTITY_SELECT, [canonicalEmail]);
+    const identityResult = await client.query(input.workspaceId ? IDENTITY_SELECT + ' FOR UPDATE' : IDENTITY_SELECT, [canonicalEmail]);
     const rows = identityRows(identityResult);
     if (!rows) throw Object.assign(new Error('identity response invalid'), { workspaceCode: 'INTERNAL_ERROR', workspaceStage: 'identity' });
     let identity = validateIdentityRow(rows);
@@ -69,25 +71,51 @@ async function createFirstWorkspace({ db, canonicalEmail, input }) {
     }
     if (!identity.ok) {
       const code = identity.code === APP_IDENTITY_ERRORS.DISABLED ? 'IDENTITY_DISABLED'
-        : identity.code === APP_IDENTITY_ERRORS.AMBIGUOUS ? 'IDENTITY_AMBIGUOUS' : 'INTERNAL_ERROR';
+        : identity.code === APP_IDENTITY_ERRORS.AMBIGUOUS ? 'IDENTITY_AMBIGUOUS' : 'IDENTITY_INVALID';
       throw Object.assign(new Error('identity rejected'), { workspaceCode: code, workspaceStage: 'identity' });
     }
     const match = compareIdentityToSessionEmail(identity, canonicalEmail);
     if (!match.ok) throw Object.assign(new Error('identity mismatch'), { workspaceCode: 'SESSION_INVALID', workspaceStage: 'identity' });
-    const memberships = await client.query(`SELECT w.id, w.name, w.revision, m.role
+    if (input.workspaceId) {
+      // Email serialization also covers identity bootstrap/v1. UUID serialization
+      // covers collisions across creators; all writers retain the PK guarantee.
+      await client.query('SELECT pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended($1, 3622))', [input.workspaceId]);
+      const existing = await client.query(`SELECT id, name, revision, status, created_by_identity_id
+        FROM public.workspaces WHERE id = $1 FOR UPDATE`, [input.workspaceId]);
+      if (!Array.isArray(existing.rows)) throw new Error('invalid workspace response');
+      if (existing.rows.length) {
+        const workspace = existing.rows[0];
+        const membership = await client.query(`SELECT role, status, revision FROM public.workspace_memberships
+          WHERE workspace_id = $1 AND identity_id = $2 FOR UPDATE`, [input.workspaceId, match.identityId]);
+        const owner = membership.rows?.[0];
+        // Mutable names cannot prove the original input after a rename. Fence
+        // replays at the initial revisions rather than accepting a changed name.
+        if (workspace.created_by_identity_id !== match.identityId || workspace.status !== 'active'
+          || workspace.name !== input.name || Number(workspace.revision) !== 1
+          || owner?.role !== 'owner' || owner.status !== 'accepted' || Number(owner.revision) !== 1) {
+          throw Object.assign(new Error('creation conflict'), { workspaceCode: 'WORKSPACE_CREATE_CONFLICT', workspaceStage: 'replay' });
+        }
+        await client.query('COMMIT');
+        return { created: false, workspace: { id: workspace.id, name: workspace.name, role: 'owner', revision: 1, brands: [], boards: [] } };
+      }
+    }
+    const memberships = input.workspaceId ? { rows: [] } : await client.query(`SELECT w.id, w.name, w.revision, m.role
       FROM public.workspace_memberships m JOIN public.workspaces w ON w.id = m.workspace_id
       WHERE m.identity_id = $1 AND m.status = 'accepted' AND w.status = 'active'
       ORDER BY w.id FOR UPDATE OF w, m`, [match.identityId]);
     if (!Array.isArray(memberships.rows)) throw Object.assign(new Error('membership response invalid'), { workspaceCode: 'INTERNAL_ERROR', workspaceStage: 'membership' });
-    if (memberships.rows.length) {
+    if (!input.workspaceId && memberships.rows.length) {
       if (memberships.rows.length === 1 && memberships.rows[0].role === 'owner' && validateWorkspaceName(memberships.rows[0].name)?.name === input.name) {
         await client.query('COMMIT');
         return { created: false, workspace: { id: memberships.rows[0].id, name: memberships.rows[0].name, role: 'owner', revision: Number(memberships.rows[0].revision), brands: [], boards: [] } };
       }
       throw Object.assign(new Error('workspace exists'), { workspaceCode: 'WORKSPACE_ALREADY_EXISTS', workspaceStage: 'authorization' });
     }
-    const workspaceResult = await client.query(`INSERT INTO public.workspaces (name, locale, status, created_by_identity_id)
-      VALUES ($1, 'en', 'active', $2) RETURNING id, name, revision`, [input.name, match.identityId]);
+    const workspaceResult = input.workspaceId
+      ? await client.query(`INSERT INTO public.workspaces (id, name, locale, status, created_by_identity_id)
+        VALUES ($1, $2, 'en', 'active', $3) RETURNING id, name, revision`, [input.workspaceId, input.name, match.identityId])
+      : await client.query(`INSERT INTO public.workspaces (name, locale, status, created_by_identity_id)
+        VALUES ($1, 'en', 'active', $2) RETURNING id, name, revision`, [input.name, match.identityId]);
     const workspace = workspaceResult.rows?.[0];
     if (!workspace || !UUID.test(workspace.id || '') || workspace.name !== input.name || !Number.isSafeInteger(Number(workspace.revision))) {
       throw Object.assign(new Error('workspace response invalid'), { workspaceCode: 'INTERNAL_ERROR', workspaceStage: 'workspace' });
@@ -111,7 +139,7 @@ function createHandler({ sessionReader = getSessionUser, db = pool, catalogLoade
     res.setHeader('Cache-Control', 'private, no-store, max-age=0');
     res.setHeader('Pragma', 'no-cache');
     res.setHeader('X-Request-Id', id);
-    const contract = req.method === 'PATCH' ? UPDATE_CONTRACT : req.method === 'POST' ? CREATE_CONTRACT : CONTRACT;
+    const contract = req.method === 'PATCH' ? UPDATE_CONTRACT : req.method === 'POST' ? (req.body?.contract === CREATE_V2_CONTRACT ? CREATE_V2_CONTRACT : CREATE_CONTRACT) : CONTRACT;
     if (!['GET','PATCH','POST'].includes(req.method)) { res.setHeader('Allow', 'GET, PATCH, POST'); return failure(res, id, 'METHOD_NOT_ALLOWED', 'method', contract); }
     let user;
     try { user = sessionReader(req); } catch { return failure(res, id, 'SESSION_INVALID', 'session', contract); }
@@ -123,16 +151,16 @@ function createHandler({ sessionReader = getSessionUser, db = pool, catalogLoade
     if (!lookup.ok) return failure(res, id, 'SESSION_INVALID', 'session', contract);
     if (req.method === 'POST') {
       const input = createRequest(req.body);
-      if (!input) return failure(res, id, 'REQUEST_INVALID', 'request', CREATE_CONTRACT);
-      if (input.invalidName) return failure(res, id, 'WORKSPACE_NAME_INVALID', 'name', CREATE_CONTRACT);
+      if (!input) return failure(res, id, 'REQUEST_INVALID', 'request', contract);
+      if (input.invalidName) return failure(res, id, 'WORKSPACE_NAME_INVALID', 'name', contract);
       try {
         const result = await createFirstWorkspace({ db, canonicalEmail: lookup.canonicalEmail, input });
         console.info('[WORKSPACE_CREATE]', { request_id: id, stage: 'complete', code: 'OK', created: result.created, duration_bucket: durationBucket(started) });
-        return send(res, result.created ? 201 : 200, { contract: CREATE_CONTRACT, request_id: input.requestId, ok: true, ...result });
+        return send(res, result.created ? 201 : 200, { contract, request_id: input.requestId, ok: true, ...result });
       } catch (error) {
-        const code = error.workspaceCode || databaseCode(error); const stage = error.workspaceStage || 'transaction';
+        const code = error.workspaceCode || (input.workspaceId && error?.code === '23505' ? 'WORKSPACE_CREATE_CONFLICT' : databaseCode(error)); const stage = error.workspaceStage || 'transaction';
         console.error('[WORKSPACE_CREATE]', { request_id: id, stage, code, created: false, duration_bucket: durationBucket(started) });
-        return failure(res, id, code, stage, CREATE_CONTRACT);
+        return failure(res, id, code, stage, contract);
       }
     }
     let currentStage = 'identity_query_construction';
@@ -228,3 +256,5 @@ module.exports.updateRequest = updateRequest;
 module.exports.createRequest = createRequest;
 module.exports.createFirstWorkspace = createFirstWorkspace;
 module.exports.IDENTITY_SELECT = IDENTITY_SELECT;
+
+module.exports.CREATE_V2_CONTRACT = CREATE_V2_CONTRACT;

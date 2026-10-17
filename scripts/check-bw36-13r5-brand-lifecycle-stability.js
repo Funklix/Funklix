@@ -110,7 +110,7 @@ async function browserJourney() {
       await page.evaluate(({catalog,W,B,EMAIL})=>{
         if(brandProfileController){brandProfileController.state.dirty=false;brandProfileController.state.deferred=true;}
         canonicalBrandDetail.draft=null;closeCanonicalBrandDetail({restoreFocus:false});
-        state.user={email:EMAIL};state.workspaceCatalog={...state.workspaceCatalog,value:catalog,status:'ready',activeWorkspaceId:W};
+        state.user={email:EMAIL};ephemeralBrandSwitcherSelection=null;state.workspaceCatalog={...state.workspaceCatalog,identity:EMAIL,value:catalog,status:'ready',activeWorkspaceId:W};
         state.session.workspaceId=W;state.session.brandId=B;state.currentBoardId=null;state.session.boardId=null;state.publicBoardToken=null;
         state.brandCatalog={...state.brandCatalog,status:'success',userEmail:EMAIL,entries:catalog.workspaces[0].brands};
         state.boardAccess={canView:true,canEdit:true,canViewBoardBrandCore:true};state.isDirty=false;
@@ -192,8 +192,8 @@ async function browserJourney() {
     const createdId=await page.evaluate(()=>canonicalBrandDetail.brandId);assert.equal(await page.evaluate(()=>state.session.brandId),createdId);
     const createRequests=r.requests.filter(q=>q.path==='/api/brands'&&q.method==='POST');assert.equal(createRequests.length,2);assert.equal(createRequests[0].body.id,createRequests[1].body.id);assert.equal(r.db.brands.length,count+1);assert.equal(r.db.boards.length,1);
     // Brand switching uses actual selector clicks; deletion reuses the authoritative transaction.
-    await page.locator('#workspace-brand-trigger').click();await page.locator(`[data-brand-id="${B}"]`).click();await ready();await page.waitForFunction(B=>canonicalBrandDetail.brandId===B,B);
-    await page.locator('#workspace-brand-trigger').click();await page.locator(`[data-brand-id="${createdId}"]`).click();await ready();await page.waitForFunction(id=>canonicalBrandDetail.brandId===id,createdId);
+    await page.locator('#workspace-brand-trigger').click();await page.locator(`[data-brand-id="${B}"]`).click();assert.equal(await page.evaluate(()=>canonicalBrandDetail.status),'closed','R2.2 selection does not open a Profile');await page.locator('#brand-core-nav-btn').click();await ready();await page.waitForFunction(B=>canonicalBrandDetail.brandId===B,B);
+    await page.locator('#workspace-brand-trigger').click();await page.locator(`[data-brand-id="${createdId}"]`).click();assert.equal(await page.evaluate(()=>canonicalBrandDetail.status),'closed','R2.2 selection does not open a Profile');await page.locator('#brand-core-nav-btn').click();await ready();await page.waitForFunction(id=>canonicalBrandDetail.brandId===id,createdId);
     // Attach a local Board fixture to the created Brand, preserving its campaign data.
     r.db.boards[0].brand_id=createdId;await page.evaluate(({createdId,D})=>{state.workspaceCatalog.value={...state.workspaceCatalog.value,workspaces:state.workspaceCatalog.value.workspaces.map(w=>({...w,boards:w.boards.map(b=>b.id===D?{...b,brand_id:createdId}:b)}))};}, {createdId,D});
     const stableBoard=clone(r.db.boards[0]);await page.locator('#workspace-brand-manage').click();await page.getByRole('menuitem',{name:'Delete Brand',exact:true}).click();

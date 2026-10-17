@@ -23,7 +23,7 @@ async function browserChecks({canvas,expectedThreads=1,hydrationCanvases=[]}={})
   });
   await page.goto('http://localhost/');await page.waitForFunction(()=>typeof state!=='undefined'&&!!workspaceSidebarController);
   await page.evaluate(({catalog,W,B,EMAIL})=>{
-   state.user={email:EMAIL};state.workspaceCatalog={...state.workspaceCatalog,value:catalog,status:'ready',activeWorkspaceId:W};state.session.workspaceId=W;state.session.brandId=B;
+   state.user={email:EMAIL};state.workspaceCatalog={...state.workspaceCatalog,identity:EMAIL,value:catalog,status:'ready',activeWorkspaceId:W};state.session.workspaceId=W;state.session.brandId=B;
    state.currentBoardId=null;state.session.boardId=null;state.publicBoardToken=null;state.brandCatalog={...state.brandCatalog,status:'success',userEmail:EMAIL,entries:catalog.workspaces[0].brands};
    state.boardAccess={canView:true,canEdit:true,canViewBoardBrandCore:true};state.isDirty=false;setActiveView('home');setSidebarCollapsed(false);renderWorkspaceSidebar();
   },{catalog:base.catalog(),W,B,EMAIL});

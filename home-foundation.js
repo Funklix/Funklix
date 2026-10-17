@@ -94,7 +94,7 @@
         select.value = model(context()).workspace?.id || '';
         if (model(context()).ready) void actions.workspace(id);
       });
-      if (c.catalog.workspaces.length) { nav.append(label, select); host.append(nav); }
+      if (c.catalog.workspaces.length) { nav.append(label, select, button('Create Workspace', 'workspace-create')); host.append(nav); }
       if (!m.workspace) {
         host.append(message(c.catalog.workspaces.length ? 'Choose your working context' : 'Your first Workspace starts here',
           c.catalog.workspaces.length ? 'Choose a Workspace to see the Brands and Boards available to you.' : 'Create a Workspace to bring your Brands and campaign work together.',
@@ -113,12 +113,12 @@
           const pick = button(brand.name, 'brand', brand.id); pick.className = 'home-brand-pick';
           pick.textContent = brand.name;
           pick.setAttribute('aria-pressed', String(brand.id === m.brand?.id));
-          pick.disabled = Boolean(c.boardId); pick.prepend(identity(brand));
+          pick.prepend(identity(brand));
           const profile = button('Brand Profile', 'profile', brand.id); profile.setAttribute('aria-label', `${t('Brand Profile')}: ${brand.name}`);
           item.append(pick, profile); list.append(item);
         }
         orientation.append(list);
-        orientation.append(node('p', 'home-note', t(c.boardId ? 'The open Board keeps its saved Brand context. You can still view other Brand Profiles.' : 'Select a Brand for context, or explore all visible Boards below.')));
+        orientation.append(node('p', 'home-note', t(c.boardId ? 'Select a Brand for navigation. The open Board keeps its saved Brand association.' : 'Select a Brand for context, or explore all visible Boards below.')));
       }
       host.append(orientation);
       const section = node('section', 'home-continue'); section.setAttribute('aria-labelledby', 'home-continue-title');
@@ -197,10 +197,10 @@
       if (!sameScope(scope, c)) { sync(); return; }
       if (action === 'signin') actions.signin();
       else if (action === 'retry') actions.retry();
-      else if (m.ready && action === 'workspace-create' && !c.catalog.workspaces.length) actions.workspaceCreate(target);
+      else if (m.ready && action === 'workspace-create') actions.workspaceCreate(target);
       else if (m.workspace) {
         if (action === 'metadata') { status = 'idle'; void load(); }
-        else if (action === 'brand' && !c.boardId && m.workspace.brands.some(b => b.id === id)) actions.brand(id);
+        else if (action === 'brand' && m.workspace.brands.some(b => b.id === id)) actions.brand(id);
         else if (action === 'profile') { const brand = m.workspace.brands.find(b => b.id === id); if (brand) actions.profile(brand); }
         else if (action === 'board' && !c.loading && m.workspace.boards.some(b => b.id === id)) actions.board(id);
         else if (action === 'all' || action === 'filtered') { filter = action === 'all' ? 'all' : 'brand'; draw(); }

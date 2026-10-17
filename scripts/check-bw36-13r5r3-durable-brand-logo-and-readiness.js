@@ -119,7 +119,7 @@ async function browserJourney(runtimeOptions) {
         state.boardAccess = { canView: true, canEdit: true }; state.isDirty = false; history.replaceState({}, '', '/');
       }, { W, B, EMAIL });
       // Fetch and validate the production-shaped Workspace catalog on each application boot.
-      await page.evaluate(async ({ W }) => { const value = window.FunklixWorkspaceCatalog.validate(await (await fetch('/api/workspaces/catalog')).json()); state.workspaceCatalog = { ...state.workspaceCatalog, value, status: 'ready', activeWorkspaceId: W }; state.brandCatalog = { ...state.brandCatalog, status: 'success', entries: value.workspaces[0].brands }; setActiveView('home'); setSidebarCollapsed(false); renderWorkspaceSidebar(); }, { W });
+      await page.evaluate(async ({ W }) => { const value = window.FunklixWorkspaceCatalog.validate(await (await fetch('/api/workspaces/catalog')).json()); state.workspaceCatalog = { ...state.workspaceCatalog, identity: state.user.email, value, status: 'ready', activeWorkspaceId: W }; state.brandCatalog = { ...state.brandCatalog, status: 'success', entries: value.workspaces[0].brands }; setActiveView('home'); setSidebarCollapsed(false); renderWorkspaceSidebar(); }, { W });
     }
     const ready = () => page.waitForFunction(B => brandProfileController?.state.brand.id === B && canonicalBrandDetail.status === 'ready', B);
     const key = k => page.locator(`[data-profile-key="${k}"]`);

@@ -29,7 +29,9 @@ assert.doesNotMatch(key, /localStorage/, "identity must be transformed before st
 assert.match(persist, /JSON\.stringify\(\{ v: BRAND_SWITCHER_PREFERENCE_VERSION, brandId \}\)/, "payload must contain only version and Brand ID");
 assert.doesNotMatch(persist, /JSON\.stringify\([^\n]*(?:name|brand_core|token|session|response|userEmail)/i, "payload must contain no summaries or authentication data");
 assert.match(select, /state\.brandCatalog\.status !== "success"/, "explicit selection must originate in a successful catalog");
-assert.match(select, /persistBrandSwitcherPreference/, "an explicit row selection must persist");
+assert.doesNotMatch(select, /persistBrandSwitcherPreference/, "R2.2 selection is session-scoped");
+assert.match(select, /selectSessionBrand\(brand.id\)/, "legacy selection delegates to the authorized Workspace owner");
+assert.match(restore, /if \(state\.workspaceCatalog\) return/, "modern Workspace navigation ignores persisted legacy hints");
 assert.match(clear, /persist && userEmail[\s\S]*removeBrandSwitcherPreference/, "explicit No Brand must remove persistence");
 assert.match(restore, /JSON\.parse/, "storage must be parsed as untrusted input");
 assert.match(restore, /Object\.keys\(parsed\)\.length === 2/, "extra stored summary data must be rejected");

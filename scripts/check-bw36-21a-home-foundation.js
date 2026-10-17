@@ -193,7 +193,7 @@ async function browserChecks() {
     page = await pageAt('/boards/' + D); await page.waitForFunction(() => !state.isBoardLoading && state.nodes.length === 1);
     await page.locator('#home-nav-btn').click(); await home(page).locator('.home-board-card').first().waitFor();
     assert.equal(await home(page).locator('.home-board-card h3').first().textContent(), 'The next chapter');
-    assert(await action(page, 'brand').first().isDisabled());
+    assert(!(await action(page, 'brand').first().isDisabled()), 'R2.2 Brand navigation remains available with an open Board');
     await page.evaluate(() => { state.isBoardLoading = true; refreshDashboardIfVisible(); });
     assert(await action(page, 'board').first().isDisabled(), 'Do not open another Board during hydration');
     await page.evaluate(() => { state.isBoardLoading = false; refreshDashboardIfVisible(); });
