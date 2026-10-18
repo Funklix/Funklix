@@ -1,0 +1,188 @@
+1: pass Install project dependencies
+2: pass Check runtime script syntax
+3: pass Check browser script integrity
+4: pass Check BW-35.1 canonical posting schedule persistence
+5: pass Check BW-35.2 manual Posting Plan workspace
+6: pass Check BW-35.2R1 integrated Posting Plan
+7: pass Check BW-35.2R2 unified Content Calendar
+8: pass Check BW-35.2R3 direct Content Calendar
+9: pass Check BW-35.2R4 scheduling interactions
+10: pass Check BW-35.2R5 fluid and reliable scheduling
+11: pass Check BW-35.2R7 emergency stability containment
+12: pass Check BW-35.2R8 simplified Content Calendar architecture
+13: pass Check BW-35.2R9 Content Calendar visual system
+14: pass Check BW-35.3 deterministic automatic planning
+15: pass Check BW-35.3R1 Auto-plan studio and primary action
+16: pass Check BW-35.3R2 Auto-plan apply and session persistence
+17: pass Check BW-35.3R3 Auto-plan freshness and safe rebasing
+18: pass Check BW-35.3R4 Auto-plan batch runtime
+19: pass Check BW-35.3R5 Auto-plan production evidence
+20: pass Check BW-35.4 safe Posting Plan CSV export
+21: pass Check BW-35.4R1 visual Posting Plan PDF export
+22: pass Check BW-35.4R2 export naming and Tendra One branding
+23: pass Check read-only Canonical Brand catalog
+24: pass Check ephemeral Canonical Brand selection
+25: pass Check Canonical Brand creation
+26: pass Check durable Workspace Brand selection
+27: pass Check explicit Board Brand association
+28: pass Check per-Board Brand association isolation
+29: pass Check Board Brand catalog resolution states
+30: pass Check read-only Canonical Brand Workspace detail
+31: pass Check explicit Canonical Brand editing
+32: pass Check read-only Brand Core comparison
+33: pass Check Brand Core comparison lifecycle
+34: pass Check explicit Canonical Brand Core initialization
+35: pass Check Brand-scoped Board library
+36: pass Check explicit Board creation from Canonical Brand
+37: pass Check Canonical Brand snapshot provenance
+38: pass Check controlled Canonical-to-Board refresh
+39: pass Check Canonical Brand foundation
+40: pass Check sanitized read-only database inspector
+41: pass Check timing-safe session signature verification
+42: pass Check Board access roles and sensitive-data boundaries
+43: pass Check Board permissions popover lifecycle
+44: pass Check private Boards and revocable public view links
+45: pass Check Canonical Brand team roles
+46: pass Check inline Brand member role management
+47: pass Check Workspace Brand deletion and selector theme
+48: pass Check independent interface and campaign languages
+49: pass Check Campaign Canvas Inspector language coverage
+50: pass Check Language and Region Settings
+51: pass Check honest AI Insights baseline
+52: pass Check read-only AI Brain advisor
+53: pass Check AI Brain Board authorization with real access helpers (mocked OpenAI)
+54: pass Check real Canvas context and turn lifecycle
+55: pass Check safe AI Brain response formatting
+56: pass Check bounded AI Brain conversation memory
+57: pass Check AI Brain follow-up reference resolution
+58: pass Check AI Brain response-language adherence
+59: pass Check controlled AI Brain Content-node creation
+60: pass Check AI Brain Content-node proposal production boundary
+61: pass Check AI Brain post-creation Canvas transition
+62: pass Check bounded large Brand Core website imports
+63: pass Check BW-27 design system and Dark Mode
+64: pass Check BW-27.1 Dark Mode surface contrast
+65: pass Check BW-27.2 premium Dark Mode visual system
+66: pass Check BW-27.3 final Dark Mode visual polish
+67: pass Check BW-27.4 Canvas component polish
+68: pass Check BW-27.5 Landing Page node Dark Mode readability
+69: pass Check BW-27.6 Campaign Canvas Dark Mode controls
+70: pass Check BW-27.7 responsive shell stability
+71: pass Check BW-28 trustworthy Canvas Intelligence
+72: pass Check BW-28.1 Insights UX and AI Brain handoff
+73: pass Check BW-28.3 premium Insights and Brand Avatar
+74: pass Check BW-28.3.1 Insights runtime rendering
+75: pass Check BW-29 assumption-based Funnel Simulator
+76: pass Check BW-29.1 Simulator UX and Dark Mode
+77: pass Check BW-29.3 Persona Journey Simulator
+78: pass Check BW-29.3.2 execution and compact Simulator UX
+79: pass Check BW-29.3.3 reliable Persona simulation
+80: pass Check BW-29.3.4 simple Persona execution path
+81: pass Check BW-29.3.5 live Persona request parity
+82: pass Check BW-29.4.1 production boundary diagnostics
+83: pass Check BW-29.4.2 Canvas-context boundary
+84: pass Check BW-30.1 App Shell and Inspector layout
+85: pass Check BW-31.1 read-only Content Workspace library
+86: pass Check BW-31.2 human Content Workspace review workflow
+87: pass Check BW-31.4 operational internal Content Calendar
+88: pass Check BW-31.5.1 Content Workspace functional recovery
+89: pass Check BW-31.5.2 simplified Content Workspace operations
+90: pass Check BW-32.1 Social Connector foundation
+91: pass Check BW-32.2 LinkedIn account connection
+92: pass Check BW-32.2.1 LinkedIn callback recovery
+93: pass Check BW-32.2.2 LinkedIn persistence reconciliation
+94: pass Check BW-32.2.3 LinkedIn connection state
+95: pass Check BW-32.2.5 truthful LinkedIn Settings controls
+96: pass Check BW-32.2.6 Social Connector schema recovery
+97: pass Check BW-32.2.9 OAuth phase migration recovery
+98: pass Check BW-32.2.10 Social Settings response contract
+99: pass Check BW-32.2.11 Social Settings read availability
+100: pass Check BW-32.2.12 direct Social Settings read
+101: pass Check BW-32.3.1 guarded LinkedIn text Publish Now
+102: pass Check BW-32.3.2 stale approval recovery
+103: pass Check BW-32.3.3 canonical content reapproval
+104: pass Check BW-32.3.5 approval fingerprint diagnostics
+105: pass Check BW-32.3.6 authoritative v2 approval
+106: pass Check BW-32.3.7 server-authoritative approval action
+107: pass Check BW-32.3.8 accepted LinkedIn publication finalization
+108: pass Check BW-32.3.9 authoritative social response boundary
+109: pass Check BW-34.1 Facebook Page publishing
+110: pass Check BW-34.1R1 Facebook callback repair
+111: pass Check BW-34.1.1 Facebook content publishing surface
+112: pass Check BW-34.1.2 Facebook Page destination selection
+113: pass Check BW-34.1.3 Facebook publishing readiness
+114: pass Check BW-34.1.9 Facebook publication finalization
+115: pass Check BW-34.2A Facebook engagement
+116: pass Check BW-34.2AR1 social adapter compatibility
+117: pass Check BW-34.2AR2 Facebook engagement repair
+118: pass Check BW-34.2AR3 Facebook engagement authentication
+119: pass Check BW-34.2AR4 Facebook engagement partial availability
+120: pass Check BW-33.2R1 corrected Tendra One brand foundation
+121: pass Check BW-33.3R1 post-hydration Canvas density
+122: pass Check BW-33.4A1 Canvas indicator Inspector routing
+123: pass Check BW-33.4B1R1 authoritative open-comment counter
+124: pass Check BW-33.4B3 Post-it UX and localization
+125: pass Check BW-33.4B3.1 resolved Post-its and Dark Mode controls
+126: pass Check BW-33.4B4 accessible Post-it emoji picker
+127: pass Check BW-33.4B4.1 stable Post-it emoji picker lifecycle
+128: pass Check BW-33.4B4.2 timed Post-it emoji picker lifecycle
+129: pass Check BW-33.5 Supabase RLS hardening contract
+130: pass Check BW-33.5.1 publishing destinations RLS delta
+131: pass Check BW-36.1R1 Canvas toolbar isolation and Funnel footer
+132: pass Check BW-36.2 isolated compact non-Canvas context bar
+133: pass Check BW-36.4 simplified Brand sidebar
+134: pass Check BW-36.6 Workspace schema foundation
+135: pass Check BW-36.7 Workspace backfill preflight
+136: pass Check BW-36.7R1 Workspace identity diagnostic
+137: pass Check BW-36.7R2 application identity bridge
+138: pass Check BW-36.7R3 corrected Workspace backfill preflight
+139: pass Check BW-36.8 transactional Workspace backfill
+140: pass Check BW-36.9 authorized Workspace read boundary
+141: pass Check BW-36.9R1 Workspace identity resolution repair
+142: pass Check BW-36.10 Workspace selector and sidebar hierarchy
+143: pass Check BW-36.10R1 Workspace selector popover layout
+144: pass Check BW-36.11 safe Workspace renaming
+145: pass Check BW-36.11R1 sidebar context interaction
+146: pass Check BW-36.13R1 Workspace stability containment
+147: pass Check BW-36.13R2 safe first Workspace creation
+148: pass Check BW-36.13R3 authoritative project creation
+149: pass Check BW-36.13R3R1 Workspace catalog and project launch repair
+150: pass Guided Brand Profile setup regression
+151: pass Install focused browser fixture
+152: pass Check approved Brand Learnings in Advice (disposable PostgreSQL, mocked OpenAI)
+153: pass Check BW-36.21A-R2.1 safe Workspace switching (Chromium)
+154: pass Check BW-36.21A Home foundation (Chromium)
+155: pass Check BW-36.20R1 provider storage and revalidation errors (mocked OpenAI)
+156: pass Check Brand Profile entry and Workspace actions in Chromium
+157: pass Check BW-36.13R5 Brand lifecycle stability
+158: pass Check Brand workspace regression recovery
+159: pass Check durable Brand logos and readiness
+160: pass Check production Brand logo persistence
+161: pass Check Brand Profile decisions and deletion UX
+162: pass Check BW-36.12 Brand logo acquisition and projection
+163: pass Check stable campaign creation and direct handoff in Chromium
+164: pass Check complete Campaign V3 generation in Chromium
+165: pass Check BW-36.15 guided campaign responsibilities
+166: pass Check BW-36.15R1 responsibility workspace continuity
+167: pass Check BW-36.16 adaptive Canvas view hierarchy in Chromium
+168: pass Check BW-36.16R1 toolbar and global view cycle in Chromium
+169: pass Check BW-36.17 governed Brand Learnings in Chromium
+170: pass Check BW-36.17R1 Learning provenance schema in disposable PostgreSQL
+171: pass Check BW-36.17R2 provenance recovery in disposable PostgreSQL
+172: pass Check BW-36.18 governed Learning source capture
+173: pass Check BW-36.19 AI Learning Advisor (mocked OpenAI)
+174: pass Check BW-36.19R1 existing saved Board compatibility (mocked OpenAI)
+175: pass Check BW-36.19R2 adaptive Advisor context and streaming recovery (mocked OpenAI)
+176: pass Check BW-36.19R4 output reliability (mocked OpenAI)
+177: pass Check BW-36.19R5 simplified generation and persisted human approval (mocked OpenAI)
+178: pass Check BW-36.19R6 Learning review and atomic batch adoption (mocked OpenAI)
+179: pass Check BW-36.19R7 Advisor visual states and accessibility in Chromium (provider-free)
+180: pass Check BW-36.19R8 Canvas Learn entry in Chromium (provider-free)
+181: pass Check dynamic AI Insights translations
+182: pass Check scoped German interface localization
+183: pass Check BW-36.21A-R2.2 multiple Workspaces and direct Brand navigation
+184: pass Check BW-36.21A-R2.3 Brand and Board context consistency
+185: pass Check BW-36.21B1 Home Intelligence (Chromium, provider-free)
+186: pass Check BW-36.21B2 Home Campaign Insights and AI Brain (Chromium, provider-free)
+187: pass Check Knowledge Module browser globals
+FINAL 187/187 PASS
