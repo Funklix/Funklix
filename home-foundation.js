@@ -62,8 +62,35 @@
       && a.publicToken === b.publicToken;
   }
 
+  // The existing library endpoint independently checks active application identity
+  // and Brand ACL. Its aggregate counts cover all pages, not just these rows.
+  function learningSummary(payload, brandId) {
+    if (payload?.contract !== 'brand_learnings_v1' || payload.brand?.id !== brandId
+      || !Array.isArray(payload.learnings) || typeof payload.can_write !== 'boolean'
+      || !payload.counts || typeof payload.counts !== 'object' || Array.isArray(payload.counts)) return null;
+    // GROUP BY omits statuses with no rows; a present, valid aggregate is sparse.
+    const count = key => !Object.hasOwn(payload.counts, key) ? 0
+      : Number.isSafeInteger(payload.counts[key]) && payload.counts[key] >= 0 ? payload.counts[key] : null;
+    return { proposed: count('proposed'), approved: count('approved'), canWrite: payload.can_write };
+  }
+
+  function responsibilitySummary(context) {
+    const m = model(context), runtime = context.responsibilities;
+    if (!m.workspace || context.loading || !context.openBoard || !runtime
+      || runtime.boardId !== context.boardId || runtime.generation !== context.boardGeneration) return null;
+    const email = value => typeof value === 'string' ? value.trim().toLowerCase() : '';
+    const mine = email(context.account.email);
+    const seen = new Set(), duplicates = new Set();
+    for (const n of runtime.nodes) { if (seen.has(n.id)) duplicates.add(n.id); seen.add(n.id); }
+    const items = runtime.nodes.filter(n => n.id && !duplicates.has(n.id) && n.assigned && !n.complete);
+    return { items, mine: items.filter(n => email(n.ownerEmail) && email(n.ownerEmail) === mine).length,
+      canEdit: context.openBoard.canEdit === true, dirty: runtime.dirty,
+      brand: m.workspace.brands.find(b => b.id === context.openBoard.brandId) || null };
+  }
+
   function create({ host, context, text: t = s => s, actions, fetchImpl = root.fetch.bind(root) }) {
     let scope = null, request = null, rows = [], status = 'idle', filter = 'all', disposed = false;
+    let learningRequest = null, learning = null, learningStatus = 'idle', runtimeKey = '';
     const doc = host.ownerDocument;
     function node(tag, className, value) {
       const element = doc.createElement(tag);
@@ -92,6 +119,70 @@
     function message(title, description, action) {
       const box = node('div', 'home-empty'); box.append(node('h3', '', t(title)), node('p', '', t(description)));
       if (action) box.append(action); return box;
+    }
+    function intelligence(c, m) {
+      const grid = node('div', 'home-intelligence');
+      const brandCard = node('section', 'home-intelligence-card'); brandCard.dataset.homeModule = 'brand';
+      const title = node('h2', '', t('Brand Intelligence')); title.id = 'home-intelligence-title';
+      brandCard.setAttribute('aria-labelledby', title.id); brandCard.append(title);
+      brandCard.append(node('p', 'home-note', t('Selected Brand')));
+      if (!m.brand) brandCard.append(node('p', '', t('Select a Brand to see its Learning review availability.')));
+      else if (learningStatus !== 'ready') {
+        // Do not show identity/availability from a Board or a failed Learning read.
+        const notice = node('p', 'home-note', t(learningStatus === 'denied' ? 'Brand Learning access could not be confirmed.'
+          : learningStatus === 'error' ? 'Brand Learnings unavailable. Try again.' : 'Checking Brand Learning access…'));
+        notice.setAttribute('role', 'status'); brandCard.append(notice);
+        const retry = ['error', 'denied'].includes(learningStatus);
+        const control = button(retry ? 'Retry Brand Learnings' : 'Checking Brand Learning access…', retry ? 'learnings-retry' : 'learnings', m.brand.id);
+        control.dataset.homeFocus = 'learnings:' + m.brand.id;
+        // Keep the native focus target mounted while counts are reauthorized.
+        // Delegation below accepts navigation only after a successful read.
+        if (!retry) control.setAttribute('aria-disabled', 'true');
+        brandCard.append(control);
+      } else {
+        const name = node('div', 'home-module-identity'); name.append(identity(m.brand), node('h3', '', m.brand.name)); brandCard.append(name);
+        const counts = node('dl', 'home-module-counts');
+        for (const [label, value] of [['Awaiting Review', learning.proposed], ['Approved Knowledge', learning.approved]]) {
+          const group = node('div'); group.append(node('dt', '', t(label)), node('dd', '', value === null ? t('Unavailable') : String(value))); counts.append(group);
+        }
+        brandCard.append(counts);
+        if (learning.proposed === 0) brandCard.append(node('p', 'home-note', t('No proposals awaiting review.')));
+        brandCard.append(node('p', 'home-note', t('Approved Learnings are human-reviewed supplementary Brand knowledge.')));
+        brandCard.append(node('p', 'home-note', t(learning.canWrite ? 'Human review is available in Brand Profile.' : 'You can view Learnings. Your access is read-only.')));
+        brandCard.append(button(learning.canWrite ? 'Review Brand Learnings' : 'View Brand Learnings', 'learnings', m.brand.id));
+      }
+      const boardCard = node('section', 'home-intelligence-card'); boardCard.dataset.homeModule = 'responsibilities';
+      const heading = node('h2', '', t('Team Responsibilities')); heading.id = 'home-responsibilities-title';
+      boardCard.setAttribute('aria-labelledby', heading.id); boardCard.append(heading, node('p', 'home-note', t('Current Board')));
+      const summary = responsibilitySummary(c);
+      if (!summary) {
+        boardCard.append(node('p', '', t(c.loading ? 'Responsibilities will appear when Board loading finishes.' : 'Open a Board to see its responsibilities.')));
+        boardCard.append(button('Browse Boards', 'boards'));
+      } else {
+        boardCard.append(node('h3', '', t('Responsibilities in {board}').replace('{board}', c.openBoard.name)
+          + ' · ' + (summary.brand?.name || t(c.openBoard.unassigned ? 'No Brand connected' : 'No visible Brand association'))));
+        boardCard.append(node('p', 'home-note', t(summary.dirty ? 'Live Canvas · includes unsaved changes' : 'Current loaded Canvas')));
+        if (!summary.canEdit) boardCard.append(node('p', 'home-note', t('View-only Board')));
+        const counts = node('dl', 'home-module-counts');
+        for (const [label, value] of [['Assigned to You', summary.mine], ['Incomplete Responsibilities', summary.items.length]]) {
+          const group = node('div'); group.append(node('dt', '', t(label)), node('dd', '', String(value))); counts.append(group);
+        }
+        boardCard.append(counts);
+        if (!summary.items.length) boardCard.append(node('p', 'home-note', t('No incomplete assigned nodes in this Board.')));
+        const list = node('ul', 'home-responsibility-list');
+        // Stable Canvas ordering; no invented priority or urgency ranking.
+        for (const item of summary.items.slice(0, 3)) {
+          const row = node('li'), label = item.title || t(item.type);
+          if (/^[\w.:-]+$/.test(item.id)) {
+            const open = button('', 'responsibility-node', item.id); open.className = 'home-responsibility-open'; open.textContent = label;
+            open.setAttribute('aria-label', `${t('Show on Canvas')}: ${label}`); row.append(open);
+          } else row.append(node('strong', '', label));
+          row.append(node('span', 'home-note', t(item.status)));
+          list.append(row);
+        }
+        boardCard.append(list, button('Open Responsibilities', 'responsibilities'));
+      }
+      grid.append(brandCard, boardCard); return grid;
     }
     function draw() {
       const c = context(), m = model(c, rows, filter);
@@ -155,7 +246,7 @@
       host.append(orientation);
       const contextNotice = node('aside'); contextNotice.dataset.homeContext = 'true';
       renderContextNotice(contextNotice, c, t, { continue: () => actions.board(c.boardId), boards: actions.brandBoards, profile: actions.profile });
-      host.append(contextNotice);
+      host.append(contextNotice, intelligence(c, m));
       const section = node('section', 'home-continue'); section.setAttribute('aria-labelledby', 'home-continue-title');
       const top = node('div', 'home-section-heading'); const h2 = node('h2', '', t('Continue Working')); h2.id = 'home-continue-title';
       const controls = node('div', 'home-actions'); controls.append(button('Browse Boards', 'boards'));
@@ -208,7 +299,8 @@
       if (focused) Array.from(host.querySelectorAll('[data-home-focus]')).find(e => e.dataset.homeFocus === focused)?.focus({ preventScroll: true });
       if (focusedContext) contextNotice.querySelector(`[data-context-action="${focusedContext}"]`)?.focus({ preventScroll: true });
     }
-    function invalidate() { request?.controller.abort(); request = null; rows = []; status = 'idle'; }
+    function invalidateLearnings() { learningRequest?.controller.abort(); learningRequest = null; learning = null; learningStatus = 'idle'; }
+    function invalidate() { request?.controller.abort(); request = null; rows = []; status = 'idle'; invalidateLearnings(); }
     function sync() {
       if (disposed) return;
       const next = context();
@@ -216,7 +308,51 @@
       if (next.view !== 'home') { host.replaceChildren(); return; }
       draw();
       if (model(next).workspace && status === 'idle') void load();
+      if (model(next).brand && learningStatus === 'idle') void loadLearnings();
     }
+    async function loadLearnings() {
+      const current = context(), brand = model(current).brand;
+      if (!brand || current.view !== 'home' || learningRequest || disposed) return;
+      const token = { controller: new AbortController() }; learningRequest = token;
+      learning = null; learningStatus = 'loading'; draw();
+      const timer = root.setTimeout(() => token.controller.abort(), 12000);
+      try {
+        // One bounded page only. Never fetch successive pages to compute counts.
+        const response = await fetchImpl(`/api/brands/${encodeURIComponent(brand.id)}/learnings?status=all&offset=0`, {
+          credentials: 'same-origin', cache: 'no-store', headers: { Accept: 'application/json' }, signal: token.controller.signal });
+        if (learningRequest !== token || !sameScope(current, context())) return;
+        if ([401, 403, 404].includes(response.status)) { learningStatus = 'denied'; return; }
+        const payload = await response.json();
+        if (learningRequest !== token || !sameScope(current, context())) return;
+        const summary = response.ok && learningSummary(payload, brand.id);
+        if (!summary) throw new Error('Learning summary unavailable');
+        learning = summary; learningStatus = 'ready';
+      } catch (_) {
+        if (learningRequest === token && sameScope(current, context())) { learning = null; learningStatus = 'error'; }
+      } finally {
+        root.clearTimeout(timer);
+        if (learningRequest === token) { learningRequest = null; if (sameScope(current, context())) draw(); }
+      }
+    }
+    function refreshLearnings(event) {
+      const c = context();
+      if (disposed || c.view !== 'home' || doc.visibilityState === 'hidden'
+        || (event?.detail?.brandId && event.detail.brandId !== c.brandId)) return;
+      invalidateLearnings(); sync();
+    }
+    root.addEventListener?.('focus', refreshLearnings);
+    root.addEventListener?.('funklix:brand-learnings-changed', refreshLearnings);
+    const resume = () => { if (doc.visibilityState === 'visible') refreshLearnings(); };
+    doc.addEventListener('visibilitychange', resume);
+    // Local presentation only: observe replacement/deletion, permission and dirty
+    // runtime changes even when another existing editor does not emit a Home event.
+    // This does not fetch, serialize for saving, or mutate Canvas state.
+    const runtimeTimer = root.setInterval(() => {
+      const c = context();
+      if (c.view !== 'home') return;
+      const key = JSON.stringify([c.openBoard, c.responsibilities, c.loading]);
+      if (!scope || !sameScope(scope, c) || key !== runtimeKey) { runtimeKey = key; sync(); }
+    }, 1000);
     async function load() {
       const current = context();
       if (!model(current).workspace || current.view !== 'home' || request) return;
@@ -246,7 +382,11 @@
       else if (action === 'retry') actions.retry();
       else if (m.ready && action === 'workspace-create') actions.workspaceCreate(target);
       else if (m.workspace) {
-        if (action === 'metadata') { status = 'idle'; void load(); }
+        if (action === 'learnings-retry') { invalidateLearnings(); void loadLearnings(); }
+        else if (action === 'learnings' && m.brand?.id === id && learningStatus === 'ready') actions.learnings({ ...m.brand, workspace_id: m.workspace.id, section: 'Brand Learnings' });
+        else if (action === 'responsibility-node' && /^[\w.:-]+$/.test(id) && responsibilitySummary(c)?.items.some(n => n.id === id)) actions.node(id);
+        else if (action === 'responsibilities' && responsibilitySummary(c)) actions.responsibilities(() => host.querySelector('[data-home-action="responsibilities"]'));
+        else if (action === 'metadata') { status = 'idle'; void load(); }
         else if (action === 'brand' && m.workspace.brands.some(b => b.id === id)) actions.brand(id);
         else if (action === 'profile') { const brand = m.workspace.brands.find(b => b.id === id); if (brand) actions.profile(brand); }
         else if (action === 'board' && !c.loading && m.workspace.boards.some(b => b.id === id)) actions.board(id);
@@ -256,8 +396,8 @@
         else if (action === 'brands') actions.brands();
       }
     });
-    return Object.freeze({ sync, dispose() { disposed = true; invalidate(); host.replaceChildren(); } });
+    return Object.freeze({ sync, dispose() { disposed = true; invalidate(); root.clearInterval(runtimeTimer); root.removeEventListener?.('focus', refreshLearnings); root.removeEventListener?.('funklix:brand-learnings-changed', refreshLearnings); doc.removeEventListener('visibilitychange', resume); host.replaceChildren(); } });
   }
-  root.FunklixHomeFoundation = Object.freeze({ model, sameScope, renderContextNotice, create });
+  root.FunklixHomeFoundation = Object.freeze({ model, sameScope, learningSummary, responsibilitySummary, renderContextNotice, create });
   if (typeof module === 'object' && module.exports) module.exports = root.FunklixHomeFoundation;
 }(typeof globalThis !== 'undefined' ? globalThis : window));

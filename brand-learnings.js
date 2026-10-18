@@ -68,6 +68,7 @@
         if (!alive || !options.current()) return null;
         if (!response.ok) { const code = result?.error?.code; throw Object.assign(new Error(), { code:COPY[code] ? code:'INTERNAL_ERROR' }); }
         if (result?.contract !== 'brand_learnings_v1' || result.brand?.id !== options.brand.id || !Array.isArray(result.learnings)) throw new Error();
+        if (method !== 'GET' && root.CustomEvent) root.dispatchEvent?.(new root.CustomEvent('funklix:brand-learnings-changed', { detail: { brandId: options.brand.id } }));
         return result;
       } finally { root.clearTimeout(timer); }
     }

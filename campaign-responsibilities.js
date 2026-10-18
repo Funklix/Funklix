@@ -156,7 +156,7 @@
       }));
     }
     dialog.addEventListener('cancel', event => { if (busy) event.preventDefault(); });
-    dialog.addEventListener('close', () => { dialog.remove(); if (previous?.isConnected) previous.focus(); });
+    dialog.addEventListener('close', () => { dialog.remove(); const target = typeof previous === 'function' ? previous() : previous; if (target?.isConnected) target.focus(); });
     dialog.addEventListener('keydown', event => {
       if (event.key !== 'Tab') return;
       const items = [...dialog.querySelectorAll('button,input,[tabindex="0"]')].filter(n => !n.disabled && n.getClientRects().length);
@@ -169,5 +169,5 @@
     else { setBusy(true); announce('Loading team'); adapter.loadPeople().then(() => announce('')).catch(() => announce('No editable team members available')).finally(() => { setBusy(false); render(); }); }
     return dialog;
   }
-  return { structure, variationNodes, candidates, mount };
+  return { types: Object.freeze(types), structure, variationNodes, candidates, mount };
 });
