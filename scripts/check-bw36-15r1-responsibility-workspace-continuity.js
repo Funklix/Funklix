@@ -56,6 +56,8 @@ async function browserChecks() {
   const originalBrand = clone(r.db.brands), originalBoard = clone(r.db.boards[0]);
   const commands = [], errors = [], nativeDialogs = [], requests = [];
   let boardGets = 0;
+  let simulatedAccess = null;
+  const permissionRefreshRoles = [];
   const browser = await chromium.launch({ ...(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH }
     : fs.existsSync('/usr/bin/chromium') ? { executablePath: '/usr/bin/chromium' } : {}), args: ['--no-sandbox'] });
   try {
@@ -90,7 +92,11 @@ async function browserChecks() {
           return route.fulfill({ status: response.statusCode, json: response.body });
         }
         boardGets++;
-        return route.fulfill({ json: (await r.request('GET', url.pathname)).body });
+        const board = (await r.request('GET', url.pathname)).body;
+        // Role checks must have one permission source: passive refresh is still
+        // running and must return the role being exercised, not the boot owner.
+        if (simulatedAccess) { board.access = clone(simulatedAccess); permissionRefreshRoles.push(simulatedAccess.role); }
+        return route.fulfill({ json: board });
       }
       if (url.pathname === '/fixture-avatar.png') return route.fulfill({ contentType: 'image/png', body: png });
       if (url.pathname.startsWith('/api/')) return route.fulfill({ json: { boards: r.db.boards, members: [], editors: [], nodes: [], presence: [] } });
@@ -250,11 +256,23 @@ async function browserChecks() {
     // Preserve authorized read-only visibility, exclude mutation authority, and
     // hide the Canvas action outside Canvas and without an authorized project.
     for (const role of ['editor','viewer','public_viewer']) {
-      await page.evaluate(role => {
-        applyBoardAccessFromServer({ role, canView: true, canEdit: role === 'editor', canManagePermissions: false });
-        state.publicBoardToken = role === 'public_viewer' ? 'read-only-token' : null;
+      simulatedAccess = { role, canView: true, canEdit: role === 'editor', canManagePermissions: false };
+      // An already-started response may still carry the previous role. Drain it
+      // before applying this role; subsequent automatic reads use simulatedAccess.
+      await page.waitForFunction(() => !state.boardRefreshInFlight);
+      await page.evaluate(async access => {
+        applyBoardAccessFromServer(access);
+        state.publicBoardToken = access.role === 'public_viewer' ? 'read-only-token' : null;
         synchronizeResponsibilityToolbar();
-      }, role);
+        // Exercise the competing production refresh path deterministically. Public
+        // viewers must continue to be excluded by its existing guard.
+        await pollBoardForRemoteChanges();
+      }, simulatedAccess);
+      await page.waitForFunction(() => !state.boardRefreshInFlight);
+      assert.deepEqual(await page.evaluate(() => ({ role: state.boardAccess.reason, canView: state.boardAccess.canView,
+        canEdit: state.boardAccess.canEdit, canManagePermissions: state.boardAccess.canManagePermissions })), simulatedAccess,
+        `Board refresh preserves the simulated ${role} capabilities`);
+      if (role !== 'public_viewer') assert(permissionRefreshRoles.includes(role), `Real Board refresh exercised for ${role}`);
       assert(await entry.isVisible()); await entry.click();
       await page.waitForFunction(() => document.getElementById('campaign-responsibilities')?.getAttribute('aria-busy') === 'false');
       assert.equal(await dialog.getByRole('button', { name: 'Add team member', exact: true }).count(), 0);
