@@ -6304,14 +6304,15 @@ function renderCampaignIntelligence() {
   let a;
   try {
     a = analyzeCampaign(state.nodes, state.edges, state.brandCore);
+    captureInsightsDiagnostic(a);
   } catch (_error) {
     state.insightsDiagnosticSnapshot = state.currentBoardId && state.boardAccess?.canView !== false
       ? { identity: currentInsightsIdentity(), analysis: null }
       : null;
     renderInsightsSurface();
+    renderAiBrain();
     return;
   }
-  captureInsightsDiagnostic(a);
   renderInsightsSurface();
   renderAiBrain();
 }
@@ -6683,7 +6684,7 @@ function currentInsightsIdentity() {
 }
 
 function currentInsightsCanvasIdentity() {
-  return JSON.stringify(state.nodes.map((node) => [node.id, node.type, node.title, node.content, node.audience, node.tone, node.funnelStage, node.social?.platform, node.social?.preview, node.landingPage?.cta, node.landingPage?.trust]));
+  return JSON.stringify(state.nodes.map((node) => [node.id, node.type, node.title, node.content, node.audience, node.tone, node.funnelStage, node.goal, node.social?.platform, node.social?.preview, node.social?.cta, node.landingPage?.cta, node.landingPage?.trust]));
 }
 
 function captureInsightsDiagnostic(analysis) {
@@ -6691,6 +6692,77 @@ function captureInsightsDiagnostic(analysis) {
   state.insightsDiagnosticSnapshot = available
     ? { identity: currentInsightsIdentity(), canvasIdentity: currentInsightsCanvasIdentity(), canvasState: state.isDirty ? "live_unsaved" : "loaded_saved", analyzedAt: new Date().toISOString(), analysis, findings: buildInsightsFindings(analysis) }
     : null;
+}
+
+// Home consumes the existing snapshot only. Rendering never calculates diagnostics,
+// changes Canvas state, or requests AI/knowledge context.
+function homeCampaignInsights() {
+  try {
+    if (state.activeView !== 'home' || !brandBoardNavigationContext().openBoard
+      || state.initialServerLoadInFlight) return null;
+    if (!state.nodes.length) return { status: 'empty' };
+    const snapshot = state.insightsDiagnosticSnapshot;
+    if (!snapshot) return { status: 'missing' };
+    if (snapshot.identity !== currentInsightsIdentity()) return { status: 'stale' };
+    if (!snapshot.analysis) return { status: 'error' };
+    if (!isCurrentInsightsSnapshot(snapshot)
+      || snapshot.canvasState !== (state.isDirty ? 'live_unsaved' : 'loaded_saved')) return { status: 'stale' };
+    if (!isValidInsightsDiagnostic(snapshot.analysis) || !Array.isArray(snapshot.findings)
+      || !Number.isFinite(Date.parse(snapshot.analyzedAt))) return { status: 'error' };
+    if (snapshot.findings.some(f => !f || typeof f.code !== 'string' || typeof f.title !== 'string'
+      || typeof f.description !== 'string' || !Object.hasOwn(INSIGHTS_SEVERITY_RANK, f.severity)
+      || !Array.isArray(f.affectedNodeIds) || f.affectedNodeIds.some(id => typeof id !== 'string'))) return { status: 'error' };
+    const campaignNodes = state.nodes.some(n => ['Idea', 'Content', 'Social Media Posting', 'Landing Page', 'Email Campaign', 'Campaign Variation'].includes(n.type)
+      || n.funnelStage || n.audience || n.tone);
+    const findings = snapshot.findings.filter(f => {
+      // The engine's global trust/CTA formulas can fire with no eligible nodes.
+      // Preserve the source findings; only preview genuinely applicable checks.
+      if (f.code === 'TRUST_PROOF_MISSING') return f.affectedNodeIds.some(id => state.nodes.some(n => n.id === id && n.type === 'Landing Page'));
+      if (f.code === 'CTA_VARIATIONS_MISSING') return f.affectedNodeIds.some(id => state.nodes.some(n => n.id === id && ['Landing Page', 'Social Media Posting'].includes(n.type)));
+      return f.code !== 'FUNNEL_STAGE_GAPS' || campaignNodes;
+    }).map(f => {
+      // showInsightsFindingOnCanvas selects the first affected node. Offer that
+      // adapter only when this exact target is unique and selector-safe.
+      const first = f.affectedNodeIds.find(id => state.nodes.some(n => n.id === id));
+      const nodeId = typeof first === 'string' && /^[\w.:-]+$/.test(first)
+        && state.nodes.filter(n => n.id === first).length === 1 ? first : null;
+      return { code: f.code, title: f.title, description: f.description, severity: f.severity,
+        affectedNodeIds: f.affectedNodeIds, nodeId };
+    });
+    return { status: findings.length ? 'ready' : 'none', findings, source: snapshot.canvasState,
+      analyzedAt: snapshot.analyzedAt,
+      key: JSON.stringify([snapshot.identity, snapshot.canvasIdentity, snapshot.canvasState, snapshot.analyzedAt]) };
+  } catch (_) { return { status: 'error' }; }
+}
+
+function openHomeBoardDestination(destination, findingCode) {
+  const c = brandBoardNavigationContext();
+  const workspace = state.workspaceCatalog.value?.workspaces.find(w => w.id === c.workspaceId);
+  if (state.activeView !== 'home' || !state.user?.email || state.publicBoardToken || !c.openBoard
+    || state.initialServerLoadInFlight || state.workspaceCatalog.status !== 'ready'
+    || state.workspaceCatalog.identity !== state.user.email.trim().toLowerCase()
+    || !workspace?.boards.some(b => b.id === state.currentBoardId)) return;
+  if (destination === 'brain' && c.openBoard.canEdit !== true) return;
+  const boardId = state.currentBoardId, generation = state.boardLoadGeneration, account = state.user;
+  if (destination === 'node') {
+    const finding = homeCampaignInsights()?.findings?.find(f => f.code === findingCode);
+    if (!finding?.nodeId) return;
+    el.campaignCanvasNavButton?.click();
+    if (state.activeView !== 'board' || state.currentBoardId !== boardId || state.boardLoadGeneration !== generation) return;
+    showInsightsFindingOnCanvas(findingCode);
+  } else if (destination === 'brain') el.aiBrainNavButton?.click();
+  else el.insightsNavButton?.click();
+  // The existing view/leave adapters own the transition. Focus only after they
+  // actually reach the destination, and never submit or replace a Brain prompt.
+  requestAnimationFrame(() => {
+    if (state.user !== account || state.currentBoardId !== boardId || state.boardLoadGeneration !== generation) return;
+    if (destination === 'brain' && state.activeView === 'ai_brain') el.aiBrainSummary?.querySelector('#ai-brain-question')?.focus();
+    else if (destination === 'node' && state.activeView === 'board') el.inputs?.title?.focus({ preventScroll: true });
+    else if (destination === 'insights' && state.activeView === 'insights') {
+      const heading = el.insightsView?.querySelector('h2, h3');
+      if (heading) { heading.tabIndex = -1; heading.focus({ preventScroll: true }); }
+    }
+  });
 }
 
 // analyzeCampaign keeps English diagnostic values canonical because they are also
@@ -6750,7 +6822,8 @@ function showInsightsFindingOnCanvas(code) {
   if (!state.currentBoardId || state.boardAccess?.canView === false || !isCurrentInsightsSnapshot(snapshot) || !finding) return setSaveStatus(uiText("This insight is no longer current. Refresh AI Insights."));
   const nodeId = finding.affectedNodeIds.find((id) => state.nodes.some((node) => node.id === id));
   if (!nodeId) return setSaveStatus(uiText("Affected nodes could not be identified reliably."));
-  focusNodeInCanvas(nodeId, { behavior: window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ? "auto" : "smooth", select: true, pulse: true });
+  const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+  focusNodeInCanvas(nodeId, { behavior: reduced ? "auto" : "smooth", select: true, pulse: !reduced });
 }
 
 function askAiBrainAboutFinding(code) {
@@ -18874,6 +18947,7 @@ homeFoundationController = window.FunklixHomeFoundation?.create({
     brandId: state.session.brandId, boardId: state.currentBoardId || getBoardIdFromPath(),
     boardGeneration: state.boardLoadGeneration, view: state.activeView, language: state.uiLanguage,
     publicToken: state.publicBoardToken, loading: state.isBoardLoading || state.isBoardHydrating || state.initialServerLoadInFlight,
+    campaign: homeCampaignInsights(),
     responsibilities: state.activeView === 'home' && brandBoardNavigationContext().openBoard ? {
       boardId: state.currentBoardId, generation: state.boardLoadGeneration, dirty: state.isDirty || responsibilitySaveHeld(),
       nodes: state.nodes.filter(n => window.FunklixCampaignResponsibilities?.types.includes(n.type))
@@ -18889,6 +18963,9 @@ homeFoundationController = window.FunklixHomeFoundation?.create({
       const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
       setAppMode('canvas'); focusNodeInCanvas(id, { behavior: reduced ? 'auto' : 'smooth', select: true, pulse: !reduced });
     },
+    insights: () => openHomeBoardDestination('insights'),
+    brain: () => openHomeBoardDestination('brain'),
+    insightNode: code => openHomeBoardDestination('node', code),
     retry: retryWorkspaceCatalog,
     accessLost: () => { clearWorkspaceCatalog(); void retryWorkspaceCatalog(); },
     workspaceCreate: origin => workspaceSidebarController?.openCreate(origin),

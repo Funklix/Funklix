@@ -437,5 +437,7 @@ jobs:
         run: npm run check:bw36.21ar2.3
       - name: Check BW-36.21B1 Home Intelligence (Chromium, provider-free)
         run: npm run check:bw36.21b1
+      - name: Check BW-36.21B2 Home Campaign Insights and AI Brain (Chromium, provider-free)
+        run: npm run check:bw36.21b2
       - name: Check Knowledge Module browser globals
         run: node scripts/check-knowledge-module-browser-globals.js

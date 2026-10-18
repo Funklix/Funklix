@@ -92,6 +92,7 @@
     let scope = null, request = null, rows = [], status = 'idle', filter = 'all', disposed = false;
     let learningRequest = null, learning = null, learningStatus = 'idle', runtimeKey = '';
     const doc = host.ownerDocument;
+    const boardActionContexts = new WeakMap();
     function node(tag, className, value) {
       const element = doc.createElement(tag);
       if (className) element.className = className;
@@ -184,6 +185,73 @@
       }
       grid.append(brandCard, boardCard); return grid;
     }
+    function boardIntelligence(c, m) {
+      const grid = node('div', 'home-board-intelligence');
+      const available = Boolean(!c.loading && c.openBoard && m.workspace.boards.some(b => b.id === c.boardId));
+      const brand = available && m.workspace.brands.find(b => b.id === c.openBoard.brandId);
+      function control(label, action, id = '') {
+        const b = button(label, action, id); boardActionContexts.set(b, { scope: c, key: c.campaign?.key }); return b;
+      }
+      function card(module, title) {
+        const section = node('section', 'home-intelligence-card'); section.dataset.homeModule = module;
+        const heading = node('h2', '', t(title)); heading.id = 'home-' + module + '-title';
+        section.setAttribute('aria-labelledby', heading.id);
+        section.append(heading, node('p', 'home-note', t('Current Board')));
+        if (available) section.append(node('h3', '', c.openBoard.name + ' · '
+          + (brand?.name || t(c.openBoard.unassigned ? 'No Brand connected' : 'No visible Brand association'))));
+        return section;
+      }
+      const insights = card('insights', 'Campaign Insights');
+      const states = {
+        empty: 'This Canvas is empty. Add campaign content to make deterministic diagnostics available.',
+        missing: 'No diagnostic snapshot is available. Open Insights to inspect the current Canvas.',
+        stale: 'The diagnostic snapshot is out of date. Open Insights to refresh it for this Canvas.',
+        error: 'Canvas diagnostics could not be calculated. No diagnostic result is shown.',
+        none: 'No applicable structural findings in this snapshot. This does not measure campaign results.'
+      };
+      if (!available) {
+        insights.append(node('p', 'home-note', t(c.loading ? 'Board is loading. Canvas diagnostics will appear when the authorized Canvas is ready.'
+          : c.boardId ? 'Board access could not be confirmed. Open an authorized Board to continue.' : 'Open a Board to see Campaign Insights.')));
+        insights.append(button('Browse Boards', 'boards'));
+      } else {
+        const diagnostic = c.campaign;
+        const status = node('p', 'home-note', t(states[diagnostic?.status] || (!diagnostic ? states.missing : 'Deterministic checks of the current Canvas structure.')));
+        status.setAttribute('role', 'status'); insights.append(status);
+        if (['ready', 'none'].includes(diagnostic?.status)) {
+          const source = node('p', 'home-note', t(diagnostic.source === 'live_unsaved' ? 'Live Canvas · includes unsaved changes' : 'Based on the currently loaded saved Canvas'));
+          const time = node('time', '', new Intl.DateTimeFormat(c.language === 'de' ? 'de-DE' : 'en-GB', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(diagnostic.analyzedAt)));
+          time.dateTime = diagnostic.analyzedAt; source.append(' · ' + t('Analyzed') + ' ', time); insights.append(source);
+          const list = node('ul', 'home-insights-list');
+          // Presentation preview only; the complete engine and Insights stay intact.
+          for (const finding of diagnostic.findings.slice(0, 3)) {
+            const row = node('li'); row.dataset.findingCode = finding.code; row.dataset.severity = finding.severity;
+            row.append(node('span', 'home-finding-severity', t(finding.severity[0].toUpperCase() + finding.severity.slice(1))),
+              node('h4', '', t(finding.title)), node('p', '', t(finding.description)));
+            if (finding.nodeId) {
+              const open = control('Show on Canvas', 'insight-node', finding.code);
+              open.setAttribute('aria-label', t('Show on Canvas') + ': ' + t(finding.title)); row.append(open);
+            }
+            list.append(row);
+          }
+          insights.append(list);
+        }
+        insights.append(control('View all Insights', 'insights'));
+      }
+      const brain = card('brain', 'AI Brain');
+      brain.classList.add('home-brain-card');
+      brain.append(node('p', '', t('Explore campaign structure, audience and next steps with your current Board.')));
+      if (available && c.openBoard.canEdit === true) {
+        brain.append(node('p', 'home-note', t('Available to authenticated Board editors. Advice uses independently authorized Brand knowledge where available.')),
+          node('p', 'home-note', t('Opens AI Brain. An answer is generated only when you submit a question.')));
+        const ask = control('Ask AI Brain', 'brain'); ask.className = 'fk-btn fk-btn-primary'; brain.append(ask);
+      } else {
+        brain.append(node('p', 'home-note', t(c.loading ? 'AI Brain will be available after Board loading finishes.'
+          : available ? 'AI Brain requires editable Board access. This Board is read-only.'
+          : c.boardId ? 'Board access could not be confirmed. Open an authorized Board to continue.' : 'Open a saved Board with edit access to use AI Brain.')));
+        brain.append(button('Browse Boards', 'boards'));
+      }
+      grid.append(insights, brain); return grid;
+    }
     function draw() {
       const c = context(), m = model(c, rows, filter);
       const focused = host.contains(doc.activeElement) ? doc.activeElement.dataset.homeFocus : null;
@@ -246,7 +314,7 @@
       host.append(orientation);
       const contextNotice = node('aside'); contextNotice.dataset.homeContext = 'true';
       renderContextNotice(contextNotice, c, t, { continue: () => actions.board(c.boardId), boards: actions.brandBoards, profile: actions.profile });
-      host.append(contextNotice, intelligence(c, m));
+      host.append(contextNotice, intelligence(c, m), boardIntelligence(c, m));
       const section = node('section', 'home-continue'); section.setAttribute('aria-labelledby', 'home-continue-title');
       const top = node('div', 'home-section-heading'); const h2 = node('h2', '', t('Continue Working')); h2.id = 'home-continue-title';
       const controls = node('div', 'home-actions'); controls.append(button('Browse Boards', 'boards'));
@@ -350,7 +418,7 @@
     const runtimeTimer = root.setInterval(() => {
       const c = context();
       if (c.view !== 'home') return;
-      const key = JSON.stringify([c.openBoard, c.responsibilities, c.loading]);
+      const key = JSON.stringify([c.openBoard, c.responsibilities, c.campaign, c.loading]);
       if (!scope || !sameScope(scope, c) || key !== runtimeKey) { runtimeKey = key; sync(); }
     }, 1000);
     async function load() {
@@ -382,7 +450,17 @@
       else if (action === 'retry') actions.retry();
       else if (m.ready && action === 'workspace-create') actions.workspaceCreate(target);
       else if (m.workspace) {
-        if (action === 'learnings-retry') { invalidateLearnings(); void loadLearnings(); }
+        if (['insights', 'insight-node', 'brain'].includes(action)) {
+          const captured = boardActionContexts.get(target);
+          if (!captured || !sameScope(captured.scope, c) || c.loading || !c.openBoard
+            || !m.workspace.boards.some(b => b.id === c.boardId)) { sync(); return; }
+          if (action === 'insights') actions.insights();
+          else if (action === 'brain' && c.openBoard.canEdit === true) actions.brain();
+          else if (action === 'insight-node' && c.campaign?.status === 'ready' && captured.key === c.campaign.key
+            && c.campaign.findings.some(f => f.code === id && f.nodeId)) actions.insightNode(id);
+          else sync();
+        }
+        else if (action === 'learnings-retry') { invalidateLearnings(); void loadLearnings(); }
         else if (action === 'learnings' && m.brand?.id === id && learningStatus === 'ready') actions.learnings({ ...m.brand, workspace_id: m.workspace.id, section: 'Brand Learnings' });
         else if (action === 'responsibility-node' && /^[\w.:-]+$/.test(id) && responsibilitySummary(c)?.items.some(n => n.id === id)) actions.node(id);
         else if (action === 'responsibilities' && responsibilitySummary(c)) actions.responsibilities(() => host.querySelector('[data-home-action="responsibilities"]'));
