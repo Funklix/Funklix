@@ -1023,7 +1023,7 @@ async function assignCampaignResponsibilities(ids, chosenEmail) {
   refreshOwnershipDisplays(); refreshNodeSearchUI(); refreshDashboardIfVisible();
   return persistResponsibilitySelection();
 }
-function openCampaignResponsibilities() {
+function openCampaignResponsibilities(returnFocus = null) {
   if (!state.currentBoardId || state.boardAccess?.canView === false) return;
   if (responsibilityWorkspaceState.pending && !responsibilitySaveHeld()) { responsibilityWorkspaceState.pending = null; responsibilityWorkspaceState.confirmed = false; responsibilityWorkspaceState.conflict = false; }
   window.FunklixCampaignResponsibilities.mount({
@@ -1046,7 +1046,7 @@ function openCampaignResponsibilities() {
       responsibilityWorkspaceState.pending = null; responsibilityWorkspaceState.confirmed = false; responsibilityWorkspaceState.conflict = false;
       await loadResponsibilityPeople();
     },
-    returnFocus: document.getElementById('campaign-responsibilities-btn')
+    returnFocus: typeof returnFocus === 'function' || returnFocus?.isConnected ? returnFocus : document.getElementById('campaign-responsibilities-btn')
   });
 }
 
@@ -18873,9 +18873,22 @@ homeFoundationController = window.FunklixHomeFoundation?.create({
     generation: state.workspaceCatalog.generation, workspaceId: state.workspaceCatalog.activeWorkspaceId,
     brandId: state.session.brandId, boardId: state.currentBoardId || getBoardIdFromPath(),
     boardGeneration: state.boardLoadGeneration, view: state.activeView, language: state.uiLanguage,
-    publicToken: state.publicBoardToken, loading: state.isBoardLoading || state.initialServerLoadInFlight }),
+    publicToken: state.publicBoardToken, loading: state.isBoardLoading || state.isBoardHydrating || state.initialServerLoadInFlight,
+    responsibilities: state.activeView === 'home' && brandBoardNavigationContext().openBoard ? {
+      boardId: state.currentBoardId, generation: state.boardLoadGeneration, dirty: state.isDirty || responsibilitySaveHeld(),
+      nodes: state.nodes.filter(n => window.FunklixCampaignResponsibilities?.types.includes(n.type))
+        .map(n => ({ id: n.id, title: n.title, type: n.type, ownerEmail: n.ownerEmail,
+          assigned: Boolean(normalizeOwnerEmail(n.ownerEmail)), status: normalizeNodeStatus(n.status),
+          complete: isDashboardNodeComplete(n) }))
+    } : null }),
   actions: {
     workspace: selectSessionWorkspace, brand: selectSessionBrand, profile: openRegularBrandProfile,
+    learnings: openRegularBrandProfile, responsibilities: openCampaignResponsibilities,
+    node: id => {
+      if (!brandBoardNavigationContext().openBoard || state.initialServerLoadInFlight || state.nodes.filter(n => n.id === id).length !== 1) return;
+      const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+      setAppMode('canvas'); focusNodeInCanvas(id, { behavior: reduced ? 'auto' : 'smooth', select: true, pulse: !reduced });
+    },
     retry: retryWorkspaceCatalog,
     accessLost: () => { clearWorkspaceCatalog(); void retryWorkspaceCatalog(); },
     workspaceCreate: origin => workspaceSidebarController?.openCreate(origin),
