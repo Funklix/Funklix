@@ -180,6 +180,12 @@
 #home-foundation .home-continue .home-filters { margin: 0; }
 #home-foundation .home-continue > .home-note { margin: 8px 0 12px; }
 @media (max-width: 767px) {
+  /* These two boxes define Home's safe scroll area. Never interpolate their
+     layout, including the global reduced-motion rule's nonzero duration. */
+  #dashboard-view.home-foundation-page,
+  .app-shell[data-active-view="home"] .sidebar > .workspace-context {
+    transition-property: background-color, border-color, color, box-shadow;
+  }
   #dashboard-view.home-foundation-page { max-height: var(--home-scroll-height, 100%); }
   #home-foundation .home-hero { grid-template-columns: 40px minmax(0, 1fr); gap: 8px 12px; padding: 12px; }
   #home-foundation h1 { font-size: 1.5rem; }
