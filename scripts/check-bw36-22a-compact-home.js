@@ -18,11 +18,11 @@ async function check(name, run) { await run(); passed++;results.push(name);conso
   try {
     await check('DOM order, unique IDs, compact selectors and guarded header continuation',async()=>{
       const f=await fixture(),p=f.page;await ready(p);
-      assert.deepEqual(await home(p).evaluate(e=>[...e.children].map(n=>n.className)),['home-hero','','home-next-moves','home-continue','home-intelligence','home-board-intelligence','home-brands']);
+      assert.deepEqual(await home(p).evaluate(e=>[...e.children].map(n=>n.className)),['home-hero','home-living','home-details-heading','','home-next-moves','home-continue','home-intelligence','home-board-intelligence','home-brands']);
       assert.equal(await p.locator('#home-workspace-select').count(),1);assert.equal(await p.locator('#home-brand-select').count(),1);
       assert.equal(await p.evaluate(()=>{const ids=[...document.querySelectorAll('[id]')].map(n=>n.id);return ids.length-new Set(ids).size;}),0);
       assert((await p.locator('.home-hero').innerText()).includes('Local Workspace'));
-      assert((await p.locator('.home-hero').innerText()).includes('Autumn Launch'));
+      assert((await p.locator('.home-details-heading').innerText()).includes('Autumn Launch'));
       await action(p,'header-board').focus();await p.keyboard.press('Enter');assert.equal(await p.evaluate(()=>state.activeView),'board');await f.close();
     });
     await check('Brand preference, mismatch actions, Profile and all Brand exploration remain independent of Board association',async()=>{
@@ -101,7 +101,7 @@ async function check(name, run) { await run(); passed++;results.push(name);conso
       await action(p,'next-responsibilities').focus();await refresh(p);assert.equal(await p.evaluate(()=>document.activeElement.dataset.homeAction),'next-responsibilities');
       await p.locator('#home-brand-select').focus();await refresh(p);assert.equal(await p.evaluate(()=>document.activeElement.id),'home-brand-select');
       assert((await p.locator('label[for=home-brand-select]').innerText()).startsWith('Selected Brand'));assert.equal(await p.locator('label[for=home-workspace-select]').innerText(),'Workspace');
-      const positions=await home(p).evaluate(e=>['.home-hero','.home-next-moves','.home-continue','.home-intelligence','.home-board-intelligence','.home-brands'].map(s=>e.querySelector(s).getBoundingClientRect().top));
+      const positions=await home(p).evaluate(e=>['.home-hero','.home-living','.home-details-heading','.home-next-moves','.home-continue','.home-intelligence','.home-board-intelligence','.home-brands'].map(s=>e.querySelector(s).getBoundingClientRect().top));
       assert(positions.every((v,i)=>!i||v>positions[i-1]));await f.close();
     });
     const geometry=[];
@@ -113,10 +113,13 @@ async function check(name, run) { await run(); passed++;results.push(name);conso
         await p.locator('.home-hero').evaluate(e=>e.scrollIntoView({block:'start'}));
         const rects=await p.evaluate(()=>{
           const r=s=>{const x=document.querySelector(s).getBoundingClientRect();return {x:x.x,y:x.y,width:x.width,height:x.height,bottom:x.bottom,right:x.right};};
-          return {hero:r('.home-hero'),next:r('.home-next-moves'),continuation:r('.home-continue'),firstOpen:r('.home-board-open'),bodyWidth:document.documentElement.scrollWidth,homeWidth:document.getElementById('home-foundation').scrollWidth,overlay:r('.sidebar > .workspace-context')};
+          return {hero:r('.home-hero'),living:r('.home-living'),heroOpen:r('[data-home-action=living-board]'),details:r('.home-details-heading'),next:r('.home-next-moves'),continuation:r('.home-continue'),firstOpen:r('.home-board-open'),bodyWidth:document.documentElement.scrollWidth,homeWidth:document.getElementById('home-foundation').scrollWidth,overlay:r('.sidebar > .workspace-context')};
         });
         assert.equal(rects.bodyWidth,width);assert(rects.hero.right<=width+1);assert(rects.hero.width>200);
-        if(width===1440&&language==='en'){assert(rects.next.y<=240,JSON.stringify(rects));assert(rects.firstOpen.y<=600,JSON.stringify(rects));}
+        // B1 inserts the approved Living Workspace before every detailed module.
+        // Keep the actionable first-viewport gate on its real saved continuation;
+        // the exact detail order, preview and navigation assertions remain above.
+        if(width===1440&&language==='en'){assert(rects.heroOpen.y<=600,JSON.stringify(rects));assert(rects.details.y>=rects.living.bottom,JSON.stringify(rects));}
         if(width<768){const bounds=await p.locator('#dashboard-view').boundingBox();assert(bounds.y+bounds.height<=rects.overlay.y+1,'Home scroll viewport overlaps fixed context controls');}
         const file=`home-${width}-${theme}-${language}.png`;await p.screenshot({path:path.join(out,file)});
         await action(p,'expand').click();assert.equal(await cards(p).count(),10);
