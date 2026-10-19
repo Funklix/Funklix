@@ -203,6 +203,7 @@
       }
       const insights = card('insights', 'Campaign Insights');
       const states = {
+        analyzing: 'Analyzing the current Canvas structure…',
         empty: 'This Canvas is empty. Add campaign content to make deterministic diagnostics available.',
         missing: 'No diagnostic snapshot is available. Open Insights to inspect the current Canvas.',
         stale: 'The diagnostic snapshot is out of date. Open Insights to refresh it for this Canvas.',

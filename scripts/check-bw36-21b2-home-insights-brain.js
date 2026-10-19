@@ -12,7 +12,7 @@ let passed = 0;
 async function check(name, action) { await action(); passed++; console.log('PASS ' + name); }
 async function main() {
   const browser = await chromium.launch({...(process.env.CHROMIUM_PATH ? {executablePath:process.env.CHROMIUM_PATH} : fs.existsSync('/usr/bin/chromium') ? {executablePath:'/usr/bin/chromium'} : {}),args:['--no-sandbox']});
-  async function fixture({viewer=false, hidden=false, noBrand=false, root=false, noWorkspace=false, empty=false, analyzed=true}={}) {
+  async function fixture({viewer=false, hidden=false, noBrand=false, root=false, noWorkspace=false, empty=false, analyzed=false}={}) {
     const r=runtime();r.db.boards[0].name='Autumn Launch';
     r.db.brands[0].name='Canvas Brand X';r.db.brands.push({...clone(r.db.brands[0]),id:Y,name:'Selected Brand Y'});
     r.db.boards[0].canvas_json.nodes = [
@@ -55,6 +55,7 @@ async function main() {
     await page.waitForFunction(()=>state.workspaceCatalog.status==='ready'&&!state.isBoardLoading&&!state.isBoardHydrating&&state.activeView);
     await page.evaluate(()=>{clearAutosaveTimer();stopPresenceLite();stopBoardRefreshPolling();setSidebarCollapsed(false);setActiveView('home');});
     if(analyzed && !root && !noWorkspace) await page.evaluate(()=>{setActiveView('insights');setActiveView('home');});
+    if (!root && !noWorkspace && !empty) await page.waitForFunction(()=>homeCampaignInsights()?.status==='ready');
     f.close=async()=>{assert.deepEqual(f.errors,[]);assert.deepEqual(f.writes,[]);await page.close();};
     return f;
   }
@@ -63,6 +64,12 @@ async function main() {
   const refresh=p=>p.evaluate(()=>{refreshDashboardIfVisible();clearAutosaveTimer();});
   const snapshot=p=>p.evaluate(()=>JSON.stringify({nodes:state.nodes,edges:state.edges,core:state.brandCore,dirty:state.isDirty,saved:state.lastSavedSnapshot,association:state.boardBrandAssociation,revision:state.lastKnownUpdatedAt}));
   const recalculate=p=>p.evaluate(()=>{renderCampaignIntelligence();refreshDashboardIfVisible();clearAutosaveTimer();});
+  const pauseAnalysis=p=>p.evaluate(()=>{
+    cancelHomeInsightsRequest();window.b2Idle=new Map();window.b2IdleId=0;
+    window.requestIdleCallback=fn=>{const id=++window.b2IdleId;window.b2Idle.set(id,fn);return id;};
+    window.cancelIdleCallback=id=>window.b2Idle.delete(id);
+  });
+  const finishAnalysis=p=>p.evaluate(()=>{const work=[...window.b2Idle.values()];window.b2Idle.clear();work.forEach(fn=>fn());});
   try {
     await check('fresh saved Board: real deterministic findings, identifiers, severities, provenance; render makes no writes or AI requests',async()=>{
       const f=await fixture(),p=f.page,before=await snapshot(p);
@@ -80,22 +87,26 @@ async function main() {
       assert(!(await insights(p).innerText()).match(/\b\d+\s*(?:%|\/100)\b/));
       await refresh(p);assert.equal(await snapshot(p),before);await f.close();
     });
-    await check('Home observes snapshot; missing, stale Canvas, stale Board, failure and provenance transitions never imply all-clear',async()=>{
+    await check('Home refreshes missing/stale evidence; failures and pending work never imply all-clear',async()=>{
       const f=await fixture(),p=f.page;
       for(const [change,expected] of [
-        ['state.insightsDiagnosticSnapshot=null','No diagnostic snapshot'],
-        ['state.nodes[0].content+=" changed"','out of date'],
-        ['state.insightsDiagnosticSnapshot.identity="foreign-board"','out of date'],
-        ['state.insightsDiagnosticSnapshot={identity:currentInsightsIdentity(),analysis:null}','could not be calculated'],
+        ['state.insightsDiagnosticSnapshot=null','Analyzing'],
+        ['state.nodes[0].content+=" changed";state.isDirty=true','Analyzing'],
+        ['state.insightsDiagnosticSnapshot.identity="foreign-board"','Analyzing'],
+        ['state.insightsDiagnosticSnapshot={identity:currentInsightsIdentity(),canvasIdentity:currentInsightsCanvasIdentity(),canvasState:state.isDirty?"live_unsaved":"loaded_saved",analysis:null}','could not be calculated'],
         ['state.insightsDiagnosticSnapshot.analysis={}','could not be calculated'],
         ['state.insightsDiagnosticSnapshot.analyzedAt="invalid"','could not be calculated'],
-        ['state.isDirty=true','out of date']
+        ['state.isDirty=true','Analyzing']
       ]){
-        await recalculate(p);await p.evaluate(change=>{(0,eval)(change);refreshDashboardIfVisible();clearAutosaveTimer();},change);
+        await recalculate(p);await pauseAnalysis(p);await p.evaluate(change=>{(0,eval)(change);refreshDashboardIfVisible();clearAutosaveTimer();},change);
         assert((await insights(p).innerText()).includes(expected),change+': '+await insights(p).innerText());
         assert.equal(await insights(p).locator('[data-finding-code]').count(),0);
         assert.equal(await action(p,'insights').count(),1);assert.equal(await action(p,'brain').count(),1);
-        await p.evaluate(()=>{state.isDirty=false;});
+        if(expected==='Analyzing') {
+          await finishAnalysis(p);assert.equal(await p.evaluate(()=>homeCampaignInsights().status),'ready');
+          assert((await insights(p).locator('[data-finding-code]').count())>0);
+        }
+        await p.evaluate(()=>{state.isDirty=false;refreshLastSavedSnapshot();});
       }
       await f.close();
     });
@@ -124,17 +135,19 @@ async function main() {
       assert((await insights(p).innerText()).includes('Reloaded Board'));assert((await insights(p).innerText()).includes('Canvas is empty'));
       assert.equal(await insights(p).locator('[data-finding-code]').count(),0);await f.close();
     });
-    await check('live-unsaved snapshot and relevant fingerprint fields; no silent recalculation on Home',async()=>{
+    await check('live-unsaved snapshot and every relevant fingerprint edit automatically refreshes on Home',async()=>{
       const f=await fixture(),p=f.page;
       await p.evaluate(()=>{state.isDirty=true;renderCampaignIntelligence();refreshDashboardIfVisible();clearAutosaveTimer();});
       assert((await insights(p).innerText()).includes('includes unsaved changes'));
       assert.equal(await p.evaluate(()=>homeCampaignInsights().source),'live_unsaved');
       for(const field of ['goal','social.cta','landingPage.cta','audience','tone','funnelStage','title']){
-        await recalculate(p);const before=await p.evaluate(()=>state.insightsDiagnosticSnapshot.analyzedAt);
+        await recalculate(p);await pauseAnalysis(p);const before=await p.evaluate(()=>state.insightsDiagnosticSnapshot.analyzedAt);
         await p.evaluate(field=>{const n=state.nodes.find(n=>n.id==='landing');if(field.includes('.')){const [a,b]=field.split('.');n[a][b]+=' changed';}else n[field]+=' changed';refreshDashboardIfVisible();clearAutosaveTimer();},field);
-        assert((await insights(p).innerText()).includes('out of date'),field);
+        assert((await insights(p).innerText()).includes('Analyzing'),field);
         assert.equal(await insights(p).locator('[data-finding-code]').count(),0);
         assert.equal(await p.evaluate(()=>state.insightsDiagnosticSnapshot.analyzedAt),before);
+        await finishAnalysis(p);assert.equal(await p.evaluate(()=>homeCampaignInsights().source),'live_unsaved');
+        assert.equal(await p.evaluate(()=>isCurrentInsightsSnapshot(state.insightsDiagnosticSnapshot)),true);
       }
       await f.close();
     });
@@ -242,6 +255,89 @@ async function main() {
       for(const account of [{email:'replacement@example.test'},null]){
         await q.evaluate(account=>{state.user=account;refreshDashboardIfVisible();},account);
         assert.equal(await q.locator('[data-home-module]').count(),0);assert(!(await q.locator('#home-foundation').innerText()).includes('Campaign destination'));
+      }
+      await f.close();
+    });
+    await check('automatic Home work discards pending Board/account/Workspace/access/hydration/Canvas changes before calculation',async()=>{
+      for(const change of [
+        'state.currentBoardId="other-board"',
+        'state.boardLoadGeneration++',
+        'state.user={email:state.user.email}',
+        'state.user={email:"other@example.test"}',
+        'state.user=null',
+        'state.workspaceCatalog.activeWorkspaceId="other-workspace"',
+        'state.workspaceCatalog.generation++',
+        'state.boardAccess.canView=false',
+        'state.boardAccess=null',
+        'state.isBoardHydrating=true',
+        'state.initialServerLoadInFlight=true',
+        'state.nodes[0].content+=" edited while pending"',
+        'state.isDirty=true',
+        'state.publicBoardToken="public"',
+        'state.activeView="board"'
+      ]) {
+        const f=await fixture(),p=f.page;await pauseAnalysis(p);
+        const result=await p.evaluate(change=>{
+          const original=analyzeCampaign;window.b2Calculations=0;
+          analyzeCampaign=(...args)=>{window.b2Calculations++;return original(...args);};
+          state.insightsDiagnosticSnapshot=null;refreshDashboardIfVisible();
+          const pending=[...window.b2Idle.values()][0];if(!pending)throw new Error('Missing scheduled work');
+          (0,eval)(change);pending();
+          return {calls:window.b2Calculations,snapshot:state.insightsDiagnosticSnapshot};
+        },change);
+        assert.equal(result.calls,0,change);assert.equal(result.snapshot,null,change);await f.close();
+      }
+    });
+    await check('large Canvas: deferred once, exact Insights parity, reused snapshot, bounded render cost, zero mutation/writes/providers',async()=>{
+      const f=await fixture(),p=f.page;await pauseAnalysis(p);
+      const initial=await p.evaluate(()=>{
+        const base=state.nodes.find(n=>n.id==='landing');
+        state.nodes=Array.from({length:20000},(_,i)=>({...structuredClone(base),id:'large-'+i}));
+        state.isDirty=true;clearAutosaveTimer();state.insightsDiagnosticSnapshot=null;window.b2Calculations=0;
+        const original=analyzeCampaign;analyzeCampaign=(...args)=>{window.b2Calculations++;const start=performance.now();const result=original(...args);window.b2EngineMs=performance.now()-start;return result;};
+        const start=performance.now();refreshDashboardIfVisible();
+        const elapsed=performance.now()-start;
+        for(let i=0;i<10;i++)homeCampaignInsights();
+        return {status:homeCampaignInsights().status,calls:window.b2Calculations,pending:window.b2Idle.size,elapsed};
+      });
+      assert.equal(initial.status,'analyzing');assert.equal(initial.calls,0);assert.equal(initial.pending,1);
+      assert(initial.elapsed<1000,'Initial Home render should yield before analysis: '+initial.elapsed);
+      const before=await snapshot(p);await finishAnalysis(p);
+      const result=await p.evaluate(()=>{
+        const actual=JSON.stringify(state.insightsDiagnosticSnapshot.findings),stamp=state.insightsDiagnosticSnapshot.analyzedAt;
+        const start=performance.now();for(let i=0;i<5;i++)refreshDashboardIfVisible();
+        const elapsed=performance.now()-start;
+        return {actual,expected:JSON.stringify(buildInsightsFindings(analyzeCampaign(state.nodes,state.edges,state.brandCore))),
+          calls:window.b2Calculations,stamp,after:state.insightsDiagnosticSnapshot.analyzedAt,elapsed,engineMs:window.b2EngineMs,pending:window.b2Idle.size};
+      });
+      assert.equal(result.actual,result.expected);assert.equal(result.calls,2,'One scheduled analysis plus the parity oracle');
+      assert.equal(result.stamp,result.after);assert.equal(result.pending,0);assert(result.elapsed<3000);
+      assert.equal(await snapshot(p),before);
+      console.log('PERF 20,000 nodes '+JSON.stringify({initialMs:initial.elapsed,engineMs:result.engineMs,fiveRendersMs:result.elapsed}));
+      await f.close();
+    });
+    await check('automatic calculation failure is unavailable and deduplicated; Canvas edit recovers; timeout fallback works',async()=>{
+      const f=await fixture(),p=f.page;await pauseAnalysis(p);
+      await p.evaluate(()=>{
+        const original=analyzeCampaign;window.b2Calculations=0;
+        analyzeCampaign=(...args)=>{window.b2Calculations++;return original(...args);};
+        state.isDirty=true;state.nodes.find(n=>n.id==='landing').landingPage={};state.insightsDiagnosticSnapshot=null;refreshDashboardIfVisible();
+      });
+      await finishAnalysis(p);
+      assert.equal(await p.evaluate(()=>homeCampaignInsights().status),'error');
+      assert((await insights(p).innerText()).includes('could not be calculated'));
+      await p.evaluate(()=>{for(let i=0;i<10;i++)refreshDashboardIfVisible();});
+      assert.equal(await p.evaluate(()=>window.b2Calculations),1);assert.equal(await p.evaluate(()=>window.b2Idle.size),0);
+      await p.evaluate(()=>{state.nodes.find(n=>n.id==='landing').landingPage.cta='';window.requestIdleCallback=undefined;refreshDashboardIfVisible();});
+      await p.waitForFunction(()=>homeCampaignInsights().status==='ready');
+      assert.equal(await p.evaluate(()=>window.b2Calculations),2);assert.equal(await action(p,'insights').count(),1);await f.close();
+    });
+    await check('pending analyzing state is localized in EN/DE and Light/Dark',async()=>{
+      const f=await fixture(),p=f.page;await pauseAnalysis(p);
+      for(const [language,theme]of[['en','light'],['de','dark']]) {
+        await p.evaluate(({language,theme})=>{state.insightsDiagnosticSnapshot=null;state.uiLanguage=FunklixLanguage.setUiLanguage(language);FunklixTheme.setPreference(theme);refreshDashboardIfVisible();},{language,theme});
+        assert((await insights(p).innerText()).includes(language==='de'?'Die aktuelle Canvas-Struktur wird analysiert':'Analyzing the current Canvas structure'));
+        assert.equal(await insights(p).locator('[data-finding-code]').count(),0);assert.equal(await action(p,'insights').count(),1);
       }
       await f.close();
     });

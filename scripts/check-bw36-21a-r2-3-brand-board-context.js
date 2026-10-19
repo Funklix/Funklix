@@ -296,7 +296,7 @@ async function main() {
         if(dir)await p.screenshot({path:path.join(dir,`canvas-${width}-${theme}-${language}.png`),fullPage:true});
         await p.locator('#home-nav-btn').click();assert(await p.locator('[data-home-context]').isVisible());assert(!(await notice.isVisible()));
         await p.locator('[data-home-context] [data-context-action=profile]').focus();await p.evaluate(()=>refreshDashboardIfVisible());assert.equal(await p.evaluate(()=>document.activeElement.dataset.contextAction),'profile');
-        await p.waitForFunction(()=>document.querySelectorAll('#home-foundation time').length===5);
+        await p.waitForFunction(()=>document.querySelectorAll('#home-foundation .home-board-card time').length===5);
         assert((await p.locator('.home-board-card').first().innerText()).includes('Autumn campaign'));
         assert((await p.locator('.home-board-card').filter({hasText:'Shared project'}).innerText()).includes(language==='de'?'Keine sichtbare':'No visible'));
         assert((await p.locator('.home-board-card').filter({hasText:'Unassigned ideas'}).innerText()).includes(language==='de'?'Keine Marke verbunden':'No Brand connected'));
