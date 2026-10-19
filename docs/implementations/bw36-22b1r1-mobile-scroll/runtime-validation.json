@@ -1,0 +1,1130 @@
+[
+  {
+    "name": "Check runtime script syntax",
+    "command": "node --check knowledge-module-registry.js\nnode --check knowledge-module-identity.js\nnode --check knowledge-module-runtime-adapter.js\nnode --check app.js\nnode --check api/_ai-brain-learning-context.js\nnode --check scripts/check-bw36-20-approved-learning-ai-brain.js\nnode --check scripts/check-bw36-20r1-learning-integration-review-fixes.js\nnode --check scripts/fixtures/bw36-20-database.js\nnode --check scripts/fixtures/bw36-20-browser.js\nnode --check campaign-v3.js\nnode --check campaign-creation.js\nnode --check campaign-creation-dialog.js\nnode --check campaign-responsibilities.js\nnode --check api/_campaign-responsibilities.js\nnode --check scripts/check-bw36-15-campaign-team-responsibilities.js\nnode --check scripts/check-bw36-15r1-responsibility-workspace-continuity.js\nnode --check adaptive-canvas-view.js\nnode --check scripts/check-bw36-16-adaptive-canvas-view-hierarchy.js\nnode --check scripts/check-bw36-16r1-toolbar-and-global-view-cycle.js\nnode --check scripts/check-bw36-19r6-learning-review.js\nnode --check scripts/fixtures/bw36-19r6-browser.js\nnode --check scripts/fixtures/bw36-19r6-review-ux.js\nnode --check learning-advisor.js\nnode --check api/_learning-advisor.js\nnode --check api/brands/[id]/learning-advisor.js\nnode --check scripts/check-bw36-19-ai-learning-advisor.js\nnode --check scripts/check-bw36-19r1-existing-board-compatibility.js\nnode --check scripts/check-bw36-19r2-adaptive-learning-advisor-context.js\nnode --check scripts/check-bw36-19r5-simplified-learning-generation.js\nnode --check scripts/check-bw36-19r4-learning-advisor-output-reliability.js\nnode --check scripts/fixtures/bw36-19r4-saved-campaign.js\nnode --check scripts/fixtures/bw36-19r2-browser.js\nnode --check scripts/fixtures/bw36-19r1-saved-boards.js\nnode --check scripts/fixtures/bw36-19-advisor-runtime.js\nnode --check scripts/fixtures/bw36-19-browser.js\nnode --check scripts/fixtures/bw36-19-database.js\nnode --check brand-learnings.js\nnode --check canvas-learning-proposal.js\nnode --check api/brands/[id]/learning-source.js\nnode --check scripts/check-bw36-18-governed-learning-provenance.js\nnode --check scripts/fixtures/bw36-18-browser.js\nnode --check brand-profile-setup.js\nnode --check api/_brand-learnings.js\nnode --check api/brands/[id]/learnings.js\nnode --check scripts/check-bw36-17r2-learning-provenance-recovery.js\nnode --check scripts/check-bw36-17r1-learning-provenance-schema.js\nnode --check scripts/check-bw36-17-governed-brand-learnings.js\nnode --check scripts/fixtures/bw36-17-local-runtime.js\nnode --check language.js\nnode --check api/campaigns.js\nnode --check api/_campaign-creation.js\nnode --check scripts/check-bw36-14-stable-campaign-creation.js\nnode --check scripts/check-bw36-14r1-restore-complete-campaign-v3.js\n",
+    "code": 0,
+    "seconds": 9.38
+  },
+  {
+    "name": "Check browser script integrity",
+    "command": "node scripts/check-browser-script-integrity.js",
+    "code": 0,
+    "seconds": 0.64
+  },
+  {
+    "name": "Check BW-35.1 canonical posting schedule persistence",
+    "command": "npm run check:bw35.1",
+    "code": 0,
+    "seconds": 1.09
+  },
+  {
+    "name": "Check BW-35.2 manual Posting Plan workspace",
+    "command": "npm run check:bw35.2",
+    "code": 0,
+    "seconds": 2.02
+  },
+  {
+    "name": "Check BW-35.2R1 integrated Posting Plan",
+    "command": "npm run check:bw35.2r1",
+    "code": 0,
+    "seconds": 1.58
+  },
+  {
+    "name": "Check BW-35.2R2 unified Content Calendar",
+    "command": "npm run check:bw35.2r2",
+    "code": 0,
+    "seconds": 2.06
+  },
+  {
+    "name": "Check BW-35.2R3 direct Content Calendar",
+    "command": "npm run check:bw35.2r3",
+    "code": 0,
+    "seconds": 1.82
+  },
+  {
+    "name": "Check BW-35.2R4 scheduling interactions",
+    "command": "npm run check:bw35.2r4",
+    "code": 0,
+    "seconds": 1.47
+  },
+  {
+    "name": "Check BW-35.2R5 fluid and reliable scheduling",
+    "command": "npm run check:bw35.2r5",
+    "code": 0,
+    "seconds": 1.75
+  },
+  {
+    "name": "Check BW-35.2R7 emergency stability containment",
+    "command": "npm run check:bw35.2r7",
+    "code": 0,
+    "seconds": 1.64
+  },
+  {
+    "name": "Check BW-35.2R8 simplified Content Calendar architecture",
+    "command": "npm run check:bw35.2r8",
+    "code": 0,
+    "seconds": 1.63
+  },
+  {
+    "name": "Check BW-35.2R9 Content Calendar visual system",
+    "command": "npm run check:bw35.2r9",
+    "code": 0,
+    "seconds": 1.22
+  },
+  {
+    "name": "Check BW-35.3 deterministic automatic planning",
+    "command": "npm run check:bw35.3",
+    "code": 0,
+    "seconds": 1.75
+  },
+  {
+    "name": "Check BW-35.3R1 Auto-plan studio and primary action",
+    "command": "npm run check:bw35.3r1",
+    "code": 0,
+    "seconds": 1.8
+  },
+  {
+    "name": "Check BW-35.3R2 Auto-plan apply and session persistence",
+    "command": "npm run check:bw35.3r2",
+    "code": 0,
+    "seconds": 2.55
+  },
+  {
+    "name": "Check BW-35.3R3 Auto-plan freshness and safe rebasing",
+    "command": "npm run check:bw35.3r3",
+    "code": 0,
+    "seconds": 2.99
+  },
+  {
+    "name": "Check BW-35.3R4 Auto-plan batch runtime",
+    "command": "npm run check:bw35.3r4",
+    "code": 0,
+    "seconds": 3.89
+  },
+  {
+    "name": "Check BW-35.3R5 Auto-plan production evidence",
+    "command": "npm run check:bw35.3r5",
+    "code": 0,
+    "seconds": 2.09
+  },
+  {
+    "name": "Check BW-35.4 safe Posting Plan CSV export",
+    "command": "npm run check:bw35.4",
+    "code": 0,
+    "seconds": 1.83
+  },
+  {
+    "name": "Check BW-35.4R1 visual Posting Plan PDF export",
+    "command": "npm run check:bw35.4r1",
+    "code": 0,
+    "seconds": 1.54
+  },
+  {
+    "name": "Check BW-35.4R2 export naming and Tendra One branding",
+    "command": "npm run check:bw35.4r2",
+    "code": 0,
+    "seconds": 1.66
+  },
+  {
+    "name": "Check read-only Canonical Brand catalog",
+    "command": "node scripts/check-bw1-brand-catalog.js",
+    "code": 0,
+    "seconds": 0.16
+  },
+  {
+    "name": "Check ephemeral Canonical Brand selection",
+    "command": "node scripts/check-bw2-ephemeral-brand-selection.js",
+    "code": 0,
+    "seconds": 0.19
+  },
+  {
+    "name": "Check Canonical Brand creation",
+    "command": "node scripts/check-bw3-canonical-brand-creation.js",
+    "code": 0,
+    "seconds": 0.31
+  },
+  {
+    "name": "Check durable Workspace Brand selection",
+    "command": "node scripts/check-bw4-durable-brand-selection.js",
+    "code": 0,
+    "seconds": 0.22
+  },
+  {
+    "name": "Check explicit Board Brand association",
+    "command": "node scripts/check-bw5-board-brand-association.js",
+    "code": 0,
+    "seconds": 0.48
+  },
+  {
+    "name": "Check per-Board Brand association isolation",
+    "command": "node scripts/check-bw5-board-brand-isolation-regression.js",
+    "code": 0,
+    "seconds": 0.3
+  },
+  {
+    "name": "Check Board Brand catalog resolution states",
+    "command": "node scripts/check-bw5-board-brand-resolution-state.js",
+    "code": 0,
+    "seconds": 0.37
+  },
+  {
+    "name": "Check read-only Canonical Brand Workspace detail",
+    "command": "node scripts/check-bw6-brand-workspace-detail.js",
+    "code": 0,
+    "seconds": 0.35
+  },
+  {
+    "name": "Check explicit Canonical Brand editing",
+    "command": "node scripts/check-bw7-canonical-brand-editing.js",
+    "code": 0,
+    "seconds": 0.26
+  },
+  {
+    "name": "Check read-only Brand Core comparison",
+    "command": "node scripts/check-bw8-brand-core-comparison.js",
+    "code": 0,
+    "seconds": 0.3
+  },
+  {
+    "name": "Check Brand Core comparison lifecycle",
+    "command": "node scripts/check-bw8-brand-core-comparison-lifecycle.js",
+    "code": 0,
+    "seconds": 0.5
+  },
+  {
+    "name": "Check explicit Canonical Brand Core initialization",
+    "command": "node scripts/check-bw9-initialize-canonical-brand-core.js",
+    "code": 0,
+    "seconds": 0.21
+  },
+  {
+    "name": "Check Brand-scoped Board library",
+    "command": "node scripts/check-bw10-brand-scoped-board-library.js",
+    "code": 0,
+    "seconds": 0.23
+  },
+  {
+    "name": "Check explicit Board creation from Canonical Brand",
+    "command": "node scripts/check-bw11-create-board-from-canonical-brand.js",
+    "code": 0,
+    "seconds": 0.27
+  },
+  {
+    "name": "Check Canonical Brand snapshot provenance",
+    "command": "node scripts/check-bw12-canonical-snapshot-provenance.js",
+    "code": 0,
+    "seconds": 0.21
+  },
+  {
+    "name": "Check controlled Canonical-to-Board refresh",
+    "command": "node scripts/check-bw13-canonical-to-board-refresh.js",
+    "code": 0,
+    "seconds": 0.32
+  },
+  {
+    "name": "Check Canonical Brand foundation",
+    "command": "node scripts/check-canonical-brand-foundation.js",
+    "code": 0,
+    "seconds": 1.97
+  },
+  {
+    "name": "Check sanitized read-only database inspector",
+    "command": "node scripts/check-bw15-read-only-db-inspector.js",
+    "code": 0,
+    "seconds": 0.8
+  },
+  {
+    "name": "Check timing-safe session signature verification",
+    "command": "node scripts/check-bw16-timing-safe-session-verification.js",
+    "code": 0,
+    "seconds": 0.19
+  },
+  {
+    "name": "Check Board access roles and sensitive-data boundaries",
+    "command": "node scripts/check-bw18-board-access-roles.js",
+    "code": 0,
+    "seconds": 0.19
+  },
+  {
+    "name": "Check Board permissions popover lifecycle",
+    "command": "node scripts/check-bw18-share-permissions-popover-lifecycle.js",
+    "code": 0,
+    "seconds": 0.22
+  },
+  {
+    "name": "Check private Boards and revocable public view links",
+    "command": "node scripts/check-bw19-private-public-board-sharing.js",
+    "code": 0,
+    "seconds": 0.17
+  },
+  {
+    "name": "Check Canonical Brand team roles",
+    "command": "node scripts/check-bw20-brand-team-roles.js",
+    "code": 0,
+    "seconds": 0.11
+  },
+  {
+    "name": "Check inline Brand member role management",
+    "command": "node scripts/check-bw20-1-inline-brand-role-management.js",
+    "code": 0,
+    "seconds": 0.48
+  },
+  {
+    "name": "Check Workspace Brand deletion and selector theme",
+    "command": "npm run check:workspace-brand-deletion",
+    "code": 0,
+    "seconds": 2.94
+  },
+  {
+    "name": "Check independent interface and campaign languages",
+    "command": "node scripts/check-bw21-language-separation.js",
+    "code": 0,
+    "seconds": 0.44
+  },
+  {
+    "name": "Check Campaign Canvas Inspector language coverage",
+    "command": "node scripts/check-bw21-1-inspector-language-coverage.js",
+    "code": 0,
+    "seconds": 0.3
+  },
+  {
+    "name": "Check Language and Region Settings",
+    "command": "node scripts/check-bw23-language-region-settings.js",
+    "code": 0,
+    "seconds": 0.42
+  },
+  {
+    "name": "Check honest AI Insights baseline",
+    "command": "node scripts/check-bw25-honest-ai-insights-baseline.js",
+    "code": 0,
+    "seconds": 0.32
+  },
+  {
+    "name": "Check read-only AI Brain advisor",
+    "command": "node scripts/check-bw26-read-only-ai-brain.js",
+    "code": 0,
+    "seconds": 0.29
+  },
+  {
+    "name": "Check AI Brain Board authorization with real access helpers (mocked OpenAI)",
+    "command": "node scripts/check-bw36-20r0-ai-brain-board-authorization.js",
+    "code": 0,
+    "seconds": 22.47
+  },
+  {
+    "name": "Check real Canvas context and turn lifecycle",
+    "command": "node scripts/check-bw26-1-real-canvas-context-and-turn-lifecycle.js",
+    "code": 0,
+    "seconds": 4.65
+  },
+  {
+    "name": "Check safe AI Brain response formatting",
+    "command": "node scripts/check-bw26-2-safe-brain-response-formatting.js",
+    "code": 0,
+    "seconds": 0.44
+  },
+  {
+    "name": "Check bounded AI Brain conversation memory",
+    "command": "node scripts/check-bw26-3-bounded-conversation-memory.js",
+    "code": 0,
+    "seconds": 3.57
+  },
+  {
+    "name": "Check AI Brain follow-up reference resolution",
+    "command": "node scripts/check-bw26-4-reference-resolution.js",
+    "code": 0,
+    "seconds": 1.61
+  },
+  {
+    "name": "Check AI Brain response-language adherence",
+    "command": "node scripts/check-bw26-5-response-language-adherence.js",
+    "code": 0,
+    "seconds": 2.5
+  },
+  {
+    "name": "Check controlled AI Brain Content-node creation",
+    "command": "node scripts/check-bw26-6-controlled-ai-brain-node-creation.js",
+    "code": 0,
+    "seconds": 0.17
+  },
+  {
+    "name": "Check AI Brain Content-node proposal production boundary",
+    "command": "node scripts/check-bw26-6-1-node-proposal-production-failure.js",
+    "code": 0,
+    "seconds": 0.23
+  },
+  {
+    "name": "Check AI Brain post-creation Canvas transition",
+    "command": "node scripts/check-bw26-6-2-node-creation-ui-transition.js",
+    "code": 0,
+    "seconds": 0.13
+  },
+  {
+    "name": "Check bounded large Brand Core website imports",
+    "command": "npm run check:bw26.6.3",
+    "code": 0,
+    "seconds": 0.86
+  },
+  {
+    "name": "Check BW-27 design system and Dark Mode",
+    "command": "node scripts/check-bw27-design-system-dark-mode.js",
+    "code": 0,
+    "seconds": 0.1
+  },
+  {
+    "name": "Check BW-27.1 Dark Mode surface contrast",
+    "command": "node scripts/check-bw27-1-dark-mode-surface-contrast.js",
+    "code": 0,
+    "seconds": 0.1
+  },
+  {
+    "name": "Check BW-27.2 premium Dark Mode visual system",
+    "command": "node scripts/check-bw27-2-premium-dark-mode.js",
+    "code": 0,
+    "seconds": 0.1
+  },
+  {
+    "name": "Check BW-27.3 final Dark Mode visual polish",
+    "command": "node scripts/check-bw27-3-final-dark-mode-polish.js",
+    "code": 0,
+    "seconds": 0.08
+  },
+  {
+    "name": "Check BW-27.4 Canvas component polish",
+    "command": "node scripts/check-bw27-4-canvas-component-polish.js",
+    "code": 0,
+    "seconds": 0.06
+  },
+  {
+    "name": "Check BW-27.5 Landing Page node Dark Mode readability",
+    "command": "node scripts/check-bw27-5-landing-page-node-dark-mode.js",
+    "code": 0,
+    "seconds": 0.08
+  },
+  {
+    "name": "Check BW-27.6 Campaign Canvas Dark Mode controls",
+    "command": "npm run check:bw27.6",
+    "code": 0,
+    "seconds": 0.39
+  },
+  {
+    "name": "Check BW-27.7 responsive shell stability",
+    "command": "npm run check:bw27.7",
+    "code": 0,
+    "seconds": 0.39
+  },
+  {
+    "name": "Check BW-28 trustworthy Canvas Intelligence",
+    "command": "node scripts/check-bw28-ai-insights-architecture.js",
+    "code": 0,
+    "seconds": 0.24
+  },
+  {
+    "name": "Check BW-28.1 Insights UX and AI Brain handoff",
+    "command": "node scripts/check-bw28-1-insights-ux-and-brain-handoff.js",
+    "code": 0,
+    "seconds": 0.25
+  },
+  {
+    "name": "Check BW-28.3 premium Insights and Brand Avatar",
+    "command": "node scripts/check-bw28-3-premium-insights-and-brand-avatar.js",
+    "code": 0,
+    "seconds": 0.06
+  },
+  {
+    "name": "Check BW-28.3.1 Insights runtime rendering",
+    "command": "node scripts/check-bw28-3-1-insights-runtime-rendering.js",
+    "code": 0,
+    "seconds": 0.14
+  },
+  {
+    "name": "Check BW-29 assumption-based Funnel Simulator",
+    "command": "node scripts/check-bw29-funnel-simulator.js",
+    "code": 0,
+    "seconds": 0.09
+  },
+  {
+    "name": "Check BW-29.1 Simulator UX and Dark Mode",
+    "command": "node scripts/check-bw29-1-simulator-ux-and-dark-mode.js",
+    "code": 0,
+    "seconds": 0.06
+  },
+  {
+    "name": "Check BW-29.3 Persona Journey Simulator",
+    "command": "npm run check:bw29.3",
+    "code": 0,
+    "seconds": 0.41
+  },
+  {
+    "name": "Check BW-29.3.2 execution and compact Simulator UX",
+    "command": "npm run check:bw29.3.2",
+    "code": 0,
+    "seconds": 0.41
+  },
+  {
+    "name": "Check BW-29.3.3 reliable Persona simulation",
+    "command": "npm run check:bw29.3.3",
+    "code": 0,
+    "seconds": 0.46
+  },
+  {
+    "name": "Check BW-29.3.4 simple Persona execution path",
+    "command": "npm run check:bw29.3.4",
+    "code": 0,
+    "seconds": 0.62
+  },
+  {
+    "name": "Check BW-29.3.5 live Persona request parity",
+    "command": "npm run check:bw29.3.5",
+    "code": 0,
+    "seconds": 0.45
+  },
+  {
+    "name": "Check BW-29.4.1 production boundary diagnostics",
+    "command": "npm run check:bw29.4.1",
+    "code": 0,
+    "seconds": 0.4
+  },
+  {
+    "name": "Check BW-29.4.2 Canvas-context boundary",
+    "command": "npm run check:bw29.4.2",
+    "code": 0,
+    "seconds": 0.38
+  },
+  {
+    "name": "Check BW-30.1 App Shell and Inspector layout",
+    "command": "npm run check:bw30.1",
+    "code": 0,
+    "seconds": 0.37
+  },
+  {
+    "name": "Check BW-31.1 read-only Content Workspace library",
+    "command": "npm run check:bw31.1",
+    "code": 0,
+    "seconds": 0.43
+  },
+  {
+    "name": "Check BW-31.2 human Content Workspace review workflow",
+    "command": "npm run check:bw31.2",
+    "code": 0,
+    "seconds": 0.41
+  },
+  {
+    "name": "Check BW-31.4 operational internal Content Calendar",
+    "command": "npm run check:bw31.4",
+    "code": 0,
+    "seconds": 0.57
+  },
+  {
+    "name": "Check BW-31.5.1 Content Workspace functional recovery",
+    "command": "npm run check:bw31.5.1",
+    "code": 0,
+    "seconds": 0.4
+  },
+  {
+    "name": "Check BW-31.5.2 simplified Content Workspace operations",
+    "command": "npm run check:bw31.5.2",
+    "code": 0,
+    "seconds": 0.56
+  },
+  {
+    "name": "Check BW-32.1 Social Connector foundation",
+    "command": "npm run check:bw32.1",
+    "code": 0,
+    "seconds": 0.5
+  },
+  {
+    "name": "Check BW-32.2 LinkedIn account connection",
+    "command": "npm run check:bw32.2",
+    "code": 0,
+    "seconds": 0.42
+  },
+  {
+    "name": "Check BW-32.2.1 LinkedIn callback recovery",
+    "command": "npm run check:bw32.2.1",
+    "code": 0,
+    "seconds": 0.41
+  },
+  {
+    "name": "Check BW-32.2.2 LinkedIn persistence reconciliation",
+    "command": "npm run check:bw32.2.2",
+    "code": 0,
+    "seconds": 0.4
+  },
+  {
+    "name": "Check BW-32.2.3 LinkedIn connection state",
+    "command": "npm run check:bw32.2.3",
+    "code": 0,
+    "seconds": 0.48
+  },
+  {
+    "name": "Check BW-32.2.5 truthful LinkedIn Settings controls",
+    "command": "npm run check:bw32.2.5",
+    "code": 0,
+    "seconds": 0.39
+  },
+  {
+    "name": "Check BW-32.2.6 Social Connector schema recovery",
+    "command": "npm run check:bw32.2.6",
+    "code": 0,
+    "seconds": 0.36
+  },
+  {
+    "name": "Check BW-32.2.9 OAuth phase migration recovery",
+    "command": "npm run check:bw32.2.9",
+    "code": 0,
+    "seconds": 0.37
+  },
+  {
+    "name": "Check BW-32.2.10 Social Settings response contract",
+    "command": "npm run check:bw32.2.10",
+    "code": 0,
+    "seconds": 0.6
+  },
+  {
+    "name": "Check BW-32.2.11 Social Settings read availability",
+    "command": "npm run check:bw32.2.11",
+    "code": 0,
+    "seconds": 0.37
+  },
+  {
+    "name": "Check BW-32.2.12 direct Social Settings read",
+    "command": "npm run check:bw32.2.12",
+    "code": 0,
+    "seconds": 0.37
+  },
+  {
+    "name": "Check BW-32.3.1 guarded LinkedIn text Publish Now",
+    "command": "npm run check:bw32.3.1",
+    "code": 0,
+    "seconds": 0.38
+  },
+  {
+    "name": "Check BW-32.3.2 stale approval recovery",
+    "command": "npm run check:bw32.3.2",
+    "code": 0,
+    "seconds": 0.42
+  },
+  {
+    "name": "Check BW-32.3.3 canonical content reapproval",
+    "command": "npm run check:bw32.3.3",
+    "code": 0,
+    "seconds": 0.41
+  },
+  {
+    "name": "Check BW-32.3.5 approval fingerprint diagnostics",
+    "command": "npm run check:bw32.3.5",
+    "code": 0,
+    "seconds": 0.38
+  },
+  {
+    "name": "Check BW-32.3.6 authoritative v2 approval",
+    "command": "npm run check:bw32.3.6",
+    "code": 0,
+    "seconds": 0.38
+  },
+  {
+    "name": "Check BW-32.3.7 server-authoritative approval action",
+    "command": "npm run check:bw32.3.7",
+    "code": 0,
+    "seconds": 0.4
+  },
+  {
+    "name": "Check BW-32.3.8 accepted LinkedIn publication finalization",
+    "command": "npm run check:bw32.3.8",
+    "code": 0,
+    "seconds": 0.46
+  },
+  {
+    "name": "Check BW-32.3.9 authoritative social response boundary",
+    "command": "npm run check:bw32.3.9",
+    "code": 0,
+    "seconds": 0.36
+  },
+  {
+    "name": "Check BW-34.1 Facebook Page publishing",
+    "command": "npm run check:bw34.1",
+    "code": 0,
+    "seconds": 0.38
+  },
+  {
+    "name": "Check BW-34.1R1 Facebook callback repair",
+    "command": "npm run check:bw34.1r1",
+    "code": 0,
+    "seconds": 0.4
+  },
+  {
+    "name": "Check BW-34.1.1 Facebook content publishing surface",
+    "command": "npm run check:bw34.1.1",
+    "code": 0,
+    "seconds": 0.4
+  },
+  {
+    "name": "Check BW-34.1.2 Facebook Page destination selection",
+    "command": "npm run check:bw34.1.2",
+    "code": 0,
+    "seconds": 0.41
+  },
+  {
+    "name": "Check BW-34.1.3 Facebook publishing readiness",
+    "command": "npm run check:bw34.1.3",
+    "code": 0,
+    "seconds": 0.41
+  },
+  {
+    "name": "Check BW-34.1.9 Facebook publication finalization",
+    "command": "npm run check:bw34.1.9",
+    "code": 0,
+    "seconds": 0.39
+  },
+  {
+    "name": "Check BW-34.2A Facebook engagement",
+    "command": "npm run check:bw34.2a",
+    "code": 0,
+    "seconds": 0.36
+  },
+  {
+    "name": "Check BW-34.2AR1 social adapter compatibility",
+    "command": "npm run check:bw34.2ar1",
+    "code": 0,
+    "seconds": 0.36
+  },
+  {
+    "name": "Check BW-34.2AR2 Facebook engagement repair",
+    "command": "npm run check:bw34.2ar2",
+    "code": 0,
+    "seconds": 0.37
+  },
+  {
+    "name": "Check BW-34.2AR3 Facebook engagement authentication",
+    "command": "npm run check:bw34.2ar3",
+    "code": 0,
+    "seconds": 0.37
+  },
+  {
+    "name": "Check BW-34.2AR4 Facebook engagement partial availability",
+    "command": "npm run check:bw34.2ar4",
+    "code": 0,
+    "seconds": 0.36
+  },
+  {
+    "name": "Check BW-33.2R1 corrected Tendra One brand foundation",
+    "command": "npm run check:bw33.2r1",
+    "code": 0,
+    "seconds": 0.4
+  },
+  {
+    "name": "Check BW-33.3R1 post-hydration Canvas density",
+    "command": "npm run check:bw33.3r1",
+    "code": 0,
+    "seconds": 0.36
+  },
+  {
+    "name": "Check BW-33.4A1 Canvas indicator Inspector routing",
+    "command": "npm run check:bw33.4a1",
+    "code": 0,
+    "seconds": 0.37
+  },
+  {
+    "name": "Check BW-33.4B1R1 authoritative open-comment counter",
+    "command": "npm run check:bw33.4b1r1",
+    "code": 0,
+    "seconds": 0.64
+  },
+  {
+    "name": "Check BW-33.4B3 Post-it UX and localization",
+    "command": "npm run check:bw33.4b3",
+    "code": 0,
+    "seconds": 0.37
+  },
+  {
+    "name": "Check BW-33.4B3.1 resolved Post-its and Dark Mode controls",
+    "command": "npm run check:bw33.4b3.1",
+    "code": 0,
+    "seconds": 0.4
+  },
+  {
+    "name": "Check BW-33.4B4 accessible Post-it emoji picker",
+    "command": "npm run check:bw33.4b4",
+    "code": 0,
+    "seconds": 0.39
+  },
+  {
+    "name": "Check BW-33.4B4.1 stable Post-it emoji picker lifecycle",
+    "command": "npm run check:bw33.4b4.1",
+    "code": 0,
+    "seconds": 0.39
+  },
+  {
+    "name": "Check BW-33.4B4.2 timed Post-it emoji picker lifecycle",
+    "command": "npm run check:bw33.4b4.2",
+    "code": 0,
+    "seconds": 0.5
+  },
+  {
+    "name": "Check BW-33.5 Supabase RLS hardening contract",
+    "command": "npm run check:bw33.5",
+    "code": 0,
+    "seconds": 0.39
+  },
+  {
+    "name": "Check BW-33.5.1 publishing destinations RLS delta",
+    "command": "npm run check:bw33.5.1",
+    "code": 0,
+    "seconds": 0.39
+  },
+  {
+    "name": "Check BW-36.1R1 Canvas toolbar isolation and Funnel footer",
+    "command": "npm run check:bw36.1r1",
+    "code": 0,
+    "seconds": 0.53
+  },
+  {
+    "name": "Check BW-36.2 isolated compact non-Canvas context bar",
+    "command": "npm run check:bw36.2",
+    "code": 0,
+    "seconds": 0.69
+  },
+  {
+    "name": "Check BW-36.4 simplified Brand sidebar",
+    "command": "npm run check:bw36.4",
+    "code": 0,
+    "seconds": 0.43
+  },
+  {
+    "name": "Check BW-36.6 Workspace schema foundation",
+    "command": "npm run check:bw36.6",
+    "code": 0,
+    "seconds": 0.61
+  },
+  {
+    "name": "Check BW-36.7 Workspace backfill preflight",
+    "command": "npm run check:bw36.7",
+    "code": 0,
+    "seconds": 0.53
+  },
+  {
+    "name": "Check BW-36.7R1 Workspace identity diagnostic",
+    "command": "npm run check:bw36.7r1",
+    "code": 0,
+    "seconds": 0.51
+  },
+  {
+    "name": "Check BW-36.7R2 application identity bridge",
+    "command": "npm run check:bw36.7r2",
+    "code": 0,
+    "seconds": 0.41
+  },
+  {
+    "name": "Check BW-36.7R3 corrected Workspace backfill preflight",
+    "command": "npm run check:bw36.7r3",
+    "code": 0,
+    "seconds": 0.48
+  },
+  {
+    "name": "Check BW-36.8 transactional Workspace backfill",
+    "command": "npm run check:bw36.8",
+    "code": 0,
+    "seconds": 0.38
+  },
+  {
+    "name": "Check BW-36.9 authorized Workspace read boundary",
+    "command": "npm run check:bw36.9",
+    "code": 0,
+    "seconds": 0.5
+  },
+  {
+    "name": "Check BW-36.9R1 Workspace identity resolution repair",
+    "command": "npm run check:bw36.9r1",
+    "code": 0,
+    "seconds": 0.52
+  },
+  {
+    "name": "Check BW-36.10 Workspace selector and sidebar hierarchy",
+    "command": "npm run check:bw36.10",
+    "code": 0,
+    "seconds": 0.42
+  },
+  {
+    "name": "Check BW-36.10R1 Workspace selector popover layout",
+    "command": "npm run check:bw36.10r1",
+    "code": 0,
+    "seconds": 0.42
+  },
+  {
+    "name": "Check BW-36.11 safe Workspace renaming",
+    "command": "npm run check:bw36.11",
+    "code": 0,
+    "seconds": 0.44
+  },
+  {
+    "name": "Check BW-36.11R1 sidebar context interaction",
+    "command": "npm run check:bw36.11r1",
+    "code": 0,
+    "seconds": 0.41
+  },
+  {
+    "name": "Check BW-36.13R1 Workspace stability containment",
+    "command": "npm run check:bw36.13r1",
+    "code": 0,
+    "seconds": 0.44
+  },
+  {
+    "name": "Check BW-36.13R2 safe first Workspace creation",
+    "command": "npm run check:bw36.13r2",
+    "code": 0,
+    "seconds": 0.44
+  },
+  {
+    "name": "Check BW-36.13R3 authoritative project creation",
+    "command": "npm run check:bw36.13r3",
+    "code": 0,
+    "seconds": 0.43
+  },
+  {
+    "name": "Check BW-36.13R3R1 Workspace catalog and project launch repair",
+    "command": "npm run check:bw36.13r3r1",
+    "code": 0,
+    "seconds": 0.48
+  },
+  {
+    "name": "Guided Brand Profile setup regression",
+    "command": "npm run check:bw36.13r4",
+    "code": 0,
+    "seconds": 0.48
+  },
+  {
+    "name": "Check approved Brand Learnings in Advice (disposable PostgreSQL, mocked OpenAI)",
+    "command": "node scripts/check-bw36-20-approved-learning-ai-brain.js",
+    "code": 0,
+    "seconds": 15.95
+  },
+  {
+    "name": "Check BW-36.21A-R2.1 safe Workspace switching (Chromium)",
+    "command": "npm run check:bw36.21ar2.1",
+    "code": 0,
+    "seconds": 211.84
+  },
+  {
+    "name": "Check BW-36.21A Home foundation (Chromium)",
+    "command": "npm run check:bw36.21a",
+    "code": 0,
+    "seconds": 40.7
+  },
+  {
+    "name": "Check BW-36.20R1 provider storage and revalidation errors (mocked OpenAI)",
+    "command": "node scripts/check-bw36-20r1-learning-integration-review-fixes.js",
+    "code": 0,
+    "seconds": 7.43
+  },
+  {
+    "name": "Check Brand Profile entry and Workspace actions in Chromium",
+    "command": "npm run check:bw36.13r4r1",
+    "code": 0,
+    "seconds": 16.25
+  },
+  {
+    "name": "Check BW-36.13R5 Brand lifecycle stability",
+    "command": "npm run check:bw36.13r5",
+    "code": 0,
+    "seconds": 24.63
+  },
+  {
+    "name": "Check Brand workspace regression recovery",
+    "command": "npm run check:bw36.13r5r2",
+    "code": 0,
+    "seconds": 8.26
+  },
+  {
+    "name": "Check durable Brand logos and readiness",
+    "command": "npm run check:bw36.13r5r3",
+    "code": 0,
+    "seconds": 6.37
+  },
+  {
+    "name": "Check production Brand logo persistence",
+    "command": "npm run check:bw36.13r5r4",
+    "code": 0,
+    "seconds": 6.79
+  },
+  {
+    "name": "Check Brand Profile decisions and deletion UX",
+    "command": "npm run check:bw36.13r6",
+    "code": 0,
+    "seconds": 13.59
+  },
+  {
+    "name": "Check BW-36.12 Brand logo acquisition and projection",
+    "command": "npm run check:bw36.12",
+    "code": 0,
+    "seconds": 0.47
+  },
+  {
+    "name": "Check stable campaign creation and direct handoff in Chromium",
+    "command": "npm run check:bw36.14",
+    "code": 0,
+    "seconds": 10.16
+  },
+  {
+    "name": "Check complete Campaign V3 generation in Chromium",
+    "command": "npm run check:bw36.14r1",
+    "code": 0,
+    "seconds": 69.94
+  },
+  {
+    "name": "Check BW-36.15 guided campaign responsibilities",
+    "command": "npm run check:bw36.15",
+    "code": 0,
+    "seconds": 45.56
+  },
+  {
+    "name": "Check BW-36.15R1 responsibility workspace continuity",
+    "command": "npm run check:bw36.15r1",
+    "code": 0,
+    "seconds": 20.3
+  },
+  {
+    "name": "Check BW-36.16 adaptive Canvas view hierarchy in Chromium",
+    "command": "npm run check:bw36.16",
+    "code": 0,
+    "seconds": 12.34
+  },
+  {
+    "name": "Check BW-36.16R1 toolbar and global view cycle in Chromium",
+    "command": "npm run check:bw36.16r1",
+    "code": 0,
+    "seconds": 22.76
+  },
+  {
+    "name": "Check BW-36.17 governed Brand Learnings in Chromium",
+    "command": "npm run check:bw36.17",
+    "code": 0,
+    "seconds": 35.49
+  },
+  {
+    "name": "Check BW-36.17R1 Learning provenance schema in disposable PostgreSQL",
+    "command": "npm run check:bw36.17r1",
+    "code": 0,
+    "seconds": 17.55
+  },
+  {
+    "name": "Check BW-36.17R2 provenance recovery in disposable PostgreSQL",
+    "command": "npm run check:bw36.17r2",
+    "code": 0,
+    "seconds": 47.93
+  },
+  {
+    "name": "Check BW-36.18 governed Learning source capture",
+    "command": "npm run check:bw36.18",
+    "code": 0,
+    "seconds": 12.16
+  },
+  {
+    "name": "Check BW-36.19 AI Learning Advisor (mocked OpenAI)",
+    "command": "npm run check:bw36.19",
+    "code": 0,
+    "seconds": 31.23
+  },
+  {
+    "name": "Check BW-36.19R1 existing saved Board compatibility (mocked OpenAI)",
+    "command": "npm run check:bw36.19r1",
+    "code": 0,
+    "seconds": 31.52
+  },
+  {
+    "name": "Check BW-36.19R2 adaptive Advisor context and streaming recovery (mocked OpenAI)",
+    "command": "npm run check:bw36.19r2",
+    "code": 0,
+    "seconds": 40.48
+  },
+  {
+    "name": "Check BW-36.19R4 output reliability (mocked OpenAI)",
+    "command": "npm run check:bw36.19r4",
+    "code": 0,
+    "seconds": 20.85
+  },
+  {
+    "name": "Check BW-36.19R5 simplified generation and persisted human approval (mocked OpenAI)",
+    "command": "npm run check:bw36.19r5",
+    "code": 0,
+    "seconds": 23.47
+  },
+  {
+    "name": "Check BW-36.19R6 Learning review and atomic batch adoption (mocked OpenAI)",
+    "command": "npm run check:bw36.19r6",
+    "code": 0,
+    "seconds": 43.54
+  },
+  {
+    "name": "Check BW-36.19R7 Advisor visual states and accessibility in Chromium (provider-free)",
+    "command": "node scripts/check-bw36-19r7-advisor-visual.js",
+    "code": 0,
+    "seconds": 17.06
+  },
+  {
+    "name": "Check BW-36.19R8 Canvas Learn entry in Chromium (provider-free)",
+    "command": "npm run check:bw36.19r8",
+    "code": 0,
+    "seconds": 11.47
+  },
+  {
+    "name": "Check dynamic AI Insights translations",
+    "command": "node scripts/check-bw25-1-dynamic-insights-translations.js",
+    "code": 0,
+    "seconds": 0.05
+  },
+  {
+    "name": "Check scoped German interface localization",
+    "command": "npm run check:bw25.2",
+    "code": 0,
+    "seconds": 0.4
+  },
+  {
+    "name": "Check BW-36.21A-R2.2 multiple Workspaces and direct Brand navigation",
+    "command": "npm run check:bw36.21ar2.2",
+    "code": 0,
+    "seconds": 47.33
+  },
+  {
+    "name": "Check BW-36.21A-R2.3 Brand and Board context consistency",
+    "command": "npm run check:bw36.21ar2.3",
+    "code": 0,
+    "seconds": 78.91
+  },
+  {
+    "name": "Check BW-36.21B1 Home Intelligence (Chromium, provider-free)",
+    "command": "npm run check:bw36.21b1",
+    "code": 0,
+    "seconds": 41.8
+  },
+  {
+    "name": "Check BW-36.21B2 Home Campaign Insights and AI Brain (Chromium, provider-free)",
+    "command": "npm run check:bw36.21b2",
+    "code": 0,
+    "seconds": 119.62
+  },
+  {
+    "name": "Check BW-36.22A compact Home and continuation (Chromium, provider-free)",
+    "command": "npm run check:bw36.22a",
+    "code": 0,
+    "seconds": 52.03
+  },
+  {
+    "name": "Check BW-36.22B1 Living Workspace foundation (Chromium, provider-free)",
+    "command": "npm run check:bw36.22b1",
+    "code": 0,
+    "seconds": 45.0
+  },
+  {
+    "name": "Check BW-36.22B1R1 current continuation name (Chromium, provider-free)",
+    "command": "npm run check:bw36.22b1r1",
+    "code": 0,
+    "seconds": 11.29
+  },
+  {
+    "name": "Check Knowledge Module browser globals",
+    "command": "node scripts/check-knowledge-module-browser-globals.js",
+    "code": 0,
+    "seconds": 0.05
+  }
+]

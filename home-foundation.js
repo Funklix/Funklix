@@ -67,9 +67,10 @@
   function heroContinuation(context, metadata = []) {
     const m = model(context, metadata);
     const saved = !context.loading && context.openBoard && m.boards.find(b => b.id === context.boardId);
-    // Hydrated association can be newer than catalog membership. Resolve only
-    // against visible catalog Brands, never against the Board's Core/snapshot.
-    const current = saved && { ...saved, brand: m.workspace.brands.find(b => b.id === context.openBoard.brandId) || null,
+    // Hydrated name and association can be newer than the catalog entry.
+    // Resolve association only against visible catalog Brands, never Core/snapshot.
+    const current = saved && { ...saved, name: context.openBoard.name,
+      brand: m.workspace.brands.find(b => b.id === context.openBoard.brandId) || null,
       unassigned: context.openBoard.unassigned === true };
     return (current && m.brand && current.brand?.id === m.brand.id ? current : null)
       || m.boards.find(b => m.brand && (b.id === current?.id ? current.brand?.id : b.brand?.id) === m.brand.id) || current || m.boards[0] || null;

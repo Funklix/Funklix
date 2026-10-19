@@ -104,6 +104,14 @@ async function check(name, run) { await run(); passed++;results.push(name);conso
       const positions=await home(p).evaluate(e=>['.home-hero','.home-living','.home-details-heading','.home-next-moves','.home-continue','.home-intelligence','.home-board-intelligence','.home-brands'].map(s=>e.querySelector(s).getBoundingClientRect().top));
       assert(positions.every((v,i)=>!i||v>positions[i-1]));await f.close();
     });
+    await check('mobile scroll clip is immediate and every Home action remains reachable across repeated shell changes', async()=>{
+      const f=await fixture({manyBoards:true}),p=f.page;await ready(p);
+      await p.locator('#home-brand-select').selectOption(Y);await ready(p);
+      await action(p,'expand').click();assert.equal(await cards(p).count(),10);
+      const before=await snapshot(p);
+      await require('./fixtures/home-mobile-geometry')(p,out);
+      assert.equal(await snapshot(p),before,'Mobile geometry changes never mutate the Board');await f.close();
+    });
     const geometry=[];
     await check('Chromium visual matrix, full labels, theme/system, fixed overlay/focus geometry and continuation',async()=>{
       const f=await fixture({manyBoards:true}),p=f.page;await ready(p);await p.locator('#home-brand-select').selectOption(Y);await ready(p);
@@ -120,7 +128,7 @@ async function check(name, run) { await run(); passed++;results.push(name);conso
         // Keep the actionable first-viewport gate on its real saved continuation;
         // the exact detail order, preview and navigation assertions remain above.
         if(width===1440&&language==='en'){assert(rects.heroOpen.y<=600,JSON.stringify(rects));assert(rects.details.y>=rects.living.bottom,JSON.stringify(rects));}
-        if(width<768){const bounds=await p.locator('#dashboard-view').boundingBox();assert(bounds.y+bounds.height<=rects.overlay.y+1,'Home scroll viewport overlaps fixed context controls');}
+        if(width<768){const bounds=await p.locator('#dashboard-view').boundingBox();assert(bounds.y+bounds.height<=rects.overlay.y+1,'Home scroll viewport overlaps fixed context controls '+JSON.stringify({width,height,theme,language,collapsed,bounds,overlay:rects.overlay}));}
         const file=`home-${width}-${theme}-${language}.png`;await p.screenshot({path:path.join(out,file)});
         await action(p,'expand').click();assert.equal(await cards(p).count(),10);
         const last=cards(p).last().locator('button');await last.focus();await last.scrollIntoViewIfNeeded();await p.waitForTimeout(40);
