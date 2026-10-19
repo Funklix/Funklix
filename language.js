@@ -308,6 +308,7 @@
     "Overview": "Überblick", "A truthful summary of the structure and content in the current Canvas.": "Eine verlässliche Zusammenfassung der Struktur und Inhalte im aktuellen Canvas.",
     // BW-36.21B2 — Board-scoped Home entries.
     "Campaign Insights": "Kampagnen-Insights",
+    "Analyzing the current Canvas structure…": "Die aktuelle Canvas-Struktur wird analysiert…",
     "No diagnostic snapshot is available. Open Insights to inspect the current Canvas.": "Es ist keine Diagnose vorhanden. Öffne Insights, um den aktuellen Canvas zu prüfen.",
     "The diagnostic snapshot is out of date. Open Insights to refresh it for this Canvas.": "Die Diagnose ist veraltet. Öffne Insights, um sie für diesen Canvas zu aktualisieren.",
     "No applicable structural findings in this snapshot. This does not measure campaign results.": "Diese Diagnose enthält keine anwendbaren strukturellen Hinweise. Sie misst keine Kampagnenergebnisse.",

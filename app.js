@@ -6301,20 +6301,24 @@ async function createSuggestedNodeFromAnalysis(suggestion) {
 }
 
 function renderCampaignIntelligence() {
-  let a;
-  try {
-    a = analyzeCampaign(state.nodes, state.edges, state.brandCore);
-    captureInsightsDiagnostic(a);
-  } catch (_error) {
-    state.insightsDiagnosticSnapshot = state.currentBoardId && state.boardAccess?.canView !== false
-      ? { identity: currentInsightsIdentity(), analysis: null }
-      : null;
-    renderInsightsSurface();
-    renderAiBrain();
-    return;
-  }
+  calculateInsightsDiagnostic();
   renderInsightsSurface();
   renderAiBrain();
+}
+
+// One deterministic path for explicit Insights refresh and deferred Home demand.
+// Only the runtime diagnostic snapshot is written; Canvas/persistence stay untouched.
+function calculateInsightsDiagnostic() {
+  try {
+    captureInsightsDiagnostic(analyzeCampaign(state.nodes, state.edges, state.brandCore));
+  } catch (_error) {
+    const failed = state.currentBoardId && state.boardAccess?.canView !== false
+      ? { identity: currentInsightsIdentity(), canvasState: state.isDirty ? "live_unsaved" : "loaded_saved", analysis: null }
+      : null;
+    // Preserve navigation even if malformed Canvas values cannot be fingerprinted.
+    try { if (failed) failed.canvasIdentity = currentInsightsCanvasIdentity(); } catch (_) { /* unavailable */ }
+    state.insightsDiagnosticSnapshot = failed;
+  }
 }
 
 function aiBrainIdentity() {
@@ -6694,18 +6698,82 @@ function captureInsightsDiagnostic(analysis) {
     : null;
 }
 
-// Home consumes the existing snapshot only. Rendering never calculates diagnostics,
-// changes Canvas state, or requests AI/knowledge context.
+let homeInsightsRequest = null;
+
+function homeInsightsContext() {
+  const c = brandBoardNavigationContext(), catalog = state.workspaceCatalog;
+  if (state.activeView !== 'home' || !c.openBoard || state.initialServerLoadInFlight
+    || !state.user?.email || state.publicBoardToken || catalog.status !== 'ready'
+    || catalog.identity !== state.user.email.trim().toLowerCase()
+    || !catalog.value?.workspaces.find(w => w.id === c.workspaceId)?.boards.some(b => b.id === state.currentBoardId)) return null;
+  const canvasIdentity = currentInsightsCanvasIdentity();
+  return { account: state.user, catalog, canvasIdentity, key: JSON.stringify([currentInsightsIdentity(),
+    c.workspaceId, catalog.generation, canvasIdentity, state.isDirty ? 'live_unsaved' : 'loaded_saved']) };
+}
+
+function cancelHomeInsightsRequest() {
+  const request = homeInsightsRequest;
+  homeInsightsRequest = null;
+  if (!request) return;
+  if (request.idle) window.cancelIdleCallback(request.handle);
+  else window.clearTimeout(request.handle);
+}
+
+function ensureHomeInsightsDiagnostic(context) {
+  if (!context || !state.nodes.length) { cancelHomeInsightsRequest(); return false; }
+  const snapshot = state.insightsDiagnosticSnapshot;
+  if (isCurrentInsightsSnapshot(snapshot, context.canvasIdentity)
+    && snapshot.canvasState === (state.isDirty ? 'live_unsaved' : 'loaded_saved')) {
+    cancelHomeInsightsRequest(); return false;
+  }
+  if (homeInsightsRequest?.context.key === context.key
+    && homeInsightsRequest.context.account === context.account
+    && homeInsightsRequest.context.catalog === context.catalog) return true;
+  cancelHomeInsightsRequest();
+  const request = { context, idle: typeof window.requestIdleCallback === 'function' };
+  homeInsightsRequest = request;
+  const run = () => {
+    if (homeInsightsRequest !== request) return;
+    homeInsightsRequest = null;
+    try {
+      const current = homeInsightsContext();
+      if (!current || current.key !== context.key || current.account !== context.account || current.catalog !== context.catalog) {
+        homeFoundationController?.sync(); return;
+      }
+      // Explicit Insights navigation/refresh may have supplied evidence while queued.
+      if (!isCurrentInsightsSnapshot(state.insightsDiagnosticSnapshot)
+        || state.insightsDiagnosticSnapshot.canvasState !== (state.isDirty ? 'live_unsaved' : 'loaded_saved')) {
+        calculateInsightsDiagnostic();
+      }
+      // The engine is synchronous: no context can interleave during calculation.
+      // Revalidate nevertheless before exposing evidence to Home or its actions.
+      const after = homeInsightsContext();
+      if (!after || after.key !== context.key || after.account !== context.account || after.catalog !== context.catalog) {
+        state.insightsDiagnosticSnapshot = null;
+      }
+    } catch (_) {
+      // A malformed Canvas/fingerprint must not interrupt Home navigation.
+      state.insightsDiagnosticSnapshot = null;
+    }
+    homeFoundationController?.sync();
+  };
+  request.handle = request.idle ? window.requestIdleCallback(run, { timeout: 300 }) : window.setTimeout(run, 32);
+  return true;
+}
+
+// Home requests the shared local engine only for missing/stale authorized evidence.
 function homeCampaignInsights() {
   try {
-    if (state.activeView !== 'home' || !brandBoardNavigationContext().openBoard
-      || state.initialServerLoadInFlight) return null;
+    const context = homeInsightsContext();
+    const analyzing = ensureHomeInsightsDiagnostic(context);
+    if (!context) return null;
     if (!state.nodes.length) return { status: 'empty' };
+    if (analyzing) return { status: 'analyzing' };
     const snapshot = state.insightsDiagnosticSnapshot;
     if (!snapshot) return { status: 'missing' };
     if (snapshot.identity !== currentInsightsIdentity()) return { status: 'stale' };
     if (!snapshot.analysis) return { status: 'error' };
-    if (!isCurrentInsightsSnapshot(snapshot)
+    if (!isCurrentInsightsSnapshot(snapshot, context.canvasIdentity)
       || snapshot.canvasState !== (state.isDirty ? 'live_unsaved' : 'loaded_saved')) return { status: 'stale' };
     if (!isValidInsightsDiagnostic(snapshot.analysis) || !Array.isArray(snapshot.findings)
       || !Number.isFinite(Date.parse(snapshot.analyzedAt))) return { status: 'error' };
@@ -6714,18 +6782,25 @@ function homeCampaignInsights() {
       || !Array.isArray(f.affectedNodeIds) || f.affectedNodeIds.some(id => typeof id !== 'string'))) return { status: 'error' };
     const campaignNodes = state.nodes.some(n => ['Idea', 'Content', 'Social Media Posting', 'Landing Page', 'Email Campaign', 'Campaign Variation'].includes(n.type)
       || n.funnelStage || n.audience || n.tone);
+    const nodesById = new Map(), duplicateIds = new Set(), landingIds = new Set(), ctaIds = new Set();
+    for (const node of state.nodes) {
+      if (nodesById.has(node.id)) duplicateIds.add(node.id);
+      nodesById.set(node.id, node);
+      if (node.type === 'Landing Page') landingIds.add(node.id);
+      if (['Landing Page', 'Social Media Posting'].includes(node.type)) ctaIds.add(node.id);
+    }
     const findings = snapshot.findings.filter(f => {
       // The engine's global trust/CTA formulas can fire with no eligible nodes.
       // Preserve the source findings; only preview genuinely applicable checks.
-      if (f.code === 'TRUST_PROOF_MISSING') return f.affectedNodeIds.some(id => state.nodes.some(n => n.id === id && n.type === 'Landing Page'));
-      if (f.code === 'CTA_VARIATIONS_MISSING') return f.affectedNodeIds.some(id => state.nodes.some(n => n.id === id && ['Landing Page', 'Social Media Posting'].includes(n.type)));
+      if (f.code === 'TRUST_PROOF_MISSING') return f.affectedNodeIds.some(id => landingIds.has(id));
+      if (f.code === 'CTA_VARIATIONS_MISSING') return f.affectedNodeIds.some(id => ctaIds.has(id));
       return f.code !== 'FUNNEL_STAGE_GAPS' || campaignNodes;
     }).map(f => {
       // showInsightsFindingOnCanvas selects the first affected node. Offer that
       // adapter only when this exact target is unique and selector-safe.
-      const first = f.affectedNodeIds.find(id => state.nodes.some(n => n.id === id));
+      const first = f.affectedNodeIds.find(id => nodesById.has(id));
       const nodeId = typeof first === 'string' && /^[\w.:-]+$/.test(first)
-        && state.nodes.filter(n => n.id === first).length === 1 ? first : null;
+        && !duplicateIds.has(first) ? first : null;
       return { code: f.code, title: f.title, description: f.description, severity: f.severity,
         affectedNodeIds: f.affectedNodeIds, nodeId };
     });
@@ -6813,8 +6888,9 @@ function buildInsightsFindings(analysis) {
   return findings.sort((left, right) => INSIGHTS_SEVERITY_RANK[left.severity] - INSIGHTS_SEVERITY_RANK[right.severity] || right.structuralRelevance - left.structuralRelevance || right.affectedNodeIds.length - left.affectedNodeIds.length || right.weight - left.weight || INSIGHTS_CATEGORY_RANK[left.category] - INSIGHTS_CATEGORY_RANK[right.category] || left.code.localeCompare(right.code) || (left.affectedNodeIds[0] || "").localeCompare(right.affectedNodeIds[0] || "")).slice(0, 5);
 }
 
-function isCurrentInsightsSnapshot(snapshot) {
-  return !!snapshot && snapshot.identity === currentInsightsIdentity() && snapshot.canvasIdentity === currentInsightsCanvasIdentity();
+function isCurrentInsightsSnapshot(snapshot, canvasIdentity) {
+  return !!snapshot && snapshot.identity === currentInsightsIdentity()
+    && snapshot.canvasIdentity === (canvasIdentity ?? currentInsightsCanvasIdentity());
 }
 
 function showInsightsFindingOnCanvas(code) {
