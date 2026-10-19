@@ -1,0 +1,22 @@
+
+> check:bw36.21a
+> node scripts/check-bw36-21a-home-foundation.js
+
+PASS authorized composition, Brand priority, server dates, missing metadata, stable manual ordering, hidden associations and identity boundaries
+PASS signed-in/out root, local draft guard, Workspace/Brand context, filters, optional failures, stale response, account/logout isolation, keyboard focus, six actual layout geometries and four Chromium screenshots
+PASS long names, real logo failure fallback, untranslated object names, viewer/public boundaries, revoked metadata and failed catalog clear private cards
+PASS Home loading recovery and retry: request failure
+PASS Home loading recovery and retry: invalid association
+PASS Home loading recovery and retry: wrong Board identity
+PASS Home loading recovery and retry: invalid Canvas
+PASS Home loading recovery and retry: malformed JSON
+PASS Home loading recovery and retry: transport timeout
+PASS Home loading recovery and retry: transport termination
+PASS Home loading recovery and retry: success
+PASS rapid switching, stale success/failure during active load, and late stale completion preserve current Canvas and actions
+PASS catalog failure/retry, no Workspace, active Board priority, persisted Brand guard, dirty Canvas preservation, saved Board route/reload/Back, zero provider calls or writes
+npm notice
+npm notice New major version of npm available! 11.9.0 -> 12.2.0
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.0
+npm notice To update run: npm install -g npm@12.2.0
+npm notice

@@ -1,0 +1,15 @@
+{
+  "passed": 10,
+  "groups": [
+    "DOM order, unique IDs, compact selectors and guarded header continuation",
+    "Brand preference, mismatch actions, Profile and all Brand exploration remain independent of Board association",
+    "fixed Learning, assigned-to-me, engine finding order; summaries reuse requests and current evidence",
+    "unknown, denied, malformed, zero and read-only Learning sources never become review recommendations",
+    "responsibility matching, completed and duplicate exclusions; diagnostic staleness removes summary",
+    "six authorized cards, reversible expansion, exact model grouping/order, partial metadata and current highlighting",
+    "fallback is existing first authorized Board; no Board/empty Canvas has no fabricated task; hidden association stays distinct",
+    "captured scope rejects forged/stale Next Moves and current evidence; navigation makes no writes",
+    "focus survives async redraw; selector labels and keyboard reading order",
+    "Chromium visual matrix, full labels, theme/system, fixed overlay/focus geometry and continuation"
+  ]
+}

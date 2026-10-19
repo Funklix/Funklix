@@ -126,7 +126,7 @@ async function browserChecks() {
         const luminance = value => { ctx.clearRect(0, 0, 1, 1); ctx.fillStyle = value; ctx.fillRect(0, 0, 1, 1);
           const rgb = Array.from(ctx.getImageData(0, 0, 1, 1).data).slice(0, 3).map(c => { c /= 255; return c <= .04045 ? c / 12.92 : ((c + .055) / 1.055) ** 2.4; });
           return rgb[0] * .2126 + rgb[1] * .7152 + rgb[2] * .0722; };
-        const card = element.querySelector('.home-board-card'), ink = luminance(getComputedStyle(card.querySelector('.home-eyebrow')).color), background = luminance(getComputedStyle(card).backgroundColor);
+        const card = element.querySelector('.home-board-card'), ink = luminance(getComputedStyle(card.querySelector('.home-board-group')).color), background = luminance(getComputedStyle(card).backgroundColor);
         return (Math.max(ink, background) + .05) / (Math.min(ink, background) + .05);
       });
       assert(contrast >= 4.5, `Small accent text contrast ${contrast}`);
