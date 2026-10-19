@@ -1,0 +1,959 @@
+[
+  {
+    "key": "1920-light-en-expanded",
+    "height": 1080,
+    "theme": "light",
+    "viewport": 1920,
+    "documentWidth": 1920,
+    "boxes": {
+      "#home-foundation": {
+        "x": 520,
+        "y": 0,
+        "width": 1120,
+        "height": 2580,
+        "scrollWidth": 1120
+      },
+      ".home-hero": {
+        "x": 520,
+        "y": 0,
+        "width": 1120,
+        "height": 227,
+        "scrollWidth": 1120
+      },
+      ".home-context": {
+        "x": 520,
+        "y": 247,
+        "width": 1120,
+        "height": 44,
+        "scrollWidth": 1120
+      },
+      ".home-brands": {
+        "x": 520,
+        "y": 327,
+        "width": 1120,
+        "height": 159,
+        "scrollWidth": 1120
+      },
+      "[data-home-context]": {
+        "x": 520,
+        "y": 510,
+        "width": 1120,
+        "height": 131,
+        "scrollWidth": 1120
+      },
+      "[data-home-module=\"brand\"]": {
+        "x": 520,
+        "y": 673,
+        "width": 550,
+        "height": 583,
+        "scrollWidth": 550
+      },
+      "[data-home-module=\"responsibilities\"]": {
+        "x": 1090,
+        "y": 673,
+        "width": 550,
+        "height": 583,
+        "scrollWidth": 550
+      },
+      "[data-home-module=\"insights\"]": {
+        "x": 520,
+        "y": 1276,
+        "width": 550,
+        "height": 742,
+        "scrollWidth": 550
+      },
+      "[data-home-module=\"brain\"]": {
+        "x": 1090,
+        "y": 1276,
+        "width": 550,
+        "height": 390,
+        "scrollWidth": 550
+      },
+      ".home-continue": {
+        "x": 520,
+        "y": 2057,
+        "width": 1120,
+        "height": 523,
+        "scrollWidth": 1120
+      },
+      ".home-board-card": {
+        "x": 520,
+        "y": 2293,
+        "width": 363,
+        "height": 287,
+        "scrollWidth": 363
+      }
+    },
+    "focus": "<body>\n    \n    <div class=\"app-shell\" data-active-view=\"home\" data-layout-mode=\"full\" data-inspector-supported=\"false\" data-inspector-open=\"false\" data-inspector-mode=\"closed\">\n  "
+  },
+  {
+    "key": "1440-light-en-expanded",
+    "height": 900,
+    "theme": "light",
+    "viewport": 1440,
+    "documentWidth": 1440,
+    "boxes": {
+      "#home-foundation": {
+        "x": 283,
+        "y": 0,
+        "width": 1114,
+        "height": 2573,
+        "scrollWidth": 1114
+      },
+      ".home-hero": {
+        "x": 283,
+        "y": 0,
+        "width": 1114,
+        "height": 220,
+        "scrollWidth": 1114
+      },
+      ".home-context": {
+        "x": 283,
+        "y": 240,
+        "width": 1114,
+        "height": 44,
+        "scrollWidth": 1114
+      },
+      ".home-brands": {
+        "x": 283,
+        "y": 320,
+        "width": 1114,
+        "height": 159,
+        "scrollWidth": 1114
+      },
+      "[data-home-context]": {
+        "x": 283,
+        "y": 503,
+        "width": 1114,
+        "height": 131,
+        "scrollWidth": 1114
+      },
+      "[data-home-module=\"brand\"]": {
+        "x": 283,
+        "y": 666,
+        "width": 547,
+        "height": 583,
+        "scrollWidth": 547
+      },
+      "[data-home-module=\"responsibilities\"]": {
+        "x": 850,
+        "y": 666,
+        "width": 547,
+        "height": 583,
+        "scrollWidth": 547
+      },
+      "[data-home-module=\"insights\"]": {
+        "x": 283,
+        "y": 1269,
+        "width": 547,
+        "height": 742,
+        "scrollWidth": 547
+      },
+      "[data-home-module=\"brain\"]": {
+        "x": 850,
+        "y": 1269,
+        "width": 547,
+        "height": 390,
+        "scrollWidth": 547
+      },
+      ".home-continue": {
+        "x": 283,
+        "y": 2051,
+        "width": 1114,
+        "height": 523,
+        "scrollWidth": 1114
+      },
+      ".home-board-card": {
+        "x": 283,
+        "y": 2287,
+        "width": 361,
+        "height": 287,
+        "scrollWidth": 361
+      }
+    },
+    "focus": "<body>\n    \n    <div class=\"app-shell\" data-active-view=\"home\" data-layout-mode=\"full\" data-inspector-supported=\"false\" data-inspector-open=\"false\" data-inspector-mode=\"closed\">\n  "
+  },
+  {
+    "key": "1440-dark-de-collapsed",
+    "height": 900,
+    "theme": "dark",
+    "viewport": 1440,
+    "documentWidth": 1440,
+    "boxes": {
+      "#home-foundation": {
+        "x": 197,
+        "y": 0,
+        "width": 1120,
+        "height": 2646,
+        "scrollWidth": 1120
+      },
+      ".home-hero": {
+        "x": 197,
+        "y": 0,
+        "width": 1120,
+        "height": 246,
+        "scrollWidth": 1120
+      },
+      ".home-context": {
+        "x": 197,
+        "y": 267,
+        "width": 1120,
+        "height": 44,
+        "scrollWidth": 1120
+      },
+      ".home-brands": {
+        "x": 197,
+        "y": 347,
+        "width": 1120,
+        "height": 159,
+        "scrollWidth": 1120
+      },
+      "[data-home-context]": {
+        "x": 197,
+        "y": 530,
+        "width": 1120,
+        "height": 131,
+        "scrollWidth": 1120
+      },
+      "[data-home-module=\"brand\"]": {
+        "x": 197,
+        "y": 693,
+        "width": 550,
+        "height": 609,
+        "scrollWidth": 550
+      },
+      "[data-home-module=\"responsibilities\"]": {
+        "x": 767,
+        "y": 693,
+        "width": 550,
+        "height": 609,
+        "scrollWidth": 550
+      },
+      "[data-home-module=\"insights\"]": {
+        "x": 197,
+        "y": 1322,
+        "width": 550,
+        "height": 762,
+        "scrollWidth": 550
+      },
+      "[data-home-module=\"brain\"]": {
+        "x": 767,
+        "y": 1322,
+        "width": 550,
+        "height": 390,
+        "scrollWidth": 550
+      },
+      ".home-continue": {
+        "x": 197,
+        "y": 2124,
+        "width": 1120,
+        "height": 523,
+        "scrollWidth": 1120
+      },
+      ".home-board-card": {
+        "x": 197,
+        "y": 2360,
+        "width": 363,
+        "height": 287,
+        "scrollWidth": 363
+      }
+    },
+    "focus": "<body>\n    \n    <div class=\"app-shell sidebar-collapsed\" data-active-view=\"home\" data-layout-mode=\"full\" data-inspector-supported=\"false\" data-inspector-open=\"false\" data-inspector"
+  },
+  {
+    "key": "1280-light-de-expanded",
+    "height": 800,
+    "theme": "light",
+    "viewport": 1280,
+    "documentWidth": 1280,
+    "boxes": {
+      "#home-foundation": {
+        "x": 117,
+        "y": 0,
+        "width": 1120,
+        "height": 2636,
+        "scrollWidth": 1120
+      },
+      ".home-hero": {
+        "x": 117,
+        "y": 0,
+        "width": 1120,
+        "height": 241,
+        "scrollWidth": 1120
+      },
+      ".home-context": {
+        "x": 117,
+        "y": 261,
+        "width": 1120,
+        "height": 44,
+        "scrollWidth": 1120
+      },
+      ".home-brands": {
+        "x": 117,
+        "y": 341,
+        "width": 1120,
+        "height": 159,
+        "scrollWidth": 1120
+      },
+      "[data-home-context]": {
+        "x": 117,
+        "y": 524,
+        "width": 1120,
+        "height": 131,
+        "scrollWidth": 1120
+      },
+      "[data-home-module=\"brand\"]": {
+        "x": 117,
+        "y": 687,
+        "width": 550,
+        "height": 605,
+        "scrollWidth": 550
+      },
+      "[data-home-module=\"responsibilities\"]": {
+        "x": 687,
+        "y": 687,
+        "width": 550,
+        "height": 605,
+        "scrollWidth": 550
+      },
+      "[data-home-module=\"insights\"]": {
+        "x": 117,
+        "y": 1312,
+        "width": 550,
+        "height": 762,
+        "scrollWidth": 550
+      },
+      "[data-home-module=\"brain\"]": {
+        "x": 687,
+        "y": 1312,
+        "width": 550,
+        "height": 390,
+        "scrollWidth": 550
+      },
+      ".home-continue": {
+        "x": 117,
+        "y": 2114,
+        "width": 1120,
+        "height": 523,
+        "scrollWidth": 1120
+      },
+      ".home-board-card": {
+        "x": 117,
+        "y": 2350,
+        "width": 363,
+        "height": 287,
+        "scrollWidth": 363
+      }
+    },
+    "focus": "<body>\n    \n    <div class=\"app-shell\" data-active-view=\"home\" data-layout-mode=\"full\" data-inspector-supported=\"false\" data-inspector-open=\"false\" data-inspector-mode=\"closed\">\n  "
+  },
+  {
+    "key": "1024-dark-en-expanded",
+    "height": 768,
+    "theme": "dark",
+    "viewport": 1024,
+    "documentWidth": 1024,
+    "boxes": {
+      "#home-foundation": {
+        "x": 105,
+        "y": 0,
+        "width": 889,
+        "height": 2645,
+        "scrollWidth": 889
+      },
+      ".home-hero": {
+        "x": 105,
+        "y": 0,
+        "width": 889,
+        "height": 191,
+        "scrollWidth": 889
+      },
+      ".home-context": {
+        "x": 105,
+        "y": 211,
+        "width": 889,
+        "height": 44,
+        "scrollWidth": 889
+      },
+      ".home-brands": {
+        "x": 105,
+        "y": 291,
+        "width": 889,
+        "height": 159,
+        "scrollWidth": 889
+      },
+      "[data-home-context]": {
+        "x": 105,
+        "y": 474,
+        "width": 889,
+        "height": 131,
+        "scrollWidth": 889
+      },
+      "[data-home-module=\"brand\"]": {
+        "x": 105,
+        "y": 637,
+        "width": 434,
+        "height": 598,
+        "scrollWidth": 434
+      },
+      "[data-home-module=\"responsibilities\"]": {
+        "x": 559,
+        "y": 637,
+        "width": 434,
+        "height": 598,
+        "scrollWidth": 434
+      },
+      "[data-home-module=\"insights\"]": {
+        "x": 105,
+        "y": 1255,
+        "width": 434,
+        "height": 827,
+        "scrollWidth": 434
+      },
+      "[data-home-module=\"brain\"]": {
+        "x": 559,
+        "y": 1255,
+        "width": 434,
+        "height": 411,
+        "scrollWidth": 434
+      },
+      ".home-continue": {
+        "x": 105,
+        "y": 2122,
+        "width": 889,
+        "height": 523,
+        "scrollWidth": 889
+      },
+      ".home-board-card": {
+        "x": 105,
+        "y": 2358,
+        "width": 286,
+        "height": 287,
+        "scrollWidth": 286
+      }
+    },
+    "focus": "<body>\n    \n    <div class=\"app-shell\" data-active-view=\"home\" data-layout-mode=\"full\" data-inspector-supported=\"false\" data-inspector-open=\"false\" data-inspector-mode=\"closed\">\n  "
+  },
+  {
+    "key": "768-light-en-expanded",
+    "height": 1024,
+    "theme": "light",
+    "viewport": 768,
+    "documentWidth": 768,
+    "boxes": {
+      "#home-foundation": {
+        "x": 97,
+        "y": 0,
+        "width": 648,
+        "height": 3358,
+        "scrollWidth": 648
+      },
+      ".home-hero": {
+        "x": 97,
+        "y": 0,
+        "width": 648,
+        "height": 166,
+        "scrollWidth": 648
+      },
+      ".home-context": {
+        "x": 97,
+        "y": 186,
+        "width": 648,
+        "height": 44,
+        "scrollWidth": 648
+      },
+      ".home-brands": {
+        "x": 97,
+        "y": 266,
+        "width": 648,
+        "height": 159,
+        "scrollWidth": 648
+      },
+      "[data-home-context]": {
+        "x": 97,
+        "y": 449,
+        "width": 648,
+        "height": 183,
+        "scrollWidth": 648
+      },
+      "[data-home-module=\"brand\"]": {
+        "x": 97,
+        "y": 664,
+        "width": 648,
+        "height": 403,
+        "scrollWidth": 648
+      },
+      "[data-home-module=\"responsibilities\"]": {
+        "x": 97,
+        "y": 1088,
+        "width": 648,
+        "height": 561,
+        "scrollWidth": 648
+      },
+      "[data-home-module=\"insights\"]": {
+        "x": 97,
+        "y": 1669,
+        "width": 648,
+        "height": 732,
+        "scrollWidth": 648
+      },
+      "[data-home-module=\"brain\"]": {
+        "x": 97,
+        "y": 2420,
+        "width": 648,
+        "height": 355,
+        "scrollWidth": 648
+      },
+      ".home-continue": {
+        "x": 97,
+        "y": 2815,
+        "width": 648,
+        "height": 543,
+        "scrollWidth": 648
+      },
+      ".home-board-card": {
+        "x": 97,
+        "y": 3071,
+        "width": 316,
+        "height": 287,
+        "scrollWidth": 316
+      }
+    },
+    "focus": "<body>\n    \n    <div class=\"app-shell\" data-active-view=\"home\" data-layout-mode=\"full\" data-inspector-supported=\"false\" data-inspector-open=\"false\" data-inspector-mode=\"closed\">\n  "
+  },
+  {
+    "key": "768-system-de-collapsed",
+    "height": 1024,
+    "theme": "dark",
+    "viewport": 768,
+    "documentWidth": 768,
+    "boxes": {
+      "#home-foundation": {
+        "x": 97,
+        "y": 0,
+        "width": 648,
+        "height": 3499,
+        "scrollWidth": 648
+      },
+      ".home-hero": {
+        "x": 97,
+        "y": 0,
+        "width": 648,
+        "height": 192,
+        "scrollWidth": 648
+      },
+      ".home-context": {
+        "x": 97,
+        "y": 213,
+        "width": 648,
+        "height": 44,
+        "scrollWidth": 648
+      },
+      ".home-brands": {
+        "x": 97,
+        "y": 293,
+        "width": 648,
+        "height": 224,
+        "scrollWidth": 648
+      },
+      "[data-home-context]": {
+        "x": 97,
+        "y": 541,
+        "width": 648,
+        "height": 206,
+        "scrollWidth": 648
+      },
+      "[data-home-module=\"brand\"]": {
+        "x": 97,
+        "y": 779,
+        "width": 648,
+        "height": 403,
+        "scrollWidth": 648
+      },
+      "[data-home-module=\"responsibilities\"]": {
+        "x": 97,
+        "y": 1203,
+        "width": 648,
+        "height": 561,
+        "scrollWidth": 648
+      },
+      "[data-home-module=\"insights\"]": {
+        "x": 97,
+        "y": 1784,
+        "width": 648,
+        "height": 732,
+        "scrollWidth": 648
+      },
+      "[data-home-module=\"brain\"]": {
+        "x": 97,
+        "y": 2535,
+        "width": 648,
+        "height": 380,
+        "scrollWidth": 648
+      },
+      ".home-continue": {
+        "x": 97,
+        "y": 2955,
+        "width": 648,
+        "height": 543,
+        "scrollWidth": 648
+      },
+      ".home-board-card": {
+        "x": 97,
+        "y": 3212,
+        "width": 316,
+        "height": 287,
+        "scrollWidth": 316
+      }
+    },
+    "focus": "<body>\n    \n    <div class=\"app-shell sidebar-collapsed\" data-active-view=\"home\" data-layout-mode=\"full\" data-inspector-supported=\"false\" data-inspector-open=\"false\" data-inspector"
+  },
+  {
+    "key": "375-light-en-collapsed",
+    "height": 812,
+    "theme": "light",
+    "viewport": 375,
+    "documentWidth": 375,
+    "boxes": {
+      "#home-foundation": {
+        "x": 16,
+        "y": 0,
+        "width": 343,
+        "height": 4013,
+        "scrollWidth": 343
+      },
+      ".home-hero": {
+        "x": 16,
+        "y": 0,
+        "width": 343,
+        "height": 255,
+        "scrollWidth": 343
+      },
+      ".home-context": {
+        "x": 16,
+        "y": 275,
+        "width": 343,
+        "height": 119,
+        "scrollWidth": 343
+      },
+      ".home-brands": {
+        "x": 16,
+        "y": 422,
+        "width": 343,
+        "height": 308,
+        "scrollWidth": 343
+      },
+      "[data-home-context]": {
+        "x": 16,
+        "y": 754,
+        "width": 343,
+        "height": 254,
+        "scrollWidth": 343
+      },
+      "[data-home-module=\"brand\"]": {
+        "x": 16,
+        "y": 1041,
+        "width": 343,
+        "height": 431,
+        "scrollWidth": 343
+      },
+      "[data-home-module=\"responsibilities\"]": {
+        "x": 16,
+        "y": 1492,
+        "width": 343,
+        "height": 594,
+        "scrollWidth": 343
+      },
+      "[data-home-module=\"insights\"]": {
+        "x": 16,
+        "y": 2105,
+        "width": 343,
+        "height": 832,
+        "scrollWidth": 343
+      },
+      "[data-home-module=\"brain\"]": {
+        "x": 16,
+        "y": 2957,
+        "width": 343,
+        "height": 415,
+        "scrollWidth": 343
+      },
+      ".home-continue": {
+        "x": 16,
+        "y": 3412,
+        "width": 343,
+        "height": 601,
+        "scrollWidth": 343
+      },
+      ".home-board-card": {
+        "x": 16,
+        "y": 3734,
+        "width": 343,
+        "height": 279,
+        "scrollWidth": 343
+      }
+    },
+    "focus": "<body>\n    \n    <div class=\"app-shell sidebar-collapsed\" data-active-view=\"home\" data-layout-mode=\"full\" data-inspector-supported=\"false\" data-inspector-open=\"false\" data-inspector"
+  },
+  {
+    "key": "375-dark-de-expanded",
+    "height": 812,
+    "theme": "dark",
+    "viewport": 375,
+    "documentWidth": 375,
+    "boxes": {
+      "#home-foundation": {
+        "x": 16,
+        "y": 0,
+        "width": 343,
+        "height": 4168,
+        "scrollWidth": 343
+      },
+      ".home-hero": {
+        "x": 16,
+        "y": 0,
+        "width": 343,
+        "height": 255,
+        "scrollWidth": 343
+      },
+      ".home-context": {
+        "x": 16,
+        "y": 275,
+        "width": 343,
+        "height": 119,
+        "scrollWidth": 343
+      },
+      ".home-brands": {
+        "x": 16,
+        "y": 422,
+        "width": 343,
+        "height": 308,
+        "scrollWidth": 343
+      },
+      "[data-home-context]": {
+        "x": 16,
+        "y": 754,
+        "width": 343,
+        "height": 277,
+        "scrollWidth": 343
+      },
+      "[data-home-module=\"brand\"]": {
+        "x": 16,
+        "y": 1064,
+        "width": 343,
+        "height": 451,
+        "scrollWidth": 343
+      },
+      "[data-home-module=\"responsibilities\"]": {
+        "x": 16,
+        "y": 1535,
+        "width": 343,
+        "height": 594,
+        "scrollWidth": 343
+      },
+      "[data-home-module=\"insights\"]": {
+        "x": 16,
+        "y": 2149,
+        "width": 343,
+        "height": 892,
+        "scrollWidth": 343
+      },
+      "[data-home-module=\"brain\"]": {
+        "x": 16,
+        "y": 3061,
+        "width": 343,
+        "height": 461,
+        "scrollWidth": 343
+      },
+      ".home-continue": {
+        "x": 16,
+        "y": 3562,
+        "width": 343,
+        "height": 606,
+        "scrollWidth": 343
+      },
+      ".home-board-card": {
+        "x": 16,
+        "y": 3889,
+        "width": 343,
+        "height": 279,
+        "scrollWidth": 343
+      }
+    },
+    "focus": "<body>\n    \n    <div class=\"app-shell\" data-active-view=\"home\" data-layout-mode=\"full\" data-inspector-supported=\"false\" data-inspector-open=\"false\" data-inspector-mode=\"closed\">\n  "
+  },
+  {
+    "key": "320-light-en-collapsed",
+    "height": 740,
+    "theme": "light",
+    "viewport": 320,
+    "documentWidth": 320,
+    "boxes": {
+      "#home-foundation": {
+        "x": 16,
+        "y": 0,
+        "width": 288,
+        "height": 4232,
+        "scrollWidth": 288
+      },
+      ".home-hero": {
+        "x": 16,
+        "y": 0,
+        "width": 288,
+        "height": 281,
+        "scrollWidth": 288
+      },
+      ".home-context": {
+        "x": 16,
+        "y": 301,
+        "width": 288,
+        "height": 119,
+        "scrollWidth": 288
+      },
+      ".home-brands": {
+        "x": 16,
+        "y": 448,
+        "width": 288,
+        "height": 308,
+        "scrollWidth": 288
+      },
+      "[data-home-context]": {
+        "x": 16,
+        "y": 781,
+        "width": 288,
+        "height": 277,
+        "scrollWidth": 288
+      },
+      "[data-home-module=\"brand\"]": {
+        "x": 16,
+        "y": 1090,
+        "width": 288,
+        "height": 451,
+        "scrollWidth": 288
+      },
+      "[data-home-module=\"responsibilities\"]": {
+        "x": 16,
+        "y": 1561,
+        "width": 288,
+        "height": 594,
+        "scrollWidth": 288
+      },
+      "[data-home-module=\"insights\"]": {
+        "x": 16,
+        "y": 2175,
+        "width": 288,
+        "height": 878,
+        "scrollWidth": 288
+      },
+      "[data-home-module=\"brain\"]": {
+        "x": 16,
+        "y": 3073,
+        "width": 288,
+        "height": 467,
+        "scrollWidth": 288
+      },
+      ".home-continue": {
+        "x": 16,
+        "y": 3580,
+        "width": 288,
+        "height": 653,
+        "scrollWidth": 288
+      },
+      ".home-board-card": {
+        "x": 16,
+        "y": 3954,
+        "width": 288,
+        "height": 279,
+        "scrollWidth": 288
+      }
+    },
+    "focus": "<body>\n    \n    <div class=\"app-shell sidebar-collapsed\" data-active-view=\"home\" data-layout-mode=\"full\" data-inspector-supported=\"false\" data-inspector-open=\"false\" data-inspector"
+  },
+  {
+    "key": "320-dark-de-expanded",
+    "height": 740,
+    "theme": "dark",
+    "viewport": 320,
+    "documentWidth": 320,
+    "boxes": {
+      "#home-foundation": {
+        "x": 16,
+        "y": 0,
+        "width": 288,
+        "height": 4547,
+        "scrollWidth": 288
+      },
+      ".home-hero": {
+        "x": 16,
+        "y": 0,
+        "width": 288,
+        "height": 281,
+        "scrollWidth": 288
+      },
+      ".home-context": {
+        "x": 16,
+        "y": 301,
+        "width": 288,
+        "height": 119,
+        "scrollWidth": 288
+      },
+      ".home-brands": {
+        "x": 16,
+        "y": 448,
+        "width": 288,
+        "height": 380,
+        "scrollWidth": 288
+      },
+      "[data-home-context]": {
+        "x": 16,
+        "y": 853,
+        "width": 288,
+        "height": 294,
+        "scrollWidth": 288
+      },
+      "[data-home-module=\"brand\"]": {
+        "x": 16,
+        "y": 1179,
+        "width": 288,
+        "height": 451,
+        "scrollWidth": 288
+      },
+      "[data-home-module=\"responsibilities\"]": {
+        "x": 16,
+        "y": 1650,
+        "width": 288,
+        "height": 671,
+        "scrollWidth": 288
+      },
+      "[data-home-module=\"insights\"]": {
+        "x": 16,
+        "y": 2341,
+        "width": 288,
+        "height": 980,
+        "scrollWidth": 288
+      },
+      "[data-home-module=\"brain\"]": {
+        "x": 16,
+        "y": 3341,
+        "width": 288,
+        "height": 487,
+        "scrollWidth": 288
+      },
+      ".home-continue": {
+        "x": 16,
+        "y": 3868,
+        "width": 288,
+        "height": 679,
+        "scrollWidth": 288
+      },
+      ".home-board-card": {
+        "x": 16,
+        "y": 4268,
+        "width": 288,
+        "height": 279,
+        "scrollWidth": 288
+      }
+    },
+    "focus": "<body>\n    \n    <div class=\"app-shell\" data-active-view=\"home\" data-layout-mode=\"full\" data-inspector-supported=\"false\" data-inspector-open=\"false\" data-inspector-mode=\"closed\">\n  "
+  }
+]

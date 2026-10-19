@@ -1,0 +1,85 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1060" viewBox="0 0 1200 1060" role="img" aria-labelledby="title desc">
+<title id="title">Proposed Home composition: desktop and mobile</title><desc id="desc">Annotated wireframes with field placeholders only. Compact context and factual next moves precede saved Boards. Selected Brand intelligence stays separate from current Board intelligence. Full Brand exploration follows. Mobile reserves room above existing fixed navigation.</desc>
+<style>text{font-family:system-ui,sans-serif;fill:#20243d} .title{font-size:24px;font-weight:700}.h{font-size:16px;font-weight:650}.p{font-size:13px}.small{font-size:12px;fill:#4e5675}.box{fill:white;stroke:#cbd0df}.accent{fill:#eeeaff;stroke:#765cff}.tag{fill:#5735df;font-weight:700}</style>
+<rect width="1200" height="1060" fill="#f4f5fb"/>
+<text x="28" y="40" class="title">BW-36.22 · proposed layout, pending approval</text>
+<text x="28" y="65" class="small">Concept only · labels represent existing fields/actions · no fabricated product data</text>
+
+<rect x="28" y="95" width="740" height="780" rx="12" class="box"/>
+<text x="42" y="121" class="h">Desktop · existing sidebar retained</text>
+<rect x="44" y="140" width="100" height="715" rx="12" class="box"/>
+<text x="58" y="166" class="h">Existing</text>
+<text x="58" y="189" class="p">shell</text>
+<text x="58" y="210" class="p">navigation</text>
+<rect x="160" y="140" width="592" height="122" rx="12" class="accent"/>
+<text x="174" y="166" class="h">A · Workspace [identity]</text>
+<text x="174" y="189" class="p">Workspace selector · Selected Brand [chooser] · Profile · Create</text>
+<text x="174" y="210" class="p">Open Board [name] · actual associated Brand · Continue</text>
+<rect x="160" y="274" width="592" height="72" rx="12" class="box"/>
+<text x="174" y="300" class="h">Context notice, when applicable</text>
+<text x="174" y="323" class="p">Selected Brand differs from open Board · existing navigation routes</text>
+<rect x="160" y="358" width="592" height="92" rx="12" class="box"/>
+<text x="174" y="384" class="h">B · Your next moves (D1)</text>
+<text x="174" y="407" class="p">Brand reviews | Board assignments | applicable Canvas finding</text>
+<text x="174" y="428" class="p">Fixed source order; existing summaries and guarded actions</text>
+<rect x="160" y="462" width="592" height="142" rx="12" class="box"/>
+<text x="174" y="488" class="h">C · Continue Working</text>
+<text x="174" y="511" class="p">All visible / selected Brand · saved-recency and coverage note</text>
+<text x="174" y="532" class="p">Connected → Other → Unknown · unchanged ordering</text>
+<text x="174" y="553" class="p">Compact Board cards · Browse / Create · Show all (D3)</text>
+<rect x="160" y="616" width="230" height="136" rx="12" class="box"/>
+<text x="174" y="642" class="h">D · Selected Brand</text>
+<text x="174" y="665" class="p">[Brand identity]</text>
+<text x="174" y="686" class="p">Brand Intelligence</text>
+<text x="174" y="707" class="p">Count rows · Review / View</text>
+<rect x="402" y="616" width="350" height="136" rx="12" class="box"/>
+<text x="416" y="642" class="h">D · Current Board</text>
+<text x="416" y="665" class="p">[Board identity · actual Brand]</text>
+<text x="416" y="686" class="p">Responsibilities · Insights + provenance</text>
+<text x="416" y="707" class="p">Compact AI Brain navigation</text>
+<rect x="160" y="764" width="592" height="90" rx="12" class="box"/>
+<text x="174" y="790" class="h">E · Workspace exploration</text>
+<text x="174" y="813" class="p">Every authorized Brand pick and Profile action</text>
+<text x="174" y="834" class="p">Existing creation pathways; visible-to-you counts</text>
+<rect x="792" y="95" width="380" height="935" rx="12" class="box"/>
+<text x="806" y="121" class="h">Mobile · single DOM/reading order</text>
+<rect x="808" y="140" width="348" height="145" rx="12" class="accent"/>
+<text x="822" y="166" class="h">A · Workspace [identity]</text>
+<text x="822" y="189" class="p">Workspace [native select]</text>
+<text x="822" y="210" class="p">Selected Brand [chooser] · Profile</text>
+<text x="822" y="231" class="p">Open Board [name · Brand] · Continue</text>
+<rect x="808" y="297" width="348" height="73" rx="12" class="box"/>
+<text x="822" y="323" class="h">Context notice</text>
+<text x="822" y="346" class="p">Visible mismatch · existing actions wrap</text>
+<rect x="808" y="382" width="348" height="91" rx="12" class="box"/>
+<text x="822" y="408" class="h">B · Your next moves (D1)</text>
+<text x="822" y="431" class="p">Stacked factual source/action rows</text>
+<text x="822" y="452" class="p">No task priorities, deadlines or KPIs</text>
+<rect x="808" y="485" width="348" height="114" rx="12" class="box"/>
+<text x="822" y="511" class="h">C · Continue Working</text>
+<text x="822" y="534" class="p">Filters · compact Board rows</text>
+<text x="822" y="555" class="p">Full names, Brand, saved date, Open</text>
+<text x="822" y="576" class="p">Show all (D3) · Browse · Create</text>
+<rect x="808" y="611" width="348" height="91" rx="12" class="box"/>
+<text x="822" y="637" class="h">D · Selected-Brand intelligence</text>
+<text x="822" y="660" class="p">Separate authorized knowledge scope</text>
+<text x="822" y="681" class="p">Real counts · Review / View</text>
+<rect x="808" y="714" width="348" height="114" rx="12" class="box"/>
+<text x="822" y="740" class="h">D · Current-Board intelligence</text>
+<text x="822" y="763" class="p">Responsibilities → Insights → AI Brain</text>
+<text x="822" y="784" class="p">Shared identity; explicit source/freshness</text>
+<text x="822" y="805" class="p">Native actions; full readable labels</text>
+<rect x="808" y="840" width="348" height="72" rx="12" class="box"/>
+<text x="822" y="866" class="h">E · Workspace exploration</text>
+<text x="822" y="889" class="p">All Brand / Profile / creation pathways</text>
+<rect x="808" y="924" width="348" height="83" rx="12" class="box"/>
+<text x="822" y="950" class="h">Existing mobile shell</text>
+<text x="822" y="973" class="p">Reserved scroll/focus clearance</text>
+<text x="822" y="994" class="p">Includes floating context + safe area</text>
+<text x="28" y="912" class="h">Annotations</text>
+<text x="28" y="940" dy="0" class="p">A: compact identity; no large welcome hero.</text>
+<text x="28" y="940" dy="21" class="p">B: optional factual summary requires approval; no new data reads.</text>
+<text x="28" y="940" dy="42" class="p">C: saved continuation precedes detailed intelligence.</text>
+<text x="28" y="940" dy="63" class="p">D: selected Brand never supplies the loaded Board’s authority.</text>
+<text x="28" y="940" dy="84" class="p">E: exploration stays complete and easy to reach.</text>
+</svg>
