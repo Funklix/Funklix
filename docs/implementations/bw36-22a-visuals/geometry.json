@@ -1,0 +1,632 @@
+[
+  {
+    "width": 1920,
+    "height": 1080,
+    "theme": "light",
+    "language": "en",
+    "collapsed": false,
+    "file": "home-1920-light-en.png",
+    "hero": {
+      "x": 480,
+      "y": 0,
+      "width": 1200,
+      "height": 134.5,
+      "bottom": 134.5,
+      "right": 1680
+    },
+    "next": {
+      "x": 480,
+      "y": 238.796875,
+      "width": 1200,
+      "height": 90.546875,
+      "bottom": 329.34375,
+      "right": 1680
+    },
+    "continuation": {
+      "x": 480,
+      "y": 345.34375,
+      "width": 1200,
+      "height": 756.671875,
+      "bottom": 1102.015625,
+      "right": 1680
+    },
+    "firstOpen": {
+      "x": 496,
+      "y": 589.78125,
+      "width": 360,
+      "height": 44,
+      "bottom": 633.78125,
+      "right": 856
+    },
+    "bodyWidth": 1920,
+    "homeWidth": 1200,
+    "overlay": {
+      "x": 18,
+      "y": 78,
+      "width": 203,
+      "height": 156,
+      "bottom": 234,
+      "right": 221
+    },
+    "focusTarget": {
+      "x": 900,
+      "y": 518.25,
+      "width": 360,
+      "height": 44
+    },
+    "focusCollisions": false,
+    "scrollViewport": {
+      "x": 240,
+      "y": 0,
+      "width": 1680,
+      "height": 1080
+    }
+  },
+  {
+    "width": 1440,
+    "height": 900,
+    "theme": "light",
+    "language": "en",
+    "collapsed": false,
+    "file": "home-1440-light-en.png",
+    "hero": {
+      "x": 283.1875,
+      "y": 0.1875,
+      "width": 1113.625,
+      "height": 134.5,
+      "bottom": 134.6875,
+      "right": 1396.8125
+    },
+    "next": {
+      "x": 283.1875,
+      "y": 238.984375,
+      "width": 1113.625,
+      "height": 90.546875,
+      "bottom": 329.53125,
+      "right": 1396.8125
+    },
+    "continuation": {
+      "x": 283.1875,
+      "y": 345.53125,
+      "width": 1113.625,
+      "height": 756.671875,
+      "bottom": 1102.203125,
+      "right": 1396.8125
+    },
+    "firstOpen": {
+      "x": 299.1875,
+      "y": 589.96875,
+      "width": 331.203125,
+      "height": 44,
+      "bottom": 633.96875,
+      "right": 630.390625
+    },
+    "bodyWidth": 1440,
+    "homeWidth": 1114,
+    "overlay": {
+      "x": 18,
+      "y": 78,
+      "width": 203,
+      "height": 156,
+      "bottom": 234,
+      "right": 221
+    },
+    "focusTarget": {
+      "x": 674.390625,
+      "y": 774.4375,
+      "width": 331.203125,
+      "height": 44
+    },
+    "focusCollisions": false,
+    "scrollViewport": {
+      "x": 240,
+      "y": 0,
+      "width": 1200,
+      "height": 900
+    }
+  },
+  {
+    "width": 1440,
+    "height": 900,
+    "theme": "dark",
+    "language": "de",
+    "collapsed": true,
+    "file": "home-1440-dark-de.png",
+    "hero": {
+      "x": 157,
+      "y": 0.1875,
+      "width": 1200,
+      "height": 134.5,
+      "bottom": 134.6875,
+      "right": 1357
+    },
+    "next": {
+      "x": 157,
+      "y": 238.984375,
+      "width": 1200,
+      "height": 90.546875,
+      "bottom": 329.53125,
+      "right": 1357
+    },
+    "continuation": {
+      "x": 157,
+      "y": 345.53125,
+      "width": 1200,
+      "height": 756.671875,
+      "bottom": 1102.203125,
+      "right": 1357
+    },
+    "firstOpen": {
+      "x": 173,
+      "y": 589.96875,
+      "width": 360,
+      "height": 44,
+      "bottom": 633.96875,
+      "right": 533
+    },
+    "bodyWidth": 1440,
+    "homeWidth": 1200,
+    "overlay": {
+      "x": 18,
+      "y": 128,
+      "width": 37,
+      "height": 120,
+      "bottom": 248,
+      "right": 55
+    },
+    "focusTarget": {
+      "x": 577,
+      "y": 774.4375,
+      "width": 360,
+      "height": 44
+    },
+    "focusCollisions": false,
+    "scrollViewport": {
+      "x": 74,
+      "y": 0,
+      "width": 1366,
+      "height": 900
+    }
+  },
+  {
+    "width": 1280,
+    "height": 800,
+    "theme": "system",
+    "language": "de",
+    "collapsed": false,
+    "file": "home-1280-system-de.png",
+    "hero": {
+      "x": 112.390625,
+      "y": 0.390625,
+      "width": 1129.21875,
+      "height": 134.5,
+      "bottom": 134.890625,
+      "right": 1241.609375
+    },
+    "next": {
+      "x": 112.390625,
+      "y": 239.1875,
+      "width": 1129.21875,
+      "height": 90.546875,
+      "bottom": 329.734375,
+      "right": 1241.609375
+    },
+    "continuation": {
+      "x": 112.390625,
+      "y": 345.734375,
+      "width": 1129.21875,
+      "height": 756.671875,
+      "bottom": 1102.40625,
+      "right": 1241.609375
+    },
+    "firstOpen": {
+      "x": 128.390625,
+      "y": 590.171875,
+      "width": 336.40625,
+      "height": 44,
+      "bottom": 634.171875,
+      "right": 464.796875
+    },
+    "bodyWidth": 1280,
+    "homeWidth": 1129,
+    "overlay": {
+      "x": 10,
+      "y": 70,
+      "width": 53,
+      "height": 188,
+      "bottom": 258,
+      "right": 63
+    },
+    "focusTarget": {
+      "x": 508.796875,
+      "y": 724.640625,
+      "width": 336.40625,
+      "height": 44
+    },
+    "focusCollisions": false,
+    "scrollViewport": {
+      "x": 74,
+      "y": 0,
+      "width": 1206,
+      "height": 800
+    }
+  },
+  {
+    "width": 1024,
+    "height": 768,
+    "theme": "dark",
+    "language": "en",
+    "collapsed": false,
+    "file": "home-1024-dark-en.png",
+    "hero": {
+      "x": 104.71875,
+      "y": -0.28125,
+      "width": 888.5625,
+      "height": 182.5,
+      "bottom": 182.21875,
+      "right": 993.28125
+    },
+    "next": {
+      "x": 104.71875,
+      "y": 286.515625,
+      "width": 888.5625,
+      "height": 90.546875,
+      "bottom": 377.0625,
+      "right": 993.28125
+    },
+    "continuation": {
+      "x": 104.71875,
+      "y": 393.0625,
+      "width": 888.5625,
+      "height": 756.671875,
+      "bottom": 1149.734375,
+      "right": 993.28125
+    },
+    "firstOpen": {
+      "x": 120.71875,
+      "y": 637.5,
+      "width": 406.28125,
+      "height": 44,
+      "bottom": 681.5,
+      "right": 527
+    },
+    "bodyWidth": 1024,
+    "homeWidth": 889,
+    "overlay": {
+      "x": 10,
+      "y": 78,
+      "width": 53,
+      "height": 188,
+      "bottom": 266,
+      "right": 63
+    },
+    "focusTarget": {
+      "x": 571,
+      "y": 699.96875,
+      "width": 406.28125,
+      "height": 44
+    },
+    "focusCollisions": false,
+    "scrollViewport": {
+      "x": 74,
+      "y": 0,
+      "width": 950,
+      "height": 768
+    }
+  },
+  {
+    "width": 768,
+    "height": 1024,
+    "theme": "system",
+    "language": "en",
+    "collapsed": true,
+    "file": "home-768-system-en.png",
+    "hero": {
+      "x": 97.03125,
+      "y": 0.03125,
+      "width": 647.9375,
+      "height": 238.5,
+      "bottom": 238.53125,
+      "right": 744.96875
+    },
+    "next": {
+      "x": 97.03125,
+      "y": 415.125,
+      "width": 647.9375,
+      "height": 153.171875,
+      "bottom": 568.296875,
+      "right": 744.96875
+    },
+    "continuation": {
+      "x": 97.03125,
+      "y": 584.296875,
+      "width": 647.9375,
+      "height": 829.140625,
+      "bottom": 1413.4375,
+      "right": 744.96875
+    },
+    "firstOpen": {
+      "x": 113.03125,
+      "y": 901.203125,
+      "width": 285.96875,
+      "height": 44,
+      "bottom": 945.203125,
+      "right": 399
+    },
+    "bodyWidth": 768,
+    "homeWidth": 648,
+    "overlay": {
+      "x": 10,
+      "y": 116,
+      "width": 53,
+      "height": 100,
+      "bottom": 216,
+      "right": 63
+    },
+    "focusTarget": {
+      "x": 443,
+      "y": 836.671875,
+      "width": 285.96875,
+      "height": 44
+    },
+    "focusCollisions": false,
+    "scrollViewport": {
+      "x": 74,
+      "y": 0,
+      "width": 694,
+      "height": 1024
+    }
+  },
+  {
+    "width": 375,
+    "height": 812,
+    "theme": "light",
+    "language": "en",
+    "collapsed": true,
+    "file": "home-375-light-en.png",
+    "hero": {
+      "x": 16,
+      "y": 0,
+      "width": 343,
+      "height": 399.546875,
+      "bottom": 399.546875,
+      "right": 359
+    },
+    "next": {
+      "x": 16,
+      "y": 648.4375,
+      "width": 343,
+      "height": 205.171875,
+      "bottom": 853.609375,
+      "right": 359
+    },
+    "continuation": {
+      "x": 16,
+      "y": 869.609375,
+      "width": 343,
+      "height": 1458.796875,
+      "bottom": 2328.40625,
+      "right": 359
+    },
+    "firstOpen": {
+      "x": 32,
+      "y": 1240.90625,
+      "width": 311,
+      "height": 44,
+      "bottom": 1284.90625,
+      "right": 343
+    },
+    "bodyWidth": 375,
+    "homeWidth": 343,
+    "overlay": {
+      "x": 323,
+      "y": 644,
+      "width": 44,
+      "height": 98,
+      "bottom": 742,
+      "right": 367
+    },
+    "focusTarget": {
+      "x": 32,
+      "y": 120.703125,
+      "width": 311,
+      "height": 44
+    },
+    "focusCollisions": false,
+    "scrollViewport": {
+      "x": 0,
+      "y": 0,
+      "width": 375,
+      "height": 632
+    }
+  },
+  {
+    "width": 375,
+    "height": 812,
+    "theme": "dark",
+    "language": "de",
+    "collapsed": false,
+    "file": "home-375-dark-de.png",
+    "hero": {
+      "x": 16,
+      "y": 0,
+      "width": 343,
+      "height": 399.546875,
+      "bottom": 399.546875,
+      "right": 359
+    },
+    "next": {
+      "x": 16,
+      "y": 648.4375,
+      "width": 343,
+      "height": 205.171875,
+      "bottom": 853.609375,
+      "right": 359
+    },
+    "continuation": {
+      "x": 16,
+      "y": 869.609375,
+      "width": 343,
+      "height": 1464.296875,
+      "bottom": 2333.90625,
+      "right": 359
+    },
+    "firstOpen": {
+      "x": 32,
+      "y": 1246.40625,
+      "width": 311,
+      "height": 44,
+      "bottom": 1290.40625,
+      "right": 343
+    },
+    "bodyWidth": 375,
+    "homeWidth": 343,
+    "overlay": {
+      "x": 187,
+      "y": 698,
+      "width": 180,
+      "height": 44,
+      "bottom": 742,
+      "right": 367
+    },
+    "focusTarget": {
+      "x": 32,
+      "y": 202.203125,
+      "width": 311,
+      "height": 44
+    },
+    "focusCollisions": false,
+    "scrollViewport": {
+      "x": 0,
+      "y": 0,
+      "width": 375,
+      "height": 686
+    }
+  },
+  {
+    "width": 320,
+    "height": 740,
+    "theme": "light",
+    "language": "en",
+    "collapsed": false,
+    "file": "home-320-light-en.png",
+    "hero": {
+      "x": 16,
+      "y": 0,
+      "width": 288,
+      "height": 418.09375,
+      "bottom": 418.09375,
+      "right": 304
+    },
+    "next": {
+      "x": 16,
+      "y": 687.28125,
+      "width": 288,
+      "height": 215.796875,
+      "bottom": 903.078125,
+      "right": 304
+    },
+    "continuation": {
+      "x": 16,
+      "y": 919.078125,
+      "width": 288,
+      "height": 1510.796875,
+      "bottom": 2429.875,
+      "right": 304
+    },
+    "firstOpen": {
+      "x": 32,
+      "y": 1342.375,
+      "width": 256,
+      "height": 44,
+      "bottom": 1386.375,
+      "right": 288
+    },
+    "bodyWidth": 320,
+    "homeWidth": 288,
+    "overlay": {
+      "x": 132,
+      "y": 626,
+      "width": 180,
+      "height": 44,
+      "bottom": 670,
+      "right": 312
+    },
+    "focusTarget": {
+      "x": 32,
+      "y": 166.171875,
+      "width": 256,
+      "height": 44
+    },
+    "focusCollisions": false,
+    "scrollViewport": {
+      "x": 0,
+      "y": 0,
+      "width": 320,
+      "height": 614
+    }
+  },
+  {
+    "width": 320,
+    "height": 740,
+    "theme": "dark",
+    "language": "de",
+    "collapsed": true,
+    "file": "home-320-dark-de.png",
+    "hero": {
+      "x": 16,
+      "y": 0,
+      "width": 288,
+      "height": 418.09375,
+      "bottom": 418.09375,
+      "right": 304
+    },
+    "next": {
+      "x": 16,
+      "y": 688.65625,
+      "width": 288,
+      "height": 215.796875,
+      "bottom": 904.453125,
+      "right": 304
+    },
+    "continuation": {
+      "x": 16,
+      "y": 920.453125,
+      "width": 288,
+      "height": 1578.515625,
+      "bottom": 2498.96875,
+      "right": 304
+    },
+    "firstOpen": {
+      "x": 32,
+      "y": 1369.71875,
+      "width": 256,
+      "height": 44,
+      "bottom": 1413.71875,
+      "right": 288
+    },
+    "bodyWidth": 320,
+    "homeWidth": 288,
+    "overlay": {
+      "x": 268,
+      "y": 572,
+      "width": 44,
+      "height": 98,
+      "bottom": 670,
+      "right": 312
+    },
+    "focusTarget": {
+      "x": 32,
+      "y": 85.015625,
+      "width": 256,
+      "height": 44
+    },
+    "focusCollisions": false,
+    "scrollViewport": {
+      "x": 0,
+      "y": 0,
+      "width": 320,
+      "height": 560
+    }
+  }
+]

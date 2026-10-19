@@ -155,6 +155,7 @@
     "check:bw36.19r2": "node scripts/check-bw36-19r2-adaptive-learning-advisor-context.js",
     "check:bw36.19r4": "node scripts/check-bw36-19r4-learning-advisor-output-reliability.js",
     "check:bw36.19r5": "node scripts/check-bw36-19r5-simplified-learning-generation.js",
+    "check:bw36.22a": "node scripts/check-bw36-22a-compact-home.js",
     "check:bw36.21b2": "node scripts/check-bw36-21b2-home-insights-brain.js",
     "check:bw36.21b1": "node scripts/check-bw36-21b1-home-intelligence.js"
   },

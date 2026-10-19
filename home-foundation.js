@@ -93,6 +93,44 @@
     let learningRequest = null, learning = null, learningStatus = 'idle', runtimeKey = '';
     const doc = host.ownerDocument;
     const boardActionContexts = new WeakMap();
+    const actionScopes = new WeakMap();
+    let expanded = false, expansionIdentity = '', renderScope = null;
+    function placed(label, action, id, placement) {
+      const b = button(label, placement + '-' + action, id);
+      boardActionContexts.set(b, { scope: renderScope, key: renderScope.campaign?.key });
+      return b;
+    }
+    function overlayRects() {
+      return Array.from(doc.querySelectorAll('.sidebar, .sidebar > .workspace-context'))
+        .filter(e => root.getComputedStyle(e).position === 'fixed' && e.getClientRects().length)
+        .map(e => e.getBoundingClientRect()).filter(r => r.width && r.height);
+    }
+    function updateClearance() {
+      const occupied = overlayRects();
+      const clearance = Math.max(24, ...occupied.map(r => root.innerHeight - r.top + 16));
+      const dashboard = host.closest('#dashboard-view');
+      if (!dashboard) return;
+      dashboard.style.setProperty('--home-overlay-clearance', clearance + 'px');
+      // Keep Home's scroll viewport above both the mobile nav and floating
+      // context controls. Bottom padding alone cannot protect middle rows.
+      if (occupied.length) {
+        const top = dashboard.getBoundingClientRect().top;
+        dashboard.style.setProperty('--home-scroll-height', Math.max(160, Math.min(...occupied.map(r => r.top)) - top - 12) + 'px');
+      } else dashboard.style.removeProperty('--home-scroll-height');
+    }
+    function clearFocusedOverlay(event) {
+      if (!host.contains(event.target)) return;
+      updateClearance();
+      root.requestAnimationFrame(() => {
+        if (!event.target.isConnected || doc.activeElement !== event.target) return;
+        const box = event.target.getBoundingClientRect();
+        if (overlayRects().some(r => box.right > r.left && box.left < r.right && box.bottom > r.top && box.top < r.bottom)) {
+          event.target.scrollIntoView({ block: 'center', inline: 'nearest' });
+        }
+      });
+    }
+    host.addEventListener('focusin', clearFocusedOverlay);
+    root.addEventListener('resize', updateClearance);
     function node(tag, className, value) {
       const element = doc.createElement(tag);
       if (className) element.className = className;
@@ -103,6 +141,7 @@
       const element = node('button', 'fk-btn fk-btn-secondary', t(label));
       element.type = 'button'; element.dataset.homeAction = action; element.dataset.homeId = id;
       element.dataset.homeFocus = action + ':' + id;
+      actionScopes.set(element, renderScope);
       return element;
     }
     function identity(item, workspace = false) {
@@ -253,16 +292,70 @@
       }
       grid.append(insights, brain); return grid;
     }
+    function nextMoves(c, m) {
+      const section = node('section', 'home-next-moves');
+      section.setAttribute('aria-labelledby', 'home-next-title');
+      const title = node('h2', '', t('Your Next Moves')); title.id = 'home-next-title'; section.append(title);
+      const list = node('ul', 'home-next-list');
+      function add(source, label, action) {
+        const row = node('li'); row.dataset.nextSource = source;
+        row.append(action || node('span', 'home-note', label));
+        if (action) action.textContent = label;
+        list.append(row);
+      }
+      if (m.brand && learningStatus === 'ready' && learning?.canWrite && learning.proposed > 0) {
+        const phrase = learning.proposed === 1 ? '{count} Learning awaiting review · {brand}' : '{count} Learnings awaiting review · {brand}';
+        add('learning', t(phrase).replace('{count}', learning.proposed).replace('{brand}', m.brand.name), placed('', 'learnings', m.brand.id, 'next'));
+      }
+      const responsibilities = m.workspace.boards.some(b => b.id === c.boardId) ? responsibilitySummary(c) : null;
+      if (responsibilities?.mine > 0) {
+        const phrase = responsibilities.mine === 1 ? '{count} responsibility assigned to you · {board}' : '{count} responsibilities assigned to you · {board}';
+        add('responsibilities', t(phrase).replace('{count}', responsibilities.mine).replace('{board}', c.openBoard.name), placed('', 'responsibilities', '', 'next'));
+      }
+      const finding = !c.loading && c.openBoard && m.workspace.boards.some(b => b.id === c.boardId)
+        && c.campaign?.status === 'ready' && c.campaign.key && c.campaign.findings[0];
+      if (finding) add('insights', t(finding.severity[0].toUpperCase() + finding.severity.slice(1)) + ' · ' + t(finding.title) + ' · ' + c.openBoard.name,
+        placed('', 'insights', finding.code, 'next'));
+      if (!list.children.length) {
+        // Fallback uses the existing unfiltered, Brand-centered model ordering.
+        const first = model(c, rows).boards[0];
+        if (first) add('continuation', t('Continue') + ': ' + first.name, placed('Continue', 'board', first.id, 'next'));
+        else add('browse', t('Browse Boards'), placed('Browse Boards', 'boards', '', 'next'));
+      }
+      section.append(list);
+      const unavailable = [];
+      if (m.brand && (learningStatus !== 'ready' || learning?.proposed === null)) unavailable.push(['Brand Learning availability', 'home-intelligence-title']);
+      if (c.boardId && !responsibilities) unavailable.push(['Responsibility availability', 'home-responsibilities-title']);
+      if (c.boardId && !['ready', 'none', 'empty'].includes(c.campaign?.status)) unavailable.push(['Campaign Insights availability', 'home-insights-title']);
+      if (unavailable.length) {
+        const note = node('p', 'home-note'); note.append(t('Some information is unavailable. See details:') + ' ');
+        for (const [label, id] of unavailable) {
+          const link = node('a', '', t(label)); link.href = '#' + id; link.dataset.homeFocus = 'next-detail:' + id;
+          link.addEventListener('click', event => {
+            event.preventDefault();
+            if (!sameScope(c, context()) || !host.contains(link)) { sync(); return; }
+            const heading = host.querySelector('#' + id);
+            if (heading) { heading.tabIndex = -1; heading.focus(); heading.scrollIntoView({ block: 'center' }); }
+          });
+          note.append(link, ' ');
+        }
+        section.append(note);
+      }
+      return section;
+    }
     function draw() {
+      updateClearance();
       const c = context(), m = model(c, rows, filter);
+      renderScope = c;
+      const collectionIdentity = JSON.stringify([c.identity, c.workspaceId, c.brandId, filter, m.workspace?.boards.map(b => [b.id, b.brand_id, b.role])]);
+      if (collectionIdentity !== expansionIdentity) { expanded = false; expansionIdentity = collectionIdentity; }
       const focused = host.contains(doc.activeElement) ? doc.activeElement.dataset.homeFocus : null;
       const focusedContext = host.contains(doc.activeElement) ? doc.activeElement.dataset.contextAction : null;
       host.replaceChildren(); host.setAttribute('aria-busy', String(status === 'loading' || ['idle', 'loading', 'refreshing'].includes(c.status) && !!c.account));
       const hero = node('header', 'home-hero');
       const copy = node('div', 'home-hero-copy');
       copy.append(node('span', 'home-eyebrow', t('YOUR CREATIVE WORKSPACE')),
-        node('h1', '', m.workspace?.name || t('A home for your next idea.')),
-        node('p', 'home-intro', t('Find your Brand. Pick up a Board. Make something that matters.')));
+        node('h1', '', m.workspace?.name || t('A home for your next idea.')));
       hero.append(copy);
       if (m.workspace) hero.prepend(identity(m.workspace, true));
       host.append(hero);
@@ -284,13 +377,36 @@
         const id = select.value;
         // Keep the confirmed context visible while leave/access checks run.
         select.value = model(context()).workspace?.id || '';
-        if (model(context()).ready) void actions.workspace(id);
+        if (sameScope(c, context()) && model(context()).ready) void actions.workspace(id);
       });
-      if (c.catalog.workspaces.length) { nav.append(label, select, button('Create Workspace', 'workspace-create')); host.append(nav); }
+      if (c.catalog.workspaces.length) { nav.append(label, select, button('Create Workspace', 'workspace-create')); hero.append(nav); }
       if (!m.workspace) {
         host.append(message(c.catalog.workspaces.length ? 'Choose your working context' : 'Your first Workspace starts here',
           c.catalog.workspaces.length ? 'Choose a Workspace to see the Brands and Boards available to you.' : 'Create a Workspace to bring your Brands and campaign work together.',
           c.catalog.workspaces.length ? null : button('Create Workspace', 'workspace-create'))); return;
+      }
+      const brandControls = node('div', 'home-brand-controls');
+      const brandLabel = node('label', '', t('Selected Brand')); brandLabel.htmlFor = 'home-brand-select';
+      const brandSelect = node('select'); brandSelect.id = 'home-brand-select'; brandSelect.dataset.homeFocus = 'header-brand-select';
+      const emptyBrand = node('option', '', t('Choose a Brand to continue.')); emptyBrand.value = ''; emptyBrand.disabled = true; brandSelect.append(emptyBrand);
+      for (const brand of m.workspace.brands) { const option = node('option', '', brand.name); option.value = brand.id; brandSelect.append(option); }
+      brandSelect.value = m.brand?.id || '';
+      brandSelect.addEventListener('change', () => {
+        const id = brandSelect.value, current = context(), currentModel = model(current);
+        brandSelect.value = currentModel.brand?.id || '';
+        if (sameScope(c, current) && currentModel.workspace?.brands.some(b => b.id === id)) actions.brand(id);
+      });
+      if (m.brand && m.brand.name.length > 30) brandLabel.append(node('span', 'home-selected-brand', ': ' + m.brand.name));
+      brandControls.append(brandLabel, brandSelect);
+      if (m.brand) brandControls.append(placed('Brand Profile', 'profile', m.brand.id, 'header'));
+      if (['owner', 'admin'].includes(m.workspace.role)) brandControls.append(placed('Manage Brands', 'brands', '', 'header'));
+      hero.append(brandControls);
+      if (c.openBoard && !c.loading && m.workspace.boards.some(b => b.id === c.boardId)) {
+        const open = node('div', 'home-open-board');
+        const brand = m.workspace.brands.find(b => b.id === c.openBoard.brandId);
+        open.append(node('p', '', t('Currently open') + ': ' + c.openBoard.name + ' · ' + (brand?.name || t(c.openBoard.unassigned ? 'No Brand connected' : 'No visible Brand association'))));
+        const resume = placed(c.openBoard.canEdit === false ? 'Continue viewing the open Board' : 'Continue', 'board', c.boardId, 'header'); resume.className = 'fk-btn fk-btn-primary';
+        open.append(resume); hero.append(open);
       }
       const orientation = node('section', 'home-brands'); orientation.setAttribute('aria-labelledby', 'home-brands-title');
       const heading = node('div', 'home-section-heading'); const title = node('h2', '', t('Brands in your Workspace')); title.id = 'home-brands-title';
@@ -312,10 +428,16 @@
         orientation.append(list);
         orientation.append(node('p', 'home-note', t(c.boardId ? 'Select a Brand for navigation. The open Board keeps its saved Brand association.' : 'Select a Brand for context, or explore all visible Boards below.')));
       }
-      host.append(orientation);
       const contextNotice = node('aside'); contextNotice.dataset.homeContext = 'true';
-      renderContextNotice(contextNotice, c, t, { continue: () => actions.board(c.boardId), boards: actions.brandBoards, profile: actions.profile });
-      host.append(contextNotice, intelligence(c, m), boardIntelligence(c, m));
+      renderContextNotice(contextNotice, c, t, { continue: () => { if (sameScope(c, context()) && context().openBoard) actions.board(c.boardId); }, boards: () => { if (sameScope(c, context())) actions.brandBoards(); }, profile: brand => { if (sameScope(c, context())) actions.profile(brand); } });
+      // Home already identifies the Board in its header. Keep its notice identity
+      // in the same concise sentence; the separately owned Canvas notice is intact.
+      if (!contextNotice.hidden) {
+        const boardIdentity = contextNotice.querySelector(':scope > span');
+        const noticeCopy = contextNotice.querySelector('p');
+        noticeCopy.append(' · ', boardIdentity);
+      }
+      host.append(contextNotice, nextMoves(c, m));
       const section = node('section', 'home-continue'); section.setAttribute('aria-labelledby', 'home-continue-title');
       const top = node('div', 'home-section-heading'); const h2 = node('h2', '', t('Continue Working')); h2.id = 'home-continue-title';
       const controls = node('div', 'home-actions'); controls.append(button('Browse Boards', 'boards'));
@@ -325,19 +447,19 @@
         const filters = node('div', 'home-filters'); filters.setAttribute('role', 'group'); filters.setAttribute('aria-label', t('Filter Boards'));
         const all = button('All visible Boards', 'all'), selected = button(m.brand.name, 'filtered');
         selected.textContent = m.brand.name;
-        all.setAttribute('aria-pressed', String(filter === 'all')); selected.setAttribute('aria-pressed', String(filter === 'brand')); filters.append(all, selected); section.append(filters);
+        all.setAttribute('aria-pressed', String(filter === 'all')); selected.setAttribute('aria-pressed', String(filter === 'brand')); filters.append(all, selected); top.insertBefore(filters, controls);
       }
       let notice = status === 'loading' ? 'Loading saved modification times…' : status === 'error'
         ? 'Saved modification times are unavailable. Your authorized Board links are still available.'
         : 'Ordered by saved modification time where available. The Board collection may be incomplete; this is not a history of your visits.';
       const note = node('p', 'home-note', t(notice)); note.setAttribute('role', 'status'); section.append(note);
       if (status === 'error') section.append(button('Retry modification times', 'metadata'));
-      if (!m.boards.length) section.append(message(filter === 'brand' ? 'No saved Boards for this Brand' : 'A fresh canvas for your next campaign',
+      if (!m.boards.length) section.append(node('p', 'home-note', t('Showing {visible} of {total} available Boards').replace('{visible}', '0').replace('{total}', '0')), message(filter === 'brand' ? 'No saved Boards for this Brand' : 'A fresh canvas for your next campaign',
         'Saved Boards available to you in this Workspace will appear here.', m.canCreate ? button('Create project', 'create') : button('Browse Boards', 'boards')));
       else {
         const list = node('ul', 'home-board-list');
         let group = null;
-        for (const board of m.boards) {
+        for (const board of (expanded ? m.boards : m.boards.slice(0, 6))) {
           if (m.brand && board.group !== group) {
             group = board.group;
             const heading = node('li', 'home-board-group-heading');
@@ -347,11 +469,12 @@
           }
           const card = node('li', 'home-board-card'); card.classList.toggle('is-current', board.active);
           const mark = node('div', 'home-board-mark'); mark.append(identity(board.brand || { name: board.name }));
-          mark.append(node('span', 'home-eyebrow', t(board.active ? 'Currently open' : 'SAVED BOARD'))); card.append(mark);
-          card.append(node('h3', '', board.name));
+          card.append(mark, node('h3', '', board.name));
+          if (board.active) card.append(node('span', 'home-eyebrow', t('Currently open')));
           const distinction = board.group === 'connected' ? 'Connected Board' : board.group === 'other' ? 'Other Brand Board' : '';
-          if (distinction) card.append(node('span', 'home-board-group', t(distinction)));
-          card.append(node('p', 'home-board-brand', board.brand?.name || t(board.unassigned ? 'No Brand connected' : 'No visible Brand association')));
+          const relationship = node('p', 'home-board-brand', board.brand?.name || t(board.unassigned ? 'No Brand connected' : 'No visible Brand association'));
+          if (distinction) { relationship.prepend(node('span', 'home-board-group', t(distinction) + ' · ')); }
+          card.append(relationship);
           const saved = node('p', 'home-board-date');
           if (board.savedAt) { const time = node('time', '', new Intl.DateTimeFormat(c.language === 'de' ? 'de-DE' : 'en-GB', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(board.time))); time.dateTime = board.savedAt; saved.append(t('Last edited') + ' ', time); }
           else saved.textContent = t('Modification time unavailable');
@@ -361,11 +484,21 @@
           open.classList.add('home-board-open'); open.setAttribute('aria-label', `${t(board.active ? 'Continue' : 'Open Board')}: ${board.name}`);
           open.disabled = Boolean(c.loading); card.append(open); list.append(card);
         }
-        section.append(list);
+        list.id = 'home-board-preview'; section.append(list);
+        const preview = node('div', 'home-preview-controls');
+        preview.append(node('p', 'home-note', t('Showing {visible} of {total} available Boards').replace('{visible}', Math.min(m.boards.length, expanded ? m.boards.length : 6)).replace('{total}', m.boards.length)));
+        if (m.boards.length > 6) {
+          const toggle = button(expanded ? 'Show less' : 'Show all visible Boards', 'expand');
+          toggle.setAttribute('aria-expanded', String(expanded)); toggle.setAttribute('aria-controls', list.id); preview.append(toggle);
+        }
+        section.append(preview);
       }
       if (c.loading) section.append(node('p', 'home-note', t('A Board is loading. Please wait before opening another.')));
-      host.append(section);
-      if (focused) Array.from(host.querySelectorAll('[data-home-focus]')).find(e => e.dataset.homeFocus === focused)?.focus({ preventScroll: true });
+      host.append(section, intelligence(c, m), boardIntelligence(c, m), orientation);
+      if (focused) {
+        const restored = Array.from(host.querySelectorAll('[data-home-focus]')).find(e => e.dataset.homeFocus === focused);
+        (restored || (focused.startsWith('board:') ? host.querySelector('[data-home-action=expand]') : null))?.focus({ preventScroll: true });
+      }
       if (focusedContext) contextNotice.querySelector(`[data-context-action="${focusedContext}"]`)?.focus({ preventScroll: true });
     }
     function invalidateLearnings() { learningRequest?.controller.abort(); learningRequest = null; learning = null; learningStatus = 'idle'; }
@@ -373,7 +506,7 @@
     function sync() {
       if (disposed) return;
       const next = context();
-      if (!scope || !sameScope(scope, next)) { invalidate(); filter = 'all'; scope = next; }
+      if (!scope || !sameScope(scope, next)) { invalidate(); filter = 'all'; expanded = false; scope = next; }
       if (next.view !== 'home') { host.replaceChildren(); return; }
       draw();
       if (model(next).workspace && status === 'idle') void load();
@@ -445,7 +578,11 @@
     }
     host.addEventListener('click', event => {
       const target = event.target.closest('[data-home-action]'); if (!target || target.disabled) return;
-      const c = context(), m = model(c, rows, filter), action = target.dataset.homeAction, id = target.dataset.homeId;
+      const c = context(), m = model(c, rows, filter), rawAction = target.dataset.homeAction, action = rawAction.replace(/^(next|header)-/, ''), id = target.dataset.homeId;
+      const capturedScope = actionScopes.get(target);
+      if (!capturedScope || !sameScope(capturedScope, c)) { sync(); return; }
+      if (rawAction === 'next-learnings' && !(learningStatus === 'ready' && learning?.canWrite && learning.proposed > 0)) { sync(); return; }
+      if (rawAction === 'next-responsibilities' && !(m.workspace?.boards.some(b => b.id === c.boardId) && responsibilitySummary(c)?.mine > 0)) { sync(); return; }
       if (!sameScope(scope, c)) { sync(); return; }
       if (action === 'signin') actions.signin();
       else if (action === 'retry') actions.retry();
@@ -455,7 +592,7 @@
           const captured = boardActionContexts.get(target);
           if (!captured || !sameScope(captured.scope, c) || c.loading || !c.openBoard
             || !m.workspace.boards.some(b => b.id === c.boardId)) { sync(); return; }
-          if (action === 'insights') actions.insights();
+          if (action === 'insights' && (rawAction !== 'next-insights' || c.campaign?.status === 'ready' && captured.key === c.campaign.key && c.campaign.findings[0]?.code === id)) actions.insights();
           else if (action === 'brain' && c.openBoard.canEdit === true) actions.brain();
           else if (action === 'insight-node' && c.campaign?.status === 'ready' && captured.key === c.campaign.key
             && c.campaign.findings.some(f => f.code === id && f.nodeId)) actions.insightNode(id);
@@ -464,7 +601,8 @@
         else if (action === 'learnings-retry') { invalidateLearnings(); void loadLearnings(); }
         else if (action === 'learnings' && m.brand?.id === id && learningStatus === 'ready') actions.learnings({ ...m.brand, workspace_id: m.workspace.id, section: 'Brand Learnings' });
         else if (action === 'responsibility-node' && /^[\w.:-]+$/.test(id) && responsibilitySummary(c)?.items.some(n => n.id === id)) actions.node(id);
-        else if (action === 'responsibilities' && responsibilitySummary(c)) actions.responsibilities(() => host.querySelector('[data-home-action="responsibilities"]'));
+        else if (action === 'responsibilities' && responsibilitySummary(c)) actions.responsibilities(() => Array.from(host.querySelectorAll('[data-home-action]')).find(e => e.dataset.homeAction === rawAction));
+        else if (action === 'expand') { expanded = !expanded; draw(); host.querySelector('[data-home-action=expand]')?.focus({ preventScroll: true }); }
         else if (action === 'metadata') { status = 'idle'; void load(); }
         else if (action === 'brand' && m.workspace.brands.some(b => b.id === id)) actions.brand(id);
         else if (action === 'profile') { const brand = m.workspace.brands.find(b => b.id === id); if (brand) actions.profile(brand); }
@@ -475,7 +613,7 @@
         else if (action === 'brands') actions.brands();
       }
     });
-    return Object.freeze({ sync, dispose() { disposed = true; invalidate(); root.clearInterval(runtimeTimer); root.removeEventListener?.('focus', refreshLearnings); root.removeEventListener?.('funklix:brand-learnings-changed', refreshLearnings); doc.removeEventListener('visibilitychange', resume); host.replaceChildren(); } });
+    return Object.freeze({ sync, dispose() { disposed = true; invalidate(); host.removeEventListener('focusin', clearFocusedOverlay); root.removeEventListener('resize', updateClearance); root.clearInterval(runtimeTimer); root.removeEventListener?.('focus', refreshLearnings); root.removeEventListener?.('funklix:brand-learnings-changed', refreshLearnings); doc.removeEventListener('visibilitychange', resume); host.replaceChildren(); } });
   }
   root.FunklixHomeFoundation = Object.freeze({ model, sameScope, learningSummary, responsibilitySummary, renderContextNotice, create });
   if (typeof module === 'object' && module.exports) module.exports = root.FunklixHomeFoundation;
