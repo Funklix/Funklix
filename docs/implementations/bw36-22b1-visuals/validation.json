@@ -1,0 +1,20 @@
+{
+  "passed": 15,
+  "groups": [
+    "continuation: matching current, selected ordering, foreign-current fallback, viewer and unauthorized/unknown dates",
+    "first-screen hierarchy, one H1, full detailed Home and all legacy static IDs preserved",
+    "Workspace/Brand orientation, generic greeting, saved identity and timestamp with no recency/progress invention",
+    "placeholder slot is explicit, image/identity-free and static; speech bubble stays truthful across runtime changes",
+    "selected Brand/current Board mismatch chooses connected continuation without relabeling Brain or mutating Canvas",
+    "explicit foreign-current fallback, hidden association and unassigned scope remain distinguishable",
+    "Brain stage and emoji shortcut use existing keyboard destination, preserve draft and never infer",
+    "Insights shortcut uses current Board destination with no inference or Canvas mutation",
+    "Learnings shortcut opens existing selected-Brand Profile section",
+    "responsibilities shortcut opens existing manager and restores origin after redraw",
+    "viewer and unavailable Learning access give honest keyboard-discoverable alternatives and block activation",
+    "no Workspace/no Brands/no Boards, loading/error/logout/account replacement and Workspace switching retire identities",
+    "forged/stale hero and quick actions reject changed Board generation, loading and lost access",
+    "repeated render introduces zero backend reads, canonical/avatar requests, writes or Canvas changes",
+    "Chromium Light reference matrix, Dark/system readability, geometry, keyboard, reduced motion and fixed-control clearance"
+  ]
+}

@@ -441,5 +441,7 @@ jobs:
         run: npm run check:bw36.21b2
       - name: Check BW-36.22A compact Home and continuation (Chromium, provider-free)
         run: npm run check:bw36.22a
+      - name: Check BW-36.22B1 Living Workspace foundation (Chromium, provider-free)
+        run: npm run check:bw36.22b1
       - name: Check Knowledge Module browser globals
         run: node scripts/check-knowledge-module-browser-globals.js

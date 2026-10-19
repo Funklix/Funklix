@@ -62,6 +62,19 @@
       && a.publicToken === b.publicToken;
   }
 
+  // Hero choice is independent of the detailed list/filter. Catalog membership
+  // still authorizes identity; current-work preference requires full hydration.
+  function heroContinuation(context, metadata = []) {
+    const m = model(context, metadata);
+    const saved = !context.loading && context.openBoard && m.boards.find(b => b.id === context.boardId);
+    // Hydrated association can be newer than catalog membership. Resolve only
+    // against visible catalog Brands, never against the Board's Core/snapshot.
+    const current = saved && { ...saved, brand: m.workspace.brands.find(b => b.id === context.openBoard.brandId) || null,
+      unassigned: context.openBoard.unassigned === true };
+    return (current && m.brand && current.brand?.id === m.brand.id ? current : null)
+      || m.boards.find(b => m.brand && (b.id === current?.id ? current.brand?.id : b.brand?.id) === m.brand.id) || current || m.boards[0] || null;
+  }
+
   // The existing library endpoint independently checks active application identity
   // and Brand ACL. Its aggregate counts cover all pages, not just these rows.
   function learningSummary(payload, brandId) {
@@ -343,6 +356,100 @@
       }
       return section;
     }
+    function livingWorkspace(c, m) {
+      function arrow() {
+        const mark = node('span', 'home-living-arrow', '→'); mark.setAttribute('aria-hidden', 'true'); return mark;
+      }
+      const living = node('section', 'home-living'); living.setAttribute('aria-labelledby', 'home-living-title');
+      const working = node('div', 'home-living-work');
+      const greeting = node('div', 'home-living-greeting');
+      const title = node('h1', '', t('Welcome back.')); title.id = 'home-living-title';
+      greeting.append(node('span', 'home-eyebrow', t('YOUR CREATIVE WORKSPACE')), title,
+        node('p', 'home-living-subtitle', t(m.brand ? 'A little space for your next idea with {brand}.' : 'A little space for your next idea.')
+          .replace('{brand}', m.brand?.name || '')));
+      const continuation = node('section', 'home-living-continue'); continuation.setAttribute('aria-labelledby', 'home-living-continue-title');
+      const heading = node('h2', '', t('Continue where you left off')); heading.id = 'home-living-continue-title'; continuation.append(heading);
+      const candidate = heroContinuation(c, rows);
+      if (candidate) {
+        const current = candidate.id === c.boardId && !!c.openBoard && !c.loading;
+        const viewer = current ? c.openBoard.canEdit !== true : candidate.role === 'viewer';
+        const info = node('div', 'home-living-board');
+        info.append(identity(candidate.brand || { name: candidate.name }));
+        const copy = node('div'); copy.append(node('h3', '', candidate.name),
+          node('p', 'home-living-scope', candidate.brand?.name || t(candidate.unassigned ? 'No Brand connected' : 'No visible Brand association')),
+          node('span', 'home-living-kind', t(viewer ? 'View-only Board' : current ? 'Currently open' : 'Saved Board')));
+        info.append(copy); continuation.append(info);
+        // Explain foreign-current and nonconnected fallbacks beside the action.
+        if (m.brand && candidate.brand?.id !== m.brand.id) continuation.append(node('p', 'home-note',
+          t(current ? 'No connected Board available. Continue your open Board.' : 'No connected Board available. Open an available saved Board.')));
+        const footer = node('div', 'home-living-resume');
+        const saved = node('p', 'home-living-saved');
+        if (candidate.savedAt) {
+          const time = node('time', '', new Intl.DateTimeFormat(c.language === 'de' ? 'de-DE' : 'en-GB', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(candidate.time)));
+          time.dateTime = candidate.savedAt; saved.append(node('span', '', t('Last saved modification')), time);
+        } else saved.textContent = t(status === 'loading' ? 'Loading saved modification times…' : 'Modification time unavailable');
+        const label = viewer ? 'View Board' : current ? 'Continue open Board' : 'Open saved Board';
+        const resume = placed(label, 'board', candidate.id, 'living'); resume.className = 'fk-btn fk-btn-primary';
+        resume.setAttribute('aria-label', t(label) + ': ' + candidate.name); resume.disabled = !!c.loading;
+        resume.append(arrow()); footer.append(saved, resume); continuation.append(footer);
+      } else {
+        continuation.append(node('p', 'home-note', t(c.loading ? 'A Board is loading. Please wait before opening another.' : 'Saved Boards available to you in this Workspace will appear here.')),
+          placed('Browse Boards', 'boards', '', 'living'));
+      }
+      working.append(greeting, continuation);
+
+      const stage = node('div', 'home-avatar-stage');
+      const art = node('div', 'home-avatar-art'); art.setAttribute('aria-hidden', 'true');
+      art.append(node('span', 'home-avatar-orbit'), node('span', 'home-avatar-orbit home-avatar-orbit-back'),
+        node('span', 'home-avatar-spark home-avatar-spark-one', '✦'), node('span', 'home-avatar-spark home-avatar-spark-two', '✧'),
+        node('span', 'home-avatar-spark home-avatar-spark-three', '∿'));
+      const bubble = node('p', 'home-avatar-bubble', t('Ready to explore your next idea?'));
+      // B1 deliberately has no canonical detail read or logo-as-Avatar fallback.
+      // This square slot can later contain one accepted image, object-fit:contain.
+      const slot = node('div', 'home-avatar-slot'); slot.dataset.avatarState = 'placeholder';
+      const abstract = node('span', 'home-avatar-neutral'); abstract.setAttribute('aria-hidden', 'true'); abstract.append(node('span', '', '✦'));
+      slot.append(abstract, node('span', 'home-avatar-placeholder', t('Brand Avatar')), node('span', 'home-avatar-placeholder-note', t('Visual placeholder')));
+      const entry = node('div', 'home-avatar-entry');
+      const available = !!(!c.loading && c.openBoard && m.workspace.boards.some(b => b.id === c.boardId));
+      const boardBrand = available && m.workspace.brands.find(b => b.id === c.openBoard.brandId);
+      const boardScope = available ? c.openBoard.name + ' · ' + (boardBrand?.name || t(c.openBoard.unassigned ? 'No Brand connected' : 'No visible Brand association')) : '';
+      const canBrain = available && c.openBoard.canEdit === true;
+      const brain = placed(canBrain ? 'Open AI Brain for {board}' : 'Browse Boards', canBrain ? 'brain' : 'boards', '', 'stage');
+      if (canBrain) brain.textContent = t('Open AI Brain for {board}').replace('{board}', c.openBoard.name);
+      brain.className = 'fk-btn fk-btn-primary'; brain.append(arrow());
+      const scope = node('p', 'home-avatar-context'); scope.id = 'home-avatar-context';
+      scope.textContent = available ? t(m.brand && m.brand.id !== boardBrand?.id
+        ? 'Selected Brand: {selected}. AI Brain uses the open Board: {board}.' : 'AI Brain uses the open Board: {board}.')
+        .replace(/\{(selected|board)\}/g, (_, key) => key === 'selected' ? m.brand?.name || '' : boardScope)
+        : t(c.loading ? 'AI Brain will be available after Board loading finishes.' : 'Open a saved Board with edit access to use AI Brain.');
+      if (available && !canBrain) scope.append(' ' + t('AI Brain requires editable Board access. This Board is read-only.'));
+      brain.setAttribute('aria-describedby', scope.id); entry.append(brain, scope);
+      stage.append(art, bubble, slot, entry); living.append(working, stage);
+
+      const shortcuts = node('section', 'home-quick-actions'); shortcuts.setAttribute('aria-labelledby', 'home-quick-title');
+      const quickTitle = node('h2', '', t('Quick actions')); quickTitle.id = 'home-quick-title'; shortcuts.append(quickTitle);
+      const list = node('ul', 'home-quick-list');
+      const responsibilities = available && responsibilitySummary(c);
+      const learningReady = !!(m.brand && learningStatus === 'ready');
+      const entries = [
+        ['🧠', 'AI Brain', 'brain', '', canBrain, canBrain ? boardScope : t(available ? 'AI Brain requires editable Board access. This Board is read-only.' : 'Open a saved Board with edit access to use AI Brain.'), 'brain'],
+        ['📊', 'Campaign Insights', 'insights', '', available, available ? boardScope : t('Open a Board to see Campaign Insights.'), 'insights'],
+        ['📚', 'Brand Learnings', 'learnings', m.brand?.id || '', learningReady, learningReady ? m.brand.name
+          : t(m.brand ? learningStatus === 'denied' ? 'Brand Learning access could not be confirmed.' : learningStatus === 'error' ? 'Brand Learnings unavailable. Try again.' : 'Checking Brand Learning access…' : 'Select a Brand to see its Learning review availability.'), 'learnings'],
+        ['👥', 'Team Responsibilities', 'responsibilities', '', !!responsibilities, responsibilities ? boardScope : t('Open a Board to see its responsibilities.'), 'responsibilities']
+      ];
+      for (const [emoji, label, action, id, enabled, description, tone] of entries) {
+        const item = node('li'); const control = placed('', action, id, 'quick'); control.className = 'home-quick-action'; control.dataset.tone = tone;
+        const icon = node('span', 'home-quick-icon', emoji); icon.setAttribute('aria-hidden', 'true');
+        const copy = node('span', 'home-quick-copy'); copy.append(node('strong', '', t(label)), node('span', '', description));
+        const arrow = node('span', 'home-quick-arrow', '›'); arrow.setAttribute('aria-hidden', 'true');
+        // Keep unavailable destinations keyboard discoverable, with an honest
+        // explanation. Activation remains blocked independently of CSS.
+        if (!enabled) control.setAttribute('aria-disabled', 'true');
+        control.append(icon, copy, arrow); item.append(control); list.append(item);
+      }
+      shortcuts.append(list); living.append(shortcuts); return living;
+    }
     function draw() {
       updateClearance();
       const c = context(), m = model(c, rows, filter);
@@ -354,15 +461,17 @@
       host.replaceChildren(); host.setAttribute('aria-busy', String(status === 'loading' || ['idle', 'loading', 'refreshing'].includes(c.status) && !!c.account));
       const hero = node('header', 'home-hero');
       const copy = node('div', 'home-hero-copy');
-      copy.append(node('span', 'home-eyebrow', t('YOUR CREATIVE WORKSPACE')),
-        node('h1', '', m.workspace?.name || t('A home for your next idea.')));
+      copy.append(node('span', 'home-eyebrow', t('Workspace')),
+        node('p', 'home-workspace-name', m.workspace?.name || t('A home for your next idea.')));
       hero.append(copy);
       if (m.workspace) hero.prepend(identity(m.workspace, true));
       host.append(hero);
       if (!c.account?.email || c.publicToken) {
+        copy.append(node('h1', '', t('Welcome back.')));
         host.append(message('Welcome to Tendra One', 'Sign in to see your Workspaces and saved Boards.', button('Sign in', 'signin'))); return;
       }
       if (!m.ready) {
+        copy.append(node('h1', '', t('Welcome back.')));
         const pending = ['idle', 'loading', 'refreshing'].includes(c.status);
         host.append(message(pending ? 'Finding your Workspace…' : 'Workspace catalog unavailable', pending
           ? 'Your accessible Brands and Boards will appear here.' : 'Your access could not be confirmed. Try again to load your Workspace.', pending ? null : button('Retry', 'retry'))); return;
@@ -381,6 +490,7 @@
       });
       if (c.catalog.workspaces.length) { nav.append(label, select, button('Create Workspace', 'workspace-create')); hero.append(nav); }
       if (!m.workspace) {
+        copy.append(node('h1', '', t('Welcome back.')));
         host.append(message(c.catalog.workspaces.length ? 'Choose your working context' : 'Your first Workspace starts here',
           c.catalog.workspaces.length ? 'Choose a Workspace to see the Brands and Boards available to you.' : 'Create a Workspace to bring your Brands and campaign work together.',
           c.catalog.workspaces.length ? null : button('Create Workspace', 'workspace-create'))); return;
@@ -401,12 +511,15 @@
       if (m.brand) brandControls.append(placed('Brand Profile', 'profile', m.brand.id, 'header'));
       if (['owner', 'admin'].includes(m.workspace.role)) brandControls.append(placed('Manage Brands', 'brands', '', 'header'));
       hero.append(brandControls);
+      host.append(livingWorkspace(c, m));
+      const details = node('div', 'home-details-heading');
+      const detailsTitle = node('h2', '', t('Workspace details')); detailsTitle.id = 'home-details-title'; details.append(detailsTitle); host.append(details);
       if (c.openBoard && !c.loading && m.workspace.boards.some(b => b.id === c.boardId)) {
         const open = node('div', 'home-open-board');
         const brand = m.workspace.brands.find(b => b.id === c.openBoard.brandId);
         open.append(node('p', '', t('Currently open') + ': ' + c.openBoard.name + ' · ' + (brand?.name || t(c.openBoard.unassigned ? 'No Brand connected' : 'No visible Brand association'))));
         const resume = placed(c.openBoard.canEdit === false ? 'Continue viewing the open Board' : 'Continue', 'board', c.boardId, 'header'); resume.className = 'fk-btn fk-btn-primary';
-        open.append(resume); hero.append(open);
+        open.append(resume); details.append(open);
       }
       const orientation = node('section', 'home-brands'); orientation.setAttribute('aria-labelledby', 'home-brands-title');
       const heading = node('div', 'home-section-heading'); const title = node('h2', '', t('Brands in your Workspace')); title.id = 'home-brands-title';
@@ -577,8 +690,8 @@
       } finally { if (request === token) { request = null; if (sameScope(current, context())) draw(); } }
     }
     host.addEventListener('click', event => {
-      const target = event.target.closest('[data-home-action]'); if (!target || target.disabled) return;
-      const c = context(), m = model(c, rows, filter), rawAction = target.dataset.homeAction, action = rawAction.replace(/^(next|header)-/, ''), id = target.dataset.homeId;
+      const target = event.target.closest('[data-home-action]'); if (!target || target.disabled || target.getAttribute('aria-disabled') === 'true') return;
+      const c = context(), m = model(c, rows, filter), rawAction = target.dataset.homeAction, action = rawAction.replace(/^(next|header|living|stage|quick)-/, ''), id = target.dataset.homeId;
       const capturedScope = actionScopes.get(target);
       if (!capturedScope || !sameScope(capturedScope, c)) { sync(); return; }
       if (rawAction === 'next-learnings' && !(learningStatus === 'ready' && learning?.canWrite && learning.proposed > 0)) { sync(); return; }
@@ -615,6 +728,6 @@
     });
     return Object.freeze({ sync, dispose() { disposed = true; invalidate(); host.removeEventListener('focusin', clearFocusedOverlay); root.removeEventListener('resize', updateClearance); root.clearInterval(runtimeTimer); root.removeEventListener?.('focus', refreshLearnings); root.removeEventListener?.('funklix:brand-learnings-changed', refreshLearnings); doc.removeEventListener('visibilitychange', resume); host.replaceChildren(); } });
   }
-  root.FunklixHomeFoundation = Object.freeze({ model, sameScope, learningSummary, responsibilitySummary, renderContextNotice, create });
+  root.FunklixHomeFoundation = Object.freeze({ model, heroContinuation, sameScope, learningSummary, responsibilitySummary, renderContextNotice, create });
   if (typeof module === 'object' && module.exports) module.exports = root.FunklixHomeFoundation;
 }(typeof globalThis !== 'undefined' ? globalThis : window));
