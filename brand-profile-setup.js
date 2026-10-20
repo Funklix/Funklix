@@ -125,7 +125,7 @@
     const state = {
       brand: options.brand, name: options.brand.name, core: clone(options.brand.brand_core),
       website: options.website || options.brand.brand_core?.brandAssets?.domain || options.brand.brand_core?.website || '',
-      section: options.initialSection === 'Brand Learnings' ? SECTIONS.indexOf('Brand Learnings') : 0, message: '', analysis: 'Not analyzed', logo: options.brand.logo_url ? 'Logo saved' : 'No logo yet. Initials are shown.',
+      section: ['Brand Learnings', 'Brand Avatar'].includes(options.initialSection) ? SECTIONS.indexOf(options.initialSection) : 0, message: '', analysis: 'Not analyzed', logo: options.brand.logo_url ? 'Logo saved' : 'No logo yet. Initials are shown.',
       proposals: clone(options.pendingData?.proposals || {}), candidate: clone(options.pendingData?.candidate || null),
       dnaPreflight: null, dnaDraft: clone(options.pendingData?.dnaDraft || null), avatarDraft: clone(options.pendingData?.avatarDraft || null), avatarDirection: options.pendingData?.avatarDirection || '', file: options.pendingData?.file || null, fileData: options.pendingData?.fileData || null, syncRequired: false, reconciliationWarning: false, pending: '', deferred: false,
       readOnly: options.brand.access?.canEditCanonicalBrand !== true || !['owner','admin','editor'].includes(options.brand.access?.role)

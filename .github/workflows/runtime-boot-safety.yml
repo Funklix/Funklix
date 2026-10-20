@@ -20,6 +20,9 @@ jobs:
           node --check knowledge-module-identity.js
           node --check knowledge-module-runtime-adapter.js
           node --check app.js
+          node --check canonical-brand-reader.js
+          node --check home-foundation.js
+          node --check scripts/check-bw36-22b2-real-brand-avatar.js
           node --check api/_ai-brain-learning-context.js
           node --check scripts/check-bw36-20-approved-learning-ai-brain.js
           node --check scripts/check-bw36-20r1-learning-integration-review-fixes.js
@@ -445,5 +448,7 @@ jobs:
         run: npm run check:bw36.22b1
       - name: Check BW-36.22B1R1 current continuation name (Chromium, provider-free)
         run: npm run check:bw36.22b1r1
+      - name: Check BW-36.22B2 real Brand Avatar and contextual personality
+        run: npm run check:bw36.22b2
       - name: Check Knowledge Module browser globals
         run: node scripts/check-knowledge-module-browser-globals.js

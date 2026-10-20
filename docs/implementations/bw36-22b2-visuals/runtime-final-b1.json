@@ -1,0 +1,10 @@
+[
+  {
+    "index": 186,
+    "name": "Check BW-36.22B1 Living Workspace foundation (Chromium, provider-free)",
+    "command": "npm run check:bw36.22b1",
+    "status": "PASS",
+    "exit_code": 0,
+    "seconds": 30.38
+  }
+]
