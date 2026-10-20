@@ -6,6 +6,7 @@ const { validateImageBuffer } = require('../../_website-image-retrieval');
 const { LOGO_COLUMNS, MAX_IMAGE_BYTES, normalizeLogoRevision, projectLogo, discoverLogo } = require('../../_brand-logo');
 const logoStorage = require('../../_brand-logo-storage');
 const { createHash } = require('crypto');
+const { lifecycle, verifyReview } = require('../../_brand-knowledge-write');
 
 const CONTRACT='brand_logo_v1';
 function send(res,status,body){res.setHeader('Cache-Control','private, no-store');return res.status(status).json(body);}
@@ -27,15 +28,21 @@ module.exports=async function handler(req,res){
   try{client=await pool.connect();}catch{return failure(res,503,'DATABASE_UNAVAILABLE');}
   try{
     await client.query('BEGIN');
-    const result=await client.query(`SELECT b.id,b.workspace_id,b.logo_object_path,b.logo_source,b.logo_revision,CASE WHEN lower(b.owner_email)=$2 THEN 'owner' ELSE bm.role END role FROM brands b LEFT JOIN brand_members bm ON bm.brand_id=b.id AND bm.email=$2 WHERE b.id=$1 FOR UPDATE OF b`,[brandId,user.email.trim().toLowerCase()]);const row=result.rows[0];
+    const mutationHex=createHash('sha256').update(JSON.stringify([brandId,user.email.trim().toLowerCase(),input.request_id])).digest('hex');
+    const mutationId=mutationHex.slice(0,8)+'-'+mutationHex.slice(8,12)+'-4'+mutationHex.slice(13,16)+'-8'+mutationHex.slice(17,20)+'-'+mutationHex.slice(20,32);
+    const inputDigest=createHash('sha256').update(require('../../../brand-write-contract').stable(input)).digest('hex');
+    const receipt=(await client.query('SELECT brand_knowledge_private.logo_receipt($1,$2::uuid,$3::uuid,$4) AS brand',[user.email.trim().toLowerCase(),brandId,mutationId,inputDigest])).rows[0]?.brand;
+    if(receipt){await client.query('COMMIT');committed=true;return send(res,200,{contract:CONTRACT,request_id:input.request_id,replay:true,logo:{brand_id:brandId,changed:true,...projectLogo(receipt),source:receipt.logo_source,updated_at:receipt.logo_updated_at}});}
+    const result=await client.query(`SELECT b.id,b.workspace_id,b.revision,b.logo_object_path,b.logo_source,b.logo_revision,CASE WHEN lower(b.owner_email)=$2 THEN 'owner' ELSE bm.role END role FROM brands b LEFT JOIN brand_members bm ON bm.brand_id=b.id AND bm.email=$2 WHERE b.id=$1 FOR UPDATE OF b`,[brandId,user.email.trim().toLowerCase()]);const row=result.rows[0];
     if(!row||!['owner','admin','editor'].includes(row.role)){await client.query('ROLLBACK');return failure(res,403,'PERMISSION_DENIED');}
     if(input.workspace_id){const member=await client.query(`SELECT 1 FROM workspace_memberships WHERE workspace_id=$1 AND identity_id=(SELECT id FROM app_identities WHERE canonical_email=$2 AND status='active') AND status='accepted'`,[input.workspace_id,user.email.trim().toLowerCase()]);if(row.workspace_id!==input.workspace_id||!member.rowCount){await client.query('ROLLBACK');return failure(res,403,'PERMISSION_DENIED');}}
     const revision=normalizeLogoRevision(row.logo_revision);
     if(revision!==input.expected_revision){await client.query('ROLLBACK');return failure(res,409,'STALE_UPDATE');}
     if(revision===Number.MAX_SAFE_INTEGER)throw new Error('INVALID_LOGO_REVISION');
     oldPath=row.logo_object_path;
+    if (oldPath) { try { if (!verifyReview(req.headers?.['x-brand-review'],user.email.trim().toLowerCase(),brandId,input)) throw new Error(); } catch { await client.query('ROLLBACK'); return failure(res,428,'LOGO_REVIEW_REQUIRED'); } }
     let updated,expectedMetadata={logo_mime_type:null,logo_source:null,logo_source_host:null};
-    if(input.action==='remove'){stage='metadata_update';updated=await client.query(`UPDATE brands SET logo_object_path=NULL,logo_mime_type=NULL,logo_source=NULL,logo_source_host=NULL,logo_updated_at=now(),logo_revision=logo_revision+1 WHERE id=$1 AND logo_revision=$2::bigint`,[brandId,revision]);}
+    if(input.action==='remove'){stage='metadata_update';pendingPath=null;}
     else{
       let buffer,mimeType,source,sourceHost=null;
       if(input.action==='upload'){if(typeof input.image_base64!=='string'||input.image_base64.length>MAX_IMAGE_BYTES*1.4+16){await client.query('ROLLBACK');return failure(res,413,'FILE_TOO_LARGE');}buffer=Buffer.from(input.image_base64,'base64');mimeType=input.mime_type;validateImageBuffer(buffer,mimeType);source='uploaded';}
@@ -43,11 +50,20 @@ module.exports=async function handler(req,res){
       if(input.action==='discover'&&input.candidate_url&&(!/^[a-f0-9]{64}$/.test(input.image_sha256||'')||createHash('sha256').update(buffer).digest('hex')!==input.image_sha256)){await client.query('ROLLBACK');return failure(res,409,'CANDIDATE_CHANGED');}
       expectedMetadata={logo_mime_type:mimeType,logo_source:source,logo_source_host:sourceHost};
       stage='storage_upload';
-      pendingPath=await logoStorage.upload({brandId,revision:revision+1,buffer,mimeType});
+      try { pendingPath=await logoStorage.upload({brandId,revision:revision+1,buffer,mimeType,mutationId}); }
+      catch(error) {
+        if(error.code!=='STORAGE_CONFLICT')throw error;
+        const retainedPath=logoStorage.objectKey(brandId,revision+1,mimeType,mutationId);
+        const retained=await logoStorage.read(retainedPath);
+        if(createHash('sha256').update(retained).digest('hex')!==createHash('sha256').update(buffer).digest('hex'))throw new Error('ASSET_RETRY_CONFLICT');
+        pendingPath=retainedPath;
+      }
       stage='metadata_update';
-      updated=await client.query(`UPDATE brands SET logo_object_path=$2,logo_mime_type=$3,logo_source=$4,logo_source_host=$5,logo_updated_at=now(),logo_revision=logo_revision+1 WHERE id=$1 AND logo_revision=$6::bigint`,[brandId,pendingPath,mimeType,source,sourceHost,revision]);
+
     }
-    if(updated.rowCount!==1)throw new Error('METADATA_UPDATE_FAILED');
+    const command={contract:'canonical-brand-write/v1',operation:'logo',workspace_id:input.workspace_id,expected_revision:String(row.revision),expected_logo_revision:revision,mutation_id:mutationId,input_digest:inputDigest,metadata:{logo_object_path:pendingPath,...expectedMetadata}};
+    updated=await lifecycle({client,email:user.email.trim().toLowerCase(),brandId,command});
+    if(!updated.brand)throw new Error('METADATA_UPDATE_FAILED');
     stage='metadata_readback';
     const saved=(await client.query(`SELECT id,${LOGO_COLUMNS} FROM brands WHERE id=$1`,[brandId])).rows[0];
     const representation=projectLogo(saved);
@@ -57,14 +73,14 @@ module.exports=async function handler(req,res){
     const response={contract:CONTRACT,request_id:input.request_id,logo:{brand_id:brandId,changed:true,...representation,source:saved.logo_source,updated_at:saved.logo_updated_at}};
     stage='metadata_update';
     await client.query('COMMIT');committed=true;
-    if(oldPath&&oldPath!==pendingPath)void logoStorage.remove(oldPath).catch(()=>{console.error('[BRAND_LOGO_FAILURE]',{stage:'storage_cleanup'});});
+    // Historical references retain immutable object bytes; no automatic cleanup.
     stage='response_projection';
     return send(res,200,response);
   }catch(error){
     console.error('[BRAND_LOGO_FAILURE]',{stage});
     if(!committed){
       await client.query('ROLLBACK').catch(()=>{});
-      if(pendingPath)await logoStorage.remove(pendingPath).catch(()=>{console.error('[BRAND_LOGO_FAILURE]',{stage:'storage_compensation'});});
+      // An uncertain COMMIT may have recorded this asset. Retain it for operator reconciliation.
     }
     const code=error?.code==='STORAGE_UNAVAILABLE'?'STORAGE_UNAVAILABLE'
       :['unsupported_content_type','invalid_dimensions','invalid_image_signature','unsupported_image_type','invalid_image','empty_response'].includes(error?.code)?'UNSUPPORTED_FILE'

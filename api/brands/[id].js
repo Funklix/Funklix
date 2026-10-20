@@ -1,25 +1,14 @@
 const { getSessionUser } = require('../_auth-session');
 const { getBrandOwnerEmail, getBrandAccess, isBrandId } = require('../_brand-access');
 // BW-20 supersedes the former owner-only item lookup: const brand = await getOwnedBrand(id, user).
-const { pool, BRAND_COLUMNS, MAX_BRAND_NAME_LENGTH, ensureBrandsTable, serializeBrand } = require('../_brands-storage');
+const { pool, ensureBrandsTable, serializeBrand } = require('../_brands-storage');
 const { randomUUID } = require('crypto');
 const { BrandDeletionError, deleteOwnedBrand } = require('../_brand-deletion');
 
-function validObject(value) {
-  return value && typeof value === 'object' && !Array.isArray(value);
-}
-
-// Omitted canonical fields survive partial clients; explicit values remain editable.
-function mergeCore(saved, patch) {
-  const result = { ...saved };
-  for (const [key, value] of Object.entries(patch)) {
-    if (['__proto__', 'constructor', 'prototype'].includes(key)) continue;
-    result[key] = validObject(value) && validObject(saved?.[key]) ? mergeCore(saved[key], value) : value;
-  }
-  return result;
-}
+const { write, mapError } = require('../_brand-knowledge-write');
 
 module.exports = async function handler(req, res) {
+  res.setHeader?.('Cache-Control', 'private, no-store');
   const requestId = randomUUID();
   if (!['GET', 'PUT', 'DELETE'].includes(req.method)) return res.status(405).json({ ok: false, code: 'METHOD_NOT_ALLOWED', requestId });
   if (!process.env.POSTGRES_URL) {
@@ -39,7 +28,7 @@ module.exports = async function handler(req, res) {
   if (req.method === 'DELETE') {
     const confirmationName = typeof req.body?.confirmationName === 'string' ? req.body.confirmationName : '';
     try {
-      const result = await deleteOwnedBrand({ brandId: id, ownerEmail, confirmationName, requestId });
+      const result = await deleteOwnedBrand({ brandId: id, ownerEmail, confirmationName, requestId, input: req.body });
       return res.status(200).json({ ok: true, requestId, ...result });
     } catch (error) {
       const failure = error instanceof BrandDeletionError ? error : new BrandDeletionError(500, 'BRAND_DELETE_FAILED');
@@ -55,32 +44,15 @@ module.exports = async function handler(req, res) {
       return res.status(200).json(serializeBrand(brand, access));
     }
 
-    const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
-    const brandCore = req.body?.brand_core;
-    const revision = req.body?.revision;
-    if (!name || name.length > MAX_BRAND_NAME_LENGTH || /[\u0000-\u001f\u007f]/.test(name)) return res.status(400).json({ ok: false, code: 'INVALID_BRAND_NAME' });
-    if (!validObject(brandCore) || Buffer.byteLength(JSON.stringify(brandCore)) > 1024 * 1024) return res.status(400).json({ ok: false, code: 'INVALID_BRAND_CORE' });
-    if (!Number.isSafeInteger(revision) || revision < 1) return res.status(400).json({ ok: false, code: 'INVALID_REVISION' });
-
-    const resolved = await getBrandAccess(id, user, { columns: 'id, revision, updated_at, brand_core' });
-    if (!resolved.brand) return res.status(404).json({ ok: false, code: 'BRAND_NOT_FOUND' });
-    if (!resolved.access.canEditCanonicalBrand) return res.status(403).json({ ok: false, code: 'PERMISSION_DENIED' });
-    // The creation fingerprint is server-owned and survives subsequent editing.
-    if (Object.hasOwn(brandCore, '_creation') && JSON.stringify(brandCore._creation) !== JSON.stringify(resolved.brand.brand_core?._creation)) return res.status(422).json({ ok: false, code: 'INVALID_BRAND_CORE' });
-    const updated = await pool.query(
-      `UPDATE brands SET name = $2, brand_core = $3::jsonb, revision = revision + 1, updated_at = NOW()
-       WHERE id = $1 AND revision = $4
-       RETURNING ${BRAND_COLUMNS}`,
-      [id, name, JSON.stringify(mergeCore(resolved.brand.brand_core, brandCore)), revision]
-    );
-    if (updated.rowCount === 0) {
-      const { brand: current } = await getBrandAccess(id, user, { columns: 'id, revision, updated_at' });
-      if (!current) return res.status(404).json({ ok: false, code: 'BRAND_NOT_FOUND' });
-      return res.status(409).json({ ok: false, code: 'STALE_UPDATE' });
-    }
-    return res.status(200).json(serializeBrand(updated.rows[0], resolved.access));
+    const outcome = await write({ db: pool, user, brandId: id, input: req.body, token: req.headers?.['x-brand-review'] });
+    const { access } = await getBrandAccess(id, user);
+    return res.status(200).json({ ...serializeBrand(outcome.brand, access), contract: 'canonical-brand-write/v1', mutation_id: outcome.mutation_id, event_id: outcome.event_id, replay: outcome.replay });
   } catch (error) {
-    console.error('[BRAND_ITEM_FAILURE]', { method: req.method, code: 'DATABASE_UNAVAILABLE' });
-    return res.status(503).json({ ok: false, code: 'DATABASE_UNAVAILABLE' });
+    if (req.method === 'GET') {
+      console.error('[BRAND_ITEM_FAILURE]', { method: 'GET', code: 'DATABASE_UNAVAILABLE' });
+      return res.status(503).json({ ok: false, code: 'DATABASE_UNAVAILABLE' });
+    }
+    const failure = mapError(error);
+    return res.status(failure.status).json({ ok: false, code: failure.code });
   }
 };

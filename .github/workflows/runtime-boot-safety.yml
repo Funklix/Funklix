@@ -9,6 +9,18 @@ on:
 jobs:
   runtime-boot-safety:
     runs-on: ubuntu-latest
+    services:
+      brand-knowledge-postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: disposable-bw36-23-fixture
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -454,3 +466,12 @@ jobs:
         run: npm run check:bw36.22b2r1
       - name: Check Knowledge Module browser globals
         run: node scripts/check-knowledge-module-browser-globals.js
+      - name: Check BW-36.23A protected Brand write contract and controllers
+        run: npm run check:bw36.23a
+      - name: Check BW-36.23A real PostgreSQL roles transactions and concurrency
+        env:
+          BW36_23_DISPOSABLE: '1'
+          BW36_23_TEST_URL: postgres://postgres:disposable-bw36-23-fixture@127.0.0.1:5432/postgres
+        run: npm run check:bw36.23a:postgres
+      - name: Check BW-36.23A protected Brand editing in Chromium
+        run: npm run check:bw36.23a:browser

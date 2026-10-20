@@ -5,6 +5,7 @@
   else root.FunklixBrandProfileSetup = api;
 }(typeof globalThis !== 'undefined' ? globalThis : window, function (root) {
   'use strict';
+  const writes = typeof module === 'object' && module.exports ? require('./brand-write-contract') : root.BrandWriteContract;
   const clone = value => JSON.parse(JSON.stringify(value));
   const object = value => !!value && typeof value === 'object' && !Array.isArray(value);
   const SECTIONS = ['Overview', 'Brand DNA', 'Audience', 'Voice & Messaging', 'Offers & Proof', 'Brand Assets', 'Brand Avatar', 'Brand Learnings', 'Team and permissions', 'Campaign Sync', 'Review'];
@@ -122,6 +123,9 @@
     const { getContext, fetchImpl = root.fetch.bind(root), validateBrand, onSave, onLogo } = options;
     const captured = { ...getContext() };
     let alive = true, flight = null;
+    const pendingWrite = {};
+    let pendingLogo = null;
+    let acceptanceOperation = null;
     const state = {
       brand: options.brand, name: options.brand.name, core: clone(options.brand.brand_core),
       website: options.website || options.brand.brand_core?.brandAssets?.domain || options.brand.brand_core?.website || '',
@@ -169,6 +173,7 @@
       if (response.status === 403) { state.readOnly = true; return 'You do not have permission to change this Brand. Your inputs are retained.'; }
       if (response.status === 404) { state.readOnly = true; return 'This Brand or workspace is no longer available. Your inputs are retained.'; }
       const code = payload?.error?.code || payload?.code;
+      if (['BRAND_PROTECTION_UNAVAILABLE','WRITE_CONTRACT_REQUIRED'].includes(code)) return 'Protected Brand saving is unavailable. Reload after the update; your inputs are retained.';
       if (code === 'STORAGE_UNAVAILABLE') return 'Logo storage is temporarily unavailable. Your Brand information can still be saved.';
       if (['UNSUPPORTED_FILE', 'FILE_TOO_LARGE'].includes(code)) return 'Choose PNG, JPEG, WebP or GIF, up to 2 MB.';
       if (code === 'DATABASE_UNAVAILABLE') return 'The database is temporarily unavailable. Your inputs are retained. Try again.';
@@ -204,6 +209,14 @@
       state.autoKeys = state.autoKeys.filter(item => item !== key);
       changed();
     }
+    async function canonicalMutation(previous, draft, operation) {
+      const command = writes.command(previous, draft, captured.workspaceId, operation);
+      if (operation === 'domain_fill') for (const change of command.changes) change.action = 'fill_empty';
+      const result = await writes.submit({ fetchImpl, brandId: previous.id, command, pending: pendingWrite, current,
+        confirmReview: options.confirmReview || root.confirm?.bind(root) });
+      if (!current()) return null;
+      return result;
+    }
     async function persistSuggestions(keys, values = state.proposals) {
       const previous = state.brand, core = clone(previous.brand_core);
       keys = keys.filter(key => {
@@ -213,7 +226,7 @@
       if (!keys.length) return true;
       for (const key of keys) core[key] = proposalValue(core, key, values[key]);
       let result;
-      try { result = await jsonRequest(`/api/brands/${previous.id}`, 'PUT', { name: previous.name, brand_core: core, revision: previous.revision }); }
+      try { result = await canonicalMutation(previous, { name: previous.name, brand_core: core }, values === state.autoValues ? 'domain_fill' : 'domain_accept'); }
       catch {
         state.message = 'The save was not confirmed. Your inputs are retained. Retry safely.';
         for (const key of keys) state.proposalErrors[key] = state.message;
@@ -335,13 +348,18 @@
         const core = clone(state.core);
         if (object(core.brandAssets) || domain) core.brandAssets = { ...(object(core.brandAssets) ? core.brandAssets : {}), domain };
         const revision = state.brand.revision;
-        const result = await jsonRequest(`/api/brands/${state.brand.id}`, 'PUT', { name, brand_core: core, revision });
+        // UI defaults are presentation; unchanged defaults never become write intent.
+        const editableBaseline = editableCore(state.brand.brand_core);
+        for (const key of Object.keys(core)) if (!Object.hasOwn(state.brand.brand_core, key) && writes.equal(core[key], editableBaseline[key])) delete core[key];
+        const command = writes.command(state.brand, { name, brand_core: core }, captured.workspaceId, acceptanceOperation || 'profile_edit');
+        const expectedCore = writes.apply(state.brand, command).brand_core;
+        const result = await canonicalMutation(state.brand, { name, brand_core: core }, acceptanceOperation || 'profile_edit');
         if (!result) return false;
         if (!result.response.ok) { state.message = errorText(result.response, 'The save was not confirmed. Your inputs are retained. Retry safely.', result.payload); return false; }
         if (!validateBrand(result.payload, state.brand.id)) { state.message = 'The save response could not be verified. Your inputs are retained.'; return false; }
         const brand = await verifyBrand();
-        if (!brand || !validateBrand(brand, state.brand.id) || brand.revision !== revision + 1 || brand.name !== name
-          || stable(brand.brand_core) !== stable(core) || brand.logo_revision !== state.brand.logo_revision || brand.logo_url !== state.brand.logo_url) { state.brand = result.payload; state.syncRequired = true; state.message = 'Brand Profile saved on the server. Reload saved Brand to synchronize. Your inputs are retained.'; return false; }
+        if (!brand || !validateBrand(brand, state.brand.id) || brand.revision !== revision + (command.changes.length ? 1 : 0) || brand.name !== name
+          || !writes.equal(brand.brand_core, expectedCore) || brand.logo_revision !== state.brand.logo_revision || brand.logo_url !== state.brand.logo_url) { state.brand = result.payload; state.syncRequired = true; state.message = 'Brand Profile saved on the server. Reload saved Brand to synchronize. Your inputs are retained.'; return false; }
         state.brand = brand;
         // Inputs may change during an in-flight save. Clear only the submitted draft.
         if (draftSignature() === submitted) { state.name = brand.name; state.core = editableCore(brand.brand_core); state.website = domain; }
@@ -372,7 +390,9 @@
       return run('Uploading logo…', async () => {
         const revision = state.brand.logo_revision || 0;
         const requestId = options.requestId();
-        const result = await jsonRequest(`/api/brands/${state.brand.id}/logo`, 'POST', { contract: 'brand_logo_v1', action, expected_revision: revision, request_id: requestId, workspace_id: captured.workspaceId, ...extra });
+        let input = { contract: 'brand_logo_v1', action, expected_revision: revision, request_id: requestId, workspace_id: captured.workspaceId, ...extra };
+        if (pendingLogo && writes.equal({...pendingLogo,request_id:input.request_id},input)) input=pendingLogo; else pendingLogo=input;
+        const result = await writes.submitLogo({fetchImpl,brandId:state.brand.id,input,current,confirmReview:options.confirmReview || root.confirm?.bind(root)});
         if (!result) return false;
         if (!result.response.ok) {
           state.logo = 'Logo upload failed';
@@ -382,6 +402,7 @@
           return false;
         }
         const logo = result.payload?.logo;
+        if (result.response.ok) pendingLogo=null;
         if ((logo?.brand_id != null && logo.brand_id !== state.brand.id) || (logo?.changed != null && typeof logo.changed !== 'boolean') || result.payload?.contract !== 'brand_logo_v1' || result.payload.request_id !== requestId || !logo
           || logo.logo_revision !== revision + 1 || (action === 'remove' ? logo.logo_url !== null : logo.logo_url !== `/api/brands/${state.brand.id}/logo?revision=${logo.logo_revision}`)) {
           state.message = 'The logo save could not be verified. Retry or reload the latest Brand.'; return false;
@@ -461,6 +482,7 @@
         if (state.name.trim() === previous.name.trim()) state.name = brand.name;
         if (normalizedWebsite(state.website) === normalizedWebsite(previous.brand_core?.brandAssets?.domain || previous.brand_core?.website)) state.website = brand.brand_core?.brandAssets?.domain || brand.brand_core?.website || '';
         for (const [key, value] of Object.entries(state.proposals)) if (stable(proposalValue(brand.brand_core, key, value)) === stable(brand.brand_core[key])) keepResolved(key);
+        pendingWrite.command = null; pendingWrite.token = null;
         state.brand = brand; baseline = stable({ name: brand.name.trim(), website: normalizedWebsite(brand.brand_core?.brandAssets?.domain || brand.brand_core?.website || ''), core: editableCore(brand.brand_core) }); state.dirty = contentDirty(); state.readOnly = brand.access.canEditCanonicalBrand !== true || !['owner','admin','editor'].includes(brand.access.role);
         state.syncRequired = !!brand.logo_url && !await verifyLogo(brand.logo_url);
         state.logo = state.syncRequired ? 'Logo saved. Synchronization needed.' : brand.logo_url ? 'Logo saved' : 'No logo yet. Initials are shown.';
@@ -494,7 +516,8 @@
       state.core.brandDNA = { ...previous, ...clone(state.dnaDraft), avatar: previous.avatar, userApproved: true };
       if (!previous.avatar) delete state.core.brandDNA.avatar;
       state.dirty = true;
-      const saved = await save(); if (saved) state.dnaDraft = null; changed(); return saved;
+      acceptanceOperation = 'accept_dna';
+      try { const saved = await save(); if (saved) state.dnaDraft = null; changed(); return saved; } finally { acceptanceOperation = null; }
     }
     function generateAvatar() {
       return run('Generating Brand Avatar…', async () => {
@@ -511,7 +534,8 @@
       if (!current() || state.readOnly || state.pending || !state.avatarDraft) return false;
       state.core.brandDNA = { ...state.core.brandDNA, avatar: { ...state.core.brandDNA?.avatar, ...clone(state.avatarDraft), userApproved: true } };
       state.dirty = true;
-      const saved = await save(); if (saved) { state.avatarDraft = null; state.avatarDirection = ''; } changed(); return saved;
+      acceptanceOperation = 'accept_avatar';
+      try { const saved = await save(); if (saved) { state.avatarDraft = null; state.avatarDirection = ''; } changed(); return saved; } finally { acceptanceOperation = null; }
     }
     function discard() {
       state.name = state.brand.name; state.core = editableCore(state.brand.brand_core); state.website = state.core.brandAssets?.domain || state.core.website || '';

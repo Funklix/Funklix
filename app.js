@@ -3452,7 +3452,7 @@ function patchCatalogBrandLogo(brandId,logo){
   projectDialogController?.reconcileBrand?.(brandId,projection);
   renderWorkspaceSidebar();renderBoardBrandAssociation();
 }
-async function mutateBrandLogo(brand,action,extra,status){const generation=canonicalBrandDetail.requestId;status.textContent=action==='discover'?'Searching…':'Updating logo…';try{const response=await fetch(`/api/brands/${encodeURIComponent(brand.id)}/logo`,{method:'POST',credentials:'same-origin',headers:{Accept:'application/json','Content-Type':'application/json'},body:JSON.stringify({contract:'brand_logo_v1',action,expected_revision:brand.logo_revision||0,request_id:`logo-${Date.now().toString(36)}`,workspace_id:state.workspaceCatalog.activeWorkspaceId,...extra})});const data=await response.json().catch(()=>null);if(generation!==canonicalBrandDetail.requestId||canonicalBrandDetail.brandId!==brand.id)return;if(!response.ok){status.textContent=data?.error?.code==='STALE_UPDATE'?brandLogoCopy('stale'):data?.error?.code==='PERMISSION_DENIED'?brandLogoCopy('denied'):brandLogoCopy('failed');return;}Object.assign(brand,data.logo);patchCatalogBrandLogo(brand.id,data.logo);renderCanonicalBrandDetail();el.brandWorkspaceDetailStatus.textContent=action==='discover'?brandLogoCopy('found'):'Brand logo updated.';}catch{status.textContent=brandLogoCopy('failed');}}
+async function mutateBrandLogo(brand,action,extra,status){const generation=canonicalBrandDetail.requestId,account=state.user,workspaceId=state.workspaceCatalog.activeWorkspaceId;status.textContent=action==='discover'?'Searching…':'Updating logo…';try{const input={contract:'brand_logo_v1',action,expected_revision:brand.logo_revision||0,request_id:crypto.randomUUID(),workspace_id:workspaceId,...extra};const {response,payload:data}=await BrandWriteContract.submitLogo({fetchImpl:fetch,brandId:brand.id,input,current:()=>generation===canonicalBrandDetail.requestId&&state.user===account&&state.workspaceCatalog.activeWorkspaceId===workspaceId});if(generation!==canonicalBrandDetail.requestId||canonicalBrandDetail.brandId!==brand.id)return;if(!response.ok){status.textContent=data?.error?.code==='STALE_UPDATE'?brandLogoCopy('stale'):data?.error?.code==='PERMISSION_DENIED'?brandLogoCopy('denied'):brandLogoCopy('failed');return;}Object.assign(brand,data.logo);patchCatalogBrandLogo(brand.id,data.logo);renderCanonicalBrandDetail();el.brandWorkspaceDetailStatus.textContent=action==='discover'?brandLogoCopy('found'):'Brand logo updated.';}catch{status.textContent=brandLogoCopy('failed');}}
 function renderBrandLogoEditor(container,brand){const section=document.createElement('section');section.className='brand-logo-editor';const preview=document.createElement('div');preview.className='brand-logo-preview';window.FunklixBrandLogo?.render(preview,brand,{label:brandLogoCopy('title')});const body=document.createElement('div');const heading=document.createElement('h3');heading.textContent=brandLogoCopy('title');const status=document.createElement('p');status.setAttribute('role','status');status.setAttribute('aria-live','polite');status.textContent=BRAND_LOGO_MUTATIONS_ENABLED?(brand.logo_url?'':brandLogoCopy('empty')):brandLogoCopy('contained');body.append(heading,status);if(BRAND_LOGO_MUTATIONS_ENABLED&&brand.access.canEditCanonicalBrand){const actions=document.createElement('div');actions.className='brand-logo-actions';const input=document.createElement('input');input.type='file';input.className='brand-logo-file';input.accept='image/png,image/jpeg,image/webp,image/gif';input.id=`brand-logo-file-${brand.id}`;const upload=document.createElement('label');upload.className='fk-btn fk-btn-primary';upload.htmlFor=input.id;upload.tabIndex=0;upload.textContent=brand.logo_url?brandLogoCopy('change'):brandLogoCopy('upload');upload.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();input.click();}});input.addEventListener('change',()=>{const file=input.files?.[0];if(!file)return;if(!['image/png','image/jpeg','image/webp','image/gif'].includes(file.type)){status.textContent=brandLogoCopy('unsupported');return;}if(file.size>2*1024*1024){status.textContent=brandLogoCopy('large');return;}const reader=new FileReader();reader.onload=()=>mutateBrandLogo(brand,'upload',{mime_type:file.type,image_base64:String(reader.result).split(',')[1]},status);reader.readAsDataURL(file);});actions.append(input,upload);const website=brand.brand_core?.brandAssets?.domain||brand.brand_core?.website||brand.brand_core?.domain;if(website){const find=document.createElement('button');find.type='button';find.className='fk-btn fk-btn-secondary';find.textContent=brandLogoCopy('find');find.addEventListener('click',()=>mutateBrandLogo(brand,'discover',{website},status));actions.append(find);}if(brand.logo_url){const remove=document.createElement('button');remove.type='button';remove.className='fk-btn fk-btn-ghost';remove.textContent=brandLogoCopy('remove');remove.addEventListener('click',()=>{mutateBrandLogo(brand,'remove',{},status);});actions.append(remove);}body.append(actions);}section.append(preview,body);container.append(section);}
 
 async function renderBrandTeamSection(container, brand) {
@@ -3636,16 +3636,18 @@ async function submitCanonicalBrandEditing(event) {
   }
   if (!name || name.length > 160) { el.brandWorkspaceEditFeedback.textContent = uiText("Name must be between 1 and 160 characters."); return; }
   if (!brandCore || typeof brandCore !== "object" || Array.isArray(brandCore)) { el.brandWorkspaceEditFeedback.textContent = uiText("Brand Core must be a JSON object, not an array or primitive."); return; }
-  const expectedRevision = detail.draft.revision + 1;
+  const writeCommand = BrandWriteContract.command({ ...detail.brand, revision: detail.draft.revision }, { name, brand_core: brandCore }, workspaceId, 'advanced_edit');
+  const expectedState = BrandWriteContract.apply(detail.brand, writeCommand);
+  const expectedRevision = detail.draft.revision + (writeCommand.changes.length ? 1 : 0);
   const saveId = detail.saveId + 1;
   const controller = new AbortController();
   detail.saveId = saveId; detail.saveController = controller; detail.status = "submitting";
   el.brandWorkspaceEditFeedback.textContent = ""; renderCanonicalBrandDetail();
   try {
-    const response = await fetch(`/api/brands/${encodeURIComponent(detail.brandId)}`, {
-      method: "PUT", headers: { Accept: "application/json", "Content-Type": "application/json" },
-      body: JSON.stringify({ name, brand_core: brandCore, revision: detail.draft.revision }), signal: controller.signal
-    });
+    const submission = await BrandWriteContract.submit({ fetchImpl: fetch, brandId: detail.brandId, command: writeCommand,
+      pending: detail.pendingWrite || (detail.pendingWrite = {}),
+      current: () => state.user === account && state.workspaceCatalog.generation === generation && state.workspaceCatalog.activeWorkspaceId === workspaceId });
+    const response = submission.response;
     const stillCurrent = () => canonicalBrandDetail === detail && detail.saveId === saveId && detail.saveController === controller
       && detail.brandId === selection.id && detail.userEmail === (state.user?.email || "").trim().toLowerCase()
       && state.user === account && state.workspaceCatalog.generation === generation && state.workspaceCatalog.activeWorkspaceId === workspaceId
@@ -3655,11 +3657,11 @@ async function submitCanonicalBrandEditing(event) {
     if (response.status === 409) { detail.status = "conflict"; renderCanonicalBrandDetail(); return; }
     if (!response.ok) { detail.status = "save-error"; el.brandWorkspaceEditFeedback.textContent = canonicalBrandSaveError(response.status); renderCanonicalBrandDetail(); return; }
     let brand = null;
-    try { brand = await response.json(); } catch (_error) { /* malformed below */ }
+    try { brand = submission.payload; } catch (_error) { /* malformed below */ }
     if (!stillCurrent()) return;
     detail.saveController = null;
     if (detail.saveId !== saveId || !isCanonicalBrandDetail(brand, detail.brandId) || brand.revision !== expectedRevision
-      || brand.name !== name || JSON.stringify(canonicalJson(brand.brand_core)) !== JSON.stringify(canonicalJson(brandCore))) {
+      || brand.name !== name || JSON.stringify(canonicalJson(brand.brand_core)) !== JSON.stringify(canonicalJson(expectedState.brand_core))) {
       detail.status = "save-error"; el.brandWorkspaceEditFeedback.textContent = uiText("The server response could not be verified. Your draft is retained."); renderCanonicalBrandDetail(); return;
     }
     detail.brand = brand; detail.draft = null; detail.status = "ready"; detail.saved = true;
@@ -4068,9 +4070,15 @@ async function submitBrandDeletion(event) {
   setBrandDeletionPending(true);
   if (el.brandDeleteFeedback) el.brandDeleteFeedback.textContent = uiText("Deleting Brand…");
   try {
+    if (!brandDeletion.command) {
+      const currentResponse = await fetch(`/api/brands/${encodeURIComponent(brand.id)}`, { credentials: 'same-origin', cache: 'no-store' });
+      const currentBrand = await currentResponse.json();
+      if (!currentResponse.ok || currentBrand.name !== confirmationName || currentBrand.revision !== brand.revision || (currentBrand.logo_revision || 0) !== (brand.logo_revision || 0) || account !== state.user || generation !== state.workspaceCatalog.generation) throw new Error('CONTEXT_CHANGED');
+      brandDeletion.command = { confirmationName, contract: 'canonical-brand-write/v1', workspace_id: brandDeletion.workspaceId, expected_revision: String(currentBrand.revision), expected_logo_revision: currentBrand.logo_revision || 0, mutation_id: crypto.randomUUID() };
+    }
     const response = await fetch(`/api/brands/${encodeURIComponent(brand.id)}`, {
       method: "DELETE", headers: { Accept: "application/json", "Content-Type": "application/json" },
-      body: JSON.stringify({ confirmationName })
+      body: JSON.stringify(brandDeletion.command)
     });
     let result = null;
     try { result = await response.json(); } catch (_error) { /* bounded generic failure below */ }
@@ -4524,10 +4532,11 @@ async function submitCanonicalBrandCoreInitialization() {
   comparison.initializationMessage = "Initializing Canonical Brand Core…";
   renderBoardBrandCoreComparison();
   try {
-    const response = await fetch(`/api/brands/${encodeURIComponent(comparison.brandId)}`, {
-      method: "PUT", headers: { Accept: "application/json", "Content-Type": "application/json" },
-      body: JSON.stringify({ name: canonical.name, brand_core: submittedCore, revision: canonical.revision }), signal: controller.signal
-    });
+    const command = BrandWriteContract.command(canonical, { name: canonical.name, brand_core: submittedCore }, state.workspaceCatalog.activeWorkspaceId);
+    command.operation = 'initialize'; command.source = { board_id: comparison.boardId, snapshot: submittedCore };
+    const submission = await BrandWriteContract.submit({ fetchImpl: fetch, brandId: comparison.brandId, command,
+      pending: comparison.pendingWrite || (comparison.pendingWrite = {}), current: () => boardBrandCoreComparison === comparison && state.boardLoadGeneration === comparison.boardLoadGeneration && state.user?.email?.trim().toLowerCase() === comparison.userEmail });
+    const response = submission.response;
     const current = boardBrandCoreComparison;
     const stillCurrent = current === comparison && current.requestId === requestId && current.initializationId === initializationId
       && current.initializationController === controller && current.userEmail === (state.user?.email || "").trim().toLowerCase()
@@ -4551,7 +4560,7 @@ async function submitCanonicalBrandCoreInitialization() {
       current.initializationMessage = initializationHttpMessage(response.status);
       renderBoardBrandCoreComparison(); return;
     }
-    let brand = null; try { brand = await response.json(); } catch (_error) { /* verified below */ }
+    let brand = submission.payload;
     const confirmed = brand && brand.id === current.brandId && brand.name === canonical.name
       && brand.revision === canonical.revision + 1 && isPlainJsonObject(brand.brand_core)
       && JSON.stringify(canonicalJson(brand.brand_core)) === JSON.stringify(canonicalJson(submittedCore));

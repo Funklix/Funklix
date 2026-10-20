@@ -131,6 +131,7 @@ Specification, not executable SQL:
 | `actor_identity_id`, `operation_identity` | Exactly one verified human identity UUID or registered server operation identity; no browser-supplied attribution |
 | `operation_type`, `contract_version` | Validated nonempty operation class and version; baseline/create/edit/accept/clear/restore/logo/archive/delete/noop distinctions |
 | `mutation_id`, `request_digest` | Non-null UUID and SHA-256 normalized request digest for durable idempotency |
+| `source_event_id` | UUID NULL; normal writes use NULL. Same-Brand restore source enforced by `FOREIGN KEY (brand_id, source_event_id) REFERENCES brand_knowledge_history (brand_id, event_id) ON DELETE RESTRICT`; backed by `UNIQUE (brand_id, event_id)`. Required in Phase A, including before any Phase B endpoint exists. |
 | `before_state`, `after_state` | JSONB full `to_jsonb(OLD/NEW)` Brand row; NULL only for absent creation/deletion side |
 | `intent`, `provenance` | Bounded structured changed paths/actions, reviewed source event, safe source class and request correlation; no raw prompts, credentials, arbitrary URLs or browser session dumps |
 | `snapshot_format_version` | Explicit version; old snapshots remain readable after schema evolution |
@@ -141,7 +142,7 @@ Constraints: object-valued snapshots; at least one snapshot present; `brand_core
 
 Indexes: unique Brand/sequence supports descending revision browsing; unique idempotency key; `(workspace_id,recorded_at,event_id)` only if scoped operator paging requires it. Avoid GIN indexing private full Core. Do not declare UNIQUE(brand_id,result_revision): logo/noop/lifecycle events may share Core revision.
 
-No cascading Brand/Workspace/actor FK. UUID references are historical identity, not an authorization grant. Same-table restore-source reference uses RESTRICT and same-Brand composite key. Retain frozen ownership/Workspace context inside snapshots. Identity retirement cannot delete history.
+No cascading Brand/Workspace/actor FK. UUID references are historical identity, not an authorization grant. Same-table `source_event_id UUID NULL` restore-source reference uses RESTRICT and the same-Brand composite key. This resolves PR #801’s P2 finding in Phase A; it is not deferred. Retain frozen ownership/Workspace context inside snapshots. Identity retirement cannot delete history.
 
 Baseline: during approved cutover, insert sequence-0 snapshots of every existing row, mark actor as verified migration operation and record actual capture time/current revision. Do not invent earlier actors or imply historical recovery. New Brands create sequence-1 creation events (before_state absent). Baselines have before/after equal. Existing sequence defaults are compatible; no Core/default/approval rewrite.
 
