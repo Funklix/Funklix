@@ -3517,7 +3517,7 @@ async function renderBrandTeamSection(container, brand) {
             if (!response.ok || !validMember(data?.member) || data.member.email.trim().toLowerCase() !== memberEmail || data.member.role !== submittedRole) {
               select.value = authoritativeRole; row.dataset.pending = "false"; setControlsDisabled(row, false); update.disabled = true; cancel.hidden = true;
               rowStatus.textContent = response.ok ? "Role update failed: the server response was not authoritative." : "Role update failed. The previous role is retained.";
-              if ([401, 403, 404].includes(response.status)) { requestGeneration += 1; setControlsDisabled(row, true); await loadCanonicalBrandDetail(); return; }
+              if ([401, 403, 404].includes(response.status)) { requestGeneration += 1; setControlsDisabled(row, true); await loadCanonicalBrandDetail({ force: true }); return; }
               select.focus(); return;
             }
             renderMembers(members.map((entry) => entry.email.trim().toLowerCase() === memberEmail ? data.member : entry), listId);
@@ -3711,7 +3711,7 @@ function canonicalBrandDetailErrorStatus(status) {
   return "error";
 }
 
-async function loadCanonicalBrandDetail() {
+async function loadCanonicalBrandDetail({ force = false } = {}) {
   const userEmail = (state.user?.email || '').trim().toLowerCase();
   const workspace = state.workspaceCatalog.value?.workspaces.find(w => w.brands.some(b => b.id === canonicalBrandDetail.brandId));
   const selection = workspace?.brands.find(b => b.id === canonicalBrandDetail.brandId);
@@ -3719,16 +3719,21 @@ async function loadCanonicalBrandDetail() {
     || workspace.id !== state.workspaceCatalog.activeWorkspaceId || !el.brandWorkspaceDetail?.open) {
     closeCanonicalBrandDetail({ restoreFocus: false }); return;
   }
+  const account = state.user, selectedBrandId = state.session?.brandId;
   const generation = state.workspaceCatalog.generation;
   canonicalBrandDetail.controller?.abort();
-  const retainedConflictDraft = canonicalBrandDetail.status === "conflict" ? canonicalBrandDetail.draft : null;
+  const retainedConflictDraft = canonicalBrandDetail.draft;
   const requestId = canonicalBrandDetail.requestId + 1;
   const controller = new AbortController();
   canonicalBrandDetail = { ...canonicalBrandDetail, status: "loading", requestId, brandId: selection.id, userEmail, brand: null, controller };
   renderCanonicalBrandDetail();
   try {
+    // Explicit reloads supersede pending reads and settled data, including accepted saves.
+    // Ordinary Profile opens still share the authorized Home request.
+    if (force) canonicalBrandReader.retire();
     const brand = await canonicalBrandReader.read(selection.id);
-    if (canonicalBrandDetail.requestId !== requestId || !el.brandWorkspaceDetail.open
+    if (canonicalBrandDetail.requestId !== requestId || controller.signal.aborted || !el.brandWorkspaceDetail.open
+      || state.user !== account || state.session?.brandId !== selectedBrandId
       || state.workspaceCatalog.generation !== generation || state.workspaceCatalog.status !== 'ready'
       || state.workspaceCatalog.activeWorkspaceId !== workspace.id
       || canonicalBrandDetail.userEmail !== (state.user?.email || '').trim().toLowerCase()
@@ -3743,7 +3748,14 @@ async function loadCanonicalBrandDetail() {
     }
     renderCanonicalBrandDetail();
   } catch (error) {
-    if (error?.name === "AbortError" || canonicalBrandDetail.requestId !== requestId || controller.signal.aborted) return;
+    // A confirmed save can retire this GET without advancing the Profile request ID.
+    if (error?.name === "AbortError" || canonicalBrandDetail.requestId !== requestId || controller.signal.aborted
+      || canonicalBrandDetail.brand !== null
+      || !el.brandWorkspaceDetail.open || state.user !== account || state.session?.brandId !== selectedBrandId
+      || userEmail !== (state.user?.email || '').trim().toLowerCase()
+      || state.workspaceCatalog.generation !== generation || state.workspaceCatalog.status !== 'ready'
+      || state.workspaceCatalog.activeWorkspaceId !== workspace.id
+      || !state.workspaceCatalog.value?.workspaces.find(w => w.id === workspace.id)?.brands.some(b => b.id === selection.id)) return;
     canonicalBrandDetail.status = error.status === 422 ? 'malformed' : canonicalBrandDetailErrorStatus(error.status);
     if (error.status === 401) {
       state.user = null;
@@ -19283,11 +19295,11 @@ el.brandWorkspaceDetail?.addEventListener('keydown', event => {
   if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
   else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
 });
-el.brandWorkspaceDetailRetry?.addEventListener("click", () => { void loadCanonicalBrandDetail(); });
+el.brandWorkspaceDetailRetry?.addEventListener("click", () => { void loadCanonicalBrandDetail({ force: true }); });
 el.brandWorkspaceEditOpen?.addEventListener("click", beginCanonicalBrandEditing);
 el.brandWorkspaceEditForm?.addEventListener("submit", submitCanonicalBrandEditing);
 el.brandWorkspaceEditCancel?.addEventListener("click", cancelCanonicalBrandEditing);
-el.brandWorkspaceConflictReload?.addEventListener("click", () => { void loadCanonicalBrandDetail(); });
+el.brandWorkspaceConflictReload?.addEventListener("click", () => { void loadCanonicalBrandDetail({ force: true }); });
 el.brandWorkspaceDetail?.addEventListener("cancel", (event) => {
   event.preventDefault();
   closeCanonicalBrandDetail();

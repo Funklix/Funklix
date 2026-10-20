@@ -450,5 +450,7 @@ jobs:
         run: npm run check:bw36.22b1r1
       - name: Check BW-36.22B2 real Brand Avatar and contextual personality
         run: npm run check:bw36.22b2
+      - name: Check BW-36.22B2R1 canonical conflict reload recovery
+        run: npm run check:bw36.22b2r1
       - name: Check Knowledge Module browser globals
         run: node scripts/check-knowledge-module-browser-globals.js
