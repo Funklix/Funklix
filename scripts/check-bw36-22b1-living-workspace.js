@@ -63,17 +63,17 @@ const snapshot = p => p.evaluate(() => JSON.stringify({nodes:state.nodes, edges:
       assert.equal(await p.locator('.home-living [role=progressbar], .home-living progress').count(),0);
       await action(p,'living-board').focus(); await p.keyboard.press('Enter'); assert.equal(await p.evaluate(()=>state.activeView),'board'); await f.close();
     });
-    await check('placeholder slot is explicit, image/identity-free and static; speech bubble stays truthful across runtime changes', async () => {
+    await check('confirmed missing Avatar stays honest and static; contextual bubble stays truthful across runtime changes', async () => {
       const f = await fixture(), p = f.page; await ready(p);
-      const bubble = await p.locator('.home-avatar-bubble').innerText(); assert.equal(bubble,'Ready to explore your next idea?');
-      assert.equal(await p.locator('[data-avatar-state=placeholder]').count(),1);
-      assert((await p.locator('.home-avatar-slot').innerText()).includes('Visual placeholder'));
+      await p.locator('[data-avatar-state=ready]').waitFor();
+      const bubble = await p.locator('.home-avatar-message').innerText(); assert(bubble.includes('73 Learning proposals'));
+      assert((await p.locator('.home-avatar-slot').innerText()).includes('Bring your Brand to life.'));
       assert.equal(await p.locator('.home-avatar-stage img, .home-avatar-stage canvas, .home-avatar-stage svg').count(),0);
       assert.equal(await p.locator('.home-avatar-bubble').getAttribute('aria-live'),null);
       assert.equal(await p.locator('.home-avatar-art').getAttribute('aria-hidden'),'true');
       await p.evaluate(()=>{state.nodes[0].title='Changed';refreshDashboardIfVisible();});
-      assert.equal(await p.locator('.home-avatar-bubble').innerText(),bubble);
-      assert(await p.locator('.home-avatar-stage').evaluate(e=>[e,...e.querySelectorAll('*')].every(n=>getComputedStyle(n).animationName==='none')));
+      assert.equal(await p.locator('.home-avatar-message').innerText(),bubble);
+      assert(await p.evaluate(()=>{const e=document.querySelector('.home-avatar-stage');return [e,...e.querySelectorAll('*')].every(n=>getComputedStyle(n).animationName==='none');}));
       await f.close();
     });
     await check('selected Brand/current Board mismatch chooses connected continuation without relabeling Brain or mutating Canvas', async () => {
@@ -182,12 +182,12 @@ const snapshot = p => p.evaluate(() => JSON.stringify({nodes:state.nodes, edges:
       assert.equal(await action(p,'stage-brain').count(),0); assert.equal(await action(p,'quick-insights').getAttribute('aria-disabled'),'true');
       await f.close();
     });
-    await check('repeated render introduces zero backend reads, canonical/avatar requests, writes or Canvas changes', async () => {
-      const f = await fixture(), p=f.page; await ready(p); await p.locator('.home-living-continue time').waitFor(); const before=await snapshot(p);
+    await check('repeated render introduces no additional reads, writes or Canvas changes after the selected canonical read', async () => {
+      const f = await fixture(), p=f.page; await ready(p); await p.locator('.home-living-continue time').waitFor(); await p.locator('[data-avatar-state=ready]').waitFor(); const before=await snapshot(p);
       const requests=f.requests.filter(x=>!x.path.includes('/presence/'));
       for(let i=0;i<4;i++) await refresh(p);
       assert.deepEqual(f.requests.filter(x=>!x.path.includes('/presence/')),requests); assert.equal(await snapshot(p),before);
-      assert.equal(f.requests.filter(x=>/^\/api\/brands\/[^/]+$/.test(x.path)).length,0);
+      assert.equal(f.requests.filter(x=>/^\/api\/brands\/[^/]+$/.test(x.path)).length,1);
       assert.equal(f.requests.filter(x=>x.path==='/api/boards/'+D).length,1,'No hero Board hydration'); await f.close();
     });
     await check('Chromium Light reference matrix, Dark/system readability, geometry, keyboard, reduced motion and fixed-control clearance', async () => {
@@ -212,7 +212,7 @@ const snapshot = p => p.evaluate(() => JSON.stringify({nodes:state.nodes, edges:
         if(width>=1440){assert(g.stage.x>g.continue.right);assert(g.quick.bottom<=height+1,JSON.stringify(g));assert(g.slot.width>=250);assert(g.continue.bottom<height);}
         else if(width<=1024) assert(g.stage.y>=g.continue.bottom);
         assert.equal(await p.locator('.home-living h1').innerText(),language==='de'?'Willkommen zurück.':'Welcome back.');
-        assert.equal(await p.locator('.home-avatar-bubble').innerText(),language==='de'?'Bereit, deine nächste Idee zu entdecken?':'Ready to explore your next idea?');
+        assert((await p.locator('.home-avatar-message').innerText()).includes(language==='de'?'73 Learning-Vorschläge':'73 Learning proposals'));
         const contrast = await p.evaluate(()=>{
           const canvas=document.createElement('canvas'), ctx=canvas.getContext('2d');
           const luminance=color=>{ctx.clearRect(0,0,1,1);ctx.fillStyle=color;ctx.fillRect(0,0,1,1);const rgb=[...ctx.getImageData(0,0,1,1).data].slice(0,3).map(v=>{v/=255;return v<=.04045?v/12.92:((v+.055)/1.055)**2.4;});return rgb[0]*.2126+rgb[1]*.7152+rgb[2]*.0722;};
@@ -238,10 +238,16 @@ const snapshot = p => p.evaluate(() => JSON.stringify({nodes:state.nodes, edges:
         const control=action(p,'quick-insights'); await control.focus(); await refresh(p);
         assert.equal(await p.evaluate(()=>document.activeElement?.dataset.homeAction),'quick-insights');
         assert.equal(await control.evaluate(e=>getComputedStyle(e).outlineWidth),'3px');
-        for(const target of [control, home(p).locator('.home-brand-card button').last()]){
-          await target.focus(); await target.scrollIntoViewIfNeeded();
-          assert.equal(await target.evaluate(e=>{const a=e.getBoundingClientRect();return [...document.querySelectorAll('.sidebar,.sidebar > .workspace-context')].filter(x=>getComputedStyle(x).position==='fixed').some(x=>{const b=x.getBoundingClientRect();return a.right>b.left&&a.left<b.right&&a.bottom>b.top&&a.top<b.bottom;});}),false,'Fixed shell covers focus');
+        for(const selector of ['[data-home-action=quick-insights]', '.home-brand-card button']) {
+          const result = await p.evaluate(selector => {
+            const targets = [...document.querySelectorAll('#home-foundation ' + selector)], e = targets.at(-1);
+            e.focus(); e.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'instant' });
+            const a = e.getBoundingClientRect();
+            return { focused: document.activeElement === e, covered: [...document.querySelectorAll('.sidebar,.sidebar > .workspace-context')].filter(x=>getComputedStyle(x).position==='fixed').some(x=>{const b=x.getBoundingClientRect();return a.right>b.left&&a.left<b.right&&a.bottom>b.top&&a.top<b.bottom;}) };
+          }, selector);
+          assert.deepEqual(result, { focused: true, covered: false }, 'Fixed shell covers focus');
         }
+
         if(width<768)assert(await p.locator('#dashboard-view').evaluate(e=>{const d=e.getBoundingClientRect();return [...document.querySelectorAll('.sidebar,.sidebar > .workspace-context')].filter(x=>getComputedStyle(x).position==='fixed').every(x=>d.bottom<=x.getBoundingClientRect().top); }));
         const targets=await home(p).locator('button,select').evaluateAll(es=>es.filter(e=>e.getClientRects().length).map(e=>e.getBoundingClientRect().height));
         assert(targets.every(h=>h>=44)); geometry.push({width,height,theme,language,collapsed,file,...g});

@@ -1,0 +1,66 @@
+[
+  {
+    "index": 17,
+    "name": "Check BW-35.3R4 Auto-plan batch runtime",
+    "command": "npm run check:bw35.3r4",
+    "status": "PASS",
+    "exit_code": 0,
+    "seconds": 0.78
+  },
+  {
+    "index": 52,
+    "name": "Check AI Brain Board authorization with real access helpers (mocked OpenAI)",
+    "command": "node scripts/check-bw36-20r0-ai-brain-board-authorization.js",
+    "status": "PASS",
+    "exit_code": 0,
+    "seconds": 6.51
+  },
+  {
+    "index": 53,
+    "name": "Check real Canvas context and turn lifecycle",
+    "command": "node scripts/check-bw26-1-real-canvas-context-and-turn-lifecycle.js",
+    "status": "PASS",
+    "exit_code": 0,
+    "seconds": 1.05
+  },
+  {
+    "index": 55,
+    "name": "Check bounded AI Brain conversation memory",
+    "command": "node scripts/check-bw26-3-bounded-conversation-memory.js",
+    "status": "PASS",
+    "exit_code": 0,
+    "seconds": 0.94
+  },
+  {
+    "index": 56,
+    "name": "Check AI Brain follow-up reference resolution",
+    "command": "node scripts/check-bw26-4-reference-resolution.js",
+    "status": "PASS",
+    "exit_code": 0,
+    "seconds": 0.72
+  },
+  {
+    "index": 57,
+    "name": "Check AI Brain response-language adherence",
+    "command": "node scripts/check-bw26-5-response-language-adherence.js",
+    "status": "PASS",
+    "exit_code": 0,
+    "seconds": 1.39
+  },
+  {
+    "index": 59,
+    "name": "Check AI Brain Content-node proposal production boundary",
+    "command": "node scripts/check-bw26-6-1-node-proposal-production-failure.js",
+    "status": "PASS",
+    "exit_code": 0,
+    "seconds": 0.14
+  },
+  {
+    "index": 150,
+    "name": "Check approved Brand Learnings in Advice (disposable PostgreSQL, mocked OpenAI)",
+    "command": "node scripts/check-bw36-20-approved-learning-ai-brain.js",
+    "status": "PASS",
+    "exit_code": 0,
+    "seconds": 19.37
+  }
+]

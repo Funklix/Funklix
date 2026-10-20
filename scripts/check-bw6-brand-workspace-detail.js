@@ -44,10 +44,11 @@ assert.match(regular, /resolveRegularBrandProfile\(\)/, "regular entry must reso
 assert.match(regular, /canonicalBrandDetail\.brandId = entry\.brand\?\.id \|\| ''/, "regular entry must use the resolved Brand, not an unchecked ID");
 assert.match(regular, /entry\.kind === 'brand'[\s\S]*loadCanonicalBrandDetail\(\)/, "detail loading must follow a resolved Brand entry");
 assert.doesNotMatch(`${open}\n${regular}\n${resolve}`, /state\.brandCatalog|ephemeralBrandSwitcherSelection|localStorage|sessionStorage/, "regular entry authority must not depend on the legacy selector or browser storage");
-assert.match(load, /fetch\(`\/api\/brands\/\$\{encodeURIComponent\(selection\.id\)\}`/, "detail must reuse authenticated GET /api/brands/:id");
+assert.match(load, /canonicalBrandReader\.read\(selection\.id\)/, "detail must reuse the shared authenticated canonical GET");
+assert.match(fs.readFileSync(path.join(root, 'canonical-brand-reader.js'), 'utf8'), /credentials: 'same-origin'[\s\S]*cache: 'no-store'/, 'shared reader retains canonical request credentials and freshness');
 assert.doesNotMatch(load, /method:\s*["'](?:POST|PUT|PATCH|DELETE)["']|\/api\/boards|brandCore|canvas|autosave|localStorage|sessionStorage|location\.|history\./, "detail loading must perform no writes, Board work, synchronization, or navigation");
 assert.doesNotMatch(`${open}\n${close}\n${render}`, /fetch\([^)]*,\s*\{[^}]*method:|\/api\/boards|persistBrandSwitcherPreference|removeBrandSwitcherPreference|state\.brandCore|canvas|autosave/, "default detail actions must remain read-only and isolated");
-assert.match(load, /response\.status === 401/, "expired authentication must be handled");
+assert.match(load, /error\.status === 401/, "expired authentication must be handled");
 assert.match(app, /\[403, 404\]\.includes\(status\)/, "forbidden and missing Brands must be unavailable without disclosure");
 assert.match(load, /isCanonicalBrandDetail\(brand, selection\.id\)/, "authoritative response must be validated before rendering");
 assert.match(load, /canonicalBrandDetail\.requestId !== requestId/, "late and superseded responses must be rejected");
@@ -102,6 +103,16 @@ async function checkCurrentAuthority() {
       clearEphemeralBrandSwitcherSelection() {}, renderBrandCatalog() {}, renderAuthState() {},
       fetch(url, options) { result.calls.push({ url, options }); return Promise.resolve({ ok: true, status: 200, json: async () => brand }); }
     };
+    context.canonicalBrandReader = require('../canonical-brand-reader').create({
+      fetchImpl: (...args) => context.fetch(...args), validate: (value, id) => value === brand && id === brand.id,
+      context: id => {
+        const c = context.state.workspaceCatalog, account = context.state.user;
+        const w = c.value?.workspaces.find(w => w.id === c.activeWorkspaceId);
+        if (!account || c.status !== 'ready' || !w?.brands.some(b => b.id === id)) return null;
+        return { account, identity: account.email.trim().toLowerCase(), catalog: c.value, generation: c.generation,
+          workspaceId: w.id, selectedBrandId: id, brandId: id, revision: 1 };
+      }
+    });
     vm.createContext(context);
     vm.runInContext(load, context);
     return { context, result, workspace, brand, run: () => vm.runInContext('loadCanonicalBrandDetail()', context) };

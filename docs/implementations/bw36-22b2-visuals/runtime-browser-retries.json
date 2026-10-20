@@ -1,0 +1,18 @@
+[
+  {
+    "index": 184,
+    "name": "Check BW-36.21B2 Home Campaign Insights and AI Brain (Chromium, provider-free)",
+    "command": "npm run check:bw36.21b2",
+    "status": "PASS",
+    "exit_code": 0,
+    "seconds": 95.74
+  },
+  {
+    "index": 186,
+    "name": "Check BW-36.22B1 Living Workspace foundation (Chromium, provider-free)",
+    "command": "npm run check:bw36.22b1",
+    "status": "PASS",
+    "exit_code": 0,
+    "seconds": 63.69
+  }
+]

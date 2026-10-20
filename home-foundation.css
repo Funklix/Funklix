@@ -303,3 +303,17 @@
   #home-foundation .home-avatar-art { display: none; }
   #home-foundation .home-quick-action[aria-disabled="true"] { color: GrayText; }
 }
+
+/* B2: original accepted images stay whole; depth belongs to their setting. */
+#home-foundation .home-avatar-slot { min-height: 220px; height: auto; gap: 8px; }
+#home-foundation .home-avatar-slot:has(> img) { padding: 12px; border-radius: 32px; }
+#home-foundation .home-avatar-slot > img { display: block; flex: 1; min-height: 0; width: 100%; height: auto; max-height: 285px; object-fit: contain; border-radius: 0; }
+#home-foundation .home-avatar-slot > button { min-height: 44px; max-width: 100%; white-space: normal; }
+#home-foundation .home-avatar-placeholder { overflow-wrap: anywhere; }
+#home-foundation .home-avatar-message { margin: 0; overflow-wrap: anywhere; }
+#home-foundation .home-avatar-message-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 10px; }
+#home-foundation .home-avatar-message-controls button { min-height: 44px; padding: 6px 10px; font-size: .78rem; white-space: normal; }
+#home-foundation .home-avatar-message-controls .home-note { font-size: .75rem; }
+#home-foundation .home-avatar-message:focus-visible, #home-foundation .home-avatar-slot:focus-visible { outline: 2px solid var(--fk-focus, #7040ff); outline-offset: 4px; }
+#home-foundation .home-avatar-bubble { width: min(300px, 85%); padding: 14px 18px; font-size: .95rem; }
+#home-foundation .home-avatar-message-controls button { min-width: 44px; font-size: 1.2rem; }

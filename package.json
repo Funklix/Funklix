@@ -159,7 +159,8 @@
     "check:bw36.22b1": "node scripts/check-bw36-22b1-living-workspace.js",
     "check:bw36.22b1r1": "node scripts/check-bw36-22b1r1-current-continuation-name.js",
     "check:bw36.21b2": "node scripts/check-bw36-21b2-home-insights-brain.js",
-    "check:bw36.21b1": "node scripts/check-bw36-21b1-home-intelligence.js"
+    "check:bw36.21b1": "node scripts/check-bw36-21b1-home-intelligence.js",
+    "check:bw36.22b2": "node scripts/check-bw36-22b2-real-brand-avatar.js"
   },
   "devDependencies": {
     "@electric-sql/pglite": "0.3.15",

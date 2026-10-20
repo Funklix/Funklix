@@ -3206,6 +3206,20 @@ function isCanonicalBrandDetail(value, expectedId) {
     && typeof value.access.canEditCanonicalBrand === "boolean" && typeof value.access.canManageBrandMembers === "boolean";
 }
 
+// No Board snapshot or sidebar cache participates in canonical detail reads.
+const canonicalBrandReader = window.FunklixCanonicalBrandReader.create({
+  validate: isCanonicalBrandDetail,
+  context: brandId => {
+    const c = state.workspaceCatalog, account = state.user;
+    const identity = (account?.email || '').trim().toLowerCase();
+    const workspace = c.value?.workspaces.find(w => w.id === c.activeWorkspaceId);
+    const brand = workspace?.brands.find(b => b.id === brandId);
+    if (!identity || state.publicBoardToken || c.status !== 'ready' || c.identity !== identity || !brand) return null;
+    return { account, identity, catalog: c.value, generation: c.generation, workspaceId: workspace.id,
+      selectedBrandId: state.session.brandId, brandId, revision: brand.revision };
+  }
+});
+
 function canonicalJson(value) {
   if (Array.isArray(value)) return value.map(canonicalJson);
   if (value && typeof value === "object") return Object.fromEntries(Object.keys(value).sort().map((key) => [key, canonicalJson(value[key])]));
@@ -3323,6 +3337,8 @@ function reconcileConfirmedBrand(confirmed) {
     ...(b.logo_revision > projection.logo_revision ? { logo_url: b.logo_url, logo_revision: b.logo_revision } : {}) } : b);
   if (ephemeralBrandSwitcherSelection?.id === confirmed.id) ephemeralBrandSwitcherSelection = { ...ephemeralBrandSwitcherSelection, name: confirmed.name };
   el.brandWorkspaceDetailTitle.textContent = confirmed.name;
+  canonicalBrandReader.accept(confirmed);
+  window.dispatchEvent(new CustomEvent('funklix:canonical-brand-saved', { detail: { brandId: confirmed.id } }));
   // Run independent consumers even if one local renderer fails.
   let failed = false;
   for (const update of [() => projectDialogController?.reconcileBrand?.(confirmed.id, projection), renderWorkspaceSidebar, renderBoardBrandAssociation]) {
@@ -3711,29 +3727,7 @@ async function loadCanonicalBrandDetail() {
   canonicalBrandDetail = { ...canonicalBrandDetail, status: "loading", requestId, brandId: selection.id, userEmail, brand: null, controller };
   renderCanonicalBrandDetail();
   try {
-    const response = await fetch(`/api/brands/${encodeURIComponent(selection.id)}`, { headers: { Accept: "application/json" }, signal: controller.signal });
-    const stillCurrent = canonicalBrandDetail.requestId === requestId && canonicalBrandDetail.brandId === selection.id
-      && canonicalBrandDetail.userEmail === (state.user?.email || "").trim().toLowerCase()
-      && state.workspaceCatalog.generation === generation && state.workspaceCatalog.status === 'ready'
-      && state.workspaceCatalog.activeWorkspaceId === workspace.id
-      && state.workspaceCatalog.value?.workspaces.find(w => w.id === workspace.id)?.brands.some(b => b.id === selection.id) && el.brandWorkspaceDetail.open;
-    if (!stillCurrent) return;
-    if (!response.ok) {
-      canonicalBrandDetail.status = canonicalBrandDetailErrorStatus(response.status);
-      canonicalBrandDetail.controller = null;
-      if (response.status === 401) {
-        state.user = null;
-        state.brandCatalog = { status: "unauthenticated", entries: [], requestId: state.brandCatalog.requestId + 1, userEmail: "" };
-        clearEphemeralBrandSwitcherSelection();
-        renderBrandCatalog();
-        renderAuthState();
-        return;
-      }
-      renderCanonicalBrandDetail();
-      return;
-    }
-    let brand = null;
-    try { brand = await response.json(); } catch (_error) { /* handled as malformed */ }
+    const brand = await canonicalBrandReader.read(selection.id);
     if (canonicalBrandDetail.requestId !== requestId || !el.brandWorkspaceDetail.open
       || state.workspaceCatalog.generation !== generation || state.workspaceCatalog.status !== 'ready'
       || state.workspaceCatalog.activeWorkspaceId !== workspace.id
@@ -3749,8 +3743,13 @@ async function loadCanonicalBrandDetail() {
     }
     renderCanonicalBrandDetail();
   } catch (error) {
-    if (error?.name === "AbortError" || canonicalBrandDetail.requestId !== requestId) return;
-    canonicalBrandDetail.status = "error";
+    if (error?.name === "AbortError" || canonicalBrandDetail.requestId !== requestId || controller.signal.aborted) return;
+    canonicalBrandDetail.status = error.status === 422 ? 'malformed' : canonicalBrandDetailErrorStatus(error.status);
+    if (error.status === 401) {
+      state.user = null;
+      state.brandCatalog = { status: "unauthenticated", entries: [], requestId: state.brandCatalog.requestId + 1, userEmail: "" };
+      clearEphemeralBrandSwitcherSelection(); renderBrandCatalog(); renderAuthState(); return;
+    }
     canonicalBrandDetail.controller = null;
     renderCanonicalBrandDetail();
   }
@@ -3796,7 +3795,7 @@ function openRegularBrandProfile(target = null) {
   if (target && (!targetBrand || workspace.id !== state.workspaceCatalog.activeWorkspaceId || state.workspaceCatalog.status !== 'ready' || !state.user?.email || state.publicBoardToken)) return;
   const entry = targetBrand && !state.publicBoardToken ? { kind: 'brand', brand: targetBrand, workspace } : resolveRegularBrandProfile();
   if (!closeCanonicalBrandDetail({ restoreFocus: false, navigate: false, resume: () => openRegularBrandProfile(target) })) return;
-  canonicalBrandDetail.initialSection = target?.section === 'Brand Learnings' ? 'Brand Learnings' : null;
+  canonicalBrandDetail.initialSection = ['Brand Learnings', 'Brand Avatar'].includes(target?.section) ? target.section : null;
   brandProfilePage = { returnView: state.activeView === 'brand-profile' ? 'home' : state.activeView };
   canonicalBrandDetail.returnFocus = el.brandCoreButton;
   canonicalBrandDetail.userEmail = (state.user?.email || '').trim().toLowerCase();
@@ -4960,6 +4959,7 @@ async function loadSessionUser() {
 
 function renderWorkspaceSidebar() {
   if (!workspaceSidebarController || !window.FunklixWorkspaceSidebar) return;
+  canonicalBrandReader.current();
   const catalog = state.workspaceCatalog.value;
   const activeBoardId = state.currentBoardId || getBoardIdFromPath() || null;
   const model = workspaceSidebarController.render({
@@ -19017,6 +19017,7 @@ workspaceSidebarController = window.FunklixWorkspaceSidebar?.create({
 globalThis.FunklixWorkspaceSidebarController = workspaceSidebarController;
 homeFoundationController = window.FunklixHomeFoundation?.create({
   host: document.getElementById('home-foundation'), text: uiText,
+  brandReader: canonicalBrandReader, acceptedAvatar: window.FunklixBrandProfileSetup.acceptedAvatar,
   context: () => ({ ...brandBoardNavigationContext(), account: state.user, identity: state.workspaceCatalog.identity,
     catalog: state.workspaceCatalog.value, status: state.workspaceCatalog.status,
     generation: state.workspaceCatalog.generation, workspaceId: state.workspaceCatalog.activeWorkspaceId,

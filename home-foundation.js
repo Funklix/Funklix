@@ -102,9 +102,31 @@
       brand: m.workspace.brands.find(b => b.id === context.openBoard.brandId) || null };
   }
 
-  function create({ host, context, text: t = s => s, actions, fetchImpl = root.fetch.bind(root) }) {
+  // Deterministic evidence only. Board messages always name their Board, even
+  // when navigation is focused on a different Brand.
+  function contextualMessages(c, metadata, learning, learningStatus) {
+    const m = model(c, metadata), messages = [];
+    if (!m.workspace) return [{ key: 'neutral', text: 'Ready to explore your next idea?' }];
+    if (m.brand && learningStatus === 'ready' && learning?.canWrite && learning.proposed > 0)
+      messages.push({ key: 'learning:' + m.brand.id, text: '{brand}: {count} Learning proposals await your review.', values: { brand: m.brand.name, count: learning.proposed } });
+    const board = !c.loading && c.openBoard && m.workspace.boards.some(b => b.id === c.boardId) && c.openBoard;
+    if (board && c.campaign?.status === 'ready' && c.campaign.findings?.length)
+      messages.push({ key: 'finding:' + c.boardId + ':' + c.campaign.findings[0].code,
+        text: 'Board {board}: {finding}', values: { board: board.name, finding: c.campaign.findings[0].title } });
+    const responsibility = board && responsibilitySummary(c);
+    if (responsibility?.mine > 0)
+      messages.push({ key: 'responsibility:' + c.boardId, text: 'Board {board}: {count} incomplete responsibilities are assigned to you.', values: { board: board.name, count: responsibility.mine } });
+    const saved = heroContinuation(c, metadata);
+    if (saved) messages.push({ key: 'saved:' + saved.id, text: 'Your saved Board {board} is here when you are ready.', values: { board: saved.name } });
+    messages.push(m.brand ? { key: 'greeting:' + m.brand.id, text: 'Ready for your next idea with {brand}?', values: { brand: m.brand.name } }
+      : { key: 'neutral', text: 'Ready to explore your next idea?' });
+    return messages;
+  }
+
+  function create({ host, context, text: t = s => s, actions, brandReader, acceptedAvatar, fetchImpl = root.fetch.bind(root) }) {
     let scope = null, request = null, rows = [], status = 'idle', filter = 'all', disposed = false;
     let learningRequest = null, learning = null, learningStatus = 'idle', runtimeKey = '';
+    let avatar = null, avatarCanEdit = null, avatarStatus = 'idle', avatarRequest = null, imageFailure = '', messageKey = null;
     const doc = host.ownerDocument;
     const boardActionContexts = new WeakMap();
     const actionScopes = new WeakMap();
@@ -404,12 +426,49 @@
       art.append(node('span', 'home-avatar-orbit'), node('span', 'home-avatar-orbit home-avatar-orbit-back'),
         node('span', 'home-avatar-spark home-avatar-spark-one', '✦'), node('span', 'home-avatar-spark home-avatar-spark-two', '✧'),
         node('span', 'home-avatar-spark home-avatar-spark-three', '∿'));
-      const bubble = node('p', 'home-avatar-bubble', t('Ready to explore your next idea?'));
-      // B1 deliberately has no canonical detail read or logo-as-Avatar fallback.
-      // This square slot can later contain one accepted image, object-fit:contain.
-      const slot = node('div', 'home-avatar-slot'); slot.dataset.avatarState = 'placeholder';
-      const abstract = node('span', 'home-avatar-neutral'); abstract.setAttribute('aria-hidden', 'true'); abstract.append(node('span', '', '✦'));
-      slot.append(abstract, node('span', 'home-avatar-placeholder', t('Brand Avatar')), node('span', 'home-avatar-placeholder-note', t('Visual placeholder')));
+      const messages = contextualMessages(c, rows, learning, learningStatus);
+      const selected = messages.find(message => message.key === messageKey) || messages[0];
+      if (messageKey && selected.key !== messageKey) messageKey = null;
+      const bubble = node('div', 'home-avatar-bubble');
+      const message = node('p', 'home-avatar-message', t(selected.text).replace(/\{(\w+)\}/g,
+        (_, key) => key === 'finding' ? t(selected.values[key]) : String(selected.values?.[key] ?? '')));
+      message.id = 'home-avatar-message'; message.dataset.homeFocus = 'avatar-message'; message.tabIndex = -1; bubble.append(message);
+      if (messages.length > 1) {
+        const controls = node('div', 'home-avatar-message-controls');
+        const index = messages.indexOf(selected);
+        for (const [label, action] of [['Previous message', 'message-previous'], ['Next message', 'message-next']]) {
+          const control = button(label, action); control.setAttribute('aria-label', t(label)); control.textContent = action === 'message-next' ? '›' : '‹'; control.setAttribute('aria-controls', message.id); controls.append(control);
+        }
+        controls.append(node('span', 'home-note', t('Message {current} of {total}').replace('{current}', index + 1).replace('{total}', messages.length)));
+        bubble.append(controls);
+      }
+      const slot = node('div', 'home-avatar-slot');
+      slot.tabIndex = -1; slot.dataset.homeFocus = 'avatar-slot'; slot.setAttribute('role', 'group'); slot.setAttribute('aria-label', t('Brand Avatar'));
+      slot.setAttribute('aria-busy', String(avatarStatus === 'loading'));
+      slot.dataset.avatarState = avatarStatus;
+      if (avatarStatus === 'ready' && avatar?.imageUrl && imageFailure !== avatar.imageUrl) {
+        slot.dataset.avatarState = 'image-loading';
+        const image = node('img'); image.alt = t('Saved Brand Avatar for {brand}').replace('{brand}', m.brand.name);
+        image.decoding = 'async'; image.referrerPolicy = 'no-referrer';
+        const loading = node('span', 'home-avatar-placeholder-note', t('Loading Brand Avatar…'));
+        image.addEventListener('load', () => { if (slot.isConnected) { slot.dataset.avatarState = 'ready'; loading.remove(); } });
+        const captured = c, url = avatar.imageUrl;
+        image.addEventListener('error', () => {
+          if (slot.isConnected && sameScope(captured, context()) && avatar?.imageUrl === url) { imageFailure = url; draw(); }
+        });
+        image.src = url; slot.append(image, loading);
+      } else {
+        const abstract = node('span', 'home-avatar-neutral'); abstract.setAttribute('aria-hidden', 'true'); abstract.append(node('span', '', '✦'));
+        const missing = avatarStatus === 'ready' && !avatar;
+        const failed = ['error', 'denied'].includes(avatarStatus) || !!imageFailure;
+        const copy = missing ? 'Bring your Brand to life.' : failed ? 'Brand Avatar unavailable.'
+          : !m.brand ? 'Select a Brand to meet its Avatar.' : 'Loading Brand Avatar…';
+        slot.append(abstract, node('span', 'home-avatar-placeholder', t(copy)));
+        if (missing) {
+          slot.append(node('span', 'home-avatar-placeholder-note', t(avatarCanEdit ? 'Create, review and save your Avatar in Brand Profile.' : 'View Brand Profile. A Brand editor can save your Avatar.')));
+          slot.append(button('Open Brand Avatar', 'avatar-profile', m.brand.id));
+        } else if (failed && m.brand) slot.append(button('Retry Brand Avatar', 'avatar-retry', m.brand.id));
+      }
       const entry = node('div', 'home-avatar-entry');
       const available = !!(!c.loading && c.openBoard && m.workspace.boards.some(b => b.id === c.boardId));
       const boardBrand = available && m.workspace.brands.find(b => b.id === c.openBoard.brandId);
@@ -616,16 +675,45 @@
       if (focusedContext) contextNotice.querySelector(`[data-context-action="${focusedContext}"]`)?.focus({ preventScroll: true });
     }
     function invalidateLearnings() { learningRequest?.controller.abort(); learningRequest = null; learning = null; learningStatus = 'idle'; }
-    function invalidate() { request?.controller.abort(); request = null; rows = []; status = 'idle'; invalidateLearnings(); }
+    function invalidateAvatar() { avatarRequest = null; avatar = null; avatarCanEdit = null; avatarStatus = 'idle'; imageFailure = ''; }
+    function invalidate() { invalidateAvatar(); messageKey = null; request?.controller.abort(); request = null; rows = []; status = 'idle'; invalidateLearnings(); }
     function sync() {
       if (disposed) return;
       const next = context();
+      const entering = scope?.view !== 'home' && next.view === 'home';
       if (!scope || !sameScope(scope, next)) { invalidate(); filter = 'all'; expanded = false; scope = next; }
+      brandReader?.current();
       if (next.view !== 'home') { host.replaceChildren(); return; }
       draw();
       if (model(next).workspace && status === 'idle') void load();
       if (model(next).brand && learningStatus === 'idle') void loadLearnings();
+      if (model(next).brand && avatarStatus === 'idle') void loadAvatar(entering);
     }
+    async function loadAvatar(force = false) {
+      const current = context(), brand = model(current).brand;
+      if (!brand || current.view !== 'home' || disposed || avatarRequest) return;
+      const token = {}; avatarRequest = token; avatarStatus = 'loading'; avatar = null; imageFailure = ''; draw();
+      try {
+        const detail = await brandReader.read(brand.id, { force });
+        if (avatarRequest !== token || !sameScope(current, context())) return;
+        avatarCanEdit = detail.access.canEditCanonicalBrand === true;
+        const accepted = acceptedAvatar(detail);
+        avatar = accepted ? { imageUrl: accepted.imageUrl } : null; avatarStatus = 'ready';
+      } catch (error) {
+        if (avatarRequest !== token || !sameScope(current, context())) return;
+        avatar = null; avatarStatus = [401, 403, 404].includes(error.status) ? 'denied' : 'error';
+      } finally {
+        if (avatarRequest === token) { avatarRequest = null; if (sameScope(current, context())) draw(); }
+      }
+    }
+    function refreshAvatar(event) {
+      const c = context();
+      if (disposed || c.view !== 'home' || doc.visibilityState === 'hidden'
+        || event?.detail?.brandId && event.detail.brandId !== c.brandId) return;
+      invalidateAvatar(); void loadAvatar(event?.type !== 'funklix:canonical-brand-saved');
+    }
+    root.addEventListener?.('focus', refreshAvatar);
+    root.addEventListener?.('funklix:canonical-brand-saved', refreshAvatar);
     async function loadLearnings() {
       const current = context(), brand = model(current).brand;
       if (!brand || current.view !== 'home' || learningRequest || disposed) return;
@@ -658,7 +746,7 @@
     }
     root.addEventListener?.('focus', refreshLearnings);
     root.addEventListener?.('funklix:brand-learnings-changed', refreshLearnings);
-    const resume = () => { if (doc.visibilityState === 'visible') refreshLearnings(); };
+    const resume = () => { if (doc.visibilityState === 'visible') { refreshLearnings(); refreshAvatar(); } };
     doc.addEventListener('visibilitychange', resume);
     // Local presentation only: observe replacement/deletion, permission and dirty
     // runtime changes even when another existing editor does not emit a Home event.
@@ -702,7 +790,18 @@
       else if (action === 'retry') actions.retry();
       else if (m.ready && action === 'workspace-create') actions.workspaceCreate(target);
       else if (m.workspace) {
-        if (['insights', 'insight-node', 'brain'].includes(action)) {
+        if (action === 'message-next' || action === 'message-previous') {
+          const messages = contextualMessages(c, rows, learning, learningStatus);
+          const index = Math.max(0, messages.findIndex(message => message.key === messageKey));
+          messageKey = messages[(index + (action === 'message-next' ? 1 : messages.length - 1)) % messages.length].key;
+          draw();
+          const text = host.querySelector('#home-avatar-message');
+          if (text) { text.setAttribute('tabindex', '-1'); text.focus({ preventScroll: true }); }
+        }
+        else if (action === 'avatar-retry' && m.brand?.id === id) { invalidateAvatar(); void loadAvatar(true); host.querySelector('.home-avatar-slot')?.focus({ preventScroll: true }); }
+        else if (action === 'avatar-profile' && m.brand?.id === id && avatarStatus === 'ready' && !avatar)
+          actions.profile({ ...m.brand, workspace_id: m.workspace.id, section: 'Brand Avatar' });
+        else if (['insights', 'insight-node', 'brain'].includes(action)) {
           const captured = boardActionContexts.get(target);
           if (!captured || !sameScope(captured.scope, c) || c.loading || !c.openBoard
             || !m.workspace.boards.some(b => b.id === c.boardId)) { sync(); return; }
@@ -727,8 +826,8 @@
         else if (action === 'brands') actions.brands();
       }
     });
-    return Object.freeze({ sync, dispose() { disposed = true; invalidate(); host.removeEventListener('focusin', clearFocusedOverlay); root.removeEventListener('resize', updateClearance); root.clearInterval(runtimeTimer); root.removeEventListener?.('focus', refreshLearnings); root.removeEventListener?.('funklix:brand-learnings-changed', refreshLearnings); doc.removeEventListener('visibilitychange', resume); host.replaceChildren(); } });
+    return Object.freeze({ sync, dispose() { disposed = true; invalidate(); host.removeEventListener('focusin', clearFocusedOverlay); root.removeEventListener('resize', updateClearance); root.clearInterval(runtimeTimer); root.removeEventListener?.('focus', refreshAvatar); root.removeEventListener?.('funklix:canonical-brand-saved', refreshAvatar); root.removeEventListener?.('focus', refreshLearnings); root.removeEventListener?.('funklix:brand-learnings-changed', refreshLearnings); doc.removeEventListener('visibilitychange', resume); host.replaceChildren(); } });
   }
-  root.FunklixHomeFoundation = Object.freeze({ model, heroContinuation, sameScope, learningSummary, responsibilitySummary, renderContextNotice, create });
+  root.FunklixHomeFoundation = Object.freeze({ model, contextualMessages, heroContinuation, sameScope, learningSummary, responsibilitySummary, renderContextNotice, create });
   if (typeof module === 'object' && module.exports) module.exports = root.FunklixHomeFoundation;
 }(typeof globalThis !== 'undefined' ? globalThis : window));

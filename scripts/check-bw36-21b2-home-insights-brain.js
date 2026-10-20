@@ -128,6 +128,7 @@ async function main() {
     await check('Insights and AI Brain navigation use existing adapters, retain Canvas and focus; no automatic question or provider submission',async()=>{
       const f=await fixture(),p=f.page,before=await snapshot(p);
       await action(p,'insights').focus();await p.keyboard.press('Enter');await p.waitForFunction(()=>state.activeView==='insights');
+      await p.waitForFunction(()=>document.activeElement.closest('#insights-view')!==null);
       assert.equal(await p.evaluate(()=>document.activeElement.closest('#insights-view')!==null),true);
       assert.equal(await snapshot(p),before);
       await p.evaluate(()=>setActiveView('home'));await action(p,'brain').focus();await p.keyboard.press('Space');

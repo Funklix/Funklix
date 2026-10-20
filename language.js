@@ -12,6 +12,24 @@
   const STORAGE_KEY = "funklix.languagePreferences.v1";
   const LANGUAGE_NAMES = Object.freeze({ en: "English", de: "German", es: "Spanish" });
   const german = {
+    "View Brand Profile. A Brand editor can save your Avatar.": "Öffne das Brand Profile. Ein Brand-Editor kann deinen Avatar speichern.",
+    "{brand}: {count} Learning proposals await your review.": "{brand}: {count} Learning-Vorschläge warten auf deine Prüfung.",
+    "Board {board}: {finding}": "Board {board}: {finding}",
+    "Board {board}: {count} incomplete responsibilities are assigned to you.": "Board {board}: Dir sind {count} offene Verantwortlichkeiten zugewiesen.",
+    "Your saved Board {board} is here when you are ready.": "Dein gespeichertes Board {board} wartet auf deine nächste Idee.",
+    "Ready for your next idea with {brand}?": "Bereit für deine nächste Idee mit {brand}?",
+    "Previous message": "Vorherige Nachricht",
+    "Next message": "Nächste Nachricht",
+    "Message {current} of {total}": "Nachricht {current} von {total}",
+    "Saved Brand Avatar for {brand}": "Gespeicherter Brand-Avatar für {brand}",
+    "Loading Brand Avatar…": "Brand-Avatar wird geladen…",
+    "Bring your Brand to life.": "Erwecke deine Brand zum Leben.",
+    "Brand Avatar unavailable.": "Brand-Avatar nicht verfügbar.",
+    "Select a Brand to meet its Avatar.": "Wähle eine Brand, um ihren Avatar kennenzulernen.",
+    "Create, review and save your Avatar in Brand Profile.": "Erstelle, prüfe und speichere deinen Avatar im Brand Profile.",
+    "Open Brand Avatar": "Brand-Avatar öffnen",
+    "Retry Brand Avatar": "Brand-Avatar erneut laden",
+
     "Welcome back.": "Willkommen zurück.",
     "A little space for your next idea with {brand}.": "Platz für deine nächste Idee mit {brand}.",
     "A little space for your next idea.": "Platz für deine nächste Idee.",
