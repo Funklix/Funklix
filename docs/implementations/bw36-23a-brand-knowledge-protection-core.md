@@ -2,11 +2,13 @@
 
 Date: 20 October 2026, Europe/Berlin. Base: merged main `a1f72e68c1b9e236606db8f9f6f346db0c344be3`, including PR #801.
 
-**Reviewable implementation; production activation BLOCKED.** Full Runtime Boot Safety has failures. This is not a release-readiness or production-enforcement claim. No merge, deploy, production SQL/records, historical restore/backfill, paid AI or generation was performed. Existing tests were not weakened or modified. Historical incident investigation was reused, not repeated.
+**Reviewable implementation; production activation BLOCKED.** Full Runtime Boot Safety has failures. This is not a release-readiness or production-enforcement claim. No merge, deploy, production SQL/records, historical restore/backfill, paid AI or generation was performed. The initial implementation did not modify existing tests; the targeted CI recovery below updates BW-7 without weakening its meaningful assertions. Historical incident investigation was reused, not repeated.
 
 ## Changed files
 
 - `docs/implementations/bw36-23a-runtime-boot-safety.json`
+- `docs/implementations/bw36-23a-explicit-editing-ci-recovery.json`
+- `scripts/check-bw7-canonical-brand-editing.js`
 - `.github/workflows/runtime-boot-safety.yml`
 - `api/_boards-storage.js`
 - `api/_brand-creation.js`
@@ -122,3 +124,78 @@ Failed starting-workflow blocks:
 ## Deferred Phase B
 
 History listing/comparison/restore UI and endpoints, selected-field recovery, operator entitlement and isolated backup recovery drills. No historical Brand reconstruction, Board promotion, Avatar regeneration, new storage provider, unrelated Home redesign or automatic repair is included. No Codex approval or CI success is implied by opening this PR.
+
+
+## CI recovery — explicit Canonical Brand editing (PR #802)
+
+### Evidence and precise cause
+
+Retrieved the **complete decoded GitHub Actions job log**, 59,170 characters, for [Runtime Boot Safety run 39458594020, job 118751820105](https://github.com/Funklix/Funklix/actions/runs/39458594020/job/118751820105), reviewed commit `6989659be6abb107727d8f8351560b6200117ebe`. The failing step ran `node scripts/check-bw7-canonical-brand-editing.js`. Log lines 579–580 identify **line 36**, `assert.match(save, /method: "PUT"/, "save reuses PUT")`; line 657 prints the exact expected regex. All later GitHub workflow checks were skipped after that failure; they were not successful checks.
+
+The saved complete decoded log is retained locally at `work/bw36-23a-ci-recovery/github-job-118751820105.log`, SHA-256 `091e98eb0ebd4274fac0e59ab701dc2d8f585feb1f631feb26c40ec137b71a78`. This is the saved decoded-text artifact, not a hash of GitHub's compressed transport.
+
+Main `a1f72e68c1b9e236606db8f9f6f346db0c344be3` and the PR originally contained the **byte-identical BW-7 test**, SHA-256 `9a64383dee595da724e63f78f793d57f9a05b47b1f2d2ba11af311cdf03b4c9e`. The main test passes against main's actual app/HTML/workflow files in an isolated local source fixture. Main sent a legacy full document directly from `submitCanonicalBrandEditing`; the PR builds an `advanced_edit` field command and delegates transport to the production shared module. Thus the literal `method: "PUT"` moved out of the function inspected by the old test. No endpoint/method replacement was needed to fix this failure.
+
+The original invariant remains: only an explicit, authorized Canonical Brand edit reaches `PUT /api/brands/:id`; it targets the captured Brand/revision, verifies persistence and preserves drafts on failure/conflict, without writing Board/Canvas state or forging ownership. A test of a literal's location is insufficient after delegation.
+
+### Verified current invocation and security boundary
+
+1. `beginCanonicalBrandEditing` requires `canEditCanonicalBrand`; submission binds authenticated account email, an authorized Workspace catalog entry, canonical identity, open dialog, navigation generation and captured revision.
+2. The production submission invokes `BrandWriteContract.command(..., workspaceId, 'advanced_edit')`, derives the expected preserved result with `apply`, and calls the actual `BrandWriteContract.submit` helper.
+3. That helper sends **PUT `/api/brands/${brandId}`**, with `canonical-brand-write/v1`, string `expected_revision`, Workspace context, UUID mutation ID, typed operation and exact path/action/existence/old-value intent. It does not supply ownership/actor/Board fields. Destructive changes use the authenticated preview, concrete confirmation and bound review header before the same PUT; cancellation sends no mutation.
+4. The route authenticates the signed server session and calls the protected backend service. The service verifies the contract/review token and uses one checked-out client and transaction. PostgreSQL locks and rechecks active identity, canonical Brand membership/Workspace and exact revision, rejects unreviewed destructive operations and records full before/after history through the protected trigger. Unauthorized, stale, malformed and history-failed writes cannot commit canonical-only state. The real PostgreSQL suite separately verifies those guarantees; client transport fixtures are not substituted for engine evidence.
+5. The editor verifies the returned Brand identity, revision, name and preserved complete Core against its computed expected result before marking saved or reconciling projections. The shared helper's response body is consumed exactly once. Late responses cannot project into a replaced account/Workspace/generation.
+
+### Targeted change and retained requirements
+
+Only the four assertions coupled to inline legacy transport were replaced. They now require the exact command construction, actual protected submission, preservation-aware expected state, the helper's canonical PUT route and serialized command. All other original meaningful checks remain, including explicit editing, authorization gates, duplicate-submit guard, verified identity/revision/Core, 409 conflict, error/draft retention, reload behavior, stale-response invalidation and Board/Canvas isolation.
+
+The **existing BW-7 test** additionally loads the actual shared browser module plus the production editor/validator functions in a disposable VM. Its **25 behavioral groups** check ordinary save through the real call chain, exact envelope/path/old-value intent, no ownership/actor/Board injection, unknown and accepted DNA/Avatar preservation, no-op revision, rejected identity/revision/name/Core responses, 409/401/403/404/422/428/503 failures, viewer denial, reviewed clear, cancelled review, network failure and retained pending command, pre-submission scope rejection and late-response isolation. The transport/DOM are local substitutes; they do not establish SQL authorization or atomicity on their own.
+
+No application runtime, server write function, schema, history guarantee, Board/Canvas persistence, generation behavior or production configuration was changed for this targeted recovery. No test was removed/skipped, legacy payload restored or bypass added.
+
+### Recovery validation
+
+Targeted changed files: `scripts/check-bw7-canonical-brand-editing.js`, this existing implementation report, and `docs/implementations/bw36-23a-explicit-editing-ci-recovery.json` (reproducible command/exit-code evidence).
+
+- Corrected BW-7 regression: **PASS**, every retained source invariant plus **25/25** final behavioral groups. The final explicit rerun includes the strict envelope and duplicate-submit checks added after the complete workflow started.
+- BW-36.23A contract/controllers: **15/15 PASS**; provider-free Chromium: **3/3 PASS**.
+- Real PostgreSQL **17.6: 43/43 PASS**, independently in the focused run and again in the complete workflow. Restricted actual LOGIN, RLS fixture tables, independent connections, exact revisions, reviewed destructive writes, authorization revocation, history insertion failure and transaction rollback are exercised. Rejected writes leave both canonical state and history unchanged.
+- Existing domain import (`check-bw26-6-3-large-brand-core-website-import.js`), DNA generation preflight and Founder Story/DNA context checks: **PASS**. The protection suites also exercise accepted DNA and reviewed Avatar replacement while preserving unknown/unrelated knowledge.
+- Existing Profile/lifecycle (`check:bw36.13r4`, `check:bw36.13r5`), real Brand Avatar (`check:bw36.22b2`) and conflict reload (`check:bw36.22b2r1`) suites: **FAIL**. The Profile fixture's first website-save assertion gets `0 !== 1`; the lifecycle fixture fails at its website acceptance/save boundary; the Avatar suite reports an unconfirmed save; the conflict reload browser suite times out. These failures predate this targeted correction and remain blockers. Their checks were not removed, bypassed or changed.
+- Complete current Runtime Boot Safety: **195/195 run blocks attempted, 176 PASS, 19 FAIL**, including two local setup substitutions (installed declared dependencies and system Chromium). Validation-only count is **174 PASS, 19 FAIL** across 193 validation blocks. No full-workflow pass is claimed. Later blocks ran locally even after failures, so these counts are more complete than GitHub's fail-fast job. The corrected explicit-editor block and all three new protection blocks passed.
+- Changed JavaScript syntax and `git diff --check`: **PASS**.
+
+[Exact recovery commands, exit codes, durations and failure summaries](bw36-23a-explicit-editing-ci-recovery.json). Remaining complete-workflow failures:
+
+| Check | Exit |
+| --- | --- |
+| Check explicit Canonical Brand Core initialization | 1 |
+| Check Canonical Brand foundation | 1 |
+| Check Canonical Brand team roles | 1 |
+| Check inline Brand member role management | 1 |
+| Check Workspace Brand deletion and selector theme | 1 |
+| Check BW-33.5.1 publishing destinations RLS delta | 1 |
+| Check BW-36.13R3 authoritative project creation | 1 |
+| Check BW-36.13R3R1 Workspace catalog and project launch repair | 1 |
+| Guided Brand Profile setup regression | 1 |
+| Check BW-36.21A-R2.1 safe Workspace switching (Chromium) | 1 |
+| Check Brand Profile entry and Workspace actions in Chromium | 1 |
+| Check BW-36.13R5 Brand lifecycle stability | 1 |
+| Check Brand workspace regression recovery | 1 |
+| Check durable Brand logos and readiness | 1 |
+| Check production Brand logo persistence | 1 |
+| Check Brand Profile decisions and deletion UX | 1 |
+| Check BW-36.12 Brand logo acquisition and projection | 1 |
+| Check BW-36.22B2 real Brand Avatar and contextual personality | 1 |
+| Check BW-36.22B2R1 canonical conflict reload recovery | 1 |
+
+
+### Codex review and unchanged production gates
+
+The Codex review of `6989659be6` completed with two unresolved findings:
+
+- [P1: update the Project creation MemoryDb fixture for protected creation](https://github.com/Funklix/Funklix/pull/802#discussion_r4327558085). This concerns a different required regression, not BW-7's inline-PUT assertion.
+- [P2: validate logo retries against the preserved request ID and retain pending state until validation](https://github.com/Funklix/Funklix/pull/802#discussion_r4327558100). This is a separate logo replay defect; this targeted explicit-editor test correction does not resolve it.
+
+These findings are reported as unresolved, not marked fixed or approved. Remaining full-workflow failures and the existing production gates (restricted runtime-role/subsystem compatibility, schema/grant/external-writer inventory, review-key provisioning, verified independent database and asset backups/restore, SQL/initialization review and separately approved cutover) still block activation. No merge, deployment or production SQL/data operation was performed.
