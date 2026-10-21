@@ -50,6 +50,7 @@ async function check(name,fn){await fn();groups++;console.log('PASS '+name);}
       }
     });
     await check('exact migration rerun creates no extra baseline',async()=>{await operator.client.query(migration);assert.equal((await root.query('SELECT count(*)::int n FROM brand_knowledge_history')).rows[0].n,2);});
+    await check('complete original companion verifier passes through SET-only operator',()=>operator.verifyCore());
     await operator.noCreate();await operator.preserveCreate();
     const runtime=async()=>{const loginUrl=new URL(testUrl);loginUrl.username=login;loginUrl.password=loginPassword;const c=new Client({connectionString:loginUrl.href});await c.connect();clients.push(c);return c;};
     const a=await runtime(), b=await runtime();

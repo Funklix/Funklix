@@ -36,14 +36,15 @@ let groups=0;async function check(name,fn){await fn();console.log('PASS '+name);
   await root.query(read('migrations/20260914_bw33_5_1_social_publishing_destinations_rls.sql'));
   const denies=(await root.query("SELECT tablename,policyname,qual,with_check FROM pg_policies WHERE roles && ARRAY['anon','authenticated']::name[] ORDER BY tablename,policyname")).rows;
   operator=await require('./fixtures/bw36-23-migration-operator')(root,local.href,core,check);
-  await operator.client.query(core);await operator.noCreate();await operator.preserveCreate();
+  await check('complete original migration and companion verifier through SET-only operator',async()=>{await operator.client.query(core);await operator.verifyCore();});await operator.noCreate();await operator.preserveCreate();
   await check('late R3 failure rolls back schema function grants and policies',async()=>{
     const before=await operator.snapshot();
     await assert.rejects(()=>operator.client.query(sql.replace(/COMMIT;\s*$/,()=>"DO $$ BEGIN RAISE EXCEPTION 'HOTFIX_R3_FAILURE'; END $$; COMMIT;")),/HOTFIX_R3_FAILURE/);
     await operator.client.query('ROLLBACK');assert.deepEqual(await operator.snapshot(),before);await operator.noCreate();
   });
   await check('existing migration chain + protected Core + additive runtime install',()=>operator.client.query(sql));
-  await check('idempotent runtime install and private protection fingerprint remain compatible',async()=>{await operator.client.query(sql);await operator.client.query(core);await operator.noCreate();await root.query(verify);assert.equal((await root.query('SELECT brand_knowledge_private.install_fingerprint()=obj_description(\'brand_knowledge_private\'::regnamespace) ok')).rows[0].ok,true);});
+  await check('complete R3 companion verifier and original verifier through SET-only operator',async()=>{await operator.client.query(verify);await operator.verifyCore();});
+  await check('idempotent runtime install and private protection fingerprint remain compatible',async()=>{await operator.client.query(sql);await operator.client.query(core);await operator.noCreate();await root.query(verify);await operator.verifyCore();});
   await check('existing anon/authenticated deny policies remain identical',async()=>assert.deepEqual((await root.query("SELECT tablename,policyname,qual,with_check FROM pg_policies WHERE roles && ARRAY['anon','authenticated']::name[] ORDER BY tablename,policyname")).rows,denies));
   local.username='tendra_app_runtime';local.password=password;
   db=new Pool({connectionString:local.href,max:5});other=new Client({connectionString:local.href});await other.connect();
@@ -145,7 +146,7 @@ let groups=0;async function check(name,fn){await fn();console.log('PASS '+name);
     // Local postgres owns legacy tables. Membership models their owner privileges,
     // but PostgreSQL does not inherit the superuser attribute through membership.
     await admin.query('GRANT postgres TO '+operator+' WITH INHERIT TRUE, SET FALSE, ADMIN FALSE');
-    await admin.query('GRANT brand_knowledge_owner TO '+operator+' WITH INHERIT TRUE, SET TRUE, ADMIN FALSE');
+    await admin.query('GRANT brand_knowledge_owner TO '+operator+' WITH INHERIT FALSE, SET TRUE, ADMIN FALSE');
     await op.connect();assert.equal((await op.query('SELECT rolsuper FROM pg_roles WHERE rolname=current_user')).rows[0].rolsuper,false);
     await op.query(sql);await op.query(verify);
    } finally {await op.end();await admin.query('DROP ROLE '+operator);}

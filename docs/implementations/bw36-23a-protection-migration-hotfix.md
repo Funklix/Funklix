@@ -1,5 +1,10 @@
 # BW-36.23A protection migration ownership hotfix
 
+Historical PR #804 evidence. Its operator fixture inherited owner privileges; that
+masked the subsequent table-ownership failure for SET-only operators. See
+[bw36-23a-migration-ownership-order.md](bw36-23a-migration-ownership-order.md) for
+the superseding ordering fix and stricter complete-chain validation.
+
 Base: main at 8ccc919, including merged #802 and #803. No production connection,
 SQL execution, deployment or merge is part of this change.
 
