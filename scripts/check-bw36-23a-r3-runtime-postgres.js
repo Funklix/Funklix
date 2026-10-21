@@ -15,7 +15,7 @@ let groups=0;async function check(name,fn){await fn();console.log('PASS '+name);
  const dbname='bw3623r3_'+randomBytes(8).toString('hex');await admin.query('CREATE DATABASE '+dbname);
  const local=new URL(url);local.pathname='/'+dbname;const root=new Client({connectionString:local.href});await root.connect();
  const roles=['brand_knowledge_owner','brand_knowledge_runtime','tendra_app_runtime','anon','authenticated','service_role'];
- let db,other;const clients=[];
+ let db,other,operator;const clients=[];
  try{
   // Dedicated local cluster prerequisite; never alter an existing production login.
   for(const role of roles)if(!(await admin.query('SELECT FROM pg_roles WHERE rolname=$1',[role])).rowCount)await admin.query('CREATE ROLE '+role+' NOLOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION');
@@ -35,9 +35,15 @@ let groups=0;async function check(name,fn){await fn();console.log('PASS '+name);
   await root.query(read('migrations/20260911_bw33_5_supabase_rls_hardening.sql'));
   await root.query(read('migrations/20260914_bw33_5_1_social_publishing_destinations_rls.sql'));
   const denies=(await root.query("SELECT tablename,policyname,qual,with_check FROM pg_policies WHERE roles && ARRAY['anon','authenticated']::name[] ORDER BY tablename,policyname")).rows;
-  await root.query(core);
-  await check('existing migration chain + protected Core + additive runtime install',()=>root.query(sql));
-  await check('idempotent runtime install and private protection fingerprint remain compatible',async()=>{await root.query(sql);await root.query(core);await root.query(verify);assert.equal((await root.query('SELECT brand_knowledge_private.install_fingerprint()=obj_description(\'brand_knowledge_private\'::regnamespace) ok')).rows[0].ok,true);});
+  operator=await require('./fixtures/bw36-23-migration-operator')(root,local.href,core,check);
+  await operator.client.query(core);await operator.noCreate();await operator.preserveCreate();
+  await check('late R3 failure rolls back schema function grants and policies',async()=>{
+    const before=await operator.snapshot();
+    await assert.rejects(()=>operator.client.query(sql.replace(/COMMIT;\s*$/,()=>"DO $$ BEGIN RAISE EXCEPTION 'HOTFIX_R3_FAILURE'; END $$; COMMIT;")),/HOTFIX_R3_FAILURE/);
+    await operator.client.query('ROLLBACK');assert.deepEqual(await operator.snapshot(),before);await operator.noCreate();
+  });
+  await check('existing migration chain + protected Core + additive runtime install',()=>operator.client.query(sql));
+  await check('idempotent runtime install and private protection fingerprint remain compatible',async()=>{await operator.client.query(sql);await operator.client.query(core);await operator.noCreate();await root.query(verify);assert.equal((await root.query('SELECT brand_knowledge_private.install_fingerprint()=obj_description(\'brand_knowledge_private\'::regnamespace) ok')).rows[0].ok,true);});
   await check('existing anon/authenticated deny policies remain identical',async()=>assert.deepEqual((await root.query("SELECT tablename,policyname,qual,with_check FROM pg_policies WHERE roles && ARRAY['anon','authenticated']::name[] ORDER BY tablename,policyname")).rows,denies));
   local.username='tendra_app_runtime';local.password=password;
   db=new Pool({connectionString:local.href,max:5});other=new Client({connectionString:local.href});await other.connect();
@@ -163,7 +169,7 @@ let groups=0;async function check(name,fn){await fn();console.log('PASS '+name);
  }finally{
   for(const c of clients)await c.end();if(other)await other.end();if(db)await db.end();
   const storage=require.cache[require.resolve('../api/_boards-storage')];if(storage)await storage.exports.pool.end();
-  await root.end();
+  if(operator)await operator.close();await root.end();
   // Pool releases that handled expected permission errors may still be finishing
   // their socket close. Wait for actual backend shutdown; never FORCE-kill them.
   let remaining=0;
@@ -172,6 +178,6 @@ let groups=0;async function check(name,fn){await fn();console.log('PASS '+name);
    if(!remaining)break;await new Promise(resolve=>setTimeout(resolve,20));
   }
   assert.equal(remaining,0,'Fixture connections must close before database cleanup');
-  await admin.query('DROP DATABASE '+dbname);await admin.end();
+  await admin.query('DROP DATABASE '+dbname);if(operator)await operator.drop(admin);await admin.end();
  }
 })().catch(e=>{console.error(e);process.exitCode=1;});

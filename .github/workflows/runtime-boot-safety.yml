@@ -8,10 +8,14 @@ on:
 
 jobs:
   runtime-boot-safety:
+    strategy:
+      fail-fast: false
+      matrix:
+        postgres: ["17.6", "18.4"]
     runs-on: ubuntu-latest
     services:
       brand-knowledge-postgres:
-        image: postgres:17
+        image: postgres:${{ matrix.postgres }}
         env:
           POSTGRES_PASSWORD: disposable-bw36-23-fixture
         ports:
