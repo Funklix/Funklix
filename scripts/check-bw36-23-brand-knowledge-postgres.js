@@ -22,6 +22,7 @@ async function check(name,fn){await fn();groups++;console.log('PASS '+name);}
   const root=new Client({connectionString:testUrl.href});await root.connect();
   const clients=[]; const loginPassword=randomUUID(); const login='bw3623_login_'+randomUUID().replaceAll('-','');
   await admin.query('CREATE ROLE '+login+" LOGIN INHERIT NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE PASSWORD '"+loginPassword+"'");
+  let operator;
   try {
     for(const role of ['brand_knowledge_owner','brand_knowledge_runtime','anon','authenticated','service_role']) {
       if(!(await admin.query('SELECT 1 FROM pg_roles WHERE rolname=$1',[role])).rowCount) await admin.query('CREATE ROLE '+role+' NOLOGIN NOSUPERUSER NOBYPASSRLS');
@@ -40,14 +41,16 @@ async function check(name,fn){await fn();groups++;console.log('PASS '+name);}
     await root.query('INSERT INTO brands(id,workspace_id,owner_email,name,brand_core) VALUES($1,$2,$3,\'Fixture\',$4),($5,$2,\'other@example.test\',\'Other\',\'{}\')',[B,W,email,initial,B2]);
     await root.query('ALTER TABLE brands ENABLE ROW LEVEL SECURITY;ALTER TABLE brand_members ENABLE ROW LEVEL SECURITY;ALTER TABLE app_identities ENABLE ROW LEVEL SECURITY;ALTER TABLE workspaces ENABLE ROW LEVEL SECURITY;ALTER TABLE workspace_memberships ENABLE ROW LEVEL SECURITY;ALTER TABLE boards ENABLE ROW LEVEL SECURITY');
     const before=(await root.query('SELECT to_jsonb(b) AS row FROM brands b WHERE id=$1',[B])).rows[0].row;
-    await check('migration and exact baseline preserve all existing values',async()=>{await root.query(migration);const after=(await root.query('SELECT to_jsonb(b) AS row FROM brands b WHERE id=$1',[B])).rows[0].row;assert.deepEqual(after,{...before,knowledge_event_seq:0});const h=(await root.query('SELECT * FROM brand_knowledge_history WHERE brand_id=$1',[B])).rows[0];assert.deepEqual(h.before_state,h.after_state);assert.equal(h.operation_type,'baseline');});
+    operator=await require('./fixtures/bw36-23-migration-operator')(root,testUrl.href,migration,check);
+    await check('migration and exact baseline preserve all existing values',async()=>{await operator.client.query(migration);const after=(await root.query('SELECT to_jsonb(b) AS row FROM brands b WHERE id=$1',[B])).rows[0].row;assert.deepEqual(after,{...before,knowledge_event_seq:0});const h=(await root.query('SELECT * FROM brand_knowledge_history WHERE brand_id=$1',[B])).rows[0];assert.deepEqual(h.before_state,h.after_state);assert.equal(h.operation_type,'baseline');});
     await check('original membership uniqueness normalization roles foreign key and required columns survive migration',async()=>{
       await root.query("INSERT INTO brand_members(brand_id,email,role) VALUES($1,'unique@example.test','viewer')",[B2]);
       for(const [id,member,role,code] of [[B2,'unique@example.test','editor','23505'],[B2,'UPPER@example.test','viewer','23514'],[B2,'owner-role@example.test','owner','23514'],[randomUUID(),'foreign@example.test','viewer','23503'],[B2,null,'viewer','23502']]){
         await assert.rejects(()=>root.query('INSERT INTO brand_members(brand_id,email,role) VALUES($1,$2,$3)',[id,member,role]),e=>e.code===code);
       }
     });
-    await check('exact migration rerun creates no extra baseline',async()=>{await root.query(migration);assert.equal((await root.query('SELECT count(*)::int n FROM brand_knowledge_history')).rows[0].n,2);});
+    await check('exact migration rerun creates no extra baseline',async()=>{await operator.client.query(migration);assert.equal((await root.query('SELECT count(*)::int n FROM brand_knowledge_history')).rows[0].n,2);});
+    await operator.noCreate();await operator.preserveCreate();
     const runtime=async()=>{const loginUrl=new URL(testUrl);loginUrl.username=login;loginUrl.password=loginPassword;const c=new Client({connectionString:loginUrl.href});await c.connect();clients.push(c);return c;};
     const a=await runtime(), b=await runtime();
     const row=async()=> (await root.query('SELECT to_jsonb(b) AS row FROM brands b WHERE id=$1',[B])).rows[0].row;
@@ -238,5 +241,5 @@ async function check(name,fn){await fn();groups++;console.log('PASS '+name);}
     });
     await check('source_event_id null for ordinary events; no event gaps or history-only changes',async()=>{assert.equal((await root.query('SELECT count(*)::int n FROM brand_knowledge_history WHERE source_event_id IS NOT NULL')).rows[0].n,0);const state=await row(),events=(await root.query('SELECT event_seq,after_state FROM brand_knowledge_history WHERE brand_id=$1 ORDER BY event_seq',[B])).rows;events.forEach((e,i)=>assert.equal(Number(e.event_seq),i));assert.deepEqual(events.at(-1).after_state,state);});
     console.log(groups+' real PostgreSQL groups passed (restricted roles, independent connections; disposable fixtures only).');
-  } finally {for(const c of clients)await c.end();await root.end();await admin.query('DROP DATABASE '+database+' WITH (FORCE)');await admin.query('DROP ROLE '+login);await admin.end();}
+  } finally {for(const c of clients)await c.end();if(operator)await operator.close();await root.end();await admin.query('DROP DATABASE '+database+' WITH (FORCE)');await admin.query('DROP ROLE '+login);if(operator)await operator.drop(admin);await admin.end();}
 })().catch(e=>{console.error(e);process.exitCode=1;});

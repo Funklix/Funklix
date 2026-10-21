@@ -89,7 +89,15 @@ CREATE TABLE IF NOT EXISTS public.brand_knowledge_history (
   )
 );
 COMMENT ON TABLE public.brand_knowledge_history IS 'bw36-23a/v1; snapshots=1; same-brand-source=1';
-ALTER TABLE public.brand_knowledge_history OWNER TO brand_knowledge_owner;
+-- PostgreSQL checks CREATE on the destination schema even for a NOLOGIN owner.
+-- Borrow it only for this transfer; preserve existing direct/inherited privileges.
+DO $history_owner$
+DECLARE temporary_create boolean := NOT has_schema_privilege('brand_knowledge_owner','public','CREATE');
+BEGIN
+  IF temporary_create THEN GRANT CREATE ON SCHEMA public TO brand_knowledge_owner; END IF;
+  ALTER TABLE public.brand_knowledge_history OWNER TO brand_knowledge_owner;
+  IF temporary_create THEN REVOKE CREATE ON SCHEMA public FROM brand_knowledge_owner; END IF;
+END $history_owner$;
 ALTER TABLE public.brand_knowledge_history ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON public.brand_knowledge_history FROM PUBLIC,brand_knowledge_runtime;
 -- Baseline capture changes no existing Brand row or Core value.
