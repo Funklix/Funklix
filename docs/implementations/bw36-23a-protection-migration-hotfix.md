@@ -52,7 +52,7 @@ of a fully executed protection installation. R3 has a corresponding late failure
 check for its schema, helper, grants and policies. Success, exact reruns, absence
 of new owner CREATE, and direct/inherited privilege preservation are asserted.
 
-- PostgreSQL 17.6: protection suite and R3 suite passed.
+- PostgreSQL 17.6: 65 protection groups and 28 R3 groups passed.
 - PostgreSQL 18.4: 65 protection groups and 28 R3 groups passed.
 - Runtime Boot Safety now has a fail-independent matrix using exact images
   postgres:17.6 and postgres:18.4, running both integration suites and all existing
