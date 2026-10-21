@@ -9,9 +9,11 @@ DO $preflight$
 DECLARE r record;
 BEGIN
   IF current_setting('server_version_num')::int<160000 THEN RAISE EXCEPTION 'POSTGRES_16_REQUIRED'; END IF;
-  IF to_regclass('public.brand_knowledge_history') IS NULL OR
-     brand_knowledge_private.install_fingerprint() IS DISTINCT FROM obj_description('brand_knowledge_private'::regnamespace) THEN
+  IF to_regclass('public.brand_knowledge_history') IS NULL THEN RAISE EXCEPTION 'PROTECTION_INSTALL_REQUIRED_OR_DRIFTED'; END IF;
+  SET LOCAL ROLE brand_knowledge_owner;
+  IF brand_knowledge_private.install_fingerprint() IS DISTINCT FROM obj_description('brand_knowledge_private'::regnamespace) THEN
     RAISE EXCEPTION 'PROTECTION_INSTALL_REQUIRED_OR_DRIFTED'; END IF;
+  RESET ROLE;
   IF (SELECT count(*) FROM pg_roles WHERE rolname IN ('brand_knowledge_owner','brand_knowledge_runtime','tendra_app_runtime'))<>3 THEN
     RAISE EXCEPTION 'EXISTING_ROLES_REQUIRED'; END IF;
   FOR r IN SELECT * FROM pg_roles WHERE rolname IN ('brand_knowledge_owner','brand_knowledge_runtime','tendra_app_runtime') LOOP
@@ -351,13 +353,13 @@ DO $lock_schema$ BEGIN
   RAISE EXCEPTION 'LOCK_SCHEMA_OWNER_DRIFT'; END IF;
 END $lock_schema$;
 CREATE SCHEMA IF NOT EXISTS tendra_runtime_private AUTHORIZATION brand_knowledge_owner;
+SET LOCAL ROLE brand_knowledge_owner;
 DO $lock_preflight$ BEGIN
  IF to_regprocedure('tendra_runtime_private.lock_brand(uuid,boolean)') IS NOT NULL AND NOT EXISTS(
   SELECT FROM pg_proc WHERE oid=to_regprocedure('tendra_runtime_private.lock_brand(uuid,boolean)')
     AND prosecdef AND proowner='brand_knowledge_owner'::regrole AND proconfig=ARRAY['search_path=pg_catalog']
     AND btrim(regexp_replace(prosrc,'\s+',' ','g'))=$lockbody$BEGIN IF session_user<>'tendra_app_runtime' THEN RAISE EXCEPTION 'BACKEND_IDENTITY_REQUIRED' USING ERRCODE='42501'; END IF; IF p_write THEN PERFORM 1 FROM public.brands WHERE id=p_id FOR UPDATE; ELSE PERFORM 1 FROM public.brands WHERE id=p_id FOR SHARE; END IF; END$lockbody$) THEN RAISE EXCEPTION 'LOCK_FUNCTION_DRIFT'; END IF;
 END $lock_preflight$;
-SET LOCAL ROLE brand_knowledge_owner;
 REVOKE ALL ON SCHEMA tendra_runtime_private FROM PUBLIC;
 GRANT USAGE ON SCHEMA tendra_runtime_private TO brand_knowledge_runtime;
 CREATE OR REPLACE FUNCTION tendra_runtime_private.lock_brand(p_id uuid,p_write boolean) RETURNS void
@@ -491,8 +493,11 @@ END $identity_fence$;
 -- Run the companion fail-closed verification before ending the operator window.
 -- Read-only, fail-closed. Run as operator AND through the actual runtime connection.
 DO $verify$
-DECLARE r record; t text; p text; c record; expected boolean; actual boolean;
+DECLARE r record; t text; p text; c record; expected boolean; actual boolean; verifier_role name := current_user;
 BEGIN
+  -- Operators may SET the owner without inheriting its schema lookup privileges.
+  -- Runtime keeps its own identity and cannot take this branch.
+  IF pg_has_role(current_user,'brand_knowledge_owner','SET') THEN SET LOCAL ROLE brand_knowledge_owner; END IF;
   IF (SELECT count(*) FROM pg_roles WHERE rolname IN ('brand_knowledge_owner','brand_knowledge_runtime') AND NOT rolcanlogin AND NOT rolsuper AND NOT rolbypassrls AND NOT rolcreaterole AND NOT rolcreatedb AND NOT rolreplication)<>2 THEN RAISE EXCEPTION 'UNSAFE_CAPABILITY_OR_OWNER_ROLE'; END IF;
   IF NOT EXISTS(SELECT FROM pg_roles WHERE rolname='tendra_app_runtime' AND rolinherit AND NOT rolsuper AND NOT rolbypassrls AND NOT rolcreaterole AND NOT rolcreatedb AND NOT rolreplication) THEN RAISE EXCEPTION 'UNSAFE_RUNTIME_LOGIN'; END IF;
   IF NOT EXISTS(SELECT FROM pg_auth_members WHERE roleid='brand_knowledge_runtime'::regrole AND member='tendra_app_runtime'::regrole AND inherit_option AND NOT set_option AND NOT admin_option) THEN RAISE EXCEPTION 'MEMBERSHIP_OPTIONS_INVALID'; END IF;
@@ -570,6 +575,7 @@ BEGIN
   FOREACH t IN ARRAY ARRAY['brand_knowledge_private.write_brand(text,uuid,jsonb,jsonb,boolean)','brand_knowledge_private.create_brand(text,uuid,uuid,text,jsonb,uuid)','brand_knowledge_private.lifecycle(text,uuid,jsonb,jsonb)','brand_knowledge_private.logo_receipt(text,uuid,uuid,text)'] LOOP
     IF NOT has_function_privilege('tendra_app_runtime',t,'EXECUTE') THEN RAISE EXCEPTION 'PROTECTED_COMMAND_NOT_EXECUTABLE: %',t; END IF;
   END LOOP;
+  EXECUTE format('SET LOCAL ROLE %I',verifier_role);
 END $verify$;
 SELECT 'BW36_23A_R3_RUNTIME_ACCESS_VERIFIED' AS result,
        session_user AS connection_identity,current_user AS effective_identity,

@@ -31,16 +31,32 @@ BEGIN
     obj_description(to_regclass('public.brand_knowledge_history')) IS DISTINCT FROM 'bw36-23a/v1; snapshots=1; same-brand-source=1' THEN
     RAISE EXCEPTION 'CONFLICTING_HISTORY_INSTALL'; END IF;
   IF to_regclass('public.brand_knowledge_history') IS NOT NULL THEN
+    SET LOCAL ROLE brand_knowledge_owner;
     IF to_regprocedure('brand_knowledge_private.install_fingerprint()') IS NULL THEN RAISE EXCEPTION 'PARTIAL_PROTECTION_INSTALL'; END IF;
     IF brand_knowledge_private.install_fingerprint() IS DISTINCT FROM obj_description(to_regnamespace('brand_knowledge_private')) THEN RAISE EXCEPTION 'PROTECTION_CATALOG_DRIFT'; END IF;
+    RESET ROLE;
   END IF;
 END $preflight$;
 LOCK TABLE public.brands IN ACCESS EXCLUSIVE MODE;
 CREATE SCHEMA IF NOT EXISTS brand_knowledge_private AUTHORIZATION brand_knowledge_owner;
+SET LOCAL ROLE brand_knowledge_owner;
 REVOKE ALL ON SCHEMA brand_knowledge_private FROM PUBLIC;
-REVOKE CREATE ON SCHEMA public FROM PUBLIC, brand_knowledge_runtime;
-GRANT USAGE ON SCHEMA public, brand_knowledge_private TO brand_knowledge_owner;
 GRANT USAGE ON SCHEMA brand_knowledge_private TO brand_knowledge_runtime;
+RESET ROLE;
+-- Trigger DDL resolves private function names as the table-owning operator.
+-- Borrow only schema USAGE (never CREATE), preserving an existing operator grant.
+DO $operator_schema$
+DECLARE operator_role name := current_user; borrowed boolean;
+BEGIN
+  borrowed := NOT has_schema_privilege(operator_role,'brand_knowledge_private','USAGE');
+  PERFORM set_config('brand_knowledge.install_operator',operator_role,true);
+  PERFORM set_config('brand_knowledge.install_borrowed_usage',borrowed::text,true);
+  SET LOCAL ROLE brand_knowledge_owner;
+  IF borrowed THEN EXECUTE format('GRANT USAGE ON SCHEMA brand_knowledge_private TO %I',operator_role); END IF;
+  RESET ROLE;
+END $operator_schema$;
+REVOKE CREATE ON SCHEMA public FROM PUBLIC, brand_knowledge_runtime;
+GRANT USAGE ON SCHEMA public TO brand_knowledge_owner;
 ALTER TABLE public.brands ADD COLUMN IF NOT EXISTS knowledge_event_seq bigint NOT NULL DEFAULT 0;
 DO $column_check$ BEGIN
   IF NOT EXISTS(SELECT FROM pg_attribute WHERE attrelid='public.brands'::regclass AND attname='knowledge_event_seq' AND atttypid='bigint'::regtype AND attnotnull) THEN RAISE EXCEPTION 'UNSUPPORTED_EVENT_SEQUENCE_COLUMN'; END IF;
@@ -88,16 +104,11 @@ CREATE TABLE IF NOT EXISTS public.brand_knowledge_history (
     ELSE before_state IS NOT NULL AND after_state IS NOT NULL END
   )
 );
+-- Fresh installs still own history as the operator; verified reruns use its owner.
+DO $history_ddl_role$ BEGIN
+  IF (SELECT relowner='brand_knowledge_owner'::regrole FROM pg_class WHERE oid='public.brand_knowledge_history'::regclass) THEN SET LOCAL ROLE brand_knowledge_owner; END IF;
+END $history_ddl_role$;
 COMMENT ON TABLE public.brand_knowledge_history IS 'bw36-23a/v1; snapshots=1; same-brand-source=1';
--- PostgreSQL checks CREATE on the destination schema even for a NOLOGIN owner.
--- Borrow it only for this transfer; preserve existing direct/inherited privileges.
-DO $history_owner$
-DECLARE temporary_create boolean := NOT has_schema_privilege('brand_knowledge_owner','public','CREATE');
-BEGIN
-  IF temporary_create THEN GRANT CREATE ON SCHEMA public TO brand_knowledge_owner; END IF;
-  ALTER TABLE public.brand_knowledge_history OWNER TO brand_knowledge_owner;
-  IF temporary_create THEN REVOKE CREATE ON SCHEMA public FROM brand_knowledge_owner; END IF;
-END $history_owner$;
 ALTER TABLE public.brand_knowledge_history ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON public.brand_knowledge_history FROM PUBLIC,brand_knowledge_runtime;
 -- Baseline capture changes no existing Brand row or Core value.
@@ -105,6 +116,9 @@ INSERT INTO public.brand_knowledge_history(brand_id,workspace_id,event_seq,previ
 SELECT b.id,b.workspace_id,0,b.revision,b.revision,b.logo_revision,b.logo_revision,'bw36-23a-baseline','baseline','canonical-brand-write/v1',gen_random_uuid(),encode(sha256(convert_to(to_jsonb(b)::text,'UTF8')),'hex'),to_jsonb(b),to_jsonb(b)
 FROM public.brands b WHERE NOT EXISTS (SELECT FROM public.brand_knowledge_history h WHERE h.brand_id=b.id);
 
+RESET ROLE;
+-- Private schema/function ownership is used explicitly; SET does not imply INHERIT.
+SET LOCAL ROLE brand_knowledge_owner;
 CREATE OR REPLACE FUNCTION brand_knowledge_private.immutable_history() RETURNS trigger
 LANGUAGE plpgsql SET search_path=pg_catalog AS $$
 BEGIN RAISE EXCEPTION 'BRAND_HISTORY_APPEND_ONLY' USING ERRCODE='42501'; END $$;
@@ -135,13 +149,21 @@ END $$;
 CREATE OR REPLACE FUNCTION brand_knowledge_private.no_brand_truncate() RETURNS trigger
 LANGUAGE plpgsql SET search_path=pg_catalog AS $$
 BEGIN RAISE EXCEPTION 'PROTECTED_BRAND_TRUNCATE_DENIED' USING ERRCODE='42501'; END $$;
-DROP TRIGGER IF EXISTS brand_knowledge_capture ON public.brands;
-CREATE TRIGGER brand_knowledge_capture AFTER INSERT OR UPDATE OR DELETE ON public.brands FOR EACH ROW EXECUTE FUNCTION brand_knowledge_private.capture_brand();
-DROP TRIGGER IF EXISTS brand_knowledge_no_truncate ON public.brands;
-CREATE TRIGGER brand_knowledge_no_truncate BEFORE TRUNCATE ON public.brands FOR EACH STATEMENT EXECUTE FUNCTION brand_knowledge_private.no_brand_truncate();
-DROP TRIGGER IF EXISTS brand_history_immutable ON public.brand_knowledge_history;
-CREATE TRIGGER brand_history_immutable BEFORE UPDATE OR DELETE OR TRUNCATE ON public.brand_knowledge_history FOR EACH STATEMENT EXECUTE FUNCTION brand_knowledge_private.immutable_history();
+RESET ROLE;
+-- On verified reruns the fingerprint already proves these exact triggers exist.
+-- Avoid recreating them as an operator that cannot EXECUTE private helpers.
+DO $triggers$ BEGIN
+  IF (SELECT relowner<>'brand_knowledge_owner'::regrole FROM pg_class WHERE oid='public.brand_knowledge_history'::regclass) THEN
+    DROP TRIGGER IF EXISTS brand_knowledge_capture ON public.brands;
+    CREATE TRIGGER brand_knowledge_capture AFTER INSERT OR UPDATE OR DELETE ON public.brands FOR EACH ROW EXECUTE FUNCTION brand_knowledge_private.capture_brand();
+    DROP TRIGGER IF EXISTS brand_knowledge_no_truncate ON public.brands;
+    CREATE TRIGGER brand_knowledge_no_truncate BEFORE TRUNCATE ON public.brands FOR EACH STATEMENT EXECUTE FUNCTION brand_knowledge_private.no_brand_truncate();
+    DROP TRIGGER IF EXISTS brand_history_immutable ON public.brand_knowledge_history;
+    CREATE TRIGGER brand_history_immutable BEFORE UPDATE OR DELETE OR TRUNCATE ON public.brand_knowledge_history FOR EACH STATEMENT EXECUTE FUNCTION brand_knowledge_private.immutable_history();
+  END IF;
+END $triggers$;
 
+SET LOCAL ROLE brand_knowledge_owner;
 CREATE OR REPLACE FUNCTION brand_knowledge_private.is_empty(v jsonb) RETURNS boolean
 LANGUAGE sql IMMUTABLE SET search_path=pg_catalog AS $$
 SELECT v IS NULL OR v IN ('null','[]','{}') OR (jsonb_typeof(v)='string' AND btrim(v#>>'{}')='') $$;
@@ -369,7 +391,7 @@ BEGIN
   IF h.operation_type<>'logo' OR h.provenance->>'request_fingerprint' IS DISTINCT FROM p_digest THEN RAISE EXCEPTION 'IDEMPOTENCY_CONFLICT'; END IF;
   RETURN h.after_state;
 END $$;
-ALTER FUNCTION brand_knowledge_private.logo_receipt(text,uuid,uuid,text) OWNER TO brand_knowledge_owner;
+RESET ROLE;
 
 GRANT SELECT,INSERT,UPDATE,DELETE ON public.brands TO brand_knowledge_owner;
 GRANT SELECT,UPDATE,DELETE ON public.brand_members TO brand_knowledge_owner;
@@ -385,10 +407,6 @@ BEGIN
     END IF;
   END LOOP;
 END $policies$;
-ALTER FUNCTION brand_knowledge_private.write_brand(text,uuid,jsonb,jsonb,boolean) OWNER TO brand_knowledge_owner;
-ALTER FUNCTION brand_knowledge_private.create_brand(text,uuid,uuid,text,jsonb,uuid) OWNER TO brand_knowledge_owner;
-ALTER FUNCTION brand_knowledge_private.lifecycle(text,uuid,jsonb,jsonb) OWNER TO brand_knowledge_owner;
-GRANT EXECUTE ON FUNCTION brand_knowledge_private.write_brand(text,uuid,jsonb,jsonb,boolean),brand_knowledge_private.create_brand(text,uuid,uuid,text,jsonb,uuid),brand_knowledge_private.lifecycle(text,uuid,jsonb,jsonb),brand_knowledge_private.logo_receipt(text,uuid,uuid,text) TO brand_knowledge_runtime;
 -- Preserve existing server read projections. This role is backend-only; browser
 -- roles receive no membership, table grant or policy. History has no runtime read.
 GRANT SELECT ON public.brands,public.brand_members TO brand_knowledge_runtime;
@@ -401,21 +419,44 @@ DO $read_policies$ BEGIN
   END IF;
 END $read_policies$;
 -- Never grant helpers to runtime. capture_brand runs as invoking function owner.
+SET LOCAL ROLE brand_knowledge_owner;
 GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA brand_knowledge_private TO brand_knowledge_owner;
 REVOKE ALL ON ALL FUNCTIONS IN SCHEMA brand_knowledge_private FROM PUBLIC;
+RESET ROLE;
 REVOKE INSERT,UPDATE,DELETE,TRUNCATE,TRIGGER,REFERENCES ON public.brands FROM PUBLIC,brand_knowledge_runtime;
 DO $close_grants$
 DECLARE r record; col record;
 BEGIN
   FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('anon','authenticated','service_role','brand_knowledge_runtime') LOOP
+    IF (SELECT relowner='brand_knowledge_owner'::regrole FROM pg_class WHERE oid='public.brand_knowledge_history'::regclass) THEN SET LOCAL ROLE brand_knowledge_owner; END IF;
     EXECUTE format('REVOKE ALL ON public.brand_knowledge_history FROM %I',r.rolname);
+    RESET ROLE;
     EXECUTE format('REVOKE INSERT,UPDATE,DELETE,TRUNCATE,TRIGGER,REFERENCES ON public.brands FROM %I',r.rolname);
     FOR col IN SELECT attname FROM pg_attribute WHERE attrelid='public.brands'::regclass AND attnum>0 AND NOT attisdropped LOOP
       EXECUTE format('REVOKE INSERT (%I), UPDATE (%I), REFERENCES (%I) ON public.brands FROM %I',col.attname,col.attname,col.attname,r.rolname);
     END LOOP;
+    SET LOCAL ROLE brand_knowledge_owner;
     EXECUTE format('REVOKE ALL ON ALL FUNCTIONS IN SCHEMA brand_knowledge_private FROM %I',r.rolname);
+    RESET ROLE;
   END LOOP;
 END $close_grants$;
+-- All history DDL, baseline capture and ACL cleanup must precede this final transfer.
+-- PostgreSQL checks CREATE on the destination schema even for a NOLOGIN owner.
+-- Borrow it only for this transfer; preserve existing direct/inherited privileges.
+DO $history_owner$
+DECLARE temporary_create boolean := NOT has_schema_privilege('brand_knowledge_owner','public','CREATE');
+BEGIN
+  IF (SELECT relowner='brand_knowledge_owner'::regrole FROM pg_class WHERE oid='public.brand_knowledge_history'::regclass) THEN RETURN; END IF;
+  IF temporary_create THEN GRANT CREATE ON SCHEMA public TO brand_knowledge_owner; END IF;
+  ALTER TABLE public.brand_knowledge_history OWNER TO brand_knowledge_owner;
+  IF temporary_create THEN REVOKE CREATE ON SCHEMA public FROM brand_knowledge_owner; END IF;
+END $history_owner$;
+SET LOCAL ROLE brand_knowledge_owner;
+DO $operator_schema_cleanup$ BEGIN
+  IF current_setting('brand_knowledge.install_borrowed_usage')::boolean THEN
+    EXECUTE format('REVOKE USAGE ON SCHEMA brand_knowledge_private FROM %I',current_setting('brand_knowledge.install_operator'));
+  END IF;
+END $operator_schema_cleanup$;
 GRANT EXECUTE ON FUNCTION brand_knowledge_private.write_brand(text,uuid,jsonb,jsonb,boolean),brand_knowledge_private.create_brand(text,uuid,uuid,text,jsonb,uuid),brand_knowledge_private.lifecycle(text,uuid,jsonb,jsonb),brand_knowledge_private.logo_receipt(text,uuid,uuid,text) TO brand_knowledge_runtime;
 CREATE OR REPLACE FUNCTION brand_knowledge_private.install_fingerprint() RETURNS text
 LANGUAGE sql STABLE SET search_path=pg_catalog AS $$
@@ -453,4 +494,5 @@ BEGIN
   IF NOT EXISTS(SELECT FROM pg_constraint WHERE conrelid='public.brand_knowledge_history'::regclass AND conname='brand_history_source' AND confdeltype='r')
     OR EXISTS(SELECT FROM public.brands b WHERE NOT EXISTS(SELECT FROM public.brand_knowledge_history h WHERE h.brand_id=b.id AND h.event_seq=b.knowledge_event_seq AND h.after_state=to_jsonb(b))) THEN RAISE EXCEPTION 'PROTECTION_VERIFICATION_FAILED'; END IF;
 END $verify$;
+RESET ROLE;
 COMMIT;

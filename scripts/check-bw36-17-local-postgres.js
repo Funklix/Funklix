@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 'use strict';
-// Optional disposable SQL engine check. Install @electric-sql/pglite only in work/pgtest.
-const {PGlite}=require(require('node:path').resolve(__dirname,'../work/pgtest/node_modules/@electric-sql/pglite'));
+// Optional disposable SQL engine check, using the declared development dependency.
+const {PGlite}=require('@electric-sql/pglite');
 const fs=require('node:fs'),assert=require('node:assert/strict');
 const {learningRuntime}=require('./fixtures/bw36-17-local-runtime');
 const {B,I,EMAIL}=require('./fixtures/bw36-13r5-local-runtime');
@@ -21,6 +21,18 @@ const verification=await pg.exec(fs.readFileSync('scripts/sql/bw36-17-verify-gov
 const check=verification.find(r=>r.rows?.[0]?.learnings_exist).rows[0];
 for(const [key,value] of Object.entries(check))assert.equal(value,key.includes('initial_')?0:true,key);
 assert.equal(verification.find(r=>r.rows?.[0]?.foreign_key_count).rows[0].foreign_key_count,8);
+// Bring the historical fixture up to the schema expected by the current service.
+for (const file of ['20261011_bw36_17r1_learning_provenance_schema.sql','20261012_bw36_17r2_learning_provenance_recovery.sql']) {
+  await pg.exec(fs.readFileSync('migrations/'+file,'utf8'));
+}
+// SQL-engine fixture for the R3 lock transport used by the real service.
+// Role/definer/session security is covered by the real 17.6/18.4 suites, not PGlite.
+await pg.exec(`CREATE SCHEMA tendra_runtime_private;
+CREATE FUNCTION tendra_runtime_private.lock_brand(p_id uuid,p_write boolean) RETURNS void
+LANGUAGE plpgsql AS $$ BEGIN
+  IF p_write THEN PERFORM 1 FROM public.brands WHERE id=p_id FOR UPDATE;
+  ELSE PERFORM 1 FROM public.brands WHERE id=p_id FOR SHARE; END IF;
+END $$;`);
 const service=learningRuntime().service,db={connect:async()=>({query:(q,a)=>pg.query(q,a),release(){}})};
 const run=input=>service.operate({db,user:{email:EMAIL},brandId:B,input});
 const create=statement=>run(service.inputRequest({statement,expected_brand_revision:'1'},true));

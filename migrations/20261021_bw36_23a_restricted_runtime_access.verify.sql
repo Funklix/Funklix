@@ -1,7 +1,10 @@
 -- Read-only, fail-closed. Run as operator AND through the actual runtime connection.
 DO $verify$
-DECLARE r record; t text; p text; c record; expected boolean; actual boolean;
+DECLARE r record; t text; p text; c record; expected boolean; actual boolean; verifier_role name := current_user;
 BEGIN
+  -- Operators may SET the owner without inheriting its schema lookup privileges.
+  -- Runtime keeps its own identity and cannot take this branch.
+  IF pg_has_role(current_user,'brand_knowledge_owner','SET') THEN SET LOCAL ROLE brand_knowledge_owner; END IF;
   IF (SELECT count(*) FROM pg_roles WHERE rolname IN ('brand_knowledge_owner','brand_knowledge_runtime') AND NOT rolcanlogin AND NOT rolsuper AND NOT rolbypassrls AND NOT rolcreaterole AND NOT rolcreatedb AND NOT rolreplication)<>2 THEN RAISE EXCEPTION 'UNSAFE_CAPABILITY_OR_OWNER_ROLE'; END IF;
   IF NOT EXISTS(SELECT FROM pg_roles WHERE rolname='tendra_app_runtime' AND rolinherit AND NOT rolsuper AND NOT rolbypassrls AND NOT rolcreaterole AND NOT rolcreatedb AND NOT rolreplication) THEN RAISE EXCEPTION 'UNSAFE_RUNTIME_LOGIN'; END IF;
   IF NOT EXISTS(SELECT FROM pg_auth_members WHERE roleid='brand_knowledge_runtime'::regrole AND member='tendra_app_runtime'::regrole AND inherit_option AND NOT set_option AND NOT admin_option) THEN RAISE EXCEPTION 'MEMBERSHIP_OPTIONS_INVALID'; END IF;
@@ -79,6 +82,7 @@ BEGIN
   FOREACH t IN ARRAY ARRAY['brand_knowledge_private.write_brand(text,uuid,jsonb,jsonb,boolean)','brand_knowledge_private.create_brand(text,uuid,uuid,text,jsonb,uuid)','brand_knowledge_private.lifecycle(text,uuid,jsonb,jsonb)','brand_knowledge_private.logo_receipt(text,uuid,uuid,text)'] LOOP
     IF NOT has_function_privilege('tendra_app_runtime',t,'EXECUTE') THEN RAISE EXCEPTION 'PROTECTED_COMMAND_NOT_EXECUTABLE: %',t; END IF;
   END LOOP;
+  EXECUTE format('SET LOCAL ROLE %I',verifier_role);
 END $verify$;
 SELECT 'BW36_23A_R3_RUNTIME_ACCESS_VERIFIED' AS result,
        session_user AS connection_identity,current_user AS effective_identity,
