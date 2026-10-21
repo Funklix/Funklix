@@ -93,6 +93,11 @@ rows, namespace ACLs, relations/columns, policies, functions and triggers match
 the prior snapshot. Role identity is restored. There are no exception handlers
 that swallow a migration error or commit a partial installation.
 
+The older optional `check-bw36-17-local-postgres.js` PGlite test also passes. Its
+fixture now applies the existing R1/R2 provenance migrations required by the
+current service and provides a test-only R3 row-lock transport. It uses the
+declared PGlite dependency; it is not evidence of Supabase role security.
+
 Runtime Boot Safety retains the exact PostgreSQL 17.6/18.4 matrix and executes all
 existing checks. Final local/Actions results are reported in the PR description.
 
