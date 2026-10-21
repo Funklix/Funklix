@@ -22,6 +22,7 @@ function fixture(){
       if(/FROM board_editors/.test(sql))return rows(options.role?[{role:options.role}]:[]);
       if(/FROM brand_members/.test(sql))return rows([]);
       if(/FROM brands b LEFT JOIN/.test(sql)){const b=r.db.brands.find(b=>b.id===args[0]),role=b?.owner_email===args[1]?'owner':options.brandRole;return rows(role?[{role}]:[]);}
+      if(sql.includes('SELECT tendra_runtime_private.lock_brand('))return rows([]);
       if(/FROM public.brands WHERE id/.test(sql))return rows(r.db.brands.filter(b=>b.id===args[0]));
       if(/UPDATE public.boards/.test(sql)){if(options.saveFail)throw new Error('Injected save failure');writes++;const b=tx.find(b=>b.id===args[0]);b.canvas_json=JSON.parse(args[1]);b.updated_at=new Date(Date.parse(b.updated_at)+1000).toISOString();return rows([b]);}
       throw new Error('Unexpected query '+sql);

@@ -17,6 +17,7 @@ async function fixture() {
     CREATE TABLE boards(id uuid PRIMARY KEY, name text, owner_id text, owner_email text, brand_id uuid REFERENCES brands(id) ON DELETE SET NULL,
       brand_core_snapshot jsonb, brand_core_source_revision bigint, brand_core_source_updated_at timestamptz, updated_at timestamptz);
     CREATE TABLE board_editors(board_id uuid, email text, role text);`);
+  await pg.exec(fs.readFileSync('scripts/fixtures/bw36-23a-r3-lock.sql','utf8'));
   for (const file of ['20261011_bw36_17_governed_brand_learnings.sql', '20261011_bw36_17r1_learning_provenance_schema.sql', '20261012_bw36_17r2_learning_provenance_recovery.sql']) {
     await pg.exec(fs.readFileSync(path.join(ROOT, 'migrations', file), 'utf8'));
   }

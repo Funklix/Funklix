@@ -27,6 +27,7 @@ function runtime({ user = stranger, board = {}, member = null, brandRole = null,
   async function query(sql, args) {
     sql = sql.replace(/\s+/g, ' ').replace(/\bpublic\./g, '').trim(); queries.push({ sql, args });
     assert.match(sql, /^(SELECT |BEGIN|SET LOCAL|COMMIT|ROLLBACK)/, 'Advice must not write application data');
+    if (sql.includes('SELECT tendra_runtime_private.lock_brand(')) return rows([]);
     if (/^(BEGIN|SET LOCAL|COMMIT|ROLLBACK)/.test(sql)) return rows([]);
     if (sql.includes('FROM app_identities')) return rows([{ id: '44444444-4444-4444-8444-444444444444', canonical_email: user.email.trim().toLowerCase(), status: 'active', revision: '1' }]);
     if (sql.includes('FROM brand_members')) return rows(brandRole && brandRole !== 'owner' ? [{ role: brandRole }] : []);

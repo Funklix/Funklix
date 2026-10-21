@@ -2,7 +2,9 @@
 const fs = require('fs');
 const assert = require('assert');
 const read = (p) => fs.readFileSync(p, 'utf8');
-const storage = read('api/_boards-storage.js');
+// Legacy schema shape is now an operator-owned fixture; runtime performs reads only.
+const storage = read('scripts/fixtures/bw36-23a-r3-boards.sql');
+assert.doesNotMatch(read('api/_boards-storage.js'), /CREATE TABLE|ALTER TABLE|CREATE INDEX/);
 const access = read('api/_board-access.js');
 const item = read('api/_board-serializer.js');
 const list = read('api/boards/index.js');

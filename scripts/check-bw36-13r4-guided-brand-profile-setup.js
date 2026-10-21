@@ -152,7 +152,7 @@ async function checkAuthoritativeCreation() {
       if (sql.includes('FROM public.workspaces')) return { rows: [{ id: W, name: 'Workspace', status: 'active', revision: 1 }] };
       if (sql.includes('FROM public.workspace_memberships')) return { rows: [{ role: 'owner', status: 'accepted' }] };
       if (sql.includes('FROM public.project_commands')) return { rows: db.commands.filter(c => c.request_id === args[1]) };
-      if (sql.includes('SELECT id FROM public.brands')) return { rows: db.brands.filter(b => b.id === args[0]) };
+      if (sql.includes('SELECT tendra_runtime_private.lock_brand(')) return { rows: db.brands.filter(b => b.id === args[0]) };
       if (sql.includes('brand_knowledge_private.create_brand(')) { const row = { ...clone(brand), id:args[1], name: args[3], workspace_id: args[2], brand_core: JSON.parse(args[4]) }; assert.equal(args[0],'fixture@example.com'); assert.equal(args[2], W); assert(writes.UUID.test(args[1])); tx.brands.push(row); return { rows: [{brand:row}] }; }
       if (sql.includes('INSERT INTO public.boards')) { const row = { id: D, name: args[2], workspace_id: args[0], brand_id: args[1], canvas_json: JSON.parse(args[3]), brand_core_snapshot: JSON.parse(args[4]), brand_core_source_revision: args[5], brand_core_source_updated_at: args[6], brand_core_snapshot_copied_at: now, created_at: now, updated_at: now }; assert.equal(args[0], W); assert.equal(args[1], tx.brands[0].id); tx.boards.push(row); return { rows: [row] }; }
       if (sql.includes('INSERT INTO public.project_commands')) { tx.commands.push({ request_id: args[1], fingerprint: args[2], outcome: JSON.parse(args[6]) }); return { rows: [] }; }

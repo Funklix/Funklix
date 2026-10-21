@@ -68,7 +68,7 @@ function protectedGenerator() {
   const expected = {
     "campaign-v3.js": "b9e05a42fcf85ec6f070da2473655d3ee64140b2a0a2c175afc1cd3bb3a5cf1c",
     "api/generate-campaign.js": "2c6d40be342a8e5798f305059f95fc8f7b450f33cce438d24b17b9d6201c66bd",
-    "api/_campaign-creation.js": "bf2d53702cdabd2efeb0c7498e292d12a14a6a20139d1e126e60184f00f59123",
+    "api/_campaign-creation.js": "4a39f62c6411bf1b4dc837c8b89e2b3a4b9ea7b3f334a928a62554fc7be8e963",
     "campaign-creation.js": "4e14fd829b822f0efd2f83dac6e0fd407093c3f300b2e1e9f2bb750a5135388d",
     "campaign-creation-dialog.js": "d114e098d4dc8c93105099e5d4f300f4a3ea7bd264bd1e55e0a6fdf5dbc51f53"
 };

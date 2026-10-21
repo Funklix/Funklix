@@ -1,0 +1,2453 @@
+{
+  "base_main": "ca52123cf65bc6f1864968b2e80d1ca908cb9c1a",
+  "production_sql_executed": false,
+  "deployed": false,
+  "merged": false,
+  "runtime_boot_safety": {
+    "execution": "local commands from .github/workflows/runtime-boot-safety.yml, with targeted reruns after compatibility fixture changes and initial browser resource timeouts; GitHub Actions result is separate",
+    "commands_passed": 192,
+    "commands_failed": 0,
+    "multiline_node_syntax_checks_passed": 58,
+    "initial_run": [
+      {
+        "index": 0,
+        "command": "node scripts/check-browser-script-integrity.js",
+        "exit_code": 0,
+        "seconds": 0.57
+      },
+      {
+        "index": 1,
+        "command": "npm run check:bw35.1",
+        "exit_code": 0,
+        "seconds": 1.37
+      },
+      {
+        "index": 2,
+        "command": "npm run check:bw35.2",
+        "exit_code": 0,
+        "seconds": 1.37
+      },
+      {
+        "index": 3,
+        "command": "npm run check:bw35.2r1",
+        "exit_code": 0,
+        "seconds": 1.0
+      },
+      {
+        "index": 4,
+        "command": "npm run check:bw35.2r2",
+        "exit_code": 0,
+        "seconds": 0.9
+      },
+      {
+        "index": 5,
+        "command": "npm run check:bw35.2r3",
+        "exit_code": 0,
+        "seconds": 0.85
+      },
+      {
+        "index": 6,
+        "command": "npm run check:bw35.2r4",
+        "exit_code": 0,
+        "seconds": 1.1
+      },
+      {
+        "index": 7,
+        "command": "npm run check:bw35.2r5",
+        "exit_code": 0,
+        "seconds": 0.55
+      },
+      {
+        "index": 8,
+        "command": "npm run check:bw35.2r7",
+        "exit_code": 0,
+        "seconds": 0.75
+      },
+      {
+        "index": 9,
+        "command": "npm run check:bw35.2r8",
+        "exit_code": 0,
+        "seconds": 0.7
+      },
+      {
+        "index": 10,
+        "command": "npm run check:bw35.2r9",
+        "exit_code": 0,
+        "seconds": 0.61
+      },
+      {
+        "index": 11,
+        "command": "npm run check:bw35.3",
+        "exit_code": 0,
+        "seconds": 0.69
+      },
+      {
+        "index": 12,
+        "command": "npm run check:bw35.3r1",
+        "exit_code": 0,
+        "seconds": 0.6
+      },
+      {
+        "index": 13,
+        "command": "npm run check:bw35.3r2",
+        "exit_code": 0,
+        "seconds": 0.54
+      },
+      {
+        "index": 14,
+        "command": "npm run check:bw35.3r3",
+        "exit_code": 0,
+        "seconds": 0.75
+      },
+      {
+        "index": 15,
+        "command": "npm run check:bw35.3r4",
+        "exit_code": 0,
+        "seconds": 1.54
+      },
+      {
+        "index": 16,
+        "command": "npm run check:bw35.3r5",
+        "exit_code": 0,
+        "seconds": 0.7
+      },
+      {
+        "index": 17,
+        "command": "npm run check:bw35.4",
+        "exit_code": 0,
+        "seconds": 1.3
+      },
+      {
+        "index": 18,
+        "command": "npm run check:bw35.4r1",
+        "exit_code": 0,
+        "seconds": 1.19
+      },
+      {
+        "index": 19,
+        "command": "npm run check:bw35.4r2",
+        "exit_code": 0,
+        "seconds": 0.71
+      },
+      {
+        "index": 20,
+        "command": "node scripts/check-bw1-brand-catalog.js",
+        "exit_code": 0,
+        "seconds": 0.14
+      },
+      {
+        "index": 21,
+        "command": "node scripts/check-bw2-ephemeral-brand-selection.js",
+        "exit_code": 0,
+        "seconds": 0.08
+      },
+      {
+        "index": 22,
+        "command": "node scripts/check-bw3-canonical-brand-creation.js",
+        "exit_code": 0,
+        "seconds": 0.07
+      },
+      {
+        "index": 23,
+        "command": "node scripts/check-bw4-durable-brand-selection.js",
+        "exit_code": 0,
+        "seconds": 0.1
+      },
+      {
+        "index": 24,
+        "command": "node scripts/check-bw5-board-brand-association.js",
+        "exit_code": 0,
+        "seconds": 0.09
+      },
+      {
+        "index": 25,
+        "command": "node scripts/check-bw5-board-brand-isolation-regression.js",
+        "exit_code": 0,
+        "seconds": 0.12
+      },
+      {
+        "index": 26,
+        "command": "node scripts/check-bw5-board-brand-resolution-state.js",
+        "exit_code": 0,
+        "seconds": 0.07
+      },
+      {
+        "index": 27,
+        "command": "node scripts/check-bw6-brand-workspace-detail.js",
+        "exit_code": 0,
+        "seconds": 0.12
+      },
+      {
+        "index": 28,
+        "command": "node scripts/check-bw7-canonical-brand-editing.js",
+        "exit_code": 0,
+        "seconds": 0.27
+      },
+      {
+        "index": 29,
+        "command": "node scripts/check-bw8-brand-core-comparison.js",
+        "exit_code": 0,
+        "seconds": 0.19
+      },
+      {
+        "index": 30,
+        "command": "node scripts/check-bw8-brand-core-comparison-lifecycle.js",
+        "exit_code": 0,
+        "seconds": 0.23
+      },
+      {
+        "index": 31,
+        "command": "node scripts/check-bw9-initialize-canonical-brand-core.js",
+        "exit_code": 0,
+        "seconds": 0.07
+      },
+      {
+        "index": 32,
+        "command": "node scripts/check-bw10-brand-scoped-board-library.js",
+        "exit_code": 0,
+        "seconds": 0.07
+      },
+      {
+        "index": 33,
+        "command": "node scripts/check-bw11-create-board-from-canonical-brand.js",
+        "exit_code": 0,
+        "seconds": 0.07
+      },
+      {
+        "index": 34,
+        "command": "node scripts/check-bw12-canonical-snapshot-provenance.js",
+        "exit_code": 1,
+        "seconds": 0.07
+      },
+      {
+        "index": 35,
+        "command": "node scripts/check-bw13-canonical-to-board-refresh.js",
+        "exit_code": 1,
+        "seconds": 0.06
+      },
+      {
+        "index": 36,
+        "command": "node scripts/check-canonical-brand-foundation.js",
+        "exit_code": 1,
+        "seconds": 0.12
+      },
+      {
+        "index": 37,
+        "command": "node scripts/check-bw15-read-only-db-inspector.js",
+        "exit_code": 0,
+        "seconds": 0.19
+      },
+      {
+        "index": 38,
+        "command": "node scripts/check-bw16-timing-safe-session-verification.js",
+        "exit_code": 0,
+        "seconds": 0.13
+      },
+      {
+        "index": 39,
+        "command": "node scripts/check-bw18-board-access-roles.js",
+        "exit_code": 1,
+        "seconds": 0.07
+      },
+      {
+        "index": 40,
+        "command": "node scripts/check-bw18-share-permissions-popover-lifecycle.js",
+        "exit_code": 0,
+        "seconds": 0.06
+      },
+      {
+        "index": 41,
+        "command": "node scripts/check-bw19-private-public-board-sharing.js",
+        "exit_code": 1,
+        "seconds": 0.07
+      },
+      {
+        "index": 42,
+        "command": "node scripts/check-bw20-brand-team-roles.js",
+        "exit_code": 0,
+        "seconds": 0.06
+      },
+      {
+        "index": 43,
+        "command": "node scripts/check-bw20-1-inline-brand-role-management.js",
+        "exit_code": 0,
+        "seconds": 0.12
+      },
+      {
+        "index": 44,
+        "command": "npm run check:workspace-brand-deletion",
+        "exit_code": 0,
+        "seconds": 0.49
+      },
+      {
+        "index": 45,
+        "command": "node scripts/check-bw21-language-separation.js",
+        "exit_code": 0,
+        "seconds": 0.06
+      },
+      {
+        "index": 46,
+        "command": "node scripts/check-bw21-1-inspector-language-coverage.js",
+        "exit_code": 0,
+        "seconds": 0.15
+      },
+      {
+        "index": 47,
+        "command": "node scripts/check-bw23-language-region-settings.js",
+        "exit_code": 0,
+        "seconds": 0.19
+      },
+      {
+        "index": 48,
+        "command": "node scripts/check-bw25-honest-ai-insights-baseline.js",
+        "exit_code": 0,
+        "seconds": 0.06
+      },
+      {
+        "index": 49,
+        "command": "node scripts/check-bw26-read-only-ai-brain.js",
+        "exit_code": 0,
+        "seconds": 0.12
+      },
+      {
+        "index": 50,
+        "command": "node scripts/check-bw36-20r0-ai-brain-board-authorization.js",
+        "exit_code": 1,
+        "seconds": 6.24
+      },
+      {
+        "index": 51,
+        "command": "node scripts/check-bw26-1-real-canvas-context-and-turn-lifecycle.js",
+        "exit_code": 0,
+        "seconds": 1.49
+      },
+      {
+        "index": 52,
+        "command": "node scripts/check-bw26-2-safe-brain-response-formatting.js",
+        "exit_code": 0,
+        "seconds": 0.15
+      },
+      {
+        "index": 53,
+        "command": "node scripts/check-bw26-3-bounded-conversation-memory.js",
+        "exit_code": 0,
+        "seconds": 1.15
+      },
+      {
+        "index": 54,
+        "command": "node scripts/check-bw26-4-reference-resolution.js",
+        "exit_code": 0,
+        "seconds": 1.17
+      },
+      {
+        "index": 55,
+        "command": "node scripts/check-bw26-5-response-language-adherence.js",
+        "exit_code": 0,
+        "seconds": 1.6
+      },
+      {
+        "index": 56,
+        "command": "node scripts/check-bw26-6-controlled-ai-brain-node-creation.js",
+        "exit_code": 0,
+        "seconds": 0.14
+      },
+      {
+        "index": 57,
+        "command": "node scripts/check-bw26-6-1-node-proposal-production-failure.js",
+        "exit_code": 0,
+        "seconds": 0.15
+      },
+      {
+        "index": 58,
+        "command": "node scripts/check-bw26-6-2-node-creation-ui-transition.js",
+        "exit_code": 0,
+        "seconds": 0.26
+      },
+      {
+        "index": 59,
+        "command": "npm run check:bw26.6.3",
+        "exit_code": 0,
+        "seconds": 0.91
+      },
+      {
+        "index": 60,
+        "command": "node scripts/check-bw27-design-system-dark-mode.js",
+        "exit_code": 0,
+        "seconds": 0.07
+      },
+      {
+        "index": 61,
+        "command": "node scripts/check-bw27-1-dark-mode-surface-contrast.js",
+        "exit_code": 0,
+        "seconds": 0.12
+      },
+      {
+        "index": 62,
+        "command": "node scripts/check-bw27-2-premium-dark-mode.js",
+        "exit_code": 0,
+        "seconds": 0.15
+      },
+      {
+        "index": 63,
+        "command": "node scripts/check-bw27-3-final-dark-mode-polish.js",
+        "exit_code": 0,
+        "seconds": 0.17
+      },
+      {
+        "index": 64,
+        "command": "node scripts/check-bw27-4-canvas-component-polish.js",
+        "exit_code": 0,
+        "seconds": 0.1
+      },
+      {
+        "index": 65,
+        "command": "node scripts/check-bw27-5-landing-page-node-dark-mode.js",
+        "exit_code": 0,
+        "seconds": 0.24
+      },
+      {
+        "index": 66,
+        "command": "npm run check:bw27.6",
+        "exit_code": 0,
+        "seconds": 0.75
+      },
+      {
+        "index": 67,
+        "command": "npm run check:bw27.7",
+        "exit_code": 0,
+        "seconds": 0.65
+      },
+      {
+        "index": 68,
+        "command": "node scripts/check-bw28-ai-insights-architecture.js",
+        "exit_code": 0,
+        "seconds": 0.64
+      },
+      {
+        "index": 69,
+        "command": "node scripts/check-bw28-1-insights-ux-and-brain-handoff.js",
+        "exit_code": 0,
+        "seconds": 0.59
+      },
+      {
+        "index": 70,
+        "command": "node scripts/check-bw28-3-premium-insights-and-brand-avatar.js",
+        "exit_code": 0,
+        "seconds": 0.12
+      },
+      {
+        "index": 71,
+        "command": "node scripts/check-bw28-3-1-insights-runtime-rendering.js",
+        "exit_code": 0,
+        "seconds": 0.22
+      },
+      {
+        "index": 72,
+        "command": "node scripts/check-bw29-funnel-simulator.js",
+        "exit_code": 0,
+        "seconds": 0.14
+      },
+      {
+        "index": 73,
+        "command": "node scripts/check-bw29-1-simulator-ux-and-dark-mode.js",
+        "exit_code": 0,
+        "seconds": 0.14
+      },
+      {
+        "index": 74,
+        "command": "npm run check:bw29.3",
+        "exit_code": 0,
+        "seconds": 0.69
+      },
+      {
+        "index": 75,
+        "command": "npm run check:bw29.3.2",
+        "exit_code": 0,
+        "seconds": 0.74
+      },
+      {
+        "index": 76,
+        "command": "npm run check:bw29.3.3",
+        "exit_code": 0,
+        "seconds": 0.64
+      },
+      {
+        "index": 77,
+        "command": "npm run check:bw29.3.4",
+        "exit_code": 0,
+        "seconds": 0.65
+      },
+      {
+        "index": 78,
+        "command": "npm run check:bw29.3.5",
+        "exit_code": 0,
+        "seconds": 0.7
+      },
+      {
+        "index": 79,
+        "command": "npm run check:bw29.4.1",
+        "exit_code": 0,
+        "seconds": 0.5
+      },
+      {
+        "index": 80,
+        "command": "npm run check:bw29.4.2",
+        "exit_code": 0,
+        "seconds": 0.8
+      },
+      {
+        "index": 81,
+        "command": "npm run check:bw30.1",
+        "exit_code": 0,
+        "seconds": 0.7
+      },
+      {
+        "index": 82,
+        "command": "npm run check:bw31.1",
+        "exit_code": 0,
+        "seconds": 0.6
+      },
+      {
+        "index": 83,
+        "command": "npm run check:bw31.2",
+        "exit_code": 0,
+        "seconds": 0.8
+      },
+      {
+        "index": 84,
+        "command": "npm run check:bw31.4",
+        "exit_code": 0,
+        "seconds": 0.9
+      },
+      {
+        "index": 85,
+        "command": "npm run check:bw31.5.1",
+        "exit_code": 0,
+        "seconds": 0.55
+      },
+      {
+        "index": 86,
+        "command": "npm run check:bw31.5.2",
+        "exit_code": 0,
+        "seconds": 0.55
+      },
+      {
+        "index": 87,
+        "command": "npm run check:bw32.1",
+        "exit_code": 0,
+        "seconds": 0.85
+      },
+      {
+        "index": 88,
+        "command": "npm run check:bw32.2",
+        "exit_code": 0,
+        "seconds": 0.8
+      },
+      {
+        "index": 89,
+        "command": "npm run check:bw32.2.1",
+        "exit_code": 0,
+        "seconds": 0.56
+      },
+      {
+        "index": 90,
+        "command": "npm run check:bw32.2.2",
+        "exit_code": 0,
+        "seconds": 0.49
+      },
+      {
+        "index": 91,
+        "command": "npm run check:bw32.2.3",
+        "exit_code": 0,
+        "seconds": 0.9
+      },
+      {
+        "index": 92,
+        "command": "npm run check:bw32.2.5",
+        "exit_code": 0,
+        "seconds": 0.9
+      },
+      {
+        "index": 93,
+        "command": "npm run check:bw32.2.6",
+        "exit_code": 0,
+        "seconds": 0.6
+      },
+      {
+        "index": 94,
+        "command": "npm run check:bw32.2.9",
+        "exit_code": 0,
+        "seconds": 0.75
+      },
+      {
+        "index": 95,
+        "command": "npm run check:bw32.2.10",
+        "exit_code": 0,
+        "seconds": 0.6
+      },
+      {
+        "index": 96,
+        "command": "npm run check:bw32.2.11",
+        "exit_code": 0,
+        "seconds": 0.69
+      },
+      {
+        "index": 97,
+        "command": "npm run check:bw32.2.12",
+        "exit_code": 0,
+        "seconds": 0.66
+      },
+      {
+        "index": 98,
+        "command": "npm run check:bw32.3.1",
+        "exit_code": 0,
+        "seconds": 0.55
+      },
+      {
+        "index": 99,
+        "command": "npm run check:bw32.3.2",
+        "exit_code": 0,
+        "seconds": 0.85
+      },
+      {
+        "index": 100,
+        "command": "npm run check:bw32.3.3",
+        "exit_code": 0,
+        "seconds": 0.8
+      },
+      {
+        "index": 101,
+        "command": "npm run check:bw32.3.5",
+        "exit_code": 0,
+        "seconds": 0.74
+      },
+      {
+        "index": 102,
+        "command": "npm run check:bw32.3.6",
+        "exit_code": 0,
+        "seconds": 0.55
+      },
+      {
+        "index": 103,
+        "command": "npm run check:bw32.3.7",
+        "exit_code": 0,
+        "seconds": 0.75
+      },
+      {
+        "index": 104,
+        "command": "npm run check:bw32.3.8",
+        "exit_code": 0,
+        "seconds": 0.7
+      },
+      {
+        "index": 105,
+        "command": "npm run check:bw32.3.9",
+        "exit_code": 0,
+        "seconds": 0.54
+      },
+      {
+        "index": 106,
+        "command": "npm run check:bw34.1",
+        "exit_code": 0,
+        "seconds": 0.7
+      },
+      {
+        "index": 107,
+        "command": "npm run check:bw34.1r1",
+        "exit_code": 0,
+        "seconds": 0.6
+      },
+      {
+        "index": 108,
+        "command": "npm run check:bw34.1.1",
+        "exit_code": 0,
+        "seconds": 0.8
+      },
+      {
+        "index": 109,
+        "command": "npm run check:bw34.1.2",
+        "exit_code": 0,
+        "seconds": 0.5
+      },
+      {
+        "index": 110,
+        "command": "npm run check:bw34.1.3",
+        "exit_code": 0,
+        "seconds": 0.75
+      },
+      {
+        "index": 111,
+        "command": "npm run check:bw34.1.9",
+        "exit_code": 0,
+        "seconds": 0.75
+      },
+      {
+        "index": 112,
+        "command": "npm run check:bw34.2a",
+        "exit_code": 0,
+        "seconds": 0.7
+      },
+      {
+        "index": 113,
+        "command": "npm run check:bw34.2ar1",
+        "exit_code": 0,
+        "seconds": 0.51
+      },
+      {
+        "index": 114,
+        "command": "npm run check:bw34.2ar2",
+        "exit_code": 0,
+        "seconds": 0.85
+      },
+      {
+        "index": 115,
+        "command": "npm run check:bw34.2ar3",
+        "exit_code": 0,
+        "seconds": 0.65
+      },
+      {
+        "index": 116,
+        "command": "npm run check:bw34.2ar4",
+        "exit_code": 0,
+        "seconds": 0.6
+      },
+      {
+        "index": 117,
+        "command": "npm run check:bw33.2r1",
+        "exit_code": 0,
+        "seconds": 0.7
+      },
+      {
+        "index": 118,
+        "command": "npm run check:bw33.3r1",
+        "exit_code": 0,
+        "seconds": 0.76
+      },
+      {
+        "index": 119,
+        "command": "npm run check:bw33.4a1",
+        "exit_code": 0,
+        "seconds": 0.55
+      },
+      {
+        "index": 120,
+        "command": "npm run check:bw33.4b1r1",
+        "exit_code": 0,
+        "seconds": 0.75
+      },
+      {
+        "index": 121,
+        "command": "npm run check:bw33.4b3",
+        "exit_code": 0,
+        "seconds": 0.6
+      },
+      {
+        "index": 122,
+        "command": "npm run check:bw33.4b3.1",
+        "exit_code": 0,
+        "seconds": 0.84
+      },
+      {
+        "index": 123,
+        "command": "npm run check:bw33.4b4",
+        "exit_code": 0,
+        "seconds": 1.31
+      },
+      {
+        "index": 124,
+        "command": "npm run check:bw33.4b4.1",
+        "exit_code": 0,
+        "seconds": 0.75
+      },
+      {
+        "index": 125,
+        "command": "npm run check:bw33.4b4.2",
+        "exit_code": 0,
+        "seconds": 0.86
+      },
+      {
+        "index": 126,
+        "command": "npm run check:bw33.5",
+        "exit_code": 0,
+        "seconds": 0.79
+      },
+      {
+        "index": 127,
+        "command": "npm run check:bw33.5.1",
+        "exit_code": 1,
+        "seconds": 0.49
+      },
+      {
+        "index": 128,
+        "command": "npm run check:bw36.1r1",
+        "exit_code": 0,
+        "seconds": 0.75
+      },
+      {
+        "index": 129,
+        "command": "npm run check:bw36.2",
+        "exit_code": 0,
+        "seconds": 0.61
+      },
+      {
+        "index": 130,
+        "command": "npm run check:bw36.4",
+        "exit_code": 0,
+        "seconds": 0.71
+      },
+      {
+        "index": 131,
+        "command": "npm run check:bw36.6",
+        "exit_code": 0,
+        "seconds": 0.65
+      },
+      {
+        "index": 132,
+        "command": "npm run check:bw36.7",
+        "exit_code": 0,
+        "seconds": 0.6
+      },
+      {
+        "index": 133,
+        "command": "npm run check:bw36.7r1",
+        "exit_code": 0,
+        "seconds": 0.59
+      },
+      {
+        "index": 134,
+        "command": "npm run check:bw36.7r2",
+        "exit_code": 0,
+        "seconds": 0.7
+      },
+      {
+        "index": 135,
+        "command": "npm run check:bw36.7r3",
+        "exit_code": 0,
+        "seconds": 0.8
+      },
+      {
+        "index": 136,
+        "command": "npm run check:bw36.8",
+        "exit_code": 0,
+        "seconds": 0.5
+      },
+      {
+        "index": 137,
+        "command": "npm run check:bw36.9",
+        "exit_code": 0,
+        "seconds": 0.85
+      },
+      {
+        "index": 138,
+        "command": "npm run check:bw36.9r1",
+        "exit_code": 0,
+        "seconds": 0.7
+      },
+      {
+        "index": 139,
+        "command": "npm run check:bw36.10",
+        "exit_code": 0,
+        "seconds": 0.5
+      },
+      {
+        "index": 140,
+        "command": "npm run check:bw36.10r1",
+        "exit_code": 0,
+        "seconds": 0.7
+      },
+      {
+        "index": 141,
+        "command": "npm run check:bw36.11",
+        "exit_code": 0,
+        "seconds": 0.6
+      },
+      {
+        "index": 142,
+        "command": "npm run check:bw36.11r1",
+        "exit_code": 0,
+        "seconds": 0.75
+      },
+      {
+        "index": 143,
+        "command": "npm run check:bw36.13r1",
+        "exit_code": 0,
+        "seconds": 0.8
+      },
+      {
+        "index": 144,
+        "command": "npm run check:bw36.13r2",
+        "exit_code": 0,
+        "seconds": 0.6
+      },
+      {
+        "index": 145,
+        "command": "npm run check:bw36.13r3",
+        "exit_code": 1,
+        "seconds": 1.09
+      },
+      {
+        "index": 146,
+        "command": "npm run check:bw36.13r3r1",
+        "exit_code": 1,
+        "seconds": 0.72
+      },
+      {
+        "index": 147,
+        "command": "npm run check:bw36.13r4",
+        "exit_code": 1,
+        "seconds": 1.4
+      },
+      {
+        "index": 148,
+        "command": "node scripts/check-bw36-20-approved-learning-ai-brain.js",
+        "exit_code": 1,
+        "seconds": 5.2
+      },
+      {
+        "index": 149,
+        "command": "npm run check:bw36.21ar2.1",
+        "exit_code": 124,
+        "seconds": 240.04
+      },
+      {
+        "index": 150,
+        "command": "npm run check:bw36.21a",
+        "exit_code": 0,
+        "seconds": 82.11
+      },
+      {
+        "index": 151,
+        "command": "node scripts/check-bw36-20r1-learning-integration-review-fixes.js",
+        "exit_code": 1,
+        "seconds": 8.05
+      },
+      {
+        "index": 152,
+        "command": "npm run check:bw36.13r4r1",
+        "exit_code": 0,
+        "seconds": 40.64
+      },
+      {
+        "index": 153,
+        "command": "npm run check:bw36.13r5",
+        "exit_code": 1,
+        "seconds": 2.5
+      },
+      {
+        "index": 154,
+        "command": "npm run check:bw36.13r5r2",
+        "exit_code": 0,
+        "seconds": 22.81
+      },
+      {
+        "index": 155,
+        "command": "npm run check:bw36.13r5r3",
+        "exit_code": 0,
+        "seconds": 15.11
+      },
+      {
+        "index": 156,
+        "command": "npm run check:bw36.13r5r4",
+        "exit_code": 1,
+        "seconds": 1.35
+      },
+      {
+        "index": 157,
+        "command": "npm run check:bw36.13r6",
+        "exit_code": 0,
+        "seconds": 29.5
+      },
+      {
+        "index": 158,
+        "command": "npm run check:bw36.12",
+        "exit_code": 0,
+        "seconds": 0.42
+      },
+      {
+        "index": 159,
+        "command": "npm run check:bw36.14",
+        "exit_code": 1,
+        "seconds": 1.13
+      },
+      {
+        "index": 160,
+        "command": "npm run check:bw36.14r1",
+        "exit_code": 1,
+        "seconds": 3.04
+      },
+      {
+        "index": 161,
+        "command": "npm run check:bw36.15",
+        "exit_code": 1,
+        "seconds": 2.05
+      },
+      {
+        "index": 162,
+        "command": "npm run check:bw36.15r1",
+        "exit_code": 1,
+        "seconds": 2.06
+      },
+      {
+        "index": 163,
+        "command": "npm run check:bw36.16",
+        "exit_code": 0,
+        "seconds": 31.4
+      },
+      {
+        "index": 164,
+        "command": "npm run check:bw36.16r1",
+        "exit_code": 0,
+        "seconds": 66.01
+      },
+      {
+        "index": 165,
+        "command": "npm run check:bw36.17",
+        "exit_code": 1,
+        "seconds": 2.69
+      },
+      {
+        "index": 166,
+        "command": "npm run check:bw36.17r1",
+        "exit_code": 1,
+        "seconds": 7.5
+      },
+      {
+        "index": 167,
+        "command": "npm run check:bw36.17r2",
+        "exit_code": 0,
+        "seconds": 105.05
+      },
+      {
+        "index": 168,
+        "command": "npm run check:bw36.18",
+        "exit_code": 1,
+        "seconds": 4.23
+      },
+      {
+        "index": 169,
+        "command": "npm run check:bw36.19",
+        "exit_code": 1,
+        "seconds": 1.11
+      },
+      {
+        "index": 170,
+        "command": "npm run check:bw36.19r1",
+        "exit_code": 1,
+        "seconds": 0.73
+      },
+      {
+        "index": 171,
+        "command": "npm run check:bw36.19r2",
+        "exit_code": 1,
+        "seconds": 0.77
+      },
+      {
+        "index": 172,
+        "command": "npm run check:bw36.19r4",
+        "exit_code": 1,
+        "seconds": 0.63
+      },
+      {
+        "index": 173,
+        "command": "npm run check:bw36.19r5",
+        "exit_code": 1,
+        "seconds": 2.0
+      },
+      {
+        "index": 174,
+        "command": "npm run check:bw36.19r6",
+        "exit_code": 1,
+        "seconds": 1.05
+      },
+      {
+        "index": 175,
+        "command": "node scripts/check-bw36-19r7-advisor-visual.js",
+        "exit_code": 0,
+        "seconds": 35.01
+      },
+      {
+        "index": 176,
+        "command": "npm run check:bw36.19r8",
+        "exit_code": 0,
+        "seconds": 43.69
+      },
+      {
+        "index": 177,
+        "command": "node scripts/check-bw25-1-dynamic-insights-translations.js",
+        "exit_code": 0,
+        "seconds": 0.34
+      },
+      {
+        "index": 178,
+        "command": "npm run check:bw25.2",
+        "exit_code": 0,
+        "seconds": 3.1
+      },
+      {
+        "index": 179,
+        "command": "npm run check:bw36.21ar2.2",
+        "exit_code": 0,
+        "seconds": 166.34
+      },
+      {
+        "index": 180,
+        "command": "npm run check:bw36.21ar2.3",
+        "exit_code": 0,
+        "seconds": 216.01
+      },
+      {
+        "index": 181,
+        "command": "npm run check:bw36.21b1",
+        "exit_code": 1,
+        "seconds": 8.11
+      },
+      {
+        "index": 182,
+        "command": "npm run check:bw36.21b2",
+        "exit_code": 124,
+        "seconds": 240.0
+      },
+      {
+        "index": 183,
+        "command": "npm run check:bw36.22a",
+        "exit_code": 124,
+        "seconds": 240.02
+      },
+      {
+        "index": 184,
+        "command": "npm run check:bw36.22b1",
+        "exit_code": 124,
+        "seconds": 240.01
+      },
+      {
+        "index": 185,
+        "command": "npm run check:bw36.22b1r1",
+        "exit_code": 0,
+        "seconds": 72.04
+      },
+      {
+        "index": 186,
+        "command": "npm run check:bw36.22b2",
+        "exit_code": 0,
+        "seconds": 163.8
+      },
+      {
+        "index": 187,
+        "command": "npm run check:bw36.22b2r1",
+        "exit_code": 0,
+        "seconds": 54.73
+      },
+      {
+        "index": 188,
+        "command": "node scripts/check-knowledge-module-browser-globals.js",
+        "exit_code": 0,
+        "seconds": 0.31
+      },
+      {
+        "index": 189,
+        "command": "npm run check:bw36.23a",
+        "exit_code": 0,
+        "seconds": 5.24
+      },
+      {
+        "index": 190,
+        "command": "npm run check:bw36.23a:browser",
+        "exit_code": 0,
+        "seconds": 18.14
+      },
+      {
+        "index": 191,
+        "command": "npm run check:bw36.23ar2",
+        "exit_code": 0,
+        "seconds": 7.16
+      }
+    ],
+    "final_results": [
+      {
+        "index": 0,
+        "command": "node scripts/check-browser-script-integrity.js",
+        "exit_code": 0,
+        "seconds": 0.57
+      },
+      {
+        "index": 1,
+        "command": "npm run check:bw35.1",
+        "exit_code": 0,
+        "seconds": 1.37
+      },
+      {
+        "index": 2,
+        "command": "npm run check:bw35.2",
+        "exit_code": 0,
+        "seconds": 1.37
+      },
+      {
+        "index": 3,
+        "command": "npm run check:bw35.2r1",
+        "exit_code": 0,
+        "seconds": 1.0
+      },
+      {
+        "index": 4,
+        "command": "npm run check:bw35.2r2",
+        "exit_code": 0,
+        "seconds": 0.9
+      },
+      {
+        "index": 5,
+        "command": "npm run check:bw35.2r3",
+        "exit_code": 0,
+        "seconds": 0.85
+      },
+      {
+        "index": 6,
+        "command": "npm run check:bw35.2r4",
+        "exit_code": 0,
+        "seconds": 1.1
+      },
+      {
+        "index": 7,
+        "command": "npm run check:bw35.2r5",
+        "exit_code": 0,
+        "seconds": 0.55
+      },
+      {
+        "index": 8,
+        "command": "npm run check:bw35.2r7",
+        "exit_code": 0,
+        "seconds": 0.75
+      },
+      {
+        "index": 9,
+        "command": "npm run check:bw35.2r8",
+        "exit_code": 0,
+        "seconds": 0.7
+      },
+      {
+        "index": 10,
+        "command": "npm run check:bw35.2r9",
+        "exit_code": 0,
+        "seconds": 0.61
+      },
+      {
+        "index": 11,
+        "command": "npm run check:bw35.3",
+        "exit_code": 0,
+        "seconds": 0.69
+      },
+      {
+        "index": 12,
+        "command": "npm run check:bw35.3r1",
+        "exit_code": 0,
+        "seconds": 0.6
+      },
+      {
+        "index": 13,
+        "command": "npm run check:bw35.3r2",
+        "exit_code": 0,
+        "seconds": 0.54
+      },
+      {
+        "index": 14,
+        "command": "npm run check:bw35.3r3",
+        "exit_code": 0,
+        "seconds": 0.75
+      },
+      {
+        "index": 15,
+        "command": "npm run check:bw35.3r4",
+        "exit_code": 0,
+        "seconds": 1.54
+      },
+      {
+        "index": 16,
+        "command": "npm run check:bw35.3r5",
+        "exit_code": 0,
+        "seconds": 0.7
+      },
+      {
+        "index": 17,
+        "command": "npm run check:bw35.4",
+        "exit_code": 0,
+        "seconds": 1.3
+      },
+      {
+        "index": 18,
+        "command": "npm run check:bw35.4r1",
+        "exit_code": 0,
+        "seconds": 1.19
+      },
+      {
+        "index": 19,
+        "command": "npm run check:bw35.4r2",
+        "exit_code": 0,
+        "seconds": 0.71
+      },
+      {
+        "index": 20,
+        "command": "node scripts/check-bw1-brand-catalog.js",
+        "exit_code": 0,
+        "seconds": 0.14
+      },
+      {
+        "index": 21,
+        "command": "node scripts/check-bw2-ephemeral-brand-selection.js",
+        "exit_code": 0,
+        "seconds": 0.08
+      },
+      {
+        "index": 22,
+        "command": "node scripts/check-bw3-canonical-brand-creation.js",
+        "exit_code": 0,
+        "seconds": 0.07
+      },
+      {
+        "index": 23,
+        "command": "node scripts/check-bw4-durable-brand-selection.js",
+        "exit_code": 0,
+        "seconds": 0.1
+      },
+      {
+        "index": 24,
+        "command": "node scripts/check-bw5-board-brand-association.js",
+        "exit_code": 0,
+        "seconds": 0.09
+      },
+      {
+        "index": 25,
+        "command": "node scripts/check-bw5-board-brand-isolation-regression.js",
+        "exit_code": 0,
+        "seconds": 0.12
+      },
+      {
+        "index": 26,
+        "command": "node scripts/check-bw5-board-brand-resolution-state.js",
+        "exit_code": 0,
+        "seconds": 0.07
+      },
+      {
+        "index": 27,
+        "command": "node scripts/check-bw6-brand-workspace-detail.js",
+        "exit_code": 0,
+        "seconds": 0.12
+      },
+      {
+        "index": 28,
+        "command": "node scripts/check-bw7-canonical-brand-editing.js",
+        "exit_code": 0,
+        "seconds": 0.27
+      },
+      {
+        "index": 29,
+        "command": "node scripts/check-bw8-brand-core-comparison.js",
+        "exit_code": 0,
+        "seconds": 0.19
+      },
+      {
+        "index": 30,
+        "command": "node scripts/check-bw8-brand-core-comparison-lifecycle.js",
+        "exit_code": 0,
+        "seconds": 0.23
+      },
+      {
+        "index": 31,
+        "command": "node scripts/check-bw9-initialize-canonical-brand-core.js",
+        "exit_code": 0,
+        "seconds": 0.07
+      },
+      {
+        "index": 32,
+        "command": "node scripts/check-bw10-brand-scoped-board-library.js",
+        "exit_code": 0,
+        "seconds": 0.07
+      },
+      {
+        "index": 33,
+        "command": "node scripts/check-bw11-create-board-from-canonical-brand.js",
+        "exit_code": 0,
+        "seconds": 0.07
+      },
+      {
+        "index": 34,
+        "command": "node scripts/check-bw12-canonical-snapshot-provenance.js",
+        "exit_code": 0,
+        "seconds": 0.32
+      },
+      {
+        "index": 35,
+        "command": "node scripts/check-bw13-canonical-to-board-refresh.js",
+        "exit_code": 0,
+        "seconds": 0.31
+      },
+      {
+        "index": 36,
+        "command": "node scripts/check-canonical-brand-foundation.js",
+        "exit_code": 0,
+        "seconds": 0.71
+      },
+      {
+        "index": 37,
+        "command": "node scripts/check-bw15-read-only-db-inspector.js",
+        "exit_code": 0,
+        "seconds": 0.19
+      },
+      {
+        "index": 38,
+        "command": "node scripts/check-bw16-timing-safe-session-verification.js",
+        "exit_code": 0,
+        "seconds": 0.13
+      },
+      {
+        "index": 39,
+        "command": "node scripts/check-bw18-board-access-roles.js",
+        "exit_code": 0,
+        "seconds": 0.44
+      },
+      {
+        "index": 40,
+        "command": "node scripts/check-bw18-share-permissions-popover-lifecycle.js",
+        "exit_code": 0,
+        "seconds": 0.06
+      },
+      {
+        "index": 41,
+        "command": "node scripts/check-bw19-private-public-board-sharing.js",
+        "exit_code": 0,
+        "seconds": 0.35
+      },
+      {
+        "index": 42,
+        "command": "node scripts/check-bw20-brand-team-roles.js",
+        "exit_code": 0,
+        "seconds": 0.06
+      },
+      {
+        "index": 43,
+        "command": "node scripts/check-bw20-1-inline-brand-role-management.js",
+        "exit_code": 0,
+        "seconds": 0.12
+      },
+      {
+        "index": 44,
+        "command": "npm run check:workspace-brand-deletion",
+        "exit_code": 0,
+        "seconds": 0.49
+      },
+      {
+        "index": 45,
+        "command": "node scripts/check-bw21-language-separation.js",
+        "exit_code": 0,
+        "seconds": 0.06
+      },
+      {
+        "index": 46,
+        "command": "node scripts/check-bw21-1-inspector-language-coverage.js",
+        "exit_code": 0,
+        "seconds": 0.15
+      },
+      {
+        "index": 47,
+        "command": "node scripts/check-bw23-language-region-settings.js",
+        "exit_code": 0,
+        "seconds": 0.19
+      },
+      {
+        "index": 48,
+        "command": "node scripts/check-bw25-honest-ai-insights-baseline.js",
+        "exit_code": 0,
+        "seconds": 0.06
+      },
+      {
+        "index": 49,
+        "command": "node scripts/check-bw26-read-only-ai-brain.js",
+        "exit_code": 0,
+        "seconds": 0.12
+      },
+      {
+        "index": 50,
+        "command": "node scripts/check-bw36-20r0-ai-brain-board-authorization.js",
+        "exit_code": 0,
+        "seconds": 14.05
+      },
+      {
+        "index": 51,
+        "command": "node scripts/check-bw26-1-real-canvas-context-and-turn-lifecycle.js",
+        "exit_code": 0,
+        "seconds": 1.49
+      },
+      {
+        "index": 52,
+        "command": "node scripts/check-bw26-2-safe-brain-response-formatting.js",
+        "exit_code": 0,
+        "seconds": 0.15
+      },
+      {
+        "index": 53,
+        "command": "node scripts/check-bw26-3-bounded-conversation-memory.js",
+        "exit_code": 0,
+        "seconds": 1.15
+      },
+      {
+        "index": 54,
+        "command": "node scripts/check-bw26-4-reference-resolution.js",
+        "exit_code": 0,
+        "seconds": 1.17
+      },
+      {
+        "index": 55,
+        "command": "node scripts/check-bw26-5-response-language-adherence.js",
+        "exit_code": 0,
+        "seconds": 1.6
+      },
+      {
+        "index": 56,
+        "command": "node scripts/check-bw26-6-controlled-ai-brain-node-creation.js",
+        "exit_code": 0,
+        "seconds": 0.14
+      },
+      {
+        "index": 57,
+        "command": "node scripts/check-bw26-6-1-node-proposal-production-failure.js",
+        "exit_code": 0,
+        "seconds": 0.15
+      },
+      {
+        "index": 58,
+        "command": "node scripts/check-bw26-6-2-node-creation-ui-transition.js",
+        "exit_code": 0,
+        "seconds": 0.26
+      },
+      {
+        "index": 59,
+        "command": "npm run check:bw26.6.3",
+        "exit_code": 0,
+        "seconds": 0.91
+      },
+      {
+        "index": 60,
+        "command": "node scripts/check-bw27-design-system-dark-mode.js",
+        "exit_code": 0,
+        "seconds": 0.07
+      },
+      {
+        "index": 61,
+        "command": "node scripts/check-bw27-1-dark-mode-surface-contrast.js",
+        "exit_code": 0,
+        "seconds": 0.12
+      },
+      {
+        "index": 62,
+        "command": "node scripts/check-bw27-2-premium-dark-mode.js",
+        "exit_code": 0,
+        "seconds": 0.15
+      },
+      {
+        "index": 63,
+        "command": "node scripts/check-bw27-3-final-dark-mode-polish.js",
+        "exit_code": 0,
+        "seconds": 0.17
+      },
+      {
+        "index": 64,
+        "command": "node scripts/check-bw27-4-canvas-component-polish.js",
+        "exit_code": 0,
+        "seconds": 0.1
+      },
+      {
+        "index": 65,
+        "command": "node scripts/check-bw27-5-landing-page-node-dark-mode.js",
+        "exit_code": 0,
+        "seconds": 0.24
+      },
+      {
+        "index": 66,
+        "command": "npm run check:bw27.6",
+        "exit_code": 0,
+        "seconds": 0.75
+      },
+      {
+        "index": 67,
+        "command": "npm run check:bw27.7",
+        "exit_code": 0,
+        "seconds": 0.65
+      },
+      {
+        "index": 68,
+        "command": "node scripts/check-bw28-ai-insights-architecture.js",
+        "exit_code": 0,
+        "seconds": 0.64
+      },
+      {
+        "index": 69,
+        "command": "node scripts/check-bw28-1-insights-ux-and-brain-handoff.js",
+        "exit_code": 0,
+        "seconds": 0.59
+      },
+      {
+        "index": 70,
+        "command": "node scripts/check-bw28-3-premium-insights-and-brand-avatar.js",
+        "exit_code": 0,
+        "seconds": 0.12
+      },
+      {
+        "index": 71,
+        "command": "node scripts/check-bw28-3-1-insights-runtime-rendering.js",
+        "exit_code": 0,
+        "seconds": 0.22
+      },
+      {
+        "index": 72,
+        "command": "node scripts/check-bw29-funnel-simulator.js",
+        "exit_code": 0,
+        "seconds": 0.14
+      },
+      {
+        "index": 73,
+        "command": "node scripts/check-bw29-1-simulator-ux-and-dark-mode.js",
+        "exit_code": 0,
+        "seconds": 0.14
+      },
+      {
+        "index": 74,
+        "command": "npm run check:bw29.3",
+        "exit_code": 0,
+        "seconds": 0.69
+      },
+      {
+        "index": 75,
+        "command": "npm run check:bw29.3.2",
+        "exit_code": 0,
+        "seconds": 0.74
+      },
+      {
+        "index": 76,
+        "command": "npm run check:bw29.3.3",
+        "exit_code": 0,
+        "seconds": 0.64
+      },
+      {
+        "index": 77,
+        "command": "npm run check:bw29.3.4",
+        "exit_code": 0,
+        "seconds": 0.65
+      },
+      {
+        "index": 78,
+        "command": "npm run check:bw29.3.5",
+        "exit_code": 0,
+        "seconds": 0.7
+      },
+      {
+        "index": 79,
+        "command": "npm run check:bw29.4.1",
+        "exit_code": 0,
+        "seconds": 0.5
+      },
+      {
+        "index": 80,
+        "command": "npm run check:bw29.4.2",
+        "exit_code": 0,
+        "seconds": 0.8
+      },
+      {
+        "index": 81,
+        "command": "npm run check:bw30.1",
+        "exit_code": 0,
+        "seconds": 0.7
+      },
+      {
+        "index": 82,
+        "command": "npm run check:bw31.1",
+        "exit_code": 0,
+        "seconds": 0.6
+      },
+      {
+        "index": 83,
+        "command": "npm run check:bw31.2",
+        "exit_code": 0,
+        "seconds": 0.8
+      },
+      {
+        "index": 84,
+        "command": "npm run check:bw31.4",
+        "exit_code": 0,
+        "seconds": 0.9
+      },
+      {
+        "index": 85,
+        "command": "npm run check:bw31.5.1",
+        "exit_code": 0,
+        "seconds": 0.55
+      },
+      {
+        "index": 86,
+        "command": "npm run check:bw31.5.2",
+        "exit_code": 0,
+        "seconds": 0.55
+      },
+      {
+        "index": 87,
+        "command": "npm run check:bw32.1",
+        "exit_code": 0,
+        "seconds": 0.85
+      },
+      {
+        "index": 88,
+        "command": "npm run check:bw32.2",
+        "exit_code": 0,
+        "seconds": 0.8
+      },
+      {
+        "index": 89,
+        "command": "npm run check:bw32.2.1",
+        "exit_code": 0,
+        "seconds": 0.56
+      },
+      {
+        "index": 90,
+        "command": "npm run check:bw32.2.2",
+        "exit_code": 0,
+        "seconds": 0.49
+      },
+      {
+        "index": 91,
+        "command": "npm run check:bw32.2.3",
+        "exit_code": 0,
+        "seconds": 0.9
+      },
+      {
+        "index": 92,
+        "command": "npm run check:bw32.2.5",
+        "exit_code": 0,
+        "seconds": 0.9
+      },
+      {
+        "index": 93,
+        "command": "npm run check:bw32.2.6",
+        "exit_code": 0,
+        "seconds": 0.6
+      },
+      {
+        "index": 94,
+        "command": "npm run check:bw32.2.9",
+        "exit_code": 0,
+        "seconds": 0.75
+      },
+      {
+        "index": 95,
+        "command": "npm run check:bw32.2.10",
+        "exit_code": 0,
+        "seconds": 0.6
+      },
+      {
+        "index": 96,
+        "command": "npm run check:bw32.2.11",
+        "exit_code": 0,
+        "seconds": 0.69
+      },
+      {
+        "index": 97,
+        "command": "npm run check:bw32.2.12",
+        "exit_code": 0,
+        "seconds": 0.66
+      },
+      {
+        "index": 98,
+        "command": "npm run check:bw32.3.1",
+        "exit_code": 0,
+        "seconds": 0.55
+      },
+      {
+        "index": 99,
+        "command": "npm run check:bw32.3.2",
+        "exit_code": 0,
+        "seconds": 0.85
+      },
+      {
+        "index": 100,
+        "command": "npm run check:bw32.3.3",
+        "exit_code": 0,
+        "seconds": 0.8
+      },
+      {
+        "index": 101,
+        "command": "npm run check:bw32.3.5",
+        "exit_code": 0,
+        "seconds": 0.74
+      },
+      {
+        "index": 102,
+        "command": "npm run check:bw32.3.6",
+        "exit_code": 0,
+        "seconds": 0.55
+      },
+      {
+        "index": 103,
+        "command": "npm run check:bw32.3.7",
+        "exit_code": 0,
+        "seconds": 0.75
+      },
+      {
+        "index": 104,
+        "command": "npm run check:bw32.3.8",
+        "exit_code": 0,
+        "seconds": 0.7
+      },
+      {
+        "index": 105,
+        "command": "npm run check:bw32.3.9",
+        "exit_code": 0,
+        "seconds": 0.54
+      },
+      {
+        "index": 106,
+        "command": "npm run check:bw34.1",
+        "exit_code": 0,
+        "seconds": 0.7
+      },
+      {
+        "index": 107,
+        "command": "npm run check:bw34.1r1",
+        "exit_code": 0,
+        "seconds": 0.6
+      },
+      {
+        "index": 108,
+        "command": "npm run check:bw34.1.1",
+        "exit_code": 0,
+        "seconds": 0.8
+      },
+      {
+        "index": 109,
+        "command": "npm run check:bw34.1.2",
+        "exit_code": 0,
+        "seconds": 0.5
+      },
+      {
+        "index": 110,
+        "command": "npm run check:bw34.1.3",
+        "exit_code": 0,
+        "seconds": 0.75
+      },
+      {
+        "index": 111,
+        "command": "npm run check:bw34.1.9",
+        "exit_code": 0,
+        "seconds": 0.75
+      },
+      {
+        "index": 112,
+        "command": "npm run check:bw34.2a",
+        "exit_code": 0,
+        "seconds": 0.7
+      },
+      {
+        "index": 113,
+        "command": "npm run check:bw34.2ar1",
+        "exit_code": 0,
+        "seconds": 0.51
+      },
+      {
+        "index": 114,
+        "command": "npm run check:bw34.2ar2",
+        "exit_code": 0,
+        "seconds": 0.85
+      },
+      {
+        "index": 115,
+        "command": "npm run check:bw34.2ar3",
+        "exit_code": 0,
+        "seconds": 0.65
+      },
+      {
+        "index": 116,
+        "command": "npm run check:bw34.2ar4",
+        "exit_code": 0,
+        "seconds": 0.6
+      },
+      {
+        "index": 117,
+        "command": "npm run check:bw33.2r1",
+        "exit_code": 0,
+        "seconds": 0.7
+      },
+      {
+        "index": 118,
+        "command": "npm run check:bw33.3r1",
+        "exit_code": 0,
+        "seconds": 0.76
+      },
+      {
+        "index": 119,
+        "command": "npm run check:bw33.4a1",
+        "exit_code": 0,
+        "seconds": 0.55
+      },
+      {
+        "index": 120,
+        "command": "npm run check:bw33.4b1r1",
+        "exit_code": 0,
+        "seconds": 0.75
+      },
+      {
+        "index": 121,
+        "command": "npm run check:bw33.4b3",
+        "exit_code": 0,
+        "seconds": 0.6
+      },
+      {
+        "index": 122,
+        "command": "npm run check:bw33.4b3.1",
+        "exit_code": 0,
+        "seconds": 0.84
+      },
+      {
+        "index": 123,
+        "command": "npm run check:bw33.4b4",
+        "exit_code": 0,
+        "seconds": 1.31
+      },
+      {
+        "index": 124,
+        "command": "npm run check:bw33.4b4.1",
+        "exit_code": 0,
+        "seconds": 0.75
+      },
+      {
+        "index": 125,
+        "command": "npm run check:bw33.4b4.2",
+        "exit_code": 0,
+        "seconds": 0.86
+      },
+      {
+        "index": 126,
+        "command": "npm run check:bw33.5",
+        "exit_code": 0,
+        "seconds": 0.79
+      },
+      {
+        "index": 127,
+        "command": "npm run check:bw33.5.1",
+        "exit_code": 0,
+        "seconds": 0.75
+      },
+      {
+        "index": 128,
+        "command": "npm run check:bw36.1r1",
+        "exit_code": 0,
+        "seconds": 0.75
+      },
+      {
+        "index": 129,
+        "command": "npm run check:bw36.2",
+        "exit_code": 0,
+        "seconds": 0.61
+      },
+      {
+        "index": 130,
+        "command": "npm run check:bw36.4",
+        "exit_code": 0,
+        "seconds": 0.71
+      },
+      {
+        "index": 131,
+        "command": "npm run check:bw36.6",
+        "exit_code": 0,
+        "seconds": 0.65
+      },
+      {
+        "index": 132,
+        "command": "npm run check:bw36.7",
+        "exit_code": 0,
+        "seconds": 0.6
+      },
+      {
+        "index": 133,
+        "command": "npm run check:bw36.7r1",
+        "exit_code": 0,
+        "seconds": 0.59
+      },
+      {
+        "index": 134,
+        "command": "npm run check:bw36.7r2",
+        "exit_code": 0,
+        "seconds": 0.7
+      },
+      {
+        "index": 135,
+        "command": "npm run check:bw36.7r3",
+        "exit_code": 0,
+        "seconds": 0.8
+      },
+      {
+        "index": 136,
+        "command": "npm run check:bw36.8",
+        "exit_code": 0,
+        "seconds": 0.5
+      },
+      {
+        "index": 137,
+        "command": "npm run check:bw36.9",
+        "exit_code": 0,
+        "seconds": 0.85
+      },
+      {
+        "index": 138,
+        "command": "npm run check:bw36.9r1",
+        "exit_code": 0,
+        "seconds": 0.7
+      },
+      {
+        "index": 139,
+        "command": "npm run check:bw36.10",
+        "exit_code": 0,
+        "seconds": 0.5
+      },
+      {
+        "index": 140,
+        "command": "npm run check:bw36.10r1",
+        "exit_code": 0,
+        "seconds": 0.7
+      },
+      {
+        "index": 141,
+        "command": "npm run check:bw36.11",
+        "exit_code": 0,
+        "seconds": 0.6
+      },
+      {
+        "index": 142,
+        "command": "npm run check:bw36.11r1",
+        "exit_code": 0,
+        "seconds": 0.75
+      },
+      {
+        "index": 143,
+        "command": "npm run check:bw36.13r1",
+        "exit_code": 0,
+        "seconds": 0.8
+      },
+      {
+        "index": 144,
+        "command": "npm run check:bw36.13r2",
+        "exit_code": 0,
+        "seconds": 0.6
+      },
+      {
+        "index": 145,
+        "command": "npm run check:bw36.13r3",
+        "exit_code": 0,
+        "seconds": 1.65
+      },
+      {
+        "index": 146,
+        "command": "npm run check:bw36.13r3r1",
+        "exit_code": 0,
+        "seconds": 0.95
+      },
+      {
+        "index": 147,
+        "command": "npm run check:bw36.13r4",
+        "exit_code": 0,
+        "seconds": 0.8
+      },
+      {
+        "index": 148,
+        "command": "node scripts/check-bw36-20-approved-learning-ai-brain.js",
+        "exit_code": 0,
+        "seconds": 25.65
+      },
+      {
+        "index": 149,
+        "command": "npm run check:bw36.21ar2.1",
+        "exit_code": 0,
+        "seconds": 231.85
+      },
+      {
+        "index": 150,
+        "command": "npm run check:bw36.21a",
+        "exit_code": 0,
+        "seconds": 82.11
+      },
+      {
+        "index": 151,
+        "command": "node scripts/check-bw36-20r1-learning-integration-review-fixes.js",
+        "exit_code": 0,
+        "seconds": 12.9
+      },
+      {
+        "index": 152,
+        "command": "npm run check:bw36.13r4r1",
+        "exit_code": 0,
+        "seconds": 40.64
+      },
+      {
+        "index": 153,
+        "command": "npm run check:bw36.13r5",
+        "exit_code": 0,
+        "seconds": 35.95
+      },
+      {
+        "index": 154,
+        "command": "npm run check:bw36.13r5r2",
+        "exit_code": 0,
+        "seconds": 22.81
+      },
+      {
+        "index": 155,
+        "command": "npm run check:bw36.13r5r3",
+        "exit_code": 0,
+        "seconds": 15.11
+      },
+      {
+        "index": 156,
+        "command": "npm run check:bw36.13r5r4",
+        "exit_code": 0,
+        "seconds": 11.09
+      },
+      {
+        "index": 157,
+        "command": "npm run check:bw36.13r6",
+        "exit_code": 0,
+        "seconds": 29.5
+      },
+      {
+        "index": 158,
+        "command": "npm run check:bw36.12",
+        "exit_code": 0,
+        "seconds": 0.42
+      },
+      {
+        "index": 159,
+        "command": "npm run check:bw36.14",
+        "exit_code": 0,
+        "seconds": 19.85
+      },
+      {
+        "index": 160,
+        "command": "npm run check:bw36.14r1",
+        "exit_code": 0,
+        "seconds": 89.51
+      },
+      {
+        "index": 161,
+        "command": "npm run check:bw36.15",
+        "exit_code": 0,
+        "seconds": 61.46
+      },
+      {
+        "index": 162,
+        "command": "npm run check:bw36.15r1",
+        "exit_code": 0,
+        "seconds": 24.74
+      },
+      {
+        "index": 163,
+        "command": "npm run check:bw36.16",
+        "exit_code": 0,
+        "seconds": 31.4
+      },
+      {
+        "index": 164,
+        "command": "npm run check:bw36.16r1",
+        "exit_code": 0,
+        "seconds": 66.01
+      },
+      {
+        "index": 165,
+        "command": "npm run check:bw36.17",
+        "exit_code": 0,
+        "seconds": 28.75
+      },
+      {
+        "index": 166,
+        "command": "npm run check:bw36.17r1",
+        "exit_code": 0,
+        "seconds": 21.45
+      },
+      {
+        "index": 167,
+        "command": "npm run check:bw36.17r2",
+        "exit_code": 0,
+        "seconds": 105.05
+      },
+      {
+        "index": 168,
+        "command": "npm run check:bw36.18",
+        "exit_code": 0,
+        "seconds": 17.54
+      },
+      {
+        "index": 169,
+        "command": "npm run check:bw36.19",
+        "exit_code": 0,
+        "seconds": 48.18
+      },
+      {
+        "index": 170,
+        "command": "npm run check:bw36.19r1",
+        "exit_code": 0,
+        "seconds": 40.1
+      },
+      {
+        "index": 171,
+        "command": "npm run check:bw36.19r2",
+        "exit_code": 0,
+        "seconds": 45.7
+      },
+      {
+        "index": 172,
+        "command": "npm run check:bw36.19r4",
+        "exit_code": 0,
+        "seconds": 27.34
+      },
+      {
+        "index": 173,
+        "command": "npm run check:bw36.19r5",
+        "exit_code": 0,
+        "verification": "sequential rerun after installing the lock semantics fixture in the embedded PGlite database"
+      },
+      {
+        "index": 174,
+        "command": "npm run check:bw36.19r6",
+        "exit_code": 0,
+        "verification": "sequential rerun after installing the lock semantics fixture in the embedded PGlite database"
+      },
+      {
+        "index": 175,
+        "command": "node scripts/check-bw36-19r7-advisor-visual.js",
+        "exit_code": 0,
+        "seconds": 35.01
+      },
+      {
+        "index": 176,
+        "command": "npm run check:bw36.19r8",
+        "exit_code": 0,
+        "seconds": 43.69
+      },
+      {
+        "index": 177,
+        "command": "node scripts/check-bw25-1-dynamic-insights-translations.js",
+        "exit_code": 0,
+        "seconds": 0.34
+      },
+      {
+        "index": 178,
+        "command": "npm run check:bw25.2",
+        "exit_code": 0,
+        "seconds": 3.1
+      },
+      {
+        "index": 179,
+        "command": "npm run check:bw36.21ar2.2",
+        "exit_code": 0,
+        "seconds": 166.34
+      },
+      {
+        "index": 180,
+        "command": "npm run check:bw36.21ar2.3",
+        "exit_code": 0,
+        "seconds": 216.01
+      },
+      {
+        "index": 181,
+        "command": "npm run check:bw36.21b1",
+        "exit_code": 0,
+        "seconds": 49.69
+      },
+      {
+        "index": 182,
+        "command": "npm run check:bw36.21b2",
+        "exit_code": 0,
+        "seconds": 173.25
+      },
+      {
+        "index": 183,
+        "command": "npm run check:bw36.22a",
+        "exit_code": 0,
+        "seconds": 133.7
+      },
+      {
+        "index": 184,
+        "command": "npm run check:bw36.22b1",
+        "exit_code": 0,
+        "seconds": 49.03
+      },
+      {
+        "index": 185,
+        "command": "npm run check:bw36.22b1r1",
+        "exit_code": 0,
+        "seconds": 72.04
+      },
+      {
+        "index": 186,
+        "command": "npm run check:bw36.22b2",
+        "exit_code": 0,
+        "seconds": 163.8
+      },
+      {
+        "index": 187,
+        "command": "npm run check:bw36.22b2r1",
+        "exit_code": 0,
+        "seconds": 54.73
+      },
+      {
+        "index": 188,
+        "command": "node scripts/check-knowledge-module-browser-globals.js",
+        "exit_code": 0,
+        "seconds": 0.31
+      },
+      {
+        "index": 189,
+        "command": "npm run check:bw36.23a",
+        "exit_code": 0,
+        "seconds": 5.24
+      },
+      {
+        "index": 190,
+        "command": "npm run check:bw36.23a:browser",
+        "exit_code": 0,
+        "seconds": 18.14
+      },
+      {
+        "index": 191,
+        "command": "npm run check:bw36.23ar2",
+        "exit_code": 0,
+        "seconds": 7.16
+      }
+    ],
+    "new_real_postgres_check": "npm run check:bw36.23ar3:postgres"
+  },
+  "postgres": {
+    "17.6": {
+      "core_groups_passed": 60,
+      "runtime_groups_passed": 22,
+      "runtime_groups": [
+        "existing migration chain + protected Core + additive runtime install",
+        "idempotent runtime install and private protection fingerprint remain compatible",
+        "existing anon/authenticated deny policies remain identical",
+        "real password login with inherited grants and full fail-closed verification",
+        "runtime has no direct Brand writes, history access, owner role or DDL",
+        "Board/document/social initialization uses real read-only runtime checks",
+        "actual first Workspace identity and accepted owner membership persistence",
+        "actual Project command atomically persists Brand, Board, snapshot and receipt",
+        "Brand creation replay holds lock without runtime UPDATE privilege",
+        "Board Canvas, editors and public-sharing persistence",
+        "Brand membership management has only existing table authority",
+        "protected Core mutation and exact single history receipt",
+        "actual Learning governance authorizes with definer row lock and immutable events",
+        "document intents, replacement metadata and real processing lease workflow",
+        "social OAuth, encrypted secret, account, destination, job and attempt persistence",
+        "anon/authenticated cannot read secrets, inherit backend or execute lock helper",
+        "protected deletion retains canonical history through existing Learning cascade triggers",
+        "unexpected group member is rejected and session identity fence denies its reads",
+        "independent connections preserve Brand lock exclusion and rollback",
+        "policy drift aborts atomically instead of broadening access",
+        "non-superuser operator with explicit owner SET authority can rerun installation",
+        "reviewed freeze stops existing-session writes and preserves all history"
+      ],
+      "scope": "disposable localhost PostgreSQL; real password LOGIN, RLS, role inheritance and independent connections; no production connection"
+    },
+    "18.4": {
+      "core_groups_passed": 60,
+      "runtime_groups_passed": 22,
+      "runtime_groups": [
+        "existing migration chain + protected Core + additive runtime install",
+        "idempotent runtime install and private protection fingerprint remain compatible",
+        "existing anon/authenticated deny policies remain identical",
+        "real password login with inherited grants and full fail-closed verification",
+        "runtime has no direct Brand writes, history access, owner role or DDL",
+        "Board/document/social initialization uses real read-only runtime checks",
+        "actual first Workspace identity and accepted owner membership persistence",
+        "actual Project command atomically persists Brand, Board, snapshot and receipt",
+        "Brand creation replay holds lock without runtime UPDATE privilege",
+        "Board Canvas, editors and public-sharing persistence",
+        "Brand membership management has only existing table authority",
+        "protected Core mutation and exact single history receipt",
+        "actual Learning governance authorizes with definer row lock and immutable events",
+        "document intents, replacement metadata and real processing lease workflow",
+        "social OAuth, encrypted secret, account, destination, job and attempt persistence",
+        "anon/authenticated cannot read secrets, inherit backend or execute lock helper",
+        "protected deletion retains canonical history through existing Learning cascade triggers",
+        "unexpected group member is rejected and session identity fence denies its reads",
+        "independent connections preserve Brand lock exclusion and rollback",
+        "policy drift aborts atomically instead of broadening access",
+        "non-superuser operator with explicit owner SET authority can rerun installation",
+        "reviewed freeze stops existing-session writes and preserves all history"
+      ],
+      "scope": "disposable localhost PostgreSQL; real password LOGIN, RLS, role inheritance and independent connections; no production connection"
+    }
+  },
+  "changed_files": [
+    ".github/workflows/runtime-boot-safety.yml",
+    "api/_boards-storage.js",
+    "api/_brand-creation.js",
+    "api/_brand-learnings.js",
+    "api/_campaign-creation.js",
+    "api/_document-processing-records.js",
+    "api/_document-records.js",
+    "api/_learning-advisor.js",
+    "api/_project-command.js",
+    "api/_runtime-schema.js",
+    "api/brands/[id]/learning-advisor.js",
+    "api/brands/[id]/logo.js",
+    "api/social-connector/schema.js",
+    "docs/implementations/bw36-23a-r3-restricted-runtime-access.md",
+    "docs/implementations/bw36-23a-r3-validation.json",
+    "docs/runbooks/bw36-23-brand-knowledge-protection.md",
+    "migrations/20261021_bw36_23a_restricted_runtime_access.rollback.sql",
+    "migrations/20261021_bw36_23a_restricted_runtime_access.sql",
+    "migrations/20261021_bw36_23a_restricted_runtime_access.verify.sql",
+    "package.json",
+    "scripts/check-bw12-canonical-snapshot-provenance.js",
+    "scripts/check-bw13-canonical-to-board-refresh.js",
+    "scripts/check-bw18-board-access-roles.js",
+    "scripts/check-bw19-private-public-board-sharing.js",
+    "scripts/check-bw33-5-1-social-publishing-destinations-rls.js",
+    "scripts/check-bw36-13r3-authoritative-project-creation.js",
+    "scripts/check-bw36-13r4-guided-brand-profile-setup.js",
+    "scripts/check-bw36-14r1-restore-complete-campaign-v3.js",
+    "scripts/check-bw36-15-campaign-team-responsibilities.js",
+    "scripts/check-bw36-17-governed-brand-learnings.js",
+    "scripts/check-bw36-17r1-learning-provenance-schema.js",
+    "scripts/check-bw36-18-governed-learning-provenance.js",
+    "scripts/check-bw36-19r5-simplified-learning-generation.js",
+    "scripts/check-bw36-20r0-ai-brain-board-authorization.js",
+    "scripts/check-bw36-23a-r3-runtime-postgres.js",
+    "scripts/check-canonical-brand-foundation.js",
+    "scripts/fixtures/bw36-13r5-local-runtime.js",
+    "scripts/fixtures/bw36-17-local-runtime.js",
+    "scripts/fixtures/bw36-19-database.js",
+    "scripts/fixtures/bw36-19r6-browser.js",
+    "scripts/fixtures/bw36-20-database.js",
+    "scripts/fixtures/bw36-23a-r3-boards.sql",
+    "scripts/fixtures/bw36-23a-r3-lock.sql"
+  ],
+  "sql_sha256": {
+    "migrations/20261021_bw36_23a_restricted_runtime_access.rollback.sql": "893fa914a0a9d09965d79a1462dbce4891e80918bf0aefe370b12b689fb48ca8",
+    "migrations/20261021_bw36_23a_restricted_runtime_access.sql": "57daf26151b94ae8317ecde6588c25184856d95932cd210650c91abc2fd88879",
+    "migrations/20261021_bw36_23a_restricted_runtime_access.verify.sql": "204db46fff0091602de39130075f45de12aaedeb4794cd682315b1042839c3e6"
+  },
+  "review": {
+    "kind": "Codex implementation self-review; no independent approval claimed",
+    "open_blocking_findings": [],
+    "fixed_findings": [
+      "Brand row locks required forbidden direct UPDATE privilege; use exact-body-verified lock-only definer in separate owner schema",
+      "JSON function timestamps and pg Date objects caused Project provenance validation failure",
+      "document/Social runtime initialization still issued DDL; replace with read-only readiness checks",
+      "Supabase operator is not a superuser; create helper under SET LOCAL ROLE in owner schema and rehearse non-superuser install",
+      "freeze must revoke column and direct-login grants, drain active transactions and retain history",
+      "backend policies require immutable session identity and exact membership options",
+      "new policy/function drift must abort installation before COMMIT"
+    ],
+    "remaining_activation_gates": [
+      "separate production SQL/credential/deployment authorization",
+      "backup/PITR and asset-byte restore rehearsal",
+      "private production schema/ACL/operator-authority review",
+      "actual Supabase custom-role TLS authentication and current_user/session_user verification (transaction pooler remains untested)",
+      "complete restricted-login staging and required GitHub CI",
+      "server-only BRAND_KNOWLEDGE_REVIEW_KEY, vault/storage/OAuth secrets",
+      "drained old writers, approved smoke fixtures, monitoring and freeze window"
+    ]
+  }
+}

@@ -22,7 +22,7 @@ class MemoryDb {
     if(sql.includes('FROM public.workspaces'))return {rows:db.options.noWorkspace?[]:[{id:W,name:'Workspace',status:db.options.workspaceStatus||'active',revision:'1'}]};
     if(sql.includes('FROM public.workspace_memberships'))return {rows:db.options.noMembership?[]:[{role:db.options.workspaceRole||'owner',status:db.options.membershipStatus||'accepted'}]};
     if(sql.includes('FROM public.project_commands'))return {rows:db.commands.filter(c=>c.request_id===args[1])};
-    if(sql.includes('SELECT id FROM public.brands'))return {rows:db.brands.filter(b=>b.id===args[0])};
+    if(sql.includes('SELECT tendra_runtime_private.lock_brand('))return {rows:db.brands.filter(b=>b.id===args[0])};
     if(sql.includes('SELECT role FROM brand_members'))return {rows:[]};
     if(sql.includes('FROM brands b')){const brand=db.brands.find(b=>b.id===args[0]);return {rows:!brand||db.options.inaccessible?[]:[{...brand,workspace_id:db.options.crossWorkspace?OTHER:brand.workspace_id,brand_access_role:db.options.brandRole||'owner'}]};}
     if(sql.startsWith('SELECT brand_knowledge_private.create_brand(')){

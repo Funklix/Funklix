@@ -24,7 +24,8 @@ async function execute({db,user,canonicalEmail,input}){
     const workspace=(await client.query('SELECT id,name,status FROM public.workspaces WHERE id=$1 FOR SHARE',[board.workspace_id])).rows[0];
     const membership=(await client.query('SELECT role,status FROM public.workspace_memberships WHERE workspace_id=$1 AND identity_id=$2 FOR SHARE',[board.workspace_id,identity.identityId])).rows[0];
     if(!workspace||workspace.status!=='active'||membership?.status!=='accepted')reject('PERMISSION_DENIED');
-    const brand=(await client.query('SELECT id,workspace_id,name,logo_object_path,logo_mime_type,logo_source,logo_revision FROM public.brands WHERE id=$1 FOR SHARE',[board.brand_id])).rows[0];
+    await client.query('SELECT tendra_runtime_private.lock_brand($1,$2)', [board.brand_id,false]);
+    const brand=(await client.query('SELECT id,workspace_id,name,logo_object_path,logo_mime_type,logo_source,logo_revision FROM public.brands WHERE id=$1',[board.brand_id])).rows[0];
     if(!brand||brand.workspace_id!==board.workspace_id)reject('CONFLICT');
     ({access}=await getBoardAccess(board.id,user,{client,columns:'id,brand_id,owner_id,owner_email'}));
     if(!access?.canEdit||access.role==='unowned')reject('PERMISSION_DENIED');

@@ -130,7 +130,7 @@ function extract(brand,board,learnings,scope) {
 async function loadScope(client,user,brandId,scope,authorized) {
   const {brand:authority,identity}=authorized || await learning.authorize(client,user,brandId,false);
   if(!brandCapabilities(authority.role).canEditCanonicalBrand) fail('BRAND_ACCESS_DENIED',403);
-  const brand=(await client.query('SELECT id,name,revision,workspace_id,brand_core FROM public.brands WHERE id=$1 FOR SHARE',[brandId])).rows[0];
+  const brand=(await client.query('SELECT id,name,revision,workspace_id,brand_core FROM public.brands WHERE id=$1',[brandId])).rows[0];
   const membership=(await client.query(`SELECT w.id FROM public.workspaces w JOIN public.workspace_memberships m ON m.workspace_id=w.id
     WHERE w.id=$1 AND w.status='active' AND m.identity_id=$2 AND m.status='accepted' FOR SHARE OF w,m`,[scope.workspace_id,identity.identityId])).rows[0];
   if(!membership||brand?.workspace_id!==scope.workspace_id) fail('WORKSPACE_ACCESS_DENIED',403);

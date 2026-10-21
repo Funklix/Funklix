@@ -13,6 +13,7 @@ function learningRuntime({queryExtension,fetchImpl} = {}) {
   const state = () => tx || db;
   async function query(sql, args = []) {
     sql=sql.replace(/\s+/g,' ').trim(); db.queries.push({sql,args:clone(args)});
+    if (sql.includes('SELECT tendra_runtime_private.lock_brand(')) return rows([]);
     if (sql === 'BEGIN') { tx=clone({learnings:db.learnings,events:db.events}); return rows([]); }
     if (sql === 'ROLLBACK') { tx=null; return rows([]); }
     if (sql === 'COMMIT') { if(db.failCommit)throw Object.assign(new Error('private failure'),{code:'ECONNREFUSED'}); Object.assign(db,tx);tx=null;return rows([]); }

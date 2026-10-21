@@ -18,61 +18,8 @@ async function ensureDocumentProcessingTables(client = pool) {
 }
 
 async function createSchema(client) {
-  return client.query(`
-    CREATE TABLE IF NOT EXISTS brand_document_processing_jobs (
-      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      board_id UUID NOT NULL REFERENCES boards(id) ON DELETE CASCADE,
-      tile_id TEXT NOT NULL,
-      source_type TEXT NOT NULL CHECK (source_type IN ('pitch_deck','whitepaper')),
-      document_id UUID NOT NULL REFERENCES brand_documents(id) ON DELETE CASCADE,
-      document_revision INTEGER NOT NULL CHECK (document_revision > 0),
-      content_hash TEXT NOT NULL CHECK (char_length(content_hash) = 64),
-      state TEXT NOT NULL CHECK (state IN ('queued','scanning','blocked','processing','completed','failed','cancelled','superseded')),
-      attempt_count INTEGER NOT NULL DEFAULT 0 CHECK (attempt_count BETWEEN 0 AND 3),
-      max_attempts INTEGER NOT NULL DEFAULT 3 CHECK (max_attempts BETWEEN 1 AND 3),
-      safe_error_code TEXT,
-      parser_version TEXT NOT NULL DEFAULT 'none-phase-b1',
-      chunker_version TEXT NOT NULL DEFAULT 'none-phase-b1',
-      scan_status TEXT NOT NULL DEFAULT 'not_configured' CHECK (scan_status IN ('not_configured','pending','clean','infected','error')),
-      scan_reference TEXT,
-      scan_version TEXT,
-      schema_version INTEGER NOT NULL DEFAULT 1,
-      lease_token TEXT,
-      lease_owner TEXT,
-      lease_expires_at TIMESTAMPTZ,
-      requested_by TEXT NOT NULL,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      started_at TIMESTAMPTZ,
-      completed_at TIMESTAMPTZ,
-      cancelled_at TIMESTAMPTZ,
-      superseded_at TIMESTAMPTZ,
-      UNIQUE(board_id,tile_id,source_type,document_id,document_revision,content_hash)
-    );
-    CREATE UNIQUE INDEX IF NOT EXISTS brand_document_processing_active_revision_uidx
-      ON brand_document_processing_jobs(board_id,tile_id,source_type,document_id,document_revision,content_hash)
-      WHERE state IN ('queued','scanning','processing');
-    CREATE INDEX IF NOT EXISTS brand_document_processing_claim_idx
-      ON brand_document_processing_jobs(state,created_at) WHERE state = 'queued';
-    CREATE TABLE IF NOT EXISTS brand_document_processing_results (
-      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      job_id UUID NOT NULL UNIQUE REFERENCES brand_document_processing_jobs(id) ON DELETE CASCADE,
-      board_id UUID NOT NULL REFERENCES boards(id) ON DELETE CASCADE,
-      tile_id TEXT NOT NULL,
-      source_type TEXT NOT NULL CHECK (source_type IN ('pitch_deck','whitepaper')),
-      document_id UUID NOT NULL REFERENCES brand_documents(id) ON DELETE CASCADE,
-      document_revision INTEGER NOT NULL CHECK (document_revision > 0),
-      content_hash TEXT NOT NULL CHECK (char_length(content_hash) = 64),
-      parser_version TEXT NOT NULL,
-      chunker_version TEXT NOT NULL,
-      scan_reference TEXT,
-      scan_version TEXT,
-      schema_version INTEGER NOT NULL DEFAULT 1,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      superseded_at TIMESTAMPTZ,
-      UNIQUE(board_id,tile_id,source_type,document_id,document_revision,content_hash)
-    );
-  `);
+  return require('./_runtime-schema').requireRuntimeTables(client,
+    ['brand_document_processing_jobs','brand_document_processing_results']);
 }
 
 function publicJob(row) {

@@ -22,6 +22,7 @@ async function databaseChecks({canvas:savedCanvas}={}){
   await pg.query('INSERT INTO brands VALUES ($1,$2,$3,1,$4,$5::jsonb)',[B,EMAIL,'Fixture Brand',W,JSON.stringify({brandCore:'Useful marketing.'})]);
   const canvas=savedCanvas||{schemaVersion:1,nodes:[{id:'node-1',type:'Content',title:'CTA',content:'Use a clear next step.'}],edges:[]};
   await pg.query('INSERT INTO boards VALUES ($1,$2,$3,$4,$5::jsonb,NULL,1,$6,NULL,$7)',[boardId,B,W,'Saved Board',JSON.stringify(canvas),time,EMAIL]);
+  await pg.exec(fs.readFileSync('scripts/fixtures/bw36-23a-r3-lock.sql','utf8'));
   for(const file of ['20261011_bw36_17_governed_brand_learnings.sql','20261011_bw36_17r1_learning_provenance_schema.sql','20261012_bw36_17r2_learning_provenance_recovery.sql'])await pg.exec(fs.readFileSync('migrations/'+file,'utf8'));
   const scope={workspace_id:W,board_id:boardId,expected_brand_revision:'1',expected_board_updated_at:time,include_discussions:false,excluded_threads:[],language:'en'};
   const suggestion={type:'learning_candidate',statement:'Use a clear next step.',rationale:'The source explicitly states this.',confidence:'medium',confidence_reason:'Explicit wording, unverified performance.',

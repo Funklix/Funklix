@@ -126,6 +126,7 @@ function publicBrand(row, columns) {
 boardsStorage.pool.query = async (sql, params = []) => {
   const text = String(sql);
   queries.push({ text, params });
+  if(text.includes("to_regclass('public.boards')")) return {rows:[{boards:"boards",editors:"board_editors"}]};
   if(text.includes("to_regclass('public.brand_knowledge_history')"))return {rows:[{protected_history:null}]};
   if(text.includes("to_regclass('public.brands')"))return {rows:[{brands:'brands',members:'brand_members'}]};
   if (injectedFailure && injectedFailure.test(text)) {
@@ -278,7 +279,8 @@ function runIsolatedProbe(source) {
   }
 
   // Static schema/API contracts: nullable additive relation, no backfill/snapshot rewrite, no PUT mutation.
-  const boardStorageSource = fs.readFileSync(require.resolve("../api/_boards-storage"), "utf8");
+  const boardStorageSource = fs.readFileSync("scripts/fixtures/bw36-23a-r3-boards.sql", "utf8");
+  assert.doesNotMatch(fs.readFileSync(require.resolve("../api/_boards-storage"), "utf8"),/CREATE TABLE|ALTER TABLE/);
   const boardItemSource = fs.readFileSync(require.resolve("../api/boards/[id]"), "utf8");
   assert(boardStorageSource.includes("ADD COLUMN IF NOT EXISTS brand_id UUID"));
   assert(!boardStorageSource.includes("brand_id UUID NOT NULL"));
@@ -295,32 +297,11 @@ function runIsolatedProbe(source) {
     let attempts=0;storage.pool.query=async sql=>{if(/CREATE|ALTER|INSERT|UPDATE|DELETE/.test(sql))throw Error('Brand reads must not mutate schema');attempts++;return {rows:[attempts===1?{}:{brands:'brands',members:'brand_members'}]}};
     (async()=>{await require('assert').rejects(()=>brands.ensureBrandsTable(),/BRAND_SCHEMA_UNAVAILABLE/);await brands.ensureBrandsTable();await brands.ensureBrandsTable();if(attempts!==3)throw Error('schema probe retry missing')})().catch(e=>{console.error(e);process.exit(1)});`;
   runIsolatedProbe(retryProbe);
-  const boardRetryProbe = `
-    const storage=require('./api/_boards-storage');
-    let failed=false,boardCreates=0; storage.pool.query=async(sql)=>{const text=String(sql);if(text.includes("to_regclass('public.brand_knowledge_history')"))return {rows:[{protected_history:null}]};if(text.includes('CREATE TABLE IF NOT EXISTS boards')){boardCreates++;if(!failed){failed=true;throw new Error('first board failure')}}if(text.includes("to_regclass('boards')"))return {rows:[{boards_exist:true,brands_exist:false}]};return {rows:[]}};
-    (async()=>{let rejected=false;try{await storage.ensureBoardsTable()}catch(e){rejected=true}if(!rejected)throw new Error('board first call must fail');await storage.ensureBoardsTable();if(boardCreates!==2)throw new Error('board retry missing');const completedCalls=boardCreates;await storage.ensureBoardsTable();if(boardCreates!==completedCalls)throw new Error('board initialization is not idempotent')})().catch(e=>{console.error(e);process.exit(1)});`;
-  runIsolatedProbe(boardRetryProbe);
-
-  const brandFailureIsolationProbe = `
-    const storage=require('./api/_boards-storage');const brands=require('./api/_brands-storage');
-    let boardCreates=0;
-    storage.pool.query=async(sql)=>{const text=String(sql);if(text.includes("to_regclass('public.brand_knowledge_history')"))return {rows:[{protected_history:null}]};if(text.includes('CREATE TABLE IF NOT EXISTS brands'))throw new Error('brand bootstrap failure');if(text.includes('CREATE TABLE IF NOT EXISTS boards'))boardCreates++;if(text.includes("to_regclass('boards')"))return {rows:[{boards_exist:true,brands_exist:false}]};return {rows:[]}};
-    (async()=>{let brandRejected=false;try{await brands.ensureBrandsTable()}catch{brandRejected=true}if(!brandRejected)throw new Error('brand failure did not propagate');await storage.ensureBoardsTable();if(boardCreates!==1)throw new Error('brand failure blocked board initialization')})().catch(e=>{console.error(e);process.exit(1)});`;
-  runIsolatedProbe(brandFailureIsolationProbe);
-
-  const relationshipProbe = `
-    const storage=require('./api/_boards-storage');const brands=require('./api/_brands-storage');
-    let boards=false,brand=false,relationAttempts=0,failRelation=true,boardCreates=0,brandCreates=0;
-    storage.pool.query=async(sql)=>{const text=String(sql);if(text.includes("to_regclass('public.brand_knowledge_history')"))return {rows:[{protected_history:null}]};if(text.includes('CREATE TABLE IF NOT EXISTS boards')){boards=true;boardCreates++}if(text.includes("to_regclass('public.brands')")){brand=true;brandCreates++;return {rows:[{brands:'brands',members:'brand_members'}]}}if(text.includes("to_regclass('boards')"))return {rows:[{boards_exist:boards,brands_exist:brand}]};if(text.includes('ADD CONSTRAINT boards_brand_id_fkey')){relationAttempts++;if(failRelation){failRelation=false;throw new Error('relationship failure')}}return {rows:[]}};
-    (async()=>{await storage.ensureBoardsTable();if(boardCreates!==1||relationAttempts!==0)throw new Error('boards-first availability failed');await brands.ensureBrandsTable();if(brandCreates!==1||relationAttempts!==0)throw new Error('Brand probe must not run Board DDL');await storage.ensureBoardsTable();if(relationAttempts!==1)throw new Error('relationship attempt missing');await storage.ensureBoardsTable();if(relationAttempts!==2)throw new Error('relationship retry missing');await storage.ensureBoardsTable();if(relationAttempts!==2)throw new Error('relationship reconciliation not idempotent')})().catch(e=>{console.error(e);process.exit(1)});`;
-  runIsolatedProbe(relationshipProbe);
-
-  const brandsFirstProbe = `
-    const storage=require('./api/_boards-storage');const brands=require('./api/_brands-storage');
-    let boards=false,brand=false,relations=0;
-    storage.pool.query=async(sql)=>{const text=String(sql);if(text.includes("to_regclass('public.brand_knowledge_history')"))return {rows:[{protected_history:null}]};if(text.includes('CREATE TABLE IF NOT EXISTS boards'))boards=true;if(text.includes("to_regclass('public.brands')")){brand=true;return {rows:[{brands:'brands',members:'brand_members'}]}}if(text.includes("to_regclass('boards')"))return {rows:[{boards_exist:boards,brands_exist:brand}]};if(text.includes('ADD CONSTRAINT boards_brand_id_fkey'))relations++;return {rows:[]}};
-    (async()=>{await brands.ensureBrandsTable();if(relations!==0)throw new Error('missing boards was not safe');await storage.ensureBoardsTable();if(relations!==1)throw new Error('brands-first relationship was not reconciled')})().catch(e=>{console.error(e);process.exit(1)});`;
-  runIsolatedProbe(brandsFirstProbe);
+  const boardReadinessProbe = `const storage=require('./api/_boards-storage');
+    let attempts=0,ready=false;
+    storage.pool.query=async sql=>{if(/CREATE|ALTER|INSERT|UPDATE|DELETE/.test(sql))throw Error('Board reads must not mutate schema');attempts++;return {rows:[ready?{boards:'boards',editors:'board_editors'}:{}]}};
+    (async()=>{await require('assert').rejects(()=>storage.ensureBoardsTable(),/BOARD_SCHEMA_UNAVAILABLE/);ready=true;await storage.ensureBoardsTable();await storage.ensureBoardsTable();if(attempts!==2)throw Error('readiness retry/cache missing')})().catch(e=>{console.error(e);process.exit(1)});`;
+  runIsolatedProbe(boardReadinessProbe);
 
   console.log("Canonical Brand Phase 1A.1 hardening checks passed (mock/contract coverage; no live PostgreSQL integration)." );
 })().catch((error) => { process.stderr.write(`${error?.stack || error}\n`); process.exitCode = 1; }).finally(() => { boardsStorage.pool.query = originalQuery; });

@@ -72,7 +72,8 @@ const protectedTables = new Set([...originalTables, 'social_publishing_destinati
 assert.strictEqual(protectedTables.size, 14);
 
 const runtimeSchema = [
-  read('api/_boards-storage.js'),
+  read('scripts/fixtures/bw36-23a-r3-boards.sql'),
+  read('migrations/20261021_bw36_23a_restricted_runtime_access.sql'),
   read('api/_brands-storage.js'),
   read('api/_document-records.js'),
   read('api/_document-processing-records.js'),

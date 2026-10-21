@@ -19,6 +19,7 @@ function runtime(options = {}) {
   const state = () => tx || db;
   async function query(sql, args = []) {
     sql = sql.replace(/\s+/g, ' ').trim(); db.queries.push(sql); events.push(sql);
+    if (sql.includes('SELECT tendra_runtime_private.lock_brand(')) return rows([]);
     const used = new Set([...sql.matchAll(/\$(\d+)/g)].map(m => +m[1]));
     for (let i = 1; i <= args.length; i++) if (!used.has(i)) { const error = new Error('untyped SQL parameter'); error.code = '42P18'; throw error; }
     if (/LEFT JOIN brand_members/.test(sql) && /FOR UPDATE$/.test(sql)) {
@@ -103,7 +104,7 @@ function runtime(options = {}) {
     let source = fs.readFileSync(location, 'utf8');
     if (options.originalLogoLock && relativeName(location) === 'api/brands/[id]/logo.js') {
       // Restore merged R5R3's lock clause and catch-all classification to reproduce its HTTP 500.
-      source = source.replace('FOR UPDATE OF b', 'FOR UPDATE')
+      source = source.replace('WHERE b.id=$1`', 'WHERE b.id=$1 FOR UPDATE`')
         .replace(/:stage==='metadata_update'\?[^;]+;/, ":'UPDATE_FAILED';");
     }
     vm.runInNewContext(source, { module, exports: module.exports, require: req, process: { env }, Buffer, URL, AbortSignal, setTimeout, clearTimeout, fetch: externalFetch, console: { error: (...v) => logs.push(v), debug: (...v) => logs.push(v), log() {} } }, { filename: relativeName(location) });
