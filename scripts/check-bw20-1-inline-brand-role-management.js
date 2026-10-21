@@ -12,7 +12,8 @@ const workflow = read('.github/workflows/runtime-boot-safety.yml');
 
 // The existing POST upsert updates one unique membership without delete/recreate.
 assert.match(members, /ON CONFLICT \(brand_id, email\) DO UPDATE SET role = EXCLUDED\.role/);
-assert.match(storage, /UNIQUE \(brand_id, email\)/);
+assert.match(storage, /to_regclass\('public\.brand_members'\)/);
+assert.match(read('scripts/fixtures/bw20-existing-brand-members.sql'), /UNIQUE \(brand_id, email\)/);
 assert.doesNotMatch(members.match(/if \(req\.method === 'DELETE'\)[^]*?const role =/)?.[0] || '', /req\.method === 'POST'[^]*DELETE FROM brand_members/);
 
 // Server-derived capabilities retain the BW-20 Owner/Admin/Editor/Viewer boundary.

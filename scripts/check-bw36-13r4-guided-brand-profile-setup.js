@@ -8,6 +8,8 @@ const { createRequire } = require('node:module');
 const { createHash } = require('node:crypto');
 globalThis.fetch = () => { throw new Error('Real network forbidden'); };
 const profile = require('../brand-profile-setup');
+const writes = require('../brand-write-contract');
+process.env.BRAND_KNOWLEDGE_REVIEW_KEY='fixture-review-signing-key-with-32-bytes';
 const language = require('../language');
 const command = require('../project-command');
 const registry = require('../knowledge-module-registry');
@@ -23,12 +25,13 @@ function makeSession(overrides = {}) {
   let context = { account: {}, generation: 1, workspaceId: W, brandId: B, authorized: true };
   const calls = [], saves = [], logos = []; let persisted = clone(overrides.brand || brand);
   const options = { brand: clone(brand), getContext: () => context, validateBrand: value => value?.id === B && Number.isSafeInteger(value.revision) && value.access && value.brand_core,
-    requestId: () => `test-${calls.length}`, onSave: value => saves.push(value), onLogo: (...args) => logos.push(args),
+    confirmReview: async () => true, requestId: () => `test-${calls.length}`, onSave: value => saves.push(value), onLogo: (...args) => logos.push(args),
     fetchImpl: async (url, init) => {
       const body = init.body ? JSON.parse(init.body) : null; calls.push({ url, init, body });
       if (url === '/api/analyze-brand-domain') return response({ suggestions, logoDiscovery: candidate });
+      if (url.endsWith('/write-preview')) return response({changes:body.changes || [],review_token:'fixture'});
       if (url.endsWith('/logo')) { persisted = { ...persisted, logo_url: `/api/brands/${B}/logo?revision=${body.expected_revision + 1}`, logo_revision: body.expected_revision + 1 }; return response({ contract: 'brand_logo_v1', request_id: body.request_id, logo: { logo_url: `/api/brands/${B}/logo?revision=${body.expected_revision + 1}`, logo_revision: body.expected_revision + 1, source: body.action === 'upload' ? 'uploaded' : 'discovered' } }); }
-      if (init.method === 'PUT') { persisted = { ...persisted, name: body.name, brand_core: body.brand_core, revision: body.revision + 1 }; return response(persisted); }
+      if (init.method === 'PUT') { writes.normalize(body); assert.equal(body.workspace_id,W); persisted = { ...persisted, ...writes.apply(persisted,body), revision: persisted.revision + (body.changes.length ? 1 : 0) }; return response(persisted); }
       return response(persisted);
     }, ...overrides };
   return { options, session: profile.createSession(options), calls, saves, logos, change(value) { context = { ...context, ...value }; } };
@@ -76,12 +79,16 @@ function loadBoundary(file, overrides, env = {}) {
   return module.exports;
 }
 async function checkLogoBoundary() {
-  const trace = [], objects = new Map(); let role = 'owner', failure = false, savedRow = { id: B, workspace_id: W, logo_object_path: null, logo_source: null, logo_revision: 0 };
+  const trace = [], objects = new Map(); let role = 'owner', failure = false, savedRow = { ...clone(brand), owner_email:'fixture@example.com', workspace_id: W, logo_object_path: null, logo_source: null, logo_revision: 0 };
+  const history=[];
   const client = { release() {}, async query(sql, args = []) {
     trace.push(sql);
+    savedRow.owner_email=role==='owner'?'fixture@example.com':'other@example.com';
+    const result=require('./fixtures/bw36-23-protected-memory').protectedQuery(sql,args,{state:()=>({brands:[savedRow],boards:[],history}),db:{identityStatus:'active',membershipStatus:'accepted',brandRole:role},email:'fixture@example.com',workspace:W,now});
+    if(result)return result;
     if (sql.includes('SELECT b.id')) return { rows: [{ ...savedRow, role }] };
     if (sql.includes('SELECT 1 FROM workspace_memberships')) return { rowCount: 1, rows: [{}] };
-    if (sql.includes('UPDATE brands SET logo_object_path=$2')) { savedRow = { ...savedRow, logo_object_path: args[1], logo_mime_type: args[2], logo_source: args[3], logo_source_host: args[4], logo_updated_at: '2026-10-09T09:11:00.000Z', logo_revision: savedRow.logo_revision + 1 }; return { rowCount: 1 }; }
+
     if (sql.startsWith('SELECT id,')) return { rows: [savedRow] };
     return { rows: [] };
   } };
@@ -95,17 +102,17 @@ async function checkLogoBoundary() {
       read: async key => objects.get(key), remove: async key => { objects.delete(key); }
     }
   });
-  const invoke = async body => { const res = { setHeader() {}, status(code) { this.code = code; return this; }, json(body) { this.body = body; }, send(body) { this.body = body; } }; await handler({ method: 'POST', query: { id: B }, user: { email: 'fixture@example.com' }, body }, res); return res; };
+  const invoke = async body => { const res = { setHeader() {}, status(code) { this.code = code; return this; }, json(body) { this.body = body; }, send(body) { this.body = body; } }; await handler({ method: 'POST', query: { id: B }, user: { email: 'fixture@example.com' }, body, headers: {'x-brand-review': require('../api/_brand-knowledge-write').signReview(require('../api/_brand-knowledge-write').proof('fixture@example.com',B,body))} }, res); return res; };
   const input = { contract: 'brand_logo_v1', action: 'upload', expected_revision: 0, request_id: 'upload-1', workspace_id: W, mime_type: 'image/png', image_base64: png.toString('base64') };
   role = 'viewer'; assert.equal((await invoke(input)).code, 403); assert.equal(objects.size, 0);
   role = 'unrelated'; assert.equal((await invoke(input)).code, 403); assert.equal(objects.size, 0);
   role = 'editor'; failure = true; const unavailable = await invoke(input); assert.equal(unavailable.code, 503); assert.equal(unavailable.body.error.code, 'STORAGE_UNAVAILABLE'); assert.equal(objects.size, 0); assert.equal(savedRow.logo_revision, 0);
   failure = false; let result = await invoke(input); assert.equal(result.code, 200); assert.equal(objects.size, 1); assert.equal(result.body.logo.logo_revision, 1); assert(trace.includes('COMMIT'));
-  assert.equal((await invoke(input)).code, 409); assert.equal(objects.size, 1);
-  result = await invoke({ ...input, expected_revision: 1, action: 'discover', candidate_url: candidate.candidate_url, image_sha256: candidate.image_sha256 });
+  const replay=await invoke(input); assert.equal(replay.code,200); assert.equal(replay.body.replay,true); assert.equal(objects.size,1); assert.equal(history.length,1);
+  result = await invoke({ ...input, expected_revision: 1, request_id:'discover-'+role+'-'+savedRow.logo_source, action: 'discover', candidate_url: candidate.candidate_url, image_sha256: candidate.image_sha256 });
   assert.equal(result.body.error.code, 'UPLOADED_LOGO_PRESERVED'); assert.equal(objects.size, 1);
   savedRow = { ...savedRow, logo_source: 'discovered' };
-  result = await invoke({ ...input, expected_revision: 1, action: 'discover', candidate_url: candidate.candidate_url, image_sha256: '0'.repeat(64) });
+  result = await invoke({ ...input, expected_revision: 1, request_id:'discover-'+role+'-'+savedRow.logo_source, action: 'discover', candidate_url: candidate.candidate_url, image_sha256: '0'.repeat(64) });
   assert.equal(result.body.error.code, 'CANDIDATE_CHANGED'); assert.equal(savedRow.logo_revision, 1);
   const policy = require('../api/_website-url-policy');
   for (const url of ['http://example.com', 'https://127.0.0.1', 'https://user:pass@example.com', 'https://example.com:444']) assert.throws(() => policy.validateWebsiteUrl(url));
@@ -146,8 +153,8 @@ async function checkAuthoritativeCreation() {
       if (sql.includes('FROM public.workspace_memberships')) return { rows: [{ role: 'owner', status: 'accepted' }] };
       if (sql.includes('FROM public.project_commands')) return { rows: db.commands.filter(c => c.request_id === args[1]) };
       if (sql.includes('SELECT id FROM public.brands')) return { rows: db.brands.filter(b => b.id === args[0]) };
-      if (sql.includes('INSERT INTO public.brands')) { const row = { ...clone(brand), name: args[2], workspace_id: args[0], brand_core: JSON.parse(args[3]) }; assert.equal(args[0], W); tx.brands.push(row); return { rows: [row] }; }
-      if (sql.includes('INSERT INTO public.boards')) { const row = { id: D, name: args[2], workspace_id: args[0], brand_id: args[1], canvas_json: JSON.parse(args[3]), brand_core_snapshot: JSON.parse(args[4]), brand_core_source_revision: args[5], brand_core_source_updated_at: args[6], brand_core_snapshot_copied_at: now, created_at: now, updated_at: now }; assert.equal(args[0], W); assert.equal(args[1], B); tx.boards.push(row); return { rows: [row] }; }
+      if (sql.includes('brand_knowledge_private.create_brand(')) { const row = { ...clone(brand), id:args[1], name: args[3], workspace_id: args[2], brand_core: JSON.parse(args[4]) }; assert.equal(args[0],'fixture@example.com'); assert.equal(args[2], W); assert(writes.UUID.test(args[1])); tx.brands.push(row); return { rows: [{brand:row}] }; }
+      if (sql.includes('INSERT INTO public.boards')) { const row = { id: D, name: args[2], workspace_id: args[0], brand_id: args[1], canvas_json: JSON.parse(args[3]), brand_core_snapshot: JSON.parse(args[4]), brand_core_source_revision: args[5], brand_core_source_updated_at: args[6], brand_core_snapshot_copied_at: now, created_at: now, updated_at: now }; assert.equal(args[0], W); assert.equal(args[1], tx.brands[0].id); tx.boards.push(row); return { rows: [row] }; }
       if (sql.includes('INSERT INTO public.project_commands')) { tx.commands.push({ request_id: args[1], fingerprint: args[2], outcome: JSON.parse(args[6]) }); return { rows: [] }; }
       throw new Error('Unexpected fixture query');
     } };
@@ -165,7 +172,7 @@ async function checkAuthoritativeCreation() {
   assert.equal((await run()).created, false); assert.equal(db.brands.length, 1); assert.equal(db.boards.length, 1); assert.equal(db.commands.length, 1);
   assert.equal(db.boards[0].workspace_id, db.brands[0].workspace_id);
   const initial = { workspaces: [{ id: W, brands: [], boards: [] }] }, reconciled = command.reconcile(initial, [], outcome);
-  assert.equal(reconciled.catalog.workspaces[0].brands[0].id, B); assert.equal(reconciled.library[0].brand_id, B);
+  assert.equal(reconciled.catalog.workspaces[0].brands[0].id, outcome.brand.id); assert.equal(reconciled.library[0].brand_id, outcome.brand.id);
   let posts = 0, opens = 0, release;
   const context = { account: {}, generation: 1, workspaceId: W };
   const boundary = command.createBoundary({ context: () => context, fetchImpl: () => { posts++; return new Promise(resolve => { release = resolve; }); }, reconcile() {}, navigate: value => { opens++; assert(value.setup_required); } });
@@ -241,7 +248,7 @@ async function checkProfileUI() {
   let fixture = makeSession({ website: 'example.com' });
   const flight = fixture.session.analyze(); assert.equal(fixture.session.analyze(), flight); await flight;
   assert.equal(fixture.calls.length, 3); assert.equal(fixture.saves.length, 1); assert.equal(fixture.logos.length, 0); assert.equal(fixture.session.state.core.brandCore, 'Positioning'); assert(profile.validCandidate(fixture.session.state.candidate)); assert.equal(fixture.session.state.core.unknown.preserve, true); assert.equal(fixture.session.state.core.brandAssets, undefined);
-  await fixture.session.save(); assert.equal(fixture.saves.length, 2); assert.equal(fixture.calls.findLast(c => c.init.method === 'PUT').body.brand_core.brandAssets.domain, 'https://example.com/'); assert.equal(fixture.saves[0].brand_core.unknown.preserve, true);
+  await fixture.session.save(); assert.equal(fixture.saves.length, 2); assert.equal(fixture.calls.findLast(c => c.init.method === 'PUT').body.changes.find(c=>c.path==='/brand_core/brandAssets').value.domain, 'https://example.com/'); assert.equal(fixture.saves[0].brand_core.unknown.preserve, true);
   await fixture.session.useLogo(); assert.equal(fixture.logos.length, 1); assert.equal(fixture.calls.findLast(c => c.init.method === 'POST').body.action, 'discover'); assert.equal(fixture.calls.findLast(c => c.init.method === 'POST').body.image_sha256, candidate.image_sha256);
   fixture = makeSession({ brand: { ...clone(brand), brand_core: { ...brand.brand_core, brandCore: 'Confirmed' } }, website: 'example.com' });
   await fixture.session.analyze(); assert.equal(fixture.session.state.core.brandCore, 'Confirmed'); assert.equal(fixture.session.state.proposals.brandCore, 'Positioning'); assert.equal(fixture.saves.length, 1); await fixture.session.applyProposal('brandCore'); assert.equal(fixture.session.state.core.brandCore, 'Positioning'); assert.equal(fixture.saves.length, 2);
@@ -251,7 +258,7 @@ async function checkProfileUI() {
   fixture = makeSession(); assert.equal(await fixture.session.chooseFile({ ...file, type: 'image/svg+xml' }, async () => ''), false);
   await fixture.session.chooseFile(file, async () => png.toString('base64')); assert.equal(fixture.calls.length, 0); await fixture.session.upload(); assert.equal(fixture.logos.length, 1); assert.equal(fixture.session.state.file, null); assert.equal(fixture.session.state.logo, 'Logo saved');
   let failUpload = true;
-  fixture = makeSession({ fetchImpl: async (_url, init) => { if (!init.body) return response({ ...brand, logo_url: `/api/brands/${B}/logo?revision=1`, logo_revision: 1 }); const body = JSON.parse(init.body); return failUpload ? response({ error: { code: 'UPDATE_FAILED' } }, 500) : response({ contract: 'brand_logo_v1', request_id: body.request_id, logo: { logo_url: `/api/brands/${B}/logo?revision=1`, logo_revision: 1, source: 'uploaded' } }); } });
+  fixture = makeSession({ fetchImpl: async (_url, init) => { if (_url.endsWith('/write-preview')) return response({changes:[]}); if (!init.body) return response({ ...brand, logo_url: `/api/brands/${B}/logo?revision=1`, logo_revision: 1 }); const body = JSON.parse(init.body); return failUpload ? response({ error: { code: 'UPDATE_FAILED' } }, 500) : response({ contract: 'brand_logo_v1', request_id: body.request_id, logo: { logo_url: `/api/brands/${B}/logo?revision=1`, logo_revision: 1, source: 'uploaded' } }); } });
   await fixture.session.chooseFile(file, async () => png.toString('base64')); assert.equal(await fixture.session.upload(), false); assert.equal(fixture.session.state.file, file); assert.equal(fixture.session.state.brand.id, B); assert.equal(fixture.logos.length, 0); failUpload = false; assert.equal(await fixture.session.upload(), true);
   for (const change of [{ account: {} }, { generation: 2 }, { authorized: false }]) {
     let release; fixture = makeSession({ website: 'example.com', fetchImpl: () => new Promise(resolve => { release = resolve; }) }); const pending = fixture.session.analyze(); fixture.change(change); fixture.session.invalidate(); release(response({ suggestions, logoDiscovery: candidate })); await pending; assert.equal(fixture.session.state.candidate, null); assert.equal(fixture.session.state.fileData, null); assert.equal(fixture.session.state.website, ''); assert.equal(fixture.saves.length, 0);

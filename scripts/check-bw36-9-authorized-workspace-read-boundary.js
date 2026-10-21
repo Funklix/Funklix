@@ -87,8 +87,8 @@ function workspace(overrides={}) { return { id:ids.workspace,name:'Invented Work
     assert(html.indexOf('/workspace-catalog.js')<html.indexOf('/app.js'));assert.match(app,/if \(current\.identity === identity && current\.promise\) return current\.promise/);assert.match(app,/clearWorkspaceCatalog\(\)/);assert.match(app,/state\.session\.workspaceId = null/);
     assert.equal((app.match(/FunklixWorkspaceCatalog\.load\(\)/g)||[]).length,1);assert(!/addEventListener\(["']resize["'][\s\S]{0,200}loadAuthorizedWorkspaceCatalog/.test(app));assert(!/theme[\s\S]{0,100}loadAuthorizedWorkspaceCatalog/.test(app));
   });
-  await test('no UI, mutation, provider, AI, migration, or baseline scope change',()=>{
-    if(fs.existsSync(path.join(root,'.git'))){const changed=require('child_process').execFileSync('git',['status','--short','--untracked-files=all'],{cwd:root,encoding:'utf8'});/* Later R3 commands and BW-36.17R1 repair extend only the migration allowlist; historical SQL stays unchanged. */const unexpected=changed.split('\n').filter(Boolean).filter(line=>/migrations\//.test(line)&&!line.endsWith('migrations/20261001_bw36_12_brand_logo.sql') && !line.endsWith('migrations/20261006_bw36_13r3_project_commands.sql') && !line.endsWith('migrations/20261011_bw36_17r1_learning_provenance_schema.sql') && !line.endsWith('migrations/20261012_bw36_17r2_learning_provenance_recovery.sql'));assert.deepEqual(unexpected,[]);}
+  await test('read boundary remains provider-free and historical migrations remain immutable',()=>{
+    require('./fixtures/bw36-historical-migrations')();
     const browserSource=fs.readFileSync(path.join(root,'workspace-catalog.js'),'utf8');assert(!/openai|googleapis|linkedin|facebook|anthropic|schedule|approval|publication/i.test(browserSource));
     for(const file of ['campaign-v3.js','content-workspace.js','automatic-planning.js','posting-plan-export.js','posting-plan-pdf.js','funnel-simulator.js','language.js','styles.css'])assert(fs.existsSync(path.join(root,file)));
   });

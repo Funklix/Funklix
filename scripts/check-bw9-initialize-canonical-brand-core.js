@@ -35,9 +35,12 @@ assert.match(submit, /if \(!comparison\.confirming \|\| comparison\.initializati
 assert.match(submit, /canonicalInitializationEligible\(comparison\)/);
 assert.match(submit, /JSON\.parse\(JSON\.stringify\(comparison\.boardSnapshot\)\)/);
 assert.doesNotMatch(submit, /state\.brandCore/);
-assert.match(submit, /method: "PUT"/);
-assert.match(submit, /JSON\.stringify\(\{ name: canonical\.name, brand_core: submittedCore, revision: canonical\.revision \}\)/);
-assert.doesNotMatch(submit, /board_id|boardId:|owner_email|userId|canvas_json|localStorage/);
+assert.match(submit, /BrandWriteContract\.command\(canonical, \{ name: canonical\.name, brand_core: submittedCore \}, state\.workspaceCatalog\.activeWorkspaceId\)/);
+assert.match(submit, /command\.operation = 'initialize'/);
+assert.match(submit, /command\.source = \{ board_id: comparison\.boardId, snapshot: submittedCore \}/);
+assert.match(submit, /BrandWriteContract\.submit\(\{ fetchImpl: fetch, brandId: comparison\.brandId, command/);
+assert.match(submit, /pending: comparison\.pendingWrite/);
+assert.doesNotMatch(submit, /owner_email|userId|canvas_json|localStorage/);
 assert.match(submit, /brand\.id === current\.brandId/);
 assert.match(submit, /brand\.name === canonical\.name/);
 assert.match(submit, /brand\.revision === canonical\.revision \+ 1/);

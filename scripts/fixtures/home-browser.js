@@ -23,6 +23,7 @@ module.exports = browser => {
     if(noWorkspace)c.workspaces=[];
     const f={r,c,reads:[],requests:[],writes:[],errors:[],results:new Map([[B,payload()],[Y,payload(Y,{proposed:9,approved:4})]]),status:200,holds:[]};
     const page=await browser.newPage({viewport:{width:1440,height:1100}});f.page=page;page.setDefaultTimeout(15000);
+    page.on('dialog', dialog => { assert.equal(dialog.type(),'confirm'); assert.match(dialog.message(),/^Review (?:these Brand changes:|logo change:)/); void dialog.accept(); });
     page.on('pageerror',e=>f.errors.push(e.message));
     await page.route('**/*',async route=>{
       const q=route.request(),u=new URL(q.url()),method=q.method();assert.equal(u.hostname,'localhost','All transport must be local; no providers');
@@ -41,7 +42,7 @@ module.exports = browser => {
       if(u.pathname==='/api/boards')return route.fulfill({json:{boards:r.db.boards}});
       if(/\/editors|\/sharing/.test(u.pathname))return route.fulfill({json:{people:[],editors:[]}});
       if(u.pathname==='/api/boards/'+D){if(f.boardHold){const hold=f.boardHold;f.boardHold=null;hold.started.resolve();await hold.release.promise;}assert.equal(method,'GET','Rendering cannot autosave');const board=clone(r.db.boards[0]);board.access={role:viewer?'viewer':'owner',canView:true,canEdit:!viewer,canViewBoardBrandCore:!viewer,canViewPresence:false};if(hidden){board.brand_id=null;board.brand_visibility='hidden';}return route.fulfill({json:board});}
-      if(u.pathname.startsWith('/api/brands')){const out=await r.request(method,u.pathname,q.postDataJSON());return route.fulfill({status:out.statusCode,json:out.body});}
+      if(u.pathname.startsWith('/api/brands')){const out=await r.request(method,u.pathname,q.postDataJSON(), undefined, q.headers());return route.fulfill({status:out.statusCode,json:out.body});}
       if(u.pathname.startsWith('/api/'))return route.fulfill({json:{members:[],editors:[],viewers:[],boards:[]}});
       const file=path.join(ROOT,u.pathname==='/'||u.pathname.startsWith('/boards/')?'index.html':u.pathname.slice(1));
       return route.fulfill({contentType:file.endsWith('.html')?'text/html':file.endsWith('.css')?'text/css':file.endsWith('.svg')?'image/svg+xml':file.endsWith('.png')?'image/png':'application/javascript',body:fs.existsSync(file)?fs.readFileSync(file):''});

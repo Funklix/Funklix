@@ -1,6 +1,6 @@
 'use strict';
 const fs=require('fs'),assert=require('node:assert/strict');let chromium;try{({chromium}=require('playwright-core'));}catch{({chromium}=require('/opt/codex/runtimes/cua/lib/node_modules/playwright-core'));}
-async function reviewUX(){const browser=await chromium.launch({executablePath:'/usr/bin/chromium',args:['--no-sandbox']});try{
+async function reviewUX(){const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH||'/usr/bin/chromium',args:['--no-sandbox']});try{
  const page=await browser.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));
  await page.route('**/*',route=>{const url=new URL(route.request().url());assert.equal(url.hostname,'localhost');const pathname=url.pathname;return route.fulfill(pathname==='/'?{body:'<html><body><button id="origin">Open</button><script src="/learning-advisor.js"></script><link rel="stylesheet" href="/learning-advisor.css"></body></html>',contentType:'text/html'}:{path:process.cwd()+pathname});});
  await page.goto('http://localhost/');

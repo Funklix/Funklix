@@ -30,7 +30,7 @@ async function createWorkspaceBrand({ db, email, input }) {
     } else {
       // JSONB retains the original input fingerprint without a new table or schema.
       const initial = { ...core(), _creation: { fingerprint } };
-      row = (await client.query(`INSERT INTO public.brands (id,workspace_id,owner_email,name,brand_core,revision) VALUES ($1,$2,$3,$4,$5::jsonb,1) RETURNING ${BRAND_COLUMNS}`, [input.id, workspace.id, email, input.name, JSON.stringify(initial)])).rows[0];
+      row = await require('./_brand-knowledge-write').create({ client, email, brandId: input.id, workspaceId: workspace.id, name: input.name, core: initial });
     }
     if (!row) reject(503, 'DATABASE_UNAVAILABLE');
     const brand = { ...serializeBrand(row, brandCapabilities('owner')), workspace_id: workspace.id, role: 'owner' };

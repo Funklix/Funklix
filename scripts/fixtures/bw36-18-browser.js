@@ -31,15 +31,15 @@ async function browserChecks(){
   await page.locator('.node[data-id="node-1"] .type').click();
   await page.evaluate(()=>{state.isDirty=false;refreshLastSavedSnapshot();updateCanvasLearningAction();});
   const action=page.locator('#propose-brand-learning-btn'),dialog=page.locator('dialog[data-canvas-learning-proposal]'),statement=dialog.locator('[data-proposal-field="statement"]'),evidence=dialog.locator('[data-proposal-field="evidence"]');
-  async function open(){await page.evaluate(()=>updateCanvasLearningAction());await action.click();await statement.waitFor({state:'visible'});await page.waitForFunction(()=>!document.querySelector('[data-proposal-field="statement"]').disabled);}
+  async function open(){await page.evaluate(()=>updateCanvasLearningAction());await action.focus();await action.press('Enter');await statement.waitFor({state:'visible'});await page.waitForFunction(()=>!document.querySelector('[data-proposal-field="statement"]').disabled);}
   const snapshot=()=>page.evaluate(()=>JSON.stringify({nodes:state.nodes,edges:state.edges,dirty:state.isDirty,saved:state.lastSavedSnapshot,storage:{...localStorage},undo:state.undoStack,activity:state.activityFeed,presence:buildPresencePayloadSignature(),history:state.history,selected:[...state.selectedIds]}));
   await action.focus();await page.mouse.move(1400,700);
-  await page.waitForFunction(()=>!state.presenceEditingNodeId&&!state.presenceSelectionPingTimer&&!state.presencePingInFlight&&!state.presenceCursorPublishTimer);
+  await page.waitForFunction(()=>!state.presenceEditingNodeId&&!state.presenceSelectionPingTimer&&!state.presencePingInFlight&&!state.presenceCursorPublishTimer&&!state.presenceCursorClearTimer);
   const writesBeforeOpen=traffic.filter(q=>q.method!=='GET').length;
   await open();assert.equal(await page.locator('#node-form dialog').count(),0);assert.equal(await statement.inputValue(),'');assert(!(await dialog.textContent()).includes('Hidden source text'));
   const initial=await snapshot();await statement.fill('Human-written observation');await evidence.fill('Human evidence');assert.equal(await snapshot(),initial);
-  await statement.press('Escape');await dialog.locator('[data-proposal-action="keep"]').click();assert.equal(await statement.inputValue(),'Human-written observation');
-  await dialog.locator('[data-proposal-action="cancel"]').click();await dialog.locator('[data-proposal-action="discardAction"]').click();await dialog.waitFor({state:'detached'});assert.equal(await page.evaluate(()=>document.activeElement.id),'propose-brand-learning-btn');assert.equal(await snapshot(),initial);
+  await statement.press('Escape');await dialog.locator('[data-proposal-action="keep"]').press('Enter');assert.equal(await statement.inputValue(),'Human-written observation');
+  await dialog.locator('[data-proposal-action="cancel"]').press('Enter');await dialog.locator('[data-proposal-action="discardAction"]').press('Enter');await dialog.waitFor({state:'detached'});assert.equal(await page.evaluate(()=>document.activeElement.id),'propose-brand-learning-btn');assert.equal(await snapshot(),initial);
   assert.equal(r.db.learnings.length,0);assert.equal(traffic.filter(q=>q.method!=='GET').length,writesBeforeOpen,'opening, typing, cancelling do not write presence or Board data');
   await open();await statement.fill('Preserve text after stale rejection');base.db.boards[0].updated_at='2026-10-12T11:00:00.000Z';
   await dialog.locator('[data-proposal-action="pending"]').click();await dialog.getByText(/saved source changed/).waitFor();assert.equal(await statement.inputValue(),'Preserve text after stale rejection');assert(await dialog.locator('[data-proposal-action="pending"]').isDisabled());

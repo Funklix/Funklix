@@ -26,16 +26,16 @@ async function boundaries() {
   const fetchImpl = async (url, init = {}) => {
     if (failImage && url.includes('/logo') && !init.method) return { ok: false, status: 502, json: async () => null };
     if (failRead && !init.method) return { ok: false, status: 503, json: async () => null };
-    const res = await r.request(init.method || 'GET', url, init.body ? JSON.parse(init.body) : undefined);
+    const res = await r.request(init.method || 'GET', url, init.body ? JSON.parse(init.body) : undefined, undefined, init.headers);
     return { ok: res.statusCode < 300, status: res.statusCode, json: async () => res.body };
   };
   const make = async () => profile.createSession({ brand: (await r.request('GET', `/api/brands/${B}`)).body, getContext: () => context, fetchImpl,
     validateBrand: (b, id) => b?.id === id && Number.isSafeInteger(b.revision) && b.brand_core && b.access,
-    requestId: () => 'durable-logo', onSave() {}, onLogo() {} });
+    requestId: require('node:crypto').randomUUID, confirmReview: async () => true, onSave() {}, onLogo() {} });
   let s = await make(); assert(!s.dirty());
   const file = { type: 'image/png', size: png.length, name: 'appics logo.png' };
   await s.chooseFile(file, async () => png.toString('base64')); assert(s.state.fileData); assert(!s.dirty());
-  r.db.failLogoMetadata = true; assert.equal(await s.upload(), false); assert.equal(r.objects.size, 0, 'Failed metadata commit compensates the new Storage object'); assert.equal(s.state.file, file); assert.equal(r.db.brands[0].logo_revision, 0);
+  r.db.failLogoMetadata = true; assert.equal(await s.upload(), false); assert.equal(r.objects.size, 1, 'Uncertain commit retains immutable asset; canonical metadata stays unchanged'); assert.equal(s.state.file, file); assert.equal(r.db.brands[0].logo_revision, 0);
   r.db.failLogoMetadata = false; assert(await s.upload()); assert.equal(r.objects.size, 1); assert.equal(s.state.file, null); assert.equal(s.state.fileData, null); assert(!s.dirty());
   const metadata = Object.fromEntries(Object.entries(r.db.brands[0]).filter(([key]) => key.startsWith('logo_')));
   s.state.core.brandCore = 'Saved positioning'; assert(await s.save()); assert(!s.dirty());
@@ -48,7 +48,7 @@ async function boundaries() {
   r.db.brands[0].brand_core.brandVoiceExamples = minimal.state.core.brandVoiceExamples;
   assert.deepEqual(s.state.core.brandDNA, dna); assert.deepEqual(r.db.boards, untouched);
   // Production PUT must preserve omitted forward-compatible fields, DNA and avatar.
-  const partial = await r.request('PUT', `/api/brands/${B}`, { name: 'Appics', revision: s.state.brand.revision, brand_core: { brandCore: 'Partial client' }, logo_url: null, logo_revision: 0, logo_object_path: null });
+  const partial = await r.request('PUT', `/api/brands/${B}`, require('../brand-write-contract').command(r.db.brands[0], { name: 'Appics', brand_core: { brandCore: 'Partial client' } }, W));
   assert.equal(partial.statusCode, 200); assert.deepEqual(r.db.brands[0].brand_core.brandDNA, dna); assert.deepEqual(r.db.brands[0].brand_core.unknown, { keep: ['all'] }); assert.equal(r.db.brands[0].logo_revision, 1);
   s = await make(); await s.chooseFile(file, async () => png.toString('base64')); failRead = true; assert.equal(await s.upload(), false);
   assert.equal(s.state.brand.logo_revision, 2); assert.equal(s.state.file, null); assert(s.state.syncRequired); assert(s.state.message.includes('saved on the server'));
@@ -56,22 +56,22 @@ async function boundaries() {
   failRead = false; assert(await s.reload()); assert(!s.state.syncRequired); assert.equal(s.state.brand.logo_revision, 2);
   assert.equal((await r.request('GET', `/api/brands/${B}/logo?revision=1`)).statusCode, 409, 'Old revision cannot cache new bytes');
   assert.equal((await r.request('GET', `/api/brands/${B}/logo?revision=2`)).statusCode, 200);
-  await s.chooseFile(file, async () => png.toString('base64')); failImage = true; assert.equal(await s.upload(), false); assert.equal(s.state.brand.logo_revision, 3); assert(s.state.syncRequired); assert.equal(r.objects.size, 1); assert(s.state.message.includes('saved on the server')); failImage = false; assert(await s.reload()); assert(!s.state.syncRequired);
-  assert(await s.removeLogo()); assert.equal(r.db.brands[0].logo_object_path, null); assert.equal(r.objects.size, 0);
-  s.state.website = 'https://example.test/'; assert(await s.analyze()); assert(await s.useLogo()); assert.equal(r.db.brands[0].logo_source, 'discovered'); assert.equal(r.objects.size, 1);
+  await s.chooseFile(file, async () => png.toString('base64')); failImage = true; assert.equal(await s.upload(), false); assert.equal(s.state.brand.logo_revision, 3); assert(s.state.syncRequired); assert.equal(r.objects.size, 3); assert(s.state.message.includes('saved on the server')); failImage = false; assert(await s.reload()); assert(!s.state.syncRequired);
+  assert(await s.removeLogo()); assert.equal(r.db.brands[0].logo_object_path, null); assert.equal(r.objects.size, 3);
+  s.state.website = 'https://example.test/'; assert(await s.analyze()); assert(await s.useLogo()); assert.equal(r.db.brands[0].logo_source, 'discovered'); assert.equal(r.objects.size, 4);
   assert.deepEqual(r.db.boards, untouched);
   // Concurrent draft changes: the baseline must advance even when newer edits remain.
   let release; const gate = new Promise(resolve => { release = resolve; }); let reached;
   const called = new Promise(resolve => { reached = resolve; });
   const saved = s.state.brand;
-  const concurrent = profile.createSession({ brand: saved, getContext: () => context, requestId: () => 'concurrent', onSave() {}, onLogo() {}, validateBrand: (b,id) => b?.id === id,
+  const concurrent = profile.createSession({ brand: saved, getContext: () => context, requestId: () => 'concurrent', confirmReview: async () => true, onSave() {}, onLogo() {}, validateBrand: (b,id) => b?.id === id,
     fetchImpl: async (url, init = {}) => { const result = await fetchImpl(url, init); if (init.method === 'PUT') { reached(); await gate; } return result; } });
   concurrent.state.name = 'Submitted name'; const flight = concurrent.save(); await called; concurrent.state.name = 'Newer name'; release(); assert(await flight); assert(concurrent.dirty()); concurrent.state.name = 'Submitted name'; assert(!concurrent.dirty(), 'Reverting to the confirmed save must clear dirty state');
-  const viewer = profile.createSession({ brand: { ...saved, access: { role: 'viewer', canEditCanonicalBrand: false } }, getContext: () => context, fetchImpl, validateBrand: () => true, onSave() {}, onLogo() {}, requestId: () => 'viewer' });
+  const viewer = profile.createSession({ brand: { ...saved, access: { role: 'viewer', canEditCanonicalBrand: false } }, getContext: () => context, fetchImpl, validateBrand: () => true, confirmReview: async () => true, onSave() {}, onLogo() {}, requestId: () => 'viewer' });
   assert.equal(await viewer.chooseFile(file), false); assert.equal(await viewer.save(), false); assert.equal(await viewer.generateAvatar(), false);
   context = { ...context, account: {} }; assert.equal(await s.save(), false); s.invalidate(); assert.equal(s.state.fileData, null); assert.deepEqual(s.state.core, {});
   assert(r.db.queries.every(sql => !/CREATE TABLE|ALTER TABLE|UPDATE boards/.test(sql)));
-  console.log('R5R3 handlers: persistent Storage/DB, upload–PUT–reload, all logo metadata preserved, compensation, no duplicate synchronization, revision delivery, DNA/avatar/unknown preservation and account/role boundaries passed.');
+  console.log('R5R3 handlers: persistent Storage/DB, upload–PUT–reload, all logo metadata preserved, asset retention, no duplicate synchronization, revision delivery, DNA/avatar/unknown preservation and account/role boundaries passed.');
 }
 function readiness() {
   const empty = { id: B, name: '', logo_url: null, logo_revision: 0, brand_core: {} };
@@ -96,7 +96,7 @@ async function browserJourney(runtimeOptions) {
   const r = runtime(runtimeOptions); seed(r); const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || (fs.existsSync('/usr/bin/chromium') ? '/usr/bin/chromium' : undefined), args: ['--no-sandbox'] });
   try {
     const page = await browser.newPage({ viewport: { width: 1440, height: 900 } }); const errors = []; let nativeDialogs = 0;
-    page.on('pageerror', e => errors.push(e.message)); page.on('dialog', d => { nativeDialogs++; void d.dismiss(); });
+    page.on('pageerror', e => errors.push(e.message)); page.on('dialog', d => { if (d.type()==='confirm' && /^Review (?:these Brand changes:|logo change:)/.test(d.message())) { void d.accept(); return; } nativeDialogs++; void d.dismiss(); });
     await page.route('**/*', async route => {
       const req = route.request(), url = new URL(req.url());
       if (url.hostname === 'example.test') return route.fulfill({ contentType: 'image/png', body: png });
@@ -104,8 +104,8 @@ async function browserJourney(runtimeOptions) {
       if (url.pathname.startsWith('/api/')) {
         if (url.pathname === '/api/auth/session') return route.fulfill({ json: { user: null } });
         if (url.pathname === '/api/workspaces/catalog') return route.fulfill({ json: catalog(r) });
-        if (/^\/api\/brands\/[^/]+(?:\/logo)?$/.test(url.pathname)) {
-          const res = await r.request(req.method(), url.pathname + url.search, req.postDataJSON() || undefined);
+        if (/^\/api\/brands\/[^/]+(?:\/(?:logo|write-preview))?$/.test(url.pathname)) {
+          const res = await r.request(req.method(), url.pathname + url.search, req.postDataJSON() || undefined, undefined, req.headers());
           return Buffer.isBuffer(res.body) ? route.fulfill({ status: res.statusCode, contentType: 'image/png', body: res.body }) : route.fulfill({ status: res.statusCode, json: res.body });
         }
         return route.fulfill({ json: { boards: [], brands: [], members: [], nodes: [], presence: [] } });
@@ -148,7 +148,7 @@ async function browserJourney(runtimeOptions) {
       await key('Brand Assets').click(); await key('file').setInputFiles({ name: 'replacement.png', mimeType: 'image/png', buffer: png });
       await page.waitForFunction(() => !!brandProfileController.state.fileData);
       await key('Change logo').click(); await page.waitForFunction(() => brandProfileController.state.brand.logo_revision === 2 && !brandProfileController.busy());
-      assert.equal(r.objects.size, 1); assert(!r.objects.has(`${B}/1.png`)); assert(r.objects.has(`${B}/2.png`));
+      assert.equal(r.objects.size, 2); assert(r.objects.has(r.db.brands[0].logo_object_path)); assert(!r.storageRequests.includes('DELETE'));
       await page.evaluate(() => { const current = canonicalBrandDetail.brand; reconcileConfirmedBrand({ ...current, logo_revision: 1, logo_url: `/api/brands/${current.id}/logo?revision=1` }); });
       assert.equal(await page.evaluate(() => state.workspaceCatalog.value.workspaces[0].brands.find(b => b.id === canonicalBrandDetail.brand.id).logo_revision), 2, 'Stale reconciliation cannot overwrite the new logo');
       await key('Overview').click();

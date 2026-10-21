@@ -44,6 +44,14 @@ async function reconcileBrandRelationshipWithoutBlockingBoards() {
 async function ensureBoardsTable() {
   if (!schemaReadyPromise) {
     schemaReadyPromise = (async () => {
+      // A migrated deployment uses a non-owner login. Preparation is read-only;
+      // existing Board data/snapshot behavior stays in its current handlers.
+      const protection = await pool.query("SELECT to_regclass('public.brand_knowledge_history') AS protected_history");
+      if (protection.rows[0]?.protected_history) {
+        const ready = await pool.query("SELECT to_regclass('public.boards') AS boards, to_regclass('public.board_editors') AS editors");
+        if (!ready.rows[0]?.boards || !ready.rows[0]?.editors) throw new Error('BOARD_SCHEMA_UNAVAILABLE');
+        return true;
+      }
       await pool.query(`
       CREATE TABLE IF NOT EXISTS boards (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -142,8 +150,8 @@ async function ensureBoardsTable() {
       throw error;
     });
   }
-  await schemaReadyPromise;
-  await reconcileBrandRelationshipWithoutBlockingBoards();
+  const protectedSchema = await schemaReadyPromise;
+  if (!protectedSchema) await reconcileBrandRelationshipWithoutBlockingBoards();
 }
 
 module.exports = {

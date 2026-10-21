@@ -49,6 +49,7 @@ assert.equal(profile.resolveEntry({ ...base, catalog: { workspaces: [] } }).kind
       if (url.pathname.startsWith('/api/')) {
         requests.push({ path: url.pathname, method: req.method(), body: req.postDataJSON() });
         if (url.pathname === '/api/auth/session') return route.fulfill({ json: { user: null } });
+        if (url.pathname.endsWith('/write-preview')) return route.fulfill({ json: { changes: [], review_token: 'fixture-review' } });
         if (/\/api\/brands\/[^/]+\/logo$/.test(url.pathname)) {
           if (req.method() === 'GET') return route.fulfill({ contentType: 'image/png', body: Buffer.from(png, 'base64') });
           if (failUpload) return route.fulfill({ status: 500, json: { error: { code: 'UPDATE_FAILED' } } });

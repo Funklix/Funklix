@@ -54,7 +54,8 @@ async function check({ refinement = false } = {}) {
     await page.addInitScript(() => localStorage.setItem('tendra.canvasDensity.v1', JSON.stringify({ version: 1, mode: 'detailed' })));
     await page.goto(`http://localhost/boards/${D}`);
     await page.waitForFunction(() => state.currentBoardId && !state.isBoardLoading && state.nodes.length === 2 && state.workspaceCatalog.status === 'ready');
-    await page.evaluate(() => { setAppMode('canvas'); setActiveView('board'); });
+    // Presentation requests are measured independently of the periodic remote poll.
+    await page.evaluate(() => { stopBoardRefreshPolling(); setAppMode('canvas'); setActiveView('board'); });
     const a = page.locator('.node[data-id="adaptive-a"]'), b = page.locator('.node[data-id="adaptive-b"]');
     const toggle = page.locator('.canvas-toolbar #canvas-compact-view-btn');
     const responsibilities = page.locator('.canvas-toolbar #campaign-responsibilities-btn');
@@ -135,9 +136,9 @@ async function check({ refinement = false } = {}) {
     await page.keyboard.press('Escape'); await allCompact();
     await page.locator('#canvas').click({ position: { x: 100, y: 650 } }); await allCompact();
     if (refinement) { await toggle.click(); await toggle.click(); await view(a,'detailed'); await view(b,'detailed'); }
-    await page.evaluate(async other => { await loadBoardFromUrlIfPresent(other); }, OTHER);
+    await page.evaluate(async other => { await loadBoardFromUrlIfPresent(other); stopBoardRefreshPolling(); }, OTHER);
     await allCompact(); assert.equal(await toggle.getAttribute('data-global-view'),'compact');
-    await page.evaluate(async id => { await loadBoardFromUrlIfPresent(id); }, D);
+    await page.evaluate(async id => { await loadBoardFromUrlIfPresent(id); stopBoardRefreshPolling(); }, D);
     await allCompact(); assert.equal(await page.evaluate(() => state.selectedPrimary), null);
     await page.evaluate(() => setActiveView('list')); await page.evaluate(() => setActiveView('board')); await allCompact();
     console.log('PASS exact BW-36.16 hierarchy sequence, two authorized Boards, legacy preference ignored, Canvas teardown');

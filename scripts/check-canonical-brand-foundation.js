@@ -81,11 +81,25 @@ const legacyBoardId = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
 const canonicalCore = { brandCore: "CANONICAL PRIVATE KNOWLEDGE", customTiles: [] };
 const boardSnapshot = { brandCore: "Campaign baseline", customTiles: [] };
 const now = "2026-01-01T00:00:00.000Z";
+const writes = require('../brand-write-contract');
+const { protectedQuery } = require('./fixtures/bw36-23-protected-memory');
+const workspace='99999999-9999-4999-8999-999999999999';
 const originalQuery = boardsStorage.pool.query.bind(boardsStorage.pool);
 const brands = new Map([
   [brandId, { id: brandId, owner_email: ownerEmail, name: "Acme", brand_core: canonicalCore, revision: 2, created_at: now, updated_at: now }],
   [otherBrandId, { id: otherBrandId, owner_email: "other@example.com", name: "Other Brand", brand_core: { brandCore: "Other" }, revision: 1, created_at: now, updated_at: now }]
 ]);
+for(const b of brands.values()) { b.workspace_id=workspace; b.logo_revision=0; }
+const history=[];
+let transaction=null;
+const state=()=>transaction||{brands:[...brands.values()],boards:[...boards.values()],history};
+boardsStorage.pool.connect=async()=>({release(){},query:async(sql,params=[])=>{
+ if(sql.startsWith('BEGIN')){transaction=structuredClone({brands:[...brands.values()],boards:[...boards.values()],history});return {rows:[]};}
+ if(sql==='COMMIT'){brands.clear();transaction.brands.forEach(b=>brands.set(b.id,b));history.splice(0,history.length,...transaction.history);transaction=null;return {rows:[]};}
+ if(sql==='ROLLBACK'){transaction=null;return {rows:[]};}
+ if(sql.startsWith('SET LOCAL'))return {rows:[]};
+ return protectedQuery(sql,params,{state,db:{identityStatus:'active',membershipStatus:'accepted'},email:ownerEmail,workspace,now})||boardsStorage.pool.query(sql,params);
+}});
 const boards = new Map([
   [linkedBoardId, { id: linkedBoardId, name: "Linked", canvas_json: { nodes: [], edges: [] }, brand_core_snapshot: boardSnapshot, brand_id: brandId, owner_id: ownerEmail, owner_email: ownerEmail, created_at: now, updated_at: now }],
   [legacyBoardId, { id: legacyBoardId, name: "Legacy", canvas_json: { nodes: [], edges: [] }, brand_core_snapshot: { brandCore: "Legacy knowledge" }, brand_id: null, owner_id: ownerEmail, owner_email: ownerEmail, created_at: now, updated_at: now }]
@@ -112,16 +126,14 @@ function publicBrand(row, columns) {
 boardsStorage.pool.query = async (sql, params = []) => {
   const text = String(sql);
   queries.push({ text, params });
+  if(text.includes("to_regclass('public.brand_knowledge_history')"))return {rows:[{protected_history:null}]};
+  if(text.includes("to_regclass('public.brands')"))return {rows:[{brands:'brands',members:'brand_members'}]};
   if (injectedFailure && injectedFailure.test(text)) {
     injectedFailure = null;
     throw new Error("postgres secret: constraint brands_internal_key SQL SELECT * FROM private_schema");
   }
   if (/^(\s*CREATE|\s*ALTER|\s*DO)/.test(text)) return { rowCount: 0, rows: [] };
   if (text.includes("to_regclass('boards')")) return { rowCount: 1, rows: [{ boards_exist: true, brands_exist: true }] };
-  if (text.includes("INSERT INTO brands")) {
-    const row = { id: `33333333-3333-4333-8333-${String(brands.size).padStart(12, "0")}`, owner_email: params[0], name: params[1], brand_core: JSON.parse(params[2]), revision: 1, created_at: now, updated_at: now };
-    brands.set(row.id, row); return { rowCount: 1, rows: [row] };
-  }
   if (text.includes("FROM brands b") && text.includes("LEFT JOIN brand_members")) {
     if (text.includes("WHERE b.id = $1")) {
       const row = brands.get(params[0]);
@@ -138,12 +150,6 @@ boardsStorage.pool.query = async (sql, params = []) => {
     if (!row || row.owner_email !== params[1]) return { rowCount: 0, rows: [] };
     const columns = text.match(/SELECT (.+?) FROM brands/)?.[1] || "id";
     return { rowCount: 1, rows: [publicBrand(row, columns)] };
-  }
-  if (text.includes("UPDATE brands SET")) {
-    const row = brands.get(params[0]);
-    if (!row || row.revision !== params[3]) return { rowCount: 0, rows: [] };
-    Object.assign(row, { name: params[1], brand_core: JSON.parse(params[2]), revision: row.revision + 1, updated_at: now });
-    return { rowCount: 1, rows: [{ ...row }] };
   }
   if (text.includes("INSERT INTO boards")) {
     const id = `cccccccc-cccc-4ccc-8ccc-${String(++boardSequence).padStart(12, "0")}`;
@@ -181,9 +187,9 @@ function runIsolatedProbe(source) {
     [brandItem, req("GET", null, {}, { id: brandId })], [brandItem, req("PUT", null, {}, { id: brandId })]
   ]) assert.strictEqual((await call(route, request)).statusCode, 401);
   assert.strictEqual((await call(brandItem, req("GET", owner, {}, { id: "invalid" }))).statusCode, 400);
-  for (const revision of [null, 0, -1, 1.5, "2"]) assert.strictEqual((await call(brandItem, req("PUT", owner, { name: "Valid", brand_core: {}, revision }, { id: brandId }))).statusCode, 400);
-  for (const name of ["", " ", "x".repeat(161)]) assert.strictEqual((await call(brandItem, req("PUT", owner, { name, brand_core: {}, revision: 2 }, { id: brandId }))).statusCode, 400);
-  for (const brand_core of [null, [], "text", 1, true]) assert.strictEqual((await call(brandItem, req("PUT", owner, { name: "Valid", brand_core, revision: 2 }, { id: brandId }))).statusCode, 400);
+  for (const revision of [null, 0, -1, 1.5, "2"]) assert.strictEqual((await call(brandItem, req("PUT", owner, { name: "Valid", brand_core: {}, revision }, { id: brandId }))).statusCode, 428);
+  for (const name of ["", " ", "x".repeat(161)]) assert.strictEqual((await call(brandItem, req("PUT", owner, { name, brand_core: {}, revision: 2 }, { id: brandId }))).statusCode, 428);
+  for (const brand_core of [null, [], "text", 1, true]) assert.strictEqual((await call(brandItem, req("PUT", owner, { name: "Valid", brand_core, revision: 2 }, { id: brandId }))).statusCode, 428);
   for (const name of ["", " ", "x".repeat(161)]) assert.strictEqual((await call(brandCollection, req("POST", owner, { name, brand_core: {} }))).statusCode, 422);
   for (const brand_core of [null, [], "text", 1, true]) assert.strictEqual((await call(brandCollection, req("POST", owner, { name: "Valid", brand_core }))).statusCode, 422);
 
@@ -205,23 +211,23 @@ function runIsolatedProbe(source) {
   for (const method of ["GET", "PUT"]) {
     const body = method === "PUT" ? { name: "Stolen", brand_core: {}, revision: 2 } : {};
     response = await call(brandItem, req(method, other, body, { id: brandId }));
-    assert.strictEqual(response.statusCode, 404);
-    assert.deepStrictEqual(response.body, { ok: false, code: "BRAND_NOT_FOUND" });
+    assert.strictEqual(response.statusCode, method === "PUT" ? 428 : 404);
+    assert.deepStrictEqual(response.body, { ok: false, code: method === "PUT" ? "WRITE_CONTRACT_REQUIRED" : "BRAND_NOT_FOUND" });
   }
   // Knowing brand_id and having linked-board editor access still grants no Brand access.
   for (const method of ["GET", "PUT"]) {
     const body = method === "PUT" ? { name: "Viewer edit", brand_core: {}, revision: 2 } : {};
     response = await call(brandItem, req(method, viewer, body, { id: brandId }));
-    assert.strictEqual(response.statusCode, 404);
+    assert.strictEqual(response.statusCode, method === "PUT" ? 428 : 404);
   }
 
   // Exact-once revision update, stale conflict immutability, and owner immutability.
   const beforeOwner = brands.get(brandId).owner_email;
-  response = await call(brandItem, req("PUT", owner, { name: "Updated", brand_core: { brandCore: "Updated core" }, revision: 2, owner_email: other.email }, { id: brandId }));
+  response = await call(brandItem, req("PUT", owner, writes.command(brands.get(brandId),{ name: "Updated", brand_core: { brandCore: "Updated core" } },workspace), { id: brandId }));
   assert.strictEqual(response.statusCode, 200); assert.strictEqual(response.body.revision, 3);
   assert.strictEqual(brands.get(brandId).owner_email, beforeOwner);
   const beforeStale = JSON.parse(JSON.stringify(brands.get(brandId)));
-  response = await call(brandItem, req("PUT", owner, { name: "Stale overwrite", brand_core: { brandCore: "Stale" }, revision: 2 }, { id: brandId }));
+  response = await call(brandItem, req("PUT", owner, {...writes.command(brands.get(brandId),{ name: "Stale overwrite", brand_core: { brandCore: "Stale" } },workspace),expected_revision:"2"}, { id: brandId }));
   assert.strictEqual(response.statusCode, 409);
   assert.strictEqual(brands.get(brandId).name, beforeStale.name);
   assert.deepStrictEqual(brands.get(brandId).brand_core, beforeStale.brand_core);
@@ -283,36 +289,36 @@ function runIsolatedProbe(source) {
   const putSection = boardItemSource.slice(boardItemSource.indexOf("if (req.method === 'PUT')"), boardItemSource.indexOf("if (req.method === 'PATCH')"));
   assert(!putSection.includes("brand_id =")); assert(!putSection.includes("req.body?.brand_id"));
 
-  // Retry behavior is checked in isolated processes because initialization promises are module-local caches.
+  // A missing migration fails closed; a later repaired schema is re-probed without DDL.
   const retryProbe = `
-    const storage=require('./api/_boards-storage'); const brands=require('./api/_brands-storage');
-    let brandCreates=0,fail=true; storage.pool.query=async(sql)=>{const text=String(sql);if(text.includes('CREATE TABLE IF NOT EXISTS brands')){brandCreates++;if(fail){fail=false;throw new Error('first failure')}}if(text.includes("to_regclass('boards')"))return {rows:[{boards_exist:false,brands_exist:true}]};return {rows:[]}};
-    (async()=>{let rejected=false; try{await brands.ensureBrandsTable()}catch(e){rejected=true} if(!rejected)throw new Error('brand first call must fail'); await brands.ensureBrandsTable(); if(brandCreates!==2)throw new Error('brand retry missing'); await brands.ensureBrandsTable(); if(brandCreates!==2)throw new Error('brand initialization is not idempotent')})().catch(e=>{console.error(e);process.exit(1)});`;
+    const storage=require('./api/_boards-storage');const brands=require('./api/_brands-storage');
+    let attempts=0;storage.pool.query=async sql=>{if(/CREATE|ALTER|INSERT|UPDATE|DELETE/.test(sql))throw Error('Brand reads must not mutate schema');attempts++;return {rows:[attempts===1?{}:{brands:'brands',members:'brand_members'}]}};
+    (async()=>{await require('assert').rejects(()=>brands.ensureBrandsTable(),/BRAND_SCHEMA_UNAVAILABLE/);await brands.ensureBrandsTable();await brands.ensureBrandsTable();if(attempts!==3)throw Error('schema probe retry missing')})().catch(e=>{console.error(e);process.exit(1)});`;
   runIsolatedProbe(retryProbe);
   const boardRetryProbe = `
     const storage=require('./api/_boards-storage');
-    let failed=false,boardCreates=0; storage.pool.query=async(sql)=>{const text=String(sql);if(text.includes('CREATE TABLE IF NOT EXISTS boards')){boardCreates++;if(!failed){failed=true;throw new Error('first board failure')}}if(text.includes("to_regclass('boards')"))return {rows:[{boards_exist:true,brands_exist:false}]};return {rows:[]}};
+    let failed=false,boardCreates=0; storage.pool.query=async(sql)=>{const text=String(sql);if(text.includes("to_regclass('public.brand_knowledge_history')"))return {rows:[{protected_history:null}]};if(text.includes('CREATE TABLE IF NOT EXISTS boards')){boardCreates++;if(!failed){failed=true;throw new Error('first board failure')}}if(text.includes("to_regclass('boards')"))return {rows:[{boards_exist:true,brands_exist:false}]};return {rows:[]}};
     (async()=>{let rejected=false;try{await storage.ensureBoardsTable()}catch(e){rejected=true}if(!rejected)throw new Error('board first call must fail');await storage.ensureBoardsTable();if(boardCreates!==2)throw new Error('board retry missing');const completedCalls=boardCreates;await storage.ensureBoardsTable();if(boardCreates!==completedCalls)throw new Error('board initialization is not idempotent')})().catch(e=>{console.error(e);process.exit(1)});`;
   runIsolatedProbe(boardRetryProbe);
 
   const brandFailureIsolationProbe = `
     const storage=require('./api/_boards-storage');const brands=require('./api/_brands-storage');
     let boardCreates=0;
-    storage.pool.query=async(sql)=>{const text=String(sql);if(text.includes('CREATE TABLE IF NOT EXISTS brands'))throw new Error('brand bootstrap failure');if(text.includes('CREATE TABLE IF NOT EXISTS boards'))boardCreates++;if(text.includes("to_regclass('boards')"))return {rows:[{boards_exist:true,brands_exist:false}]};return {rows:[]}};
+    storage.pool.query=async(sql)=>{const text=String(sql);if(text.includes("to_regclass('public.brand_knowledge_history')"))return {rows:[{protected_history:null}]};if(text.includes('CREATE TABLE IF NOT EXISTS brands'))throw new Error('brand bootstrap failure');if(text.includes('CREATE TABLE IF NOT EXISTS boards'))boardCreates++;if(text.includes("to_regclass('boards')"))return {rows:[{boards_exist:true,brands_exist:false}]};return {rows:[]}};
     (async()=>{let brandRejected=false;try{await brands.ensureBrandsTable()}catch{brandRejected=true}if(!brandRejected)throw new Error('brand failure did not propagate');await storage.ensureBoardsTable();if(boardCreates!==1)throw new Error('brand failure blocked board initialization')})().catch(e=>{console.error(e);process.exit(1)});`;
   runIsolatedProbe(brandFailureIsolationProbe);
 
   const relationshipProbe = `
     const storage=require('./api/_boards-storage');const brands=require('./api/_brands-storage');
     let boards=false,brand=false,relationAttempts=0,failRelation=true,boardCreates=0,brandCreates=0;
-    storage.pool.query=async(sql)=>{const text=String(sql);if(text.includes('CREATE TABLE IF NOT EXISTS boards')){boards=true;boardCreates++}if(text.includes('CREATE TABLE IF NOT EXISTS brands')){brand=true;brandCreates++}if(text.includes("to_regclass('boards')"))return {rows:[{boards_exist:boards,brands_exist:brand}]};if(text.includes('ADD CONSTRAINT boards_brand_id_fkey')){relationAttempts++;if(failRelation){failRelation=false;throw new Error('relationship failure')}}return {rows:[]}};
-    (async()=>{await storage.ensureBoardsTable();if(boardCreates!==1||relationAttempts!==0)throw new Error('boards-first availability failed');await brands.ensureBrandsTable();if(brandCreates!==1||relationAttempts!==1)throw new Error('boards-first reconciliation was not attempted');await storage.ensureBoardsTable();if(relationAttempts!==2)throw new Error('relationship retry missing');await storage.ensureBoardsTable();if(relationAttempts!==2)throw new Error('relationship reconciliation not idempotent')})().catch(e=>{console.error(e);process.exit(1)});`;
+    storage.pool.query=async(sql)=>{const text=String(sql);if(text.includes("to_regclass('public.brand_knowledge_history')"))return {rows:[{protected_history:null}]};if(text.includes('CREATE TABLE IF NOT EXISTS boards')){boards=true;boardCreates++}if(text.includes("to_regclass('public.brands')")){brand=true;brandCreates++;return {rows:[{brands:'brands',members:'brand_members'}]}}if(text.includes("to_regclass('boards')"))return {rows:[{boards_exist:boards,brands_exist:brand}]};if(text.includes('ADD CONSTRAINT boards_brand_id_fkey')){relationAttempts++;if(failRelation){failRelation=false;throw new Error('relationship failure')}}return {rows:[]}};
+    (async()=>{await storage.ensureBoardsTable();if(boardCreates!==1||relationAttempts!==0)throw new Error('boards-first availability failed');await brands.ensureBrandsTable();if(brandCreates!==1||relationAttempts!==0)throw new Error('Brand probe must not run Board DDL');await storage.ensureBoardsTable();if(relationAttempts!==1)throw new Error('relationship attempt missing');await storage.ensureBoardsTable();if(relationAttempts!==2)throw new Error('relationship retry missing');await storage.ensureBoardsTable();if(relationAttempts!==2)throw new Error('relationship reconciliation not idempotent')})().catch(e=>{console.error(e);process.exit(1)});`;
   runIsolatedProbe(relationshipProbe);
 
   const brandsFirstProbe = `
     const storage=require('./api/_boards-storage');const brands=require('./api/_brands-storage');
     let boards=false,brand=false,relations=0;
-    storage.pool.query=async(sql)=>{const text=String(sql);if(text.includes('CREATE TABLE IF NOT EXISTS boards'))boards=true;if(text.includes('CREATE TABLE IF NOT EXISTS brands'))brand=true;if(text.includes("to_regclass('boards')"))return {rows:[{boards_exist:boards,brands_exist:brand}]};if(text.includes('ADD CONSTRAINT boards_brand_id_fkey'))relations++;return {rows:[]}};
+    storage.pool.query=async(sql)=>{const text=String(sql);if(text.includes("to_regclass('public.brand_knowledge_history')"))return {rows:[{protected_history:null}]};if(text.includes('CREATE TABLE IF NOT EXISTS boards'))boards=true;if(text.includes("to_regclass('public.brands')")){brand=true;return {rows:[{brands:'brands',members:'brand_members'}]}}if(text.includes("to_regclass('boards')"))return {rows:[{boards_exist:boards,brands_exist:brand}]};if(text.includes('ADD CONSTRAINT boards_brand_id_fkey'))relations++;return {rows:[]}};
     (async()=>{await brands.ensureBrandsTable();if(relations!==0)throw new Error('missing boards was not safe');await storage.ensureBoardsTable();if(relations!==1)throw new Error('brands-first relationship was not reconciled')})().catch(e=>{console.error(e);process.exit(1)});`;
   runIsolatedProbe(brandsFirstProbe);
 

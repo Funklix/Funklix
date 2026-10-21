@@ -1,0 +1,2238 @@
+{
+  "scope": "BW-36.23A R2 comprehensive recovery on existing PR #802; no production, merge, deploy or paid provider activity",
+  "base_pr_head": "614b6eb932c29b9eb51ff219ea682a20c73b5cb5",
+  "collected_at_utc": "2026-10-21T06:58:07.739368+00:00",
+  "registered_run_blocks": 196,
+  "complete_runtime_boot_safety": {
+    "registered_run_blocks": 196,
+    "passed": 196,
+    "failed": 0,
+    "elapsed_seconds": 691.26,
+    "execution_strategy": "All independent workflow run blocks, 3 workers, Bash -e -o pipefail per block; 600-second collector timeout; every failure collected.",
+    "results": [
+      {
+        "index": 0,
+        "name": "Install project dependencies",
+        "workflow_command": "npm install --ignore-scripts --no-package-lock",
+        "executed_command": "node -e \"require('pg');require('playwright-core');require('@electric-sql/pglite');require('js-tiktoken');require('@vercel/blob')\"",
+        "exit_code": 0,
+        "seconds": 0.9,
+        "output_tail": "",
+        "failure_class": null
+      },
+      {
+        "index": 1,
+        "name": "Check runtime script syntax",
+        "workflow_command": "node --check knowledge-module-registry.js\nnode --check knowledge-module-identity.js\nnode --check knowledge-module-runtime-adapter.js\nnode --check app.js\nnode --check canonical-brand-reader.js\nnode --check home-foundation.js\nnode --check scripts/check-bw36-22b2-real-brand-avatar.js\nnode --check api/_ai-brain-learning-context.js\nnode --check scripts/check-bw36-20-approved-learning-ai-brain.js\nnode --check scripts/check-bw36-20r1-learning-integration-review-fixes.js\nnode --check scripts/fixtures/bw36-20-database.js\nnode --check scripts/fixtures/bw36-20-browser.js\nnode --check campaign-v3.js\nnode --check campaign-creation.js\nnode --check campaign-creation-dialog.js\nnode --check campaign-responsibilities.js\nnode --check api/_campaign-responsibilities.js\nnode --check scripts/check-bw36-15-campaign-team-responsibilities.js\nnode --check scripts/check-bw36-15r1-responsibility-workspace-continuity.js\nnode --check adaptive-canvas-view.js\nnode --check scripts/check-bw36-16-adaptive-canvas-view-hierarchy.js\nnode --check scripts/check-bw36-16r1-toolbar-and-global-view-cycle.js\nnode --check scripts/check-bw36-19r6-learning-review.js\nnode --check scripts/fixtures/bw36-19r6-browser.js\nnode --check scripts/fixtures/bw36-19r6-review-ux.js\nnode --check learning-advisor.js\nnode --check api/_learning-advisor.js\nnode --check api/brands/[id]/learning-advisor.js\nnode --check scripts/check-bw36-19-ai-learning-advisor.js\nnode --check scripts/check-bw36-19r1-existing-board-compatibility.js\nnode --check scripts/check-bw36-19r2-adaptive-learning-advisor-context.js\nnode --check scripts/check-bw36-19r5-simplified-learning-generation.js\nnode --check scripts/check-bw36-19r4-learning-advisor-output-reliability.js\nnode --check scripts/fixtures/bw36-19r4-saved-campaign.js\nnode --check scripts/fixtures/bw36-19r2-browser.js\nnode --check scripts/fixtures/bw36-19r1-saved-boards.js\nnode --check scripts/fixtures/bw36-19-advisor-runtime.js\nnode --check scripts/fixtures/bw36-19-browser.js\nnode --check scripts/fixtures/bw36-19-database.js\nnode --check brand-learnings.js\nnode --check canvas-learning-proposal.js\nnode --check api/brands/[id]/learning-source.js\nnode --check scripts/check-bw36-18-governed-learning-provenance.js\nnode --check scripts/fixtures/bw36-18-browser.js\nnode --check brand-profile-setup.js\nnode --check api/_brand-learnings.js\nnode --check api/brands/[id]/learnings.js\nnode --check scripts/check-bw36-17r2-learning-provenance-recovery.js\nnode --check scripts/check-bw36-17r1-learning-provenance-schema.js\nnode --check scripts/check-bw36-17-governed-brand-learnings.js\nnode --check scripts/fixtures/bw36-17-local-runtime.js\nnode --check language.js\nnode --check api/campaigns.js\nnode --check api/_campaign-creation.js\nnode --check scripts/check-bw36-14-stable-campaign-creation.js\nnode --check scripts/check-bw36-14r1-restore-complete-campaign-v3.js\n",
+        "executed_command": "node --check knowledge-module-registry.js\nnode --check knowledge-module-identity.js\nnode --check knowledge-module-runtime-adapter.js\nnode --check app.js\nnode --check canonical-brand-reader.js\nnode --check home-foundation.js\nnode --check scripts/check-bw36-22b2-real-brand-avatar.js\nnode --check api/_ai-brain-learning-context.js\nnode --check scripts/check-bw36-20-approved-learning-ai-brain.js\nnode --check scripts/check-bw36-20r1-learning-integration-review-fixes.js\nnode --check scripts/fixtures/bw36-20-database.js\nnode --check scripts/fixtures/bw36-20-browser.js\nnode --check campaign-v3.js\nnode --check campaign-creation.js\nnode --check campaign-creation-dialog.js\nnode --check campaign-responsibilities.js\nnode --check api/_campaign-responsibilities.js\nnode --check scripts/check-bw36-15-campaign-team-responsibilities.js\nnode --check scripts/check-bw36-15r1-responsibility-workspace-continuity.js\nnode --check adaptive-canvas-view.js\nnode --check scripts/check-bw36-16-adaptive-canvas-view-hierarchy.js\nnode --check scripts/check-bw36-16r1-toolbar-and-global-view-cycle.js\nnode --check scripts/check-bw36-19r6-learning-review.js\nnode --check scripts/fixtures/bw36-19r6-browser.js\nnode --check scripts/fixtures/bw36-19r6-review-ux.js\nnode --check learning-advisor.js\nnode --check api/_learning-advisor.js\nnode --check api/brands/[id]/learning-advisor.js\nnode --check scripts/check-bw36-19-ai-learning-advisor.js\nnode --check scripts/check-bw36-19r1-existing-board-compatibility.js\nnode --check scripts/check-bw36-19r2-adaptive-learning-advisor-context.js\nnode --check scripts/check-bw36-19r5-simplified-learning-generation.js\nnode --check scripts/check-bw36-19r4-learning-advisor-output-reliability.js\nnode --check scripts/fixtures/bw36-19r4-saved-campaign.js\nnode --check scripts/fixtures/bw36-19r2-browser.js\nnode --check scripts/fixtures/bw36-19r1-saved-boards.js\nnode --check scripts/fixtures/bw36-19-advisor-runtime.js\nnode --check scripts/fixtures/bw36-19-browser.js\nnode --check scripts/fixtures/bw36-19-database.js\nnode --check brand-learnings.js\nnode --check canvas-learning-proposal.js\nnode --check api/brands/[id]/learning-source.js\nnode --check scripts/check-bw36-18-governed-learning-provenance.js\nnode --check scripts/fixtures/bw36-18-browser.js\nnode --check brand-profile-setup.js\nnode --check api/_brand-learnings.js\nnode --check api/brands/[id]/learnings.js\nnode --check scripts/check-bw36-17r2-learning-provenance-recovery.js\nnode --check scripts/check-bw36-17r1-learning-provenance-schema.js\nnode --check scripts/check-bw36-17-governed-brand-learnings.js\nnode --check scripts/fixtures/bw36-17-local-runtime.js\nnode --check language.js\nnode --check api/campaigns.js\nnode --check api/_campaign-creation.js\nnode --check scripts/check-bw36-14-stable-campaign-creation.js\nnode --check scripts/check-bw36-14r1-restore-complete-campaign-v3.js\n",
+        "exit_code": 0,
+        "seconds": 2.61,
+        "output_tail": "",
+        "failure_class": null
+      },
+      {
+        "index": 2,
+        "name": "Check browser script integrity",
+        "workflow_command": "node scripts/check-browser-script-integrity.js",
+        "executed_command": "node scripts/check-browser-script-integrity.js",
+        "exit_code": 0,
+        "seconds": 0.3,
+        "output_tail": "Browser script integrity check passed (46 local classic scripts checked).\n",
+        "failure_class": null
+      },
+      {
+        "index": 3,
+        "name": "Check BW-35.1 canonical posting schedule persistence",
+        "workflow_command": "npm run check:bw35.1",
+        "executed_command": "npm run check:bw35.1",
+        "exit_code": 0,
+        "seconds": 0.4,
+        "output_tail": "\n> check:bw35.1\n> node scripts/check-bw35-1-canonical-posting-schedule-persistence.js\n\nBW-35.1 canonical posting schedule persistence checks passed (33 acceptance assertions; zero provider requests).\n",
+        "failure_class": null
+      },
+      {
+        "index": 4,
+        "name": "Check BW-35.2 manual Posting Plan workspace",
+        "workflow_command": "npm run check:bw35.2",
+        "executed_command": "npm run check:bw35.2",
+        "exit_code": 0,
+        "seconds": 0.37,
+        "output_tail": "\n> check:bw35.2\n> node scripts/check-bw35-2-manual-posting-plan-workspace.js\n\nBW-35.2R2 unified Content Calendar checks passed (60 acceptance areas; invented fixtures; zero provider requests).\n",
+        "failure_class": null
+      },
+      {
+        "index": 5,
+        "name": "Check BW-35.2R1 integrated Posting Plan",
+        "workflow_command": "npm run check:bw35.2r1",
+        "executed_command": "npm run check:bw35.2r1",
+        "exit_code": 0,
+        "seconds": 0.4,
+        "output_tail": "\n> check:bw35.2r1\n> node scripts/check-bw35-2r1-integrated-posting-plan.js\n\nBW-35.2R2 unified Content Calendar checks passed (60 acceptance areas; invented fixtures; zero provider requests).\n",
+        "failure_class": null
+      },
+      {
+        "index": 6,
+        "name": "Check BW-35.2R2 unified Content Calendar",
+        "workflow_command": "npm run check:bw35.2r2",
+        "executed_command": "npm run check:bw35.2r2",
+        "exit_code": 0,
+        "seconds": 0.34,
+        "output_tail": "\n> check:bw35.2r2\n> node scripts/check-bw35-2r2-unified-content-calendar.js\n\nBW-35.2R2 unified Content Calendar checks passed (60 acceptance areas; invented fixtures; zero provider requests).\n",
+        "failure_class": null
+      },
+      {
+        "index": 7,
+        "name": "Check BW-35.2R3 direct Content Calendar",
+        "workflow_command": "npm run check:bw35.2r3",
+        "executed_command": "npm run check:bw35.2r3",
+        "exit_code": 0,
+        "seconds": 0.3,
+        "output_tail": "\n> check:bw35.2r3\n> node scripts/check-bw35-2r3-direct-content-calendar.js\n\nBW-35.2R3 direct Content Calendar checks passed (65 acceptance areas; invented fixtures; zero provider requests).\n",
+        "failure_class": null
+      },
+      {
+        "index": 8,
+        "name": "Check BW-35.2R4 scheduling interactions",
+        "workflow_command": "npm run check:bw35.2r4",
+        "executed_command": "npm run check:bw35.2r4",
+        "exit_code": 0,
+        "seconds": 0.35,
+        "output_tail": "\n> check:bw35.2r4\n> node scripts/check-bw35-2r4-calendar-scheduling-interactions.js\n\nBW-35.2R4 scheduling interaction checks passed (35 acceptance areas; production-shaped invented fixtures; zero provider requests).\n",
+        "failure_class": null
+      },
+      {
+        "index": 9,
+        "name": "Check BW-35.2R5 fluid and reliable scheduling",
+        "workflow_command": "npm run check:bw35.2r5",
+        "executed_command": "npm run check:bw35.2r5",
+        "exit_code": 0,
+        "seconds": 0.35,
+        "output_tail": "\n> check:bw35.2r5\n> node scripts/check-bw35-2r5-fluid-calendar-scheduling.js\n\nBW-35.2R5 checks passed (50 acceptance areas; production-shaped invented fixtures; ordering and non-blocking boundaries proven; zero provider requests).\n",
+        "failure_class": null
+      },
+      {
+        "index": 10,
+        "name": "Check BW-35.2R7 emergency stability containment",
+        "workflow_command": "npm run check:bw35.2r7",
+        "executed_command": "npm run check:bw35.2r7",
+        "exit_code": 0,
+        "seconds": 0.37,
+        "output_tail": "\n> check:bw35.2r7\n> node scripts/check-bw35-2r7-calendar-stability-containment.js\n\nBW-35.2R7 stability containment checks passed: bounded timezone, constant-time dragover, lifecycle cleanup, queue bounds, pending design, and 20-operation deterministic stress.\n",
+        "failure_class": null
+      },
+      {
+        "index": 11,
+        "name": "Check BW-35.2R8 simplified Content Calendar architecture",
+        "workflow_command": "npm run check:bw35.2r8",
+        "executed_command": "npm run check:bw35.2r8",
+        "exit_code": 0,
+        "seconds": 0.35,
+        "output_tail": "\n> check:bw35.2r8\n> node scripts/check-bw35-2r8-simplified-calendar-architecture.js\n\nBW-35.2R8 simplified Content Calendar architecture regression passed (60 deterministic authority, projection, overlay, writer, reconciliation, lifecycle, view, access, localization, design, loading, stress, and zero-provider invariants).\n",
+        "failure_class": null
+      },
+      {
+        "index": 12,
+        "name": "Check BW-35.2R9 Content Calendar visual system",
+        "workflow_command": "npm run check:bw35.2r9",
+        "executed_command": "npm run check:bw35.2r9",
+        "exit_code": 0,
+        "seconds": 0.29,
+        "output_tail": "\n> check:bw35.2r9\n> node scripts/check-bw35-2r9-content-calendar-visual-system.js\n\nBW-35.2R9 Content Calendar visual system regression passed (60 deterministic channel, card, media, safety, responsive, accessibility, architecture, stress-preservation, and zero-provider invariants).\n",
+        "failure_class": null
+      },
+      {
+        "index": 13,
+        "name": "Check BW-35.3 deterministic automatic planning",
+        "workflow_command": "npm run check:bw35.3",
+        "executed_command": "npm run check:bw35.3",
+        "exit_code": 0,
+        "seconds": 0.31,
+        "output_tail": "\n> check:bw35.3\n> node scripts/check-bw35-3-deterministic-automatic-planning.js\n\nBW-35.3 deterministic automatic planning checks passed\n",
+        "failure_class": null
+      },
+      {
+        "index": 14,
+        "name": "Check BW-35.3R1 Auto-plan studio and primary action",
+        "workflow_command": "npm run check:bw35.3r1",
+        "executed_command": "npm run check:bw35.3r1",
+        "exit_code": 0,
+        "seconds": 0.29,
+        "output_tail": "\n> check:bw35.3r1\n> node scripts/check-bw35-3r1-auto-plan-studio.js\n\nBW-35.3R1 Auto-plan studio regression passed (20 grouped checks covering 72 presentation, portal, lifecycle, responsive, accessibility, authority, atomic-batch, and zero-provider invariants).\n",
+        "failure_class": null
+      },
+      {
+        "index": 15,
+        "name": "Check BW-35.3R2 Auto-plan apply and session persistence",
+        "workflow_command": "npm run check:bw35.3r2",
+        "executed_command": "npm run check:bw35.3r2",
+        "exit_code": 0,
+        "seconds": 0.3,
+        "output_tail": "\n> check:bw35.3r2\n> node scripts/check-bw35-3r2-auto-plan-apply.js\n\n\u2713 portal action is a non-submit, prevented, reconstructed binding\n\u2713 session owns all edited configuration across regeneration and render\n\u2713 one strict atomic request and current-node fingerprint boundary\n\u2713 response identity, revisions, lifecycle, immutable snapshot and projections\n\u2713 bounded failure classification does not alias identity to publication lock\n\u2713 localized pending, stale, failure, success and disabled explanations\n\u2713 portal cleanup is scoped/idempotent and visual contracts remain\n\u2713 privacy-safe diagnostics cover every stage\n\u2713 response carries Board identity and no provider boundary exists\n\u2713 registration follows R1\n\u2713 success fixture applies multiple posts and creates one complete-plan Undo\n\u2713 stale revision explicitly requires regeneration\n\u2713 malformed response cannot mutate authority\n\u2713 Board lifecycle switch rejects late response\n\u2713 rapid double click dispatches exactly one batch\n\u2713 recoverable network/server failure preserves settings, proposal and button\nBW-35.3R2 Auto-plan apply and session persistence checks passed\n",
+        "failure_class": null
+      },
+      {
+        "index": 16,
+        "name": "Check BW-35.3R3 Auto-plan freshness and safe rebasing",
+        "workflow_command": "npm run check:bw35.3r3",
+        "executed_command": "npm run check:bw35.3r3",
+        "exit_code": 0,
+        "seconds": 0.29,
+        "output_tail": "\n> check:bw35.3r3\n> node scripts/check-bw35-3r3-auto-plan-freshness.js\n\n\u2713 exact refresh clone stays current and dispatches one atomic batch\n\u2713 newer equivalent authority safely rebases to latest revision\n\u2713 property order, clone, visual optional fields and localized projections are ignored\n\u2713 portal, calendar, pending, locale and preference rerenders are not provenance inputs\n\u2713 unrelated Board metadata permits safe rebase\n\u2713 target schedule revision requires regeneration\n\u2713 new collision/capacity input requires regeneration\n\u2713 eligible set change requires regeneration\n\u2713 editorial eligibility change requires regeneration\n\u2713 publication material change requires regeneration\n\u2713 planning configuration/capacity change requires regeneration\n\u2713 finalized target is blocked without request\n\u2713 Board switch, access removal and target deletion are blocked\n\u2713 canonical schedule and revision normalization ignore absent visual optionals\n\u2713 DST ambiguity remains strict\n\u2713 strict batch allowlist and command coverage remain enforced\n\u2713 wildcard channels survive Apply normalization (verified root cause)\n\u2713 UX separates Preview ready and Update needed in English and German\n\u2713 safe rebase stays enabled, regeneration preserves configuration and network failure is recoverable\n\u2713 double-click reservation precedes async dispatch and pending cannot stick on caught failure\n\u2713 focus, mobile, dark and reduced-motion contracts remain\n\u2713 batch taxonomy and atomic locking remain bounded\n\u2713 privacy-safe diagnostics cover R3 lifecycle\n\u2713 zero provider/CDN requests and zero publication mutations\n\u2713 Runtime Boot Safety registers R3 immediately after R2\nBW-35.3R3 Auto-plan freshness and safe-rebase checks passed\n",
+        "failure_class": null
+      },
+      {
+        "index": 17,
+        "name": "Check BW-35.3R4 Auto-plan batch runtime",
+        "workflow_command": "npm run check:bw35.3r4",
+        "executed_command": "npm run check:bw35.3r4",
+        "exit_code": 0,
+        "seconds": 0.9,
+        "output_tail": "\n> check:bw35.3r4\n> node scripts/check-bw35-3r4-auto-plan-batch-runtime.js\n\n\u2713 canonical deployment-safe route boots and old conflicting route is absent\n\u2713 HTTP and client failures have honest English/German taxonomy\n\u2713 no provider boundary or publication mutation exists\n\u2713 tracked-files-only checkout boots route and executes this runtime regression without node_modules\n\u2713 rejected fetch, malformed success, duplicate click and lifecycle switch preserve authority\n\u2713 authentication, malformed body, method and forbidden failures are bounded\n\u2713 real engine, builder, route, contract, service, transaction and validator complete one request\n\u2713 stale, fingerprint, collision, finalized and storage fixtures never partially mutate\nBW-35.3R4 production-shaped Auto-plan batch runtime checks passed\n",
+        "failure_class": null
+      },
+      {
+        "index": 18,
+        "name": "Check BW-35.3R5 Auto-plan production evidence",
+        "workflow_command": "npm run check:bw35.3r5",
+        "executed_command": "npm run check:bw35.3r5",
+        "exit_code": 0,
+        "seconds": 0.3,
+        "output_tail": "\n> check:bw35.3r5\n> node scripts/check-bw35-3r5-auto-plan-production-evidence.js\n\nBW-35.3R5 production evidence checks passed\n",
+        "failure_class": null
+      },
+      {
+        "index": 19,
+        "name": "Check BW-35.4 safe Posting Plan CSV export",
+        "workflow_command": "npm run check:bw35.4",
+        "executed_command": "npm run check:bw35.4",
+        "exit_code": 0,
+        "seconds": 0.35,
+        "output_tail": "\n> check:bw35.4\n> node scripts/check-bw35-4-posting-plan-csv-export.js\n\n\u2713 v1 authority, exact role scope, complete Board scope and deterministic classification\n\u2713 CSV exact columns, BOM, CRLF, captions, blanks, Unicode, quotes and formula defense\n\u2713 all formula prefixes and URL policy are neutralized independently of HTML\n\u2713 browser-only Blob download uses one URL, anchor and immediate cleanup\n\u2713 review studio, unscheduled choices, Auto-plan handoff, accessibility and lifecycle\n\u2713 no server/provider/storage/mutation boundary and Runtime Boot Safety registration\nBW-35.4 safe Posting Plan CSV export passed (6 groups).\n",
+        "failure_class": null
+      },
+      {
+        "index": 20,
+        "name": "Check BW-35.4R1 visual Posting Plan PDF export",
+        "workflow_command": "npm run check:bw35.4r1",
+        "executed_command": "npm run check:bw35.4r1",
+        "exit_code": 0,
+        "seconds": 0.35,
+        "output_tail": "\n> check:bw35.4r1\n> node scripts/check-bw35-4r1-posting-plan-pdf-export.js\n\nBW-35.4R1 visual Posting Plan PDF export passed (format, projection, privacy, print, CSS, architecture).\n",
+        "failure_class": null
+      },
+      {
+        "index": 21,
+        "name": "Check BW-35.4R2 export naming and Tendra One branding",
+        "workflow_command": "npm run check:bw35.4r2",
+        "executed_command": "npm run check:bw35.4r2",
+        "exit_code": 0,
+        "seconds": 0.35,
+        "output_tail": "\n> check:bw35.4r2\n> node scripts/check-bw35-4r2-export-naming-and-branding.js\n\nBW-35.4R2 export naming and Tendra One branding passed.\n",
+        "failure_class": null
+      },
+      {
+        "index": 22,
+        "name": "Check read-only Canonical Brand catalog",
+        "workflow_command": "node scripts/check-bw1-brand-catalog.js",
+        "executed_command": "node scripts/check-bw1-brand-catalog.js",
+        "exit_code": 0,
+        "seconds": 0.06,
+        "output_tail": "BW-1 read-only Canonical Brand catalog checks passed.\n",
+        "failure_class": null
+      },
+      {
+        "index": 23,
+        "name": "Check ephemeral Canonical Brand selection",
+        "workflow_command": "node scripts/check-bw2-ephemeral-brand-selection.js",
+        "executed_command": "node scripts/check-bw2-ephemeral-brand-selection.js",
+        "exit_code": 0,
+        "seconds": 0.07,
+        "output_tail": "BW-2 ephemeral Canonical Brand selection checks passed.\n",
+        "failure_class": null
+      },
+      {
+        "index": 24,
+        "name": "Check Canonical Brand creation",
+        "workflow_command": "node scripts/check-bw3-canonical-brand-creation.js",
+        "executed_command": "node scripts/check-bw3-canonical-brand-creation.js",
+        "exit_code": 0,
+        "seconds": 0.06,
+        "output_tail": "BW-3 Canonical Brand creation checks passed.\n",
+        "failure_class": null
+      },
+      {
+        "index": 25,
+        "name": "Check durable Workspace Brand selection",
+        "workflow_command": "node scripts/check-bw4-durable-brand-selection.js",
+        "executed_command": "node scripts/check-bw4-durable-brand-selection.js",
+        "exit_code": 0,
+        "seconds": 0.07,
+        "output_tail": "BW-4 durable Workspace Brand selection checks passed.\n",
+        "failure_class": null
+      },
+      {
+        "index": 26,
+        "name": "Check explicit Board Brand association",
+        "workflow_command": "node scripts/check-bw5-board-brand-association.js",
+        "executed_command": "node scripts/check-bw5-board-brand-association.js",
+        "exit_code": 0,
+        "seconds": 0.07,
+        "output_tail": "BW-5 explicit Board Brand association checks passed.\n",
+        "failure_class": null
+      },
+      {
+        "index": 27,
+        "name": "Check per-Board Brand association isolation",
+        "workflow_command": "node scripts/check-bw5-board-brand-isolation-regression.js",
+        "executed_command": "node scripts/check-bw5-board-brand-isolation-regression.js",
+        "exit_code": 0,
+        "seconds": 0.07,
+        "output_tail": "BW-5 per-Board Brand isolation regression checks passed.\n",
+        "failure_class": null
+      },
+      {
+        "index": 28,
+        "name": "Check Board Brand catalog resolution states",
+        "workflow_command": "node scripts/check-bw5-board-brand-resolution-state.js",
+        "executed_command": "node scripts/check-bw5-board-brand-resolution-state.js",
+        "exit_code": 0,
+        "seconds": 0.07,
+        "output_tail": "BW-5 Board Brand resolution state checks passed.\n",
+        "failure_class": null
+      },
+      {
+        "index": 29,
+        "name": "Check read-only Canonical Brand Workspace detail",
+        "workflow_command": "node scripts/check-bw6-brand-workspace-detail.js",
+        "executed_command": "node scripts/check-bw6-brand-workspace-detail.js",
+        "exit_code": 0,
+        "seconds": 0.12,
+        "output_tail": "BW-6 Brand Profile detail checks passed: Workspace authority, wrapper delegation, authenticated GET, both response race boundaries, read isolation, errors and retry.\n",
+        "failure_class": null
+      },
+      {
+        "index": 30,
+        "name": "Check explicit Canonical Brand editing",
+        "workflow_command": "node scripts/check-bw7-canonical-brand-editing.js",
+        "executed_command": "node scripts/check-bw7-canonical-brand-editing.js",
+        "exit_code": 0,
+        "seconds": 0.17,
+        "output_tail": "enting a revision increment\nPASS unverified success with wrong id retains draft and never projects saved state\nPASS unverified success with wrong revision retains draft and never projects saved state\nPASS unverified success with wrong name retains draft and never projects saved state\nPASS unverified success with wrong brand_core retains draft and never projects saved state\nPASS HTTP 409 retains draft without canonical or history change\nPASS HTTP 401 retains draft without canonical or history change\nPASS HTTP 403 retains draft without canonical or history change\nPASS HTTP 404 retains draft without canonical or history change\nPASS HTTP 422 retains draft without canonical or history change\nPASS HTTP 428 retains draft without canonical or history change\nPASS HTTP 503 retains draft without canonical or history change\nPASS viewer cannot enter explicit edit mode or submit\nPASS reviewed clear uses preview then protected PUT with exact intent and preserves unrelated knowledge\nPASS cancelled destructive review sends no mutation and records no history\nPASS network error retains the exact command and local draft for deliberate retry\nPASS account mismatch blocks a new canonical submission\nPASS catalog mismatch blocks a new canonical submission\nPASS workspace mismatch blocks a new canonical submission\nPASS brand mismatch blocks a new canonical submission\nPASS duplicate in-flight submissions cannot send a second mutation\nPASS late account response cannot project into a replacement context\nPASS late generation response cannot project into a replacement context\nPASS late workspace response cannot project into a replacement context\nBW-7 explicit Canonical Brand editing: source invariants and 25 production-path groups passed. SQL atomicity/authorization require the real PostgreSQL suite.\n",
+        "failure_class": null
+      },
+      {
+        "index": 31,
+        "name": "Check read-only Brand Core comparison",
+        "workflow_command": "node scripts/check-bw8-brand-core-comparison.js",
+        "executed_command": "node scripts/check-bw8-brand-core-comparison.js",
+        "exit_code": 0,
+        "seconds": 0.06,
+        "output_tail": "BW-8 read-only Brand Core comparison checks passed.\n",
+        "failure_class": null
+      },
+      {
+        "index": 32,
+        "name": "Check Brand Core comparison lifecycle",
+        "workflow_command": "node scripts/check-bw8-brand-core-comparison-lifecycle.js",
+        "executed_command": "node scripts/check-bw8-brand-core-comparison-lifecycle.js",
+        "exit_code": 0,
+        "seconds": 0.22,
+        "output_tail": "BW-8 Brand Core comparison lifecycle checks passed.\n",
+        "failure_class": null
+      },
+      {
+        "index": 33,
+        "name": "Check explicit Canonical Brand Core initialization",
+        "workflow_command": "node scripts/check-bw9-initialize-canonical-brand-core.js",
+        "executed_command": "node scripts/check-bw9-initialize-canonical-brand-core.js",
+        "exit_code": 0,
+        "seconds": 0.07,
+        "output_tail": "BW-9 explicit Canonical Brand Core initialization checks passed.\n",
+        "failure_class": null
+      },
+      {
+        "index": 34,
+        "name": "Check Brand-scoped Board library",
+        "workflow_command": "node scripts/check-bw10-brand-scoped-board-library.js",
+        "executed_command": "node scripts/check-bw10-brand-scoped-board-library.js",
+        "exit_code": 0,
+        "seconds": 0.07,
+        "output_tail": "BW-10 Brand-scoped Board library checks passed.\n",
+        "failure_class": null
+      },
+      {
+        "index": 35,
+        "name": "Check explicit Board creation from Canonical Brand",
+        "workflow_command": "node scripts/check-bw11-create-board-from-canonical-brand.js",
+        "executed_command": "node scripts/check-bw11-create-board-from-canonical-brand.js",
+        "exit_code": 0,
+        "seconds": 0.07,
+        "output_tail": "BW-11 explicit Canonical Brand Board creation checks passed.\n",
+        "failure_class": null
+      },
+      {
+        "index": 36,
+        "name": "Check Canonical Brand snapshot provenance",
+        "workflow_command": "node scripts/check-bw12-canonical-snapshot-provenance.js",
+        "executed_command": "node scripts/check-bw12-canonical-snapshot-provenance.js",
+        "exit_code": 0,
+        "seconds": 0.06,
+        "output_tail": "BW-12 Canonical Brand snapshot provenance checks passed.\n",
+        "failure_class": null
+      },
+      {
+        "index": 37,
+        "name": "Check controlled Canonical-to-Board refresh",
+        "workflow_command": "node scripts/check-bw13-canonical-to-board-refresh.js",
+        "executed_command": "node scripts/check-bw13-canonical-to-board-refresh.js",
+        "exit_code": 0,
+        "seconds": 0.06,
+        "output_tail": "BW-13 controlled Canonical-to-Board refresh checks passed.\n",
+        "failure_class": null
+      },
+      {
+        "index": 38,
+        "name": "Check Canonical Brand foundation",
+        "workflow_command": "node scripts/check-canonical-brand-foundation.js",
+        "executed_command": "node scripts/check-canonical-brand-foundation.js",
+        "exit_code": 0,
+        "seconds": 0.42,
+        "output_tail": "[BOARD_GET_SUCCESS] { boardId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', role: 'owner' }\n[BOARD_GET_EDITOR_IDENTITY_REFRESH_BEFORE] {\n  boardId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',\n  email: 'viewer@example.com',\n  role: 'editor'\n}\n[Funklix Owner Identity] Refreshing editor identity {\n  boardId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',\n  rawSessionEmail: 'viewer@example.com',\n  normalizedSessionEmail: 'viewer@example.com',\n  sessionName: 'Viewer',\n  sessionAvatar: null,\n  hasName: true,\n  hasAvatar: false,\n  boardRole: 'editor',\n  route: 'GET /api/boards/:id',\n  userKeys: [ 'email', 'name' ],\n  sqlInputs: {\n    boardId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',\n    email: 'viewer@example.com',\n    role: 'editor',\n    name: 'Viewer',\n    avatar: null\n  }\n}\n[Funklix Owner Identity] Editor identity refresh complete {\n  boardId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',\n  rawSessionEmail: 'viewer@example.com',\n  normalizedSessionEmail: 'viewer@example.com',\n  sessionName: 'Viewer',\n  sessionAvatar: null,\n  hasName: true,\n  hasAvatar: false,\n  boardRole: 'editor',\n  route: 'GET /api/boards/:id',\n  userKeys: [ 'email', 'name' ],\n  sqlInputs: {\n    boardId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',\n    email: 'viewer@example.com',\n    role: 'editor',\n    name: 'Viewer',\n    avatar: null\n  },\n  rowCount: 0\n}\n[BOARD_GET_EDITOR_IDENTITY_REFRESH_AFTER] {\n  boardId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',\n  email: 'viewer@example.com',\n  role: 'editor'\n}\n[BOARD_GET_SUCCESS] { boardId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', role: 'editor' }\nCanonical Brand Phase 1A.1 hardening checks passed (mock/contract coverage; no live PostgreSQL integration).\n",
+        "failure_class": null
+      },
+      {
+        "index": 39,
+        "name": "Check sanitized read-only database inspector",
+        "workflow_command": "node scripts/check-bw15-read-only-db-inspector.js",
+        "executed_command": "node scripts/check-bw15-read-only-db-inspector.js",
+        "exit_code": 0,
+        "seconds": 0.17,
+        "output_tail": "BW-15 read-only database inspector checks passed (mock match, drift, partial, rollback failure; no database connection).\n",
+        "failure_class": null
+      },
+      {
+        "index": 40,
+        "name": "Check timing-safe session signature verification",
+        "workflow_command": "node scripts/check-bw16-timing-safe-session-verification.js",
+        "executed_command": "node scripts/check-bw16-timing-safe-session-verification.js",
+        "exit_code": 0,
+        "seconds": 0.07,
+        "output_tail": "BW-16 timing-safe session verification checks passed.\n",
+        "failure_class": null
+      },
+      {
+        "index": 41,
+        "name": "Check Board access roles and sensitive-data boundaries",
+        "workflow_command": "node scripts/check-bw18-board-access-roles.js",
+        "executed_command": "node scripts/check-bw18-board-access-roles.js",
+        "exit_code": 0,
+        "seconds": 0.07,
+        "output_tail": "BW-18 Board access role and sensitive-data boundary checks passed.\n",
+        "failure_class": null
+      },
+      {
+        "index": 42,
+        "name": "Check Board permissions popover lifecycle",
+        "workflow_command": "node scripts/check-bw18-share-permissions-popover-lifecycle.js",
+        "executed_command": "node scripts/check-bw18-share-permissions-popover-lifecycle.js",
+        "exit_code": 0,
+        "seconds": 0.07,
+        "output_tail": "BW-18.1 Board permissions popover lifecycle checks passed.\n",
+        "failure_class": null
+      },
+      {
+        "index": 43,
+        "name": "Check private Boards and revocable public view links",
+        "workflow_command": "node scripts/check-bw19-private-public-board-sharing.js",
+        "executed_command": "node scripts/check-bw19-private-public-board-sharing.js",
+        "exit_code": 0,
+        "seconds": 0.07,
+        "output_tail": "BW-19 private Boards and revocable public view link checks passed.\n",
+        "failure_class": null
+      },
+      {
+        "index": 44,
+        "name": "Check Canonical Brand team roles",
+        "workflow_command": "node scripts/check-bw20-brand-team-roles.js",
+        "executed_command": "node scripts/check-bw20-brand-team-roles.js",
+        "exit_code": 0,
+        "seconds": 0.07,
+        "output_tail": "BW-20 Canonical Brand team role checks passed.\n",
+        "failure_class": null
+      },
+      {
+        "index": 45,
+        "name": "Check inline Brand member role management",
+        "workflow_command": "node scripts/check-bw20-1-inline-brand-role-management.js",
+        "executed_command": "node scripts/check-bw20-1-inline-brand-role-management.js",
+        "exit_code": 0,
+        "seconds": 0.07,
+        "output_tail": "BW-20.1 inline Brand member role management checks passed.\n",
+        "failure_class": null
+      },
+      {
+        "index": 46,
+        "name": "Check Workspace Brand deletion and selector theme",
+        "workflow_command": "npm run check:workspace-brand-deletion",
+        "executed_command": "npm run check:workspace-brand-deletion",
+        "exit_code": 0,
+        "seconds": 0.23,
+        "output_tail": "\n> check:workspace-brand-deletion\n> node scripts/check-workspace-brand-deletion.js\n\nWorkspace Brand deletion and selector regression passed (19 contracts).\n",
+        "failure_class": null
+      },
+      {
+        "index": 47,
+        "name": "Check independent interface and campaign languages",
+        "workflow_command": "node scripts/check-bw21-language-separation.js",
+        "executed_command": "node scripts/check-bw21-language-separation.js",
+        "exit_code": 0,
+        "seconds": 0.07,
+        "output_tail": "BW-21 language separation checks passed.\n",
+        "failure_class": null
+      },
+      {
+        "index": 48,
+        "name": "Check Campaign Canvas Inspector language coverage",
+        "workflow_command": "node scripts/check-bw21-1-inspector-language-coverage.js",
+        "executed_command": "node scripts/check-bw21-1-inspector-language-coverage.js",
+        "exit_code": 0,
+        "seconds": 0.08,
+        "output_tail": "BW-21.1 Inspector language coverage checks passed.\n",
+        "failure_class": null
+      },
+      {
+        "index": 49,
+        "name": "Check Language and Region Settings",
+        "workflow_command": "node scripts/check-bw23-language-region-settings.js",
+        "executed_command": "node scripts/check-bw23-language-region-settings.js",
+        "exit_code": 0,
+        "seconds": 0.12,
+        "output_tail": "BW-21 language separation checks passed.\nBW-21.1 Inspector language coverage checks passed.\nBW-23 Language & Region Settings checks passed.\n",
+        "failure_class": null
+      },
+      {
+        "index": 50,
+        "name": "Check honest AI Insights baseline",
+        "workflow_command": "node scripts/check-bw25-honest-ai-insights-baseline.js",
+        "executed_command": "node scripts/check-bw25-honest-ai-insights-baseline.js",
+        "exit_code": 0,
+        "seconds": 0.07,
+        "output_tail": "BW-25 honest AI Insights baseline checks passed.\n",
+        "failure_class": null
+      },
+      {
+        "index": 51,
+        "name": "Check read-only AI Brain advisor",
+        "workflow_command": "node scripts/check-bw26-read-only-ai-brain.js",
+        "executed_command": "node scripts/check-bw26-read-only-ai-brain.js",
+        "exit_code": 0,
+        "seconds": 0.07,
+        "output_tail": "BW-26 read-only AI Brain checks passed.\n",
+        "failure_class": null
+      },
+      {
+        "index": 52,
+        "name": "Check AI Brain Board authorization with real access helpers (mocked OpenAI)",
+        "workflow_command": "node scripts/check-bw36-20r0-ai-brain-board-authorization.js",
+        "executed_command": "node scripts/check-bw36-20r0-ai-brain-board-authorization.js",
+        "exit_code": 0,
+        "seconds": 8.57,
+        "output_tail": "Confirmed pre-fix defect: unrelated identity classified unowned; provider invoked once (stub).\n[AI_BRAIN_CANVAS_REJECTED] {\n  lifecycleStage: 'validation',\n  boardId: '11111111-1111-4111-8111-111111111111',\n  requestGeneration: '',\n  nodeCount: 1,\n  edgeCount: 0,\n  payloadSize: 'bounded',\n  classification: 'unsupported_canvas',\n  httpStatus: 400\n}\nBW-36.20R0 passed: 17 ACL cases, 11 invalid projections, zero unauthorized provider calls, context isolation and Advice compatibility.\n",
+        "failure_class": null
+      },
+      {
+        "index": 53,
+        "name": "Check real Canvas context and turn lifecycle",
+        "workflow_command": "node scripts/check-bw26-1-real-canvas-context-and-turn-lifecycle.js",
+        "executed_command": "node scripts/check-bw26-1-real-canvas-context-and-turn-lifecycle.js",
+        "exit_code": 0,
+        "seconds": 1.63,
+        "output_tail": "[AI_BRAIN_CANVAS_REJECTED] {\n  lifecycleStage: 'validation',\n  boardId: 'board',\n  requestGeneration: '',\n  nodeCount: 1,\n  edgeCount: 0,\n  payloadSize: 'bounded',\n  classification: 'unsupported_canvas',\n  httpStatus: 400\n}\nBW-26.1 real Canvas context and turn lifecycle checks passed. Exact pre-fix cause: node status was the first persistence field rejected by BW-26 sameKeys; invalid context called provider zero times and valid context once.\n",
+        "failure_class": null
+      },
+      {
+        "index": 54,
+        "name": "Check safe AI Brain response formatting",
+        "workflow_command": "node scripts/check-bw26-2-safe-brain-response-formatting.js",
+        "executed_command": "node scripts/check-bw26-2-safe-brain-response-formatting.js",
+        "exit_code": 0,
+        "seconds": 0.07,
+        "output_tail": "BW-26.2 safe AI Brain response formatting checks passed. Allowlisted semantic DOM rendering preserves literal hostile HTML, malformed Markdown, read-only lifecycle, and responsive wrapping.\n",
+        "failure_class": null
+      },
+      {
+        "index": 55,
+        "name": "Check bounded AI Brain conversation memory",
+        "workflow_command": "node scripts/check-bw26-3-bounded-conversation-memory.js",
+        "executed_command": "node scripts/check-bw26-3-bounded-conversation-memory.js",
+        "exit_code": 0,
+        "seconds": 1.33,
+        "output_tail": "BW-26.3 bounded ephemeral conversation memory checks passed.\n",
+        "failure_class": null
+      },
+      {
+        "index": 56,
+        "name": "Check AI Brain follow-up reference resolution",
+        "workflow_command": "node scripts/check-bw26-4-reference-resolution.js",
+        "executed_command": "node scripts/check-bw26-4-reference-resolution.js",
+        "exit_code": 0,
+        "seconds": 1.55,
+        "output_tail": "BW-26.4 reliable follow-up reference resolution checks passed.\n",
+        "failure_class": null
+      },
+      {
+        "index": 57,
+        "name": "Check AI Brain response-language adherence",
+        "workflow_command": "node scripts/check-bw26-5-response-language-adherence.js",
+        "executed_command": "node scripts/check-bw26-5-response-language-adherence.js",
+        "exit_code": 0,
+        "seconds": 1.41,
+        "output_tail": "BW-26.5 per-turn response-language adherence checks passed.\n",
+        "failure_class": null
+      },
+      {
+        "index": 58,
+        "name": "Check controlled AI Brain Content-node creation",
+        "workflow_command": "node scripts/check-bw26-6-controlled-ai-brain-node-creation.js",
+        "executed_command": "node scripts/check-bw26-6-controlled-ai-brain-node-creation.js",
+        "exit_code": 0,
+        "seconds": 0.14,
+        "output_tail": "BW-26.6 controlled AI Brain Content-node creation checks passed.\n",
+        "failure_class": null
+      },
+      {
+        "index": 59,
+        "name": "Check AI Brain Content-node proposal production boundary",
+        "workflow_command": "node scripts/check-bw26-6-1-node-proposal-production-failure.js",
+        "executed_command": "node scripts/check-bw26-6-1-node-proposal-production-failure.js",
+        "exit_code": 0,
+        "seconds": 0.14,
+        "output_tail": "[AI_BRAIN_PROPOSAL_REJECTED] {\n  lifecycleStage: 'authorization',\n  validationClassification: 'proposal_forbidden',\n  httpStatus: 403,\n  endpointLoaded: true,\n  authenticated: true,\n  boardAuthorized: false,\n  providerCalled: false,\n  providerReturned: false,\n  jsonParsed: false,\n  proposalValidated: false\n}\n[AI_BRAIN_PROPOSAL_REJECTED] {\n  lifecycleStage: 'authorization',\n  validationClassification: 'proposal_forbidden',\n  httpStatus: 403,\n  endpointLoaded: true,\n  authenticated: true,\n  boardAuthorized: false,\n  providerCalled: false,\n  providerReturned: false,\n  jsonParsed: false,\n  proposalValidated: false\n}\n[AI_BRAIN_PROPOSAL_REJECTED] {\n  lifecycleStage: 'authentication',\n  validationClassification: 'proposal_unauthorized',\n  httpStatus: 401,\n  endpointLoaded: true,\n  authenticated: false,\n  boardAuthorized: false,\n  providerCalled: false,\n  providerReturned: false,\n  jsonParsed: false,\n  proposalValidated: false\n}\n[AI_BRAIN_PROPOSAL_REJECTED] {\n  lifecycleStage: 'request',\n  validationClassification: 'request_shape',\n  httpStatus: 400,\n  endpointLoaded: true,\n  authenticated: false,\n  boardAuthorized: false,\n  providerCalled: false,\n  providerReturned: false,\n  jsonParsed: false,\n  proposalValidated: false\n}\nBW-26.6.1 production-boundary regression checks passed.\n",
+        "failure_class": null
+      },
+      {
+        "index": 60,
+        "name": "Check AI Brain post-creation Canvas transition",
+        "workflow_command": "node scripts/check-bw26-6-2-node-creation-ui-transition.js",
+        "executed_command": "node scripts/check-bw26-6-2-node-creation-ui-transition.js",
+        "exit_code": 0,
+        "seconds": 0.1,
+        "output_tail": "BW-26.6.2 AI Brain node-creation UI transition checks passed.\n",
+        "failure_class": null
+      },
+      {
+        "index": 61,
+        "name": "Check bounded large Brand Core website imports",
+        "workflow_command": "npm run check:bw26.6.3",
+        "executed_command": "npm run check:bw26.6.3",
+        "exit_code": 0,
+        "seconds": 0.35,
+        "output_tail": "\n> check:bw26.6.3\n> node scripts/check-bw26-6-3-large-brand-core-website-import.js\n\nBW-26.6.3 bounded large Brand Core website import checks passed.\n",
+        "failure_class": null
+      },
+      {
+        "index": 62,
+        "name": "Check BW-27 design system and Dark Mode",
+        "workflow_command": "node scripts/check-bw27-design-system-dark-mode.js",
+        "executed_command": "node scripts/check-bw27-design-system-dark-mode.js",
+        "exit_code": 0,
+        "seconds": 0.15,
+        "output_tail": "BW-27 design-system and Dark Mode checks passed (71 contracts covered).\n",
+        "failure_class": null
+      },
+      {
+        "index": 63,
+        "name": "Check BW-27.1 Dark Mode surface contrast",
+        "workflow_command": "node scripts/check-bw27-1-dark-mode-surface-contrast.js",
+        "executed_command": "node scripts/check-bw27-1-dark-mode-surface-contrast.js",
+        "exit_code": 0,
+        "seconds": 0.06,
+        "output_tail": "BW-27.1 Dark Mode surface contrast checks passed (42 contracts plus 7 contrast fixtures). \n",
+        "failure_class": null
+      },
+      {
+        "index": 64,
+        "name": "Check BW-27.2 premium Dark Mode visual system",
+        "workflow_command": "node scripts/check-bw27-2-premium-dark-mode.js",
+        "executed_command": "node scripts/check-bw27-2-premium-dark-mode.js",
+        "exit_code": 0,
+        "seconds": 0.09,
+        "output_tail": "BW-27.2 premium Dark Mode checks passed (45 contracts plus 14 contrast fixtures). Visual quality still requires human review.\n",
+        "failure_class": null
+      },
+      {
+        "index": 65,
+        "name": "Check BW-27.3 final Dark Mode visual polish",
+        "workflow_command": "node scripts/check-bw27-3-final-dark-mode-polish.js",
+        "executed_command": "node scripts/check-bw27-3-final-dark-mode-polish.js",
+        "exit_code": 0,
+        "seconds": 0.07,
+        "output_tail": "BW-27.3 final Dark Mode polish checks passed (56 contracts and 21 deterministic contrast fixtures). Visual quality remains a human review responsibility.\n",
+        "failure_class": null
+      },
+      {
+        "index": 66,
+        "name": "Check BW-27.4 Canvas component polish",
+        "workflow_command": "node scripts/check-bw27-4-canvas-component-polish.js",
+        "executed_command": "node scripts/check-bw27-4-canvas-component-polish.js",
+        "exit_code": 0,
+        "seconds": 0.14,
+        "output_tail": "BW-27.4 Canvas component polish checks passed (55 contracts and 14 deterministic contrast fixtures). Visual quality remains a human review responsibility.\n",
+        "failure_class": null
+      },
+      {
+        "index": 67,
+        "name": "Check BW-27.5 Landing Page node Dark Mode readability",
+        "workflow_command": "node scripts/check-bw27-5-landing-page-node-dark-mode.js",
+        "executed_command": "node scripts/check-bw27-5-landing-page-node-dark-mode.js",
+        "exit_code": 0,
+        "seconds": 0.12,
+        "output_tail": "BW-27.5 Landing Page Dark Mode readability checks passed.\n",
+        "failure_class": null
+      },
+      {
+        "index": 68,
+        "name": "Check BW-27.6 Campaign Canvas Dark Mode controls",
+        "workflow_command": "npm run check:bw27.6",
+        "executed_command": "npm run check:bw27.6",
+        "exit_code": 0,
+        "seconds": 0.3,
+        "output_tail": "\n> check:bw27.6\n> node scripts/check-bw27-6-canvas-dark-mode-controls.js\n\nBW-27.6 Campaign Canvas Dark Mode control checks passed.\n",
+        "failure_class": null
+      },
+      {
+        "index": 69,
+        "name": "Check BW-27.7 responsive shell stability",
+        "workflow_command": "npm run check:bw27.7",
+        "executed_command": "npm run check:bw27.7",
+        "exit_code": 0,
+        "seconds": 0.31,
+        "output_tail": "\n> check:bw27.7\n> node scripts/check-bw27-7-responsive-shell-stability.js\n\n\u2713 Runtime Boot Safety registers BW-27.7 directly after BW-27.6\n\u2713 root and shell have one shrink-safe width owner\n\u2713 compact navigation is one persistent DOM mode\n\u2713 dashboard changes deliberately from columns to one readable track\n\u2713 calendar toolbar, backlog, cards and genuine data overflow stay local\n\u2713 portals are viewport bounded with reachable sticky actions\n\u2713 resize is presentation-only and preserves Board, tab, proposal and schedules\n\u2713 accessibility contracts cover touch, focus, motion, contrast and zoom reflow\nBW-27.7 responsive shell stability checks passed.\n",
+        "failure_class": null
+      },
+      {
+        "index": 70,
+        "name": "Check BW-28 trustworthy Canvas Intelligence",
+        "workflow_command": "node scripts/check-bw28-ai-insights-architecture.js",
+        "executed_command": "node scripts/check-bw28-ai-insights-architecture.js",
+        "exit_code": 0,
+        "seconds": 0.25,
+        "output_tail": "Browser script integrity check passed (46 local classic scripts checked).\nBW-28 trustworthy Canvas Intelligence checks passed (86 architecture contracts).\n",
+        "failure_class": null
+      },
+      {
+        "index": 71,
+        "name": "Check BW-28.1 Insights UX and AI Brain handoff",
+        "workflow_command": "node scripts/check-bw28-1-insights-ux-and-brain-handoff.js",
+        "executed_command": "node scripts/check-bw28-1-insights-ux-and-brain-handoff.js",
+        "exit_code": 0,
+        "seconds": 0.3,
+        "output_tail": "Browser script integrity check passed (46 local classic scripts checked).\nBW-28.1 Insights UX and AI Brain handoff checks passed (39 regression contracts).\n",
+        "failure_class": null
+      },
+      {
+        "index": 72,
+        "name": "Check BW-28.3 premium Insights and Brand Avatar",
+        "workflow_command": "node scripts/check-bw28-3-premium-insights-and-brand-avatar.js",
+        "executed_command": "node scripts/check-bw28-3-premium-insights-and-brand-avatar.js",
+        "exit_code": 0,
+        "seconds": 0.1,
+        "output_tail": "BW-28.3 premium Insights and Brand Avatar checks passed.\n",
+        "failure_class": null
+      },
+      {
+        "index": 73,
+        "name": "Check BW-28.3.1 Insights runtime rendering",
+        "workflow_command": "node scripts/check-bw28-3-1-insights-runtime-rendering.js",
+        "executed_command": "node scripts/check-bw28-3-1-insights-runtime-rendering.js",
+        "exit_code": 0,
+        "seconds": 0.12,
+        "output_tail": "BW-28.3.1 production Insights runtime rendering checks passed (46 contracts).\n",
+        "failure_class": null
+      },
+      {
+        "index": 74,
+        "name": "Check BW-29 assumption-based Funnel Simulator",
+        "workflow_command": "node scripts/check-bw29-funnel-simulator.js",
+        "executed_command": "node scripts/check-bw29-funnel-simulator.js",
+        "exit_code": 0,
+        "seconds": 0.08,
+        "output_tail": "BW-29 Funnel Simulator production contract passed (92 requirement groups). \n",
+        "failure_class": null
+      },
+      {
+        "index": 75,
+        "name": "Check BW-29.1 Simulator UX and Dark Mode",
+        "workflow_command": "node scripts/check-bw29-1-simulator-ux-and-dark-mode.js",
+        "executed_command": "node scripts/check-bw29-1-simulator-ux-and-dark-mode.js",
+        "exit_code": 0,
+        "seconds": 0.12,
+        "output_tail": "BW-29.1 Simulator UX and Dark Mode contract passed (66 requirement groups).\n",
+        "failure_class": null
+      },
+      {
+        "index": 76,
+        "name": "Check BW-29.3 Persona Journey Simulator",
+        "workflow_command": "npm run check:bw29.3",
+        "executed_command": "npm run check:bw29.3",
+        "exit_code": 0,
+        "seconds": 0.28,
+        "output_tail": "\n> check:bw29.3\n> node scripts/check-bw29-3-persona-journey-simulator.js\n\n[persona-journey] {\"client_request_id\":\"ABC123\",\"server_request_id\":\"GWO6Z2K\",\"phase\":\"completed\",\"code\":\"success\",\"classification\":\"synthetic_persona\"}\nBW-29.3 Persona Journey Simulator checks passed (55 executable contract groups; 144 acceptance areas).\n",
+        "failure_class": null
+      },
+      {
+        "index": 77,
+        "name": "Check BW-29.3.2 execution and compact Simulator UX",
+        "workflow_command": "npm run check:bw29.3.2",
+        "executed_command": "npm run check:bw29.3.2",
+        "exit_code": 0,
+        "seconds": 0.3,
+        "output_tail": "\n> check:bw29.3.2\n> node scripts/check-bw29-3-2-execution-and-compact-ux.js\n\nBW-29.3.2 execution and compact UX checks passed (102 checks).\n",
+        "failure_class": null
+      },
+      {
+        "index": 78,
+        "name": "Check BW-29.3.3 reliable Persona simulation",
+        "workflow_command": "npm run check:bw29.3.3",
+        "executed_command": "npm run check:bw29.3.3",
+        "exit_code": 0,
+        "seconds": 0.3,
+        "output_tail": "\n> check:bw29.3.3\n> node scripts/check-bw29-3-3-reliable-persona-simulation.js\n\nBW-29.3.3 reliable Persona simulation checks passed (40 checks).\n",
+        "failure_class": null
+      },
+      {
+        "index": 79,
+        "name": "Check BW-29.3.4 simple Persona execution path",
+        "workflow_command": "npm run check:bw29.3.4",
+        "executed_command": "npm run check:bw29.3.4",
+        "exit_code": 0,
+        "seconds": 0.27,
+        "output_tail": "\n> check:bw29.3.4\n> node scripts/check-bw29-3-4-simple-execution-path.js\n\n[persona-journey] {\"client_request_id\":\"922OL0\",\"server_request_id\":\"CBHKTBI\",\"phase\":\"completed\",\"code\":\"success\",\"classification\":\"synthetic_persona\"}\nBW-29.3.4 simple execution path checks passed (42 checks).\n",
+        "failure_class": null
+      },
+      {
+        "index": 80,
+        "name": "Check BW-29.3.5 live Persona request parity",
+        "workflow_command": "npm run check:bw29.3.5",
+        "executed_command": "npm run check:bw29.3.5",
+        "exit_code": 0,
+        "seconds": 0.36,
+        "output_tail": "\n> check:bw29.3.5\n> node scripts/check-bw29-3-5-live-request-parity.js\n\n[persona-journey] {\"client_request_id\":\"C9B9T0\",\"server_request_id\":\"RYDMG6W\",\"phase\":\"completed\",\"code\":\"success\",\"classification\":\"synthetic_persona\"}\n[persona-journey] {\"client_request_id\":\"C9B9T0\",\"server_request_id\":\"HHHTRU4\",\"phase\":\"context_loaded\",\"code\":\"configuration_invalid\",\"classification\":\"target_group_unresolved\"}\n[persona-journey] {\"client_request_id\":\"C9B9T0\",\"server_request_id\":\"STEMOWY\",\"phase\":\"context_loaded\",\"code\":\"configuration_invalid\",\"classification\":\"asset_incomplete\"}\nBW-29.3.5 simple execution path checks passed (54 checks).\n",
+        "failure_class": null
+      },
+      {
+        "index": 81,
+        "name": "Check BW-29.4.1 production boundary diagnostics",
+        "workflow_command": "npm run check:bw29.4.1",
+        "executed_command": "npm run check:bw29.4.1",
+        "exit_code": 0,
+        "seconds": 0.34,
+        "output_tail": "\n> check:bw29.4.1\n> node scripts/check-bw29-4-1-production-boundary-diagnostics.js\n\n[persona-journey] {\"client_request_id\":\"ABC123\",\"server_request_id\":\"T-R8SQW\",\"phase\":\"handler_entered\",\"code\":\"health_ok\",\"classification\":\"health_ok\"}\n[persona-journey] {\"client_request_id\":\"ABC123\",\"server_request_id\":\"YPHDSD0\",\"phase\":\"body_parsed\",\"code\":\"authentication_required\",\"classification\":\"authentication_failed\"}\nBW-29.4.1 production boundary diagnostic checks passed (26 checks).\n",
+        "failure_class": null
+      },
+      {
+        "index": 82,
+        "name": "Check BW-29.4.2 Canvas-context boundary",
+        "workflow_command": "npm run check:bw29.4.2",
+        "executed_command": "npm run check:bw29.4.2",
+        "exit_code": 0,
+        "seconds": 0.27,
+        "output_tail": "\n> check:bw29.4.2\n> node scripts/check-bw29-4-2-canvas-context-boundary.js\n\n[persona-journey] {\"client_request_id\":\"ABC123\",\"server_request_id\":\"RCSS-5K\",\"phase\":\"configuration_resolved\",\"code\":\"simulation_unavailable\",\"classification\":\"provider_unavailable\"}\nBW-29.4.2 Canvas-context boundary checks passed (exact legacy rejection reproduced; saved v2 context resolved).\n",
+        "failure_class": null
+      },
+      {
+        "index": 83,
+        "name": "Check BW-30.1 App Shell and Inspector layout",
+        "workflow_command": "npm run check:bw30.1",
+        "executed_command": "npm run check:bw30.1",
+        "exit_code": 0,
+        "seconds": 0.3,
+        "output_tail": "\n> check:bw30.1\n> node scripts/check-bw30-1-app-shell-inspector-layout.js\n\nBW-30.1 App Shell and Inspector runtime transition checks passed.\n",
+        "failure_class": null
+      },
+      {
+        "index": 84,
+        "name": "Check BW-31.1 read-only Content Workspace library",
+        "workflow_command": "npm run check:bw31.1",
+        "executed_command": "npm run check:bw31.1",
+        "exit_code": 0,
+        "seconds": 0.28,
+        "output_tail": "\n> check:bw31.1\n> node scripts/check-bw31-1-content-workspace-library.js\n\nBW-31.1 Content Workspace library regression passed (read-only projection, readiness, filters, lifecycle, locale, theme and responsive contracts).\n",
+        "failure_class": null
+      },
+      {
+        "index": 85,
+        "name": "Check BW-31.2 human Content Workspace review workflow",
+        "workflow_command": "npm run check:bw31.2",
+        "executed_command": "npm run check:bw31.2",
+        "exit_code": 0,
+        "seconds": 0.3,
+        "output_tail": "\n> check:bw31.2\n> node scripts/check-bw31-2-content-review-workflow.js\n\nBW-31.2 human review workflow regression passed (runtime transition contract, stale guards, permissions, notes, synchronization, localization, accessibility, themes and responsive UI).\n",
+        "failure_class": null
+      },
+      {
+        "index": 86,
+        "name": "Check BW-31.4 operational internal Content Calendar",
+        "workflow_command": "npm run check:bw31.4",
+        "executed_command": "npm run check:bw31.4",
+        "exit_code": 0,
+        "seconds": 0.4,
+        "output_tail": "\n> check:bw31.4\n> node scripts/check-bw31-4-content-calendar.js\n\nBW-35.2R2 unified Content Calendar checks passed (60 acceptance areas; invented fixtures; zero provider requests).\n",
+        "failure_class": null
+      },
+      {
+        "index": 87,
+        "name": "Check BW-31.5.1 Content Workspace functional recovery",
+        "workflow_command": "npm run check:bw31.5.1",
+        "executed_command": "npm run check:bw31.5.1",
+        "exit_code": 0,
+        "seconds": 0.3,
+        "output_tail": "\n> check:bw31.5.1\n> node scripts/check-bw31-5-1-content-functional-recovery.js\n\nBW-31.5.1 functional recovery passed (authoritative resolution, real entry wiring, Model C planning, source feedback, guarded review and scheduling, localization and preservation boundaries).\n",
+        "failure_class": null
+      },
+      {
+        "index": 88,
+        "name": "Check BW-31.5.2 simplified Content Workspace operations",
+        "workflow_command": "npm run check:bw31.5.2",
+        "executed_command": "npm run check:bw31.5.2",
+        "exit_code": 0,
+        "seconds": 0.32,
+        "output_tail": "\n> check:bw31.5.2\n> node scripts/check-bw31-5-2-content-workspace-ux.js\n\nBW-31.5.2 simplified Content Workspace UX regression passed (runtime projection, hierarchy, attention, filters, actions, planning, lifecycle, permissions, localization, and responsive contracts).\n",
+        "failure_class": null
+      },
+      {
+        "index": 89,
+        "name": "Check BW-32.1 Social Connector foundation",
+        "workflow_command": "npm run check:bw32.1",
+        "executed_command": "npm run check:bw32.1",
+        "exit_code": 0,
+        "seconds": 0.32,
+        "output_tail": "\n> check:bw32.1\n> node scripts/check-bw32-1-social-connector-foundation.js\n\nBW-32.1 Social Connector foundation regression checks passed.\n",
+        "failure_class": null
+      },
+      {
+        "index": 90,
+        "name": "Check BW-32.2 LinkedIn account connection",
+        "workflow_command": "npm run check:bw32.2",
+        "executed_command": "npm run check:bw32.2",
+        "exit_code": 0,
+        "seconds": 0.29,
+        "output_tail": "\n> check:bw32.2\n> node scripts/check-bw32-2-linkedin-connection.js\n\nBW-32.2 LinkedIn connection regression checks passed.\n",
+        "failure_class": null
+      },
+      {
+        "index": 91,
+        "name": "Check BW-32.2.1 LinkedIn callback recovery",
+        "workflow_command": "npm run check:bw32.2.1",
+        "executed_command": "npm run check:bw32.2.1",
+        "exit_code": 0,
+        "seconds": 0.29,
+        "output_tail": "\n> check:bw32.2.1\n> node scripts/check-bw32-2-1-linkedin-callback-recovery.js\n\nBW-32.2.1 LinkedIn callback recovery regression checks passed.\n",
+        "failure_class": null
+      },
+      {
+        "index": 92,
+        "name": "Check BW-32.2.2 LinkedIn persistence reconciliation",
+        "workflow_command": "npm run check:bw32.2.2",
+        "executed_command": "npm run check:bw32.2.2",
+        "exit_code": 0,
+        "seconds": 0.3,
+        "output_tail": "\n> check:bw32.2.2\n> node scripts/check-bw32-2-2-linkedin-persistence.js\n\nBW-32.2.2 LinkedIn persistence regression checks passed.\n",
+        "failure_class": null
+      },
+      {
+        "index": 93,
+        "name": "Check BW-32.2.3 LinkedIn connection state",
+        "workflow_command": "npm run check:bw32.2.3",
+        "executed_command": "npm run check:bw32.2.3",
+        "exit_code": 0,
+        "seconds": 0.29,
+        "output_tail": "\n> check:bw32.2.3\n> node scripts/check-bw32-2-3-linkedin-connection-state.js\n\nBW-32.2.3 LinkedIn connection state regression checks passed.\n",
+        "failure_class": null
+      },
+      {
+        "index": 94,
+        "name": "Check BW-32.2.5 truthful LinkedIn Settings controls",
+        "workflow_command": "npm run check:bw32.2.5",
+        "executed_command": "npm run check:bw32.2.5",
+        "exit_code": 0,
+        "seconds": 0.3,
+        "output_tail": "\n> check:bw32.2.5\n> node scripts/check-bw32-2-5-linkedin-settings-controls.js\n\nBW-32.2.5 truthful LinkedIn Settings control regression checks passed.\n",
+        "failure_class": null
+      },
+      {
+        "index": 95,
+        "name": "Check BW-32.2.6 Social Connector schema recovery",
+        "workflow_command": "npm run check:bw32.2.6",
+        "executed_command": "npm run check:bw32.2.6",
+        "exit_code": 0,
+        "seconds": 0.3,
+        "output_tail": "\n> check:bw32.2.6\n> node scripts/check-bw32-2-6-social-schema-recovery.js\n\nBW-32.2.6 deterministic migration contract passed; PostgreSQL integration skipped (BW326_DATABASE_URL not set).\n",
+        "failure_class": null
+      },
+      {
+        "index": 96,
+        "name": "Check BW-32.2.9 OAuth phase migration recovery",
+        "workflow_command": "npm run check:bw32.2.9",
+        "executed_command": "npm run check:bw32.2.9",
+        "exit_code": 0,
+        "seconds": 0.3,
+        "output_tail": "\n> check:bw32.2.9\n> node scripts/check-bw32-2-9-oauth-phase-migration.js\n\nBW-32.2.9 OAuth phase migration check passed (state_received, callback_entered, schema_ready, state_loaded, state_validated, state_consumed, token_exchange_started, token_received, identity_request_started, identity_resolved, credential_sealed, connection_transaction_started, token_secret_written, connected_account_written, destination_written, connection_committed, callback_result_created, redirect_created, completed, unknown)\n",
+        "failure_class": null
+      },
+      {
+        "index": 97,
+        "name": "Check BW-32.2.10 Social Settings response contract",
+        "workflow_command": "npm run check:bw32.2.10",
+        "executed_command": "npm run check:bw32.2.10",
+        "exit_code": 0,
+        "seconds": 0.3,
+        "output_tail": "\n> check:bw32.2.10\n> node scripts/check-bw32-2-10-social-settings-response-contract.js\n\nBW-32.2.10 Social Settings response contract checks passed (40 scenarios).\n",
+        "failure_class": null
+      },
+      {
+        "index": 98,
+        "name": "Check BW-32.2.11 Social Settings read availability",
+        "workflow_command": "npm run check:bw32.2.11",
+        "executed_command": "npm run check:bw32.2.11",
+        "exit_code": 0,
+        "seconds": 0.3,
+        "output_tail": "\n> check:bw32.2.11\n> node scripts/check-bw32-2-11-social-settings-read-availability.js\n\nBW-32.2.11 Social Settings read availability checks passed (40 scenarios).\n",
+        "failure_class": null
+      },
+      {
+        "index": 99,
+        "name": "Check BW-32.2.12 direct Social Settings read",
+        "workflow_command": "npm run check:bw32.2.12",
+        "executed_command": "npm run check:bw32.2.12",
+        "exit_code": 0,
+        "seconds": 0.31,
+        "output_tail": "\n> check:bw32.2.12\n> node scripts/check-bw32-2-12-direct-social-settings-read.js\n\nBW-32.2.12 direct Social Settings read checks passed (40 scenarios).\n",
+        "failure_class": null
+      },
+      {
+        "index": 100,
+        "name": "Check BW-32.3.1 guarded LinkedIn text Publish Now",
+        "workflow_command": "npm run check:bw32.3.1",
+        "executed_command": "npm run check:bw32.3.1",
+        "exit_code": 0,
+        "seconds": 0.4,
+        "output_tail": "\n> check:bw32.3.1\n> node scripts/check-bw32-3-1-linkedin-text-publish-now.js\n\nBW-32.3.1 LinkedIn text Publish Now checks passed (pure evaluator, storage/route source fixtures, adapter fixture, browser lifecycle, controlled live boundary; zero live LinkedIn calls).\n",
+        "failure_class": null
+      },
+      {
+        "index": 101,
+        "name": "Check BW-32.3.2 stale approval recovery",
+        "workflow_command": "npm run check:bw32.3.2",
+        "executed_command": "npm run check:bw32.3.2",
+        "exit_code": 0,
+        "seconds": 0.39,
+        "output_tail": "\n> check:bw32.3.2\n> node scripts/check-bw32-3-2-stale-approval-recovery.js\n\nBW-32.3.2 stale approval recovery passed (localized recovery, guarded deliberate transition, fingerprint equivalence, Inspector parity, confirmation-only publishing; zero LinkedIn calls).\n",
+        "failure_class": null
+      },
+      {
+        "index": 102,
+        "name": "Check BW-32.3.3 canonical content reapproval",
+        "workflow_command": "npm run check:bw32.3.3",
+        "executed_command": "npm run check:bw32.3.3",
+        "exit_code": 0,
+        "seconds": 0.3,
+        "output_tail": "\n> check:bw32.3.3\n> node scripts/check-bw32-3-3-canonical-reapproval.js\n\nBW-32.3.3 canonical reapproval regression passed (57 assertions; no LinkedIn provider request).\n",
+        "failure_class": null
+      },
+      {
+        "index": 103,
+        "name": "Check BW-32.3.5 approval fingerprint diagnostics",
+        "workflow_command": "npm run check:bw32.3.5",
+        "executed_command": "npm run check:bw32.3.5",
+        "exit_code": 0,
+        "seconds": 0.27,
+        "output_tail": "\n> check:bw32.3.5\n> node scripts/check-bw32-3-5-approval-fingerprint-diagnostics.js\n\nBW-32.3.5 approval fingerprint diagnostics passed (51 assertions; zero LinkedIn calls).\n",
+        "failure_class": null
+      },
+      {
+        "index": 104,
+        "name": "Check BW-32.3.6 authoritative v2 approval",
+        "workflow_command": "npm run check:bw32.3.6",
+        "executed_command": "npm run check:bw32.3.6",
+        "exit_code": 0,
+        "seconds": 0.34,
+        "output_tail": "\n> check:bw32.3.6\n> node scripts/check-bw32-3-6-authoritative-v2-approval.js\n\nBW-32.3.6 authoritative v2 approval passed (67 assertions; first v1 difference: images/object-key-order; zero LinkedIn calls).\n",
+        "failure_class": null
+      },
+      {
+        "index": 105,
+        "name": "Check BW-32.3.7 server-authoritative approval action",
+        "workflow_command": "npm run check:bw32.3.7",
+        "executed_command": "npm run check:bw32.3.7",
+        "exit_code": 0,
+        "seconds": 0.28,
+        "output_tail": "\n> check:bw32.3.7\n> node scripts/check-bw32-3-7-approval-action.js\n\nBW-32.3.7 approval action passed (23 assertions; exactly one approval request; zero publishing operations).\n",
+        "failure_class": null
+      },
+      {
+        "index": 106,
+        "name": "Check BW-32.3.8 accepted LinkedIn publication finalization",
+        "workflow_command": "npm run check:bw32.3.8",
+        "executed_command": "npm run check:bw32.3.8",
+        "exit_code": 0,
+        "seconds": 0.22,
+        "output_tail": "\n> check:bw32.3.8\n> node scripts/check-bw32-3-8-linkedin-publication-finalization.js\n\nBW-32.3.8 finalization checks passed (real adapter contract and route/service/browser/storage lifecycle boundaries; zero live LinkedIn calls).\n",
+        "failure_class": null
+      },
+      {
+        "index": 107,
+        "name": "Check BW-32.3.9 authoritative social response boundary",
+        "workflow_command": "npm run check:bw32.3.9",
+        "executed_command": "npm run check:bw32.3.9",
+        "exit_code": 0,
+        "seconds": 0.25,
+        "output_tail": "\n> check:bw32.3.9\n> node scripts/check-bw32-3-9-authoritative-response-boundary.js\n\nBW-32.3.9 authoritative route serialization checks passed (controlled fixtures only; zero live LinkedIn calls).\n",
+        "failure_class": null
+      },
+      {
+        "index": 108,
+        "name": "Check BW-34.1 Facebook Page publishing",
+        "workflow_command": "npm run check:bw34.1",
+        "executed_command": "npm run check:bw34.1",
+        "exit_code": 0,
+        "seconds": 0.28,
+        "output_tail": "\n> check:bw34.1\n> node scripts/check-bw34-1-facebook-page-publishing.js\n\nBW-34.1 Facebook Page publishing regression passed (deterministic fixtures; no Meta request).\n",
+        "failure_class": null
+      },
+      {
+        "index": 109,
+        "name": "Check BW-34.1R1 Facebook callback repair",
+        "workflow_command": "npm run check:bw34.1r1",
+        "executed_command": "npm run check:bw34.1r1",
+        "exit_code": 0,
+        "seconds": 0.3,
+        "output_tail": "\n> check:bw34.1r1\n> node scripts/check-bw34-1r1-facebook-callback-repair.js\n\nBW-34.1R1 Facebook callback repair regression passed (invented fixtures; no external requests).\n",
+        "failure_class": null
+      },
+      {
+        "index": 110,
+        "name": "Check BW-34.1.1 Facebook content publishing surface",
+        "workflow_command": "npm run check:bw34.1.1",
+        "executed_command": "npm run check:bw34.1.1",
+        "exit_code": 0,
+        "seconds": 0.25,
+        "output_tail": "\n> check:bw34.1.1\n> node scripts/check-bw34-1-1-facebook-content-publishing-surface.js\n\nBW-34.1.1 Facebook content publishing surface regression passed (invented fixtures; no network, credentials, database, or Meta request).\n",
+        "failure_class": null
+      },
+      {
+        "index": 111,
+        "name": "Check BW-34.1.2 Facebook Page destination selection",
+        "workflow_command": "npm run check:bw34.1.2",
+        "executed_command": "npm run check:bw34.1.2",
+        "exit_code": 0,
+        "seconds": 0.21,
+        "output_tail": "\n> check:bw34.1.2\n> node scripts/check-bw34-1-2-facebook-destination-selection.js\n\nBW-34.1.2 Facebook destination selection regression passed (invented fixtures; no network, PostgreSQL, credentials, Meta request, or Facebook post).\n",
+        "failure_class": null
+      },
+      {
+        "index": 112,
+        "name": "Check BW-34.1.3 Facebook publishing readiness",
+        "workflow_command": "npm run check:bw34.1.3",
+        "executed_command": "npm run check:bw34.1.3",
+        "exit_code": 0,
+        "seconds": 0.27,
+        "output_tail": "\n> check:bw34.1.3\n> node scripts/check-bw34-1-3-facebook-publishing-readiness.js\n\nBW-34.1.3 Facebook publishing readiness regression passed (invented fixtures; no network, credentials, database, Meta request, or Facebook post).\n",
+        "failure_class": null
+      },
+      {
+        "index": 113,
+        "name": "Check BW-34.1.9 Facebook publication finalization",
+        "workflow_command": "npm run check:bw34.1.9",
+        "executed_command": "npm run check:bw34.1.9",
+        "exit_code": 0,
+        "seconds": 0.27,
+        "output_tail": "\n> check:bw34.1.9\n> node scripts/check-bw34-1-9-facebook-publication-finalization.js\n\nBW-34.1.9 finalization checks passed (pure DTO, reload/idempotency/copy boundaries; zero Meta requests or database mutations).\n",
+        "failure_class": null
+      },
+      {
+        "index": 114,
+        "name": "Check BW-34.2A Facebook engagement",
+        "workflow_command": "npm run check:bw34.2a",
+        "executed_command": "npm run check:bw34.2a",
+        "exit_code": 0,
+        "seconds": 0.24,
+        "output_tail": "\n> check:bw34.2a\n> node scripts/check-bw34-2a-facebook-engagement-mvp.js\n\nBW-34.2A focused regression passed: aggregate projection, zeros, unavailable shares, safe failures, bounded GET, ownership boundary, DTO privacy, publication-only UI, request deduplication, and existing publication UI.\n",
+        "failure_class": null
+      },
+      {
+        "index": 115,
+        "name": "Check BW-34.2AR1 social adapter compatibility",
+        "workflow_command": "npm run check:bw34.2ar1",
+        "executed_command": "npm run check:bw34.2ar1",
+        "exit_code": 0,
+        "seconds": 0.27,
+        "output_tail": "\n> check:bw34.2ar1\n> node scripts/check-bw34-2ar1-social-adapter-compatibility.js\n\nBW-34.2AR1 adapter compatibility checks passed (no network or database access).\n",
+        "failure_class": null
+      },
+      {
+        "index": 116,
+        "name": "Check BW-34.2AR2 Facebook engagement repair",
+        "workflow_command": "npm run check:bw34.2ar2",
+        "executed_command": "npm run check:bw34.2ar2",
+        "exit_code": 0,
+        "seconds": 0.32,
+        "output_tail": "\n> check:bw34.2ar2\n> node scripts/check-bw34-2ar2-facebook-engagement-repair.js\n\nBW-34.2AR2 regression passed: selected Page credential parity, safe 401 diagnostics, aggregate projection, and bounded automatic/manual request lifecycle (no database or Meta request).\n",
+        "failure_class": null
+      },
+      {
+        "index": 117,
+        "name": "Check BW-34.2AR3 Facebook engagement authentication",
+        "workflow_command": "npm run check:bw34.2ar3",
+        "executed_command": "npm run check:bw34.2ar3",
+        "exit_code": 0,
+        "seconds": 0.27,
+        "output_tail": "\n> check:bw34.2ar3\n> node scripts/check-bw34-2ar3-facebook-engagement-authentication.js\n\nBW-34.2AR3 regression passed: strict adapter contract, proven bearer transport, OAuth 190 renewal state, and hard bounded lifecycle (no real Meta request or database mutation).\n",
+        "failure_class": null
+      },
+      {
+        "index": 118,
+        "name": "Check BW-34.2AR4 Facebook engagement partial availability",
+        "workflow_command": "npm run check:bw34.2ar4",
+        "executed_command": "npm run check:bw34.2ar4",
+        "exit_code": 0,
+        "seconds": 0.22,
+        "output_tail": "\n> check:bw34.2ar4\n> node scripts/check-bw34-2ar4-facebook-engagement-partial-availability.js\n\nBW-34.2AR4 partial-availability checks passed (bounded OAuth 10 fallback, authoritative zero, unavailable optional metrics, no network/database).\n",
+        "failure_class": null
+      },
+      {
+        "index": 119,
+        "name": "Check BW-33.2R1 corrected Tendra One brand foundation",
+        "workflow_command": "npm run check:bw33.2r1",
+        "executed_command": "npm run check:bw33.2r1",
+        "exit_code": 0,
+        "seconds": 0.28,
+        "output_tail": "\n> check:bw33.2r1\n> node scripts/check-bw33-2r1-tendra-one-brand-foundation.js\n\nBW-33.2R1 corrected Tendra One brand-foundation regression checks passed.\n",
+        "failure_class": null
+      },
+      {
+        "index": 120,
+        "name": "Check BW-33.3R1 post-hydration Canvas density",
+        "workflow_command": "npm run check:bw33.3r1",
+        "executed_command": "npm run check:bw33.3r1",
+        "exit_code": 0,
+        "seconds": 0.28,
+        "output_tail": "\n> check:bw33.3r1\n> node scripts/check-bw33-3r1-canvas-density.js\n\nBW-33.3R1 deterministic post-hydration Canvas-density regression checks passed.\n",
+        "failure_class": null
+      },
+      {
+        "index": 121,
+        "name": "Check BW-33.4A1 Canvas indicator Inspector routing",
+        "workflow_command": "npm run check:bw33.4a1",
+        "executed_command": "npm run check:bw33.4a1",
+        "exit_code": 0,
+        "seconds": 0.27,
+        "output_tail": "\n> check:bw33.4a1\n> node scripts/check-bw33-4a1-inspector-indicator-routing.js\n\nBW-33.4A1 production indicator-to-Inspector routing checks passed.\n",
+        "failure_class": null
+      },
+      {
+        "index": 122,
+        "name": "Check BW-33.4B1R1 authoritative open-comment counter",
+        "workflow_command": "npm run check:bw33.4b1r1",
+        "executed_command": "npm run check:bw33.4b1r1",
+        "exit_code": 0,
+        "seconds": 0.29,
+        "output_tail": "\n> check:bw33.4b1r1\n> node scripts/check-bw33-4b1r1-open-conversation-count.js\n\nBW-33.4B1R1 authoritative counter and frozen Inspector runtime checks passed.\n",
+        "failure_class": null
+      },
+      {
+        "index": 123,
+        "name": "Check BW-33.4B3 Post-it UX and localization",
+        "workflow_command": "npm run check:bw33.4b3",
+        "executed_command": "npm run check:bw33.4b3",
+        "exit_code": 0,
+        "seconds": 0.25,
+        "output_tail": "\n> check:bw33.4b3\n> node scripts/check-bw33-4b3-postit-polish.js\n\nBW-33.4B3 Post-it polish, localization, counting, geometry, and isolation checks passed.\n",
+        "failure_class": null
+      },
+      {
+        "index": 124,
+        "name": "Check BW-33.4B3.1 resolved Post-its and Dark Mode controls",
+        "workflow_command": "npm run check:bw33.4b3.1",
+        "executed_command": "npm run check:bw33.4b3.1",
+        "exit_code": 0,
+        "seconds": 0.22,
+        "output_tail": "\n> check:bw33.4b3.1\n> node scripts/check-bw33-4b3-1-resolved-postits.js\n\nBW-33.4B3.1 resolved Post-it history, geometry, accessibility, controls, and isolation checks passed.\n",
+        "failure_class": null
+      },
+      {
+        "index": 125,
+        "name": "Check BW-33.4B4 accessible Post-it emoji picker",
+        "workflow_command": "npm run check:bw33.4b4",
+        "executed_command": "npm run check:bw33.4b4",
+        "exit_code": 0,
+        "seconds": 0.3,
+        "output_tail": "\n> check:bw33.4b4\n> node scripts/check-bw33-4b4-postit-emoji-picker.js\n\nBW-33.4B4 production caret, picker lifecycle, accessibility, localization, isolation, and persistence boundaries passed.\n",
+        "failure_class": null
+      },
+      {
+        "index": 126,
+        "name": "Check BW-33.4B4.1 stable Post-it emoji picker lifecycle",
+        "workflow_command": "npm run check:bw33.4b4.1",
+        "executed_command": "npm run check:bw33.4b4.1",
+        "exit_code": 0,
+        "seconds": 0.27,
+        "output_tail": "\n> check:bw33.4b4.1\n> node scripts/check-bw33-4b4-1-emoji-picker-lifecycle.js\n\nBW-33.4B4.1 production pointer-travel lifecycle, authoritative dismissal, focus, stale-state, and isolation boundaries passed.\n",
+        "failure_class": null
+      },
+      {
+        "index": 127,
+        "name": "Check BW-33.4B4.2 timed Post-it emoji picker lifecycle",
+        "workflow_command": "npm run check:bw33.4b4.2",
+        "executed_command": "npm run check:bw33.4b4.2",
+        "exit_code": 0,
+        "seconds": 0.22,
+        "output_tail": "\n> check:bw33.4b4.2\n> node scripts/check-bw33-4b4-2-timed-emoji-picker-lifecycle.js\n\nBW-33.4B4.2 proven timed lifecycle, background-refresh resilience, close reasons, and preservation boundaries passed.\n",
+        "failure_class": null
+      },
+      {
+        "index": 128,
+        "name": "Check BW-33.5 Supabase RLS hardening contract",
+        "workflow_command": "npm run check:bw33.5",
+        "executed_command": "npm run check:bw33.5",
+        "exit_code": 0,
+        "seconds": 0.22,
+        "output_tail": "\n> check:bw33.5\n> node scripts/check-bw33-5-supabase-rls-hardening.js\n\nBW-33.5 static RLS hardening contract passed; no database command was executed.\n",
+        "failure_class": null
+      },
+      {
+        "index": 129,
+        "name": "Check BW-33.5.1 publishing destinations RLS delta",
+        "workflow_command": "npm run check:bw33.5.1",
+        "executed_command": "npm run check:bw33.5.1",
+        "exit_code": 0,
+        "seconds": 0.24,
+        "output_tail": "\n> check:bw33.5.1\n> node scripts/check-bw33-5-1-social-publishing-destinations-rls.js\n\nBW-33.5.1 one-table RLS delta contract passed; no database command was executed.\n",
+        "failure_class": null
+      },
+      {
+        "index": 130,
+        "name": "Check BW-36.1R1 Canvas toolbar isolation and Funnel footer",
+        "workflow_command": "npm run check:bw36.1r1",
+        "executed_command": "npm run check:bw36.1r1",
+        "exit_code": 0,
+        "seconds": 0.28,
+        "output_tail": "\n> check:bw36.1r1\n> node scripts/check-bw36-1r1-canvas-toolbar-visibility-and-funnel-footer.js\n\n\u2713 restored pre-BW-36.1 toolbar DOM is byte-for-byte preserved\n\u2713 reverted contextual architecture and forbidden Canvas labels stay absent\n\u2713 Canvas retains every restored toolbar control and account placement\n\u2713 visibility is exactly the established active section's Canvas predicate\n\u2713 all mapped and fallback non-Canvas sections contribute zero toolbar layout\n\u2713 Settings uses the same visibility boundary and restores the active section\n\u2713 navigation and resize do not recreate the toolbar, duplicate listeners, fetch Boards, or alter section state\n\u2713 page-owned actions remain in their existing owners\n\u2713 only the audited compact journey navigation rule changed presentation CSS\n\u2713 compact journey actions are in flow, bounded, transparent, safe-area padded, and reachable\n\u2713 Funnel state survives theme/resize and both themes retain compatible tokens\n\u2713 visibility is presentation-only and leaves planning/export sessions untouched\n\u2713 no dependency, migration, provider, AI, or mutation boundary was added\nBW-36.1R1 Canvas toolbar visibility and Funnel footer checks passed (13 groups).\n",
+        "failure_class": null
+      },
+      {
+        "index": 131,
+        "name": "Check BW-36.2 isolated compact non-Canvas context bar",
+        "workflow_command": "npm run check:bw36.2",
+        "executed_command": "npm run check:bw36.2",
+        "exit_code": 0,
+        "seconds": 0.28,
+        "output_tail": "\n> check:bw36.2\n> node scripts/check-bw36-2-compact-non-canvas-context-bar.js\n\n\u2713 BW-36.1R1 Canvas subtree baseline is unchanged\n\u2713 one sibling compact host exists outside Canvas toolbar\n\u2713 real mode authority has only hidden, board, and library outcomes\n\u2713 Canvas, Home, Brand Core, Settings, and unknown surfaces render zero compact-bar height\n\u2713 library identity is localized and never leaks the previous Board\n\u2713 authorized Board name renders and switches from authority\n\u2713 loading, clear, and access denial immediately remove stale identity\n\u2713 English and German bounded strings are complete\n\u2713 account projection uses existing state with safe avatar fallback\n\u2713 only one account presentation is visible for each mapped owner\n\u2713 strict compact content allowlist excludes Canvas and page actions\n\u2713 compact controls delegate to existing theme and sign-out authorities once\n\u2713 single-row responsive sizing and containment contracts are bounded\n\u2713 normal flow, focus, themes, forced colors, and reduced motion are explicit\n\u2713 section changes render in place without listeners, fetches, or application rerenders\n\u2713 Board-load lifecycle clears stale name before the existing request\n\u2713 resize, stateful workspaces, and repaired Funnel footer stay isolated\n\u2713 no provider, AI, persistence, mutation, migration, dependency, or build delta\n\u2713 Runtime Boot Safety registers BW-36.2 immediately after R1\nBW-36.2 compact non-Canvas context bar checks passed (19 groups).\n",
+        "failure_class": null
+      },
+      {
+        "index": 132,
+        "name": "Check BW-36.4 simplified Brand sidebar",
+        "workflow_command": "npm run check:bw36.4",
+        "executed_command": "npm run check:bw36.4",
+        "exit_code": 0,
+        "seconds": 0.27,
+        "output_tail": "\n> check:bw36.4\n> node scripts/check-bw36-4-simplified-brand-sidebar.js\n\nBW-36.4 simplified Brand sidebar checks passed (58 acceptance boundaries; production projection + DOM fixture).\n",
+        "failure_class": null
+      },
+      {
+        "index": 133,
+        "name": "Check BW-36.6 Workspace schema foundation",
+        "workflow_command": "npm run check:bw36.6",
+        "executed_command": "npm run check:bw36.6",
+        "exit_code": 0,
+        "seconds": 0.3,
+        "output_tail": "\n> check:bw36.6\n> node scripts/check-bw36-6-workspace-schema-foundation.js\n\n\u2713 the exact immutable BW-36.6 migration is selected while later migrations are allowed\n\u2713 Workspace shape has stable UUID, bounded name, locale/status/revision, actor, timestamps and archive state\n\u2713 membership shape has unique identity, exact roles and bounded lifecycle\n\u2713 Brand and Board references are nullable, restrictive, indexed and have no default\n\u2713 query indexes cover Workspaces and memberships\n\u2713 new tables enable RLS and reads require bounded active membership\n\u2713 writes are service-bounded and grants cannot create orphan Workspaces\n\u2713 SQL helper is fixed-path, qualified, bounded, recursion-safe and not public\n\u2713 last owner downgrade, revocation, deletion, bulk and concurrent boundary are protected\n\u2713 pure authorization helper evaluates identity, lifecycle and role rank\n\u2713 migration is additive, data-free, preference-free and provider-free\n\u2713 current Brand, Board, shares, tokens and membership policies are not cut over\n\u2713 UI, BW-36.4 sidebar, compact bar and Canvas toolbar baselines are unchanged\n\u2713 documentation fixes hierarchy, invariant phases, deployment and refusal rollback\n\u2713 registration is immediately after BW-36.4 with no dependency change\nBW-36.6 Workspace schema foundation: 15 deterministic groups passed; zero database, provider, AI, or network requests.\n",
+        "failure_class": null
+      },
+      {
+        "index": 134,
+        "name": "Check BW-36.7 Workspace backfill preflight",
+        "workflow_command": "npm run check:bw36.7",
+        "executed_command": "npm run check:bw36.7",
+        "exit_code": 0,
+        "seconds": 0.27,
+        "output_tail": "\n> check:bw36.7\n> node scripts/check-bw36-7-workspace-backfill-preflight.js\n\n\u2713 preflight stays outside migrations and historical SQL remains immutable\n\u2713 parser sees exactly one read-only CTE/SELECT statement\n\u2713 all write, DDL, privilege, procedural and copy operations are absent\n\u2713 remote and provider operations are absent\n\u2713 result projection is privacy-safe and bounded\n\u2713 status vocabulary is bounded\n\u2713 schema and adoption checks are complete\n\u2713 Brand inventory and membership diagnostics are complete\n\u2713 Board inventory, sharing, public and snapshot diagnostics are complete\n\u2713 migration risks use conservative quarantine projections\n\u2713 access-preservation aggregate baselines are present\n\u2713 prospective backfill summary is complete and non-mutating\n\u2713 final readiness and deterministic category order are explicit\n\u2713 browser preference, UI, provider and AI boundaries are untouched\n\u2713 BW-36.6 migration and BW-36.4 sidebar remain byte-identical\n\u2713 package and Runtime Boot Safety register BW-36.7 immediately after BW-36.6\n\u2713 runbook states privacy, manual execution, review and no-backfill boundaries\n\u2713 tracked-files-only execution needs no dependencies or external activity\nBW-36.7 Workspace backfill preflight: 18 deterministic groups passed; zero database writes, provider requests, AI requests, or network requests.\n",
+        "failure_class": null
+      },
+      {
+        "index": 135,
+        "name": "Check BW-36.7R1 Workspace identity diagnostic",
+        "workflow_command": "npm run check:bw36.7r1",
+        "executed_command": "npm run check:bw36.7r1",
+        "exit_code": 0,
+        "seconds": 0.28,
+        "output_tail": "\n> check:bw36.7r1\n> node scripts/check-bw36-7r1-workspace-identity-diagnostic.js\n\n\u2713 scanner removes comments, literals, escaped strings, identifiers and dollar strings\n\u2713 diagnostic is exactly one read-only CTE and final SELECT statement\n\u2713 all mutation, DDL, privilege, procedural, transaction, temporary and remote operations are rejected\n\u2713 five-column output is bounded and cannot project raw identity or payload fields\n\u2713 status vocabulary and deterministic ordering are fixed\n\u2713 all identity schema checks and repository authorities are explicit\n\u2713 each relationship has every required stored-shape aggregate\n\u2713 every supported resolution path is separately counted\n\u2713 relationship semantics preserve Brand, Board-only and public isolation\n\u2713 blocker reconstruction is explicit, typed, deduplicated and non-naive\n\u2713 all derived conclusion states and evidence-only readiness are supported\n\u2713 R1 introduced no migration and its required historical files survive later ordered migrations byte-identically\n\u2713 package and Runtime Boot Safety register R1 immediately after BW-36.7\n\u2713 runbook captures evidence, exact manual procedure and stop boundaries\n\u2713 regression is dependency-free and contains no database, provider, AI or network client\nBW-36.7R1 Workspace identity diagnostic: 15 deterministic groups passed; zero database writes, provider requests, AI requests, or network requests.\n",
+        "failure_class": null
+      },
+      {
+        "index": 136,
+        "name": "Check BW-36.7R2 application identity bridge",
+        "workflow_command": "npm run check:bw36.7r2",
+        "executed_command": "npm run check:bw36.7r2",
+        "exit_code": 0,
+        "seconds": 0.25,
+        "output_tail": "\n> check:bw36.7r2\n> node scripts/check-bw36-7r2-application-identity-bridge.js\n\n\u2713 one ordered transactional migration preserves the historical foundation\n\u2713 preflight refuses adoption, drift and partial/repeat application\n\u2713 identity schema is minimal, normalized, unique and lifecycle-bounded\n\u2713 RLS is closed and auth.uid policies and helper are removed\n\u2713 all Workspace identity columns and restrictive keys use app identities\n\u2713 migration performs no rows, legacy authorization mutation or remote work\n\u2713 pure identity helper canonicalizes without inventing equivalence\n\u2713 verified session conversion has bounded email-free failures\n\u2713 identity rows handle missing, ambiguous, disabled, invalid and mismatched data\n\u2713 Workspace authorization is UUID-, lifecycle-, role- and last-owner-bounded\n\u2713 helpers contain no database, network, provider or cross-catalog authority\n\u2713 login, Brand, Board, UI and prior evidence baselines are byte-identical\n\u2713 registration immediately follows BW-36.7R1\nBW-36.7R2 application identity bridge: 13 deterministic groups passed; zero database, provider, AI, or network requests.\n",
+        "failure_class": null
+      },
+      {
+        "index": 137,
+        "name": "Check BW-36.7R3 corrected Workspace backfill preflight",
+        "workflow_command": "npm run check:bw36.7r3",
+        "executed_command": "npm run check:bw36.7r3",
+        "exit_code": 0,
+        "seconds": 0.29,
+        "output_tail": "\n> check:bw36.7r3\n> node scripts/check-bw36-7r3-corrected-workspace-backfill-preflight.js\n\n\u2713 SQL is exactly one CTE and final aggregate SELECT\n\u2713 executable SQL has a strict read-only boundary\n\u2713 privacy contract exposes only five aggregate columns\n\u2713 all eleven categories and deterministic ordering are encoded\n\u2713 post-R2 schema contract is comprehensive\n\u2713 canonical signed-session identity replaces auth.users authority\n\u2713 Option C projections and isolation controls are explicit\n\u2713 invented fixture proves distinct eligibility and Option C counts\n\u2713 blockers are derived once and final readiness uses their disjoint result\n\u2713 historical evidence remains byte-exact and later ordered files are permitted\n\u2713 only the five scoped files differ and no runtime file changed\n\u2713 registration immediately follows R2 in package and Runtime Boot Safety\nBW-36.7R3 corrected Workspace backfill preflight: 12 deterministic groups passed; zero database, provider, AI, or network requests.\n",
+        "failure_class": null
+      },
+      {
+        "index": 138,
+        "name": "Check BW-36.8 transactional Workspace backfill",
+        "workflow_command": "npm run check:bw36.8",
+        "executed_command": "npm run check:bw36.8",
+        "exit_code": 0,
+        "seconds": 0.28,
+        "output_tail": "\n> check:bw36.8\n> node scripts/check-bw36-8-transactional-workspace-backfill.js\n\nok - single ordered migration and atomic boundary\nok - locked authorities and post-lock refusal projection\nok - Option C writes and preservation\nok - bounded rollback, replay, and final validation\nok - authorization and provider boundaries\nok - verification is one read-only nine-category statement\nok - registered immediately after R3\nok - tracked-only and no runtime activation\nBW-36.8 regression: 8 checks passed\n",
+        "failure_class": null
+      },
+      {
+        "index": 139,
+        "name": "Check BW-36.9 authorized Workspace read boundary",
+        "workflow_command": "npm run check:bw36.9",
+        "executed_command": "npm run check:bw36.9",
+        "exit_code": 0,
+        "seconds": 0.35,
+        "output_tail": ",\n  membership_count: 1,\n  duration_bucket: 'lt_100ms'\n}\n[WORKSPACE_CATALOG_STAGE] {\n  request_id: '7a4506b828ef5ba279052a60',\n  stage: 'response_construction',\n  code: 'OK'\n}\n[WORKSPACE_CATALOG_STAGE] {\n  request_id: '1a7b7bfc46979e72574a8e83',\n  stage: 'identity_query_construction',\n  code: 'OK'\n}\n[WORKSPACE_CATALOG_STAGE] {\n  request_id: '1a7b7bfc46979e72574a8e83',\n  stage: 'identity_query_execution',\n  code: 'OK'\n}\n[WORKSPACE_CATALOG_STAGE] {\n  request_id: '1a7b7bfc46979e72574a8e83',\n  stage: 'identity_response_normalization',\n  code: 'OK'\n}\n[WORKSPACE_CATALOG_STAGE] {\n  request_id: '1a7b7bfc46979e72574a8e83',\n  stage: 'identity_row_validation',\n  code: 'OK'\n}\n[WORKSPACE_CATALOG_STAGE] {\n  request_id: '1a7b7bfc46979e72574a8e83',\n  stage: 'identity_canonical_comparison',\n  code: 'OK'\n}\n[WORKSPACE_CATALOG_STAGE] {\n  request_id: '1a7b7bfc46979e72574a8e83',\n  stage: 'membership_lookup',\n  code: 'OK'\n}\n[WORKSPACE_CATALOG_STAGE] {\n  request_id: '1a7b7bfc46979e72574a8e83',\n  stage: 'catalog_projection',\n  code: 'OK'\n}\n[WORKSPACE_CATALOG] {\n  request_id: '1a7b7bfc46979e72574a8e83',\n  stage: 'relationship_validation',\n  code: 'WORKSPACE_CATALOG_CONFLICT',\n  workspace_count: 0,\n  brand_count: 0,\n  board_count: 0,\n  membership_count: 0,\n  duration_bucket: 'lt_100ms'\n}\nok - disabled, ambiguous, method, authentication, database and cross-Workspace failures are bounded\nok - catalog is read-only, private, and excludes forbidden material\nok - runtime lifecycle is isolated and registered before app\nok - read boundary remains provider-free and historical migrations remain immutable\nok - package and Runtime Boot Safety register BW-36.9 immediately after BW-36.8\nBW-36.9 authorized Workspace read boundary checks passed (12). Zero network/provider/AI/database requests or real mutations.\n",
+        "failure_class": null
+      },
+      {
+        "index": 140,
+        "name": "Check BW-36.9R1 Workspace identity resolution repair",
+        "workflow_command": "npm run check:bw36.9r1",
+        "executed_command": "npm run check:bw36.9r1",
+        "exit_code": 0,
+        "seconds": 0.3,
+        "output_tail": "\n> check:bw36.9r1\n> node scripts/check-bw36-9r1-workspace-identity-resolution.js\n\nok - production BIGINT representation reproduces the old rejection and is now normalized\nok - real signed-session route resolves the production envelope and exact selected-column contract once\nok - no identity and no accepted membership produce empty catalogs\nok - disabled, malformed, ambiguous, mismatched and malformed-envelope identities fail closed\nok - database unavailability remains bounded and carries privacy-safe request stages\nok - membership cannot expand descendants and external descendants are excluded\nok - Board-only collaborator, public token and request parameters cannot become identity authority\nok - duplicate browser loads share one request and cause no provider or AI traffic\nok - repair remains registered immediately after BW-36.9 and historical migrations remain immutable\nBW-36.9R1 Workspace identity resolution checks passed (9). Zero writes/provider/AI/network requests.\n",
+        "failure_class": null
+      },
+      {
+        "index": 141,
+        "name": "Check BW-36.10 Workspace selector and sidebar hierarchy",
+        "workflow_command": "npm run check:bw36.10",
+        "executed_command": "npm run check:bw36.10",
+        "exit_code": 0,
+        "seconds": 0.22,
+        "output_tail": "\n> check:bw36.10\n> node scripts/check-bw36-10-workspace-selector-and-sidebar-hierarchy.js\n\nBW-36.10 Workspace selector and sidebar hierarchy checks passed (authorized hierarchy, lifecycle, responsive DOM, accessibility, privacy and zero-write boundaries).\n",
+        "failure_class": null
+      },
+      {
+        "index": 142,
+        "name": "Check BW-36.10R1 Workspace selector popover layout",
+        "workflow_command": "npm run check:bw36.10r1",
+        "executed_command": "npm run check:bw36.10r1",
+        "exit_code": 0,
+        "seconds": 0.27,
+        "output_tail": "\n> check:bw36.10r1\n> node scripts/check-bw36-10r1-workspace-selector-popover-layout.js\n\n\u2713 production collision geometry aligns expanded menus and flips above\n\u2713 compact rail geometry opens to the right without covering its trigger\n\u2713 bounded mobile sheet works at target widths and 200% zoom equivalent\n\u2713 popover is a fixed portal with compact bounded, internally scrolling rows\n\u2713 opened menu has no oversized title or separate close control\n\u2713 names retain a flexible column, Unicode initials and accessible full text\n\u2713 one menu owner toggles, closes outside/on Escape, restores focus and selects by keyboard\n\u2713 resize and captured sidebar scroll reposition without a request\n\u2713 dark/light tokens, forced colors and reduced motion remain supported\n\u2713 Canvas toolbar and compact context bar remain outside selector ownership\n\u2713 selection authority, one bootstrap read, and zero mutation/provider/AI boundaries are unchanged\n\u2713 focused check is registered immediately after BW-36.10\nBW-36.10R1 Workspace selector popover layout checks passed.\n",
+        "failure_class": null
+      },
+      {
+        "index": 143,
+        "name": "Check BW-36.11 safe Workspace renaming",
+        "workflow_command": "npm run check:bw36.11",
+        "executed_command": "npm run check:bw36.11",
+        "exit_code": 0,
+        "seconds": 0.3,
+        "output_tail": "_response_normalization',\n  code: 'OK'\n}\n[WORKSPACE_CATALOG_STAGE] {\n  request_id: '09c6e6350cbc75de2f34ebd0',\n  stage: 'identity_row_validation',\n  code: 'OK'\n}\n[WORKSPACE_CATALOG_STAGE] {\n  request_id: '09c6e6350cbc75de2f34ebd0',\n  stage: 'identity_canonical_comparison',\n  code: 'OK'\n}\n[WORKSPACE_UPDATE] {\n  request_id: '09c6e6350cbc75de2f34ebd0',\n  stage: 'complete',\n  code: 'OK',\n  role_category: 'owner',\n  changed: false,\n  duration_bucket: 'lt_100ms'\n}\nok - normalized unchanged name is an idempotent committed no-op\n[WORKSPACE_CATALOG_STAGE] {\n  request_id: 'a5bcc39eb64504ee3a58c00b',\n  stage: 'identity_query_construction',\n  code: 'OK'\n}\n[WORKSPACE_CATALOG_STAGE] {\n  request_id: 'a5bcc39eb64504ee3a58c00b',\n  stage: 'identity_query_execution',\n  code: 'OK'\n}\n[WORKSPACE_CATALOG_STAGE] {\n  request_id: 'a5bcc39eb64504ee3a58c00b',\n  stage: 'identity_response_normalization',\n  code: 'OK'\n}\n[WORKSPACE_CATALOG_STAGE] {\n  request_id: 'a5bcc39eb64504ee3a58c00b',\n  stage: 'identity_row_validation',\n  code: 'OK'\n}\n[WORKSPACE_CATALOG_STAGE] {\n  request_id: 'a5bcc39eb64504ee3a58c00b',\n  stage: 'identity_canonical_comparison',\n  code: 'OK'\n}\n[WORKSPACE_UPDATE] {\n  request_id: 'a5bcc39eb64504ee3a58c00b',\n  stage: 'transaction',\n  code: 'DATABASE_UNAVAILABLE',\n  role_category: 'owner',\n  changed: false,\n  duration_bucket: 'lt_100ms'\n}\nok - failed update rolls transaction back with private bounded error\nok - browser boundary sends exactly one PATCH, no GET, validates and patches only matching catalog entry\nok - runtime has single-flight dialog, keyboard/focus, role visibility, reconciliation without navigation\nok - English/German strings, isolation, registration, docs and no migration\nBW-36.11 safe Workspace renaming checks passed (9). Zero real database, provider, or AI requests.\n",
+        "failure_class": null
+      },
+      {
+        "index": 144,
+        "name": "Check BW-36.11R1 sidebar context interaction",
+        "workflow_command": "npm run check:bw36.11r1",
+        "executed_command": "npm run check:bw36.11r1",
+        "exit_code": 0,
+        "seconds": 0.25,
+        "output_tail": "\n> check:bw36.11r1\n> node scripts/check-bw36-11r1-sidebar-context-interaction.js\n\nok - production projections preserve one/many Workspace and separate authorized Brand descendants\nok - localized authorized descendant counts cover zero, singular and plural\nok - layout production function bounds selectors, menu and dialog from 320 through 1440 and zoom geometry\nok - DOM fixture has static single-Workspace identity, independent ARIA owners and always-adjacent Brand row\nok - single and multi interaction branches, role gating, mutual exclusion and body portal ownership use production handlers\nok - management menu is one compact row and rename is an independent body-owned dialog\nok - portal-safe CSS is top-level, content-driven, themed and has no ancestor dependency\nok - keyboard, outside click, submit, cancellation, focus trap and restoration remain explicit\nok - compact rail and mobile rules keep surfaces overlay-only with 44px targets and safe-area bounds\nok - rename transport and authorization stay delegated and shell/navigation boundaries stay unchanged\nok - Canvas, compact bar, mutations and external providers remain outside this repair\nok - focused check registration immediately follows BW-36.11\nBW-36.11R1 sidebar context interaction checks passed (12). Zero real database, provider, or AI requests.\n",
+        "failure_class": null
+      },
+      {
+        "index": 145,
+        "name": "Check BW-36.13R1 Workspace stability containment",
+        "workflow_command": "npm run check:bw36.13r1",
+        "executed_command": "npm run check:bw36.13r1",
+        "exit_code": 0,
+        "seconds": 0.29,
+        "output_tail": "\n> check:bw36.13r1\n> node scripts/check-bw36-13r1-workspace-stability-containment.js\n\nBW-36.13R1 production catalog, logo fallback, stale lifecycle, menu containment, responsive and mutation boundaries passed (22 acceptance groups; zero external mutations).\n",
+        "failure_class": null
+      },
+      {
+        "index": 146,
+        "name": "Check BW-36.13R2 safe first Workspace creation",
+        "workflow_command": "npm run check:bw36.13r2",
+        "executed_command": "npm run check:bw36.13r2",
+        "exit_code": 0,
+        "seconds": 0.3,
+        "output_tail": ": 'lt_100ms'\n}\n[WORKSPACE_CREATE] {\n  request_id: 'c927ecf05314cbd1d091923c',\n  stage: 'identity',\n  code: 'IDENTITY_DISABLED',\n  created: false,\n  duration_bucket: 'lt_100ms'\n}\n[WORKSPACE_CREATE] {\n  request_id: '19696e7cfb2b7a682ce1c831',\n  stage: 'identity',\n  code: 'IDENTITY_AMBIGUOUS',\n  created: false,\n  duration_bucket: 'lt_100ms'\n}\n[WORKSPACE_CREATE] {\n  request_id: '558314c5b677557bdc6db15f',\n  stage: 'transaction',\n  code: 'INTERNAL_ERROR',\n  created: false,\n  duration_bucket: 'lt_100ms'\n}\n[WORKSPACE_CREATE] {\n  request_id: '46cb2af335a0573ee51754a4',\n  stage: 'transaction',\n  code: 'INTERNAL_ERROR',\n  created: false,\n  duration_bucket: 'lt_100ms'\n}\n[WORKSPACE_CREATE] {\n  request_id: 'aace4264f2e8cc4621cf6895',\n  stage: 'complete',\n  code: 'OK',\n  created: true,\n  duration_bucket: 'lt_100ms'\n}\n[WORKSPACE_CREATE] {\n  request_id: 'b36cb06d6fbffc084c8227da',\n  stage: 'complete',\n  code: 'OK',\n  created: false,\n  duration_bucket: 'lt_100ms'\n}\n[WORKSPACE_CREATE] {\n  request_id: '0720a993bd2eee73c8d28462',\n  stage: 'complete',\n  code: 'OK',\n  created: false,\n  duration_bucket: 'lt_100ms'\n}\n[WORKSPACE_CREATE] {\n  request_id: '7275dc1525783e6e8dc88751',\n  stage: 'complete',\n  code: 'OK',\n  created: true,\n  duration_bucket: 'lt_100ms'\n}\n[WORKSPACE_CREATE] {\n  request_id: '7457d8d2021efb27f60828db',\n  stage: 'authorization',\n  code: 'WORKSPACE_ALREADY_EXISTS',\n  created: false,\n  duration_bucket: 'lt_100ms'\n}\n[WORKSPACE_CREATE] {\n  request_id: '69ca7b45c03c7bf436b1806e',\n  stage: 'authorization',\n  code: 'WORKSPACE_ALREADY_EXISTS',\n  created: false,\n  duration_bucket: 'lt_100ms'\n}\nBW-36.13R2 first Workspace transaction, idempotency, strict client reconciliation, empty-state, accessibility and non-goal boundaries passed (30 acceptance groups; zero provider/AI requests).\n",
+        "failure_class": null
+      },
+      {
+        "index": 147,
+        "name": "Check BW-36.13R3 authoritative project creation",
+        "workflow_command": "npm run check:bw36.13r3",
+        "executed_command": "npm run check:bw36.13r3",
+        "exit_code": 0,
+        "seconds": 0.4,
+        "output_tail": "\n> check:bw36.13r3\n> node scripts/check-bw36-13r3-authoritative-project-creation.js\n\nBW-36.13R3 passed: strict contracts, signed session/identity, independent roles, transaction rollback, durable concurrent replay, account isolation, one POST, immutable reconciliation, navigation and dialog fixtures. No database/network/provider/AI activity. Browser visuals remain unverified.\n",
+        "failure_class": null
+      },
+      {
+        "index": 148,
+        "name": "Check BW-36.13R3R1 Workspace catalog and project launch repair",
+        "workflow_command": "npm run check:bw36.13r3r1",
+        "executed_command": "npm run check:bw36.13r3r1",
+        "exit_code": 0,
+        "seconds": 0.4,
+        "output_tail": "\n> check:bw36.13r3r1\n> node scripts/check-bw36-13r3r1-workspace-catalog-repair.js\n\nBW-36.13R3R1 passed: scoped signed-session catalog, independent Board-only/legacy access, hidden cross-Workspace conflict, integrity/privacy, real sidebar/dialog glue, visible localized feedback, single-flight Retry/account isolation, atomic R3 and blocked legacy writes. No real database/network/provider/AI activity. Browser visuals unverified.\n",
+        "failure_class": null
+      },
+      {
+        "index": 149,
+        "name": "Guided Brand Profile setup regression",
+        "workflow_command": "npm run check:bw36.13r4",
+        "executed_command": "npm run check:bw36.13r4",
+        "exit_code": 0,
+        "seconds": 0.51,
+        "output_tail": "\n> check:bw36.13r4\n> node scripts/check-bw36-13r4-guided-brand-profile-setup.js\n\nBW-36.13R4 passed: guided draft/review, single-flight analysis, explicit confirmed logo storage boundary, upload recovery, viewer/authority, account isolation, keyboard dialog, original Board return, localization and responsive source/DOM checks. Zero real network/provider/AI/storage/database calls. Visual browser acceptance remains pending.\n",
+        "failure_class": null
+      },
+      {
+        "index": 150,
+        "name": "Install focused browser fixture",
+        "workflow_command": "npx playwright-core install --with-deps chromium\nnode -e 'require(\"fs\").appendFileSync(process.env.GITHUB_ENV, \"CHROMIUM_PATH=\" + require(\"playwright-core\").chromium.executablePath() + \"\\n\")'\n",
+        "executed_command": "/usr/bin/chromium --version",
+        "exit_code": 0,
+        "seconds": 0.15,
+        "output_tail": "Chromium 151.0.7922.173 built on Debian GNU/Linux 13 (trixie)\n",
+        "failure_class": null
+      },
+      {
+        "index": 151,
+        "name": "Check approved Brand Learnings in Advice (disposable PostgreSQL, mocked OpenAI)",
+        "workflow_command": "node scripts/check-bw36-20-approved-learning-ai-brain.js",
+        "executed_command": "node scripts/check-bw36-20-approved-learning-ai-brain.js",
+        "exit_code": 0,
+        "seconds": 34.36,
+        "output_tail": "PASS BW-36.20: real Advice/Board/Brand/Learning authorization and governed SQL; roles/identities/isolation/lifecycle, three-stage freshness, no locks during inference, full-library EN/DE ranking, complete-statement model budget, untrusted data, accurate transparency, zero mutations, one mocked provider call.\nPASS BW-36.20 browser: production disclosure DOM/CSS, EN/DE, light/dark, desktop/375px, keyboard, whole hostile statements as text, no empty section, partial coverage.\n",
+        "failure_class": null
+      },
+      {
+        "index": 152,
+        "name": "Check BW-36.21A-R2.1 safe Workspace switching (Chromium)",
+        "workflow_command": "npm run check:bw36.21ar2.1",
+        "executed_command": "npm run check:bw36.21ar2.1",
+        "exit_code": 0,
+        "seconds": 273.65,
+        "output_tail": "eeps confirmed Workspace and visibly explains blocked navigation\nPASS loading/hydration/save/association/campaign/responsibility guards keep outgoing context intact\nPASS node preview dialogs retire on exit and active refinement blocks until its real response settles\nPASS association write and dependent preview requests block exit until their real responses settle\nPASS campaign generation uses existing pending operation guard with mocked failure and no paid request\nPASS responsibility submission and failed-save retry hold the Workspace until confirmed\nPASS authorization revalidation rejects an account change while awaiting the fresh catalog\nPASS delayed Board load blocks switch until hydration settles\nPASS late save 200 cannot restore retired context or conflict UI\nPASS late save 409 cannot restore retired context or conflict UI\nPASS late save 503 cannot restore retired context or conflict UI\nPASS queued autosave near transition cannot save outgoing Canvas\nPASS late presence success and Board refresh cannot restore collaboration/data\nPASS late presence failure and Board refresh cannot restore collaboration/data\nPASS independent shared Board outside catalog exits and remains available through direct route/reload/Back\nPASS same Workspace is no-op; inaccessible/revoked/stale catalog and offline validation preserve context\nPASS account/logout changes, superseded attempts and edits during confirmation reject stale decisions\nPASS dirty Brand Profile cancel preserves existing leave contract\nPASS dirty Brand Profile discard preserves existing leave contract\nPASS dirty Brand Profile save preserves existing leave contract\nPASS dirty Brand Profile failed-save preserves existing leave contract\nPASS 96 safe Workspace switching browser groups; local fixtures only, zero provider calls\n",
+        "failure_class": null
+      },
+      {
+        "index": 153,
+        "name": "Check BW-36.21A Home foundation (Chromium)",
+        "workflow_command": "npm run check:bw36.21a",
+        "executed_command": "npm run check:bw36.21a",
+        "exit_code": 0,
+        "seconds": 71.0,
+        "output_tail": "\n> check:bw36.21a\n> node scripts/check-bw36-21a-home-foundation.js\n\nPASS authorized composition, Brand priority, server dates, missing metadata, stable manual ordering, hidden associations and identity boundaries\nPASS signed-in/out root, local draft guard, Workspace/Brand context, filters, optional failures, stale response, account/logout isolation, keyboard focus, six actual layout geometries and four Chromium screenshots\nPASS long names, real logo failure fallback, untranslated object names, viewer/public boundaries, revoked metadata and failed catalog clear private cards\nPASS Home loading recovery and retry: request failure\nPASS Home loading recovery and retry: invalid association\nPASS Home loading recovery and retry: wrong Board identity\nPASS Home loading recovery and retry: invalid Canvas\nPASS Home loading recovery and retry: malformed JSON\nPASS Home loading recovery and retry: transport timeout\nPASS Home loading recovery and retry: transport termination\nPASS Home loading recovery and retry: success\nPASS rapid switching, stale success/failure during active load, and late stale completion preserve current Canvas and actions\nPASS catalog failure/retry, no Workspace, active Board priority, persisted Brand guard, dirty Canvas preservation, saved Board route/reload/Back, zero provider calls or writes\n",
+        "failure_class": null
+      },
+      {
+        "index": 154,
+        "name": "Check BW-36.20R1 provider storage and revalidation errors (mocked OpenAI)",
+        "workflow_command": "node scripts/check-bw36-20r1-learning-integration-review-fixes.js",
+        "executed_command": "node scripts/check-bw36-20r1-learning-integration-review-fixes.js",
+        "exit_code": 0,
+        "seconds": 15.75,
+        "output_tail": "PASS BW-36.20R1: explicit store:false with/without approved Learnings; 90 infrastructure failures and 12 stale-context cases across both revalidation stages; bounded errors, suppressed output, released transactions, no provider retries.\n",
+        "failure_class": null
+      },
+      {
+        "index": 155,
+        "name": "Check Brand Profile entry and Workspace actions in Chromium",
+        "workflow_command": "npm run check:bw36.13r4r1",
+        "executed_command": "npm run check:bw36.13r4r1",
+        "exit_code": 0,
+        "seconds": 29.66,
+        "output_tail": "\n> check:bw36.13r4r1\n> node scripts/check-bw36-13r4r1-brand-profile-entry-and-workspace-actions.js\n\nbrowser: light 1440px\nbrowser: light 1024px\nbrowser: light 768px\nbrowser: light 480px\nbrowser: light 375px\nbrowser: light 320px\nbrowser: dark 1440px\nbrowser: dark 1024px\nbrowser: dark 768px\nbrowser: dark 480px\nbrowser: dark 375px\nbrowser: dark 320px\nBW-36.13R4R1 passed: real index.html/app.js/DOM/CSS in Chromium; authorized Profile resolution, existing Brand upload/retry/reconciliation, Snapshot isolation, actual ellipsis\u2192menu\u2192rename\u2192cancel/submit, roles/revocation/status, focus, both themes, six widths and 200% equivalent reflow. Zero real provider/AI/storage/production database calls.\n",
+        "failure_class": null
+      },
+      {
+        "index": 156,
+        "name": "Check BW-36.13R5 Brand lifecycle stability",
+        "workflow_command": "npm run check:bw36.13r5",
+        "executed_command": "npm run check:bw36.13r5",
+        "exit_code": 0,
+        "seconds": 40.35,
+        "output_tail": "\n> check:bw36.13r5\n> node scripts/check-bw36-13r5-brand-lifecycle-stability.js\n\nR5 handlers/controllers: signed sessions, real access/analysis/PUT/reload/logo/storage/config/create/replay/project/delete, bounded failures and snapshot isolation passed.\nR5 Chromium: real HTML/app/sidebar/profile/CSS clicks, save/reload/logo retry, local projection failure, internal dirty decisions, idempotent Sidebar create/delete, Board survival, new-project save/handoff, roles, EN/DE, themes, widths, reflow, forced colors and reduced motion passed.\nBW-36.13R5 passed. Zero production database, real provider/AI/storage calls; no migration/SQL.\n",
+        "failure_class": null
+      },
+      {
+        "index": 157,
+        "name": "Check Brand workspace regression recovery",
+        "workflow_command": "npm run check:bw36.13r5r2",
+        "executed_command": "npm run check:bw36.13r5r2",
+        "exit_code": 0,
+        "seconds": 12.2,
+        "output_tail": "\n> check:bw36.13r5r2\n> node scripts/check-bw36-13r5r2-brand-workspace-regression-recovery.js\n\nR5R2 production controllers/routes: canonical/unknown round-trip, DNA save/generate/review, accepted Avatar preservation/reload, logo storage/revision/re-read/retry, website confirmation, dirty baseline, renderer/read failure, roles/session/deletion/snapshot isolation passed.\nR5R2 Chromium: Appics selected/markmans row-target deletion without Board/reload; immutable confirmation; authoritative associated-Board block; structured DNA edits; explicit Avatar review/save; distinct logo; durable reload/sidebar/clean leave; EN/DE, desktop/mobile, themes, keyboard, reflow, forced colors/reduced motion. Mocked I/O only.\nBW-36.13R5R2 passed. Migration/SQL: none.\n",
+        "failure_class": null
+      },
+      {
+        "index": 158,
+        "name": "Check durable Brand logos and readiness",
+        "workflow_command": "npm run check:bw36.13r5r3",
+        "executed_command": "npm run check:bw36.13r5r3",
+        "exit_code": 0,
+        "seconds": 9.89,
+        "output_tail": "\n> check:bw36.13r5r3\n> node scripts/check-bw36-13r5r3-durable-brand-logo-and-readiness.js\n\nR5R3 readiness: all sections empty/partial/complete/neutral, placeholders, saved assets and accepted avatars passed.\nR5R3 handlers: persistent Storage/DB, upload\u2013PUT\u2013reload, all logo metadata preserved, asset retention, no duplicate synchronization, revision delivery, DNA/avatar/unknown preservation and account/role boundaries passed.\nR5R3 Chromium production DOM: select\u2013preview\u2013upload\u2013Storage/metadata\u2013save\u2013leave without dialog\u2013full reload\u2013validated catalog\u2013Overview/sidebar/selector logo; separate avatar, readiness/selection/accessibility, stale/broken fallback, German, themes, mobile/reflow/keyboard/forced colors passed.\n",
+        "failure_class": null
+      },
+      {
+        "index": 159,
+        "name": "Check production Brand logo persistence",
+        "workflow_command": "npm run check:bw36.13r5r4",
+        "executed_command": "npm run check:bw36.13r5r4",
+        "exit_code": 0,
+        "seconds": 13.65,
+        "output_tail": "\n> check:bw36.13r5r4\n> node scripts/check-bw36-13r5r4-brand-logo-persistence.js\n\nR5R4: reproduced nullable LEFT JOIN lock rejection; pg rows/BIGINT strings, schema SQL, private upload/readback/delivery/reload, CAS, roles, rollback/asset retention and replacement ordering passed.\nR5R4: committed success survives local reconciliation failure; dirty reset and later profile PUT preserve logo/DNA/avatar.\nR5R3 Chromium production DOM: select\u2013preview\u2013upload\u2013Storage/metadata\u2013save\u2013leave without dialog\u2013full reload\u2013validated catalog\u2013Overview/sidebar/selector logo; separate avatar, readiness/selection/accessibility, stale/broken fallback, German, themes, mobile/reflow/keyboard/forced colors passed.\n",
+        "failure_class": null
+      },
+      {
+        "index": 160,
+        "name": "Check Brand Profile decisions and deletion UX",
+        "workflow_command": "npm run check:bw36.13r6",
+        "executed_command": "npm run check:bw36.13r6",
+        "exit_code": 0,
+        "seconds": 30.26,
+        "output_tail": "\n> check:bw36.13r6\n> node scripts/check-bw36-13r6-brand-profile-decision-and-deletion-ux.js\n\nR6 controllers: normalized clean close, reverting edits, batched/identical/conflicting suggestions, keep/use/error/retry/stale, mixed assets, manual edit isolation, saved logo/DNA/avatar passed.\nR6 Chromium: real production DOM/app, clean navigation/session retention, keep/use/error/retry/local saving, manual leave guard, own-row delete, singular/plural/concurrent blocks, existing project filter, roles, focus/Tab/Escape/restoration, EN/DE, light/dark at 1440/1024/768/480/375/320 and 720x450 reflow passed.\nBW-36.13R6 passed; fixtures made zero real provider/AI/storage/database calls.\n",
+        "failure_class": null
+      },
+      {
+        "index": 161,
+        "name": "Check BW-36.12 Brand logo acquisition and projection",
+        "workflow_command": "npm run check:bw36.12",
+        "executed_command": "npm run check:bw36.12",
+        "exit_code": 0,
+        "seconds": 0.75,
+        "output_tail": "\n> check:bw36.12\n> node scripts/check-bw36-12-brand-logo-acquisition-and-projection.js\n\nBW-36.12 Brand logo acquisition and projection checks passed.\n",
+        "failure_class": null
+      },
+      {
+        "index": 162,
+        "name": "Check stable campaign creation and direct handoff in Chromium",
+        "workflow_command": "npm run check:bw36.14",
+        "executed_command": "npm run check:bw36.14",
+        "exit_code": 0,
+        "seconds": 24.34,
+        "output_tail": "\n> check:bw36.14\n> node scripts/check-bw36-14-stable-campaign-creation.js\n\nBW-36.14R1 server: production signed auth/access/transaction/rollback, roles, conflict/stale, concurrent replay, lost commit, deleted campaign and confirmed reconciliation recovery passed.\n{\"test\":\"BW-36.14R1 Chromium\",\"stage\":\"browser_launched\",\"elapsed_ms\":887,\"pending_routes\":0,\"held_requests\":0,\"pages\":0}\nBW-36.14R1 Chromium versions: Playwright 1.64.1, browser 151.0.7922.173\n{\"test\":\"BW-36.14R1 Chromium\",\"stage\":\"boot\",\"elapsed_ms\":1311,\"pending_routes\":0,\"held_requests\":0,\"pages\":1}\n{\"test\":\"BW-36.14R1 Chromium\",\"stage\":\"context_access_and_reflow\",\"elapsed_ms\":3325,\"pending_routes\":0,\"held_requests\":0,\"pages\":1}\n{\"test\":\"BW-36.14R1 Chromium\",\"stage\":\"teardown\",\"elapsed_ms\":21884,\"pending_routes\":0,\"held_requests\":0,\"pages\":1}\n{\"test\":\"BW-36.14R1 Chromium\",\"stage\":\"teardown_complete\",\"elapsed_ms\":22043,\"pending_routes\":0,\"held_requests\":0,\"pages\":0}\nBW-36.14 context/logo/roles/singleton/two-step DOM/themes/reflow regression passed.\nBW-36.14 retained context and handoff regressions passed with the V3 contract.\n",
+        "failure_class": null
+      },
+      {
+        "index": 163,
+        "name": "Check complete Campaign V3 generation in Chromium",
+        "workflow_command": "npm run check:bw36.14r1",
+        "executed_command": "npm run check:bw36.14r1",
+        "exit_code": 0,
+        "seconds": 91.1,
+        "output_tail": "s\":0,\"held_requests\":0,\"pages\":1}\n{\"test\":\"BW-36.14R1 Chromium\",\"stage\":\"held_ai_request\",\"elapsed_ms\":76330,\"pending_routes\":1,\"held_requests\":1,\"pages\":1}\n{\"test\":\"BW-36.14R1 Chromium\",\"stage\":\"identity_mutation_3\",\"elapsed_ms\":76742,\"pending_routes\":0,\"held_requests\":0,\"pages\":1}\n{\"test\":\"BW-36.14R1 Chromium\",\"stage\":\"held_ai_request\",\"elapsed_ms\":79147,\"pending_routes\":1,\"held_requests\":1,\"pages\":1}\n{\"test\":\"BW-36.14R1 Chromium\",\"stage\":\"identity_mutation_4\",\"elapsed_ms\":79503,\"pending_routes\":0,\"held_requests\":0,\"pages\":1}\n{\"test\":\"BW-36.14R1 Chromium\",\"stage\":\"held_ai_request\",\"elapsed_ms\":82295,\"pending_routes\":1,\"held_requests\":1,\"pages\":1}\n{\"test\":\"BW-36.14R1 Chromium\",\"stage\":\"identity_mutation_5\",\"elapsed_ms\":82837,\"pending_routes\":0,\"held_requests\":0,\"pages\":1}\n{\"test\":\"BW-36.14R1 Chromium\",\"stage\":\"held_ai_request\",\"elapsed_ms\":85297,\"pending_routes\":1,\"held_requests\":1,\"pages\":1}\n{\"test\":\"BW-36.14R1 Chromium\",\"stage\":\"identity_mutation_6\",\"elapsed_ms\":85730,\"pending_routes\":0,\"held_requests\":0,\"pages\":1}\n{\"test\":\"BW-36.14R1 Chromium\",\"stage\":\"held_ai_request\",\"elapsed_ms\":88330,\"pending_routes\":1,\"held_requests\":1,\"pages\":1}\n{\"test\":\"BW-36.14R1 Chromium\",\"stage\":\"assertions_complete\",\"elapsed_ms\":88615,\"pending_routes\":0,\"held_requests\":0,\"pages\":1}\n{\"test\":\"BW-36.14R1 Chromium\",\"stage\":\"teardown\",\"elapsed_ms\":88615,\"pending_routes\":0,\"held_requests\":0,\"pages\":1}\n{\"test\":\"BW-36.14R1 Chromium\",\"stage\":\"teardown_complete\",\"elapsed_ms\":88836,\"pending_routes\":0,\"held_requests\":0,\"pages\":0}\nBW-36.14R1 Chromium passed: 13 nodes / 17 edges, real V3 adapter, quality/repair, nine animated steps/avatar/scroll, AI retry, save-only retry, confirmed reconciliation retry, immutable response replay, refresh hydration, context changes, themes/reflow, zero external calls.\n",
+        "failure_class": null
+      },
+      {
+        "index": 164,
+        "name": "Check BW-36.15 guided campaign responsibilities",
+        "workflow_command": "npm run check:bw36.15",
+        "executed_command": "npm run check:bw36.15",
+        "exit_code": 0,
+        "seconds": 59.89,
+        "output_tail": "\n> check:bw36.15\n> node scripts/check-bw36-15-campaign-team-responsibilities.js\n\nPASS production permission projection, invitation boundary, atomic save, rollback, replay, stale revision and revocation\nPASS V3 ready: both EN/DE actions, modal/container fit, 44px targets, mobile stacking, keyboard focus, Light/Dark at all BW-36.14R1 widths including 720x450 reflow, accessibility media, actual Reveal opens the created campaign\nPASS real Chromium: V3 completion + toolbar, 13 nodes/17 edges, all groups, one-save bulk, individual/removal/chip/list/dashboard/filter/activity, invitation, retry, stale review, confirmed save, refresh, Viewer, EN/DE, Light/Dark, 7 viewport/reflow sizes, forced colors/reduced motion, keyboard/Escape/focus restoration; no external I/O\nBW-36.15 checks passed\n",
+        "failure_class": null
+      },
+      {
+        "index": 165,
+        "name": "Check BW-36.15R1 responsibility workspace continuity",
+        "workflow_command": "npm run check:bw36.15r1",
+        "executed_command": "npm run check:bw36.15r1",
+        "exit_code": 0,
+        "seconds": 43.1,
+        "output_tail": "\n> check:bw36.15r1\n> node scripts/check-bw36-15r1-responsibility-workspace-continuity.js\n\nPASS production server: PostgreSQL Date rows with .137/.274/.411 revisions, authoritative assignments, genuine stale conflict, owner/editor/viewer boundaries\nPASS real Chromium: uninterrupted individual/reassign/unassign/bulk/post-bulk session; exact revision transitions; no self-conflict or blind GET; genuine external conflict/recovery/reopen; toolbar only; EN/DE, light/dark, all 7 widths including 720x450 reflow, keyboard/focus/Escape, media, owner/editor/viewer/public boundaries; no unrelated mutations or AI/provider requests\nBW-36.15R1 checks passed\n",
+        "failure_class": null
+      },
+      {
+        "index": 166,
+        "name": "Check BW-36.16 adaptive Canvas view hierarchy in Chromium",
+        "workflow_command": "npm run check:bw36.16",
+        "executed_command": "npm run check:bw36.16",
+        "exit_code": 0,
+        "seconds": 24.19,
+        "output_tail": "\n> check:bw36.16\n> node scripts/check-bw36-16-adaptive-canvas-view-hierarchy.js\n\nPASS exact BW-36.16 hierarchy sequence, two authorized Boards, legacy preference ignored, Canvas teardown\nPASS accessible Details, keyboard, modal Escape, child controls, Utilities cleanup, zero presentation mutations/storage/provider calls\nPASS 44 responsive language/theme cases, 200%-equivalent reflow, reduced motion, forced colors, 44px target\nPASS real drag/click suppression, connection creation, deletion pruning, zero console errors\nPASS touch selection, accessible Details and blank Canvas tap, zero touch console errors\n",
+        "failure_class": null
+      },
+      {
+        "index": 167,
+        "name": "Check BW-36.16R1 toolbar and global view cycle in Chromium",
+        "workflow_command": "npm run check:bw36.16r1",
+        "executed_command": "npm run check:bw36.16r1",
+        "exit_code": 0,
+        "seconds": 50.16,
+        "output_tail": "\n> check:bw36.16r1\n> node scripts/check-bw36-16r1-toolbar-and-global-view-cycle.js\n\nPASS R1 exact two-row ownership/order, Tasks opens existing responsibility workspace, icon-only SVG\nPASS R1 first cycle all nodes, selection/hover authority, zero API/storage/data mutations\nPASS exact BW-36.16 hierarchy sequence, two authorized Boards, legacy preference ignored, Canvas teardown\nPASS accessible Details, keyboard, modal Escape, child controls, Utilities cleanup, zero presentation mutations/storage/provider calls\nPASS 44 responsive language/theme cases, 200%-equivalent reflow, reduced motion, forced colors, 44px target\nPASS real drag/click suppression, connection creation, deletion pruning, zero console errors\nPASS R1 reader global cycle, account change and sign-out clear UI presentation\nPASS touch selection, accessible Details and blank Canvas tap, zero touch console errors\n",
+        "failure_class": null
+      },
+      {
+        "index": 168,
+        "name": "Check BW-36.17 governed Brand Learnings in Chromium",
+        "workflow_command": "npm run check:bw36.17",
+        "executed_command": "npm run check:bw36.17",
+        "exit_code": 0,
+        "seconds": 38.56,
+        "output_tail": "\n> check:bw36.17\n> node scripts/check-bw36-17-governed-brand-learnings.js\n\nPASS BW-36.17 production route/service: signed sessions, active identity, Brand roles, strict input, Unicode, duplicates, atomic events, rollback, successor, stale race, schema failure, bounded privacy and unchanged related data.\nPASS BW-36.17 authenticated Chromium: durable lifecycle, duplicate, successor, two-context stale recovery, viewer, clean navigation, schema-unavailable isolation, preserved DNA/Avatar/logo, EN/DE \u00d7 light/dark \u00d7 1440/1024/768/480/375/320/720x450 reflow, keyboard/Escape/focus restoration, no overflow/native dialogs/provider calls/unrelated writes.\nBW-36.17 passed. All rows are invented local fixtures; no production SQL, AI/provider requests or real data mutation.\n",
+        "failure_class": null
+      },
+      {
+        "index": 169,
+        "name": "Check BW-36.17R1 Learning provenance schema in disposable PostgreSQL",
+        "workflow_command": "npm run check:bw36.17r1",
+        "executed_command": "npm run check:bw36.17r1",
+        "exit_code": 0,
+        "seconds": 21.55,
+        "output_tail": "ery is one read-only statement and cannot claim preservation without a baseline\nPASS original SET NULL foreign key reproduces the lifecycle conflict\nPASS forward migration preserves all manual Learning and append-only event values\nPASS replay refuses and rolls back without changing valid provenance\nPASS proposed campaign observation and bounded creation event retain server-shaped provenance\nPASS Board deletion succeeds and preserves immutable source UUID, node ID, snapshots and history\nPASS every ownership/provenance field is immutable even with the correct revision increment\nPASS column checks reject empty, whitespace, controls and oversized display snapshots\nPASS event allowlist rejects unknown keys, non-UUID sources, nested/raw payloads and every text overflow\nPASS existing manual approval, edit/successor, rejection and archive remain governed\nPASS append-only events, no individual deletion/TRUNCATE and browser grants remain closed\nPASS Brand deletion still cascades owned Learnings and events\nPASS unexpected schema refuses atomically: wrong source FK action\nPASS unexpected schema refuses atomically: missing source FK\nPASS unexpected schema refuses atomically: changed lifecycle\nPASS unexpected schema refuses atomically: open browser grant\nPASS unexpected schema refuses atomically: open column grant\nPASS unexpected schema refuses atomically: changed history guard\nPASS unexpected schema refuses atomically: changed event allowlist\nPASS catalog discovery supports renamed generated FK and event constraints\nPASS missing prerequisite and mid-migration failure both roll back\nPASS preservation guard detects a row rewrite and rolls the whole migration back\nBW-36.17R1: 23 disposable PostgreSQL checks passed. Zero provider/AI/network requests; zero production SQL/data mutations.\n",
+        "failure_class": null
+      },
+      {
+        "index": 170,
+        "name": "Check BW-36.17R2 provenance recovery in disposable PostgreSQL",
+        "workflow_command": "npm run check:bw36.17r2",
+        "executed_command": "npm run check:bw36.17r2",
+        "exit_code": 0,
+        "seconds": 69.1,
+        "output_tail": "e refuses and rolls back: unexpected additional FK\nPASS partial/conflicting state refuses and rolls back: unexpected additional non-source FK\nPASS partial/conflicting state refuses and rolls back: weakened RLS\nPASS partial/conflicting state refuses and rolls back: weakened completed RLS\nPASS partial/conflicting state refuses and rolls back: browser table grant\nPASS partial/conflicting state refuses and rolls back: browser column grant\nPASS partial/conflicting state refuses and rolls back: PUBLIC column grant\nPASS partial/conflicting state refuses and rolls back: browser guard function grant\nPASS partial/conflicting state refuses and rolls back: PUBLIC guard function grant\nPASS partial/conflicting state refuses and rolls back: browser policy\nPASS partial/conflicting state refuses and rolls back: wrong history trigger type\nPASS partial/conflicting state refuses and rolls back: conditional lifecycle trigger\nPASS partial/conflicting state refuses and rolls back: weakened statement bound\nPASS partial/conflicting state refuses and rolls back: missing duplicate guard\nPASS partial/conflicting state refuses and rolls back: unexpected column\nPASS partial/conflicting state refuses and rolls back: additional event restriction\nPASS partial/conflicting state refuses and rolls back: snapshot default\nPASS partial/conflicting state refuses and rolls back: security definer lifecycle\nPASS partial/conflicting state refuses and rolls back: wrong Brand target\nPASS mid-DDL failure and row rewrite each roll back complete State A correction\nPASS corrected Board deletion, immutable provenance, bounded events, Brand cascade and append-only history\nPASS missing prerequisites refuse with bounded error\nBW-36.17R2: 46 disposable PostgreSQL checks passed; zero production/provider/AI/network requests.\n",
+        "failure_class": null
+      },
+      {
+        "index": 171,
+        "name": "Check BW-36.18 governed Learning source capture",
+        "workflow_command": "npm run check:bw36.18",
+        "executed_command": "npm run check:bw36.18",
+        "exit_code": 0,
+        "seconds": 20.1,
+        "output_tail": "\n> check:bw36.18\n> node scripts/check-bw36-18-governed-learning-provenance.js\n\nPASS strict optional source contract; text IDs preserved; forged metadata/PATCH replacement rejected\nPASS owner/admin/editor preview and write; viewer/Board-only/Workspace-only deny\nPASS save-time access revocation is independently revalidated after preview\nPASS invalid/ambiguous identity and anonymous/public token denial\nPASS forged Board/Brand/Node, missing/duplicate nodes, wrong Workspace, stale timestamps/revisions roll back\nPASS unsupported and malformed persisted source data fails closed without Canvas writes\nPASS exact immutable text provenance and bounded R2 event snapshots, duplicate protection, event rollback\nPASS Node deletion hides current context while human review remains available\nPASS safe current source projections suppress labels after reassociation/deletion; stored origin intact\nPASS review/edit/successor after source deletion copy original provenance atomically\nPASS bounded derived snapshots; unchanged manual creation; post-activation checks and owned cascade\nPASS BW-36.18 authenticated Chromium: Inspector eligibility, empty manual statement, no Canvas/storage/undo changes, stale preservation and explicit resubmission, switching, EN/DE light/dark responsive dialogs, keyboard/Escape/focus, no external traffic.\nPASS BW-36.18: 11 database/security groups and authenticated Chromium coverage\n",
+        "failure_class": null
+      },
+      {
+        "index": 172,
+        "name": "Check BW-36.19 AI Learning Advisor (mocked OpenAI)",
+        "workflow_command": "npm run check:bw36.19",
+        "executed_command": "npm run check:bw36.19",
+        "exit_code": 0,
+        "seconds": 57.15,
+        "output_tail": "alidation\",\"correlation_id\":\"1624e7f0-4f55-4f33-896c-df8ac63dd210\",\"category\":\"provider_failure\",\"stage\":\"analyzing\",\"pass\":0}\n{\"event\":\"learning_advisor_validation\",\"correlation_id\":\"fe8b1cd3-e750-4b2e-a902-8120d01db06f\",\"category\":\"provider_failure\",\"stage\":\"analyzing\",\"pass\":0}\n{\"event\":\"learning_advisor_validation\",\"correlation_id\":\"9d09821c-6057-45c1-9f61-c15d0d228003\",\"category\":\"provider_timeout\",\"stage\":\"analyzing\",\"pass\":0}\n{\"event\":\"learning_advisor_validation\",\"correlation_id\":\"11532483-d0ef-446d-8c99-41c95fb76879\",\"category\":\"analysis_failure\",\"stage\":\"analysis\",\"pass\":0}\nPASS provider 429, failure, timeout and missing configuration; no automatic retry\n{\"event\":\"learning_advisor_validation\",\"correlation_id\":\"5c44a29c-33c5-49d5-81df-8d724c1f0d35\",\"category\":\"source_freshness_failure\",\"stage\":\"analysis\",\"pass\":0}\nPASS freshness between preparation and dispatch, signed expiry and independent model configuration\nPASS single text Node adoption, receipt forgery/session isolation, stale adoption and atomic event rollback\nPASS manual Profile/multi-source proposal and successor inherit existing provenance\n{\"event\":\"learning_advisor_validation\",\"correlation_id\":\"f24b052f-e93d-4e9f-a52f-d6d57bc4f06e\",\"category\":\"source_access_failure\",\"stage\":\"analysis\",\"pass\":0}\nPASS BW-36.19 disposable PGlite: actual source/Workspace SQL, precision, signed receipt, text Node adoption, R2 events, atomic rollback, stale Learning set and in-flight revocation. Not a multi-process contention test.\nPASS BW-36.19 real Profile/Advisor Chromium: explicit inference, discussions/exclusion, edited adoption, stale preservation, context discard, zero Canvas writes, EN/DE, themes, 1440/768/375/320, focus/Tab/Escape.\nBW-36.19: 13 focused security/API groups, disposable database and Chromium passed.\n",
+        "failure_class": null
+      },
+      {
+        "index": 173,
+        "name": "Check BW-36.19R1 existing saved Board compatibility (mocked OpenAI)",
+        "workflow_command": "npm run check:bw36.19r1",
+        "executed_command": "npm run check:bw36.19r1",
+        "exit_code": 0,
+        "seconds": 42.64,
+        "output_tail": "pass\":0}\n{\"event\":\"learning_advisor_validation\",\"correlation_id\":\"0b8ad6c5-448e-4ef9-b4d0-fc488e905cc7\",\"category\":\"analysis_failure\",\"stage\":\"analysis\",\"pass\":0}\n{\"event\":\"learning_advisor_validation\",\"correlation_id\":\"6079fc93-d8a6-4df9-949b-9d1f23070f94\",\"category\":\"analysis_failure\",\"stage\":\"analysis\",\"pass\":0}\n{\"event\":\"learning_advisor_validation\",\"correlation_id\":\"a6f92df1-ea6d-4194-bdf8-f96b480b5cec\",\"category\":\"analysis_failure\",\"stage\":\"analysis\",\"pass\":0}\n{\"event\":\"learning_advisor_validation\",\"correlation_id\":\"cdf6fa9a-76ca-4e0a-b576-ff6becb96802\",\"category\":\"analysis_failure\",\"stage\":\"analysis\",\"pass\":0}\n{\"event\":\"learning_advisor_validation\",\"correlation_id\":\"89e1ea4e-e1a4-4652-b455-abade5c222e8\",\"category\":\"analysis_failure\",\"stage\":\"analysis\",\"pass\":0}\n{\"event\":\"learning_advisor_validation\",\"correlation_id\":\"4c177540-937d-44a1-bba8-aaeaa6b5009b\",\"category\":\"analysis_failure\",\"stage\":\"analysis\",\"pass\":0}\n{\"event\":\"learning_advisor_validation\",\"correlation_id\":\"ea97e47e-9109-40c4-92df-13335f8baa59\",\"category\":\"source_freshness_failure\",\"stage\":\"analysis\",\"pass\":0}\nPASS BW-36.19R1 canonical and historical saved tuple-edge Boards: provider-free preview and mocked full analysis.\nPASS BW-36.19 real Profile/Advisor Chromium: explicit inference, discussions/exclusion, edited adoption, stale preservation, context discard, zero Canvas writes, EN/DE, themes, 1440/768/375/320, focus/Tab/Escape.\n{\"event\":\"learning_advisor_validation\",\"correlation_id\":\"7dce4809-9fb1-4df1-b7c6-4c8e9c54ce15\",\"category\":\"source_access_failure\",\"stage\":\"analysis\",\"pass\":0}\nPASS BW-36.19 disposable PGlite: actual source/Workspace SQL, precision, signed receipt, text Node adoption, R2 events, atomic rollback, stale Learning set and in-flight revocation. Not a multi-process contention test.\n",
+        "failure_class": null
+      },
+      {
+        "index": 174,
+        "name": "Check BW-36.19R2 adaptive Advisor context and streaming recovery (mocked OpenAI)",
+        "workflow_command": "npm run check:bw36.19r2",
+        "executed_command": "npm run check:bw36.19r2",
+        "exit_code": 0,
+        "seconds": 46.95,
+        "output_tail": "ss\":1}\nPASS revocation, source changes, provider failure/timeout between passes release no partial result\n{\"event\":\"learning_advisor_validation\",\"correlation_id\":\"93455d12-57ad-4c9c-94ac-b4a2d75acc13\",\"category\":\"unknown_source_reference\",\"stage\":\"analyzing\",\"pass\":1}\n{\"event\":\"learning_advisor_validation\",\"correlation_id\":\"a0e6735f-e45a-497f-91fa-c180646aef62\",\"category\":\"evidence_excerpt_mismatch\",\"stage\":\"consolidating\",\"pass\":4}\nPASS per-pass references are restricted; consolidation cannot cite raw text outside candidate excerpts\n{\"event\":\"learning_advisor_validation\",\"correlation_id\":\"d1da7dda-d08c-437f-8bc9-beeb905be777\",\"category\":\"analysis_failure\",\"stage\":\"analysis\",\"pass\":0}\n{\"event\":\"learning_advisor_validation\",\"correlation_id\":\"ba232659-a4aa-4b7b-9481-660d0e98a12d\",\"category\":\"schema_validation_failure\",\"stage\":\"analyzing\",\"pass\":0}\nPASS cancelled stream cannot start another pass and unknown schema/extra provider keys fail\n{\"event\":\"learning_advisor_validation\",\"correlation_id\":\"2282df31-3d7b-4969-b430-260bbc0e1d8e\",\"category\":\"provider_failure\",\"stage\":\"analyzing\",\"pass\":0}\n{\"event\":\"learning_advisor_validation\",\"correlation_id\":\"4141932e-e663-45dc-8dca-b7ae314ea66e\",\"category\":\"provider_failure\",\"stage\":\"analyzing\",\"pass\":0}\n{\"event\":\"learning_advisor_validation\",\"correlation_id\":\"cc5ec403-16a2-4f04-a068-2ada75d645c8\",\"category\":\"provider_failure\",\"stage\":\"analyzing\",\"pass\":0}\n{\"event\":\"learning_advisor_validation\",\"correlation_id\":\"f4334573-5ba3-4df3-9717-c1a0fc9a3f04\",\"category\":\"provider_failure\",\"stage\":\"analyzing\",\"pass\":0}\nPASS BW-36.19R2 Chromium: streamed passes/consolidation, alert icon, recoverable options, source reload, EN/DE, light/dark, 320px scroll, keyboard/focus.\nBW-36.19R2: 8 adaptive context/security groups passed (mocked OpenAI only).\n",
+        "failure_class": null
+      },
+      {
+        "index": 175,
+        "name": "Check BW-36.19R4 output reliability (mocked OpenAI)",
+        "workflow_command": "npm run check:bw36.19r4",
+        "executed_command": "npm run check:bw36.19r4",
+        "exit_code": 0,
+        "seconds": 34.6,
+        "output_tail": "\n> check:bw36.19r4\n> node scripts/check-bw36-19r4-learning-advisor-output-reliability.js\n\nPASS realistic EN/DE saved Campaigns, Responses message output, exact evidence, usage, immutable analysis\nPASS reproduce old 16K output and 60KB envelope mismatch; token budget covers realistic detailed output\nPASS schema lengths count Unicode code points; emoji excerpts remain literal\nPASS unknown/missing refs and nonliteral legacy excerpts are discarded independently\nPASS classification, unsupported claims and wrong-language prose remain fail-closed\nPASS incomplete provider, truncation, malformed envelope, refusal and ambiguous documents are never empty success\nPASS streamed transport bounds, diagnostic whitelist and logging failures cannot alter results\nPASS multi-pass consolidation uses validated excerpts only; no raw-text reopening or stitched quotes\nPASS revoked access and stale fingerprints discard otherwise valid output, Learning/Canvas unchanged\nBW-36.19R4: 9 production-shaped output reliability groups passed; all providers mocked.\n",
+        "failure_class": null
+      },
+      {
+        "index": 176,
+        "name": "Check BW-36.19R5 simplified generation and persisted human approval (mocked OpenAI)",
+        "workflow_command": "npm run check:bw36.19r5",
+        "executed_command": "npm run check:bw36.19r5",
+        "exit_code": 0,
+        "seconds": 35.49,
+        "output_tail": "r_incomplete\",\"stage\":\"analyzing\",\"pass\":0}\n{\"event\":\"learning_advisor_validation\",\"correlation_id\":\"1839d885-fa6b-4cfe-8680-530be23a4afc\",\"category\":\"response_parse_failure\",\"stage\":\"analyzing\",\"pass\":0}\n{\"event\":\"learning_advisor_validation\",\"correlation_id\":\"a0a96479-63de-42d7-9dc8-d3f95d2b178d\",\"category\":\"provider_refusal\",\"stage\":\"analyzing\",\"pass\":0}\n{\"event\":\"learning_advisor_validation\",\"correlation_id\":\"f0baf211-c341-4015-9592-9490296ea5f6\",\"category\":\"response_parse_failure\",\"stage\":\"analyzing\",\"pass\":0}\n{\"event\":\"learning_advisor_validation\",\"correlation_id\":\"b57bdafc-2a52-4ef1-9f35-646b0d4ea5c1\",\"category\":\"provider_failure\",\"stage\":\"analyzing\",\"pass\":0}\n{\"event\":\"learning_advisor_validation\",\"correlation_id\":\"97b3bdca-d6de-4a8f-9d4e-a19b86b993f3\",\"category\":\"provider_failure\",\"stage\":\"analyzing\",\"pass\":0}\n{\"event\":\"learning_advisor_validation\",\"correlation_id\":\"08ed5968-aeac-4541-946d-1a7ece96e2c5\",\"category\":\"provider_timeout\",\"stage\":\"analyzing\",\"pass\":0}\n{\"event\":\"learning_advisor_validation\",\"correlation_id\":\"106d519a-de03-40a6-8724-4a20aff4a577\",\"category\":\"schema_validation_failure\",\"stage\":\"analyzing\",\"pass\":0}\nPASS R5 minimal contract, optional evidence isolation, EN/DE partial candidates, provider envelopes/errors, revocation, no generation writes and adaptive consolidation.\n{\"event\":\"learning_advisor_validation\",\"correlation_id\":\"505fcaf5-36e4-42cd-85c8-852d4c2f29af\",\"category\":\"provider_failure\",\"stage\":\"analyzing\",\"pass\":0}\nPASS R5 actual Advisor/Learning HTTP handlers + Chromium + disposable PGlite: saved Profile/two variations/persisted comments -> displayed title/statement/rationale -> explicit proposal -> persisted proposed -> authorized human approval -> approved after refresh; empty/error UI; generation alone has zero application writes.\n",
+        "failure_class": null
+      },
+      {
+        "index": 177,
+        "name": "Check BW-36.19R6 Learning review and atomic batch adoption (mocked OpenAI)",
+        "workflow_command": "npm run check:bw36.19r6",
+        "executed_command": "npm run check:bw36.19r6",
+        "exit_code": 0,
+        "seconds": 43.89,
+        "output_tail": "\n> check:bw36.19r6\n> node scripts/check-bw36-19r6-learning-review.js\n\nPASS R6 full editable context, literal excerpts/AI distinction, unverified and missing evidence, EN/DE.\nPASS R6 single receipt continuation; independent candidates; atomic mixed provenance; duplicate, invalid, expiry, revocation, stale, event/commit failures; zero extra provider calls.\nPASS R6 review UI: EN/DE, light/dark, desktop/375/320, editable overflow, independent drafts, explicit bulk confirmation, session preservation, Tab/Escape and focus.\nPASS R6 actual HTTP handlers + Chromium + PGlite: context edits and durable reload, session after single save, selection/deselection/removal, multi-review edits, explicit confirmation, second-event atomic rollback and safe retry, manual/source-backed provenance, no paid calls or Canvas/Profile writes.\n",
+        "failure_class": null
+      },
+      {
+        "index": 178,
+        "name": "Check BW-36.19R7 Advisor visual states and accessibility in Chromium (provider-free)",
+        "workflow_command": "node scripts/check-bw36-19r7-advisor-visual.js",
+        "executed_command": "node scripts/check-bw36-19r7-advisor-visual.js",
+        "exit_code": 0,
+        "seconds": 27.21,
+        "output_tail": "PASS R7 Chromium: 48 Light/Dark desktop/mobile state captures; actual streaming-state rendering, source disclosure, evidence, selection, edited review, confirmation, proposed success, recoverable error, primary/editor text contrast, reduced motion, forced colors, tablet/320px short-height scrolling, Tab/Escape and restored focus.\n",
+        "failure_class": null
+      },
+      {
+        "index": 179,
+        "name": "Check BW-36.19R8 Canvas Learn entry in Chromium (provider-free)",
+        "workflow_command": "npm run check:bw36.19r8",
+        "executed_command": "npm run check:bw36.19r8",
+        "exit_code": 0,
+        "seconds": 15.67,
+        "output_tail": "\n> check:bw36.19r8\n> node scripts/check-bw36-19r8-canvas-learn-entry.js\n\nPASS R8 production Canvas/Advisor: exact position, saved Board/Brand/Workspace, keyboard/focus, EN/DE unavailable guidance, viewer/Board-only boundaries, server denial, unavailable source, 10 pending context races, 16 language/theme/reflow combinations, no analysis/Canvas mutations/autosave.\n",
+        "failure_class": null
+      },
+      {
+        "index": 180,
+        "name": "Check dynamic AI Insights translations",
+        "workflow_command": "node scripts/check-bw25-1-dynamic-insights-translations.js",
+        "executed_command": "node scripts/check-bw25-1-dynamic-insights-translations.js",
+        "exit_code": 0,
+        "seconds": 0.07,
+        "output_tail": "BW-25.1 dynamic AI Insights translation checks passed.\n",
+        "failure_class": null
+      },
+      {
+        "index": 181,
+        "name": "Check scoped German interface localization",
+        "workflow_command": "npm run check:bw25.2",
+        "executed_command": "npm run check:bw25.2",
+        "exit_code": 0,
+        "seconds": 0.32,
+        "output_tail": "\n> check:bw25.2\n> node scripts/check-bw25-2-interface-localization.js\n\nBW-25.2 scoped German interface localization checks passed.\n",
+        "failure_class": null
+      },
+      {
+        "index": 182,
+        "name": "Check BW-36.21A-R2.2 multiple Workspaces and direct Brand navigation",
+        "workflow_command": "npm run check:bw36.21ar2.2",
+        "executed_command": "npm run check:bw36.21ar2.2",
+        "exit_code": 0,
+        "seconds": 69.61,
+        "output_tail": "CE_CREATE] {\n  request_id: '8ca076d9b79716719463f6c7',\n  stage: 'complete',\n  code: 'OK',\n  created: true,\n  duration_bucket: 'lt_100ms'\n}\nPASS catalog appends without dropping populated descendants and validates exact UUID\nPASS R2.2 12 server/client groups; disposable PGlite PostgreSQL SQL, no production or provider calls.\nPASS sidebar selects Y independently of Board X; collapsed=false\nPASS sidebar selects Y independently of Board X; collapsed=true\nPASS sidebar selects Y independently of Board unbranded; collapsed=false\nPASS sidebar selects Y independently of Board unbranded; collapsed=true\nPASS sidebar selects Y independently of Board X; collapsed=false\nPASS sidebar selects Y independently of Board X; collapsed=true\nPASS Home Y, All default, explicit filter, Profile Y, Canvas return and Board reload retain X\nPASS viewer singleton Profile is independently accessible and mobile selectors remain reachable\nPASS create second Workspace retains dirty Board; explicit switch uses Cancel/Discard lifecycle\nPASS first explicit switch waits for the delayed post-create catalog refresh\nPASS failed post-create refresh gives feedback and retries switching without another POST\nPASS timeout/lost response retries immutable UUID and name even after dialog dismissal\nPASS definitive UUID conflict refreshes access and allows an explicit fresh creation\nPASS first Workspace activates automatically through the same dialog\nPASS account replacement during creation cannot reconcile or announce success\nPASS foreign Brand, stale catalog, public context and logout cannot select\nPASS Workspace validation never adopts a foreign preference; logout clears preference owner\nPASS search keyboard skips hidden Brand rows and selection never opens Profile\nPASS R2.2 18 Chromium groups, mocked transport only.\n",
+        "failure_class": null
+      },
+      {
+        "index": 183,
+        "name": "Check BW-36.21A-R2.3 Brand and Board context consistency",
+        "workflow_command": "npm run check:bw36.21ar2.3",
+        "executed_command": "npm run check:bw36.21ar2.3",
+        "exit_code": 0,
+        "seconds": 102.45,
+        "output_tail": "lidates same-board-generation before preference adoption\nPASS late catalog revalidates selection before preference adoption\nPASS late catalog revalidates workspace before preference adoption\nPASS late catalog revalidates account before preference adoption\nPASS late catalog revalidates visibility before preference adoption\nPASS explicit Brand Y selection wins over a pending catalog refresh\nPASS deferred hidden independently shared Board never borrows visible Brand authority\nPASS selection mismatch, actual labels, same Canvas/snapshot, campaign/Brain authority, return to X clears notice\nPASS Home prioritizes connected Y Boards; current X remains reachable and explicit Brand filter is separate\nPASS neutral null association and independently shared access stay private\nPASS neutral hidden association and independently shared access stay private\nPASS inaccessible associated Brand never becomes navigation authority or visible notice content\nPASS read-only shared Board with hidden association retains viewing contract\nPASS Profile Y and filtered Boards actions reuse adapters and keep Board A/X intact\nPASS Profile Y cannot supply the avatar for Board X Brain, campaigns or AI Review metadata\nPASS late Board response cannot overwrite a newer intentional selection\nPASS rejected Workspace attempt during loading cannot suppress authorized Board Brand adoption\nPASS late response after account retirement cannot adopt preference\nPASS late response after workspace retirement cannot adopt preference\nPASS late response after board retirement cannot adopt preference\nPASS invalid Canvas hydration never adopts Board Brand\nPASS EN/DE, Light/Dark, mobile, collapsed sidebar, keyboard, reduced motion and screenshots\nPASS R2.3 30 groups; mocked local transport, no production SQL or provider calls.\n",
+        "failure_class": null
+      },
+      {
+        "index": 184,
+        "name": "Check BW-36.21B1 Home Intelligence (Chromium, provider-free)",
+        "workflow_command": "npm run check:bw36.21b1",
+        "executed_command": "npm run check:bw36.21b1",
+        "exit_code": 0,
+        "seconds": 68.81,
+        "output_tail": "\n> check:bw36.21b1\n> node scripts/check-bw36-21b1-home-intelligence.js\n\nPASS aggregate projection: pagination, sparse zero, missing/malformed fields and exact Brand\nPASS real signed Learning route independently enforces identity and Brand roles; Board ownership gives no Learning access\nPASS selected Brand counts and current Board responsibilities remain separate, bounded and read-only composition\nPASS empty library, absent aggregate, malformed count and API error distinguish genuine zero\nPASS Brand viewer uses server capability and correct explicit Profile Learnings target; return refreshes without revision bump\nPASS Profile Learnings handoff preserves busy and dirty leave guards, Cancel and explicit Discard\nPASS pending Learning read rejects stale brand result\nPASS pending Learning read rejects stale workspace result\nPASS pending Learning read rejects stale logout result\nPASS pending Learning read rejects stale account result\nPASS Board-only access, hidden association and no selected Brand never read its Learnings\nPASS no Workspace and no Board preserve useful navigation\nPASS live unsaved, replacement/deletion, completion aliases, ambiguous identity and Board generation guard\nPASS viewer Board manager remains view-only; revocation removes nodes\nPASS lifecycle event and focus resume refresh independently of canonical revision; unrelated Brand event does not\nPASS EN/DE, Light/Dark/system, mobile, long names, reduced motion, native keyboard and screenshots\nPASS responsibility summary refuses stale/duplicate identity and matches only actual owner email\nBW-36.21B1 PASS 17 groups (all I/O mocked, zero production SQL or paid AI)\n",
+        "failure_class": null
+      },
+      {
+        "index": 185,
+        "name": "Check BW-36.21B2 Home Campaign Insights and AI Brain (Chromium, provider-free)",
+        "workflow_command": "npm run check:bw36.21b2",
+        "executed_command": "npm run check:bw36.21b2",
+        "exit_code": 0,
+        "seconds": 177.65,
+        "output_tail": "lick rejected before observer refresh: duplicate\nPASS stale click rejected before observer refresh: fingerprint\nPASS stale click rejected before observer refresh: board\nPASS stale click rejected before observer refresh: generation\nPASS stale click rejected before observer refresh: permission\nPASS stale click rejected before observer refresh: hydrating\nPASS stale click rejected before observer refresh: account\nPASS stale click rejected before observer refresh: logout\nPASS stale click rejected before observer refresh: workspace\nPASS stale click rejected before observer refresh: edit\nPASS selected Brand Y never substitutes for current Board X; authorized labels, B1 and mismatch notice preserved\nPASS hidden and absent Brand association stay neutral; Brain remains Board-edit scoped without independent knowledge fetch\nPASS Board viewer, revoked access, no saved Board, hydration and public token have no Brain action\nPASS root Home/no Workspace useful; direct route and reload rehydrate Board; account replacement/logout clear private findings\nPASS automatic Home work discards pending Board/account/Workspace/access/hydration/Canvas changes before calculation\nPERF 20,000 nodes {\"initialMs\":335.10000000009313,\"engineMs\":29.0999999998603,\"fiveRendersMs\":754.9000000001397}\nPASS large Canvas: deferred once, exact Insights parity, reused snapshot, bounded render cost, zero mutation/writes/providers\nPASS automatic calculation failure is unavailable and deduplicated; Canvas edit recovers; timeout fallback works\nPASS pending analyzing state is localized in EN/DE and Light/Dark\nPASS EN/DE, Light/Dark/system, desktop/tablet/mobile, long labels, native keyboard, focus stability and visual evidence\nBW-36.21B2 PASS 30 groups (real diagnostics, all transport mocked, zero provider calls/writes)\n",
+        "failure_class": null
+      },
+      {
+        "index": 186,
+        "name": "Check BW-36.22A compact Home and continuation (Chromium, provider-free)",
+        "workflow_command": "npm run check:bw36.22a",
+        "executed_command": "npm run check:bw36.22a",
+        "exit_code": 0,
+        "seconds": 134.6,
+        "output_tail": "\n> check:bw36.22a\n> node scripts/check-bw36-22a-compact-home.js\n\nPASS DOM order, unique IDs, compact selectors and guarded header continuation\nPASS Brand preference, mismatch actions, Profile and all Brand exploration remain independent of Board association\nPASS fixed Learning, assigned-to-me, engine finding order; summaries reuse requests and current evidence\nPASS unknown, denied, malformed, zero and read-only Learning sources never become review recommendations\nPASS responsibility matching, completed and duplicate exclusions; diagnostic staleness removes summary\nPASS six authorized cards, reversible expansion, exact model grouping/order, partial metadata and current highlighting\nPASS fallback is existing first authorized Board; no Board/empty Canvas has no fabricated task; hidden association stays distinct\nPASS captured scope rejects forged/stale Next Moves and current evidence; navigation makes no writes\nPASS focus survives async redraw; selector labels and keyboard reading order\nPASS mobile scroll clip is immediate and every Home action remains reachable across repeated shell changes\nPASS Chromium visual matrix, full labels, theme/system, fixed overlay/focus geometry and continuation\n11 BW-36.22A groups passed\n",
+        "failure_class": null
+      },
+      {
+        "index": 187,
+        "name": "Check BW-36.22B1 Living Workspace foundation (Chromium, provider-free)",
+        "workflow_command": "npm run check:bw36.22b1",
+        "executed_command": "npm run check:bw36.22b1",
+        "exit_code": 0,
+        "seconds": 89.15,
+        "output_tail": "\n> check:bw36.22b1\n> node scripts/check-bw36-22b1-living-workspace.js\n\nPASS continuation: matching current, selected ordering, foreign-current fallback, viewer and unauthorized/unknown dates\nPASS first-screen hierarchy, one H1, full detailed Home and all legacy static IDs preserved\nPASS Workspace/Brand orientation, generic greeting, saved identity and timestamp with no recency/progress invention\nPASS confirmed missing Avatar stays honest and static; contextual bubble stays truthful across runtime changes\nPASS selected Brand/current Board mismatch chooses connected continuation without relabeling Brain or mutating Canvas\nPASS explicit foreign-current fallback, hidden association and unassigned scope remain distinguishable\nPASS Brain stage and emoji shortcut use existing keyboard destination, preserve draft and never infer\nPASS Insights shortcut uses current Board destination with no inference or Canvas mutation\nPASS Learnings shortcut opens existing selected-Brand Profile section\nPASS responsibilities shortcut opens existing manager and restores origin after redraw\nPASS viewer and unavailable Learning access give honest keyboard-discoverable alternatives and block activation\nPASS no Workspace/no Brands/no Boards, loading/error/logout/account replacement and Workspace switching retire identities\nPASS forged/stale hero and quick actions reject changed Board generation, loading and lost access\nPASS repeated render introduces no additional reads, writes or Canvas changes after the selected canonical read\nPASS Chromium Light reference matrix, Dark/system readability, geometry, keyboard, reduced motion and fixed-control clearance\n15 BW-36.22B1 groups passed\n",
+        "failure_class": null
+      },
+      {
+        "index": 188,
+        "name": "Check BW-36.22B1R1 current continuation name (Chromium, provider-free)",
+        "workflow_command": "npm run check:bw36.22b1r1",
+        "executed_command": "npm run check:bw36.22b1r1",
+        "exit_code": 0,
+        "seconds": 18.0,
+        "output_tail": "\n> check:bw36.22b1r1\n> node scripts/check-bw36-22b1r1-current-continuation-name.js\n\nPASS pure candidate names, authorization, association, switching and immutable metadata\nPASS real rehydration, stale catalog, other labels, accessible names, identity and no reads/writes\nPASS Board generation, account and Workspace transitions retire names and captured actions\nPASS view-only hydrated card and accessible action label retain Board identity\n",
+        "failure_class": null
+      },
+      {
+        "index": 189,
+        "name": "Check BW-36.22B2 real Brand Avatar and contextual personality",
+        "workflow_command": "npm run check:bw36.22b2",
+        "executed_command": "npm run check:bw36.22b2",
+        "exit_code": 0,
+        "seconds": 37.86,
+        "output_tail": "\n> check:bw36.22b2\n> node scripts/check-bw36-22b2-real-brand-avatar.js\n\nPASS shared canonical reader deduplicates and enforces every scope boundary before/after JSON, access, revision and timeout\nPASS message priority, honest fallback, Brand/Board labels, invalid scopes and no invented metrics\nPASS saved approved original image, missing and unapproved states; Image failure/retry; keyboard Profile Avatar entry and real save refresh\nPASS canonical failure is not absence; optional loading does not block Home, Board or Brain; stale selected-Brand response is discarded\nPASS accepted selected-Brand image stays independent of the open Board Brand and catalog logos\nPASS account, Workspace, catalog and revoked Brand retire pending identity; Board access never grants Brand access\nPASS manual eligible messages, stable selection, EN/DE, keyboard and screen reader naming; no automatic inference or timed rotation\nPASS Light desktop/mobile original asset fidelity, Dark baseline, no motion and contextual Brain eligibility\n8 B2 acceptance groups passed\n",
+        "failure_class": null
+      },
+      {
+        "index": 190,
+        "name": "Check BW-36.22B2R1 canonical conflict reload recovery",
+        "workflow_command": "npm run check:bw36.22b2r1",
+        "executed_command": "npm run check:bw36.22b2r1",
+        "exit_code": 0,
+        "seconds": 15.7,
+        "output_tail": "\n> check:bw36.22b2r1\n> node scripts/check-bw36-22b2r1-canonical-conflict-reload.js\n\nPASS initial authorized canonical GET; ordinary Home/Profile pending and settled deduplication\nPASS 409 conflict reload bypasses settled detail; repeated reload and accepted save bypass; draft revision retained\nPASS overlapping forced reloads supersede old headers/JSON even when transport ignores abort\nPASS accepted newer save retires an old Profile reload without overwriting its state\nPASS failed reload/retry and overlapping reload retain unsaved conflict draft\nPASS Brand, Workspace, account, catalog generation and access changes cannot apply stale reload success or failure\nPASS fresh reads still reject malformed identity, access and revision; unauthorized context does not GET\nPASS real 409, explicit conflict button, retained input, Cancel/Discard and deliberate reconciliation save; Home Avatar refresh\nPASS guided Profile 409 reload rebases untouched fields and retains local inputs before deliberate Save\nBW-36.22B2R1: 9 groups PASS; local intercepted transport only, no AI/provider calls or Canvas/Board writes.\n",
+        "failure_class": null
+      },
+      {
+        "index": 191,
+        "name": "Check Knowledge Module browser globals",
+        "workflow_command": "node scripts/check-knowledge-module-browser-globals.js",
+        "executed_command": "node scripts/check-knowledge-module-browser-globals.js",
+        "exit_code": 0,
+        "seconds": 0.39,
+        "output_tail": "Knowledge Module browser-global compatibility check passed.\n",
+        "failure_class": null
+      },
+      {
+        "index": 192,
+        "name": "Check BW-36.23A protected Brand write contract and controllers",
+        "workflow_command": "npm run check:bw36.23a",
+        "executed_command": "npm run check:bw36.23a",
+        "exit_code": 0,
+        "seconds": 0.91,
+        "output_tail": "\n> check:bw36.23a\n> node scripts/check-bw36-23-brand-knowledge-protection.js\n\nPASS recursive diff preserves unknown omitted fields without whole-document replacement\nPASS null absence blanks arrays and objects remain distinct\nPASS ambiguous overlapping root positional and pollution paths rejected\nPASS safe omission cannot remove subtree and arrays require exact old value\nPASS append-only list edits preserve every old element without destructive review\nPASS legacy payload rejected with actionable contract code\nPASS ordinary Profile edit has no destructive dialog and retains accepted knowledge\nPASS DNA acceptance retains Avatar unknowns and Founder Story\nPASS Avatar replacement displays concrete old/new review and retains strategy\nPASS Founder Story edit preserves unknown tile properties\nPASS lost response retries same durable mutation with same revision and intent\nPASS brandId switch cannot send pending draft to new scope\nPASS workspaceId switch cannot send pending draft to new scope\nPASS account switch cannot send pending draft to new scope\nPASS review tokens bind exact command actor Brand expiry and fit HTTP headers\n15 contract/controller groups passed; SQL invariants require the separate real PostgreSQL suite.\n",
+        "failure_class": null
+      },
+      {
+        "index": 193,
+        "name": "Check BW-36.23A real PostgreSQL roles transactions and concurrency",
+        "workflow_command": "npm run check:bw36.23a:postgres",
+        "executed_command": "npm run check:bw36.23a:postgres",
+        "exit_code": 0,
+        "seconds": 2.51,
+        "output_tail": " stale by a concurrent canonical edit\nPASS initialization history failure rolls back exact canonical state and leaves the source intact\nPASS Brand-only runtime has no implicit Board write grant and failed Project transaction rolls back\nPASS protected creation and real Board insert commit together with exact identities and history\nPASS real Board insertion failure cannot leave a partial Brand or creation history\nPASS logo history failure rolls back metadata revisions and full canonical knowledge\nPASS initialization denial independently enforces actor Brand and Workspace authorization\nPASS associated-Board delete denial returns only an authorized validated project count\nPASS delete lifecycle retains history and authorizes original actor retry\nPASS expired review token proof cannot authorize a new destructive write\nPASS database rejects malformed missing revision and future prototype payload\nPASS expired token can resolve exact committed receipt but never a new mutation\n[BRAND_LOGO_FAILURE] { stage: 'authorization' }\n[BRAND_LOGO_FAILURE] { stage: 'authorization' }\nPASS real logo HTTP receipt-only replay verifies the committed request without upload or another mutation\nPASS production HTTP handler uses verified session and compatible authoritative response\nPASS migration detects installed catalog drift and rolls back\nPASS non-destructive list append needs no review and retains old unknown metadata\nPASS no-op command records a receipt without incrementing Core revision\nPASS runtime LOGIN cannot assume the NOLOGIN function owner\nPASS logo and Core writers interleave without losing metadata\nPASS source_event_id null for ordinary events; no event gaps or history-only changes\n60 real PostgreSQL groups passed (restricted roles, independent connections; disposable fixtures only).\n",
+        "failure_class": null
+      },
+      {
+        "index": 194,
+        "name": "Check BW-36.23A protected Brand editing in Chromium",
+        "workflow_command": "npm run check:bw36.23a:browser",
+        "executed_command": "npm run check:bw36.23a:browser",
+        "exit_code": 0,
+        "seconds": 3.24,
+        "output_tail": "\n> check:bw36.23a:browser\n> node scripts/check-bw36-23-brand-knowledge-browser.js\n\nPASS Chromium ordinary edit preserves accepted knowledge without review dialog\nPASS Chromium Avatar acceptance reviews exact replacement and preserves metadata\nPASS Chromium in-flight Workspace switch ignores response and retains original mutation scope\n3 provider-free Chromium groups passed. SQL isolation is verified separately.\n",
+        "failure_class": null
+      },
+      {
+        "index": 195,
+        "name": "Check BW-36.23A initialization and logo response-loss recovery",
+        "workflow_command": "npm run check:bw36.23ar2",
+        "executed_command": "npm run check:bw36.23ar2",
+        "exit_code": 0,
+        "seconds": 0.65,
+        "output_tail": "\n> check:bw36.23ar2\n> node scripts/check-bw36-23-initialization.js && node scripts/check-bw36-23-logo-replay.js\n\nBW-36.23A initialization: 19/19 controller groups PASS. Database guarantees require the separate PostgreSQL suite.\nBW-36.23A logo replay: 10/10 groups PASS (lost response, malformed receipt, failed commit, fresh mutation, account/Workspace/Brand isolation).\n",
+        "failure_class": null
+      }
+    ]
+  },
+  "setup_substitutions": [
+    "Declared installed dependencies verified instead of reinstalling inside the collector",
+    "System Chromium /usr/bin/chromium replaces CI Playwright download; CI exports installed executable as CHROMIUM_PATH",
+    "Disposable localhost PostgreSQL port 55432 replaces CI service port 5432"
+  ],
+  "prior_19_failures": [
+    {
+      "name": "Check explicit Canonical Brand Core initialization",
+      "failure_summary": "AssertionError [ERR_ASSERTION]: The input did not match the regular expression /method: \"PUT\"/. Input:",
+      "resolved": true
+    },
+    {
+      "name": "Check Canonical Brand foundation",
+      "failure_summary": "AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:",
+      "resolved": true
+    },
+    {
+      "name": "Check Canonical Brand team roles",
+      "failure_summary": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:",
+      "resolved": true
+    },
+    {
+      "name": "Check inline Brand member role management",
+      "failure_summary": "AssertionError [ERR_ASSERTION]: The input did not match the regular expression /UNIQUE \\(brand_id, email\\)/. Input:",
+      "resolved": true
+    },
+    {
+      "name": "Check Workspace Brand deletion and selector theme",
+      "failure_summary": "AssertionError [ERR_ASSERTION]: 428 == 200",
+      "resolved": true
+    },
+    {
+      "name": "Check BW-33.5.1 publishing destinations RLS delta",
+      "failure_summary": "  throw new AssertionError(obj);; AssertionError [ERR_ASSERTION]: a user-created runtime table is missing from the documented inventory",
+      "resolved": true
+    },
+    {
+      "name": "Check BW-36.13R3 authoritative project creation",
+      "failure_summary": "AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:",
+      "resolved": true
+    },
+    {
+      "name": "Check BW-36.13R3R1 Workspace catalog and project launch repair",
+      "failure_summary": "AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:",
+      "resolved": true
+    },
+    {
+      "name": "Guided Brand Profile setup regression",
+      "failure_summary": "AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:",
+      "resolved": true
+    },
+    {
+      "name": "Check BW-36.21A-R2.1 safe Workspace switching (Chromium)",
+      "failure_summary": "  name: 'TimeoutError'",
+      "resolved": true
+    },
+    {
+      "name": "Check Brand Profile entry and Workspace actions in Chromium",
+      "failure_summary": "  name: 'TimeoutError'",
+      "resolved": true
+    },
+    {
+      "name": "Check BW-36.13R5 Brand lifecycle stability",
+      "failure_summary": "AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:",
+      "resolved": true
+    },
+    {
+      "name": "Check Brand workspace regression recovery",
+      "failure_summary": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:",
+      "resolved": true
+    },
+    {
+      "name": "Check durable Brand logos and readiness",
+      "failure_summary": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:",
+      "resolved": true
+    },
+    {
+      "name": "Check production Brand logo persistence",
+      "failure_summary": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:",
+      "resolved": true
+    },
+    {
+      "name": "Check Brand Profile decisions and deletion UX",
+      "failure_summary": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:",
+      "resolved": true
+    },
+    {
+      "name": "Check BW-36.12 Brand logo acquisition and projection",
+      "failure_summary": "AssertionError [ERR_ASSERTION]: logoStorage.remove(pendingPath)",
+      "resolved": true
+    },
+    {
+      "name": "Check BW-36.22B2 real Brand Avatar and contextual personality",
+      "failure_summary": "page.evaluate: Error: The save was not confirmed. Your inputs are retained. Retry safely.",
+      "resolved": true
+    },
+    {
+      "name": "Check BW-36.22B2R1 canonical conflict reload recovery",
+      "failure_summary": "  name: 'TimeoutError'",
+      "resolved": true
+    }
+  ],
+  "additional_corrected_failures": [
+    "BW-36.7/9/9R1 worktree migration scope assumptions",
+    "BW-36.7R2/R3 transitive test-source evidence pins",
+    "Home blocked-switch status erased by redraw",
+    "Logo stale preview blocked committed receipt retry",
+    "Logo protected receipt denial mapped to outage",
+    "Protected deletion lost associated-project count",
+    "PostgreSQL role setup order and restricted LOGIN SCRAM password",
+    "Deferred concurrent-write rejection assertion race",
+    "BW-36.18 pending cursor-clear/mouse snapshot race",
+    "BW-36.15/R1 and BW-36.16/R1 background-poll timing assertions",
+    "CI cached Chromium executable selection",
+    "Home Intelligence modal-focus/reauthorization timing and Home Insights dirty-watcher fixture ordering"
+  ],
+  "postgresql": {
+    "engine": "PostgreSQL 17.11 (Debian 17.11-1.pgdg13+2)",
+    "passed": 60,
+    "failed": 0,
+    "restricted_actual_login": true,
+    "independent_connections": true,
+    "disposable_only": true,
+    "board_permissions": "Verified missing Board INSERT grant rolls Brand/history back; later project transaction cases add a fixture-only Workspace/owner-scoped INSERT policy"
+  },
+  "targeted_groups": {
+    "initialization": 19,
+    "logo_replay": 10,
+    "protected_contract_controllers": 15,
+    "protected_browser": 3,
+    "explicit_editor": 25
+  },
+  "github_actions": {
+    "baseline_run": "https://github.com/Funklix/Funklix/actions/runs/39500479225",
+    "baseline_conclusion": "failure",
+    "recovery_conclusion": "See current-head PR checks and final delivery report; local evidence is assembled before push"
+  },
+  "codex_prior_findings": [
+    {
+      "priority": "P1",
+      "thread": "PRRT_kwDONExWSc6ubJHW",
+      "resolution": "Protected creation/history fixture and consumers corrected; targeted and complete suite verify it"
+    },
+    {
+      "priority": "P2",
+      "thread": "PRRT_kwDONExWSc6ubJHi",
+      "resolution": "Original request ID retained, verified pending clear, receipt-only retry; real HTTP/controller and PostgreSQL regressions verify it"
+    }
+  ],
+  "changed_files": [
+    ".github/workflows/runtime-boot-safety.yml",
+    "api/_brand-deletion.js",
+    "api/_brand-knowledge-write.js",
+    "api/brands/[id]/logo.js",
+    "brand-profile-setup.js",
+    "brand-write-contract.js",
+    "docs/implementations/bw36-23a-brand-knowledge-protection-core.md",
+    "docs/implementations/bw36-23a-comprehensive-ci-recovery.json",
+    "home-foundation.js",
+    "migrations/20261020_bw36_23_brand_knowledge_protection.sql",
+    "package.json",
+    "scripts/check-bw20-1-inline-brand-role-management.js",
+    "scripts/check-bw20-brand-team-roles.js",
+    "scripts/check-bw33-5-1-social-publishing-destinations-rls.js",
+    "scripts/check-bw36-12-brand-logo-acquisition-and-projection.js",
+    "scripts/check-bw36-13r3-authoritative-project-creation.js",
+    "scripts/check-bw36-13r3r1-workspace-catalog-repair.js",
+    "scripts/check-bw36-13r4-guided-brand-profile-setup.js",
+    "scripts/check-bw36-13r4r1-brand-profile-entry-and-workspace-actions.js",
+    "scripts/check-bw36-13r5-brand-lifecycle-stability.js",
+    "scripts/check-bw36-13r5r2-brand-workspace-regression-recovery.js",
+    "scripts/check-bw36-13r5r3-durable-brand-logo-and-readiness.js",
+    "scripts/check-bw36-13r5r4-brand-logo-persistence.js",
+    "scripts/check-bw36-13r6-brand-profile-decision-and-deletion-ux.js",
+    "scripts/check-bw36-15-campaign-team-responsibilities.js",
+    "scripts/check-bw36-15r1-responsibility-workspace-continuity.js",
+    "scripts/check-bw36-16-adaptive-canvas-view-hierarchy.js",
+    "scripts/check-bw36-21a-r2-1-safe-workspace-switching.js",
+    "scripts/check-bw36-21b1-home-intelligence.js",
+    "scripts/check-bw36-21b2-home-insights-brain.js",
+    "scripts/check-bw36-23-brand-knowledge-postgres.js",
+    "scripts/check-bw36-23-initialization.js",
+    "scripts/check-bw36-23-logo-replay.js",
+    "scripts/check-bw36-7-workspace-backfill-preflight.js",
+    "scripts/check-bw36-7r2-application-identity-bridge.js",
+    "scripts/check-bw36-7r3-corrected-workspace-backfill-preflight.js",
+    "scripts/check-bw36-9-authorized-workspace-read-boundary.js",
+    "scripts/check-bw36-9r1-workspace-identity-resolution.js",
+    "scripts/check-bw9-initialize-canonical-brand-core.js",
+    "scripts/check-canonical-brand-foundation.js",
+    "scripts/check-workspace-brand-deletion.js",
+    "scripts/fixtures/bw20-existing-brand-members.sql",
+    "scripts/fixtures/bw36-13r5-local-runtime.js",
+    "scripts/fixtures/bw36-18-browser.js",
+    "scripts/fixtures/bw36-19r6-review-ux.js",
+    "scripts/fixtures/bw36-23-protected-memory.js",
+    "scripts/fixtures/bw36-historical-migrations.js",
+    "scripts/fixtures/home-browser.js"
+  ],
+  "changed_source_sha256": {
+    ".github/workflows/runtime-boot-safety.yml": "8bf551400ed9210b35740023ec98c112080263f29233a6a718031e057707778d",
+    "api/_brand-deletion.js": "9d978bfc62a3001c5ce0d4a5f7e0ed9e90ed88e017e452e0234f36407a8805c6",
+    "api/_brand-knowledge-write.js": "8e2623caf21a1055006fe79668821be53155aa1a0ba9a695ce458b9ea926ecb3",
+    "api/brands/[id]/logo.js": "a4ccd337182d4ea55faa2438c211e9b4a292f03b1c55b8c0af29f5ca47240f44",
+    "brand-profile-setup.js": "e109913d5cd8fbba8c67d29181a52d88a60ad597c0542d5529adb57307a262e8",
+    "brand-write-contract.js": "b915a28ac9dbc76d0192ed1183c24f4141f4318458821df114f9a8f8d6bb0cbd",
+    "home-foundation.js": "59c1bd3127f5c77e03843084800fe7fe1111c3d323abb3400ee46ed127c9c320",
+    "migrations/20261020_bw36_23_brand_knowledge_protection.sql": "2aa189d2d36cbcef47c4d47f51f84685ec8c521ebb4168b6e5d0bf7bd55c2c31",
+    "package.json": "e29d57d9f4d08f34a322f1e376bed3a012dc13acd0fa724d6f26b2219962c330",
+    "scripts/check-bw20-1-inline-brand-role-management.js": "b2ad795a1b8f25a656c3e12fd238794a666ea6c356b0a7b662651053bea60ef4",
+    "scripts/check-bw20-brand-team-roles.js": "1d444bc544954f0a9c236f465c28205f6237b5a2f449554025b50e5ebe7f35d8",
+    "scripts/check-bw33-5-1-social-publishing-destinations-rls.js": "3de2e82501adcce377dcd616c7d1273a22d1ecac732667dbbc9e8fca86da16e2",
+    "scripts/check-bw36-12-brand-logo-acquisition-and-projection.js": "01b8fe1c44a3c8c3000d753c7ac5a92189d32654ea585bf3fd827d12e55258c3",
+    "scripts/check-bw36-13r3-authoritative-project-creation.js": "da373383f29aff49ce72461dc4414b4455a07cf353f339da7440596ac37baedf",
+    "scripts/check-bw36-13r3r1-workspace-catalog-repair.js": "79f7808441d4961d4fe63d5e56782530dd10c6203885f67b8c25975cfa02c583",
+    "scripts/check-bw36-13r4-guided-brand-profile-setup.js": "6a5a4dd409c6d74f65fd41c2f42a7ce3a41458184ee762ea81e94fe1fed136a2",
+    "scripts/check-bw36-13r4r1-brand-profile-entry-and-workspace-actions.js": "3c0d795d3e5841b3d3c6b774333d32570628f40bafbfca1e01cecb788de0ddee",
+    "scripts/check-bw36-13r5-brand-lifecycle-stability.js": "f4d1c410fa9606c6251720f38e4e4c4d31089eaf69766b7e6fb666bae55aaaed",
+    "scripts/check-bw36-13r5r2-brand-workspace-regression-recovery.js": "23a33c3ed45eb8269ff1cf03faf18611e9956166fd81c2fc8e4adaed041d3830",
+    "scripts/check-bw36-13r5r3-durable-brand-logo-and-readiness.js": "57238f8fe6f3680539931716d42a5f618fec4af021329ee12066b0b0f0606ed6",
+    "scripts/check-bw36-13r5r4-brand-logo-persistence.js": "12de6eaeb8a87c5bf90f2ff28d106d4ab88bc48c0a7d6205fd9e5d5d87fa96cb",
+    "scripts/check-bw36-13r6-brand-profile-decision-and-deletion-ux.js": "4c64a0ef3233ff77366ecc9547a13073cf8c7f689b8ca5456efe8da188cf55c8",
+    "scripts/check-bw36-15-campaign-team-responsibilities.js": "7f896d657df9a469c30f4fd9679a1f3b415f4d64a27dd6bc0a50426f30076e58",
+    "scripts/check-bw36-15r1-responsibility-workspace-continuity.js": "62cb9f046bb858d44762382244dba5844ba8b0db698b4523dc5aefe0ae1e3733",
+    "scripts/check-bw36-16-adaptive-canvas-view-hierarchy.js": "467fd81ae9429ce56bc6731c8fb187762a56f7e7685fa05d07ed49340cb42905",
+    "scripts/check-bw36-21a-r2-1-safe-workspace-switching.js": "c5b810fd97b782e63f374fd16c1f9827d223d1230cdce2b0497d9e68cb8630ff",
+    "scripts/check-bw36-21b1-home-intelligence.js": "7001333e5c4708801390df23999bace8edf8045c77a5346e5e769b2e87e43aa2",
+    "scripts/check-bw36-21b2-home-insights-brain.js": "6f48caa874686cfa89cb996b8c9c2317c60adc1d4994320f3edbb66f6ebb445b",
+    "scripts/check-bw36-23-brand-knowledge-postgres.js": "9e5b36d2db1f1468e0ea5c4e6e7f76ba9b80aa577d6854889703fc05a5dc6647",
+    "scripts/check-bw36-23-initialization.js": "5c70540db091d6698dac0cf08b0f9091c4b80a406f42e226f4465c41dafa9c6c",
+    "scripts/check-bw36-23-logo-replay.js": "9d73e4ad1f5a8af7c3725537695295f1961ee6de6f8e38a5f58869843c171d1f",
+    "scripts/check-bw36-7-workspace-backfill-preflight.js": "a85b1b31dd07eebeb761d535f1b7c7932331e9f15a410964dc9877ac5d07db3d",
+    "scripts/check-bw36-7r2-application-identity-bridge.js": "6409b6acb5f3a57862262ab410a6d5ad1b709010ca1b8c77ff176bb304594580",
+    "scripts/check-bw36-7r3-corrected-workspace-backfill-preflight.js": "9a88264f3ea53d3b17f915e271a090384af70ff0efd02d5b223e7cb7b366c9f1",
+    "scripts/check-bw36-9-authorized-workspace-read-boundary.js": "f2f5b1fb97b5e5826de30c190a8efef131c4237c06683627eaee4d38e85daaf1",
+    "scripts/check-bw36-9r1-workspace-identity-resolution.js": "e30be0225b6971c02176082422e1fd89afc5ff8fbda164ec4936680440a4a2b7",
+    "scripts/check-bw9-initialize-canonical-brand-core.js": "32f4d3c12e959a84b0cb8157fac0d3a16fc126cc87e9da53524adadaafee8eea",
+    "scripts/check-canonical-brand-foundation.js": "c22e4edcc9fd366bed0f2d94a9e9405392017a28c8a5d99b589c9e76d8bf09da",
+    "scripts/check-workspace-brand-deletion.js": "b03bd8c87d6821e8329904c000c080284a52080954437fc99fedf787ef2e47f9",
+    "scripts/fixtures/bw20-existing-brand-members.sql": "c0dc7f0836366fd82d9155a4267d3bd015b5e50270b581152090d7325b4cd00f",
+    "scripts/fixtures/bw36-13r5-local-runtime.js": "2b6125257c6095216b57345c75a101898d83364ba4b8200ed4d381246fc6fffb",
+    "scripts/fixtures/bw36-18-browser.js": "4ea03d8c06b878efeed07799517ee371d658a93698f3708384e99a9b9cac4ed6",
+    "scripts/fixtures/bw36-19r6-review-ux.js": "f95d976395e7d935818126def062086ec33f0b195aae45997c29179cb62c3bda",
+    "scripts/fixtures/bw36-23-protected-memory.js": "3adbf9026bca67311e6c3340d73c0e262f4539e6217128fcf1bb6e7220f68a80",
+    "scripts/fixtures/bw36-historical-migrations.js": "d6022d2332a50b9cd9dca4d7f149d58909599f4fe7e5deb475491ae96c5498f0",
+    "scripts/fixtures/home-browser.js": "de632524b82d4538399546deb1f62d9fcbfd1bced6cb63978fc1d22b295ae312"
+  },
+  "workflow_sha256": "8bf551400ed9210b35740023ec98c112080263f29233a6a718031e057707778d",
+  "source_fingerprints": {
+    "unchanged": true,
+    "before_digest": "bfe29b2b74646ad8b373b026b883e9b5cd1bf8a3ec2e79888ea9bccc77881c2e",
+    "after_digest": "bfe29b2b74646ad8b373b026b883e9b5cd1bf8a3ec2e79888ea9bccc77881c2e",
+    "changed_paths": [],
+    "note": "Each corrected fixture is also targeted independently; only whole-process successful run blocks are counted."
+  },
+  "unresolved_recovery_failures": [],
+  "production_cutover_blockers": [
+    "Operator schema/grants/policies/triggers and external-writer inventory",
+    "Full application Board/Project/identity/catalog permission compatibility under separated runtime roles",
+    "Independent review-signing-key provisioning and credentials",
+    "Verified independent database/asset backup and restore and retention ownership",
+    "Initialization SERIALIZABLE/locking review, client restart/reconciliation coverage, separately approved cutover"
+  ]
+}

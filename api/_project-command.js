@@ -36,8 +36,7 @@ async function execute({db,user,canonicalEmail,input}) {
       if(brand.workspace_id!==workspace.id) reject('CROSS_WORKSPACE_BRAND');
     } else {
       if(!['owner','admin'].includes(membership.role)) reject('PERMISSION_DENIED');
-      brand=(await client.query(`INSERT INTO public.brands (workspace_id,owner_email,name,brand_core,revision)
-        VALUES ($1,$2,$3,$4::jsonb,1) RETURNING id,workspace_id,name,brand_core,revision,created_at,updated_at`,[workspace.id,canonicalEmail,input.brand.new_name,JSON.stringify(core())])).rows[0];
+      brand = await require('./_brand-knowledge-write').create({ client, email: canonicalEmail, brandId: crypto.randomUUID(), workspaceId: workspace.id, name: input.brand.new_name, core: core(), mutationId: crypto.randomUUID() });
       // owner_email is the established owner relationship; brand_members disallows role=owner.
       access={role:'owner',canCreateBrandBoards:true,canEditCanonicalBrand:true};
     }

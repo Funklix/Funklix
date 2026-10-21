@@ -11,7 +11,7 @@ class BrandDeletionError extends Error {
   }
 }
 
-async function deleteOwnedBrand({ brandId, ownerEmail, confirmationName, requestId }) {
+async function deleteOwnedBrand({ brandId, ownerEmail, confirmationName, requestId, input }) {
   if (!isBrandId(brandId)) throw new BrandDeletionError(400, 'INVALID_BRAND_ID');
   if (typeof confirmationName !== 'string' || !confirmationName || confirmationName.length > MAX_BRAND_NAME_LENGTH) {
     throw new BrandDeletionError(400, 'CONFIRMATION_REQUIRED');
@@ -22,24 +22,9 @@ async function deleteOwnedBrand({ brandId, ownerEmail, confirmationName, request
     await ensureBrandsTable();
     client = await pool.connect();
     await client.query('BEGIN');
-    const resolved = await client.query(
-      'SELECT id, name FROM brands WHERE id = $1 AND owner_email = $2 FOR UPDATE',
-      [brandId, ownerEmail]
-    );
-    const brand = resolved.rows[0];
-    if (!brand) throw new BrandDeletionError(404, 'BRAND_NOT_FOUND');
-    if (confirmationName !== brand.name) throw new BrandDeletionError(409, 'CONFIRMATION_MISMATCH');
-
-    // The locked Brand prevents concurrent foreign-key association inserts until commit.
-    // Current associations block deletion; never detach or cascade Boards.
-    const associated = await client.query('SELECT COUNT(*)::integer AS count FROM boards WHERE brand_id = $1', [brandId]);
-    const boardCount = Number(associated.rows[0].count);
-    if (!Number.isSafeInteger(boardCount) || boardCount < 0) throw new BrandDeletionError(500, 'BRAND_DELETE_FAILED');
-    if (boardCount > 0) throw new BrandDeletionError(409, 'BRAND_IN_USE', boardCount);
-    // Memberships have no lifecycle outside their Canonical Brand.
-    await client.query('DELETE FROM brand_members WHERE brand_id = $1', [brandId]);
-    const deleted = await client.query('DELETE FROM brands WHERE id = $1 AND owner_email = $2', [brandId, ownerEmail]);
-    if (deleted.rowCount !== 1) throw new Error('brand_delete_race');
+    if (!input || input.contract !== 'canonical-brand-write/v1' || !/^[1-9][0-9]*$/.test(input.expected_revision || '') || !Number.isSafeInteger(input.expected_logo_revision) || !isBrandId(input.mutation_id)) throw new BrandDeletionError(428, 'WRITE_CONTRACT_REQUIRED');
+    const command = { contract: input.contract, operation: 'delete', workspace_id: input.workspace_id, expected_revision: input.expected_revision, expected_logo_revision: input.expected_logo_revision, mutation_id: input.mutation_id, confirmation_name: confirmationName };
+    await require('./_brand-knowledge-write').lifecycle({ client, email: ownerEmail, brandId, command });
     await client.query('COMMIT');
     return { code: 'BRAND_DELETED', deletedBrandId: brandId, detachedBoardCount: 0 };
   } catch (error) {
@@ -47,8 +32,8 @@ async function deleteOwnedBrand({ brandId, ownerEmail, confirmationName, request
       try { await client.query('ROLLBACK'); } catch (_rollbackError) { /* original failure is authoritative */ }
     }
     if (error instanceof BrandDeletionError) throw error;
-    console.error('[BRAND_DELETE_FAILURE]', { code: 'BRAND_DELETE_TRANSACTION_FAILED' });
-    throw new BrandDeletionError(500, 'BRAND_DELETE_FAILED');
+    const failure = require('./_brand-knowledge-write').mapError(error);
+    throw new BrandDeletionError(failure.status, failure.code, failure.boardCount);
   } finally {
     client?.release();
   }

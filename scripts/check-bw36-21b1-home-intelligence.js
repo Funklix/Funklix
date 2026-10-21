@@ -182,13 +182,17 @@ async function main() {
         if(width<800){
           await team(p).evaluate(e=>e.scrollIntoView({block:'start',behavior:'instant'}));await p.screenshot({path:path.join(dir,`team-${width}-${theme}-${lang}.png`)});
           await action(p,'responsibilities').click();await p.locator('#campaign-responsibilities').waitFor();await p.locator('#campaign-responsibilities button').first().click();
+          await p.locator('#campaign-responsibilities').waitFor({state:'detached'});
+          await p.waitForFunction(()=>document.activeElement?.dataset.homeAction==='responsibilities');
         }
       }
       fs.writeFileSync(path.join(dir,'geometry.json'),JSON.stringify(geometry,null,2));
       await p.evaluate(Y=>{const w=state.workspaceCatalog.value.workspaces[0];w.brands.find(b=>b.id===Y).name='VeryLongBrandName'.repeat(20);state.currentBoardName='LongBoardName'.repeat(30);refreshDashboardIfVisible();},Y);
       assert(await brand(p).evaluate(e=>e.scrollWidth<=e.clientWidth+1));assert(await team(p).evaluate(e=>e.scrollWidth<=e.clientWidth+1));
       await action(p,'learnings').focus();assert.equal(await action(p,'learnings').evaluate(e=>document.activeElement===e),true);
-      await refresh(p);await waitCount(p,9);assert.equal(await action(p,'learnings').evaluate(e=>document.activeElement===e),true);
+      const focusRead={started:defer(),release:defer()};f.holds.push(focusRead);
+      await refresh(p);await focusRead.started.promise;assert.equal(await action(p,'learnings').evaluate(e=>document.activeElement===e),true,'Focus remains on the bounded reauthorization placeholder');
+      focusRead.release.resolve();await waitCount(p,9);assert.equal(await action(p,'learnings').evaluate(e=>document.activeElement===e),true);
       await p.keyboard.press('Enter');await p.waitForFunction(()=>state.activeView==='brand-profile');await f.close();
     });
     await check('responsibility summary refuses stale/duplicate identity and matches only actual owner email',()=>{

@@ -21,6 +21,7 @@ async function main() {
     c.workspaces.push(...[W2, W3].map((id, i) => ({ id, name: 'Target ' + i, role: 'viewer', revision: 1, avatar_url: null, locale: null, brands: [], boards: [] })));
     const f = { r, catalog: c, signedIn: true, writes: [], errors: [], pending: [], failSave: 0, offlineSave: false, failCatalog: false };
     const page = await browser.newPage(); f.page = page; page.setDefaultTimeout(15000);
+    page.on('dialog', dialog => { if(dialog.type()==='confirm'&&/^Review (?:these Brand changes:|logo change:)/.test(dialog.message()))void dialog.accept(); else void dialog.dismiss(); });
     page.on('pageerror', e => { f.errors.push(e.message); console.error('BROWSER', e.message); });
     await page.route('**/*', async intercept => {
       const req = intercept.request(), url = new URL(req.url()), method = req.method();
@@ -52,7 +53,7 @@ async function main() {
         return intercept.fulfill({ json: data });
       }
       if (url.pathname.startsWith('/api/brands')) {
-        const res = await r.request(method, url.pathname, req.postDataJSON());
+        const res = await r.request(method, url.pathname, req.postDataJSON(), undefined, req.headers());
         return intercept.fulfill({ status: res.statusCode, json: res.body });
       }
       if (url.pathname === '/api/social-connections') return intercept.fulfill({ json: { connections: [] } });
@@ -116,6 +117,10 @@ async function main() {
   async function observeMutations(f) {
     await f.page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
     await f.page.evaluate(() => {
+      // Account for the fixture's deliberate foreground edit before observing
+      // a late AI response. The ordinary dirty watcher must not look like a
+      // stale-response autosave when the browser is slow.
+      detectDirtyFromSnapshot(); clearAutosaveTimer();
       window.staleCalls = [];
       for (const name of ['updateNodeCard', 'fillInspector', 'saveCampaignCanvasState', 'addEdge', 'setSaveStatus', 'renderCampaignCanvasFromStateIfNeeded']) {
         const original = window[name]; window[name] = (...args) => { window.staleCalls.push(name); return original(...args); };
@@ -501,6 +506,7 @@ async function main() {
       await f.page.evaluate(() => { state.isSaving = true; });
       await f.page.locator('#home-workspace-select').selectOption(W2);
       await f.page.locator('#workspace-switch-status').waitFor();
+      await f.page.evaluate(() => homeFoundationController.sync());
       assert.match(await f.page.locator('#workspace-switch-status').innerText(), /Finish the Board save/);
       assert.equal(await f.page.locator('#home-workspace-select').inputValue(), W);
       assert.equal(await f.page.evaluate(() => state.currentBoardId), D);

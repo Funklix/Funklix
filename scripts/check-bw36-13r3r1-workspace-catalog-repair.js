@@ -210,7 +210,7 @@ let cookie;
     }
     // Execute the authoritative service against the existing invented transaction fixture.
     const r3 = fs.readFileSync('scripts/check-bw36-13r3-authoritative-project-creation.js', 'utf8');
-    const transaction = { structuredClone, Promise, command }; vm.createContext(transaction);
+    const transaction = { structuredClone, Promise, command, assert }; vm.createContext(transaction);
     vm.runInContext(r3.slice(r3.indexOf("const I='"), r3.indexOf('const input=')) + '\nthis.MemoryDb=MemoryDb;this.W=W;this.B=B;', transaction);
     for (const brandChoice of [{ existing_id: transaction.B }, { new_name: 'New Brand' }]) {
       const db = new transaction.MemoryDb({ empty: !!brandChoice.new_name }), input = command.build(transaction.W, 'Project', brandChoice, 'write-1'), res = response();

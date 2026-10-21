@@ -15,9 +15,9 @@ function seed(r) {
 }
 async function boundaries() {
   const r=runtime();seed(r);const snapshot=clone(r.db.boards), initial=clone(r.db.brands[0].brand_core);
-  const fetchImpl=async(url,init={})=>{const res=await r.request(init.method||'GET',url,init.body?JSON.parse(init.body):undefined);return{status:res.statusCode,ok:res.statusCode<300,json:async()=>res.body};};
+  const fetchImpl=async(url,init={})=>{const res=await r.request(init.method||'GET',url,init.body?JSON.parse(init.body):undefined, undefined, init.headers);return{status:res.statusCode,ok:res.statusCode<300,json:async()=>res.body};};
   let context={account:{},generation:1,brandId:B,workspaceId:W,authorized:true};
-  const make=async(overrides={})=>profile.createSession({brand:(await r.request('GET',`/api/brands/${B}`)).body,getContext:()=>context,fetchImpl,validateBrand:(b,id)=>b?.id===id&&Number.isSafeInteger(b.revision)&&b.brand_core&&b.access,requestId:()=> 'recovery-logo',onSave(){},onLogo(){},...overrides});
+  const make=async(overrides={})=>profile.createSession({brand:(await r.request('GET',`/api/brands/${B}`)).body,getContext:()=>context,fetchImpl,validateBrand:(b,id)=>b?.id===id&&Number.isSafeInteger(b.revision)&&b.brand_core&&b.access,requestId: require('node:crypto').randomUUID,confirmReview: async () => true, onSave(){},onLogo(){},...overrides});
   let s=await make();assert.equal(s.dirty(),false);s.state.name='Appics updated';assert(await s.save());assert.equal(s.dirty(),false);assert.deepEqual(r.db.brands[0].brand_core,initial);assert.deepEqual(clone(r.db.boards),snapshot);
   s.state.core.brandDNA.positioning='Confirmed DNA';assert(s.dirty());assert(await s.save());assert.equal((await make()).state.core.brandDNA.positioning,'Confirmed DNA');
   const accepted=clone(s.state.core.brandDNA.avatar);assert(await s.generateDna());assert.deepEqual(s.state.core.brandDNA.avatar,accepted);assert(await s.acceptDna());assert.deepEqual(s.state.core.brandDNA.avatar,accepted);assert.deepEqual(s.state.core.brandDNA.futureDna,{keep:['all']});
@@ -27,9 +27,9 @@ async function boundaries() {
   s=await make({fetchImpl:async(url,init)=>init?.method==='PUT'?fetchImpl(url,init):{ok:false,status:503,json:async()=>({})}});s.state.name='Stored but unverified';assert.equal(await s.save(),false);assert(s.dirty());assert.equal(r.db.brands[0].name,'Stored but unverified');
   s=await make();s.state.website='https://example.test/';assert(await s.analyze());assert(s.state.candidate);assert.equal(r.db.brands[0].logo_revision,1,'Unconfirmed candidate cannot overwrite');assert.equal(await s.useLogo(),false,'Manual upload retains priority');assert.equal(r.db.brands[0].logo_revision,1);assert(await s.removeLogo());assert(await s.useLogo()===false,'Remove clears old candidate');
   s=await make();s.state.website='https://example.test/';assert(await s.analyze());assert(await s.useLogo());assert.equal(r.db.brands[0].logo_source,'discovered');assert.equal(r.db.brands[0].logo_revision,3);
-  const before=clone(r.db);const blocked=await r.request('DELETE',`/api/brands/${B}`,{confirmationName:r.db.brands[0].name,boardCount:0});assert.equal(blocked.statusCode,409);assert.equal(blocked.body.boardCount,1);assert.deepEqual(clone(r.db.brands),before.brands);assert.deepEqual(clone(r.db.boards),snapshot);
-  const mark=await r.request('DELETE',`/api/brands/${M}`,{confirmationName:'markmans'});assert.equal(mark.body.deletedBrandId,M);assert.equal(r.db.brands.length,1);assert.deepEqual(clone(r.db.boards),snapshot);
-  for(const role of ['admin','editor','viewer']){r.db.brands[0].owner_email='other@example.test';r.db.brandRole=role;const next=await make();next.state.name='Role '+role;assert.equal(await next.save(),role!=='viewer');const result=await r.request('POST','/api/generate-brand-avatar',{brandId:B,revision:r.db.brands[0].revision});assert.equal(result.statusCode,role==='viewer'?403:200);assert.equal((await r.request('DELETE',`/api/brands/${B}`,{confirmationName:r.db.brands[0].name})).statusCode,404);}
+  const before=clone(r.db);const blocked=await r.request('DELETE',`/api/brands/${B}`,{...require('../brand-write-contract').command(r.db.brands[0],{},W),expected_logo_revision:r.db.brands[0].logo_revision,confirmationName:r.db.brands[0].name,boardCount:0});assert.equal(blocked.statusCode,409);assert.equal(r.db.boards.filter(b=>b.brand_id===B).length,1);assert.deepEqual(clone(r.db.brands),before.brands);assert.deepEqual(clone(r.db.boards),snapshot);
+  const mark=await r.request('DELETE',`/api/brands/${M}`,{...require('../brand-write-contract').command(r.db.brands.find(b=>b.id===M),{},W),expected_logo_revision:0,confirmationName:'markmans'});assert.equal(mark.body.deletedBrandId,M);assert.equal(r.db.brands.length,1);assert.deepEqual(clone(r.db.boards),snapshot);
+  for(const role of ['admin','editor','viewer']){r.db.brands[0].owner_email='other@example.test';r.db.brandRole=role;const next=await make();next.state.name='Role '+role;assert.equal(await next.save(),role!=='viewer');const result=await r.request('POST','/api/generate-brand-avatar',{brandId:B,revision:r.db.brands[0].revision});assert.equal(result.statusCode,role==='viewer'?403:200);assert.equal((await r.request('DELETE',`/api/brands/${B}`,{...require('../brand-write-contract').command(r.db.brands[0],{},W),expected_logo_revision:r.db.brands[0].logo_revision,confirmationName:r.db.brands[0].name} )).statusCode,403);}
   r.db.brandRole='viewer';r.db.workspaceRole='owner';assert.equal((await r.request('POST','/api/discover-brand-dna',{brandId:B,revision:r.db.brands[0].revision})).statusCode,403,'Workspace owner cannot infer Brand rights');assert.equal((await r.request('POST','/api/generate-brand-avatar',{brandId:B,revision:1},null)).statusCode,401);
   s=await make();context={...context,account:{}};assert.equal(await s.save(),false);s.invalidate();assert.equal(s.state.avatarDraft,null);assert.deepEqual(s.state.core,{});
   const reads=r.requests.filter(x=>x.method==='GET'&&x.path===`/api/brands/${B}`);assert(reads.length>10);assert.deepEqual(clone(r.db.boards),snapshot);assert(r.db.queries.every(q=>!/CREATE TABLE|ALTER TABLE|DROP TABLE|UPDATE boards SET brand_id/.test(q)));
@@ -44,14 +44,14 @@ async function browserJourney() {
   const r=runtime();seed(r);const root=path.resolve(__dirname,'..');const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH||'/usr/bin/chromium',args:['--no-sandbox']});
   try {
     const page=await browser.newPage({viewport:{width:1440,height:900}});const errors=[];let native=0;
-    page.on('pageerror',e=>errors.push(e.message));page.on('dialog',d=>{native++;void d.dismiss();});
+    page.on('pageerror',e=>errors.push(e.message));page.on('dialog',d=>{if(d.type()==='confirm'&&/^Review (?:these Brand changes:|logo change:)/.test(d.message())){void d.accept();return;}native++;void d.dismiss();});
     await page.route('**/*',async route=>{const req=route.request(),url=new URL(req.url());
       if(url.hostname==='example.test')return route.fulfill({contentType:'image/png',body:png});
       assert.equal(url.hostname,'localhost','No external traffic');
       if(url.pathname.startsWith('/api/')){
         if(url.pathname==='/api/auth/session')return route.fulfill({json:{user:null}});
-        if(/^\/api\/(brands\/[^/]+(?:\/logo)?|discover-brand-dna|generate-brand-avatar|analyze-brand-domain)$/.test(url.pathname)){
-          const res=await r.request(req.method(),url.pathname,req.postDataJSON()||undefined);return Buffer.isBuffer(res.body)?route.fulfill({status:res.statusCode,contentType:'image/png',body:res.body}):route.fulfill({status:res.statusCode,json:res.body});}
+        if(/^\/api\/(brands\/[^/]+(?:\/(?:logo|write-preview))?|discover-brand-dna|generate-brand-avatar|analyze-brand-domain)$/.test(url.pathname)){
+          const res=await r.request(req.method(),url.pathname,req.postDataJSON()||undefined, undefined, req.headers());return Buffer.isBuffer(res.body)?route.fulfill({status:res.statusCode,contentType:'image/png',body:res.body}):route.fulfill({status:res.statusCode,json:res.body});}
         return route.fulfill({json:{boards:[],brands:r.catalog().workspaces[0].brands,members:[],nodes:[],presence:[]}});
       }
       const file=path.resolve(root,url.pathname==='/'?'index.html':'.'+url.pathname);return route.fulfill(fs.existsSync(file)&&fs.statSync(file).isFile()?{path:file}:{body:''});

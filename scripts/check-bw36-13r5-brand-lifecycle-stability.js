@@ -10,12 +10,12 @@ const ROOT = path.resolve(__dirname, '..');
 async function boundaries() {
   const r = runtime();
   const fetchImpl = async (url, init = {}) => {
-    const response = await r.request(init.method || 'GET', url, init.body ? JSON.parse(init.body) : undefined);
+    const response = await r.request(init.method || 'GET', url, init.body ? JSON.parse(init.body) : undefined, undefined, init.headers);
     return { status: response.statusCode, ok: response.statusCode < 300, json: async () => response.body };
   };
   const opened = (await r.request('GET', `/api/brands/${B}`)).body;
   const account = {}, options = { brand: opened, getContext: () => ({ account, generation: 1, brandId: B, workspaceId: W, authorized: true }), fetchImpl,
-    validateBrand: (b,id) => b?.id === id && b.brand_core && b.access?.canEditCanonicalBrand === true && Number.isSafeInteger(b.revision), requestId: () => 'local-logo', onSave() {}, onLogo() {} };
+    validateBrand: (b,id) => b?.id === id && b.brand_core && b.access?.canEditCanonicalBrand === true && Number.isSafeInteger(b.revision), requestId: require('node:crypto').randomUUID, confirmReview: async () => true, onSave() {}, onLogo() {} };
   const session = profile.createSession(options);
   session.state.website = 'https://example.test/';
   assert.equal(await session.analyze(), true); assert(session.state.candidate); for (const key of Object.keys(session.state.proposals)) await session.applyProposal(key);
@@ -24,7 +24,7 @@ async function boundaries() {
   assert.equal(loaded.brand_core.brandCore, r.suggestions.brandCore); assert.equal(loaded.brand_core.valueProposition, r.suggestions.valueProposition);
   const snapshot = clone(r.db.boards[0]);
   const discovered = await session.useLogo(); assert.equal(discovered, true); assert.equal(r.objects.size, 1);
-  assert.equal(await session.removeLogo(), true); assert.equal(r.objects.size, 0);
+  assert.equal(await session.removeLogo(), true); assert.equal(r.objects.size, 1);
   await session.chooseFile({ type: 'image/png', size: png.length, name: 'local-logo.png' }, async () => png.toString('base64'));
   r.setMissingSecret(true);
   assert.equal(await session.upload(), false); assert.equal(session.state.file.name, 'local-logo.png');
@@ -46,7 +46,7 @@ async function boundaries() {
   localFailure.state.core.personas.push({ name: 'Full retained draft', note: 'Retained' }); localFailure.state.dirty = true;
   const retained = clone(localFailure.state.core); r.db.failPut = true;
   assert.equal(await localFailure.save(), false); assert.deepEqual(localFailure.state.core, retained); assert(localFailure.dirty());
-  assert(localFailure.state.message.includes('database')); r.db.failPut = false;
+  assert(localFailure.state.message.includes('Protected Brand saving is unavailable')); r.db.failPut = false;
   r.db.brands[0].revision++; assert.equal(await localFailure.save(), false); assert.deepEqual(localFailure.state.core, retained); assert(localFailure.state.message.includes('changed elsewhere'));
   assert.equal(await localFailure.reload(), true); assert.deepEqual(localFailure.state.core, retained); assert.equal(await localFailure.save(), true);
   const invalid = profile.createSession({ ...options, brand: (await r.request('GET', `/api/brands/${B}`)).body, fetchImpl: async () => ({ ok:true, status:200, json:async()=>({}) }) });
@@ -60,7 +60,7 @@ async function boundaries() {
   const created = await r.request('POST','/api/brands',input); assert.equal(created.statusCode,201); assert.equal(created.body.brand.name,'Created Brand');
   const replay = await r.request('POST','/api/brands',input); assert.equal(replay.body.created,false); assert.equal(replay.body.brand.id,created.body.brand.id);
   const renamed = created.body.brand;
-  assert.equal((await r.request('PUT',`/api/brands/${renamed.id}`,{name:'Edited name',brand_core:renamed.brand_core,revision:1})).statusCode,200);
+  assert.equal((await r.request('PUT',`/api/brands/${renamed.id}`,require('../brand-write-contract').command(renamed,{name:'Edited name'},W))).statusCode,200);
   assert.equal((await r.request('POST','/api/brands',input)).body.created,false,'Original creation input remains idempotent after edits');
   assert.equal((await r.request('POST','/api/brands',{...input,name:'Different input'})).statusCode,409);
   assert.equal(r.db.boards.length,1,'Standalone creation makes no Board');
@@ -69,9 +69,9 @@ async function boundaries() {
   const result = await r.request('POST','/api/projects',project); assert.equal(result.statusCode,201); command.validate(result.body,project);
   assert.equal((await r.request('POST','/api/projects',project)).body.created,false); assert.equal(r.db.boards.length,2); assert.equal(r.db.brands.length,3);
   const admin = {email:'unrelated-admin@example.test'}; r.db.brandRole='admin';
-  assert.equal((await r.request('DELETE',`/api/brands/${B}`,{confirmationName:r.db.brands[0].name},admin)).statusCode,404);
-  assert.equal((await r.request('DELETE',`/api/brands/${B}`,{confirmationName:'wrong'})).statusCode,409);
-  const blocked = await r.request('DELETE',`/api/brands/${B}`,{confirmationName:r.db.brands[0].name}); assert.equal(blocked.body.code,'BRAND_IN_USE'); assert.equal(blocked.body.boardCount,1);
+  assert.equal((await r.request('DELETE',`/api/brands/${B}`,{...require('../brand-write-contract').command(r.db.brands[0],{},W),expected_logo_revision:r.db.brands[0].logo_revision,confirmationName:r.db.brands[0].name},admin)).statusCode,403);
+  assert.equal((await r.request('DELETE',`/api/brands/${B}`,{...require('../brand-write-contract').command(r.db.brands[0],{},W),expected_logo_revision:r.db.brands[0].logo_revision,confirmationName:'wrong'})).statusCode,409);
+  const blocked = await r.request('DELETE',`/api/brands/${B}`,{...require('../brand-write-contract').command(r.db.brands[0],{},W),expected_logo_revision:r.db.brands[0].logo_revision,confirmationName:r.db.brands[0].name}); assert.equal(blocked.body.code,'BRAND_IN_USE'); assert.equal(r.db.boards.filter(b=>b.brand_id===B).length,1);
   assert.equal(r.db.boards[0].brand_id,B); assert.deepEqual(r.db.boards[0].brand_core_snapshot,snapshot.brand_core_snapshot); assert.deepEqual(r.db.boards[0].canvas_json,snapshot.canvas_json);
   assert.equal((await r.request('GET',`/api/boards/${D}`)).statusCode,200);
   assert(!JSON.stringify(r.logs).includes(EMAIL)); assert(!JSON.stringify(r.logs).includes('private SQL'));
@@ -83,7 +83,7 @@ async function browserJourney() {
   try {
     const page = await browser.newPage({ viewport: { width: 1440, height: 900 } }); page.setDefaultTimeout(12000);
     const errors = [], dialogs = []; let dropCreationResponse = false, dropProjectResponse = false, pausePut = null, nativeFail = false;
-    page.on('dialog', dialog => { nativeFail = true; dialogs.push(dialog.type()); void dialog.dismiss(); });
+    page.on('dialog', dialog => { if (dialog.type()==='confirm' && /^Review (?:these Brand changes:|logo change:)/.test(dialog.message())) { void dialog.accept(); return; } nativeFail = true; dialogs.push(dialog.type()); void dialog.dismiss(); });
     page.on('pageerror', error => errors.push(error.message));
     page.on('console', message => { if (message.type() === 'error' && !/Failed to load resource|net::ERR_FAILED/.test(message.text())) errors.push(message.text()); });
     await page.route('**/*', async route => {
@@ -91,9 +91,9 @@ async function browserJourney() {
       if (url.pathname.startsWith('/api/')) {
         if (url.pathname === '/api/auth/session') return route.fulfill({json:{user:null}});
         if (url.pathname === '/api/workspaces/catalog') return route.fulfill({json:r.catalog()});
-        if (/^\/api\/(brands(?:\/[^/]+(?:\/logo)?)?|analyze-brand-domain|projects|boards\/[^/]+)$/.test(url.pathname) && !(url.pathname === '/api/brands' && req.method() === 'GET')) {
+        if (/^\/api\/(brands(?:\/[^/]+(?:\/(?:logo|write-preview))?)?|analyze-brand-domain|projects|boards\/[^/]+)$/.test(url.pathname) && !(url.pathname === '/api/brands' && req.method() === 'GET')) {
           if (req.method() === 'PUT' && pausePut) await new Promise(resolve => { pausePut.release = resolve; });
-          const res = await r.request(req.method(),url.pathname,req.postDataJSON() || undefined);
+          const res = await r.request(req.method(),url.pathname,req.postDataJSON() || undefined, undefined, req.headers());
           if (url.pathname === '/api/projects' && dropProjectResponse) { dropProjectResponse=false; return route.abort('failed'); }
           if (url.pathname === '/api/brands' && req.method() === 'POST' && dropCreationResponse) { dropCreationResponse=false; return route.abort('failed'); }
           return Buffer.isBuffer(res.body) ? route.fulfill({status:res.statusCode,contentType:'image/png',body:res.body}) : route.fulfill({status:res.statusCode,json:res.body});
@@ -222,7 +222,7 @@ async function browserJourney() {
     const projectId=await page.evaluate(()=>projectSetupContext.outcome.board.id), projectBrandId=await page.evaluate(()=>canonicalBrandDetail.brandId);
     const beforeProjectCounts=[r.db.boards.length,r.db.brands.length], posts=r.requests.filter(q=>q.path==='/api/projects').length;
     await clickKey('Overview');await page.locator('[data-profile-key="Brand description"]').fill('Project reusable profile');r.db.failPut=true;await clickKey('Save Brand Profile and continue');
-    await page.waitForFunction(()=>brandProfileController.state.message.includes('database'));assert.equal(await page.evaluate(()=>!!projectSetupContext),true);assert.deepEqual([r.db.boards.length,r.db.brands.length],beforeProjectCounts);
+    await page.waitForFunction(()=>brandProfileController.state.message.includes('Protected Brand saving is unavailable'));assert.equal(await page.evaluate(()=>!!projectSetupContext),true);assert.deepEqual([r.db.boards.length,r.db.brands.length],beforeProjectCounts);
     r.db.failPut=false;await clickKey('Save Brand Profile and continue');await page.waitForFunction(()=>!projectSetupContext);
     assert.equal(await page.evaluate(()=>state.currentBoardId),projectId);assert.equal(new URL(page.url()).pathname,`/boards/${projectId}`);assert.equal(r.db.brands.find(b=>b.id===projectBrandId).brand_core.brandCore,'Project reusable profile');
     assert.equal(r.requests.filter(q=>q.path==='/api/projects').length,posts);assert.deepEqual([r.db.boards.length,r.db.brands.length],beforeProjectCounts);
