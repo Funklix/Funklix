@@ -130,10 +130,11 @@ async function authorize(client, sessionUser, brandId, write) {
   // Same predicate as getBrandAccess; no Workspace or Board membership join, no runtime DDL.
   // The Brand lock serializes Learning operations and existing Brand deletion. Membership
   // and identity locks prevent concurrent revocation/disable between validation and commit.
+  await client.query('SELECT tendra_runtime_private.lock_brand($1,$2)', [brandId,write]);
   const result = await client.query(`SELECT b.id, b.name, b.revision,
     CASE WHEN b.owner_email = $2 THEN 'owner' ELSE bm.role END AS role
     FROM public.brands b LEFT JOIN public.brand_members bm ON bm.brand_id = b.id AND bm.email = $2
-    WHERE b.id = $1 AND (b.owner_email = $2 OR bm.role IN ('admin','editor','viewer')) FOR ${write ? 'UPDATE' : 'SHARE'} OF b`, [brandId, identity.canonicalEmail]);
+    WHERE b.id = $1 AND (b.owner_email = $2 OR bm.role IN ('admin','editor','viewer'))`, [brandId, identity.canonicalEmail]);
   const brand = result.rows[0];
   if (!brand) fail('BRAND_UNAVAILABLE', 404);
   const membership = await client.query(`SELECT role FROM public.brand_members WHERE brand_id = $1 AND email = $2 FOR SHARE`, [brandId, identity.canonicalEmail]);

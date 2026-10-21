@@ -49,7 +49,7 @@ async function contracts() {
   assert.equal((await r.request('GET',URL_PATH+'?offset=10001')).body.error.code,'INVALID_REQUEST');
   r.db.missingSchema=true;const missing=await call('GET');assert.equal(missing.statusCode,503);assert.equal(missing.body.error.code,'SCHEMA_UNAVAILABLE');assert(!JSON.stringify(missing.body).includes('private'));r.db.missingSchema=false;
   assert.deepEqual(clone(r.base.db),before,'No Brand/Board/Core/snapshot/catalog mutation');
-  assert(r.db.queries.some(q=>q.sql.includes('FOR UPDATE OF b')));assert(r.db.queries.some(q=>q.sql.includes('FROM public.brand_members')&&q.sql.includes('FOR SHARE')));
+  assert(r.db.queries.some(q=>q.sql.includes('SELECT tendra_runtime_private.lock_brand(')&&q.args[1]===true));assert(r.db.queries.some(q=>q.sql.includes('FROM public.brand_members')&&q.sql.includes('FOR SHARE')));
   const sql=fs.readFileSync('migrations/20261011_bw36_17_governed_brand_learnings.sql','utf8');
   for(const contract of ['ENABLE ROW LEVEL SECURITY','FROM PUBLIC, anon, authenticated','ON DELETE CASCADE','learning_history_immutable','learning_approved_immutable','FOREIGN KEY (brand_id, supersedes_learning_id)','brand_learnings_approved_key','brand_learnings_proposal_key'])assert(sql.includes(contract),contract);
   assert(!/CREATE POLICY|auth\.uid|auth\.users|UPDATE public\.(brands|boards|workspaces)|INSERT INTO public\.(brands|boards|workspaces)/.test(sql));

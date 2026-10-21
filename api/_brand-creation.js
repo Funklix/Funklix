@@ -23,7 +23,8 @@ async function createWorkspaceBrand({ db, email, input }) {
     // Global ID lock serializes simultaneous retries, including across workspaces.
     await client.query('SELECT pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended($1, 36135))', [input.id]);
     const fingerprint = createHash('sha256').update(JSON.stringify([workspace.id, email, input.name])).digest('hex');
-    let row = (await client.query(`SELECT ${BRAND_COLUMNS} FROM public.brands WHERE id=$1 FOR UPDATE`, [input.id])).rows[0];
+    await client.query('SELECT tendra_runtime_private.lock_brand($1,$2)', [input.id,true]);
+    let row = (await client.query(`SELECT ${BRAND_COLUMNS} FROM public.brands WHERE id=$1`, [input.id])).rows[0];
     const created = !row;
     if (row) {
       if (row.workspace_id !== workspace.id || row.owner_email !== email || row.brand_core?._creation?.fingerprint !== fingerprint) reject(409, 'IDEMPOTENCY_CONFLICT');

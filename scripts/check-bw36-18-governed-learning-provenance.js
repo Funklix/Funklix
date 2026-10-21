@@ -26,6 +26,7 @@ async function databaseChecks() {
   const canvas={nodes:[{id:'node-1',type:'Content',title:'Saved title',content:'Never extract hidden content'}]};
   async function board(){await pg.query('INSERT INTO boards VALUES ($1,$2,$3,$4,$5::jsonb,$6,NULL,$7)',[BOARD,B,W,'Saved Board',JSON.stringify(canvas),time,EMAIL]);}
   await board();
+  await pg.exec(fs.readFileSync('scripts/fixtures/bw36-23a-r3-lock.sql','utf8'));
   for(const file of ['20261011_bw36_17_governed_brand_learnings.sql','20261011_bw36_17r1_learning_provenance_schema.sql','20261012_bw36_17r2_learning_provenance_recovery.sql'])await pg.exec(fs.readFileSync(`migrations/${file}`,'utf8'));
   const queries=[];
   let failEvent=false;

@@ -7,27 +7,9 @@ let schemaReadyPromise;
 
 async function ensureDocumentTables() {
   await ensureBoardsTable();
-  if (!schemaReadyPromise) schemaReadyPromise = pool.query(`
-    CREATE TABLE IF NOT EXISTS brand_documents (
-      id UUID PRIMARY KEY DEFAULT gen_random_uuid(), board_id UUID NOT NULL REFERENCES boards(id) ON DELETE CASCADE,
-      tile_id TEXT NOT NULL, source_type TEXT NOT NULL CHECK (source_type IN ('pitch_deck','whitepaper')),
-      original_filename TEXT NOT NULL, display_filename TEXT NOT NULL, media_type TEXT NOT NULL, extension TEXT NOT NULL,
-      file_size INTEGER NOT NULL, content_hash TEXT NOT NULL, storage_key TEXT NOT NULL UNIQUE,
-      upload_status TEXT NOT NULL DEFAULT 'uploaded', malware_scan_status TEXT NOT NULL DEFAULT 'not_configured',
-      page_count INTEGER, page_count_status TEXT NOT NULL, schema_version INTEGER NOT NULL DEFAULT 1,
-      created_by TEXT NOT NULL, uploaded_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), replaced_at TIMESTAMPTZ,
-      deleted_at TIMESTAMPTZ, active BOOLEAN NOT NULL DEFAULT TRUE, revision INTEGER NOT NULL DEFAULT 1
-    );
-    CREATE UNIQUE INDEX IF NOT EXISTS brand_documents_active_tile_uidx ON brand_documents(board_id,tile_id) WHERE active AND deleted_at IS NULL;
-    CREATE TABLE IF NOT EXISTS brand_document_upload_intents (
-      id UUID PRIMARY KEY DEFAULT gen_random_uuid(), request_id TEXT NOT NULL UNIQUE, board_id UUID NOT NULL REFERENCES boards(id) ON DELETE CASCADE,
-      tile_id TEXT NOT NULL, source_type TEXT NOT NULL CHECK (source_type IN ('pitch_deck','whitepaper')),
-      original_filename TEXT NOT NULL, display_filename TEXT NOT NULL, declared_media_type TEXT NOT NULL, extension TEXT NOT NULL,
-      storage_key TEXT NOT NULL UNIQUE, expected_document_id UUID, created_by TEXT NOT NULL,
-      status TEXT NOT NULL DEFAULT 'pending', created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), expires_at TIMESTAMPTZ NOT NULL
-    );
-    CREATE UNIQUE INDEX IF NOT EXISTS brand_document_pending_tile_uidx ON brand_document_upload_intents(board_id,tile_id) WHERE status = 'pending';
-  `).then(() => ensureDocumentProcessingTables()).catch((error) => { schemaReadyPromise = null; throw error; });
+  if (!schemaReadyPromise) schemaReadyPromise = require('./_runtime-schema').requireRuntimeTables(pool,
+    ['brand_documents','brand_document_upload_intents']).then(() => ensureDocumentProcessingTables())
+    .catch(error => { schemaReadyPromise=null; throw error; });
   return schemaReadyPromise;
 }
 

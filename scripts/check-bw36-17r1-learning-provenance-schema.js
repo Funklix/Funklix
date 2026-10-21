@@ -34,6 +34,7 @@ async function setup() {
   await pg.query('INSERT INTO app_identities VALUES ($1,$2,$3,1)', [I, EMAIL, 'active']);
   await pg.query('INSERT INTO brands VALUES ($1,$2,$3,1)', [B, EMAIL, 'Invented Brand']);
   await pg.query('INSERT INTO boards(id,brand_id) VALUES ($1,$2)', [BOARD, B]);
+  await pg.exec(fs.readFileSync('scripts/fixtures/bw36-23a-r3-lock.sql','utf8'));
   await pg.exec(original);
   return pg;
 }

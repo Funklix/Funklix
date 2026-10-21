@@ -4,7 +4,9 @@ const path = require('path');
 
 const root = path.join(__dirname, '..');
 const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
-const storage = read('api/_boards-storage.js');
+// Legacy schema shape is now an operator-owned fixture; runtime performs reads only.
+const storage = read('scripts/fixtures/bw36-23a-r3-boards.sql');
+assert.doesNotMatch(read('api/_boards-storage.js'), /CREATE TABLE|ALTER TABLE|CREATE INDEX/);
 const collection = read('api/boards/index.js');
 const item = read('api/boards/[id].js');
 const app = read('app.js');
@@ -17,7 +19,7 @@ for (const field of fields) {
 }
 assert.match(storage, /brand_core_source_revision IS NULL OR brand_core_source_revision > 0/);
 assert.doesNotMatch(storage, /UPDATE boards[\s\S]*brand_core_source_(?:revision|updated_at)|UPDATE boards[\s\S]*brand_core_snapshot_copied_at/, 'schema setup never backfills provenance');
-assert.match(storage, /schemaReadyPromise = null[\s\S]*\.catch\(\(error\) => \{[\s\S]*schemaReadyPromise = null/, 'initialization remains retryable');
+assert.match(read('api/_boards-storage.js'), /catch\(error => \{ ready=null; throw error;/, 'read-only initialization remains retryable');
 
 // R3R1 blocks legacy writes; assert authoritative R3 provenance instead.
 const service = read('api/_project-command.js');

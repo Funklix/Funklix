@@ -6,7 +6,8 @@ const { getBrandAccess } = require('./_brand-access');
 const { getBoardAccess } = require('./_board-access');
 const { projectBrandLogo } = require('./_workspace-catalog');
 function reject(code) { throw contract.error(code); }
-function iso(value) { return value instanceof Date ? value.toISOString() : value; }
+// Protected functions return JSON timestamps; pg table reads return Date objects.
+function iso(value) { return value == null ? value : new Date(value).toISOString(); }
 function core() { return {brandCore:'',toneOfVoice:[],messagingPillars:[],valueProposition:'',personas:[],contentGuidelines:[],dosAndDonts:{dos:[],donts:[]},brandVoiceExamples:{good:'',avoid:''},keywords:[],brandAssets:{domain:'',logo:'',colors:[],typography:'',references:[]},brandDNA:null,customTiles:[]}; }
 async function execute({db,user,canonicalEmail,input}) {
   const client = await db.connect(); let committing=false;
@@ -22,13 +23,13 @@ async function execute({db,user,canonicalEmail,input}) {
     const membership=(await client.query(`SELECT role,status FROM public.workspace_memberships WHERE workspace_id=$1 AND identity_id=$2 FOR UPDATE`,[workspace.id,identity.identityId])).rows[0];
     if(!membership||membership.status!=='accepted'||!['owner','admin','member','viewer'].includes(membership.role)) reject('MEMBERSHIP_REQUIRED');
     const fingerprint=crypto.createHash('sha256').update(JSON.stringify(input)).digest('hex');
-    const previous=(await client.query(`SELECT fingerprint,outcome FROM public.project_commands WHERE identity_id=$1 AND request_id=$2 FOR UPDATE`,[identity.identityId,input.request_id])).rows[0];
+    const previous=(await client.query(`SELECT fingerprint,outcome FROM public.project_commands WHERE identity_id=$1 AND request_id=$2`,[identity.identityId,input.request_id])).rows[0];
     if(previous&&previous.fingerprint!==fingerprint) reject('IDEMPOTENCY_CONFLICT');
     const brandId=previous?.outcome?.brand?.id || input.brand.existing_id;
     let brand, access;
     if(brandId) {
       // Lock the Brand before independently resolving its current established authority.
-      await client.query(`SELECT id FROM public.brands WHERE id=$1 FOR UPDATE`,[brandId]);
+      await client.query(`SELECT tendra_runtime_private.lock_brand($1,true)`,[brandId]);
       const resolved=await getBrandAccess(brandId,user,{client,skipEnsure:true,lockMembership:true,columns:'id,workspace_id,name,brand_core,revision,created_at,updated_at,logo_object_path,logo_mime_type,logo_source,logo_revision'});
       brand=resolved.brand; access=resolved.access;
       if(!brand) reject('BRAND_NOT_FOUND');

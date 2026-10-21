@@ -36,7 +36,7 @@ function createHandler({db,env=process.env,fetchImpl=fetch}={}) {
           if(!brandCapabilities(brand.role).canEditCanonicalBrand)fail('BRAND_ACCESS_DENIED',403);
           const membership=(await client.query(`SELECT w.id FROM public.workspaces w JOIN public.workspace_memberships m ON m.workspace_id=w.id
             JOIN public.brands b ON b.workspace_id=w.id WHERE w.id=$1 AND b.id=$3 AND w.status='active'
-            AND m.identity_id=$2 AND m.status='accepted' FOR SHARE OF w,m,b`,[query.workspace_id,identity.identityId,brandId])).rows[0];
+            AND m.identity_id=$2 AND m.status='accepted' FOR SHARE OF w,m`,[query.workspace_id,identity.identityId,brandId])).rows[0];
           if(!membership)fail('WORKSPACE_ACCESS_DENIED',403);
           const rows=(await client.query('SELECT id,name,updated_at FROM public.boards WHERE brand_id=$1 AND workspace_id=$2 ORDER BY name,id',[brandId,query.workspace_id])).rows;
           const boards=[];
