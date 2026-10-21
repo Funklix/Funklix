@@ -12,8 +12,8 @@ async function controllers() {
   const account = {}, context = { account, generation: 1, brandId: B, workspaceId: W, authorized: true };
   const make = async extra => profile.createSession({ brand: (await r.request('GET', `/api/brands/${B}`)).body,
     getContext: () => context, validateBrand: (b,id) => b?.id === id && !!b.brand_core && !!b.access && Number.isSafeInteger(b.revision),
-    requestId: () => 'r6-logo', onSave() {}, onLogo() {},
-    fetchImpl: async (url, init = {}) => { const res = await r.request(init.method || 'GET', url, init.body ? JSON.parse(init.body) : undefined); return { ok: res.statusCode < 300, status: res.statusCode, json: async () => res.body }; }, ...extra });
+    requestId: require('node:crypto').randomUUID, confirmReview: async () => true, onSave() {}, onLogo() {},
+    fetchImpl: async (url, init = {}) => { const res = await r.request(init.method || 'GET', url, init.body ? JSON.parse(init.body) : undefined, undefined, init.headers); return { ok: res.statusCode < 300, status: res.statusCode, json: async () => res.body }; }, ...extra });
   let s = await make({ website: 'example.test' }); assert(!s.dirty(), 'Same saved website is normalized');
   s.state.dirty = true; assert(!s.dirty(), 'Legacy writes cannot stick');
   s.state.core.brandCore = 'Manual'; assert(s.dirty()); s.state.core.brandCore = 'Original positioning'; assert(!s.dirty());
@@ -68,16 +68,16 @@ async function dom() {
   try {
     const page = await browser.newPage({viewport:{width:1440,height:900}}); page.setDefaultTimeout(10000);
     const errors = [], dialogs = [], calls = []; let pause = null;
-    page.on('pageerror', e=>errors.push(e.message)); page.on('dialog', d=>{dialogs.push(d.type());void d.dismiss();});
+    page.on('pageerror', e=>errors.push(e.message)); page.on('dialog', d => { if (d.type()==='confirm' && /^Review (?:these Brand changes:|logo change:)/.test(d.message())) { void d.accept(); return; }dialogs.push(d.type());void d.dismiss();});
     await page.route('**/*', async route=>{
       const req=route.request(), url=new URL(req.url()); calls.push({method:req.method(),path:url.pathname}); assert.equal(url.hostname,'localhost','Fixture cannot call providers');
       if(url.pathname.startsWith('/api/')) {
         if(url.pathname==='/api/auth/session')return route.fulfill({json:{user:null}});
         if(url.pathname==='/api/workspaces/catalog')return route.fulfill({json:r.catalog()});
         if(url.pathname==='/api/brands'&&req.method()==='GET')return route.fulfill({json:{brands:r.catalog().workspaces[0].brands.map(b=>({...b,created_at:'2026-10-08T08:00:00.000Z',updated_at:'2026-10-08T08:00:00.000Z'}))}});
-        if(/^\/api\/(brands\/[^/]+(?:\/logo)?|analyze-brand-domain|discover-brand-dna|generate-brand-avatar|projects|boards\/[^/]+)$/.test(url.pathname)) {
+        if(/^\/api\/(brands\/[^/]+(?:\/(?:logo|write-preview))?|analyze-brand-domain|discover-brand-dna|generate-brand-avatar|projects|boards\/[^/]+)$/.test(url.pathname)) {
           if(req.method()==='PUT'&&pause)await new Promise(resolve=>{pause.release=resolve;});
-          const res=await r.request(req.method(),url.pathname,req.postDataJSON()||undefined);
+          const res=await r.request(req.method(),url.pathname,req.postDataJSON()||undefined, undefined, req.headers());
           return Buffer.isBuffer(res.body)?route.fulfill({status:res.statusCode,contentType:'image/png',body:res.body}):route.fulfill({status:res.statusCode,json:res.body});
         }
         return route.fulfill({json:{boards:[],members:[],editors:[],nodes:[],presence:[]}});

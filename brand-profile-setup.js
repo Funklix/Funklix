@@ -402,11 +402,12 @@
           return false;
         }
         const logo = result.payload?.logo;
-        if (result.response.ok) pendingLogo=null;
-        if ((logo?.brand_id != null && logo.brand_id !== state.brand.id) || (logo?.changed != null && typeof logo.changed !== 'boolean') || result.payload?.contract !== 'brand_logo_v1' || result.payload.request_id !== requestId || !logo
+        if (!current()) return false;
+        if ((logo?.brand_id != null && logo.brand_id !== state.brand.id) || (logo?.changed != null && typeof logo.changed !== 'boolean') || result.payload?.contract !== 'brand_logo_v1' || result.payload.request_id !== input.request_id || !logo
           || logo.logo_revision !== revision + 1 || (action === 'remove' ? logo.logo_url !== null : logo.logo_url !== `/api/brands/${state.brand.id}/logo?revision=${logo.logo_revision}`)) {
           state.message = 'The logo save could not be verified. Retry or reload the latest Brand.'; return false;
         }
+        pendingLogo = null;
         // A valid committed response owns this logo revision even if the next read fails.
         state.brand = { ...state.brand, ...logo, logo_source: logo.source, logo_updated_at: logo.updated_at };
         state.file = null; state.fileData = null; state.candidate = null;

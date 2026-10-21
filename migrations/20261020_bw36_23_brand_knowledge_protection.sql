@@ -321,7 +321,9 @@ BEGIN
   PERFORM set_config('brand_knowledge.context',jsonb_build_object('actor',actor,'brand_id',p_id,'mutation_id',mid,'digest',digest,'operation',op,'request_fingerprint',p_command->>'input_digest')::text,true);
   IF op='delete' THEN
     IF p_command->>'confirmation_name' IS DISTINCT FROM b.name THEN RAISE EXCEPTION 'CONFIRMATION_MISMATCH'; END IF;
-    IF EXISTS(SELECT FROM public.boards WHERE brand_id=p_id) THEN RAISE EXCEPTION 'BRAND_IN_USE'; END IF;
+    IF EXISTS(SELECT FROM public.boards WHERE brand_id=p_id) THEN
+      RAISE EXCEPTION 'BRAND_IN_USE' USING DETAIL=jsonb_build_object('boardCount',(SELECT count(*) FROM public.boards WHERE brand_id=p_id))::text;
+    END IF;
     DELETE FROM public.brand_members WHERE brand_id=p_id;
     DELETE FROM public.brands WHERE id=p_id;
     RETURN jsonb_build_object('deleted',true);

@@ -117,7 +117,13 @@
     const preview=await fetchImpl(`/api/brands/${brandId}/write-preview`,{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify(input)});
     const payload=await preview.json();
     if(!current())throw new Error('CONTEXT_CHANGED');
-    if(!preview.ok)return {response:preview,payload};
+    if(!preview.ok){
+      if(preview.status!==409 || payload?.code!=='STALE_UPDATE')return {response:preview,payload};
+      // A committed response can be lost before the client adopts its revision.
+      // Resolve only the original receipt; this fallback cannot upload or mutate.
+      const response=await fetchImpl(`/api/brands/${brandId}/logo`,{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-Brand-Receipt-Only':'1'},body:JSON.stringify(input)});
+      return {response,payload:await response.json().catch(()=>null)};
+    }
     if(payload.changes?.[0]?.expected.exists) {
       if(!confirmReview || !await confirmReview('Review logo change: '+JSON.stringify(payload.changes[0])))throw new Error('REVIEW_CANCELLED');
       token=payload.review_token;

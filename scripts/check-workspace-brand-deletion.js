@@ -1,6 +1,8 @@
 'use strict';
 const assert = require('assert');
 const fs = require('fs');
+const { randomUUID } = require('node:crypto');
+const { protectedQuery } = require('./fixtures/bw36-23-protected-memory');
 const path = require('path');
 const root = path.resolve(__dirname, '..');
 const routePath = path.join(root, 'api/brands/[id].js');
@@ -17,6 +19,8 @@ function fixture({ actor = 'owner@example.test', failAt = '', associated = false
     boards: [{ id: 'board-a', brand_id: associated ? IDS.target : IDS.other, canvas_json: { nodes: [{ id: 'node-a', content: 'invented' }] } }],
     members: [{ brand_id: IDS.target, email: 'member@example.test' }, { brand_id: IDS.other, email: 'other-member@example.test' }]
   };
+  for(const brand of durable.brands)Object.assign(brand,{revision:1,logo_revision:0,workspace_id:null});
+  durable.history=[];
   let tx = null;
   const current = () => tx || durable;
   const client = {
@@ -24,6 +28,8 @@ function fixture({ actor = 'owner@example.test', failAt = '', associated = false
       if (sql === 'BEGIN') { tx = structuredClone(durable); return { rows: [], rowCount: 0 }; }
       if (sql === 'COMMIT') { Object.keys(durable).forEach(k => { durable[k] = tx[k]; }); tx = null; return { rows: [], rowCount: 0 }; }
       if (sql === 'ROLLBACK') { tx = null; return { rows: [], rowCount: 0 }; }
+      const protectedResult=protectedQuery(sql,params,{state:current,db:{identityStatus:'active',membershipStatus:'accepted',failHistory:!!failAt},email:'owner@example.test',workspace:null,now:'2026-10-20T00:00:00Z'});
+      if(protectedResult)return protectedResult;
       if (failAt && sql.includes(failAt)) throw new Error('invented transaction failure');
       if (sql.includes('SELECT id, name FROM brands')) { const row = current().brands.find(b => b.id === params[0] && b.owner_email === params[1]); return { rows: row ? [row] : [], rowCount: row ? 1 : 0 }; }
       if (sql.includes('SELECT COUNT(*)::integer AS count FROM boards')) return { rows: [{ count: current().boards.filter(b => b.brand_id === params[0]).length }], rowCount: 1 };
@@ -39,28 +45,30 @@ function fixture({ actor = 'owner@example.test', failAt = '', associated = false
   require.cache[authPath] = { id: authPath, filename: authPath, loaded: true, exports: { getSessionUser: () => ({ email: actor }) } };
   return { durable, handler: require(routePath) };
 }
-async function invoke(handler, { id = IDS.target, confirmationName = 'Invented Alpine' } = {}) {
-  const req = { method: 'DELETE', query: { id }, body: { confirmationName } };
+async function invoke(handler, { id = IDS.target, confirmationName = 'Invented Alpine', legacy = false } = {}) {
+  const req = { method: 'DELETE', query: { id }, body: { confirmationName, ...(!legacy?{contract:'canonical-brand-write/v1',workspace_id:null,expected_revision:'1',expected_logo_revision:0,mutation_id:randomUUID()}:{} ) } };
   const result = {};
   const res = { status(code) { result.status = code; return this; }, json(body) { result.body = body; return this; } };
   await handler(req, res); return result;
 }
 (async () => {
+  const legacyFixture=fixture();const legacyBefore=structuredClone(legacyFixture.durable);assert.equal((await invoke(legacyFixture.handler,{legacy:true})).status,428);assert.deepEqual(legacyFixture.durable,legacyBefore);
   let f = fixture(); const originalCanvas = structuredClone(f.durable.boards[0].canvas_json); let r = await invoke(f.handler);
   assert.equal(r.status, 200); assert.equal(r.body.code, 'BRAND_DELETED'); assert.match(r.body.requestId, /^[0-9a-f-]{36}$/);
+  assert.equal(f.durable.history.length,1); assert.equal(f.durable.history[0].operation,'delete');
   assert(!f.durable.brands.some(b => b.id === IDS.target), 'owner deletes owned Brand');
   assert(f.durable.brands.some(b => b.id === IDS.other), 'other Brands unchanged');
   assert.deepEqual(f.durable.members, [{brand_id:IDS.other,email:'other-member@example.test'}], 'Unrelated Brand memberships survive');
   assert.equal(f.durable.boards.length, 1); assert.equal(f.durable.boards[0].brand_id, IDS.other); assert.deepEqual(f.durable.boards[0].canvas_json, originalCanvas, 'Board and nodes unchanged');
   r = await invoke(f.handler); assert.equal(r.status, 404, 'duplicate request is consistent');
-  f = fixture({ associated: true }); const inUseBefore = structuredClone(f.durable); r = await invoke(f.handler); assert.equal(r.status, 409); assert.equal(r.body.code, 'BRAND_IN_USE'); assert.equal(r.body.boardCount, 1); assert.deepEqual(f.durable, inUseBefore);
-  f = fixture({ actor: 'viewer@example.test' }); r = await invoke(f.handler); assert.equal(r.status, 404); assert.equal(f.durable.brands.length, 2, 'non-owner retains Brand');
+  f = fixture({ associated: true }); const inUseBefore = structuredClone(f.durable); r = await invoke(f.handler); assert.equal(r.status, 409); assert.equal(r.body.code, 'BRAND_IN_USE'); assert.equal(f.durable.boards.filter(b=>b.brand_id===IDS.target).length, 1); assert.deepEqual(f.durable, inUseBefore);
+  f = fixture({ actor: 'viewer@example.test' }); r = await invoke(f.handler); assert.equal(r.status, 403); assert.equal(f.durable.brands.length, 2, 'non-owner retains Brand');
   f = fixture(); r = await invoke(f.handler, { id: 'bad' }); assert.equal(r.status, 400); assert.equal(r.body.code, 'INVALID_BRAND_ID');
-  f = fixture({ failAt: 'DELETE FROM brands' }); const before = structuredClone(f.durable); r = await invoke(f.handler); assert.equal(r.status, 500); assert.deepEqual(f.durable, before, 'failure rolls back detach and membership deletion');
+  f = fixture({ failAt: 'DELETE FROM brands' }); const before = structuredClone(f.durable); r = await invoke(f.handler); assert.equal(r.status, 503); assert.deepEqual(f.durable, before, 'failure rolls back detach and membership deletion');
   const app = fs.readFileSync(path.join(root, 'app.js'), 'utf8'); const css = fs.readFileSync(path.join(root, 'styles.css'), 'utf8'); const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
   const route = fs.readFileSync(routePath, 'utf8'); const deletion = fs.readFileSync(deletionPath, 'utf8');
   assert(!/UPDATE boards|brand_core_source_|brand_core_snapshot_copied_at/.test(route), 'Canonical Brand item route contains no direct Board mutation');
-  assert(!deletion.includes('UPDATE boards SET brand_id = NULL') && deletion.includes('SELECT COUNT(*)::integer AS count FROM boards') && deletion.includes("client.query('BEGIN')") && deletion.includes("client.query('COMMIT')"), 'dedicated deletion service blocks associations under the Brand lock');
+  assert(!deletion.includes('UPDATE boards SET brand_id = NULL') && deletion.includes("require('./_brand-knowledge-write').lifecycle") && deletion.includes("client.query('BEGIN')") && deletion.includes("client.query('COMMIT')"), 'dedicated deletion service blocks associations under the Brand lock');
   let deletionCalls = 0;
   delete require.cache[routePath];
   require.cache[deletionPath] = { id: deletionPath, filename: deletionPath, loaded: true, exports: { BrandDeletionError: class extends Error {}, deleteOwnedBrand: async () => { deletionCalls++; return { code: 'BRAND_DELETED', deletedBrandId: IDS.target, detachedBoardCount: 0 }; } } };

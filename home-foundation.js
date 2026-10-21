@@ -513,12 +513,14 @@
     function draw() {
       updateClearance();
       const c = context(), m = model(c, rows, filter);
+      const workspaceStatus = renderScope && sameScope(renderScope, c) ? host.querySelector('#workspace-switch-status') : null;
       renderScope = c;
       const collectionIdentity = JSON.stringify([c.identity, c.workspaceId, c.brandId, filter, m.workspace?.boards.map(b => [b.id, b.brand_id, b.role])]);
       if (collectionIdentity !== expansionIdentity) { expanded = false; expansionIdentity = collectionIdentity; }
       const focused = host.contains(doc.activeElement) ? doc.activeElement.dataset.homeFocus : null;
       const focusedContext = host.contains(doc.activeElement) ? doc.activeElement.dataset.contextAction : null;
       host.replaceChildren(); host.setAttribute('aria-busy', String(status === 'loading' || ['idle', 'loading', 'refreshing'].includes(c.status) && !!c.account));
+      if (workspaceStatus) host.append(workspaceStatus);
       const hero = node('header', 'home-hero');
       const copy = node('div', 'home-hero-copy');
       copy.append(node('span', 'home-eyebrow', t('Workspace')),

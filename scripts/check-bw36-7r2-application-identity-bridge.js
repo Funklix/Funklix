@@ -109,9 +109,9 @@ test('helpers contain no database, network, provider or cross-catalog authority'
 });
 
 test('login, Brand, Board, UI and prior evidence baselines are byte-identical', () => {
-  // R3's opt-in Brand transaction extension preserves the original authorization model; R1's corresponding evidence pin is updated.
+  // R2 recovery replaces BW-36.7's worktree scope gate with immutable historical migration hashes; only that test evidence pin changes.
   const expected = {
-    'api/_auth-session.js':'2ee41ebe695a761c9aa05cc1c9a0df1a0dc81649f9150a6a083b6139c3e26e28', 'api/_brand-access.js':'15f35ef6ab4e77a1fda5d07ecd24d5a85cf920d98a16beeb57f8d789990b214c', 'api/_board-access.js':'84620c66037f2ff039c414032056b3e452f09e524cf481efa68c865cee59daef', 'api/auth/google/callback.js':'676451684d6610d9b9daaca6e4fcbce4bba1ee2fc2dce12d97cc33a88ee36485', 'brand-sidebar.js':'42cd9ca38505a7e4755b888c494c73440a457e57bcc495059f9746bba02d1efb', 'content-workspace.js':'72915d34948fef1352f645a336cff2160d07e605021c4d8fcd33a67a996d0615', 'automatic-planning.js':'3f2ce9323a4cf7896092dfaae7cf147f3fae7664a8c174f1cb7d4fb04e877bb4', 'scripts/check-bw36-7-workspace-backfill-preflight.js':'82cf69aba30c96cab94c30e4d680928bc0846e7cc94e019a10d1eb890f9d5478', 'scripts/check-bw36-7r1-workspace-identity-diagnostic.js':'06eba1c0ee0073db83aab9465be1e5b4f93cbd20438631d205398a3301247284'
+    'api/_auth-session.js':'2ee41ebe695a761c9aa05cc1c9a0df1a0dc81649f9150a6a083b6139c3e26e28', 'api/_brand-access.js':'15f35ef6ab4e77a1fda5d07ecd24d5a85cf920d98a16beeb57f8d789990b214c', 'api/_board-access.js':'84620c66037f2ff039c414032056b3e452f09e524cf481efa68c865cee59daef', 'api/auth/google/callback.js':'676451684d6610d9b9daaca6e4fcbce4bba1ee2fc2dce12d97cc33a88ee36485', 'brand-sidebar.js':'42cd9ca38505a7e4755b888c494c73440a457e57bcc495059f9746bba02d1efb', 'content-workspace.js':'72915d34948fef1352f645a336cff2160d07e605021c4d8fcd33a67a996d0615', 'automatic-planning.js':'3f2ce9323a4cf7896092dfaae7cf147f3fae7664a8c174f1cb7d4fb04e877bb4', 'scripts/check-bw36-7-workspace-backfill-preflight.js':'a85b1b31dd07eebeb761d535f1b7c7932331e9f15a410964dc9877ac5d07db3d', 'scripts/check-bw36-7r1-workspace-identity-diagnostic.js':'06eba1c0ee0073db83aab9465be1e5b4f93cbd20438631d205398a3301247284'
   };
   for (const [file, hash] of Object.entries(expected)) assert.equal(digest(file), hash, file);
 });

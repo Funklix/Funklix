@@ -85,9 +85,13 @@ const representedTables = new Set(
 const separatelyInventoried = new Set(['board_editors', 'social_connector_schema_version']);
 assert.deepStrictEqual(
   [...representedTables].sort(),
-  [...new Set([...protectedTables, ...separatelyInventoried])].sort(),
+  [...new Set([...protectedTables, ...separatelyInventoried])].filter(table => !['brands', 'brand_members'].includes(table)).sort(),
   'a user-created runtime table is missing from the documented inventory'
 );
+// Migration-owned Brand tables remain in the protected inventory; runtime reads only probe them.
+const brandStorage = read('api/_brands-storage.js');
+for (const table of ['brands', 'brand_members']) { assert(protectedTables.has(table)); assert(brandStorage.includes(`to_regclass('public.${table}')`)); }
+assert.doesNotMatch(brandStorage, /CREATE TABLE|ALTER TABLE/);
 for (const table of representedTables) assert(audit.includes(`\`${table}\``), `${table} is silently absent from the audit`);
 
 assert.match(audit, /server-side[\s\S]+pg\.Pool[\s\S]+POSTGRES_URL/);

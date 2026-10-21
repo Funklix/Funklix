@@ -33,6 +33,7 @@ module.exports=async function handler(req,res){
     const inputDigest=createHash('sha256').update(require('../../../brand-write-contract').stable(input)).digest('hex');
     const receipt=(await client.query('SELECT brand_knowledge_private.logo_receipt($1,$2::uuid,$3::uuid,$4) AS brand',[user.email.trim().toLowerCase(),brandId,mutationId,inputDigest])).rows[0]?.brand;
     if(receipt){await client.query('COMMIT');committed=true;return send(res,200,{contract:CONTRACT,request_id:input.request_id,replay:true,logo:{brand_id:brandId,changed:true,...projectLogo(receipt),source:receipt.logo_source,updated_at:receipt.logo_updated_at}});}
+    if(req.headers?.['x-brand-receipt-only']==='1'){await client.query('ROLLBACK');return failure(res,409,'RECEIPT_NOT_FOUND');}
     const result=await client.query(`SELECT b.id,b.workspace_id,b.revision,b.logo_object_path,b.logo_source,b.logo_revision,CASE WHEN lower(b.owner_email)=$2 THEN 'owner' ELSE bm.role END role FROM brands b LEFT JOIN brand_members bm ON bm.brand_id=b.id AND bm.email=$2 WHERE b.id=$1 FOR UPDATE OF b`,[brandId,user.email.trim().toLowerCase()]);const row=result.rows[0];
     if(!row||!['owner','admin','editor'].includes(row.role)){await client.query('ROLLBACK');return failure(res,403,'PERMISSION_DENIED');}
     if(input.workspace_id){const member=await client.query(`SELECT 1 FROM workspace_memberships WHERE workspace_id=$1 AND identity_id=(SELECT id FROM app_identities WHERE canonical_email=$2 AND status='active') AND status='accepted'`,[input.workspace_id,user.email.trim().toLowerCase()]);if(row.workspace_id!==input.workspace_id||!member.rowCount){await client.query('ROLLBACK');return failure(res,403,'PERMISSION_DENIED');}}
@@ -82,6 +83,9 @@ module.exports=async function handler(req,res){
       await client.query('ROLLBACK').catch(()=>{});
       // An uncertain COMMIT may have recorded this asset. Retain it for operator reconciliation.
     }
+    if(error?.code==='42501')return failure(res,403,'PERMISSION_DENIED');
+    if(error?.message==='BRAND_NOT_FOUND')return failure(res,404,'NOT_FOUND');
+    if(['STALE_UPDATE','IDEMPOTENCY_CONFLICT','WORKSPACE_CONTEXT_CHANGED'].includes(error?.message))return failure(res,409,error.message);
     const code=error?.code==='STORAGE_UNAVAILABLE'?'STORAGE_UNAVAILABLE'
       :['unsupported_content_type','invalid_dimensions','invalid_image_signature','unsupported_image_type','invalid_image','empty_response'].includes(error?.code)?'UNSUPPORTED_FILE'
       :stage==='metadata_update'?'UPDATE_FAILED':stage==='metadata_readback'?'READBACK_FAILED':stage==='response_projection'?'RESPONSE_INVALID':stage==='storage_upload'?'STORAGE_UNAVAILABLE':'DATABASE_UNAVAILABLE';

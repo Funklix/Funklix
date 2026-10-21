@@ -30,7 +30,15 @@ function verifyReview(token, email, brandId, command) {
 function mapError(e) {
   if (e.status) return e;
   const code = String(e.message || '');
-  if (['STALE_UPDATE','STALE_FIELD','IDEMPOTENCY_CONFLICT','CONFIRMATION_MISMATCH','BRAND_IN_USE'].includes(code)) return error(code, 409);
+  if (code === 'BRAND_IN_USE') {
+    let count;
+    try { count = JSON.parse(e.detail).boardCount; } catch {}
+    const failure = error(code, 409);
+    if (Number.isSafeInteger(count) && count > 0) failure.boardCount = count;
+    return failure;
+  }
+  if (e.code === '40001') return error('STALE_UPDATE', 409);
+  if (['STALE_UPDATE','STALE_FIELD','IDEMPOTENCY_CONFLICT','CONFIRMATION_MISMATCH','BRAND_IN_USE','INITIALIZATION_REQUIRES_EMPTY_CORE','INITIALIZATION_SOURCE_CHANGED'].includes(code)) return error(code, 409);
   if (e.code === '42501') return error('PERMISSION_DENIED', 403);
   if (code === 'BRAND_NOT_FOUND') return error(code, 404);
   if (['WRITE_CONTRACT_REQUIRED','DESTRUCTIVE_REVIEW_REQUIRED'].includes(code)) return error(code, 428);

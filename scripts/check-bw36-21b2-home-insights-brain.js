@@ -66,10 +66,10 @@ async function main() {
     });
     await check('actual diagnostic exception and malformed snapshot are isolated from other Home modules',async()=>{
       const f=await fixture(),p=f.page;
-      await p.evaluate(()=>{state.nodes.find(n=>n.type==='Landing Page').landingPage={};renderCampaignIntelligence();refreshDashboardIfVisible();});
+      await p.evaluate(()=>{state.nodes.find(n=>n.type==='Landing Page').landingPage={};detectDirtyFromSnapshot();clearAutosaveTimer();renderCampaignIntelligence();refreshDashboardIfVisible();});
       assert.equal(await p.evaluate(()=>state.insightsDiagnosticSnapshot.analysis),null);
       assert((await insights(p).innerText()).includes('could not be calculated'));assert.equal(await action(p,'brain').count(),1);
-      await p.evaluate(()=>{state.nodes.find(n=>n.type==='Landing Page').landingPage.cta='';renderCampaignIntelligence();state.insightsDiagnosticSnapshot.findings=[{code:'TRUST_PROOF_MISSING'}];refreshDashboardIfVisible();});
+      await p.evaluate(()=>{state.nodes.find(n=>n.type==='Landing Page').landingPage.cta='';detectDirtyFromSnapshot();clearAutosaveTimer();renderCampaignIntelligence();state.insightsDiagnosticSnapshot.findings=[{code:'TRUST_PROOF_MISSING'}];refreshDashboardIfVisible();});
       assert((await insights(p).innerText()).includes('could not be calculated'));assert.equal(await action(p,'brain').count(),1);
       assert.equal(await p.locator('[data-home-module="responsibilities"]').count(),1);
       // A deterministic diagnostic exception must not prevent Brain navigation.
@@ -312,7 +312,17 @@ async function main() {
       fs.writeFileSync(path.join(dir,'geometry.json'),JSON.stringify(geometry,null,2));
       await p.evaluate(()=>{state.currentBoardName='LongBoardName'.repeat(30);const w=state.workspaceCatalog.value.workspaces[0];w.brands.find(b=>b.id===state.boardBrandAssociation.brandId).name='LongBrandName'.repeat(30);refreshDashboardIfVisible();});
       for(const module of [insights(p),brain(p)])assert(await module.evaluate(e=>e.scrollWidth<=e.clientWidth+1));
-      await action(p,'brain').focus();await refresh(p);assert.equal(await action(p,'brain').evaluate(e=>document.activeElement===e),true);
+      // Focus and redraw in one browser task: a protocol-resolved locator can
+      // otherwise target a node replaced by an intervening Home refresh.
+      const focus = await p.evaluate(()=>{
+        const selector='#home-foundation [data-home-action="brain"]',before=document.querySelector(selector);
+        before.focus();const acquired=document.activeElement===before;
+        refreshDashboardIfVisible();clearAutosaveTimer();
+        const after=document.querySelector(selector);
+        return {acquired,replaced:before!==after,retained:document.activeElement===after};
+      });
+      assert.deepEqual(focus,{acquired:true,replaced:true,retained:true});
+      assert.equal(await action(p,'brain').evaluate(e=>document.activeElement===e),true);
       await p.keyboard.press('Enter');await p.waitForFunction(()=>state.activeView==='ai_brain');await f.close();
     });
   } finally { await browser.close(); }

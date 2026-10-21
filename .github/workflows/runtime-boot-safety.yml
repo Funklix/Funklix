@@ -383,6 +383,7 @@ jobs:
       - name: Install focused browser fixture
         run: |
           npx playwright-core install --with-deps chromium
+          node -e 'require("fs").appendFileSync(process.env.GITHUB_ENV, "CHROMIUM_PATH=" + require("playwright-core").chromium.executablePath() + "\n")'
       - name: Check approved Brand Learnings in Advice (disposable PostgreSQL, mocked OpenAI)
         run: node scripts/check-bw36-20-approved-learning-ai-brain.js
       - name: Check BW-36.21A-R2.1 safe Workspace switching (Chromium)
@@ -475,3 +476,5 @@ jobs:
         run: npm run check:bw36.23a:postgres
       - name: Check BW-36.23A protected Brand editing in Chromium
         run: npm run check:bw36.23a:browser
+      - name: Check BW-36.23A initialization and logo response-loss recovery
+        run: npm run check:bw36.23ar2

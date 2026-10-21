@@ -105,7 +105,9 @@ async function browserChecks() {
     });
     await page.goto(`http://localhost/boards/${D}`);
     await page.waitForFunction(() => state.currentBoardId && state.workspaceCatalog.status === 'ready' && !state.isBoardLoading && state.nodes.length === 7);
-    await page.evaluate(() => { setAppMode('canvas'); setActiveView('board'); });
+    // Isolate mutation-triggered reads from the unrelated 12-second timer.
+    // Competing production refresh is still invoked explicitly in the role tests below.
+    await page.evaluate(() => { stopBoardRefreshPolling(); setAppMode('canvas'); setActiveView('board'); });
     const toolbar = page.locator('.canvas-toolbar'), entry = toolbar.locator('#campaign-responsibilities-btn');
     const dialog = page.locator('#campaign-responsibilities');
     const id1 = 'continuity-1', id2 = 'continuity-2';

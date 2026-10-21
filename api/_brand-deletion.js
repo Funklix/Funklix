@@ -33,7 +33,7 @@ async function deleteOwnedBrand({ brandId, ownerEmail, confirmationName, request
     }
     if (error instanceof BrandDeletionError) throw error;
     const failure = require('./_brand-knowledge-write').mapError(error);
-    throw new BrandDeletionError(failure.status, failure.code);
+    throw new BrandDeletionError(failure.status, failure.code, failure.boardCount);
   } finally {
     client?.release();
   }

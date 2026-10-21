@@ -164,7 +164,8 @@
     "check:bw36.22b2": "node scripts/check-bw36-22b2-real-brand-avatar.js",
     "check:bw36.23a": "node scripts/check-bw36-23-brand-knowledge-protection.js",
     "check:bw36.23a:browser": "node scripts/check-bw36-23-brand-knowledge-browser.js",
-    "check:bw36.23a:postgres": "node scripts/check-bw36-23-brand-knowledge-postgres.js"
+    "check:bw36.23a:postgres": "node scripts/check-bw36-23-brand-knowledge-postgres.js",
+    "check:bw36.23ar2": "node scripts/check-bw36-23-initialization.js && node scripts/check-bw36-23-logo-replay.js"
   },
   "devDependencies": {
     "@electric-sql/pglite": "0.3.15",
