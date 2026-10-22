@@ -134,7 +134,18 @@ function maintenance(res) { assert.equal(res.statusCode,503);assert.equal(res.bo
   for(const fixture of [{external_post_id:'post',delivery_state:'confirmed',status:'delivering'}, {provider_attempt_state:'accepted',provider_request_reference:'123_456',status:'delivering'}]){
    readResult={rowCount:1,rows:[{id,owner_account_id:user.email,...fixture}]};delivered=[];await service.jobResult(id,user.email);assert.equal(delivered.length,1);assert.match(delivered[0],/^SELECT/);
   }
-  await blocked(()=>service.publish({},user));
+  // Keep original authorization/eligibility checks before the explicit job gate.
+  const contractName=name==='publishing-service'?'linkedin-publishing':'facebook-publishing';
+  const realContract=require('../api/social-connector/'+contractName);
+  const gatedModule=load('api/social-connector/'+name+'.js',{
+   '../_boards-storage':storage,
+   '../_board-access':{getBoardAccess:async()=>({board:{canvas_json:{nodes:[{id:'fixture-node',approvedContentFingerprint:'fp'}]}},access:{canEdit:true}})},
+   ['./'+contractName]:{...realContract,materialFingerprint:()=> 'fp',idempotencyKey:()=> 'key',evaluateLinkedInTextPublishEligibility:()=>({eligible:true}),evaluate:()=>({eligible:true})},
+   './linkedin-publishing':{...require('../api/social-connector/linkedin-publishing'),materialFingerprint:()=> 'fp',idempotencyKey:()=> 'key',evaluateLinkedInTextPublishEligibility:()=>({eligible:true})}
+  });
+  const guardedFactory=gatedModule.createPublishingService||gatedModule.createFacebookPublishingService;
+  readResult={rows:[],rowCount:0};const direct=guardedFactory({pool,adapter:{}});
+  delivered=[];await assert.rejects(()=>direct.publish({nodeId:'fixture-node',expectedApprovedFingerprint:'fp'},user),error=>error.code===gate.CODE);assert(delivered.every(sql=>gate.isReadQuery(sql)));
  }
  console.log('PASS LinkedIn/Facebook status reads skip both repairs; direct publishing jobs stop before provider work');
  process.env.TENDRA_WRITE_MAINTENANCE='0';delivered=[];await pool.query('UPDATE boards SET name=$1',['restored']);assert.equal(delivered.length,1);

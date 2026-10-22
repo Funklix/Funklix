@@ -80,12 +80,12 @@ function createPublishingService({ pool = defaultPool, adapter = createLinkedInA
   }
 
   async function publish(input, actor) {
-    require('../_write-maintenance').assertWritesAllowed();
     const state = await resolve(input, actor);
     const existing = state.previous[0];
     if (existing) return await jobResult(existing.id,input.ownerAccountId) || {ok:false,status:'publishing_in_progress',jobId:existing.id};
     if (!state.evaluation.eligible) return { ok: false, status: state.evaluation.code, blockingCodes: state.evaluation.blockingCodes };
     if (input.expectedApprovedFingerprint !== state.node.approvedContentFingerprint) return { ok: false, status: 'approval_stale' };
+    require('../_write-maintenance').assertWritesAllowed();
     const jobId = crypto.randomUUID();
     const snapshot = { schemaVersion: 1, actionVersion: ACTION_VERSION, ownerAccountId: input.ownerAccountId, boardId: input.boardId, nodeId: input.nodeId, approvedFingerprint: state.node.approvedContentFingerprint, normalizedTextDigest: digest(state.evaluation.caption), caption: state.evaluation.caption, connectedAccountId: state.connection.id, destinationId: state.destination.id, platform: 'linkedin', requestedByActor: input.ownerAccountId, responseLanguage: input.responseLanguage, createdAt: now().toISOString() };
     let job;
