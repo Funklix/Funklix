@@ -10,10 +10,6 @@ DECLARE r record;
 BEGIN
   IF current_setting('server_version_num')::int<160000 THEN RAISE EXCEPTION 'POSTGRES_16_REQUIRED'; END IF;
   IF to_regclass('public.brand_knowledge_history') IS NULL THEN RAISE EXCEPTION 'PROTECTION_INSTALL_REQUIRED_OR_DRIFTED'; END IF;
-  SET LOCAL ROLE brand_knowledge_owner;
-  IF brand_knowledge_private.install_fingerprint() IS DISTINCT FROM obj_description('brand_knowledge_private'::regnamespace) THEN
-    RAISE EXCEPTION 'PROTECTION_INSTALL_REQUIRED_OR_DRIFTED'; END IF;
-  RESET ROLE;
   IF (SELECT count(*) FROM pg_roles WHERE rolname IN ('brand_knowledge_owner','brand_knowledge_runtime','tendra_app_runtime'))<>3 THEN
     RAISE EXCEPTION 'EXISTING_ROLES_REQUIRED'; END IF;
   FOR r IN SELECT * FROM pg_roles WHERE rolname IN ('brand_knowledge_owner','brand_knowledge_runtime','tendra_app_runtime') LOOP
@@ -37,6 +33,53 @@ BEGIN
   IF EXISTS(SELECT FROM pg_class WHERE relnamespace='public'::regnamespace AND relkind='r' AND
     relowner IN ('brand_knowledge_runtime'::regrole,'tendra_app_runtime'::regrole)) THEN RAISE EXCEPTION 'RUNTIME_TABLE_OWNERSHIP'; END IF;
 END $preflight$;
+-- Validate legacy catalogs as their authorized installer before changing ownership.
+-- Older completed installs created this function after the blanket owner EXECUTE
+-- grant, so SET-only membership cannot execute it as brand_knowledge_owner yet.
+DO $legacy_fingerprint$
+DECLARE installer name := current_user; fingerprint oid; legacy_owner oid;
+        borrowed_usage boolean; f record;
+BEGIN
+  IF to_regclass('public.brand_knowledge_history') IS NULL THEN RETURN; END IF;
+  SET LOCAL ROLE brand_knowledge_owner;
+  fingerprint := to_regprocedure('brand_knowledge_private.install_fingerprint()');
+  IF fingerprint IS NULL THEN RAISE EXCEPTION 'PARTIAL_PROTECTION_INSTALL'; END IF;
+  SELECT proowner INTO legacy_owner FROM pg_proc WHERE oid=fingerprint;
+  IF legacy_owner='brand_knowledge_owner'::regrole THEN
+    IF brand_knowledge_private.install_fingerprint() IS DISTINCT FROM obj_description('brand_knowledge_private'::regnamespace) THEN RAISE EXCEPTION 'PROTECTION_CATALOG_DRIFT'; END IF;
+    RESET ROLE;
+    RETURN;
+  END IF;
+  RESET ROLE;
+  IF legacy_owner IN (SELECT oid FROM pg_roles WHERE rolname IN ('brand_knowledge_runtime','tendra_app_runtime','anon','authenticated','service_role')) THEN RAISE EXCEPTION 'UNSAFE_LEGACY_FUNCTION_OWNER'; END IF;
+  -- EXECUTE alone never authorizes taking ownership of a previous installation.
+  IF NOT pg_has_role(installer::regrole,legacy_owner,'USAGE') THEN RAISE EXCEPTION 'LEGACY_INSTALLER_OWNERSHIP_REQUIRED'; END IF;
+  borrowed_usage := NOT has_schema_privilege(installer,'brand_knowledge_private','USAGE');
+  SET LOCAL ROLE brand_knowledge_owner;
+  IF borrowed_usage THEN EXECUTE format('GRANT USAGE ON SCHEMA brand_knowledge_private TO %I',installer); END IF;
+  RESET ROLE;
+  IF brand_knowledge_private.install_fingerprint() IS DISTINCT FROM obj_description('brand_knowledge_private'::regnamespace) THEN RAISE EXCEPTION 'PROTECTION_CATALOG_DRIFT'; END IF;
+  -- Only the seven known installer-owned helpers may be normalized. The four
+  -- SECURITY DEFINER entry points must already belong to the NOLOGIN owner.
+  IF EXISTS(SELECT FROM pg_proc p WHERE p.pronamespace='brand_knowledge_private'::regnamespace
+    AND p.proowner<>'brand_knowledge_owner'::regrole AND (p.proowner<>legacy_owner OR NOT p.oid=ANY(ARRAY[
+      'brand_knowledge_private.immutable_history()'::regprocedure,
+      'brand_knowledge_private.capture_brand()'::regprocedure,
+      'brand_knowledge_private.no_brand_truncate()'::regprocedure,
+      'brand_knowledge_private.is_empty(jsonb)'::regprocedure,
+      'brand_knowledge_private.validate_json(jsonb,integer)'::regprocedure,
+      'brand_knowledge_private.resolve_changes(jsonb,jsonb)'::regprocedure,
+      'brand_knowledge_private.install_fingerprint()'::regprocedure]))) THEN
+    RAISE EXCEPTION 'UNREVIEWED_LEGACY_FUNCTION_OWNER';
+  END IF;
+  FOR f IN SELECT oid FROM pg_proc WHERE pronamespace='brand_knowledge_private'::regnamespace AND proowner=legacy_owner LOOP
+    EXECUTE format('ALTER FUNCTION %s OWNER TO brand_knowledge_owner',f.oid::regprocedure);
+  END LOOP;
+  SET LOCAL ROLE brand_knowledge_owner;
+  IF borrowed_usage THEN EXECUTE format('REVOKE USAGE ON SCHEMA brand_knowledge_private FROM %I',installer); END IF;
+  EXECUTE format('COMMENT ON SCHEMA brand_knowledge_private IS %L',brand_knowledge_private.install_fingerprint());
+  RESET ROLE;
+END $legacy_fingerprint$;
 -- Materialize document schema formerly created lazily. Existing rows are untouched.
 
     CREATE TABLE IF NOT EXISTS brand_documents (

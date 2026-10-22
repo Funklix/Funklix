@@ -36,7 +36,8 @@ let groups=0;async function check(name,fn){await fn();console.log('PASS '+name);
   await root.query(read('migrations/20260914_bw33_5_1_social_publishing_destinations_rls.sql'));
   const denies=(await root.query("SELECT tablename,policyname,qual,with_check FROM pg_policies WHERE roles && ARRAY['anon','authenticated']::name[] ORDER BY tablename,policyname")).rows;
   operator=await require('./fixtures/bw36-23-migration-operator')(root,local.href,core,check);
-  await check('complete original migration and companion verifier through SET-only operator',async()=>{await operator.client.query(core);await operator.verifyCore();});await operator.noCreate();await operator.preserveCreate();
+  if(process.env.BW36_23_LEGACY_INSTALL==='1')await operator.prepareLegacy(sql);
+  await check('complete original migration and companion verifier through SET-only operator',async()=>{await operator.client.query(core);await operator.verifyCore();await operator.assertLegacyRows();});await operator.noCreate();await operator.preserveCreate();
   await check('late R3 failure rolls back schema function grants and policies',async()=>{
     const before=await operator.snapshot();
     await assert.rejects(()=>operator.client.query(sql.replace(/COMMIT;\s*$/,()=>"DO $$ BEGIN RAISE EXCEPTION 'HOTFIX_R3_FAILURE'; END $$; COMMIT;")),/HOTFIX_R3_FAILURE/);
