@@ -8,9 +8,17 @@ BEGIN
   IF (SELECT count(*) FROM pg_roles WHERE rolname IN ('brand_knowledge_owner','brand_knowledge_runtime') AND NOT rolcanlogin AND NOT rolsuper AND NOT rolbypassrls AND NOT rolcreaterole AND NOT rolcreatedb AND NOT rolreplication)<>2 THEN RAISE EXCEPTION 'UNSAFE_CAPABILITY_OR_OWNER_ROLE'; END IF;
   IF NOT EXISTS(SELECT FROM pg_roles WHERE rolname='tendra_app_runtime' AND rolinherit AND NOT rolsuper AND NOT rolbypassrls AND NOT rolcreaterole AND NOT rolcreatedb AND NOT rolreplication) THEN RAISE EXCEPTION 'UNSAFE_RUNTIME_LOGIN'; END IF;
   IF NOT EXISTS(SELECT FROM pg_auth_members WHERE roleid='brand_knowledge_runtime'::regrole AND member='tendra_app_runtime'::regrole AND inherit_option AND NOT set_option AND NOT admin_option) THEN RAISE EXCEPTION 'MEMBERSHIP_OPTIONS_INVALID'; END IF;
-  IF EXISTS(SELECT FROM pg_auth_members WHERE
+  -- Operator-only ADMIN rows are permitted only with an explicit all-SET
+  -- path to the owner. INHERIT/SET capability edges are never exempted.
+  IF EXISTS(WITH RECURSIVE operators(oid) AS (
+    SELECT 'brand_knowledge_owner'::regrole::oid
+    UNION SELECT m.member FROM pg_auth_members m JOIN operators o ON m.roleid=o.oid WHERE m.set_option
+  ) SELECT FROM pg_auth_members WHERE
     (member IN ('brand_knowledge_runtime'::regrole,'tendra_app_runtime'::regrole) OR roleid IN ('brand_knowledge_runtime'::regrole,'tendra_app_runtime'::regrole))
-    AND NOT(roleid='brand_knowledge_runtime'::regrole AND member='tendra_app_runtime'::regrole AND inherit_option AND NOT set_option AND NOT admin_option)) THEN RAISE EXCEPTION 'UNREVIEWED_ROLE_MEMBERSHIP'; END IF;
+    AND NOT(roleid='brand_knowledge_runtime'::regrole AND member='tendra_app_runtime'::regrole AND inherit_option AND NOT set_option AND NOT admin_option)
+      AND NOT(roleid IN ('brand_knowledge_runtime'::regrole,'tendra_app_runtime'::regrole)
+        AND member IN (SELECT oid FROM operators)
+        AND NOT inherit_option AND NOT set_option AND admin_option)) THEN RAISE EXCEPTION 'UNREVIEWED_ROLE_MEMBERSHIP'; END IF;
   FOREACH t IN ARRAY ARRAY['brand_knowledge_runtime','tendra_app_runtime'] LOOP
     IF pg_has_role(t,'brand_knowledge_owner','MEMBER') OR has_schema_privilege(t,'public','CREATE') OR has_schema_privilege(t,'brand_knowledge_private','CREATE') OR has_schema_privilege(t,'tendra_runtime_private','CREATE')
        OR has_table_privilege(t,'public.brands','INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')

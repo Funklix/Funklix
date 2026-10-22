@@ -37,6 +37,7 @@ let groups=0;async function check(name,fn){await fn();console.log('PASS '+name);
   const denies=(await root.query("SELECT tablename,policyname,qual,with_check FROM pg_policies WHERE roles && ARRAY['anon','authenticated']::name[] ORDER BY tablename,policyname")).rows;
   operator=await require('./fixtures/bw36-23-migration-operator')(root,local.href,core,check);
   if(process.env.BW36_23_LEGACY_INSTALL==='1')await operator.prepareLegacy(sql);
+  await require('./fixtures/bw36-23a-runtime-role-graph').prepare(root,operator,core,check,local.href);
   await check('complete original migration and companion verifier through SET-only operator',async()=>{await operator.client.query(core);await operator.verifyCore();await operator.assertLegacyRows();});await operator.noCreate();await operator.preserveCreate();
   await check('late R3 failure rolls back schema function grants and policies',async()=>{
     const before=await operator.snapshot();
@@ -45,12 +46,14 @@ let groups=0;async function check(name,fn){await fn();console.log('PASS '+name);
   });
   await check('existing migration chain + protected Core + additive runtime install',()=>operator.client.query(sql));
   await check('complete R3 companion verifier and original verifier through SET-only operator',async()=>{await operator.client.query(verify);await operator.verifyCore();});
+  await require('./fixtures/bw36-23a-runtime-role-graph').postgresChain(root,local.href,core,sql,verify,check);
   await check('idempotent runtime install and private protection fingerprint remain compatible',async()=>{await operator.client.query(sql);await operator.client.query(core);await operator.noCreate();await root.query(verify);await operator.verifyCore();});
   await check('existing anon/authenticated deny policies remain identical',async()=>assert.deepEqual((await root.query("SELECT tablename,policyname,qual,with_check FROM pg_policies WHERE roles && ARRAY['anon','authenticated']::name[] ORDER BY tablename,policyname")).rows,denies));
   local.username='tendra_app_runtime';local.password=password;
   db=new Pool({connectionString:local.href,max:5});other=new Client({connectionString:local.href});await other.connect();
   process.env.POSTGRES_URL=local.href;process.env.AUTH_SECRET=randomBytes(32).toString('hex');process.env.BRAND_KNOWLEDGE_REVIEW_KEY=randomBytes(32).toString('hex');
   await check('real password login with inherited grants and full fail-closed verification',async()=>{const r=(await db.query('SELECT session_user,current_user')).rows[0];assert.equal(r.session_user,'tendra_app_runtime');assert.equal(r.current_user,'tendra_app_runtime');await db.query(verify);});
+  await require('./fixtures/bw36-23a-runtime-role-graph').unsafe(root,operator,core,sql,verify,check);
   const denied=(q,args)=>assert.rejects(()=>db.query(q,args),e=>e.code==='42501');
   await check('runtime has no direct Brand writes, history access, owner role or DDL',async()=>{
    for(const q of ["INSERT INTO brands(name,owner_email) VALUES('bad','bad@test')","UPDATE brands SET name='bad'","DELETE FROM brands","SELECT * FROM brand_knowledge_history","UPDATE brand_knowledge_history SET intent='[]'","DELETE FROM brand_knowledge_history","TRUNCATE brands","SET ROLE brand_knowledge_owner","SET ROLE brand_knowledge_runtime","CREATE TABLE public.runtime_ddl_bad(id int)"])await denied(q);
@@ -180,6 +183,6 @@ let groups=0;async function check(name,fn){await fn();console.log('PASS '+name);
    if(!remaining)break;await new Promise(resolve=>setTimeout(resolve,20));
   }
   assert.equal(remaining,0,'Fixture connections must close before database cleanup');
-  await admin.query('DROP DATABASE '+dbname);if(operator)await operator.drop(admin);await admin.end();
+  await admin.query('DROP DATABASE '+dbname);if(operator)await operator.drop(admin);await admin.query('REVOKE brand_knowledge_runtime,tendra_app_runtime,brand_knowledge_owner FROM postgres CASCADE');await admin.end();
  }
 })().catch(e=>{console.error(e);process.exitCode=1;});
