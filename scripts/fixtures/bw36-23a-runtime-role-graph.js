@@ -23,6 +23,7 @@ module.exports={
   // Supabase operator SET authority plus PostgreSQL 16+ creator ADMIN rows.
   // These are explicit catalog edges: superuser's implicit pg_has_role is not evidence.
   await root.query('GRANT brand_knowledge_owner TO postgres WITH INHERIT FALSE, SET TRUE, ADMIN FALSE');
+  if(process.env.BW36_23_RESTRICTIVE_GRAPH==='1')return;
   await root.query('GRANT brand_knowledge_runtime, tendra_app_runtime TO postgres WITH INHERIT FALSE, SET FALSE, ADMIN TRUE');
   await withSupabasePostgres(root,url,async()=>{
   await check('Supabase operator ADMIN-only memberships reproduce exact P0001 postgres and atomic rollback',async()=>{
@@ -79,7 +80,9 @@ module.exports={
     ['runtime administers other role','GRANT bw23_untrusted TO tendra_app_runtime WITH INHERIT FALSE, SET FALSE, ADMIN TRUE','REVOKE bw23_untrusted FROM tendra_app_runtime'],
     ['runtime membership SET changed','GRANT brand_knowledge_runtime TO tendra_app_runtime WITH INHERIT TRUE, SET TRUE, ADMIN FALSE','GRANT brand_knowledge_runtime TO tendra_app_runtime WITH INHERIT TRUE, SET FALSE, ADMIN FALSE'],
    ])await check(name+' rejected by restrictive R3 graph',async()=>{
-    await root.query(grant);try{await reject(r3,/UNREVIEWED_ROLE_MEMBERSHIP|EXACT_RUNTIME_MEMBERSHIP_REQUIRED/);await reject(verify,/UNREVIEWED_ROLE_MEMBERSHIP|MEMBERSHIP_OPTIONS_INVALID/);}finally{await root.query(revoke);}
+    await root.query(grant);try{
+     if(name!=='runtime membership SET changed'){await reject(core,/UNSAFE_RUNTIME_PRIVILEGES/);await reject(protectionVerify,/UNSAFE_RUNTIME_PRIVILEGES/);}
+     await reject(r3,/UNREVIEWED_ROLE_MEMBERSHIP|EXACT_RUNTIME_MEMBERSHIP_REQUIRED/);await reject(verify,/UNREVIEWED_ROLE_MEMBERSHIP|MEMBERSHIP_OPTIONS_INVALID/);}finally{await root.query(revoke);}
    });
    await operator.client.query(protectionVerify);await operator.client.query(verify);
   }finally{await root.query('DROP ROLE bw23_elevated,bw23_bridge,bw23_untrusted');}

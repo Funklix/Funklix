@@ -36,7 +36,9 @@ actual INHERIT or SET path into runtime must still fail.
 Protection installation and standalone verification traverse explicit INHERIT
 or SET edges down to runtime members, then up to every capability-reachable
 ancestor. The union deliberately rejects mixed INHERIT/SET paths conservatively;
-ADMIN-only edges do not convey capabilities. Every resulting role undergoes the
+ADMIN-only edges do not convey capabilities. Only owner-authorized operators
+may hold inert incoming ADMIN rows; untrusted ADMIN holders and outgoing runtime
+ADMIN rights fail closed in protection verification too. Every resulting role undergoes the
 existing elevated attribute, owner membership, protected table/column and schema
 privilege checks. Ancestors matter: SET into another role must not evade checks
 just because its grants are not inherited in the login's current identity.
@@ -64,6 +66,9 @@ Local final validation passed on both PostgreSQL versions:
 | --- | ---: | ---: |
 | Protection | 68 | 74 |
 | R3 including role graph and NOSUPERUSER postgres chain | 47 | 56 |
+
+The restrictive graph without incoming administrative memberships also passed
+45 R3 groups on each version.
 
 The 15 contract/controller groups and `git diff --check` also passed. GitHub
 Runtime Boot Safety is required on the pushed PR commit; its final status is

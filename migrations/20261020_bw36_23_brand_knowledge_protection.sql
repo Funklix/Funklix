@@ -531,6 +531,15 @@ BEGIN
   ) SELECT p.* FROM pg_roles p JOIN reachable r ON p.oid=r.oid LOOP
     IF runtime_role.rolsuper OR runtime_role.rolbypassrls OR runtime_role.rolcreaterole OR runtime_role.rolcreatedb OR runtime_role.rolreplication
       OR pg_has_role(runtime_role.oid,'brand_knowledge_owner','MEMBER')
+      -- Runtime must not administer roles and grant itself a new capability.
+      OR EXISTS(SELECT FROM pg_auth_members WHERE member=runtime_role.oid AND admin_option)
+      -- Only explicit owner-authorized operators may hold inert ADMIN rows.
+      OR EXISTS(WITH RECURSIVE operators(oid) AS (
+        SELECT 'brand_knowledge_owner'::regrole::oid
+        UNION SELECT m.member FROM pg_auth_members m JOIN operators o ON m.roleid=o.oid WHERE m.set_option
+      ) SELECT FROM pg_auth_members WHERE roleid=runtime_role.oid
+        AND admin_option AND NOT inherit_option AND NOT set_option
+        AND member NOT IN (SELECT oid FROM operators))
       OR has_table_privilege(runtime_role.oid,'public.brands','INSERT,UPDATE,DELETE,TRUNCATE,TRIGGER')
       OR has_any_column_privilege(runtime_role.oid,'public.brands','INSERT,UPDATE,REFERENCES')
       OR has_table_privilege(runtime_role.oid,'public.brand_knowledge_history','INSERT,UPDATE,DELETE,TRUNCATE,TRIGGER,SELECT')
