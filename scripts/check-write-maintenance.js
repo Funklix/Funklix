@@ -9,7 +9,7 @@ const root = path.resolve(__dirname, '..');
 function files(dir) { return fs.readdirSync(dir, { withFileTypes: true }).flatMap(e => e.isDirectory() ? files(path.join(dir,e.name)) : [path.join(dir,e.name)]); }
 function response() { return { statusCode:200, headers:{}, setHeader(k,v){this.headers[k.toLowerCase()]=v;},removeHeader(k){delete this.headers[k.toLowerCase()];},status(n){this.statusCode=n;return this;},json(b){this.body=b;return this.end(JSON.stringify(b));},end(b){if(b)this.body=JSON.parse(b);this.finished=true;return this;} }; }
 let delivered = [], readResult = { rows:[], rowCount:0 };
-function rawQuery(sql, values, callback) { delivered.push(typeof sql==='string'?sql:sql.text); const result=readResult;const cb=typeof values==='function'?values:callback;if(cb){cb(null,result);return;}return Promise.resolve(result); }
+function rawQuery(sql, values, callback) { delivered.push(typeof sql==='string'?sql:sql.text); const result=typeof readResult==='function'?readResult(typeof sql==='string'?sql:sql.text,values):readResult;const cb=typeof values==='function'?values:callback;if(cb){cb(null,result);return;}return Promise.resolve(result); }
 const client={query:rawQuery,release(){}};
 const pool=gate.guardPool({query:rawQuery,connect(callback){if(callback){callback(null,client,()=>{});return;}return Promise.resolve(client);}});
 function load(file, overrides={}) {
@@ -45,6 +45,9 @@ function maintenance(res) { assert.equal(res.statusCode,503);assert.equal(res.bo
  const previewSql='SELECT brand_knowledge_private.write_brand($1,$2::uuid,$3::jsonb,$4::jsonb,$5) AS outcome';
  await pool.query(previewSql,['owner', 'brand', '{}', null, true]);
  await blocked(()=>pool.query(previewSql,['owner', 'brand', '{}', null, false]));
+ await blocked(()=>pool.query(previewSql,['owner', 'brand', '{}', null, 'true']));
+ await pool.query({text:previewSql,values:['owner','brand','{}',null,true]});
+ await new Promise((resolve,reject)=>pool.query({text:previewSql,values:['owner','brand','{}',null,true]},error=>error?reject(error):resolve()));
  await pool.query("SET LOCAL lock_timeout='5s'");
  for(const sql of ['WITH x AS (DELETE FROM boards RETURNING *) SELECT * FROM x','SELECT * INTO backup FROM brands','SELECT "brand_knowledge_private"."write_brand"($1)','SELECT public.unknown_writer()','SELECT nextval($1)','SELECT pg_catalog.set_config($1,$2,false)','SELECT 1; DELETE FROM brands','TRUNCATE brands','SET default_transaction_read_only=off'])await blocked(()=>pool.query(sql));
  for(const sql of ["SELECT 'DELETE; UPDATE brands' AS value",'/* comment */ SELECT count(*) FROM boards','BEGIN','ROLLBACK','COMMIT'])await pool.query(sql);
@@ -75,6 +78,28 @@ function maintenance(res) { assert.equal(res.statusCode,503);assert.equal(res.bo
  assert.equal((await invoke(members,{method:'GET',query:{id},user})).statusCode,200);
  assert.equal((await invoke(members,{method:'POST',query:{id},body:{email:'other@example.test',role:'editor'}})).statusCode,401);
  console.log('PASS real Board PUT and Brand member POST return retryable 503; forbidden and unauthenticated requests retain 403/401; member GET works');
+ // Real Workspace rename, Project creation and Learning proposal control flow:
+ // authorization reads run, and the first mutation never reaches the driver.
+ const identity={id,canonical_email:user.email,status:'active',revision:'1'};
+ readResult=sql=>{
+  if(/FROM public.app_identities/.test(sql))return{rows:[identity],rowCount:1};
+  if(/FROM public.workspaces/.test(sql))return{rows:[{id,name:'Existing',status:'active',revision:1}],rowCount:1};
+  if(/FROM public.workspace_memberships/.test(sql))return{rows:[{role:'owner',status:'accepted'}],rowCount:1};
+  if(/FROM public.brands b/.test(sql))return{rows:[{id,name:'Brand',revision:1,role:'owner'}],rowCount:1};
+  return{rows:[],rowCount:0};
+ };
+ const workspaces=load('api/workspaces.js',{'./_auth-session':auth,'./_boards-storage':storage});
+ maintenance(await invoke(workspaces,{method:'PATCH',user,body:{contract:'workspace_update_v1',workspace_id:id,expected_revision:1,name:'New name',request_id:'fixture-rename'}}));
+ const workspaceRead=workspaces.createHandler({db:pool,sessionReader:()=>user,catalogLoader:async()=>[]});
+ assert.equal((await invoke(workspaceRead,{method:'GET'})).statusCode,200);
+ const executor=load('api/_project-command.js',{'./_brand-access':{getBrandAccess:async()=>({brand:{id,workspace_id:id,name:'Brand',brand_core:{},revision:1},access:{role:'owner',canCreateBrandBoards:true}})}});
+ const projects=load('api/projects.js',{'./_auth-session':auth,'./_boards-storage':storage,'./_project-command':executor});
+ maintenance(await invoke(projects,{method:'POST',user,body:{contract:'project_command_v1',workspace_id:id,project_name:'Project',request_id:'fixture-project',brand:{existing_id:id}}}));
+ const learning=load('api/_brand-learnings.js');
+ const learnings=load('api/brands/[id]/learnings.js',{'../../_auth-session':auth,'../../_boards-storage':storage,'../../_brand-learnings':learning});
+ maintenance(await invoke(learnings,{method:'POST',user,query:{id},body:{expected_brand_revision:'1',statement:'A useful learning',evidence_summary:'Fixture evidence'}}));
+ console.log('PASS real Workspace rename, Project creation and Learning proposal stop before writes; Workspace catalog GET remains available');
+ readResult={rows:[],rowCount:0};
  // Disabled document ingestion still returns the maintenance retry contract for
  // authorized mutation attempts; cleanup of an old pending intent cannot write.
  const docRecords={pool,SOURCE_TYPES:new Set(['pitch_deck']),verifySourceTile:()=>true,ensureDocumentTables:async()=>{},getActiveDocument:async()=>null,publicDocument:x=>x};

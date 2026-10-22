@@ -36,7 +36,7 @@ function isReadQuery(query, values) {
   if (/^set\s+local\s+lock_timeout\s*=\s*$/.test(sql)) return true; // a bounded session timeout, never data
   // Audited preview mode performs authorization and computes a diff, then returns
   // before write_brand's first DML. Match the complete invocation, not a substring.
-  const params = values || query?.values;
+  const params = Array.isArray(values) ? values : query?.values;
   if (/^select\s+brand_knowledge_private\s*\.\s*write_brand\s*\(\s*\$1\s*,\s*\$2::uuid\s*,\s*\$3::jsonb\s*,\s*(?:null\s*,\s*true|\$4::jsonb\s*,\s*\$5)\s*\)\s+as\s+outcome$/.test(sql)) {
     return Array.isArray(params) && (/null\s*,\s*true/.test(sql) || params[4] === true);
   }
