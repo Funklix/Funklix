@@ -49,3 +49,6 @@ module.exports = async function handler(req, res) {
     return res.status(500).json({ error: 'Sharing operation failed' });
   }
 };
+
+// Preserve the handler's authentication and authorization before guarding database writes.
+module.exports = require('../../_write-maintenance').withMaintenanceResponse(module.exports);

@@ -20,3 +20,6 @@ module.exports = async function handler(req, res) {
     return res.status(safe.status).json({ contract:'brand_learnings_v1', error:{ code:safe.code } });
   }
 };
+
+// Preserve the handler's authentication and authorization before guarding database writes.
+module.exports = require('../../_write-maintenance').withMaintenanceResponse(module.exports);

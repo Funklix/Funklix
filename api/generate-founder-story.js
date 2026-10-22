@@ -221,3 +221,6 @@ module.exports = async function handler(req, res) {
     return res.status(500).json({ success: false, error: { code: 'generation_failed', message: 'We couldn’t generate the Founder Story. Your existing content is unchanged. Please try again.' } });
   }
 };
+
+// Preserve the handler's authentication and authorization before guarding database writes.
+module.exports = require('./_write-maintenance').withMaintenanceResponse(module.exports);

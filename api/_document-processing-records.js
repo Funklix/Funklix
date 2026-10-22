@@ -86,6 +86,7 @@ async function cancelJob(binding, client = pool) {
 }
 
 async function claimJob(workerId, client = pool) {
+  require('./_write-maintenance').assertWritesAllowed();
   await ensureDocumentProcessingTables();
   const leaseToken = crypto.randomUUID();
   const result = await client.query(`WITH candidate AS (
@@ -105,6 +106,7 @@ async function claimJob(workerId, client = pool) {
 }
 
 async function transitionClaimedJob({ jobId, leaseToken, workerId, state, scanStatus, safeErrorCode = null, scanReference = null, scanVersion = null }, client = pool) {
+  require('./_write-maintenance').assertWritesAllowed();
   if (!['blocked', 'processing', 'failed'].includes(state)) throw new Error('invalid_processing_transition');
   const result = await client.query(`UPDATE brand_document_processing_jobs j SET state=$4, scan_status=$5,
       safe_error_code=$6, scan_reference=$7, scan_version=$8, lease_token=NULL, lease_owner=NULL, lease_expires_at=NULL,

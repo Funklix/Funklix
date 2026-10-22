@@ -84,3 +84,6 @@ module.exports.createHandler=createHandler;
 
 // 20 seconds remain for extraction, authorization, delivery and cleanup.
 module.exports.config={maxDuration:300};
+
+// Preserve the handler's authentication and authorization before guarding database writes.
+module.exports = require('../../_write-maintenance').withMaintenanceResponse(module.exports);

@@ -1,3 +1,6 @@
 'use strict';
 const route = require('../../social-publishing-route');
 module.exports = async function handler(req, res) { const serverRequestId = route.requestId(req); const id=req.query?.id; if (req.method !== 'GET') return route.send(res, 405, { ok:false,status:'request_invalid',classification:'method_not_allowed',jobId:route.UUID.test(id||'')?id:'invalid',serverRequestId }); const identity=route.actor(req); if(!identity)return route.send(res,401,{ok:false,status:'authentication_required',jobId:route.UUID.test(id||'')?id:'invalid',serverRequestId}); if(!route.UUID.test(id||''))return route.send(res,400,{ok:false,status:'request_invalid',jobId:'invalid',serverRequestId}); try{const result=await route.service().jobResult(id,identity.ownerAccountId);if(!result)return route.send(res,404,{ok:false,status:'unknown',classification:'job_not_found',jobId:id,serverRequestId,retryable:false});return route.send(res,200,{...result,jobId:id,serverRequestId});}catch{return route.send(res,503,{ok:false,status:'unknown',classification:'job_status_unavailable',jobId:id,serverRequestId,retryable:false});} };
+
+// Preserve the handler's authentication and authorization before guarding database writes.
+module.exports = require('../../_write-maintenance').withMaintenanceResponse(module.exports);

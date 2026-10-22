@@ -59,3 +59,6 @@ module.exports = async function handler(req, res) {
 };
 
 module.exports.MEMBER_ROLES = MEMBER_ROLES;
+
+// Preserve the handler's authentication and authorization before guarding database writes.
+module.exports = require('../../_write-maintenance').withMaintenanceResponse(module.exports);

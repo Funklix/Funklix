@@ -58,3 +58,6 @@ module.exports = async function handler(req, res) {
 };
 module.exports.proposalMessages = proposalMessages;
 module.exports.PROPOSAL_SCHEMA = PROPOSAL_SCHEMA;
+
+// Preserve the handler's authentication and authorization before guarding database writes.
+module.exports = require('../_write-maintenance').withMaintenanceResponse(module.exports);

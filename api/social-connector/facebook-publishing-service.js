@@ -31,10 +31,10 @@ function createFacebookPublishingService({ pool = defaultPool, adapter = createF
     if (!found.rowCount) return null;
     let row = found.rows[0];
     if (row.external_post_id && row.delivery_state === 'confirmed') {
-      if (row.status !== 'delivered') await pool.query(`UPDATE public.social_publish_jobs SET status='delivered',completed_at=COALESCE(completed_at,$2),updated_at=$2 WHERE id=$1 AND owner_account_id=$3`, [jobId, row.published_at || now().toISOString(), ownerAccountId]);
+      if (!require('../_write-maintenance').enabled() && row.status !== 'delivered') await pool.query(`UPDATE public.social_publish_jobs SET status='delivered',completed_at=COALESCE(completed_at,$2),updated_at=$2 WHERE id=$1 AND owner_account_id=$3`, [jobId, row.published_at || now().toISOString(), ownerAccountId]);
       return publishedResult(row);
     }
-    if (reconcile && row.provider_attempt_state === 'accepted' && POST_ID.test(row.provider_request_reference || '')) {
+    if (!require('../_write-maintenance').enabled() && reconcile && row.provider_attempt_state === 'accepted' && POST_ID.test(row.provider_request_reference || '')) {
       const snapshot = typeof row.content_snapshot === 'string' ? JSON.parse(row.content_snapshot) : row.content_snapshot;
       const publishedAt = row.completed_at || now().toISOString();
       await pool.query(`INSERT INTO public.social_external_posts(platform,external_post_id,destination_id,publish_job_id,owner_account_id,source_board_id,source_node_id,approved_fingerprint,published_snapshot_reference,external_url,published_at,delivery_state,deletion_state)
@@ -78,6 +78,7 @@ function createFacebookPublishingService({ pool = defaultPool, adapter = createF
   }
 
   async function publish(input, actor) {
+    require('../_write-maintenance').assertWritesAllowed();
     const state = await resolve(input, actor);
     const existing = state.previous[0];
     if (existing) return await jobResult(existing.id,input.ownerAccountId) || {ok:false,status:'publishing_in_progress',jobId:existing.id};

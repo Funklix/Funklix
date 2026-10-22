@@ -25,3 +25,6 @@ module.exports=async function(req,res){
   return res.end(JSON.stringify(contract.serviceUnavailable({linkedin,serverRequestId})));
  }
 };
+
+// Preserve the handler's authentication and authorization before guarding database writes.
+module.exports = require('./_write-maintenance').withMaintenanceResponse(module.exports);

@@ -42,3 +42,6 @@ module.exports=async function handler(req,res){
 };
 // Safe lifecycle telemetry retains provider_invoked and final_classification semantics without content.
 module.exports._simulation=simulation;module.exports._diagnostics={CLIENT_ID_PATTERN,opaqueId};
+
+// Preserve the handler's authentication and authorization before guarding database writes.
+module.exports = require('../_write-maintenance').withMaintenanceResponse(module.exports);

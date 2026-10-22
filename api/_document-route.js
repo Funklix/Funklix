@@ -43,6 +43,7 @@ async function metadata(req, res) {
 
 async function intent(req, res) {
   const auth = await authorize(req, res, { edit: true }); if (!auth) return;
+  require('./_write-maintenance').assertWritesAllowed();
   return documentImportDisabled(res);
   /* Legacy implementation retained for reversible reactivation and lifecycle reference. */
   /* istanbul ignore next */

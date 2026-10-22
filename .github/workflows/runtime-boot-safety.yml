@@ -495,3 +495,5 @@ jobs:
         run: |
           npm run check:bw36.23a:postgres
           npm run check:bw36.23ar3:postgres
+      - name: Check temporary write maintenance gate (provider-free)
+        run: npm run check:write-maintenance

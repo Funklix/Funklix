@@ -40,6 +40,7 @@ module.exports=async function handler(req,res){
     const revision=normalizeLogoRevision(row.logo_revision);
     if(revision!==input.expected_revision){await client.query('ROLLBACK');return failure(res,409,'STALE_UPDATE');}
     if(revision===Number.MAX_SAFE_INTEGER)throw new Error('INVALID_LOGO_REVISION');
+    require('../../_write-maintenance').assertWritesAllowed();
     oldPath=row.logo_object_path;
     if (oldPath) { try { if (!verifyReview(req.headers?.['x-brand-review'],user.email.trim().toLowerCase(),brandId,input)) throw new Error(); } catch { await client.query('ROLLBACK'); return failure(res,428,'LOGO_REVIEW_REQUIRED'); } }
     let updated,expectedMetadata={logo_mime_type:null,logo_source:null,logo_source_host:null};
@@ -92,3 +93,6 @@ module.exports=async function handler(req,res){
     return failure(res,code==='UNSUPPORTED_FILE'?415:['STORAGE_UNAVAILABLE','DATABASE_UNAVAILABLE'].includes(code)?503:500,code);
   }finally{client.release();}
 };
+
+// Preserve the handler's authentication and authorization before guarding database writes.
+module.exports = require('../../_write-maintenance').withMaintenanceResponse(module.exports);
