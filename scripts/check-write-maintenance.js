@@ -59,7 +59,7 @@ function maintenance(res) { assert.equal(res.statusCode,503);assert.equal(res.bo
  const sources=new Map(apis.map(f=>[f,fs.readFileSync(f,'utf8')]));
  function reaches(file,seen=new Set()){if(file.endsWith('/_boards-storage.js'))return true;if(seen.has(file))return false;seen.add(file);return [...(sources.get(file)||'').matchAll(/require\(['"]([^'"]+)['"]\)/g)].some(m=>m[1].startsWith('.')&&reaches(path.resolve(path.dirname(file),m[1]+'.js'),seen));}
  let routes=0;
- for(const [file,src] of sources){if(!path.basename(file).startsWith('_')&&/module\.exports\s*=\s*(?:async\b|createHandler\(|handler\b|require\([^\n]+\)\.handler\()/.test(src)&&reaches(file)){assert(src.includes('.withMaintenanceResponse(module.exports)'),file);routes++;}}
+ for(const [file,src] of sources){if(!path.basename(file).startsWith('_')&&/module\.exports\s*=\s*(?:async\b|createHandler\(|makeHandler\(|handler\b|require\([^\n]+\)\.handler\()/.test(src)&&reaches(file)){assert(src.includes('.withMaintenanceResponse(module.exports)'),file);routes++;}}
  assert(routes>=50);console.log(`PASS ${routes} database-dependent HTTP routes retain central response boundary`);
  const swallowed=gate.withMaintenanceResponse(async(req,res)=>{try{await pool.query('DELETE FROM brands');}catch{}res.statusCode=303;res.setHeader('location','/success');return res.end('{}');});
  maintenance(await invoke(swallowed,{}));

@@ -7,3 +7,6 @@ module.exports = makeHandler({
   system: 'Create a reviewable strategic Market Research draft from supplied evidence. You do not browse or verify current market data.',
   instructions: 'Separate confirmed user-provided facts from qualitative inferences. Map accepted personas and Brand Avatar evidence into customerSegments and primaryNeeds when supported. Map value proposition and positioning into marketScope, differentiationOpportunities, and strategic implications. Map product/category descriptions into marketCategory and marketScope, supplied competitors and alternatives into their matching fields, and messaging/channel evidence into the matching implications. Never fabricate competitors or competitor details. Keep unsupported observations in assumptionsToValidate and produce useful strategic implications only from supported evidence.'
 });
+
+// Preserve the handler's authentication and authorization before guarding database writes.
+module.exports = require('./_write-maintenance').withMaintenanceResponse(module.exports);
