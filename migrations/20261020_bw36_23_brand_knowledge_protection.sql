@@ -9,7 +9,7 @@ SELECT pg_catalog.pg_advisory_xact_lock(3623001);
 DO $preflight$
 DECLARE r record;
 BEGIN
-  IF current_setting('server_version_num')::int < 140000 THEN RAISE EXCEPTION 'UNSUPPORTED_POSTGRES'; END IF;
+  IF current_setting('server_version_num')::int < 160000 THEN RAISE EXCEPTION 'POSTGRES_16_REQUIRED'; END IF;
   IF to_regclass('public.brands') IS NULL OR to_regclass('public.brand_members') IS NULL
     OR to_regclass('public.app_identities') IS NULL OR to_regclass('public.workspace_memberships') IS NULL THEN
     RAISE EXCEPTION 'UNSUPPORTED_SCHEMA'; END IF;
@@ -517,10 +517,18 @@ END $fingerprint$;
 DO $verify$
 DECLARE runtime_role record;
 BEGIN
+  -- ADMIN alone is role-management authority, not inherited/SET capability.
+  -- Follow explicit capability edges, never pg_has_role(superuser, ..., 'USAGE'):
+  -- that function reports implicit superuser authority even without membership.
   FOR runtime_role IN WITH RECURSIVE members(oid) AS (
     SELECT oid FROM pg_roles WHERE rolname='brand_knowledge_runtime'
     UNION SELECT m.member FROM pg_auth_members m JOIN members r ON m.roleid=r.oid
-  ) SELECT p.* FROM pg_roles p JOIN members m ON p.oid=m.oid LOOP
+      WHERE m.inherit_option OR m.set_option
+  ), reachable(oid) AS (
+    SELECT oid FROM members
+    UNION SELECT m.roleid FROM pg_auth_members m JOIN reachable r ON m.member=r.oid
+      WHERE m.inherit_option OR m.set_option
+  ) SELECT p.* FROM pg_roles p JOIN reachable r ON p.oid=r.oid LOOP
     IF runtime_role.rolsuper OR runtime_role.rolbypassrls OR runtime_role.rolcreaterole OR runtime_role.rolcreatedb OR runtime_role.rolreplication
       OR pg_has_role(runtime_role.oid,'brand_knowledge_owner','MEMBER')
       OR has_table_privilege(runtime_role.oid,'public.brands','INSERT,UPDATE,DELETE,TRUNCATE,TRIGGER')
