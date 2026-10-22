@@ -9,7 +9,7 @@ SELECT pg_catalog.pg_advisory_xact_lock(3623001);
 DO $preflight$
 DECLARE r record;
 BEGIN
-  IF current_setting('server_version_num')::int < 140000 THEN RAISE EXCEPTION 'UNSUPPORTED_POSTGRES'; END IF;
+  IF current_setting('server_version_num')::int < 160000 THEN RAISE EXCEPTION 'UNSUPPORTED_POSTGRES'; END IF;
   IF to_regclass('public.brands') IS NULL OR to_regclass('public.brand_members') IS NULL
     OR to_regclass('public.app_identities') IS NULL OR to_regclass('public.workspace_memberships') IS NULL THEN
     RAISE EXCEPTION 'UNSUPPORTED_SCHEMA'; END IF;
@@ -517,12 +517,25 @@ END $fingerprint$;
 DO $verify$
 DECLARE runtime_role record;
 BEGIN
+  -- PG16+ records creator/operator ADMIN-only memberships. These confer neither
+  -- inherited privileges nor SET ROLE. Only elevated LOGIN operators already
+  -- authorized to SET the owner may administer the group without joining this
+  -- capability closure. INHERIT/SET edges are always checked, including postgres.
   FOR runtime_role IN WITH RECURSIVE members(oid) AS (
     SELECT oid FROM pg_roles WHERE rolname='brand_knowledge_runtime'
     UNION SELECT m.member FROM pg_auth_members m JOIN members r ON m.roleid=r.oid
+      WHERE NOT (m.admin_option AND NOT m.inherit_option AND NOT m.set_option
+        AND EXISTS(SELECT FROM pg_roles op WHERE op.oid=m.member AND op.rolcanlogin
+          AND (op.rolsuper OR op.rolcreaterole)
+          AND pg_has_role(op.oid,'brand_knowledge_owner','SET')))
   ) SELECT p.* FROM pg_roles p JOIN members m ON p.oid=m.oid LOOP
     IF runtime_role.rolsuper OR runtime_role.rolbypassrls OR runtime_role.rolcreaterole OR runtime_role.rolcreatedb OR runtime_role.rolreplication
+      OR EXISTS(SELECT FROM pg_auth_members m WHERE m.member=runtime_role.oid
+        AND m.admin_option AND NOT m.inherit_option AND NOT m.set_option)
       OR pg_has_role(runtime_role.oid,'brand_knowledge_owner','MEMBER')
+      OR EXISTS(SELECT FROM pg_roles elevated WHERE
+        (elevated.rolsuper OR elevated.rolbypassrls OR elevated.rolcreaterole OR elevated.rolcreatedb OR elevated.rolreplication)
+        AND pg_has_role(runtime_role.oid,elevated.oid,'MEMBER'))
       OR has_table_privilege(runtime_role.oid,'public.brands','INSERT,UPDATE,DELETE,TRUNCATE,TRIGGER')
       OR has_any_column_privilege(runtime_role.oid,'public.brands','INSERT,UPDATE,REFERENCES')
       OR has_table_privilege(runtime_role.oid,'public.brand_knowledge_history','INSERT,UPDATE,DELETE,TRUNCATE,TRIGGER,SELECT')

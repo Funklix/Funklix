@@ -497,3 +497,11 @@ jobs:
           npm run check:bw36.23ar3:postgres
       - name: Check temporary write maintenance gate (provider-free)
         run: npm run check:write-maintenance
+      - name: Check restrictive role graph without operator ADMIN membership
+        env:
+          BW36_23_DISPOSABLE: '1'
+          BW36_23_RESTRICTIVE_GRAPH: '1'
+          BW36_23_TEST_URL: postgres://postgres:disposable-bw36-23-fixture@127.0.0.1:5432/postgres
+        run: |
+          npm run check:bw36.23a:postgres
+          npm run check:bw36.23ar3:postgres

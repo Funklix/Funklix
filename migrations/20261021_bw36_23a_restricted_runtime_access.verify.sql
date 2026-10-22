@@ -10,7 +10,13 @@ BEGIN
   IF NOT EXISTS(SELECT FROM pg_auth_members WHERE roleid='brand_knowledge_runtime'::regrole AND member='tendra_app_runtime'::regrole AND inherit_option AND NOT set_option AND NOT admin_option) THEN RAISE EXCEPTION 'MEMBERSHIP_OPTIONS_INVALID'; END IF;
   IF EXISTS(SELECT FROM pg_auth_members WHERE
     (member IN ('brand_knowledge_runtime'::regrole,'tendra_app_runtime'::regrole) OR roleid IN ('brand_knowledge_runtime'::regrole,'tendra_app_runtime'::regrole))
-    AND NOT(roleid='brand_knowledge_runtime'::regrole AND member='tendra_app_runtime'::regrole AND inherit_option AND NOT set_option AND NOT admin_option)) THEN RAISE EXCEPTION 'UNREVIEWED_ROLE_MEMBERSHIP'; END IF;
+    AND NOT((roleid='brand_knowledge_runtime'::regrole AND member='tendra_app_runtime'::regrole AND inherit_option AND NOT set_option AND NOT admin_option)
+    -- ADMIN alone is operator control, not runtime capability. Never allow an
+    -- operator INHERIT or SET edge, or an ADMIN edge held by a runtime identity.
+    OR (roleid='brand_knowledge_runtime'::regrole AND admin_option AND NOT inherit_option AND NOT set_option
+      AND EXISTS(SELECT FROM pg_roles op WHERE op.oid=member AND op.rolcanlogin
+        AND (op.rolsuper OR op.rolcreaterole)
+        AND pg_has_role(op.oid,'brand_knowledge_owner','SET'))))) THEN RAISE EXCEPTION 'UNREVIEWED_ROLE_MEMBERSHIP'; END IF;
   FOREACH t IN ARRAY ARRAY['brand_knowledge_runtime','tendra_app_runtime'] LOOP
     IF pg_has_role(t,'brand_knowledge_owner','MEMBER') OR has_schema_privilege(t,'public','CREATE') OR has_schema_privilege(t,'brand_knowledge_private','CREATE') OR has_schema_privilege(t,'tendra_runtime_private','CREATE')
        OR has_table_privilege(t,'public.brands','INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
