@@ -487,3 +487,11 @@ jobs:
           BW36_23_DISPOSABLE: '1'
           BW36_23_TEST_URL: postgres://postgres:disposable-bw36-23-fixture@127.0.0.1:5432/postgres
         run: npm run check:bw36.23ar3:postgres
+      - name: Check completed pre-805 protection upgrade and full verifier chain
+        env:
+          BW36_23_DISPOSABLE: '1'
+          BW36_23_LEGACY_INSTALL: '1'
+          BW36_23_TEST_URL: postgres://postgres:disposable-bw36-23-fixture@127.0.0.1:5432/postgres
+        run: |
+          npm run check:bw36.23a:postgres
+          npm run check:bw36.23ar3:postgres
