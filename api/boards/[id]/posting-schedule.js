@@ -18,3 +18,6 @@ module.exports=async function handler(req,res){const id=requestId(req);
     return response.write(res,200,envelope(id,true,result.code,{board_id:boardId,node_id:body.nodeId,planning_schedule:result.planningSchedule,board_revision:result.boardRevision}));
   }catch(error){console.error('[POSTING_SCHEDULE_FAILURE]',{server_request_id:id,classification:'storage_unavailable'});return response.write(res,503,envelope(id,false,'schedule_failed',{failure_category:'storage_unavailable',retryable:true}));}
 };
+
+// Preserve the handler's authentication and authorization before guarding database writes.
+module.exports = require('../../_write-maintenance').withMaintenanceResponse(module.exports);

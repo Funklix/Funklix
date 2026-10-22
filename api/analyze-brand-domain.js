@@ -93,3 +93,6 @@ module.exports = handler;
 module.exports.analyzeBrandDomain = analyzeBrandDomain;
 module.exports.normalizeDomainUrl = normalizeDomainUrl;
 module.exports.validSuggestions = validSuggestions;
+
+// Preserve the handler's authentication and authorization before guarding database writes.
+module.exports = require('./_write-maintenance').withMaintenanceResponse(module.exports);

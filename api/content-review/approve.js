@@ -18,3 +18,6 @@ module.exports = async function approve(req, res) {
     return response.write(res,200,envelope(id,true,'approval_saved',{board_id:body.boardId,node_id:body.nodeId,fingerprint:result.fingerprint,fingerprint_version:result.fingerprintVersion,board_revision:result.boardRevision,approval_write_result:result.approvalAuthority}));
   } catch (error) { const construction=error?.message==='unsafe_authoritative_envelope'; return response.write(res,construction?500:503,envelope(id,false,construction?'response_construction_failed':'storage_unavailable',{failure_category:construction?'response_construction_failed':'approval_write_failed',retryable:!construction})); }
 };
+
+// Preserve the handler's authentication and authorization before guarding database writes.
+module.exports = require('../_write-maintenance').withMaintenanceResponse(module.exports);

@@ -21,3 +21,6 @@ module.exports = async (req, res) => {
     return res.status(200).json(await write({ db: pool, user: getSessionUser(req), brandId: req.query.id, input: req.body, preview: true })); }
   catch (e) { return res.status(e.status || 503).json({ code: e.code || 'BRAND_PROTECTION_UNAVAILABLE' }); }
 };
+
+// Preserve the handler's authentication and authorization before guarding database writes.
+module.exports = require('../../_write-maintenance').withMaintenanceResponse(module.exports);

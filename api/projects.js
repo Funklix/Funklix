@@ -21,3 +21,6 @@ function createHandler({db=pool,sessionReader=getSessionUser}={}) {
   };
 }
 module.exports=createHandler();module.exports.createHandler=createHandler;
+
+// Preserve the handler's authentication and authorization before guarding database writes.
+module.exports = require('./_write-maintenance').withMaintenanceResponse(module.exports);

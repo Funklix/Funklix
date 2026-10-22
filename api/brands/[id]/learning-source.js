@@ -16,3 +16,6 @@ module.exports = async function handler(req,res) {
     return res.status(200).json(await previewSource({db:pool,user,brandId:id,source}));
   } catch(error) { const safe=boundedError(error); return res.status(safe.status).json({contract:'brand_learning_source_v1',error:{code:safe.code}}); }
 };
+
+// Preserve the handler's authentication and authorization before guarding database writes.
+module.exports = require('../../_write-maintenance').withMaintenanceResponse(module.exports);

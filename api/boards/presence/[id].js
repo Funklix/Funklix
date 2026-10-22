@@ -82,6 +82,7 @@ module.exports = async function handler(req, res) {
   const viewers = boardsPresence.get(boardId) || new Map();
 
   if (req.method === 'POST') {
+    require('../../_write-maintenance').assertWritesAllowed();
     const { selectedNodeId = null, editingNodeId = null, editingField = null, cursorX = null, cursorY = null, viewportCenterX = null, viewportCenterY = null, hoveredNodeId = null } = req.body || {};
     const safeSelectedNodeId = safeString(selectedNodeId);
     const safeEditingNodeId = safeString(editingNodeId);
@@ -135,3 +136,6 @@ module.exports = async function handler(req, res) {
 
   return res.status(200).json({ viewers: list, count: list.length, ttlMs: PRESENCE_TTL_MS });
 };
+
+// Preserve the handler's authentication and authorization before guarding database writes.
+module.exports = require('../../_write-maintenance').withMaintenanceResponse(module.exports);

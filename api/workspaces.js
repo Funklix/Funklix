@@ -258,3 +258,6 @@ module.exports.createFirstWorkspace = createFirstWorkspace;
 module.exports.IDENTITY_SELECT = IDENTITY_SELECT;
 
 module.exports.CREATE_V2_CONTRACT = CREATE_V2_CONTRACT;
+
+// Preserve the handler's authentication and authorization before guarding database writes.
+module.exports = require('./_write-maintenance').withMaintenanceResponse(module.exports);

@@ -14,3 +14,6 @@ function redirect(res,result,id){
 }
 module.exports=async function(req,res){const id=route.requestId(req);if(req.method!=='GET'){res.statusCode=405;return res.end();}const owner=route.user(req);if(!owner)return redirect(res,{ok:false,error:{code:'linkedin_state_invalid',classification:'authorization',phase:'callback_entered',serverRequestId:id}},id);try{await route.ensure();const url=new URL(req.url,'https://funklix.invalid');let result=await route.service().complete({ownerAccountId:owner,sessionBinding:route.fingerprint(req),state:url.searchParams.get('state'),code:url.searchParams.get('code'),serverRequestId:id});const providerError=url.searchParams.get('error');if(providerError&&result.error?.code==='linkedin_code_missing')result={...result,error:{...result.error,code:providerError==='user_cancelled_authorize'?'linkedin_authorization_cancelled':'linkedin_authorization_denied'}};return redirect(res,result,id);}catch{return redirect(res,{ok:false,error:{code:'linkedin_storage_failed',classification:'storage',phase:'callback_entered',serverRequestId:id}},id);}};
 module.exports.redirect=redirect;
+
+// Preserve the handler's authentication and authorization before guarding database writes.
+module.exports = require('./_write-maintenance').withMaintenanceResponse(module.exports);

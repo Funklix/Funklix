@@ -329,7 +329,7 @@ module.exports = async function handler(req, res) {
       };
     }
     requestAccess = access;
-    if (access?.role === 'editor') {
+    if (access?.role === 'editor' && !require('../_write-maintenance').enabled()) {
       console.error('[BOARD_GET_EDITOR_IDENTITY_REFRESH_BEFORE]', {
         boardId: id,
         email: user?.email || null,
@@ -373,3 +373,6 @@ module.exports = async function handler(req, res) {
     return res.status(500).json({ error: error?.message || 'Failed to load board' });
   }
 };
+
+// Preserve the handler's authentication and authorization before guarding database writes.
+module.exports = require('../_write-maintenance').withMaintenanceResponse(module.exports);

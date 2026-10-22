@@ -36,6 +36,7 @@ async function authorizeBinding(req, res, { edit = false } = {}) {
 
 async function start(req, res) {
   const auth = await authorizeBinding(req, res, { edit: true }); if (!auth) return;
+  require('./_write-maintenance').assertWritesAllowed();
   return documentImportDisabled(res);
   /* istanbul ignore next */
   let row = await processing.startJob(auth.binding, normalizeEmail(auth.user.email));
@@ -52,6 +53,7 @@ async function status(req, res) {
 
 async function retry(req, res) {
   const auth = await authorizeBinding(req, res, { edit: true }); if (!auth) return;
+  require('./_write-maintenance').assertWritesAllowed();
   return documentImportDisabled(res);
   /* istanbul ignore next */
   const before = await processing.getBoundJob(auth.binding);
@@ -80,6 +82,7 @@ function internalAuthorized(req) {
 
 async function processClaimedJob(claim, scanner = createScannerProvider()) {
   if (!claim) return null;
+  require('./_write-maintenance').assertWritesAllowed();
   const base = { jobId: claim.row.id, leaseToken: claim.leaseToken, workerId: claim.row.lease_owner };
   if (!scanner.configured) return processing.transitionClaimedJob({ ...base, state: 'blocked', scanStatus: 'not_configured', safeErrorCode: 'scanner_not_configured' });
   try {
@@ -97,6 +100,7 @@ async function processClaimedJob(claim, scanner = createScannerProvider()) {
 
 async function run(req, res) {
   if (!internalAuthorized(req)) return errorResponse(res, 401, 'worker_unauthorized', 'Worker authentication required.');
+  require('./_write-maintenance').assertWritesAllowed();
   return documentImportDisabled(res);
   /* istanbul ignore next */
   await documentRecords.ensureDocumentTables();

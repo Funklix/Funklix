@@ -1,5 +1,6 @@
 const { Pool } = require('pg');
-const pool = new Pool({ connectionString: process.env.POSTGRES_URL });
+const { guardPool } = require('./_write-maintenance');
+const pool = guardPool(new Pool({ connectionString: process.env.POSTGRES_URL }));
 let ready;
 async function reconcileBrandRelationship() {
   const result = await pool.query("SELECT 1 FROM pg_constraint WHERE conrelid='public.boards'::regclass AND confrelid='public.brands'::regclass AND contype='f' AND convalidated");

@@ -9,3 +9,6 @@ function createHandler(dependencies={}){return async function handler(req,res){c
 const handler=createHandler();
 module.exports=handler;
 module.exports.createHandler=createHandler;
+
+// Preserve the handler's authentication and authorization before guarding database writes.
+module.exports = require('../../_write-maintenance').withMaintenanceResponse(module.exports);
