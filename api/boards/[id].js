@@ -329,7 +329,7 @@ module.exports = async function handler(req, res) {
       };
     }
     requestAccess = access;
-    if (access?.role === 'editor') {
+    if (access?.role === 'editor' && !require('../_write-maintenance').enabled()) {
       console.error('[BOARD_GET_EDITOR_IDENTITY_REFRESH_BEFORE]', {
         boardId: id,
         email: user?.email || null,

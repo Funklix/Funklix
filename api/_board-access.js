@@ -30,7 +30,6 @@ function logOwnerIdentityDebug(message, details = {}) {
 }
 
 async function refreshOwnEditorIdentity(boardId, user, context = {}) {
-  if (require('./_write-maintenance').enabled()) return false;
   const email = normalizeEmail(user?.email);
   const name = sessionIdentityValue(user?.name, 120);
   const avatar = sessionIdentityValue(user?.avatar, 1000);

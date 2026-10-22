@@ -69,7 +69,8 @@ function maintenance(res) { assert.equal(res.statusCode,503);assert.equal(res.bo
  require.cache[path.join(root,'api/_boards-storage.js')]={id:path.join(root,'api/_boards-storage.js'),filename:path.join(root,'api/_boards-storage.js'),loaded:true,exports:storage};
  const auth={getSessionUser:req=>req.user};
  let access={canEdit:true,canView:true,canRead:true,canManageBrandMembers:true,canManageBrandAdmins:true,role:'owner'};
- const boardAccess={normalizeEmail:v=>(v||'').toLowerCase(),refreshOwnEditorIdentity:async()=>{},getBoardAccess:async()=>({board:{id,owner_email:user.email,updated_at:'2026-01-01'},access})};
+ let identityRefreshes=0;
+ const boardAccess={normalizeEmail:v=>(v||'').toLowerCase(),refreshOwnEditorIdentity:async()=>{identityRefreshes++;},getBoardAccess:async()=>({board:{id,owner_email:user.email,updated_at:'2026-01-01'},access})};
  const boards=load('api/boards/[id].js',{'../_auth-session':auth,'../_boards-storage':storage,'../_board-access':boardAccess,'../_document-storage':{}});
  maintenance(await invoke(boards,{method:'PUT',query:{id},user,body:{canvas_json:{nodes:[]}}}));
  access={...access,canEdit:false};assert.equal((await invoke(boards,{method:'PUT',query:{id},user,body:{canvas_json:{nodes:[]}}})).statusCode,403);access={...access,canEdit:true};
@@ -123,7 +124,8 @@ function maintenance(res) { assert.equal(res.statusCode,503);assert.equal(res.bo
  }
  console.log('PASS document upload/cleanup and direct scanner job stop; document metadata reads work; both real OAuth GET callbacks return 503 instead of redirects');
  // Optional Board GET repair is skipped, not reported as a failed read.
- delivered=[];const realAccess=load('api/_board-access.js',{'./_boards-storage':storage});assert.equal(await realAccess.refreshOwnEditorIdentity(id,user),false);assert.equal(delivered.length,0);
+ delivered=[];access={...access,role:'editor'};
+ assert.equal((await invoke(boards,{method:'GET',query:{id},user})).statusCode,200);assert.equal(identityRefreshes,0);access={...access,role:'owner'};
  // Already accepted Social jobs must remain readable without reconciliation writes.
  for(const name of ['publishing-service','facebook-publishing-service']){
   const serviceModule=load('api/social-connector/'+name+'.js',{'../_boards-storage':storage});
