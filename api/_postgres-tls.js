@@ -22,7 +22,7 @@ function postgresPoolOptions(env = process.env) {
   // pg also accepts a query-string host override. It must not turn the local
   // fixture exception into an unverified remote connection.
   const local = loopback(url.hostname) &&
-    (!url.searchParams.has('host') || loopback(url.searchParams.get('host'))) &&
+    url.searchParams.getAll('host').every(loopback) &&
     !url.searchParams.has('hostaddr') && !url.searchParams.has('service');
   const supplied = env.SUPABASE_CA_CERT !== undefined;
   if (local && !supplied) return { connectionString };
