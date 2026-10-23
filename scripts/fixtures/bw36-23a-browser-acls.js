@@ -21,10 +21,10 @@ module.exports={
     console.log('REPRODUCED '+e.code+': '+e.message);return true;
    });
    await operator.client.query('ROLLBACK');assert.deepEqual(await operator.snapshot(),before);assert.deepEqual(await policySnapshot(root),policies);
-   // A table-level revoke alone leaves explicit column grants behind.
+   // PostgreSQL table REVOKE ALL also clears matching explicit column ACLs.
    await root.query('BEGIN; REVOKE ALL ON board_editors FROM authenticated');
    assert.equal((await root.query("SELECT has_table_privilege('authenticated','board_editors','SELECT') t,has_any_column_privilege('authenticated','board_editors','SELECT,UPDATE,REFERENCES') c")).rows[0].t,false);
-   assert.equal((await root.query("SELECT has_any_column_privilege('authenticated','board_editors','SELECT,UPDATE,REFERENCES') c")).rows[0].c,true);
+   assert.equal((await root.query("SELECT has_any_column_privilege('authenticated','board_editors','SELECT,UPDATE,REFERENCES') c")).rows[0].c,false);
    await root.query('ROLLBACK');
   });
   await check('catalog inventory resolves exact direct table and column ACL sources',async()=>{

@@ -394,8 +394,8 @@ BEGIN
 END $schema$;
 
 -- BEGIN obsolete browser ACL cleanup
--- Only these server-only relations are in scope. Table REVOKE does not remove
--- column ACLs. PUBLIC grants also contribute to both browser roles' privileges.
+-- Only these server-only relations are in scope. Explicitly cover every live
+-- column too. PUBLIC grants contribute to both browser roles' privileges.
 -- Do not CASCADE or edit shared role memberships/ACLs: unreviewed inherited
 -- access must fail closed, preserving unrelated users and grant dependencies.
 DO $browser_acl_cleanup$

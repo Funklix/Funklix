@@ -8,8 +8,11 @@ No production SQL execution, deployment or merge.
 R3 installs server grants and checks effective browser privileges, but did not
 remove obsolete browser ACLs. RLS policies and SQL privileges are independent:
 a restrictive deny policy can deny rows while has_table_privilege still returns
-true. The older BW-33.5 table cleanup omitted board_editors. It also only revoked
-table grants, which does not remove separate pg_attribute.attacl column grants.
+true. The older BW-33.5 table cleanup omitted board_editors. R3 must account for table ACLs, explicit pg_attribute.attacl column grants,
+PUBLIC grants and effective inherited access. PostgreSQL table REVOKE ALL also
+clears matching column grants; the fixture verifies this behavior rather than
+assuming column grants survive it. The explicit column pass is redundant on the
+tested versions but keeps the intended complete browser cleanup visible.
 
 The reported error establishes effective authenticated privileges on
 board_editors; it does not establish which ACL source or columns production has.
@@ -82,7 +85,7 @@ It exercises Protection install → Protection verify → R3 install → R3 veri
 Protection verify, reruns, late injected rollback, actual runtime application
 workflows, policy preservation and the existing unsafe identity/role tests.
 
-Added fixtures reproduce the exact old failure, demonstrate column ACL survival,
+Added fixtures reproduce the exact old failure, verify table REVOKE ALL clears column ACLs,
 seed table/column browser grants on all 21 tables (including PUBLIC and grant
 options), preserve an unrelated ACL, reject shared inherited table/column grants
 with source diagnostics and atomic rollback, reject dependent regrants, and verify
