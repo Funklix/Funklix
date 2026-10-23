@@ -69,6 +69,7 @@ check('local fixtures and absent URL preserve existing pg defaults', () => {
     const connectionString = 'postgres://fixture:fixture@' + host + ':5432/postgres';
     assert.deepEqual(postgresPoolOptions({ POSTGRES_URL: connectionString }), { connectionString });
   }
+  assert.throws(() => postgresPoolOptions({ POSTGRES_URL: 'postgres://localhost/test?host=remote.example.test' }), /SUPABASE_CA_CERT/);
   assert.throws(() => postgresPoolOptions({ ...env, POSTGRES_URL: 'bad password@secret' }), error => error.code === 'POSTGRES_TLS_CONFIGURATION_ERROR' && !error.message.includes('secret'));
 });
 check('runtime storage uses strict options and retains maintenance wrapper', () => {
