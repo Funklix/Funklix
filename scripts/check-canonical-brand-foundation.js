@@ -7,6 +7,8 @@ process.env.AUTH_SECRET = "canonical-brand-foundation-test-secret";
 // Handlers retain their production configuration guard; this sentinel is never
 // used by the mocked Pool and does not identify a reachable PostgreSQL server.
 process.env.POSTGRES_URL = "postgres://foundation-check.invalid/unused";
+// Public fixture trust anchor; the mocked Pool never opens a connection.
+process.env.SUPABASE_CA_CERT = require("node:tls").rootCertificates[0];
 
 function installPgMock() {
   const Module = require("module");

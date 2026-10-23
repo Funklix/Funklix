@@ -33,8 +33,25 @@ assert.match(rollback, /public\.boards was already RLS-enabled|boards was alread
 const browserSources = ['app.js', 'index.html', 'content-workspace.js', 'campaign-v3.js']
   .map(file => fs.readFileSync(path.join(root, file), 'utf8')).join('\n');
 assert.doesNotMatch(browserSources, /SUPABASE_(?:SERVICE_ROLE|ANON)_KEY|DATABASE_URL|POSTGRES_URL|\/rest\/v1|@supabase\/supabase-js/i);
-assert.match(fs.readFileSync(path.join(root, 'api/_boards-storage.js'), 'utf8'),
-  /new Pool\(\{ connectionString: process\.env\.POSTGRES_URL \}\)/);
+const storage = fs.readFileSync(path.join(root, 'api/_boards-storage.js'), 'utf8');
+assert.match(storage, /const \{ postgresPoolOptions \} = require\('\.\/_postgres-tls'\)/);
+assert.match(storage,
+  /guardPool\(new Pool\(postgresPoolOptions\(\)\)\)/);
+// Keep the RLS storage-boundary assertion meaningful after centralizing TLS:
+// verify the options pg actually uses, without issuing a database command.
+const { postgresPoolOptions } = require('../api/_postgres-tls');
+const { Pool, Client } = require('pg');
+const ca = require('node:tls').rootCertificates[0];
+const tlsEnv = {
+  POSTGRES_URL: 'postgres://tendra_app_runtime.fixture:fixture@pooler.supabase.com:6543/postgres?sslmode=require',
+  SUPABASE_CA_CERT: ca
+};
+const parameters = new Client(new Pool(postgresPoolOptions(tlsEnv)).options).connectionParameters;
+assert.deepEqual(parameters.ssl, { ca: ca.trim(), rejectUnauthorized: true });
+assert.equal(parameters.host, 'pooler.supabase.com');
+assert.equal(parameters.port, 6543);
+assert.equal(parameters.user, 'tendra_app_runtime.fixture');
+assert.throws(() => postgresPoolOptions({ POSTGRES_URL: tlsEnv.POSTGRES_URL }), error => error.code === 'POSTGRES_TLS_CONFIGURATION_ERROR');
 assert.doesNotMatch(migration + rollback, /postgres(?:ql)?:\/\/|SUPABASE_[A-Z_]*KEY\s*=|POSTGRES_URL\s*=/i);
 assert.doesNotMatch(migration + rollback, /supabase\s+(?:db push|migration up)|psql\s|curl\s/i);
 

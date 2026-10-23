@@ -189,10 +189,23 @@ async function main() {
       fs.writeFileSync(path.join(dir,'geometry.json'),JSON.stringify(geometry,null,2));
       await p.evaluate(Y=>{const w=state.workspaceCatalog.value.workspaces[0];w.brands.find(b=>b.id===Y).name='VeryLongBrandName'.repeat(20);state.currentBoardName='LongBoardName'.repeat(30);refreshDashboardIfVisible();},Y);
       assert(await brand(p).evaluate(e=>e.scrollWidth<=e.clientWidth+1));assert(await team(p).evaluate(e=>e.scrollWidth<=e.clientWidth+1));
-      await action(p,'learnings').focus();assert.equal(await action(p,'learnings').evaluate(e=>document.activeElement===e),true);
+      // draw() replaces controls and restores their logical focus synchronously.
+      // Locator.evaluate resolves an ElementHandle before evaluating it; a timer
+      // redraw between those operations can leave that handle detached even
+      // while the replacement is focused. Read both in one browser task, without
+      // retrying a failed focus assertion or moving focus on the test's behalf.
+      const learningFocused=()=>p.evaluate(()=>{
+        const current=document.querySelector('#home-foundation [data-home-action="learnings"]');
+        return !!current&&document.activeElement===current;
+      });
+      await action(p,'learnings').focus();assert.equal(await learningFocused(),true);
       const focusRead={started:defer(),release:defer()};f.holds.push(focusRead);
-      await refresh(p);await focusRead.started.promise;assert.equal(await action(p,'learnings').evaluate(e=>document.activeElement===e),true,'Focus remains on the bounded reauthorization placeholder');
-      focusRead.release.resolve();await waitCount(p,9);assert.equal(await action(p,'learnings').evaluate(e=>document.activeElement===e),true);
+      await refresh(p);await focusRead.started.promise;assert.equal(await learningFocused(),true,'Focus remains on the bounded reauthorization placeholder');
+      focusRead.release.resolve();await waitCount(p,9);
+      // Deterministically exercise the runtime redraw that exposed the stale
+      // handle race. A real loss of focus remains a failure after this redraw.
+      await p.evaluate(()=>refreshDashboardIfVisible());
+      assert.equal(await learningFocused(),true,'Focus remains on the refreshed Learnings control after replacement');
       await p.keyboard.press('Enter');await p.waitForFunction(()=>state.activeView==='brand-profile');await f.close();
     });
     await check('responsibility summary refuses stale/duplicate identity and matches only actual owner email',()=>{

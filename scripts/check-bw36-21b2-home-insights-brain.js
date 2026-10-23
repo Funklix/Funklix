@@ -132,8 +132,10 @@ async function main() {
       assert.equal(await p.evaluate(()=>document.activeElement.closest('#insights-view')!==null),true);
       assert.equal(await snapshot(p),before);
       await p.evaluate(()=>setActiveView('home'));await action(p,'brain').focus();await p.keyboard.press('Space');
-      await p.waitForFunction(()=>state.activeView==='ai_brain');assert.equal(await p.locator('#ai-brain-question').inputValue(),'');
-      assert.equal(await p.locator('#ai-brain-question').evaluate(e=>document.activeElement===e),true);
+      // Navigation sets the view synchronously, then hands off focus in RAF.
+      // Await that existing handoff, as the Insights branch above already does.
+      await p.waitForFunction(()=>state.activeView==='ai_brain'&&document.activeElement===document.querySelector('#ai-brain-question'));assert.equal(await p.locator('#ai-brain-question').inputValue(),'');
+      assert.equal(await p.evaluate(()=>document.activeElement===document.querySelector('#ai-brain-question')),true);
       assert.deepEqual(await p.evaluate(()=>state.aiBrain.messages),[]);assert.equal(await snapshot(p),before);
       await p.locator('#ai-brain-question').fill('A draft question');await p.evaluate(()=>setActiveView('home'));await action(p,'brain').click();
       assert.equal(await p.locator('#ai-brain-question').inputValue(),'A draft question');assert.deepEqual(await p.evaluate(()=>state.aiBrain.messages),[]);
@@ -144,7 +146,7 @@ async function main() {
       await p.emulateMedia({reducedMotion:'reduce'});
       const code=await action(p,'insight-node').first().getAttribute('data-home-id');
       const id=await p.evaluate(code=>homeCampaignInsights().findings.find(f=>f.code===code).nodeId,code);
-      await action(p,'insight-node').first().click();await p.waitForFunction(id=>state.activeView==='board'&&state.selectedPrimary===id,id);
+      await action(p,'insight-node').first().click();await p.waitForFunction(id=>state.activeView==='board'&&state.selectedPrimary===id&&document.activeElement===el.inputs.title,id);
       assert.equal(await p.evaluate(()=>document.activeElement===el.inputs.title),true);
       assert.equal(await p.locator('.activity-focus-pulse').count(),0);assert.equal(await snapshot(p),before);await f.close();
     });
@@ -322,7 +324,9 @@ async function main() {
         return {acquired,replaced:before!==after,retained:document.activeElement===after};
       });
       assert.deepEqual(focus,{acquired:true,replaced:true,retained:true});
-      assert.equal(await action(p,'brain').evaluate(e=>document.activeElement===e),true);
+      // Resolve the live control and focus atomically; retain the one-shot
+      // assertion so an actual loss of focus cannot be hidden by retrying.
+      assert.equal(await p.evaluate(()=>document.activeElement===document.querySelector('#home-foundation [data-home-action="brain"]')),true);
       await p.keyboard.press('Enter');await p.waitForFunction(()=>state.activeView==='ai_brain');await f.close();
     });
   } finally { await browser.close(); }
