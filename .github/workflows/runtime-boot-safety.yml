@@ -32,6 +32,8 @@ jobs:
         uses: actions/checkout@v4
       - name: Install project dependencies
         run: npm install --ignore-scripts --no-package-lock
+      - name: Check strict PostgreSQL TLS configuration
+        run: npm run check:postgres-tls
       - name: Prepare non-bootstrap postgres test operator
         # PostgreSQL forbids demoting the bootstrap superuser. A distinct fixture
         # admin lets the R3 suite model Supabase's NOSUPERUSER postgres safely.
