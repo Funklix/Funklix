@@ -9,7 +9,8 @@ async function reviewBrowser(){
  const pg=new PGlite(),boardId='77777777-7777-4777-8777-777777777777',time='2026-10-12T10:00:00.123456Z';
  const db={connect:async()=>({query:(q,a)=>{if(q.includes('INSERT INTO public.brand_learning_events')&&++eventAttempts===failEventAt)throw new Error('Injected second event failure');return pg.query(q,a);},release(){}})};
  const campaign=savedCampaign(),savedCanvas=clone(campaign.board.canvas_json);
- const oldSecret=process.env.AUTH_SECRET,oldUrl=process.env.POSTGRES_URL;process.env.AUTH_SECRET='r5-fixture-only';process.env.POSTGRES_URL='fixture-only';
+ // Valid loopback sentinel for module initialization; all queries use injected PGlite.
+ const oldSecret=process.env.AUTH_SECRET,oldUrl=process.env.POSTGRES_URL;process.env.AUTH_SECRET='r5-fixture-only';process.env.POSTGRES_URL='postgres://fixture:fixture@127.0.0.1:1/unused';
  let browser,failEventAt=0,eventAttempts=0;
  try{
   await pg.exec(`CREATE ROLE anon;CREATE ROLE authenticated;
