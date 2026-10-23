@@ -393,6 +393,45 @@ BEGIN
   END LOOP;
 END $schema$;
 
+-- BEGIN obsolete browser ACL cleanup
+-- Only these server-only relations are in scope. Table REVOKE does not remove
+-- column ACLs. PUBLIC grants also contribute to both browser roles' privileges.
+-- Do not CASCADE or edit shared role memberships/ACLs: unreviewed inherited
+-- access must fail closed, preserving unrelated users and grant dependencies.
+DO $browser_acl_cleanup$
+DECLARE t text; columns_sql text; browser name; leaked text;
+BEGIN
+ FOREACH t IN ARRAY ARRAY['boards','board_editors','app_identities','workspaces','workspace_memberships','brand_members','project_commands','brand_learnings','brand_learning_events','brand_documents','brand_document_upload_intents','brand_document_processing_jobs','brand_document_processing_results','social_token_secrets','social_connected_accounts','social_publishing_destinations','social_oauth_attempts','social_publish_jobs','social_provider_attempts','social_external_posts','social_connector_schema_version'] LOOP
+  EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY',t);
+  EXECUTE format('REVOKE ALL PRIVILEGES ON TABLE public.%I FROM PUBLIC, anon, authenticated RESTRICT',t);
+  SELECT string_agg(format('%I',attname),', ' ORDER BY attnum) INTO columns_sql
+    FROM pg_attribute WHERE attrelid=format('public.%I',t)::regclass AND attnum>0 AND NOT attisdropped;
+  EXECUTE format('REVOKE ALL PRIVILEGES (%s) ON TABLE public.%I FROM PUBLIC, anon, authenticated RESTRICT',columns_sql,t);
+  FOREACH browser IN ARRAY ARRAY['anon','authenticated']::name[] LOOP
+   IF has_table_privilege(browser,format('public.%I',t),'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+     OR has_any_column_privilege(browser,format('public.%I',t),'SELECT,INSERT,UPDATE,REFERENCES') THEN
+    -- Raw catalog ACLs identify the actual source, grantor and column; effective
+    -- checks above also catch ownership/superuser access without an ACL entry.
+    SELECT string_agg(format('%s: %s %s granted by %s%s',source,
+      CASE WHEN grantee=0 THEN 'PUBLIC' ELSE pg_get_userbyid(grantee) END,
+      privilege_type,pg_get_userbyid(grantor),CASE WHEN is_grantable THEN ' WITH GRANT OPTION' ELSE '' END),'; ' ORDER BY source,grantee,privilege_type)
+    INTO leaked FROM (
+      SELECT 'TABLE' AS source,a.* FROM pg_class c CROSS JOIN LATERAL aclexplode(c.relacl) a
+        WHERE c.oid=format('public.%I',t)::regclass
+      UNION ALL
+      SELECT format('COLUMN %I',c.attname),a.* FROM pg_attribute c CROSS JOIN LATERAL aclexplode(c.attacl) a
+        WHERE c.attrelid=format('public.%I',t)::regclass AND c.attnum>0 AND NOT c.attisdropped
+    ) acl WHERE CASE WHEN grantee=0 THEN true ELSE pg_has_role(browser,grantee,'USAGE') END;
+    RAISE EXCEPTION 'UNREVIEWED_INHERITED_BROWSER_ACCESS: % %',browser,t
+      USING DETAIL=format('owner=%I; effective ACL sources: %s',
+        (SELECT pg_get_userbyid(relowner) FROM pg_class WHERE oid=format('public.%I',t)::regclass),
+        coalesce(leaked,'none; inspect browser role attributes and ownership'));
+   END IF;
+  END LOOP;
+ END LOOP;
+END $browser_acl_cleanup$;
+-- END obsolete browser ACL cleanup
+
 -- Lock-only entry point. No row contents, mutation, dynamic SQL or actor claims.
 -- The caller must still authorize the user and read after this separate statement.
 -- Does not alter the fingerprinted private protection schema/functions.
