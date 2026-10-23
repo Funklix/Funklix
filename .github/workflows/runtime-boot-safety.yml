@@ -45,27 +45,6 @@ jobs:
             finally {await c.end();}
           })().catch(e=>{console.error(e);process.exitCode=1;});
           JS
-      # Run migration regressions before the broad browser suite so an unrelated
-      # browser failure cannot hide a database migration failure.
-      - name: Check BW-36.23A R3 restricted runtime on real PostgreSQL
-        env:
-          BW36_23_DISPOSABLE: '1'
-          BW36_23_TEST_URL: postgres://postgres:disposable-bw36-23-fixture@127.0.0.1:5432/postgres
-        run: npm run check:bw36.23ar3:postgres
-      - name: Check completed pre-805 protection upgrade and full verifier chain
-        env:
-          BW36_23_DISPOSABLE: '1'
-          BW36_23_LEGACY_INSTALL: '1'
-          BW36_23_TEST_URL: postgres://postgres:disposable-bw36-23-fixture@127.0.0.1:5432/postgres
-        run: |
-          npm run check:bw36.23a:postgres
-          npm run check:bw36.23ar3:postgres
-      - name: Check strict runtime graph without administrative memberships
-        env:
-          BW36_23_DISPOSABLE: '1'
-          BW36_23_RESTRICTIVE_GRAPH: '1'
-          BW36_23_TEST_URL: postgres://postgres:disposable-bw36-23-fixture@127.0.0.1:5432/postgres
-        run: npm run check:bw36.23ar3:postgres
       - name: Check runtime script syntax
         run: |
           node --check knowledge-module-registry.js
@@ -384,6 +363,27 @@ jobs:
         run: npm run check:bw36.1r1
       - name: Check BW-36.2 isolated compact non-Canvas context bar
         run: npm run check:bw36.2
+      # Run migration regressions before the broad browser suite so an unrelated
+      # browser failure cannot hide a database migration failure.
+      - name: Check BW-36.23A R3 restricted runtime on real PostgreSQL
+        env:
+          BW36_23_DISPOSABLE: '1'
+          BW36_23_TEST_URL: postgres://postgres:disposable-bw36-23-fixture@127.0.0.1:5432/postgres
+        run: npm run check:bw36.23ar3:postgres
+      - name: Check completed pre-805 protection upgrade and full verifier chain
+        env:
+          BW36_23_DISPOSABLE: '1'
+          BW36_23_LEGACY_INSTALL: '1'
+          BW36_23_TEST_URL: postgres://postgres:disposable-bw36-23-fixture@127.0.0.1:5432/postgres
+        run: |
+          npm run check:bw36.23a:postgres
+          npm run check:bw36.23ar3:postgres
+      - name: Check strict runtime graph without administrative memberships
+        env:
+          BW36_23_DISPOSABLE: '1'
+          BW36_23_RESTRICTIVE_GRAPH: '1'
+          BW36_23_TEST_URL: postgres://postgres:disposable-bw36-23-fixture@127.0.0.1:5432/postgres
+        run: npm run check:bw36.23ar3:postgres
       - name: Check BW-36.4 simplified Brand sidebar
         run: npm run check:bw36.4
       - name: Check BW-36.6 Workspace schema foundation
