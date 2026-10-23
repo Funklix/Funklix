@@ -22,7 +22,7 @@ function postgresPoolOptions(env = process.env) {
   // overrides (including empty/duplicate/encoded keys) before any local exception
   // so there is exactly one source of truth for the destination and TLS hostname.
   for (const key of url.searchParams.keys()) {
-    if (['host', 'hostaddr', 'service'].includes(key.toLowerCase())) {
+    if (['host', 'hostaddr', 'port', 'service'].includes(key.toLowerCase())) {
       throw configurationError('POSTGRES_URL connection-target query overrides are not supported.');
     }
   }

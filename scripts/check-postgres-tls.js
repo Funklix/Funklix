@@ -69,7 +69,9 @@ check('connection-target overrides cannot take the local-development exception',
     'host=localhost&host=remote.example.test&sslmode=no-verify',
     'host=remote.example.test&host=localhost', 'host=localhost', 'host=',
     '%68ost=remote.example.test', 'HOST=remote.example.test',
-    'hostaddr=203.0.113.1', 'service=remote', 'host=%2Ftmp%2Fpostgres'
+    'hostaddr=203.0.113.1', 'service=remote', 'host=%2Ftmp%2Fpostgres',
+    'port=5432', 'port=6543&port=5432', 'port=5432&port=6543',
+    'port=', '%70ort=5432', 'PORT=5432', 'port=5432&sslmode=disable'
   ]) {
     for (const authority of ['localhost', '127.0.0.1', '[::1]', 'pooler.supabase.com']) {
       const connectionString = 'postgres://fixture:fixture@' + authority + '/postgres?' + query;
@@ -87,6 +89,11 @@ check('connection-target overrides cannot take the local-development exception',
   const parsed = new Client({ connectionString: 'postgres://fixture:fixture@localhost/postgres?host=remote.example.test&sslmode=disable' }).connectionParameters;
   assert.equal(parsed.host, 'remote.example.test');
   assert.equal(parsed.ssl, false);
+  // A query port also changes the pooler mode despite an explicit authority port.
+  const portOverride = remote + '&port=5432';
+  assert.equal(new Client({ connectionString: portOverride }).connectionParameters.port, 5432);
+  assert.throws(() => postgresPoolOptions({ ...env, POSTGRES_URL: portOverride }), /connection-target query overrides/);
+  assert.equal(effective(env).port, 6543);
 });
 check('local fixtures and absent URL preserve existing pg defaults', () => {
   assert.deepEqual(postgresPoolOptions({}), { connectionString: undefined });
