@@ -27,6 +27,13 @@ module.exports={
    assert.equal((await root.query("SELECT has_any_column_privilege('authenticated','board_editors','SELECT,UPDATE,REFERENCES') c")).rows[0].c,true);
    await root.query('ROLLBACK');
   });
+  await check('catalog inventory resolves exact direct table and column ACL sources',async()=>{
+   const rows=(await root.query(require('node:fs').readFileSync('scripts/sql/bw36-23a-r3-browser-acl-inventory.sql','utf8'))).rows;
+   const direct=rows.filter(r=>r.browser==='authenticated'&&r.table_name==='board_editors');
+   assert.equal(direct.length,7);
+   assert.deepEqual(direct.filter(r=>r.column_name).map(r=>[r.column_name,r.privilege_type]).sort(),[['board_id','REFERENCES'],['email','SELECT'],['role','UPDATE']]);
+   assert.ok(direct.every(r=>r.grantee==='authenticated'&&r.grantor==='postgres'&&r.source==='DIRECT'));
+  });
   // Production-equivalent superset: defaults, grant options and all column ACLs.
   // Every R3 server-only relation participates; unrelated catalogs are untouched.
   for(const t of tables)await root.query('GRANT ALL ON '+t+' TO anon,authenticated; GRANT ALL PRIVILEGES ('+
@@ -50,7 +57,10 @@ module.exports={
     ['table','GRANT SELECT ON board_editors TO bw23_browser_shared','REVOKE SELECT ON board_editors FROM bw23_browser_shared','TABLE'],
     ['column','GRANT UPDATE(role) ON board_editors TO bw23_browser_shared','REVOKE UPDATE(role) ON board_editors FROM bw23_browser_shared','COLUMN role']
    ])await check('shared inherited browser '+name+' ACL identified and rejected atomically',async()=>{
-    await root.query(grant);const before=await operator.snapshot(),policies=await policySnapshot(root);
+    await root.query(grant);
+    const inventory=(await root.query(require('node:fs').readFileSync('scripts/sql/bw36-23a-r3-browser-acl-inventory.sql','utf8'))).rows;
+    assert.ok(inventory.some(r=>r.browser==='authenticated'&&r.table_name==='board_editors'&&r.grantee==='bw23_browser_shared'&&r.source==='INHERITED'&&Boolean(r.column_name)===(name==='column')));
+    const before=await operator.snapshot(),policies=await policySnapshot(root);
     try{
      await assert.rejects(()=>operator.client.query(sql),e=>{assert.match(e.message,/UNREVIEWED_INHERITED_BROWSER_ACCESS: authenticated board_editors/);assert.ok(e.detail.includes(source));assert.ok(e.detail.includes('bw23_browser_shared'));assert.ok(e.detail.includes('granted by postgres'));return true;});
      await operator.client.query('ROLLBACK');assert.deepEqual(await operator.snapshot(),before);assert.deepEqual(await policySnapshot(root),policies);

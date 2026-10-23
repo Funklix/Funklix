@@ -13,7 +13,9 @@ table grants, which does not remove separate pg_attribute.attacl column grants.
 
 The reported error establishes effective authenticated privileges on
 board_editors; it does not establish which ACL source or columns production has.
-Production catalogs have not been accessed. The disposable reproduction seeds
+Production catalogs have not been accessed. The read-only
+scripts/sql/bw36-23a-r3-browser-acl-inventory.sql reports browser, table, column,
+grantee, grantor, privilege, grant option and direct/PUBLIC/inherited source. The disposable reproduction seeds
 authenticated SELECT/INSERT/UPDATE/DELETE on board_editors, plus SELECT(email),
 UPDATE(role), REFERENCES(board_id), legacy SELECT/UPDATE policies and a
 restrictive false deny. Removing only the new cleanup block reproduces exactly
