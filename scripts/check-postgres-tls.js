@@ -63,14 +63,38 @@ check('no insecure fallback or hostname verification override', () => {
     assert.throws(() => postgresPoolOptions({ POSTGRES_URL: remote.split('?')[0] + '?sslmode=' + mode }), /SUPABASE_CA_CERT/);
   }
 });
+check('connection-target overrides cannot take the local-development exception', () => {
+  for (const query of [
+    'host=remote.example.test&sslmode=disable', 'host=remote.example.test&ssl=0',
+    'host=localhost&host=remote.example.test&sslmode=no-verify',
+    'host=remote.example.test&host=localhost', 'host=localhost', 'host=',
+    '%68ost=remote.example.test', 'HOST=remote.example.test',
+    'hostaddr=203.0.113.1', 'service=remote', 'host=%2Ftmp%2Fpostgres'
+  ]) {
+    for (const authority of ['localhost', '127.0.0.1', '[::1]', 'pooler.supabase.com']) {
+      const connectionString = 'postgres://fixture:fixture@' + authority + '/postgres?' + query;
+      for (const certificate of [undefined, ca]) {
+        assert.throws(() => postgresPoolOptions({ POSTGRES_URL: connectionString, SUPABASE_CA_CERT: certificate }), error => {
+          assert.equal(error.code, 'POSTGRES_TLS_CONFIGURATION_ERROR');
+          assert.match(error.message, /connection-target query overrides/);
+          assert.ok(!error.message.includes(connectionString));
+          return true;
+        });
+      }
+    }
+  }
+  // Verify the review's bypass against the installed parser, without connecting.
+  const parsed = new Client({ connectionString: 'postgres://fixture:fixture@localhost/postgres?host=remote.example.test&sslmode=disable' }).connectionParameters;
+  assert.equal(parsed.host, 'remote.example.test');
+  assert.equal(parsed.ssl, false);
+});
 check('local fixtures and absent URL preserve existing pg defaults', () => {
   assert.deepEqual(postgresPoolOptions({}), { connectionString: undefined });
   for (const host of ['localhost', '127.0.0.1', '[::1]']) {
     const connectionString = 'postgres://fixture:fixture@' + host + ':5432/postgres';
     assert.deepEqual(postgresPoolOptions({ POSTGRES_URL: connectionString }), { connectionString });
   }
-  assert.throws(() => postgresPoolOptions({ POSTGRES_URL: 'postgres://localhost/test?host=remote.example.test' }), /SUPABASE_CA_CERT/);
-  assert.throws(() => postgresPoolOptions({ POSTGRES_URL: 'postgres://localhost/test?host=localhost&host=remote.example.test' }), /SUPABASE_CA_CERT/);
+  assert.throws(() => postgresPoolOptions({ POSTGRES_URL: 'postgres://localhost/test', NODE_TLS_REJECT_UNAUTHORIZED: '0' }), /Global TLS certificate verification/);
   assert.throws(() => postgresPoolOptions({ ...env, POSTGRES_URL: 'bad password@secret' }), error => error.code === 'POSTGRES_TLS_CONFIGURATION_ERROR' && !error.message.includes('secret'));
 });
 check('runtime storage uses strict options and retains maintenance wrapper', () => {

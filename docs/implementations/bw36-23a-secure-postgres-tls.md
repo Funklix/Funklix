@@ -15,7 +15,10 @@ verification remains active. There is no retry with weaker TLS.
 node-postgres merges parsed connection-string options after explicit options, so
 URL SSL parameters can replace the entire SSL object. The helper removes SSL
 controls and `uselibpqcompat` only from an in-memory URL copy before handing it to
-pg. The Vercel URL secret, login, pooler hostname, port 6543, database, non-TLS query
+pg. Connection-target query overrides (`host`, `hostaddr`, `service`) are rejected
+before the local-development exception, including empty, duplicate and encoded
+keys. The URL authority is the sole destination and TLS hostname source.
+The Vercel URL secret, login, pooler hostname, port 6543, database, other accepted non-TLS query
 options, pool defaults, maintenance guard, transactions and authorization remain
 unchanged. No migrations are required.
 

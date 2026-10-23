@@ -18,12 +18,18 @@ function postgresPoolOptions(env = process.env) {
   if (!['postgres:', 'postgresql:'].includes(url.protocol)) {
     throw configurationError('POSTGRES_URL must be a valid PostgreSQL URL.');
   }
-  const loopback = host => ['localhost', '127.0.0.1', '[::1]'].includes(host);
-  // pg also accepts a query-string host override. It must not turn the local
-  // fixture exception into an unverified remote connection.
-  const local = loopback(url.hostname) &&
-    url.searchParams.getAll('host').every(loopback) &&
-    !url.searchParams.has('hostaddr') && !url.searchParams.has('service');
+  // pg gives query-string targets precedence over the URL authority. Reject
+  // overrides (including empty/duplicate/encoded keys) before any local exception
+  // so there is exactly one source of truth for the destination and TLS hostname.
+  for (const key of url.searchParams.keys()) {
+    if (['host', 'hostaddr', 'service'].includes(key.toLowerCase())) {
+      throw configurationError('POSTGRES_URL connection-target query overrides are not supported.');
+    }
+  }
+  if (env.NODE_TLS_REJECT_UNAUTHORIZED === '0') {
+    throw configurationError('Global TLS certificate verification must be enabled.');
+  }
+  const local = ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
   const supplied = env.SUPABASE_CA_CERT !== undefined;
   if (local && !supplied) return { connectionString };
 
@@ -40,10 +46,6 @@ function postgresPoolOptions(env = process.env) {
   } catch {
     throw configurationError('SUPABASE_CA_CERT must contain complete valid PEM certificates.');
   }
-  if (env.NODE_TLS_REJECT_UNAUTHORIZED === '0') {
-    throw configurationError('Global TLS certificate verification must be enabled.');
-  }
-
   // pg parses connectionString AFTER explicit options. sslmode=require (and
   // sslcert/sslkey/sslrootcert/ssl) can replace the entire ssl object. Strip only
   // URL TLS controls from our in-memory copy; preserve the configured secret,
