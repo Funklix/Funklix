@@ -34,7 +34,7 @@ const browserSources = ['app.js', 'index.html', 'content-workspace.js', 'campaig
   .map(file => fs.readFileSync(path.join(root, file), 'utf8')).join('\n');
 assert.doesNotMatch(browserSources, /SUPABASE_(?:SERVICE_ROLE|ANON)_KEY|DATABASE_URL|POSTGRES_URL|\/rest\/v1|@supabase\/supabase-js/i);
 assert.match(fs.readFileSync(path.join(root, 'api/_boards-storage.js'), 'utf8'),
-  /new Pool\(\{ connectionString: process\.env\.POSTGRES_URL \}\)/);
+  /guardPool\(new Pool\(postgresPoolOptions\(\)\)\)/);
 assert.doesNotMatch(migration + rollback, /postgres(?:ql)?:\/\/|SUPABASE_[A-Z_]*KEY\s*=|POSTGRES_URL\s*=/i);
 assert.doesNotMatch(migration + rollback, /supabase\s+(?:db push|migration up)|psql\s|curl\s/i);
 
