@@ -80,7 +80,22 @@ async function check(name, run) { await run(); groups++; console.log('PASS ' + n
       await refresh(p); await ready(p); assert.equal(await accepted(p).count(), 0);
       f.r.db.brands[0].brand_core.brandDNA.userApproved = true; await refresh(p); await accepted(p).waitFor();
       assert.equal(await accepted(p).getAttribute('src'), '/fixture-avatar.png');
-      const size = await accepted(p).evaluate(e => ({ w: e.naturalWidth, h: e.naturalHeight, fit: getComputedStyle(e).objectFit })); assert.deepEqual(size, { w: 360, h: 240, fit: 'contain' });
+      // A Home redraw can detach an image after Locator resolves it. Detached
+      // images retain intrinsic dimensions but have no computed style. Exercise
+      // that boundary, then resolve and measure the current image atomically.
+      // Wait only for readiness, never for the expected object-fit value.
+      const previousImage = await accepted(p).elementHandle();
+      await p.evaluate(() => { refreshDashboardIfVisible(); clearAutosaveTimer(); });
+      await accepted(p).waitFor();
+      assert.equal(await previousImage.evaluate(image => image.isConnected), false);
+      const sizeSnapshot = await p.waitForFunction(() => {
+        const image = document.querySelector('#home-foundation [data-avatar-state=ready] > img');
+        if (!image?.isConnected) return false;
+        return { w: image.naturalWidth, h: image.naturalHeight, fit: getComputedStyle(image).objectFit };
+      });
+      const size = await sizeSnapshot.jsonValue(); await sizeSnapshot.dispose();
+      assert.deepEqual(size, { w: 360, h: 240, fit: 'contain' });
+      await previousImage.dispose();
       f.r.db.brands[0].brand_core.brandDNA.avatar.imageUrl = '/missing-avatar.png'; await refresh(p); await p.getByRole('button', { name: 'Retry Brand Avatar', exact: true }).waitFor();
       await p.screenshot({ path: path.join(out, 'home-image-error-light-en.png') });
       assert((await p.locator('.home-avatar-slot').innerText()).includes('unavailable')); assert.equal(await p.getByRole('button', { name: 'Open Brand Avatar', exact: true }).count(), 0);
@@ -116,7 +131,8 @@ async function check(name, run) { await run(); groups++; console.log('PASS ' + n
       await refresh(p); await entered.promise; assert.equal(await p.locator('[data-home-action=stage-brain]').count(), 1);
       await p.locator('#home-brand-select').selectOption(Y); hold.resolve(); await ready(p);
       assert.equal(await p.locator('img[src="/retired-avatar.png"]').count(), 0);
-      assert((await message(p).innerText()).startsWith('Selected Brand Y: 9'));
+      assert((await p.locator('[data-signal-source=learning]').innerText()).includes('9 Learning proposals'));
+      assert((await message(p).innerText()).startsWith('Board Autumn Launch:'), 'Complementary Board evidence retains its own attribution');
       assert((await p.locator('.home-avatar-context').innerText()).includes('Autumn Launch · Canvas Brand X'));
       await p.locator('[data-home-action=stage-brain]').press('Enter'); assert.equal(await p.evaluate(() => state.activeView), 'ai_brain');
       await f.close();
@@ -162,7 +178,10 @@ async function check(name, run) { await run(); groups++; console.log('PASS ' + n
     });
     await check('manual eligible messages, stable selection, EN/DE, keyboard and screen reader naming; no automatic inference or timed rotation', async () => {
       const f = await setup(), p = f.page;
-      assert((await message(p).innerText()).includes('73 Learning proposals'));
+      assert((await message(p).innerText()).includes('3 incomplete responsibilities'), 'Default bubble complements the Learning and diagnostic signals');
+      await p.getByRole('button', { name: 'Previous message', exact: true }).press('Enter');
+      await p.getByRole('button', { name: 'Previous message', exact: true }).press('Enter');
+      assert((await message(p).innerText()).includes('73 Learning proposals'), 'Manual navigation still reaches the highest-priority evidence');
       await p.getByRole('button', { name: 'Next message', exact: true }).press('Enter');
       const selected = await message(p).innerText(); assert(selected.startsWith('Board Autumn Launch:'));
       assert.equal(await p.evaluate(() => document.activeElement === document.querySelector('.home-avatar-message')), true);
@@ -174,6 +193,9 @@ async function check(name, run) { await run(); groups++; console.log('PASS ' + n
       assert.equal(await p.getByRole('button', { name: 'Nächste Nachricht', exact: true }).getAttribute('aria-controls'), 'home-avatar-message');
       assert.equal(await p.locator('.home-avatar-bubble').getAttribute('aria-live'), null);
       assert.equal(f.requests.filter(r => /generate|ai-brain/.test(r.path)).length, 0); await f.close();
+      const only = await setup({empty:true});
+      assert((await message(only.page).innerText()).includes('73 Learning proposals'), 'Keep important Learning evidence when no complementary verified message exists');
+      await only.close();
     });
     await check('Light desktop/mobile original asset fidelity, Dark baseline, no motion and contextual Brain eligibility', async () => {
       const geometry = [];
@@ -189,10 +211,14 @@ async function check(name, run) { await run(); groups++; console.log('PASS ' + n
           await document.fonts.ready; await new Promise(requestAnimationFrame);
           for (const animation of document.getAnimations()) if (animation.effect?.getTiming().iterations !== Infinity) animation.finish();
         });
-        const result = await p.locator('.home-avatar-stage').evaluate(e => {
-          const image = e.querySelector('img'), r = image.getBoundingClientRect(), s = e.getBoundingClientRect();
+        const snapshot = await p.waitForFunction(() => {
+          const e = document.querySelector('#home-foundation .home-avatar-stage');
+          const image = e?.querySelector('[data-avatar-state=ready] > img');
+          if (!image?.isConnected) return false;
+          const r = image.getBoundingClientRect(), s = e.getBoundingClientRect();
           return { image: r.toJSON(), stage: s.toJSON(), fit: getComputedStyle(image).objectFit, natural: [image.naturalWidth,image.naturalHeight], motion: [e,...e.querySelectorAll('*')].some(e => getComputedStyle(e).animationName !== 'none'), overflow: document.documentElement.scrollWidth > innerWidth };
         });
+        const result = await snapshot.jsonValue(); await snapshot.dispose();
         assert.equal(result.fit, 'contain'); assert.equal(result.motion, false); assert.equal(result.overflow, false);
         assert(result.image.left >= result.stage.left && result.image.right <= result.stage.right);
         assert.equal(await p.locator('[data-home-action=stage-brain]').count(), 1);

@@ -1,0 +1,415 @@
+
+### Initial 2 Prepare non-bootstrap postgres test operator
+Error: connect ECONNREFUSED 127.0.0.1:5432
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1864:16) {
+  errno: -111,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 5432
+}
+
+### Initial 134 Check BW-36.23A R3 restricted runtime on real PostgreSQL
+
+> check:bw36.23ar3:postgres
+> node scripts/check-bw36-23a-r3-runtime-postgres.js
+
+Error: connect ECONNREFUSED 127.0.0.1:5432
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1864:16) {
+  errno: -111,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 5432
+}
+
+### Initial 135 Check completed pre-805 protection upgrade and full verifier chain
+
+> check:bw36.23a:postgres
+> node scripts/check-bw36-23-brand-knowledge-postgres.js
+
+Error: connect ECONNREFUSED 127.0.0.1:5432
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1864:16) {
+  errno: -111,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 5432
+}
+
+### Initial 136 Check strict runtime graph without administrative memberships
+
+> check:bw36.23ar3:postgres
+> node scripts/check-bw36-23a-r3-runtime-postgres.js
+
+Error: connect ECONNREFUSED 127.0.0.1:5432
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1864:16) {
+  errno: -111,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 5432
+}
+
+### Initial 155 Install focused browser fixture
+Installing dependencies...
+Switching to root user to install dependencies...
+Failed to install browsers
+Error: Installation process exited with code: 1
+Password: su: Authentication failure
+
+### Initial 158 Check BW-36.21B1 Home Intelligence (Chromium, provider-free)
+
+> check:bw36.21b1
+> node scripts/check-bw36-21b1-home-intelligence.js
+
+PASS aggregate projection: pagination, sparse zero, missing/malformed fields and exact Brand
+PASS real signed Learning route independently enforces identity and Brand roles; Board ownership gives no Learning access
+PASS selected Brand counts and current Board responsibilities remain separate, bounded and read-only composition
+PASS empty library, absent aggregate, malformed count and API error distinguish genuine zero
+PASS Brand viewer uses server capability and correct explicit Profile Learnings target; return refreshes without revision bump
+PASS Profile Learnings handoff preserves busy and dirty leave guards, Cancel and explicit Discard
+PASS pending Learning read rejects stale brand result
+PASS pending Learning read rejects stale workspace result
+PASS pending Learning read rejects stale logout result
+PASS pending Learning read rejects stale account result
+PASS Board-only access, hidden association and no selected Brand never read its Learnings
+PASS no Workspace and no Board preserve useful navigation
+PASS live unsaved, replacement/deletion, completion aliases, ambiguous identity and Board generation guard
+PASS viewer Board manager remains view-only; revocation removes nodes
+PASS lifecycle event and focus resume refresh independently of canonical revision; unrelated Brand event does not
+page.screenshot: Timeout 15000ms exceeded.
+Call log:
+[2m  - taking page screenshot[22m
+[2m  - waiting for fonts to load...[22m
+[2m  - fonts loaded[22m
+
+    at /workspace/Funklix/scripts/check-bw36-21b1-home-intelligence.js:182:98
+    at async check (/workspace/Funklix/scripts/check-bw36-21b1-home-intelligence.js:11:38)
+    at async main (/workspace/Funklix/scripts/check-bw36-21b1-home-intelligence.js:173:5) {
+  log: [
+    '  - taking page screenshot',
+    '  - waiting for fonts to load...',
+    '  - fonts loaded'
+  ],
+  name: 'TimeoutError'
+}
+
+### Initial 160 Check BW-36.22A compact Home and continuation (Chromium, provider-free)
+
+> check:bw36.22a
+> node scripts/check-bw36-22a-compact-home.js
+
+AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
++ actual - expected
+
+  [
++   'home-hero home-context-ready',
+-   'home-hero',
+    'home-living',
+    'home-details-heading',
+    '',
+    'home-next-moves',
+    'home-continue',
+
+    at /workspace/Funklix/scripts/check-bw36-22a-compact-home.js:21:14
+    at async check (/workspace/Funklix/scripts/check-bw36-22a-compact-home.js:9:35)
+    at async /workspace/Funklix/scripts/check-bw36-22a-compact-home.js:19:5 {
+  generatedMessage: true,
+  code: 'ERR_ASSERTION',
+  actual: [Array],
+  expected: [Array],
+  operator: 'deepStrictEqual',
+  diff: 'simple'
+}
+
+### db-retry-134.log
+
+> check:bw36.23ar3:postgres
+> node scripts/check-bw36-23a-r3-runtime-postgres.js
+
+PostgreSQL 18.4 (Debian 18.4-1.pgdg13+1)
+PASS non-superuser operator has owner SET authority; NOLOGIN owner lacks public CREATE
+REPRODUCED 42501: permission denied for schema public at history OWNER TO
+PASS original ownership transfer reproduces exact 42501 and rolls back entire install
+REPRODUCED 42501: must be owner of table brand_knowledge_history at ALTER TABLE public.brand_knowledge_history ENABLE ROW LEVEL SECURITY
+PASS premature ownership transfer reproduces exact 42501 at ENABLE ROW LEVEL SECURITY
+PASS failure immediately after transfer rolls back ownership and still-borrowed CREATE
+PASS late installation failure rolls back DDL grants policies baseline and temporary CREATE
+REPRODUCED P0001: UNSAFE_RUNTIME_PRIVILEGES: postgres
+PASS Supabase operator ADMIN-only memberships reproduce exact P0001 postgres and atomic rollback
+PASS postgres operator installs and verifies protection with unchanged administrative memberships
+PASS complete original migration and companion verifier through SET-only operator
+PASS pre-existing direct CREATE WITH GRANT OPTION survives exact rerun unchanged
+PASS inherited CREATE survives rerun without a new direct grant
+REPRODUCED P0001: BROWSER_PRIVILEGE_LEAK: authenticated board_editors
+PASS legacy authenticated board_editors table/column ACLs reproduce exact P0001 and atomic rollback
+PASS catalog inventory resolves exact direct table and column ACL sources
+PASS late R3 failure rolls back schema function grants and policies
+PASS existing migration chain + protected Core + additive runtime install
+PASS complete R3 companion verifier and original verifier through SET-only operator
+PASS all 21 table and column browser ACLs removed, unrelated ACL retained
+PASS shared inherited browser table ACL identified and rejected atomically
+PASS shared inherited browser column ACL identified and rejected atomically
+PASS dependent browser regrant stops cleanup without CASCADE
+PASS fresh document creation enables all four RLS flags before commit
+PASS NOSUPERUSER postgres executes complete protection and R3 verifier chain
+PASS idempotent runtime install and private protection fingerprint remain compatible
+PASS existing anon/authenticated deny policies remain identical
+PASS real password login with inherited grants and full fail-closed verification
+PASS operator inherits runtime rejected by both installers and both verifiers
+PASS operator can SET runtime rejected by both installers and both verifiers
+PASS operator inherits runtime login rejected by both installers and both verifiers
+PASS transitive elevated runtime member rejected by both installers and both verifiers
+PASS runtime SET elevated ancestor rejected by both installers and both verifiers
+PASS runtime SET schema creator rejected by both installers and both verifiers
+PASS runtime inherits owner rejected by both installers and both verifiers
+PASS runtime SET owner rejected by both installers and both verifiers
+PASS transitive owner inheritance rejected by both installers and both verifiers
+PASS untrusted ADMIN-only member rejected by restrictive R3 graph
+PASS runtime administers other role rejected by restrictive R3 graph
+PASS runtime membership SET changed rejected by restrictive R3 graph
+PASS runtime has no direct Brand writes, history access, owner role or DDL
+PASS Board/document/social initialization uses real read-only runtime checks
+PASS actual first Workspace identity and accepted owner membership persistence
+PASS actual Project command atomically persists Brand, Board, snapshot and receipt
+PASS Brand creation replay holds lock without runtime UPDATE privilege
+PASS Board Canvas, editors and public-sharing persistence
+PASS Brand membership management has only existing table authority
+PASS protected Core mutation and exact single history receipt
+PASS actual Learning governance authorizes with definer row lock and immutable events
+PASS document intents, replacement metadata and real processing lease workflow
+PASS social OAuth, encrypted secret, account, destination, job and attempt persistence
+PASS anon/authenticated cannot read secrets, inherit backend or execute lock helper
+PASS protected deletion retains canonical history through existing Learning cascade triggers
+PASS unexpected group member is rejected and session identity fence denies its reads
+PASS independent connections preserve Brand lock exclusion and rollback
+PASS policy drift aborts atomically instead of broadening access
+PASS non-superuser operator with explicit owner SET authority can rerun installation
+PASS reviewed freeze stops existing-session writes and preserves all history
+54 real PostgreSQL R3 groups passed; 18.4 (Debian 18.4-1.pgdg13+1)
+
+### db-retry-135.log
+
+> check:bw36.23a:postgres
+> node scripts/check-bw36-23-brand-knowledge-postgres.js
+
+PostgreSQL 18.4 (Debian 18.4-1.pgdg13+1)
+PASS non-superuser operator has owner SET authority; NOLOGIN owner lacks public CREATE
+REPRODUCED 42501: permission denied for schema public at history OWNER TO
+PASS original ownership transfer reproduces exact 42501 and rolls back entire install
+REPRODUCED 42501: must be owner of table brand_knowledge_history at ALTER TABLE public.brand_knowledge_history ENABLE ROW LEVEL SECURITY
+PASS premature ownership transfer reproduces exact 42501 at ENABLE ROW LEVEL SECURITY
+PASS failure immediately after transfer rolls back ownership and still-borrowed CREATE
+PASS late installation failure rolls back DDL grants policies baseline and temporary CREATE
+PASS completed pre-805 install has installer-owned fingerprint without owner EXECUTE
+REPRODUCED protection 42501: permission denied for function install_fingerprint
+PASS protection pre-fix preflight reproduces exact legacy fingerprint EXECUTE failure
+PASS protection rejects legacy fingerprint drift without normalizing ownership
+PASS protection late upgrade failure rolls back all legacy owners ACLs and marker
+PASS EXECUTE-only authority cannot adopt a legacy fingerprint
+PASS unknown legacy helper is rejected even with a matching saved fingerprint
+PASS migration and exact baseline preserve all existing values
+PASS original membership uniqueness normalization roles foreign key and required columns survive migration
+PASS exact migration rerun creates no extra baseline
+PASS complete original companion verifier passes through SET-only operator
+PASS pre-existing direct CREATE WITH GRANT OPTION survives exact rerun unchanged
+PASS inherited CREATE survives rerun without a new direct grant
+PASS normal profile update retains DNA Avatar story unknown fields and future columns
+PASS unknown nested scalar editing preserves siblings
+PASS explicit null requires bound review and rejected write is atomic
+PASS blank requires bound review and rejected write is atomic
+PASS empty array requires bound review and rejected write is atomic
+PASS empty object requires bound review and rejected write is atomic
+PASS nested subtree replacement requires review
+PASS approval downgrade cannot hide accepted Avatar
+PASS image replacement reviewed; original reference retained in preimage
+PASS DNA acceptance retains Avatar and unknown siblings
+PASS Founder Story atomic array review retains all unknown metadata
+PASS domain fill only absent or exactly empty paths
+PASS legacy payload rejected without changing data or history
+PASS stale revision rejected
+PASS concurrent connections serialize and one stale writer fails
+PASS lost-response retry returns one durable receipt before revision check
+PASS unauthorized identity viewer and Workspace mismatch fail atomically
+PASS membership revocation serializes with authorized writer
+PASS history insertion failure rolls canonical row back
+PASS explicit transaction rollback removes both canonical edit and event
+PASS brand_knowledge_runtime cannot bypass authority or alter history
+PASS anon cannot bypass authority or alter history
+PASS authenticated cannot bypass authority or alter history
+PASS service_role cannot bypass authority or alter history
+PASS caller-written GUC does not authorize direct mutation
+PASS composite source foreign key accepts same Brand and rejects cross Brand
+PASS creation history and coupled outer transaction roll back together
+PASS reviewed clear remove explicit null and false zero remain distinguishable
+PASS logo history shares sequence and retains Core revision; retry receipt is durable
+PASS initialization binds current authorized associated Board and exactly empty Core
+PASS initialization exact committed readback history and durable replay preserve the source Board
+PASS default-only or populated Core cannot be initialized: {"brandDNA":null}
+PASS default-only or populated Core cannot be initialized: {"brandCore":"","personas":[]}
+PASS default-only or populated Core cannot be initialized: {"brandDNA":{"userApproved":true,"avatar":{"userApproved":true,"imageUrl":"https://fixture.test/keep.png"}}}
+PASS missing or null creation Core is rejected atomically rather than treated as empty
+PASS initialization independently rejects missing cross-Brand and cross-Workspace source Boards
+PASS source snapshot changes and forged submitted snapshots reject initialization without writes
+PASS independent restricted connections reject initialization made stale by a concurrent canonical edit
+PASS initialization history failure rolls back exact canonical state and leaves the source intact
+PASS Brand-only runtime has no implicit Board write grant and failed Project transaction rolls back
+PASS protected creation and real Board insert commit together with exact identities and history
+PASS real Board insertion failure cannot leave a partial Brand or creation history
+PASS logo history failure rolls back metadata revisions and full canonical knowledge
+PASS initialization denial independently enforces actor Brand and Workspace authorization
+PASS associated-Board delete denial returns only an authorized validated project count
+PASS delete lifecycle retains history and authorizes original actor retry
+PASS expired review token proof cannot authorize a new destructive write
+PASS database rejects malformed missing revision and future prototype payload
+PASS expired token can resolve exact committed receipt but never a new mutation
+PASS real logo HTTP receipt-only replay verifies the committed request without upload or another mutation
+PASS production HTTP handler uses verified session and compatible authoritative response
+PASS migration detects installed catalog drift and rolls back
+PASS non-destructive list append needs no review and retains old unknown metadata
+PASS no-op command records a receipt without incrementing Core revision
+PASS runtime LOGIN cannot assume the NOLOGIN function owner
+PASS logo and Core writers interleave without losing metadata
+PASS source_event_id null for ordinary events; no event gaps or history-only changes
+74 real PostgreSQL groups passed (restricted roles, independent connections; disposable fixtures only).
+
+> check:bw36.23ar3:postgres
+> node scripts/check-bw36-23a-r3-runtime-postgres.js
+
+PostgreSQL 18.4 (Debian 18.4-1.pgdg13+1)
+PASS non-superuser operator has owner SET authority; NOLOGIN owner lacks public CREATE
+REPRODUCED 42501: permission denied for schema public at history OWNER TO
+PASS original ownership transfer reproduces exact 42501 and rolls back entire install
+REPRODUCED 42501: must be owner of table brand_knowledge_history at ALTER TABLE public.brand_knowledge_history ENABLE ROW LEVEL SECURITY
+PASS premature ownership transfer reproduces exact 42501 at ENABLE ROW LEVEL SECURITY
+PASS failure immediately after transfer rolls back ownership and still-borrowed CREATE
+PASS late installation failure rolls back DDL grants policies baseline and temporary CREATE
+PASS completed pre-805 install has installer-owned fingerprint without owner EXECUTE
+REPRODUCED protection 42501: permission denied for function install_fingerprint
+PASS protection pre-fix preflight reproduces exact legacy fingerprint EXECUTE failure
+REPRODUCED R3 42501: permission denied for function install_fingerprint
+PASS R3 pre-fix preflight reproduces exact legacy fingerprint EXECUTE failure
+PASS protection rejects legacy fingerprint drift without normalizing ownership
+PASS protection late upgrade failure rolls back all legacy owners ACLs and marker
+PASS R3 rejects legacy fingerprint drift without normalizing ownership
+PASS R3 late upgrade failure rolls back all legacy owners ACLs and marker
+PASS EXECUTE-only authority cannot adopt a legacy fingerprint
+PASS unknown legacy helper is rejected even with a matching saved fingerprint
+REPRODUCED P0001: UNSAFE_RUNTIME_PRIVILEGES: postgres
+PASS Supabase operator ADMIN-only memberships reproduce exact P0001 postgres and atomic rollback
+PASS postgres operator installs and verifies protection with unchanged administrative memberships
+PASS complete original migration and companion verifier through SET-only operator
+PASS pre-existing direct CREATE WITH GRANT OPTION survives exact rerun unchanged
+PASS inherited CREATE survives rerun without a new direct grant
+REPRODUCED P0001: BROWSER_PRIVILEGE_LEAK: authenticated board_editors
+PASS legacy authenticated board_editors table/column ACLs reproduce exact P0001 and atomic rollback
+PASS catalog inventory resolves exact direct table and column ACL sources
+PASS late R3 failure rolls back schema function grants and policies
+PASS existing migration chain + protected Core + additive runtime install
+PASS complete R3 companion verifier and original verifier through SET-only operator
+PASS all 21 table and column browser ACLs removed, unrelated ACL retained
+PASS shared inherited browser table ACL identified and rejected atomically
+PASS shared inherited browser column ACL identified and rejected atomically
+PASS dependent browser regrant stops cleanup without CASCADE
+PASS fresh document creation enables all four RLS flags before commit
+PASS NOSUPERUSER postgres executes complete protection and R3 verifier chain
+PASS idempotent runtime install and private protection fingerprint remain compatible
+PASS existing anon/authenticated deny policies remain identical
+PASS real password login with inherited grants and full fail-closed verification
+PASS operator inherits runtime rejected by both installers and both verifiers
+PASS operator can SET runtime rejected by both installers and both verifiers
+PASS operator inherits runtime login rejected by both installers and both verifiers
+PASS transitive elevated runtime member rejected by both installers and both verifiers
+PASS runtime SET elevated ancestor rejected by both installers and both verifiers
+PASS runtime SET schema creator rejected by both installers and both verifiers
+PASS runtime inherits owner rejected by both installers and both verifiers
+PASS runtime SET owner rejected by both installers and both verifiers
+PASS transitive owner inheritance rejected by both installers and both verifiers
+PASS untrusted ADMIN-only member rejected by restrictive R3 graph
+PASS runtime administers other role rejected by restrictive R3 graph
+PASS runtime membership SET changed rejected by restrictive R3 graph
+PASS runtime has no direct Brand writes, history access, owner role or DDL
+PASS Board/document/social initialization uses real read-only runtime checks
+PASS actual first Workspace identity and accepted owner membership persistence
+PASS actual Project command atomically persists Brand, Board, snapshot and receipt
+PASS Brand creation replay holds lock without runtime UPDATE privilege
+PASS Board Canvas, editors and public-sharing persistence
+PASS Brand membership management has only existing table authority
+PASS protected Core mutation and exact single history receipt
+PASS actual Learning governance authorizes with definer row lock and immutable events
+PASS document intents, replacement metadata and real processing lease workflow
+PASS social OAuth, encrypted secret, account, destination, job and attempt persistence
+PASS anon/authenticated cannot read secrets, inherit backend or execute lock helper
+PASS protected deletion retains canonical history through existing Learning cascade triggers
+PASS unexpected group member is rejected and session identity fence denies its reads
+PASS independent connections preserve Brand lock exclusion and rollback
+PASS policy drift aborts atomically instead of broadening access
+PASS non-superuser operator with explicit owner SET authority can rerun installation
+PASS reviewed freeze stops existing-session writes and preserves all history
+63 real PostgreSQL R3 groups passed; 18.4 (Debian 18.4-1.pgdg13+1)
+[BRAND_LOGO_FAILURE] { stage: 'authorization' }
+[BRAND_LOGO_FAILURE] { stage: 'authorization' }
+
+### db-retry-136.log
+
+> check:bw36.23ar3:postgres
+> node scripts/check-bw36-23a-r3-runtime-postgres.js
+
+PostgreSQL 18.4 (Debian 18.4-1.pgdg13+1)
+PASS non-superuser operator has owner SET authority; NOLOGIN owner lacks public CREATE
+REPRODUCED 42501: permission denied for schema public at history OWNER TO
+PASS original ownership transfer reproduces exact 42501 and rolls back entire install
+REPRODUCED 42501: must be owner of table brand_knowledge_history at ALTER TABLE public.brand_knowledge_history ENABLE ROW LEVEL SECURITY
+PASS premature ownership transfer reproduces exact 42501 at ENABLE ROW LEVEL SECURITY
+PASS failure immediately after transfer rolls back ownership and still-borrowed CREATE
+PASS late installation failure rolls back DDL grants policies baseline and temporary CREATE
+PASS complete original migration and companion verifier through SET-only operator
+PASS pre-existing direct CREATE WITH GRANT OPTION survives exact rerun unchanged
+PASS inherited CREATE survives rerun without a new direct grant
+REPRODUCED P0001: BROWSER_PRIVILEGE_LEAK: authenticated board_editors
+PASS legacy authenticated board_editors table/column ACLs reproduce exact P0001 and atomic rollback
+PASS catalog inventory resolves exact direct table and column ACL sources
+PASS late R3 failure rolls back schema function grants and policies
+PASS existing migration chain + protected Core + additive runtime install
+PASS complete R3 companion verifier and original verifier through SET-only operator
+PASS all 21 table and column browser ACLs removed, unrelated ACL retained
+PASS shared inherited browser table ACL identified and rejected atomically
+PASS shared inherited browser column ACL identified and rejected atomically
+PASS dependent browser regrant stops cleanup without CASCADE
+PASS fresh document creation enables all four RLS flags before commit
+PASS NOSUPERUSER postgres executes complete protection and R3 verifier chain
+PASS idempotent runtime install and private protection fingerprint remain compatible
+PASS existing anon/authenticated deny policies remain identical
+PASS real password login with inherited grants and full fail-closed verification
+PASS operator inherits runtime rejected by both installers and both verifiers
+PASS operator can SET runtime rejected by both installers and both verifiers
+PASS operator inherits runtime login rejected by both installers and both verifiers
+PASS transitive elevated runtime member rejected by both installers and both verifiers
+PASS runtime SET elevated ancestor rejected by both installers and both verifiers
+PASS runtime SET schema creator rejected by both installers and both verifiers
+PASS runtime inherits owner rejected by both installers and both verifiers
+PASS runtime SET owner rejected by both installers and both verifiers
+PASS transitive owner inheritance rejected by both installers and both verifiers
+PASS untrusted ADMIN-only member rejected by restrictive R3 graph
+PASS runtime administers other role rejected by restrictive R3 graph
+PASS runtime membership SET changed rejected by restrictive R3 graph
+PASS runtime has no direct Brand writes, history access, owner role or DDL
+PASS Board/document/social initialization uses real read-only runtime checks
+PASS actual first Workspace identity and accepted owner membership persistence
+PASS actual Project command atomically persists Brand, Board, snapshot and receipt
+PASS Brand creation replay holds lock without runtime UPDATE privilege
+PASS Board Canvas, editors and public-sharing persistence
+PASS Brand membership management has only existing table authority
+PASS protected Core mutation and exact single history receipt
+PASS actual Learning governance authorizes with definer row lock and immutable events
+PASS document intents, replacement metadata and real processing lease workflow
+PASS social OAuth, encrypted secret, account, destination, job and attempt persistence
+PASS anon/authenticated cannot read secrets, inherit backend or execute lock helper
+PASS protected deletion retains canonical history through existing Learning cascade triggers
+PASS unexpected group member is rejected and session identity fence denies its reads
+PASS independent connections preserve Brand lock exclusion and rollback
+PASS policy drift aborts atomically instead of broadening access
+PASS non-superuser operator with explicit owner SET authority can rerun installation
+PASS reviewed freeze stops existing-session writes and preserves all history
+52 real PostgreSQL R3 groups passed; 18.4 (Debian 18.4-1.pgdg13+1)
