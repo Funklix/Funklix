@@ -66,13 +66,14 @@ const snapshot = p => p.evaluate(() => JSON.stringify({nodes:state.nodes, edges:
     await check('confirmed missing Avatar stays honest and static; contextual bubble stays truthful across runtime changes', async () => {
       const f = await fixture(), p = f.page; await ready(p);
       await p.locator('[data-avatar-state=ready]').waitFor();
-      const bubble = await p.locator('.home-avatar-message').innerText(); assert(bubble.includes('73 Learning proposals'));
+      const bubble = await p.locator('.home-avatar-message').innerText(); assert(bubble.includes('3 incomplete responsibilities'));
+      assert((await p.locator('[data-signal-source=learning]').innerText()).includes('73 Learning proposals'));
       assert((await p.locator('.home-avatar-slot').innerText()).includes('Bring your Brand to life.'));
       assert.equal(await p.locator('.home-avatar-stage img, .home-avatar-stage canvas, .home-avatar-stage svg').count(),0);
       assert.equal(await p.locator('.home-avatar-bubble').getAttribute('aria-live'),null);
       assert.equal(await p.locator('.home-avatar-art').getAttribute('aria-hidden'),'true');
       await p.evaluate(()=>{state.nodes[0].title='Changed';refreshDashboardIfVisible();});
-      assert.equal(await p.locator('.home-avatar-message').innerText(),bubble);
+      assert.equal(await p.locator('.home-avatar-message').innerText(),'Your saved Board Autumn Launch is here when you are ready.', 'When diagnostics become stale, responsibility moves into the signals and the default bubble complements it with verified saved identity');
       assert(await p.evaluate(()=>{const e=document.querySelector('.home-avatar-stage');return [e,...e.querySelectorAll('*')].every(n=>getComputedStyle(n).animationName==='none');}));
       await f.close();
     });
@@ -202,17 +203,19 @@ const snapshot = p => p.evaluate(() => JSON.stringify({nodes:state.nodes, edges:
         const g=await p.evaluate(()=>{
           const rect=s=>{const r=document.querySelector(s).getBoundingClientRect();return {x:r.x,y:r.y,right:r.right,bottom:r.bottom,width:r.width,height:r.height};};
           const h=document.querySelector('#home-foundation');
-          return {orientation:rect('.home-hero'),living:rect('.home-living'),stage:rect('.home-avatar-stage'),slot:rect('.home-avatar-slot'),
+          return {workspaceSelect:rect('#home-workspace-select'),brandSelect:rect('#home-brand-select'),workspaceLabel:rect('[for=home-workspace-select]'),brandLabel:rect('[for=home-brand-select]'),orientation:rect('.home-hero'),living:rect('.home-living'),stage:rect('.home-avatar-stage'),slot:rect('.home-avatar-slot'),
             bubble:rect('.home-avatar-bubble'),continue:rect('.home-living-continue'),quick:rect('.home-quick-actions'),details:rect('.home-details-heading'),
             scrollViewport:rect('#dashboard-view'),documentWidth:document.documentElement.scrollWidth,homeWidth:h.scrollWidth,
             wide:[...h.querySelectorAll('*')].filter(e=>e.getBoundingClientRect().left < -1||e.getBoundingClientRect().right>innerWidth+1).map(e=>e.className)};
         });
+        assert.equal(g.workspaceSelect.height,44); assert.equal(g.brandSelect.height,44);
+        if(width>=768) { assert.equal(g.workspaceSelect.y,g.brandSelect.y); assert.equal(g.workspaceLabel.bottom,g.brandLabel.bottom); }
         assert.equal(g.documentWidth,width); assert.deepEqual(g.wide,[]); assert(g.homeWidth<=g.living.width+1);
         assert(g.details.y>=g.living.bottom+24); assert(g.bubble.bottom<=g.slot.y+3);
         if(width>=1440){assert(g.stage.x>g.continue.right);assert(g.quick.bottom<=height+1,JSON.stringify(g));assert(g.slot.width>=250);assert(g.continue.bottom<height);}
         else if(width<=1024) assert(g.stage.y>=g.continue.bottom);
         assert.equal(await p.locator('.home-living h1').innerText(),language==='de'?'Willkommen zurück.':'Welcome back.');
-        assert((await p.locator('.home-avatar-message').innerText()).includes(language==='de'?'73 Learning-Vorschläge':'73 Learning proposals'));
+        assert((await p.locator('.home-avatar-message').innerText()).includes(language==='de'?'3 offene Verantwortlichkeiten':'3 incomplete responsibilities'));
         const contrast = await p.evaluate(()=>{
           const canvas=document.createElement('canvas'), ctx=canvas.getContext('2d');
           const luminance=color=>{ctx.clearRect(0,0,1,1);ctx.fillStyle=color;ctx.fillRect(0,0,1,1);const rgb=[...ctx.getImageData(0,0,1,1).data].slice(0,3).map(v=>{v/=255;return v<=.04045?v/12.92:((v+.055)/1.055)**2.4;});return rgb[0]*.2126+rgb[1]*.7152+rgb[2]*.0722;};
