@@ -116,7 +116,8 @@ async function check(name, run) { await run(); groups++; console.log('PASS ' + n
       await refresh(p); await entered.promise; assert.equal(await p.locator('[data-home-action=stage-brain]').count(), 1);
       await p.locator('#home-brand-select').selectOption(Y); hold.resolve(); await ready(p);
       assert.equal(await p.locator('img[src="/retired-avatar.png"]').count(), 0);
-      assert((await message(p).innerText()).startsWith('Selected Brand Y: 9'));
+      assert((await p.locator('[data-signal-source=learning]').innerText()).includes('9 Learning proposals'));
+      assert((await message(p).innerText()).startsWith('Board Autumn Launch:'), 'Complementary Board evidence retains its own attribution');
       assert((await p.locator('.home-avatar-context').innerText()).includes('Autumn Launch · Canvas Brand X'));
       await p.locator('[data-home-action=stage-brain]').press('Enter'); assert.equal(await p.evaluate(() => state.activeView), 'ai_brain');
       await f.close();
@@ -162,7 +163,10 @@ async function check(name, run) { await run(); groups++; console.log('PASS ' + n
     });
     await check('manual eligible messages, stable selection, EN/DE, keyboard and screen reader naming; no automatic inference or timed rotation', async () => {
       const f = await setup(), p = f.page;
-      assert((await message(p).innerText()).includes('73 Learning proposals'));
+      assert((await message(p).innerText()).includes('3 incomplete responsibilities'), 'Default bubble complements the Learning and diagnostic signals');
+      await p.getByRole('button', { name: 'Previous message', exact: true }).press('Enter');
+      await p.getByRole('button', { name: 'Previous message', exact: true }).press('Enter');
+      assert((await message(p).innerText()).includes('73 Learning proposals'), 'Manual navigation still reaches the highest-priority evidence');
       await p.getByRole('button', { name: 'Next message', exact: true }).press('Enter');
       const selected = await message(p).innerText(); assert(selected.startsWith('Board Autumn Launch:'));
       assert.equal(await p.evaluate(() => document.activeElement === document.querySelector('.home-avatar-message')), true);
@@ -174,6 +178,9 @@ async function check(name, run) { await run(); groups++; console.log('PASS ' + n
       assert.equal(await p.getByRole('button', { name: 'Nächste Nachricht', exact: true }).getAttribute('aria-controls'), 'home-avatar-message');
       assert.equal(await p.locator('.home-avatar-bubble').getAttribute('aria-live'), null);
       assert.equal(f.requests.filter(r => /generate|ai-brain/.test(r.path)).length, 0); await f.close();
+      const only = await setup({empty:true});
+      assert((await message(only.page).innerText()).includes('73 Learning proposals'), 'Keep important Learning evidence when no complementary verified message exists');
+      await only.close();
     });
     await check('Light desktop/mobile original asset fidelity, Dark baseline, no motion and contextual Brain eligibility', async () => {
       const geometry = [];

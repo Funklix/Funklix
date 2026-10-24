@@ -148,6 +148,19 @@
     return signals.slice(0, 2);
   }
 
+  // Keep the evidence priority and manual sequence intact. Only the default
+  // presentation prefers verified evidence not already visible in a signal.
+  function presentationMessage(messages, signals, key) {
+    const manual = messages.find(message => message.key === key);
+    if (manual) return manual;
+    const shown = new Set(signals.map(signal => signal.source));
+    return messages.find(message => {
+      const source = message.key.split(':')[0];
+      return ['learning', 'finding', 'responsibility', 'saved'].includes(source)
+        && !shown.has(source === 'finding' ? 'diagnostic' : source);
+    }) || messages[0];
+  }
+
   function contextualOnboarding(detail, readiness) {
     if (typeof detail?.access?.canEditCanonicalBrand !== 'boolean' || !detail.brand_core || typeof readiness !== 'function') return null;
     try {
@@ -485,7 +498,7 @@
         node('span', 'home-avatar-spark home-avatar-spark-one', '✦'), node('span', 'home-avatar-spark home-avatar-spark-two', '✧'),
         node('span', 'home-avatar-spark home-avatar-spark-three', '∿'));
       const messages = contextualMessages(c, rows, learning, learningStatus);
-      const selected = messages.find(message => message.key === messageKey) || messages[0];
+      const selected = presentationMessage(messages, signals, messageKey);
       if (messageKey && selected.key !== messageKey) messageKey = null;
       const bubble = node('div', 'home-avatar-bubble');
       const message = node('p', 'home-avatar-message', t(selected.text).replace(/\{(\w+)\}/g,
@@ -608,13 +621,19 @@
         select.value = model(context()).workspace?.id || '';
         if (sameScope(c, context()) && model(context()).ready) void actions.workspace(id);
       });
-      if (c.catalog.workspaces.length) { nav.append(label, select, button('Create Workspace', 'workspace-create')); hero.append(nav); }
+      if (c.catalog.workspaces.length) {
+        const management = node('div', 'home-context-actions');
+        management.append(button('Create Workspace', 'workspace-create'));
+        nav.append(label, select, management); hero.append(nav);
+      }
       if (!m.workspace) {
         copy.append(node('h1', '', t('Welcome back.')));
         host.append(message(c.catalog.workspaces.length ? 'Choose your working context' : 'Your first Workspace starts here',
           c.catalog.workspaces.length ? 'Choose a Workspace to see the Brands and Boards available to you.' : 'Create a Workspace to bring your Brands and campaign work together.',
           c.catalog.workspaces.length ? null : button('Create Workspace', 'workspace-create'))); return;
       }
+      hero.dataset.contextReady = 'true';
+      copy.hidden = true;
       const brandControls = node('div', 'home-brand-controls');
       const brandLabel = node('label', '', t('Selected Brand')); brandLabel.htmlFor = 'home-brand-select';
       const brandSelect = node('select'); brandSelect.id = 'home-brand-select'; brandSelect.dataset.homeFocus = 'header-brand-select';
@@ -626,10 +645,12 @@
         brandSelect.value = currentModel.brand?.id || '';
         if (sameScope(c, current) && currentModel.workspace?.brands.some(b => b.id === id)) actions.brand(id);
       });
-      if (m.brand && m.brand.name.length > 30) brandLabel.append(node('span', 'home-selected-brand', ': ' + m.brand.name));
+      if (m.brand) brandSelect.title = m.brand.name;
       brandControls.append(brandLabel, brandSelect);
-      if (m.brand) brandControls.append(placed('Brand Profile', 'profile', m.brand.id, 'header'));
-      if (['owner', 'admin'].includes(m.workspace.role)) brandControls.append(placed('Manage Brands', 'brands', '', 'header'));
+      const brandActions = node('div', 'home-context-actions');
+      if (m.brand) brandActions.append(placed('Brand Profile', 'profile', m.brand.id, 'header'));
+      if (['owner', 'admin'].includes(m.workspace.role)) brandActions.append(placed('Manage Brands', 'brands', '', 'header'));
+      brandControls.append(brandActions);
       hero.append(brandControls);
       host.append(livingWorkspace(c, m));
       const details = node('div', 'home-details-heading');
@@ -857,7 +878,8 @@
       else if (m.workspace) {
         if (action === 'message-next' || action === 'message-previous') {
           const messages = contextualMessages(c, rows, learning, learningStatus);
-          const index = Math.max(0, messages.findIndex(message => message.key === messageKey));
+          const selected = presentationMessage(messages, livingSignals(c, rows, learning, learningStatus), messageKey);
+          const index = messages.indexOf(selected);
           messageKey = messages[(index + (action === 'message-next' ? 1 : messages.length - 1)) % messages.length].key;
           draw();
           const text = host.querySelector('#home-avatar-message');
