@@ -429,6 +429,11 @@ jobs:
           node -e 'require("fs").appendFileSync(process.env.GITHUB_ENV, "CHROMIUM_PATH=" + require("playwright-core").chromium.executablePath() + "\n")'
       - name: Check approved Brand Learnings in Advice (disposable PostgreSQL, mocked OpenAI)
         run: node scripts/check-bw36-20-approved-learning-ai-brain.js
+      # Fail early on Home layout/focus regressions before long browser suites.
+      - name: Check BW-36.21B1 Home Intelligence (Chromium, provider-free)
+        run: npm run check:bw36.21b1
+      - name: Check BW-36.22A compact Home and continuation (Chromium, provider-free)
+        run: npm run check:bw36.22a
       - name: Check BW-36.21A-R2.1 safe Workspace switching (Chromium)
         run: npm run check:bw36.21ar2.1
       - name: Check BW-36.21A Home foundation (Chromium)
@@ -494,12 +499,8 @@ jobs:
         run: npm run check:bw36.21ar2.2
       - name: Check BW-36.21A-R2.3 Brand and Board context consistency
         run: npm run check:bw36.21ar2.3
-      - name: Check BW-36.21B1 Home Intelligence (Chromium, provider-free)
-        run: npm run check:bw36.21b1
       - name: Check BW-36.21B2 Home Campaign Insights and AI Brain (Chromium, provider-free)
         run: npm run check:bw36.21b2
-      - name: Check BW-36.22A compact Home and continuation (Chromium, provider-free)
-        run: npm run check:bw36.22a
       - name: Check BW-36.22B1 Living Workspace foundation (Chromium, provider-free)
         run: npm run check:bw36.22b1
       - name: Check BW-36.22B1R1 current continuation name (Chromium, provider-free)

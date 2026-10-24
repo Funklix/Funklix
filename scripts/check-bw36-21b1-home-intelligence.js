@@ -216,4 +216,4 @@ async function main() {
   } finally { await browser.close(); }
   console.log(`BW-36.21B1 PASS ${passed} groups (all I/O mocked, zero production SQL or paid AI)`);
 }
-main().catch(e=>{console.error(e);process.exitCode=1;});
+main().catch(e=>{console.error(e);if(process.env.GITHUB_ACTIONS==='true')console.error('::error title=Home Intelligence regression::'+String(e.stack||e).replace(/%/g,'%25').replace(/\r/g,'%0D').replace(/\n/g,'%0A'));process.exitCode=1;});
