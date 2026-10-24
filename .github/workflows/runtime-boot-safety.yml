@@ -54,6 +54,7 @@ jobs:
           node --check knowledge-module-runtime-adapter.js
           node --check app.js
           node --check canonical-brand-reader.js
+          node --check scripts/check-bw36-22b3-living-signals.js
           node --check home-foundation.js
           node --check scripts/check-bw36-22b2-real-brand-avatar.js
           node --check api/_ai-brain-learning-context.js
@@ -505,6 +506,8 @@ jobs:
         run: npm run check:bw36.22b1r1
       - name: Check BW-36.22B2 real Brand Avatar and contextual personality
         run: npm run check:bw36.22b2
+      - name: Check BW-36.22B3 Living Signals and contextual onboarding
+        run: npm run check:bw36.22b3
       - name: Check BW-36.22B2R1 canonical conflict reload recovery
         run: npm run check:bw36.22b2r1
       - name: Check Knowledge Module browser globals

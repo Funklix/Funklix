@@ -12,6 +12,19 @@
   const STORAGE_KEY = "funklix.languagePreferences.v1";
   const LANGUAGE_NAMES = Object.freeze({ en: "English", de: "German", es: "Spanish" });
   const german = {
+    "Current signals": "Aktuelle Signale",
+    "{count} Learning proposals awaiting review": "{count} Learning-Vorschläge warten auf Prüfung",
+    "{count} incomplete responsibilities assigned to you": "Dir sind {count} offene Verantwortlichkeiten zugewiesen",
+    "Selected Brand · {name} · Learning reviews": "Ausgewählte Brand · {name} · Learning-Prüfung",
+    "Current Board · {name} · Canvas diagnostics": "Aktuelles Board · {name} · Canvas-Diagnose",
+    "Current Board · {name} · Team Responsibilities": "Aktuelles Board · {name} · Team-Verantwortlichkeiten",
+    "Saved Board · {name}": "Gespeichertes Board · {name}",
+    "Continue saved Board": "Gespeichertes Board fortsetzen",
+    "Your Brand Profile next step": "Dein nächster Schritt im Brand Profile",
+    "Complete the {section} section for {brand}.": "Vervollständige den Abschnitt {section} für {brand}.",
+    "The {section} section for {brand} needs attention. A Brand editor can complete it.": "Der Abschnitt {section} für {brand} braucht Aufmerksamkeit. Ein Brand-Editor kann ihn vervollständigen.",
+    "Open Profile section": "Profilabschnitt öffnen",
+    "View Profile section": "Profilabschnitt ansehen",
     "View Brand Profile. A Brand editor can save your Avatar.": "Öffne das Brand Profile. Ein Brand-Editor kann deinen Avatar speichern.",
     "{brand}: {count} Learning proposals await your review.": "{brand}: {count} Learning-Vorschläge warten auf deine Prüfung.",
     "Board {board}: {finding}": "Board {board}: {finding}",

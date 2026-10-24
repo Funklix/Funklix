@@ -1,0 +1,101 @@
+{
+  "groups": [
+    "eligible evidence is bounded, precisely scoped and immutable; exact responsibility ownership and duplicate rejection",
+    "canonical readiness selects one real section, complete/neutral never incomplete; permission and unknown failures",
+    "real signal destinations, selected Brand/Board mismatch, keyboard navigation, redraw and origin focus; no writes or added reads",
+    "canonical section deep links, complete readiness, read-only guidance, loading and denied/failed reads",
+    "Learning capability, invalid aggregates, loading/denial; responsibility and saved continuation fallbacks",
+    "Brand, Workspace, catalog and account switches retire pending onboarding and Learning results; detached/forged controls cannot navigate",
+    "Light/Dark, EN/DE, desktop/mobile and text enlargement: readable signals, accepted Avatar, keyboard focus and static composition"
+  ],
+  "geometry": [
+    {
+      "width": 1600,
+      "height": 900,
+      "theme": "light",
+      "language": "en",
+      "overflow": false,
+      "controls": [
+        {
+          "height": 82.03125,
+          "contained": true
+        },
+        {
+          "height": 82.03125,
+          "contained": true
+        },
+        {
+          "height": 44,
+          "contained": true
+        }
+      ],
+      "animations": 0
+    },
+    {
+      "width": 1440,
+      "height": 900,
+      "theme": "dark",
+      "language": "de",
+      "overflow": false,
+      "controls": [
+        {
+          "height": 101.0625,
+          "contained": true
+        },
+        {
+          "height": 101.0625,
+          "contained": true
+        },
+        {
+          "height": 44,
+          "contained": true
+        }
+      ],
+      "animations": 0
+    },
+    {
+      "width": 375,
+      "height": 812,
+      "theme": "light",
+      "language": "en",
+      "overflow": false,
+      "controls": [
+        {
+          "height": 64.03125,
+          "contained": true
+        },
+        {
+          "height": 64.03125,
+          "contained": true
+        },
+        {
+          "height": 44,
+          "contained": true
+        }
+      ],
+      "animations": 0
+    },
+    {
+      "width": 320,
+      "height": 740,
+      "theme": "dark",
+      "language": "de",
+      "overflow": false,
+      "controls": [
+        {
+          "height": 101.0625,
+          "contained": true
+        },
+        {
+          "height": 101.0625,
+          "contained": true
+        },
+        {
+          "height": 44,
+          "contained": true
+        }
+      ],
+      "animations": 0
+    }
+  ]
+}

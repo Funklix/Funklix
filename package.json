@@ -168,7 +168,8 @@
     "check:bw36.23ar2": "node scripts/check-bw36-23-initialization.js && node scripts/check-bw36-23-logo-replay.js",
     "check:bw36.23ar3:postgres": "node scripts/check-bw36-23a-r3-runtime-postgres.js",
     "check:postgres-tls": "node scripts/check-postgres-tls.js",
-    "check:write-maintenance": "node scripts/check-write-maintenance.js"
+    "check:write-maintenance": "node scripts/check-write-maintenance.js",
+    "check:bw36.22b3": "node scripts/check-bw36-22b3-living-signals.js"
   },
   "devDependencies": {
     "@electric-sql/pglite": "0.3.15",
