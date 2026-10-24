@@ -310,4 +310,10 @@ async function browserChecks() {
   } finally { if (release) release(); await browser.close(); }
 }
 composition();
-if (!process.argv.includes('--model-only')) browserChecks().catch(error => { console.error(error); process.exitCode = 1; });
+if (!process.argv.includes('--model-only')) browserChecks().catch(error => {
+  console.error(error);
+  // Keep the failure diagnosable when Actions log downloads are unavailable.
+  if (process.env.GITHUB_ACTIONS === 'true') console.error('::error title=Home foundation regression::'
+    + String(error.stack || error).replace(/%/g, '%25').replace(/\r/g, '%0D').replace(/\n/g, '%0A'));
+  process.exitCode = 1;
+});

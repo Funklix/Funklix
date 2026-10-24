@@ -78,6 +78,12 @@ const fullBrand = () => ({ id: B, name: 'Complete Brand', logo_revision: 1, logo
       await signal(p, 'diagnostic').locator('button').press('Enter');
       await p.waitForFunction(() => state.activeView === 'insights' && document.activeElement?.closest('#insights-view'));
       await p.evaluate(() => setActiveView('home')); await settled(p);
+      const hold = { started: defer(), release: defer() }; f.holds.push(hold);
+      await signal(p, 'learning').locator('button').focus(); await learningRefresh(p); await hold.started.promise;
+      assert.equal(await signal(p, 'learning').count(), 0);
+      assert.equal(await p.evaluate(() => document.activeElement?.dataset.homeFocus), 'living-title', 'Retired signals retain a safe keyboard focus destination during reauthorization');
+      hold.release.resolve(); await settled(p);
+      assert.equal(await p.evaluate(() => document.activeElement?.dataset.homeFocus), 'living-title');
       await p.locator('#home-brand-select').selectOption(Y); await settled(p);
       assert.match(await signal(p, 'learning').innerText(), /9.*\nSelected Brand · Selected Brand Y/);
       assert.match(await signal(p, 'diagnostic').innerText(), /Current Board · Autumn Launch/);
@@ -90,7 +96,9 @@ const fullBrand = () => ({ id: B, name: 'Complete Brand', logo_revision: 1, logo
       // A real canonical response with every earlier section complete.
       Object.assign(f.r.db.brands[0], fullBrand());
       f.r.db.brands[0].brand_core.personas = []; f.r.db.brands[0].brand_core.customTiles = [];
+      await p.locator('[data-home-action=onboarding-profile]').focus();
       await canonicalRefresh(p); await settled(p); assert.match(await onboarding(p).innerText(), /Audience/);
+      assert.equal(await p.evaluate(() => document.activeElement?.dataset.homeFocus), 'living-title', 'Readiness refresh preserves focus while the old next step is removed');
       await p.locator('[data-home-action=onboarding-profile]').press('Enter');
       await p.waitForFunction(() => brandProfileController?.state.section === 2);
       await p.evaluate(() => closeCanonicalBrandDetail()); await settled(p);
@@ -139,6 +147,8 @@ const fullBrand = () => ({ id: B, name: 'Complete Brand', logo_revision: 1, logo
       await p.waitForFunction(() => document.querySelector('[data-home-module=brand] dl'));
       await p.evaluate(() => { state.nodes.forEach(n => n.ownerEmail = 'someone-else@example.test'); refreshDashboardIfVisible(); clearAutosaveTimer(); });
       await signal(p, 'saved').waitFor(); assert.match(await signal(p, 'saved').innerText(), /Autumn Launch/);
+      await signal(p, 'saved').locator('button').press('Enter');
+      await p.waitForFunction(() => state.activeView === 'board');
       await f.close();
     });
     await check('Brand, Workspace, catalog and account switches retire pending onboarding and Learning results; detached/forged controls cannot navigate', async () => {

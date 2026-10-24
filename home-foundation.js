@@ -730,7 +730,9 @@
       host.append(section, intelligence(c, m), boardIntelligence(c, m), orientation);
       if (focused) {
         const restored = Array.from(host.querySelectorAll('[data-home-focus]')).find(e => e.dataset.homeFocus === focused);
-        (restored || (focused.startsWith('board:') ? host.querySelector('[data-home-action=expand]') : null))?.focus({ preventScroll: true });
+        const retiredSignal = focused.startsWith('signal-') || focused.startsWith('onboarding-profile:');
+        (restored || (retiredSignal ? host.querySelector('#home-living-title')
+          : focused.startsWith('board:') ? host.querySelector('[data-home-action=expand]') : null))?.focus({ preventScroll: true });
       }
       if (focusedContext) contextNotice.querySelector(`[data-context-action="${focusedContext}"]`)?.focus({ preventScroll: true });
     }

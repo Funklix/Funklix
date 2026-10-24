@@ -10,7 +10,7 @@ Learning reviews require the existing valid Brand-matched aggregate, positive sa
 
 Missing, loading, stale and denied projections yield no factual signal for that source. Another independently eligible source may appear instead. Zero and completion are never inferred from missing data. Selected-Brand Learning facts remain independent of a mismatched current Board. No health, growth, performance, AI insight or activity timestamp is introduced.
 
-Every signal action uses the existing Home button/placement factories and original destination adapter. Delegation checks the controller-owned scope, current eligible signal and, for diagnostics, its captured fresh key/finding. Reinserted old elements and copied dataset attributes cannot authorize navigation. Responsibility dialog return focus resolves its current Home origin after redraw.
+Every signal action uses the existing Home button/placement factories and original destination adapter. Delegation checks the controller-owned scope, current eligible signal and, for diagnostics, its captured fresh key/finding. Reinserted old elements and copied dataset attributes cannot authorize navigation. Responsibility dialog return focus resolves its current Home origin after redraw. When reauthorization removes a focused signal or next step, focus moves to the stable Home heading and survives the result redraw.
 
 ## Canonical next step
 
