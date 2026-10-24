@@ -221,7 +221,8 @@
 #home-foundation .home-living-resume { display: flex; align-items: stretch; gap: 14px; flex-wrap: wrap; }
 #home-foundation .home-living-saved { display: flex; flex: 1 1 160px; flex-direction: column; justify-content: center; margin: 0; padding: 12px 14px; border-radius: 14px; background: var(--fk-color-surface-card, var(--fk-surface)); color: var(--fk-color-text-secondary, var(--fk-text-muted)); font-size: .75rem; line-height: 1.5; }
 #home-foundation .home-living-resume .fk-btn { flex: 1 1 160px; justify-content: center; gap: 14px; font-size: .9rem; border-radius: 14px; }
-#home-foundation .home-living-arrow { margin-inline-start: 8px; font-size: 1.4em; }
+#home-foundation .home-living-label { min-width: 0; overflow-wrap: anywhere; }
+#home-foundation .home-living-arrow { flex: 0 0 auto; margin-inline-start: 8px; font-size: 1.4em; }
 #home-foundation .home-living-signals { display: flex; flex-wrap: wrap; gap: 10px; padding: 0; margin: 18px 0 0; list-style: none; }
 #home-foundation .home-living-signals > li { flex: 1 1 180px; min-width: 0; }
 #home-foundation .home-signal { display: flex; flex-direction: column; gap: 5px; width: 100%; min-height: 44px; height: 100%; padding: 10px 12px; border: 1px solid var(--fk-color-border-control, var(--fk-border)); border-radius: 18px; background: var(--fk-color-surface-elevated, var(--fk-surface)); color: var(--fk-color-text-primary, var(--fk-text)); font: inherit; text-align: start; cursor: pointer; overflow-wrap: anywhere; }

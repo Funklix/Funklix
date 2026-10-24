@@ -449,7 +449,7 @@
         const label = viewer ? 'View Board' : current ? 'Continue open Board' : 'Open saved Board';
         const resume = placed(label, 'board', candidate.id, 'living'); resume.className = 'fk-btn fk-btn-primary';
         resume.setAttribute('aria-label', t(label) + ': ' + candidate.name); resume.disabled = !!c.loading;
-        resume.append(arrow()); footer.append(saved, resume); continuation.append(footer);
+        resume.replaceChildren(node('span', 'home-living-label', t(label)), arrow()); footer.append(saved, resume); continuation.append(footer);
       } else {
         continuation.append(node('p', 'home-note', t(c.loading ? 'A Board is loading. Please wait before opening another.' : 'Saved Boards available to you in this Workspace will appear here.')),
           placed('Browse Boards', 'boards', '', 'living'));
@@ -534,7 +534,7 @@
       const canBrain = available && c.openBoard.canEdit === true;
       const brain = placed(canBrain ? 'Open AI Brain for {board}' : 'Browse Boards', canBrain ? 'brain' : 'boards', '', 'stage');
       if (canBrain) brain.textContent = t('Open AI Brain for {board}').replace('{board}', c.openBoard.name);
-      brain.className = 'fk-btn fk-btn-primary'; brain.append(arrow());
+      brain.className = 'fk-btn fk-btn-primary'; brain.replaceChildren(node('span', 'home-living-label', brain.textContent), arrow());
       const scope = node('p', 'home-avatar-context'); scope.id = 'home-avatar-context';
       scope.textContent = available ? t(m.brand && m.brand.id !== boardBrand?.id
         ? 'Selected Brand: {selected}. AI Brain uses the open Board: {board}.' : 'AI Brain uses the open Board: {board}.')
