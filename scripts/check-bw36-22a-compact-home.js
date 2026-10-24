@@ -131,9 +131,15 @@ async function check(name, run) { await run(); passed++;results.push(name);conso
         if(width<768){const bounds=await p.locator('#dashboard-view').boundingBox();assert(bounds.y+bounds.height<=rects.overlay.y+1,'Home scroll viewport overlaps fixed context controls '+JSON.stringify({width,height,theme,language,collapsed,bounds,overlay:rects.overlay}));}
         const file=`home-${width}-${theme}-${language}.png`;await p.screenshot({path:path.join(out,file)});
         await action(p,'expand').click();assert.equal(await cards(p).count(),10);
-        const last=cards(p).last().locator('button');await last.focus();await last.scrollIntoViewIfNeeded();await p.waitForTimeout(40);
-        const collision=await last.evaluate(e=>{const a=e.getBoundingClientRect();return [...document.querySelectorAll('.sidebar,.sidebar > .workspace-context')].filter(x=>getComputedStyle(x).position==='fixed').some(x=>{const b=x.getBoundingClientRect();return a.right>b.left&&a.left<b.right&&a.bottom>b.top&&a.top<b.bottom;});});assert.equal(collision,false,'focused card covered '+width);
-        rects.focusTarget=await last.boundingBox();rects.focusCollisions=collision;rects.scrollViewport=await p.locator('#dashboard-view').boundingBox();
+        const focusGeometry=await p.evaluate(()=>{
+          const card=[...document.querySelectorAll('.home-board-card')].at(-1),current=card.querySelector('button');
+          current.focus();current.scrollIntoView({block:'nearest',inline:'nearest',behavior:'instant'});
+          const a=current.getBoundingClientRect();
+          return {focused:document.activeElement===current,target:a.toJSON(),scrollViewport:document.querySelector('#dashboard-view').getBoundingClientRect().toJSON(),
+            covered:[...document.querySelectorAll('.sidebar,.sidebar > .workspace-context')].filter(x=>getComputedStyle(x).position==='fixed').some(x=>{const b=x.getBoundingClientRect();return a.right>b.left&&a.left<b.right&&a.bottom>b.top&&a.top<b.bottom;})};
+        });
+        assert.equal(focusGeometry.focused,true,'Current expanded card has focus');assert.equal(focusGeometry.covered,false,'focused card covered '+width);
+        rects.focusTarget=focusGeometry.target;rects.focusCollisions=focusGeometry.covered;rects.scrollViewport=focusGeometry.scrollViewport;
         if(width===1440||width===375)await p.screenshot({path:path.join(out,`expanded-${width}-${theme}-${language}.png`)});
         await action(p,'expand').click();geometry.push({width,height,theme,language,collapsed,file,...rects});
       }

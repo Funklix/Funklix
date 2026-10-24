@@ -112,67 +112,67 @@
     "collapsed": true,
     "file": "living-1440-light-en.png",
     "orientation": {
-      "x": 117.1875,
+      "x": 122,
       "y": 0,
-      "right": 1396.8125,
+      "right": 1392,
       "bottom": 116.75,
-      "width": 1279.625,
+      "width": 1270,
       "height": 116.75
     },
     "living": {
-      "x": 117.1875,
+      "x": 122,
       "y": 116.75,
-      "right": 1396.8125,
-      "bottom": 865.140625,
-      "width": 1279.625,
-      "height": 748.390625
+      "right": 1392,
+      "bottom": 862.921875,
+      "width": 1270,
+      "height": 746.171875
     },
     "stage": {
       "x": 773,
       "y": 144.75,
-      "right": 1396.8125,
-      "bottom": 691.21875,
-      "width": 623.8125,
-      "height": 546.46875
+      "right": 1392,
+      "bottom": 689,
+      "width": 619,
+      "height": 544.25
     },
     "slot": {
-      "x": 937.75,
+      "x": 936.453125,
       "y": 276.90625,
-      "right": 1232.0625,
-      "bottom": 571.21875,
-      "width": 294.3125,
-      "height": 294.3125
+      "right": 1228.546875,
+      "bottom": 569,
+      "width": 292.09375,
+      "height": 292.09375
     },
     "bubble": {
-      "x": 1076.8125,
+      "x": 1072,
       "y": 144.75,
-      "right": 1376.8125,
+      "right": 1372,
       "bottom": 278.90625,
       "width": 300,
       "height": 134.15625
     },
     "continue": {
-      "x": 117.1875,
-      "y": 280.203125,
+      "x": 122,
+      "y": 279.53125,
       "right": 741,
-      "bottom": 501.203125,
-      "width": 623.8125,
+      "bottom": 500.53125,
+      "width": 619,
       "height": 221
     },
     "quick": {
-      "x": 117.1875,
-      "y": 721.21875,
-      "right": 1396.8125,
-      "bottom": 865.140625,
-      "width": 1279.625,
+      "x": 122,
+      "y": 719,
+      "right": 1392,
+      "bottom": 862.921875,
+      "width": 1270,
       "height": 143.921875
     },
     "details": {
-      "x": 117.1875,
-      "y": 913.140625,
-      "right": 1396.8125,
-      "bottom": 986.140625,
-      "width": 1279.625,
+      "x": 122,
+      "y": 910.921875,
+      "right": 1392,
+      "bottom": 983.921875,
+      "width": 1270,
       "height": 73
     },
     "scrollViewport": {
@@ -184,7 +184,7 @@
       "height": 900
     },
     "documentWidth": 1440,
-    "homeWidth": 1280,
+    "homeWidth": 1270,
     "wide": [],
     "contrast": [
       {

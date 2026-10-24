@@ -165,9 +165,9 @@ async function check(name, run) { await run(); groups++; console.log('PASS ' + n
       assert((await message(p).innerText()).includes('73 Learning proposals'));
       await p.getByRole('button', { name: 'Next message', exact: true }).press('Enter');
       const selected = await message(p).innerText(); assert(selected.startsWith('Board Autumn Launch:'));
-      assert.equal(await message(p).evaluate(e => document.activeElement === e), true);
+      assert.equal(await p.evaluate(() => document.activeElement === document.querySelector('.home-avatar-message')), true);
       await p.evaluate(() => { refreshDashboardIfVisible(); clearAutosaveTimer(); }); assert.equal(await message(p).innerText(), selected);
-      assert.equal(await message(p).evaluate(e => document.activeElement === e), true);
+      assert.equal(await p.evaluate(() => document.activeElement === document.querySelector('.home-avatar-message')), true);
       await p.getByRole('button', { name: 'Previous message', exact: true }).press('Space'); assert((await message(p).innerText()).includes('73 Learning proposals'));
       await p.evaluate(() => { FunklixLanguage.setUiLanguage('de'); state.uiLanguage = 'de'; refreshDashboardIfVisible(); });
       assert((await message(p).innerText()).includes('73 Learning-Vorschläge'));

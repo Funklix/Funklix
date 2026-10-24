@@ -92,7 +92,8 @@ async function main() {
       assert.equal(await snapshot(p),before);await p.evaluate(()=>setActiveView('home'));await waitCount(p,9);
       await action(p,'responsibilities').click();await p.locator('#campaign-responsibilities').waitFor();
       assert.equal(await p.locator('[data-responsibility-node="mine"]').count(),1);await p.locator('#campaign-responsibilities button').first().click();
-      assert.equal(await action(p,'responsibilities').evaluate(e=>document.activeElement===e),true,'Return focus to Home origin');
+      await p.waitForFunction(()=>document.activeElement===document.querySelector('#home-foundation [data-home-action="responsibilities"]'));
+      assert.equal(await p.evaluate(()=>document.activeElement===document.querySelector('#home-foundation [data-home-action="responsibilities"]')),true,'Return focus to Home origin');
       await f.close();
     });
     await check('empty library, absent aggregate, malformed count and API error distinguish genuine zero',async()=>{

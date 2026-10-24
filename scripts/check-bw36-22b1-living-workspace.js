@@ -237,7 +237,7 @@ const snapshot = p => p.evaluate(() => JSON.stringify({nodes:state.nodes, edges:
         }
         const control=action(p,'quick-insights'); await control.focus(); await refresh(p);
         assert.equal(await p.evaluate(()=>document.activeElement?.dataset.homeAction),'quick-insights');
-        assert.equal(await control.evaluate(e=>getComputedStyle(e).outlineWidth),'3px');
+        assert.equal(await p.evaluate(()=>getComputedStyle(document.querySelector('#home-foundation [data-home-action="quick-insights"]')).outlineWidth),'3px');
         for(const selector of ['[data-home-action=quick-insights]', '.home-brand-card button']) {
           const result = await p.evaluate(selector => {
             const targets = [...document.querySelectorAll('#home-foundation ' + selector)], e = targets.at(-1);
