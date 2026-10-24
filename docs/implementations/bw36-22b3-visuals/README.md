@@ -5,7 +5,7 @@ Baseline: merged `main` at `7c5371e63a9c4cee7ba2787343a4e8d1f71789c3`, including
 ## Focused acceptance
 
 - B3: all seven acceptance groups pass. [Machine-readable acceptance and geometry](validation.json).
-- B1: all 15 groups pass, including its unchanged first-screen, contrast, reflow, fixed-control clearance and keyboard geometry assertions.
+- B1: all 15 groups pass, including its unchanged first-screen, contrast, reflow, fixed-control clearance and keyboard geometry assertions. [Current B1 measurements](b1-geometry.json).
 - B2: all eight groups pass, including canonical scope races, original accepted Avatar, Profile save reconciliation and deterministic manual messages.
 - Changed JavaScript syntax and `git diff --check` pass.
 - Complete local Runtime Boot Safety: **201/201 run blocks pass**, using declared dependencies, system Chromium 151 and disposable PostgreSQL 17.6. [Results and exact commands](runtime-validation.json), [summary](runtime-summary.log). This complete sequence preceded the final CTA enlarged-text adjustment.
