@@ -119,6 +119,9 @@ async function browserChecks() {
       await page.evaluate(({ theme, language, large }) => { FunklixTheme.setPreference(theme); state.uiLanguage = FunklixLanguage.setUiLanguage(language); document.documentElement.style.fontSize = large ? '200%' : ''; refreshDashboardIfVisible(); }, { theme, language, large });
       assert((await home(page).innerText()).includes(language === 'de' ? 'Brands in deinem Workspace' : 'Brands in your Workspace'), 'Actual EN/DE copy');
       const geometry = await home(page).evaluate(element => ({ width: element.getBoundingClientRect().width, scroll: element.scrollWidth,
+        internalOverflow: element.scrollWidth > element.getBoundingClientRect().width + 1
+          ? Array.from(element.querySelectorAll('*')).filter(e => e.scrollWidth > e.clientWidth + 1 && getComputedStyle(e).overflowX === 'visible')
+            .map(e => ({ tag: e.tagName, class: e.className, width: e.clientWidth, scroll: e.scrollWidth, right: e.getBoundingClientRect().right })).slice(0, 30) : [],
         overflow: Array.from(element.querySelectorAll('*')).filter(e => e.getBoundingClientRect().right > innerWidth + 1 || e.getBoundingClientRect().left < -1).map(e => e.className) }));
       assert(geometry.scroll <= geometry.width + 1, JSON.stringify({ width, geometry })); assert.deepEqual(geometry.overflow, [], 'No clipped/wide Home descendants');
       const contrast = await home(page).evaluate(element => {
@@ -310,4 +313,10 @@ async function browserChecks() {
   } finally { if (release) release(); await browser.close(); }
 }
 composition();
-if (!process.argv.includes('--model-only')) browserChecks().catch(error => { console.error(error); process.exitCode = 1; });
+if (!process.argv.includes('--model-only')) browserChecks().catch(error => {
+  console.error(error);
+  // Keep the failure diagnosable when Actions log downloads are unavailable.
+  if (process.env.GITHUB_ACTIONS === 'true') console.error('::error title=Home foundation regression::'
+    + String(error.stack || error).replace(/%/g, '%25').replace(/\r/g, '%0D').replace(/\n/g, '%0A'));
+  process.exitCode = 1;
+});

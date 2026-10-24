@@ -1,0 +1,18 @@
+PASS aggregate projection: pagination, sparse zero, missing/malformed fields and exact Brand
+PASS real signed Learning route independently enforces identity and Brand roles; Board ownership gives no Learning access
+PASS selected Brand counts and current Board responsibilities remain separate, bounded and read-only composition
+PASS empty library, absent aggregate, malformed count and API error distinguish genuine zero
+PASS Brand viewer uses server capability and correct explicit Profile Learnings target; return refreshes without revision bump
+PASS Profile Learnings handoff preserves busy and dirty leave guards, Cancel and explicit Discard
+PASS pending Learning read rejects stale brand result
+PASS pending Learning read rejects stale workspace result
+PASS pending Learning read rejects stale logout result
+PASS pending Learning read rejects stale account result
+PASS Board-only access, hidden association and no selected Brand never read its Learnings
+PASS no Workspace and no Board preserve useful navigation
+PASS live unsaved, replacement/deletion, completion aliases, ambiguous identity and Board generation guard
+PASS viewer Board manager remains view-only; revocation removes nodes
+PASS lifecycle event and focus resume refresh independently of canonical revision; unrelated Brand event does not
+PASS EN/DE, Light/Dark/system, mobile, long names, reduced motion, native keyboard and screenshots
+PASS responsibility summary refuses stale/duplicate identity and matches only actual owner email
+BW-36.21B1 PASS 17 groups (all I/O mocked, zero production SQL or paid AI)

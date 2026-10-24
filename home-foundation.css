@@ -221,7 +221,40 @@
 #home-foundation .home-living-resume { display: flex; align-items: stretch; gap: 14px; flex-wrap: wrap; }
 #home-foundation .home-living-saved { display: flex; flex: 1 1 160px; flex-direction: column; justify-content: center; margin: 0; padding: 12px 14px; border-radius: 14px; background: var(--fk-color-surface-card, var(--fk-surface)); color: var(--fk-color-text-secondary, var(--fk-text-muted)); font-size: .75rem; line-height: 1.5; }
 #home-foundation .home-living-resume .fk-btn { flex: 1 1 160px; justify-content: center; gap: 14px; font-size: .9rem; border-radius: 14px; }
-#home-foundation .home-living-arrow { margin-inline-start: 8px; font-size: 1.4em; }
+#home-foundation .home-living-label { min-width: 0; overflow-wrap: anywhere; }
+#home-foundation .home-living-arrow { flex: 0 0 auto; margin-inline-start: 8px; font-size: 1.4em; }
+#home-foundation .home-living-signals { display: flex; flex-wrap: wrap; gap: 10px; padding: 0; margin: 18px 0 0; list-style: none; }
+#home-foundation .home-living-signals > li { flex: 1 1 180px; min-width: 0; }
+#home-foundation .home-signal { display: flex; flex-direction: column; gap: 5px; width: 100%; min-height: 44px; height: 100%; padding: 10px 12px; border: 1px solid var(--fk-color-border-control, var(--fk-border)); border-radius: 18px; background: var(--fk-color-surface-elevated, var(--fk-surface)); color: var(--fk-color-text-primary, var(--fk-text)); font: inherit; text-align: start; cursor: pointer; overflow-wrap: anywhere; }
+#home-foundation .home-signal strong { font-size: .85rem; line-height: 1.4; }
+#home-foundation .home-signal span { font-size: .75rem; line-height: 1.5; color: var(--fk-color-text-secondary, var(--fk-text-muted)); }
+#home-foundation .home-signal { transform: none; transition: none; }
+#home-foundation .home-signal:hover { border-color: var(--home-ink); }
+#home-foundation .home-profile-next { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 12px; margin-top: 14px; padding: 14px 16px; border: 1px solid var(--fk-color-border-default, var(--fk-border)); border-radius: 18px; background: var(--fk-color-surface-elevated, var(--fk-surface)); }
+#home-foundation .home-profile-next h2 { margin: 0; font-size: .9rem; }
+#home-foundation .home-profile-next p { grid-column: 1; margin: 0; font-size: .85rem; line-height: 1.5; color: var(--fk-color-text-secondary, var(--fk-text-muted)); }
+#home-foundation .home-profile-next .fk-btn { grid-column: 2; grid-row: 1 / span 2; align-self: center; min-height: 44px; max-width: 180px; white-space: normal; }
+:root[data-theme="light"] #home-foundation [data-signal-source="learning"] .home-signal { background: #edf8f2; border-color: #b6d9c7; }
+:root[data-theme="light"] #home-foundation [data-signal-source="diagnostic"] .home-signal { background: #f4f0ff; border-color: #d7c9f4; }
+:root[data-theme="light"] #home-foundation .home-profile-next { background: #ffffffed; }
+@container (max-width: 520px) {
+  #home-foundation .home-living-signals { flex-direction: column; }
+  #home-foundation .home-living-signals > li { flex-basis: auto; }
+  #home-foundation .home-profile-next { grid-template-columns: minmax(0, 1fr); }
+  #home-foundation .home-profile-next .fk-btn { grid-column: 1; grid-row: auto; justify-self: start; margin-top: 6px; }
+}
+@container (min-width: 901px) {
+  #home-foundation .home-living { padding-top: 28px; }
+  #home-foundation .home-living-greeting { padding-bottom: 8px; }
+  #home-foundation .home-living-continue { padding: 16px; }
+  #home-foundation .home-living-board { margin-block: 12px; }
+  #home-foundation .home-living-signals { margin-top: 14px; }
+  #home-foundation .home-profile-next { padding-block: 12px; }
+  #home-foundation .home-quick-list .home-quick-action { padding: 12px 14px; gap: 12px; }
+}
+@media (forced-colors: active) {
+  #home-foundation :is(.home-signal, .home-profile-next) { border: 1px solid CanvasText; }
+}
 #home-foundation .home-avatar-stage { position: relative; isolation: isolate; display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; min-height: 420px; padding: 0 20px; }
 #home-foundation .home-avatar-art { position: absolute; z-index: -1; inset: 0; pointer-events: none; overflow: hidden; border-radius: 42%; }
 #home-foundation .home-avatar-orbit { position: absolute; top: 50%; left: 50%; width: 70%; aspect-ratio: 1; border: 2px solid var(--fk-color-border-default, var(--fk-border)); border-radius: 50%; transform: translate(-50%, -50%) rotate(-28deg) scaleY(.8); }

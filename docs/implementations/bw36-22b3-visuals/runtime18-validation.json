@@ -1,0 +1,37 @@
+[
+  {
+    "index": 0,
+    "name": "Prepare non-bootstrap postgres test operator",
+    "exitCode": 0,
+    "seconds": 0.11,
+    "run": "node - <<'JS'\nconst {Client}=require('pg');\n(async()=>{\n  const c=new Client({connectionString:'postgres://bw23_fixture_admin:disposable-bw36-23-fixture@127.0.0.1:5433/postgres'});\n  await c.connect();\n  try {await c.query(\"CREATE ROLE postgres LOGIN SUPERUSER PASSWORD 'disposable-bw36-23-fixture'\");}\n  finally {await c.end();}\n})().catch(e=>{console.error(e);process.exitCode=1;});\nJS\n"
+  },
+  {
+    "index": 1,
+    "name": "Check BW-36.23A R3 restricted runtime on real PostgreSQL",
+    "exitCode": 0,
+    "seconds": 3.19,
+    "run": "npm run check:bw36.23ar3:postgres"
+  },
+  {
+    "index": 2,
+    "name": "Check completed pre-805 protection upgrade and full verifier chain",
+    "exitCode": 0,
+    "seconds": 5.22,
+    "run": "npm run check:bw36.23a:postgres\nnpm run check:bw36.23ar3:postgres\n"
+  },
+  {
+    "index": 3,
+    "name": "Check strict runtime graph without administrative memberships",
+    "exitCode": 0,
+    "seconds": 3.1,
+    "run": "npm run check:bw36.23ar3:postgres"
+  },
+  {
+    "index": 4,
+    "name": "Check BW-36.23A real PostgreSQL roles transactions and concurrency",
+    "exitCode": 0,
+    "seconds": 1.9,
+    "run": "npm run check:bw36.23a:postgres"
+  }
+]

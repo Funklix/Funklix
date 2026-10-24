@@ -1,0 +1,5 @@
+1/5 PASS Prepare non-bootstrap postgres test operator
+2/5 PASS Check BW-36.23A R3 restricted runtime on real PostgreSQL
+3/5 PASS Check completed pre-805 protection upgrade and full verifier chain
+4/5 PASS Check strict runtime graph without administrative memberships
+5/5 PASS Check BW-36.23A real PostgreSQL roles transactions and concurrency

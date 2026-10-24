@@ -3703,7 +3703,10 @@ function closeCanonicalBrandDetail({ restoreFocus = true, navigate = true, resum
   if (page && navigate && state.activeView === 'brand-profile') setActiveView(page.returnView);
   if (el.brandWorkspaceDetailTitle) el.brandWorkspaceDetailTitle.textContent = uiText('Brand Profile');
   renderCanonicalBrandDetail();
-  if (restoreFocus && previous.returnFocus?.isConnected) previous.returnFocus.focus();
+  if (restoreFocus) {
+    const origin = typeof previous.returnFocus === 'function' ? previous.returnFocus() : previous.returnFocus;
+    if (origin?.isConnected) origin.focus();
+  }
   return true;
 }
 
@@ -3803,15 +3806,15 @@ function renderBrandProfileEntryState(detail) {
   }
 }
 
-function openRegularBrandProfile(target = null) {
+function openRegularBrandProfile(target = null, returnFocus = null) {
   const workspace = target && state.workspaceCatalog.value?.workspaces.find(w => w.id === target.workspace_id);
   const targetBrand = workspace?.brands.find(b => b.id === target?.id);
   if (target && (!targetBrand || workspace.id !== state.workspaceCatalog.activeWorkspaceId || state.workspaceCatalog.status !== 'ready' || !state.user?.email || state.publicBoardToken)) return;
   const entry = targetBrand && !state.publicBoardToken ? { kind: 'brand', brand: targetBrand, workspace } : resolveRegularBrandProfile();
-  if (!closeCanonicalBrandDetail({ restoreFocus: false, navigate: false, resume: () => openRegularBrandProfile(target) })) return;
-  canonicalBrandDetail.initialSection = ['Brand Learnings', 'Brand Avatar'].includes(target?.section) ? target.section : null;
+  if (!closeCanonicalBrandDetail({ restoreFocus: false, navigate: false, resume: () => openRegularBrandProfile(target, returnFocus) })) return;
+  canonicalBrandDetail.initialSection = window.FunklixBrandProfileSetup.SECTIONS.includes(target?.section) ? target.section : null;
   brandProfilePage = { returnView: state.activeView === 'brand-profile' ? 'home' : state.activeView };
-  canonicalBrandDetail.returnFocus = el.brandCoreButton;
+  canonicalBrandDetail.returnFocus = typeof returnFocus === 'function' ? returnFocus : el.brandCoreButton;
   canonicalBrandDetail.userEmail = (state.user?.email || '').trim().toLowerCase();
   canonicalBrandDetail.brandId = entry.brand?.id || '';
   state.appMode = 'canvas'; el.workspaceWrap?.classList.remove('brand-mode');

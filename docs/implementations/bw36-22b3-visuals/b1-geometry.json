@@ -1,0 +1,947 @@
+[
+  {
+    "width": 1600,
+    "height": 900,
+    "theme": "light",
+    "language": "en",
+    "collapsed": true,
+    "file": "living-1600-light-en.png",
+    "orientation": {
+      "x": 122,
+      "y": 0,
+      "right": 1552,
+      "bottom": 116.75,
+      "width": 1430,
+      "height": 116.75
+    },
+    "living": {
+      "x": 122,
+      "y": 116.75,
+      "right": 1552,
+      "bottom": 880.828125,
+      "width": 1430,
+      "height": 764.078125
+    },
+    "stage": {
+      "x": 853,
+      "y": 144.75,
+      "right": 1552,
+      "bottom": 706.90625,
+      "width": 699,
+      "height": 562.15625
+    },
+    "slot": {
+      "x": 1047.5,
+      "y": 276.90625,
+      "right": 1357.5,
+      "bottom": 586.90625,
+      "width": 310,
+      "height": 310
+    },
+    "bubble": {
+      "x": 1232,
+      "y": 144.75,
+      "right": 1532,
+      "bottom": 278.90625,
+      "width": 300,
+      "height": 134.15625
+    },
+    "continue": {
+      "x": 122,
+      "y": 289.78125,
+      "right": 821,
+      "bottom": 510.78125,
+      "width": 699,
+      "height": 221
+    },
+    "quick": {
+      "x": 122,
+      "y": 736.90625,
+      "right": 1552,
+      "bottom": 880.828125,
+      "width": 1430,
+      "height": 143.921875
+    },
+    "details": {
+      "x": 122,
+      "y": 928.828125,
+      "right": 1552,
+      "bottom": 1001.828125,
+      "width": 1430,
+      "height": 73
+    },
+    "scrollViewport": {
+      "x": 74,
+      "y": 0,
+      "right": 1600,
+      "bottom": 900,
+      "width": 1526,
+      "height": 900
+    },
+    "documentWidth": 1600,
+    "homeWidth": 1430,
+    "wide": [],
+    "contrast": [
+      {
+        "selector": ".home-avatar-placeholder-note",
+        "ratio": 5.487801906273163
+      },
+      {
+        "selector": ".home-avatar-bubble",
+        "ratio": 15.204719331600405
+      },
+      {
+        "selector": ".home-quick-copy > span",
+        "ratio": 7.211720440343858
+      },
+      {
+        "selector": "[data-home-action=stage-brain]",
+        "ratio": 5.514096301296758
+      },
+      {
+        "selector": "[data-home-action=living-board]",
+        "ratio": 5.514096301296758
+      }
+    ]
+  },
+  {
+    "width": 1440,
+    "height": 900,
+    "theme": "light",
+    "language": "en",
+    "collapsed": true,
+    "file": "living-1440-light-en.png",
+    "orientation": {
+      "x": 122,
+      "y": 0,
+      "right": 1392,
+      "bottom": 116.75,
+      "width": 1270,
+      "height": 116.75
+    },
+    "living": {
+      "x": 122,
+      "y": 116.75,
+      "right": 1392,
+      "bottom": 862.921875,
+      "width": 1270,
+      "height": 746.171875
+    },
+    "stage": {
+      "x": 773,
+      "y": 144.75,
+      "right": 1392,
+      "bottom": 689,
+      "width": 619,
+      "height": 544.25
+    },
+    "slot": {
+      "x": 936.453125,
+      "y": 276.90625,
+      "right": 1228.546875,
+      "bottom": 569,
+      "width": 292.09375,
+      "height": 292.09375
+    },
+    "bubble": {
+      "x": 1072,
+      "y": 144.75,
+      "right": 1372,
+      "bottom": 278.90625,
+      "width": 300,
+      "height": 134.15625
+    },
+    "continue": {
+      "x": 122,
+      "y": 279.53125,
+      "right": 741,
+      "bottom": 500.53125,
+      "width": 619,
+      "height": 221
+    },
+    "quick": {
+      "x": 122,
+      "y": 719,
+      "right": 1392,
+      "bottom": 862.921875,
+      "width": 1270,
+      "height": 143.921875
+    },
+    "details": {
+      "x": 122,
+      "y": 910.921875,
+      "right": 1392,
+      "bottom": 983.921875,
+      "width": 1270,
+      "height": 73
+    },
+    "scrollViewport": {
+      "x": 74,
+      "y": 0,
+      "right": 1440,
+      "bottom": 900,
+      "width": 1366,
+      "height": 900
+    },
+    "documentWidth": 1440,
+    "homeWidth": 1270,
+    "wide": [],
+    "contrast": [
+      {
+        "selector": ".home-avatar-placeholder-note",
+        "ratio": 5.487801906273163
+      },
+      {
+        "selector": ".home-avatar-bubble",
+        "ratio": 15.204719331600405
+      },
+      {
+        "selector": ".home-quick-copy > span",
+        "ratio": 7.211720440343858
+      },
+      {
+        "selector": "[data-home-action=stage-brain]",
+        "ratio": 5.514096301296758
+      },
+      {
+        "selector": "[data-home-action=living-board]",
+        "ratio": 5.514096301296758
+      }
+    ]
+  },
+  {
+    "width": 1280,
+    "height": 800,
+    "theme": "light",
+    "language": "en",
+    "collapsed": false,
+    "file": "living-1280-light-en.png",
+    "orientation": {
+      "x": 112.390625,
+      "y": 0,
+      "right": 1241.609375,
+      "bottom": 116.75,
+      "width": 1129.21875,
+      "height": 116.75
+    },
+    "living": {
+      "x": 112.390625,
+      "y": 116.75,
+      "right": 1241.609375,
+      "bottom": 865.734375,
+      "width": 1129.21875,
+      "height": 748.984375
+    },
+    "stage": {
+      "x": 693,
+      "y": 144.75,
+      "right": 1241.609375,
+      "bottom": 691.8125,
+      "width": 548.609375,
+      "height": 547.0625
+    },
+    "slot": {
+      "x": 837.4375,
+      "y": 276.90625,
+      "right": 1097.15625,
+      "bottom": 536.625,
+      "width": 259.71875,
+      "height": 259.71875
+    },
+    "bubble": {
+      "x": 921.609375,
+      "y": 144.75,
+      "right": 1221.609375,
+      "bottom": 278.90625,
+      "width": 300,
+      "height": 134.15625
+    },
+    "continue": {
+      "x": 112.390625,
+      "y": 269.921875,
+      "right": 661,
+      "bottom": 490.921875,
+      "width": 548.609375,
+      "height": 221
+    },
+    "quick": {
+      "x": 112.390625,
+      "y": 721.8125,
+      "right": 1241.609375,
+      "bottom": 865.734375,
+      "width": 1129.21875,
+      "height": 143.921875
+    },
+    "details": {
+      "x": 112.390625,
+      "y": 913.734375,
+      "right": 1241.609375,
+      "bottom": 986.734375,
+      "width": 1129.21875,
+      "height": 73
+    },
+    "scrollViewport": {
+      "x": 74,
+      "y": 0,
+      "right": 1280,
+      "bottom": 800,
+      "width": 1206,
+      "height": 800
+    },
+    "documentWidth": 1280,
+    "homeWidth": 1129,
+    "wide": [],
+    "contrast": [
+      {
+        "selector": ".home-avatar-placeholder-note",
+        "ratio": 5.487801906273163
+      },
+      {
+        "selector": ".home-avatar-bubble",
+        "ratio": 15.204719331600405
+      },
+      {
+        "selector": ".home-quick-copy > span",
+        "ratio": 7.211720440343858
+      },
+      {
+        "selector": "[data-home-action=stage-brain]",
+        "ratio": 5.514096301296758
+      },
+      {
+        "selector": "[data-home-action=living-board]",
+        "ratio": 5.514096301296758
+      }
+    ]
+  },
+  {
+    "width": 1024,
+    "height": 768,
+    "theme": "light",
+    "language": "en",
+    "collapsed": false,
+    "file": "living-1024-light-en.png",
+    "orientation": {
+      "x": 104.71875,
+      "y": 0,
+      "right": 993.28125,
+      "bottom": 166.75,
+      "width": 888.5625,
+      "height": 166.75
+    },
+    "living": {
+      "x": 104.71875,
+      "y": 166.75,
+      "right": 993.28125,
+      "bottom": 1580.875,
+      "width": 888.5625,
+      "height": 1414.125
+    },
+    "stage": {
+      "x": 229,
+      "y": 774.796875,
+      "right": 869,
+      "bottom": 1286.953125,
+      "width": 640,
+      "height": 512.15625
+    },
+    "slot": {
+      "x": 419,
+      "y": 906.953125,
+      "right": 679,
+      "bottom": 1166.953125,
+      "width": 260,
+      "height": 260
+    },
+    "bubble": {
+      "x": 549,
+      "y": 774.796875,
+      "right": 849,
+      "bottom": 908.953125,
+      "width": 300,
+      "height": 134.15625
+    },
+    "continue": {
+      "x": 104.71875,
+      "y": 329.9375,
+      "right": 993.28125,
+      "bottom": 578.9375,
+      "width": 888.5625,
+      "height": 249
+    },
+    "quick": {
+      "x": 104.71875,
+      "y": 1316.953125,
+      "right": 993.28125,
+      "bottom": 1580.875,
+      "width": 888.5625,
+      "height": 263.921875
+    },
+    "details": {
+      "x": 104.71875,
+      "y": 1628.875,
+      "right": 993.28125,
+      "bottom": 1701.875,
+      "width": 888.5625,
+      "height": 73
+    },
+    "scrollViewport": {
+      "x": 74,
+      "y": 0,
+      "right": 1024,
+      "bottom": 768,
+      "width": 950,
+      "height": 768
+    },
+    "documentWidth": 1024,
+    "homeWidth": 889,
+    "wide": [],
+    "contrast": [
+      {
+        "selector": ".home-avatar-placeholder-note",
+        "ratio": 5.487801906273163
+      },
+      {
+        "selector": ".home-avatar-bubble",
+        "ratio": 15.204719331600405
+      },
+      {
+        "selector": ".home-quick-copy > span",
+        "ratio": 7.211720440343858
+      },
+      {
+        "selector": "[data-home-action=stage-brain]",
+        "ratio": 5.514096301296758
+      },
+      {
+        "selector": "[data-home-action=living-board]",
+        "ratio": 5.514096301296758
+      }
+    ]
+  },
+  {
+    "width": 375,
+    "height": 812,
+    "theme": "light",
+    "language": "en",
+    "collapsed": true,
+    "file": "living-375-light-en.png",
+    "orientation": {
+      "x": 16,
+      "y": 0,
+      "right": 359,
+      "bottom": 285.75,
+      "width": 343,
+      "height": 285.75
+    },
+    "living": {
+      "x": 16,
+      "y": 285.75,
+      "right": 359,
+      "bottom": 2084.203125,
+      "width": 343,
+      "height": 1798.453125
+    },
+    "stage": {
+      "x": 16,
+      "y": 1095.75,
+      "right": 359,
+      "bottom": 1598.28125,
+      "width": 343,
+      "height": 502.53125
+    },
+    "slot": {
+      "x": 77.5,
+      "y": 1249.90625,
+      "right": 297.5,
+      "bottom": 1469.90625,
+      "width": 220,
+      "height": 220
+    },
+    "bubble": {
+      "x": 67.453125,
+      "y": 1095.75,
+      "right": 359,
+      "bottom": 1229.90625,
+      "width": 291.546875,
+      "height": 134.15625
+    },
+    "continue": {
+      "x": 16,
+      "y": 453.71875,
+      "right": 359,
+      "bottom": 749.46875,
+      "width": 343,
+      "height": 295.75
+    },
+    "quick": {
+      "x": 16,
+      "y": 1628.28125,
+      "right": 359,
+      "bottom": 2084.203125,
+      "width": 343,
+      "height": 455.921875
+    },
+    "details": {
+      "x": 16,
+      "y": 2116.203125,
+      "right": 359,
+      "bottom": 2257.671875,
+      "width": 343,
+      "height": 141.46875
+    },
+    "scrollViewport": {
+      "x": 0,
+      "y": 0,
+      "right": 375,
+      "bottom": 632,
+      "width": 375,
+      "height": 632
+    },
+    "documentWidth": 375,
+    "homeWidth": 343,
+    "wide": [],
+    "contrast": [
+      {
+        "selector": ".home-avatar-placeholder-note",
+        "ratio": 5.487801906273163
+      },
+      {
+        "selector": ".home-avatar-bubble",
+        "ratio": 15.204719331600405
+      },
+      {
+        "selector": ".home-quick-copy > span",
+        "ratio": 7.211720440343858
+      },
+      {
+        "selector": "[data-home-action=stage-brain]",
+        "ratio": 5.514096301296758
+      },
+      {
+        "selector": "[data-home-action=living-board]",
+        "ratio": 5.514096301296758
+      }
+    ]
+  },
+  {
+    "width": 320,
+    "height": 740,
+    "theme": "light",
+    "language": "de",
+    "collapsed": false,
+    "file": "living-320-light-de.png",
+    "orientation": {
+      "x": 16,
+      "y": 0,
+      "right": 304,
+      "bottom": 285.75,
+      "width": 288,
+      "height": 285.75
+    },
+    "living": {
+      "x": 16,
+      "y": 285.75,
+      "right": 304,
+      "bottom": 2289.40625,
+      "width": 288,
+      "height": 2003.65625
+    },
+    "stage": {
+      "x": 16,
+      "y": 1251.15625,
+      "right": 304,
+      "bottom": 1778.765625,
+      "width": 288,
+      "height": 527.609375
+    },
+    "slot": {
+      "x": 50,
+      "y": 1430.390625,
+      "right": 270,
+      "bottom": 1650.390625,
+      "width": 220,
+      "height": 220
+    },
+    "bubble": {
+      "x": 59.203125,
+      "y": 1251.15625,
+      "right": 304,
+      "bottom": 1410.390625,
+      "width": 244.796875,
+      "height": 159.234375
+    },
+    "continue": {
+      "x": 16,
+      "y": 487.3125,
+      "right": 304,
+      "bottom": 811.375,
+      "width": 288,
+      "height": 324.0625
+    },
+    "quick": {
+      "x": 16,
+      "y": 1808.765625,
+      "right": 304,
+      "bottom": 2289.40625,
+      "width": 288,
+      "height": 480.640625
+    },
+    "details": {
+      "x": 16,
+      "y": 2321.40625,
+      "right": 304,
+      "bottom": 2481.421875,
+      "width": 288,
+      "height": 160.015625
+    },
+    "scrollViewport": {
+      "x": 0,
+      "y": 0,
+      "right": 320,
+      "bottom": 614,
+      "width": 320,
+      "height": 614
+    },
+    "documentWidth": 320,
+    "homeWidth": 288,
+    "wide": [],
+    "contrast": [
+      {
+        "selector": ".home-avatar-placeholder-note",
+        "ratio": 5.487801906273163
+      },
+      {
+        "selector": ".home-avatar-bubble",
+        "ratio": 15.204719331600405
+      },
+      {
+        "selector": ".home-quick-copy > span",
+        "ratio": 7.211720440343858
+      },
+      {
+        "selector": "[data-home-action=stage-brain]",
+        "ratio": 5.514096301296758
+      },
+      {
+        "selector": "[data-home-action=living-board]",
+        "ratio": 5.514096301296758
+      }
+    ]
+  },
+  {
+    "width": 1440,
+    "height": 900,
+    "theme": "dark",
+    "language": "de",
+    "collapsed": false,
+    "file": "living-1440-dark-de.png",
+    "orientation": {
+      "x": 283.1875,
+      "y": 0,
+      "right": 1396.8125,
+      "bottom": 116.75,
+      "width": 1113.625,
+      "height": 116.75
+    },
+    "living": {
+      "x": 283.1875,
+      "y": 116.75,
+      "right": 1396.8125,
+      "bottom": 885.0625,
+      "width": 1113.625,
+      "height": 768.3125
+    },
+    "stage": {
+      "x": 856,
+      "y": 144.75,
+      "right": 1396.8125,
+      "bottom": 711.140625,
+      "width": 540.8125,
+      "height": 566.390625
+    },
+    "slot": {
+      "x": 998.34375,
+      "y": 301.984375,
+      "right": 1254.46875,
+      "bottom": 558.109375,
+      "width": 256.125,
+      "height": 256.125
+    },
+    "bubble": {
+      "x": 1076.8125,
+      "y": 144.75,
+      "right": 1376.8125,
+      "bottom": 303.984375,
+      "width": 300,
+      "height": 159.234375
+    },
+    "continue": {
+      "x": 283.1875,
+      "y": 268.859375,
+      "right": 824,
+      "bottom": 489.859375,
+      "width": 540.8125,
+      "height": 221
+    },
+    "quick": {
+      "x": 283.1875,
+      "y": 741.140625,
+      "right": 1396.8125,
+      "bottom": 885.0625,
+      "width": 1113.625,
+      "height": 143.921875
+    },
+    "details": {
+      "x": 283.1875,
+      "y": 933.0625,
+      "right": 1396.8125,
+      "bottom": 1006.0625,
+      "width": 1113.625,
+      "height": 73
+    },
+    "scrollViewport": {
+      "x": 240,
+      "y": 0,
+      "right": 1440,
+      "bottom": 900,
+      "width": 1200,
+      "height": 900
+    },
+    "documentWidth": 1440,
+    "homeWidth": 1114,
+    "wide": [],
+    "contrast": [
+      {
+        "selector": ".home-avatar-placeholder-note",
+        "ratio": 9.274502171549301
+      },
+      {
+        "selector": ".home-avatar-bubble",
+        "ratio": 14.029528883184037
+      },
+      {
+        "selector": ".home-quick-copy > span",
+        "ratio": 8.579916348774287
+      },
+      {
+        "selector": "[data-home-action=stage-brain]",
+        "ratio": 4.553282210964381
+      },
+      {
+        "selector": "[data-home-action=living-board]",
+        "ratio": 4.553282210964381
+      }
+    ]
+  },
+  {
+    "width": 1440,
+    "height": 900,
+    "theme": "system",
+    "language": "en",
+    "collapsed": true,
+    "file": "living-1440-system-en.png",
+    "orientation": {
+      "x": 117.1875,
+      "y": 0,
+      "right": 1396.8125,
+      "bottom": 116.75,
+      "width": 1279.625,
+      "height": 116.75
+    },
+    "living": {
+      "x": 117.1875,
+      "y": 116.75,
+      "right": 1396.8125,
+      "bottom": 865.140625,
+      "width": 1279.625,
+      "height": 748.390625
+    },
+    "stage": {
+      "x": 773,
+      "y": 144.75,
+      "right": 1396.8125,
+      "bottom": 691.21875,
+      "width": 623.8125,
+      "height": 546.46875
+    },
+    "slot": {
+      "x": 937.75,
+      "y": 276.90625,
+      "right": 1232.0625,
+      "bottom": 571.21875,
+      "width": 294.3125,
+      "height": 294.3125
+    },
+    "bubble": {
+      "x": 1076.8125,
+      "y": 144.75,
+      "right": 1376.8125,
+      "bottom": 278.90625,
+      "width": 300,
+      "height": 134.15625
+    },
+    "continue": {
+      "x": 117.1875,
+      "y": 280.203125,
+      "right": 741,
+      "bottom": 501.203125,
+      "width": 623.8125,
+      "height": 221
+    },
+    "quick": {
+      "x": 117.1875,
+      "y": 721.21875,
+      "right": 1396.8125,
+      "bottom": 865.140625,
+      "width": 1279.625,
+      "height": 143.921875
+    },
+    "details": {
+      "x": 117.1875,
+      "y": 913.140625,
+      "right": 1396.8125,
+      "bottom": 986.140625,
+      "width": 1279.625,
+      "height": 73
+    },
+    "scrollViewport": {
+      "x": 74,
+      "y": 0,
+      "right": 1440,
+      "bottom": 900,
+      "width": 1366,
+      "height": 900
+    },
+    "documentWidth": 1440,
+    "homeWidth": 1280,
+    "wide": [],
+    "contrast": [
+      {
+        "selector": ".home-avatar-placeholder-note",
+        "ratio": 5.487801906273163
+      },
+      {
+        "selector": ".home-avatar-bubble",
+        "ratio": 15.204719331600405
+      },
+      {
+        "selector": ".home-quick-copy > span",
+        "ratio": 7.211720440343858
+      },
+      {
+        "selector": "[data-home-action=stage-brain]",
+        "ratio": 5.514096301296758
+      },
+      {
+        "selector": "[data-home-action=living-board]",
+        "ratio": 5.514096301296758
+      }
+    ]
+  },
+  {
+    "width": 375,
+    "height": 812,
+    "theme": "system",
+    "language": "de",
+    "collapsed": false,
+    "file": "living-375-system-de.png",
+    "orientation": {
+      "x": 16,
+      "y": 0,
+      "right": 359,
+      "bottom": 285.75,
+      "width": 343,
+      "height": 285.75
+    },
+    "living": {
+      "x": 16,
+      "y": 285.75,
+      "right": 359,
+      "bottom": 2133.03125,
+      "width": 343,
+      "height": 1847.28125
+    },
+    "stage": {
+      "x": 16,
+      "y": 1119.5,
+      "right": 359,
+      "bottom": 1647.109375,
+      "width": 343,
+      "height": 527.609375
+    },
+    "slot": {
+      "x": 77.5,
+      "y": 1298.734375,
+      "right": 297.5,
+      "bottom": 1518.734375,
+      "width": 220,
+      "height": 220
+    },
+    "bubble": {
+      "x": 67.453125,
+      "y": 1119.5,
+      "right": 359,
+      "bottom": 1278.734375,
+      "width": 291.546875,
+      "height": 159.234375
+    },
+    "continue": {
+      "x": 16,
+      "y": 453.71875,
+      "right": 359,
+      "bottom": 773.21875,
+      "width": 343,
+      "height": 319.5
+    },
+    "quick": {
+      "x": 16,
+      "y": 1677.109375,
+      "right": 359,
+      "bottom": 2133.03125,
+      "width": 343,
+      "height": 455.921875
+    },
+    "details": {
+      "x": 16,
+      "y": 2165.03125,
+      "right": 359,
+      "bottom": 2306.5,
+      "width": 343,
+      "height": 141.46875
+    },
+    "scrollViewport": {
+      "x": 0,
+      "y": 0,
+      "right": 375,
+      "bottom": 686,
+      "width": 375,
+      "height": 686
+    },
+    "documentWidth": 375,
+    "homeWidth": 343,
+    "wide": [],
+    "contrast": [
+      {
+        "selector": ".home-avatar-placeholder-note",
+        "ratio": 9.274502171549301
+      },
+      {
+        "selector": ".home-avatar-bubble",
+        "ratio": 14.029528883184037
+      },
+      {
+        "selector": ".home-quick-copy > span",
+        "ratio": 8.579916348774287
+      },
+      {
+        "selector": "[data-home-action=stage-brain]",
+        "ratio": 4.553282210964381
+      },
+      {
+        "selector": "[data-home-action=living-board]",
+        "ratio": 4.553282210964381
+      }
+    ]
+  }
+]

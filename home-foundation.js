@@ -123,10 +123,44 @@
     return messages;
   }
 
+  // Compact evidence from the same authorized projections as the detailed Home.
+  // No unavailable source is coerced to a count, completion or health claim.
+  function livingSignals(c, metadata, learning, learningStatus) {
+    const m = model(c), signals = [];
+    if (!m.workspace) return signals;
+    if (m.brand && learningStatus === 'ready' && learning?.canWrite === true
+      && Number.isSafeInteger(learning.proposed) && learning.proposed > 0)
+      signals.push({ source: 'learning', id: m.brand.id, action: 'learnings',
+        text: '{count} Learning proposals awaiting review', values: { count: learning.proposed },
+        scope: 'Selected Brand · {name} · Learning reviews', name: m.brand.name });
+    const board = !c.loading && c.openBoard && m.workspace.boards.some(b => b.id === c.boardId) && c.openBoard;
+    const finding = board && c.campaign?.status === 'ready' && c.campaign.key && c.campaign.findings?.[0];
+    if (finding) signals.push({ source: 'diagnostic', id: finding.code, action: 'insights',
+      text: finding.title, scope: 'Current Board · {name} · Canvas diagnostics', name: board.name });
+    const responsibility = board && responsibilitySummary(c);
+    if (responsibility?.mine > 0) signals.push({ source: 'responsibility', id: '', action: 'responsibilities',
+      text: '{count} incomplete responsibilities assigned to you', values: { count: responsibility.mine },
+      scope: 'Current Board · {name} · Team Responsibilities', name: board.name,
+      note: responsibility.dirty ? 'Live Canvas · includes unsaved changes' : 'Current loaded Canvas' });
+    const saved = !c.loading && heroContinuation(c, metadata);
+    if (saved) signals.push({ source: 'saved', id: saved.id, action: 'board', text: 'Continue saved Board',
+      scope: 'Saved Board · {name}', name: saved.name });
+    return signals.slice(0, 2);
+  }
+
+  function contextualOnboarding(detail, readiness) {
+    if (typeof detail?.access?.canEditCanonicalBrand !== 'boolean' || !detail.brand_core || typeof readiness !== 'function') return null;
+    try {
+      const next = readiness(detail).find(item => ['partial', 'empty'].includes(item.status));
+      return next ? { section: next.section, canEdit: detail.access.canEditCanonicalBrand
+        && ['owner', 'admin', 'editor'].includes(detail.access.role) } : null;
+    } catch (_) { return null; } // Unknown readiness must not hide a confirmed Avatar.
+  }
+
   function create({ host, context, text: t = s => s, actions, brandReader, acceptedAvatar, fetchImpl = root.fetch.bind(root) }) {
     let scope = null, request = null, rows = [], status = 'idle', filter = 'all', disposed = false;
     let learningRequest = null, learning = null, learningStatus = 'idle', runtimeKey = '';
-    let avatar = null, avatarCanEdit = null, avatarStatus = 'idle', avatarRequest = null, imageFailure = '', messageKey = null;
+    let avatar = null, avatarCanEdit = null, avatarStatus = 'idle', avatarRequest = null, imageFailure = '', messageKey = null, onboarding = null;
     const doc = host.ownerDocument;
     const boardActionContexts = new WeakMap();
     const actionScopes = new WeakMap();
@@ -387,6 +421,7 @@
       const working = node('div', 'home-living-work');
       const greeting = node('div', 'home-living-greeting');
       const title = node('h1', '', t('Welcome back.')); title.id = 'home-living-title';
+      title.tabIndex = -1; title.dataset.homeFocus = 'living-title';
       greeting.append(node('span', 'home-eyebrow', t('YOUR CREATIVE WORKSPACE')), title,
         node('p', 'home-living-subtitle', t(m.brand ? 'A little space for your next idea with {brand}.' : 'A little space for your next idea.')
           .replace('{brand}', m.brand?.name || '')));
@@ -414,12 +449,35 @@
         const label = viewer ? 'View Board' : current ? 'Continue open Board' : 'Open saved Board';
         const resume = placed(label, 'board', candidate.id, 'living'); resume.className = 'fk-btn fk-btn-primary';
         resume.setAttribute('aria-label', t(label) + ': ' + candidate.name); resume.disabled = !!c.loading;
-        resume.append(arrow()); footer.append(saved, resume); continuation.append(footer);
+        resume.replaceChildren(node('span', 'home-living-label', t(label)), arrow()); footer.append(saved, resume); continuation.append(footer);
       } else {
         continuation.append(node('p', 'home-note', t(c.loading ? 'A Board is loading. Please wait before opening another.' : 'Saved Boards available to you in this Workspace will appear here.')),
           placed('Browse Boards', 'boards', '', 'living'));
       }
       working.append(greeting, continuation);
+
+      const signals = livingSignals(c, rows, learning, learningStatus);
+      if (signals.length) {
+        const list = node('ul', 'home-living-signals'); list.setAttribute('aria-label', t('Current signals'));
+        for (const signal of signals) {
+          const item = node('li'); item.dataset.signalSource = signal.source;
+          const control = placed('', signal.action, signal.id, 'signal'); control.className = 'home-signal';
+          control.append(node('strong', '', t(signal.text).replace(/\{(\w+)\}/g, (_, key) => signal.values?.[key] ?? '')),
+            node('span', '', t(signal.scope).replace('{name}', signal.name)));
+          if (signal.note) control.append(node('span', '', t(signal.note)));
+          item.append(control); list.append(item);
+        }
+        working.append(list);
+      }
+      if (m.brand && avatarStatus === 'ready' && onboarding) {
+        const next = node('section', 'home-profile-next'); next.setAttribute('aria-labelledby', 'home-profile-next-title');
+        const title = node('h2', '', t('Your Brand Profile next step')); title.id = 'home-profile-next-title';
+        const copy = node('p', '', t(onboarding.canEdit ? 'Complete the {section} section for {brand}.'
+          : 'The {section} section for {brand} needs attention. A Brand editor can complete it.')
+          .replace('{section}', t(onboarding.section)).replace('{brand}', m.brand.name));
+        next.append(title, copy, button(onboarding.canEdit ? 'Open Profile section' : 'View Profile section', 'onboarding-profile', m.brand.id));
+        working.append(next);
+      }
 
       const stage = node('div', 'home-avatar-stage');
       const art = node('div', 'home-avatar-art'); art.setAttribute('aria-hidden', 'true');
@@ -476,7 +534,7 @@
       const canBrain = available && c.openBoard.canEdit === true;
       const brain = placed(canBrain ? 'Open AI Brain for {board}' : 'Browse Boards', canBrain ? 'brain' : 'boards', '', 'stage');
       if (canBrain) brain.textContent = t('Open AI Brain for {board}').replace('{board}', c.openBoard.name);
-      brain.className = 'fk-btn fk-btn-primary'; brain.append(arrow());
+      brain.className = 'fk-btn fk-btn-primary'; brain.replaceChildren(node('span', 'home-living-label', brain.textContent), arrow());
       const scope = node('p', 'home-avatar-context'); scope.id = 'home-avatar-context';
       scope.textContent = available ? t(m.brand && m.brand.id !== boardBrand?.id
         ? 'Selected Brand: {selected}. AI Brain uses the open Board: {board}.' : 'AI Brain uses the open Board: {board}.')
@@ -672,12 +730,14 @@
       host.append(section, intelligence(c, m), boardIntelligence(c, m), orientation);
       if (focused) {
         const restored = Array.from(host.querySelectorAll('[data-home-focus]')).find(e => e.dataset.homeFocus === focused);
-        (restored || (focused.startsWith('board:') ? host.querySelector('[data-home-action=expand]') : null))?.focus({ preventScroll: true });
+        const retiredSignal = focused.startsWith('signal-') || focused.startsWith('onboarding-profile:');
+        (restored || (retiredSignal ? host.querySelector('#home-living-title')
+          : focused.startsWith('board:') ? host.querySelector('[data-home-action=expand]') : null))?.focus({ preventScroll: true });
       }
       if (focusedContext) contextNotice.querySelector(`[data-context-action="${focusedContext}"]`)?.focus({ preventScroll: true });
     }
     function invalidateLearnings() { learningRequest?.controller.abort(); learningRequest = null; learning = null; learningStatus = 'idle'; }
-    function invalidateAvatar() { avatarRequest = null; avatar = null; avatarCanEdit = null; avatarStatus = 'idle'; imageFailure = ''; }
+    function invalidateAvatar() { avatarRequest = null; avatar = null; avatarCanEdit = null; avatarStatus = 'idle'; imageFailure = ''; onboarding = null; }
     function invalidate() { invalidateAvatar(); messageKey = null; request?.controller.abort(); request = null; rows = []; status = 'idle'; invalidateLearnings(); }
     function sync() {
       if (disposed) return;
@@ -694,11 +754,12 @@
     async function loadAvatar(force = false) {
       const current = context(), brand = model(current).brand;
       if (!brand || current.view !== 'home' || disposed || avatarRequest) return;
-      const token = {}; avatarRequest = token; avatarStatus = 'loading'; avatar = null; imageFailure = ''; draw();
+      const token = {}; avatarRequest = token; avatarStatus = 'loading'; avatar = null; imageFailure = ''; onboarding = null; draw();
       try {
         const detail = await brandReader.read(brand.id, { force });
         if (avatarRequest !== token || !sameScope(current, context())) return;
         avatarCanEdit = detail.access.canEditCanonicalBrand === true;
+        onboarding = contextualOnboarding(detail, root.FunklixBrandProfileSetup?.readiness);
         const accepted = acceptedAvatar(detail);
         avatar = accepted ? { imageUrl: accepted.imageUrl } : null; avatarStatus = 'ready';
       } catch (error) {
@@ -782,9 +843,11 @@
     }
     host.addEventListener('click', event => {
       const target = event.target.closest('[data-home-action]'); if (!target || target.disabled || target.getAttribute('aria-disabled') === 'true') return;
-      const c = context(), m = model(c, rows, filter), rawAction = target.dataset.homeAction, action = rawAction.replace(/^(next|header|living|stage|quick)-/, ''), id = target.dataset.homeId;
+      const c = context(), m = model(c, rows, filter), rawAction = target.dataset.homeAction, action = rawAction.replace(/^(next|header|living|stage|quick|signal)-/, ''), id = target.dataset.homeId;
       const capturedScope = actionScopes.get(target);
       if (!capturedScope || !sameScope(capturedScope, c)) { sync(); return; }
+      if (rawAction.startsWith('signal-') && !livingSignals(c, rows, learning, learningStatus)
+        .some(signal => signal.action === action && signal.id === id)) { sync(); return; }
       if (rawAction === 'next-learnings' && !(learningStatus === 'ready' && learning?.canWrite && learning.proposed > 0)) { sync(); return; }
       if (rawAction === 'next-responsibilities' && !(m.workspace?.boards.some(b => b.id === c.boardId) && responsibilitySummary(c)?.mine > 0)) { sync(); return; }
       if (!sameScope(scope, c)) { sync(); return; }
@@ -800,6 +863,17 @@
           const text = host.querySelector('#home-avatar-message');
           if (text) { text.setAttribute('tabindex', '-1'); text.focus({ preventScroll: true }); }
         }
+        else if (action === 'onboarding-profile' && m.brand?.id === id && avatarStatus === 'ready' && onboarding) {
+          const origin = () => {
+            const current = context();
+            // A confirmed Profile save replaces the catalog projection. Resolve
+            // fresh controls for the same actor/Workspace/Brand after returning.
+            if (current.view !== 'home' || current.account !== c.account || current.identity !== c.identity
+              || current.workspaceId !== c.workspaceId || model(current).brand?.id !== id) return null;
+            return host.querySelector('[data-home-action=onboarding-profile]') || host.querySelector('#home-living-title');
+          };
+          actions.profile({ ...m.brand, workspace_id: m.workspace.id, section: onboarding.section }, origin);
+        }
         else if (action === 'avatar-retry' && m.brand?.id === id) { invalidateAvatar(); void loadAvatar(true); host.querySelector('.home-avatar-slot')?.focus({ preventScroll: true }); }
         else if (action === 'avatar-profile' && m.brand?.id === id && avatarStatus === 'ready' && !avatar)
           actions.profile({ ...m.brand, workspace_id: m.workspace.id, section: 'Brand Avatar' });
@@ -807,7 +881,7 @@
           const captured = boardActionContexts.get(target);
           if (!captured || !sameScope(captured.scope, c) || c.loading || !c.openBoard
             || !m.workspace.boards.some(b => b.id === c.boardId)) { sync(); return; }
-          if (action === 'insights' && (rawAction !== 'next-insights' || c.campaign?.status === 'ready' && captured.key === c.campaign.key && c.campaign.findings[0]?.code === id)) actions.insights();
+          if (action === 'insights' && (!['next-insights', 'signal-insights'].includes(rawAction) || c.campaign?.status === 'ready' && captured.key === c.campaign.key && c.campaign.findings[0]?.code === id)) actions.insights();
           else if (action === 'brain' && c.openBoard.canEdit === true) actions.brain();
           else if (action === 'insight-node' && c.campaign?.status === 'ready' && captured.key === c.campaign.key
             && c.campaign.findings.some(f => f.code === id && f.nodeId)) actions.insightNode(id);
@@ -830,6 +904,6 @@
     });
     return Object.freeze({ sync, dispose() { disposed = true; invalidate(); host.removeEventListener('focusin', clearFocusedOverlay); root.removeEventListener('resize', updateClearance); root.clearInterval(runtimeTimer); root.removeEventListener?.('focus', refreshAvatar); root.removeEventListener?.('funklix:canonical-brand-saved', refreshAvatar); root.removeEventListener?.('focus', refreshLearnings); root.removeEventListener?.('funklix:brand-learnings-changed', refreshLearnings); doc.removeEventListener('visibilitychange', resume); host.replaceChildren(); } });
   }
-  root.FunklixHomeFoundation = Object.freeze({ model, contextualMessages, heroContinuation, sameScope, learningSummary, responsibilitySummary, renderContextNotice, create });
+  root.FunklixHomeFoundation = Object.freeze({ model, livingSignals, contextualOnboarding, contextualMessages, heroContinuation, sameScope, learningSummary, responsibilitySummary, renderContextNotice, create });
   if (typeof module === 'object' && module.exports) module.exports = root.FunklixHomeFoundation;
 }(typeof globalThis !== 'undefined' ? globalThis : window));

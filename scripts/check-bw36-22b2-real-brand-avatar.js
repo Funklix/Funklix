@@ -165,9 +165,9 @@ async function check(name, run) { await run(); groups++; console.log('PASS ' + n
       assert((await message(p).innerText()).includes('73 Learning proposals'));
       await p.getByRole('button', { name: 'Next message', exact: true }).press('Enter');
       const selected = await message(p).innerText(); assert(selected.startsWith('Board Autumn Launch:'));
-      assert.equal(await message(p).evaluate(e => document.activeElement === e), true);
+      assert.equal(await p.evaluate(() => document.activeElement === document.querySelector('.home-avatar-message')), true);
       await p.evaluate(() => { refreshDashboardIfVisible(); clearAutosaveTimer(); }); assert.equal(await message(p).innerText(), selected);
-      assert.equal(await message(p).evaluate(e => document.activeElement === e), true);
+      assert.equal(await p.evaluate(() => document.activeElement === document.querySelector('.home-avatar-message')), true);
       await p.getByRole('button', { name: 'Previous message', exact: true }).press('Space'); assert((await message(p).innerText()).includes('73 Learning proposals'));
       await p.evaluate(() => { FunklixLanguage.setUiLanguage('de'); state.uiLanguage = 'de'; refreshDashboardIfVisible(); });
       assert((await message(p).innerText()).includes('73 Learning-Vorschläge'));
@@ -215,4 +215,4 @@ async function check(name, run) { await run(); groups++; console.log('PASS ' + n
     });
   } finally { await browser.close(); }
   console.log(groups + ' B2 acceptance groups passed');
-})().catch(error => { console.error(error); process.exitCode = 1; });
+})().catch(error => { console.error(error); if (process.env.GITHUB_ACTIONS === 'true') console.error('::error title=B2 Avatar regression::' + String(error.stack || error).replace(/%/g, '%25').replace(/\r/g, '%0D').replace(/\n/g, '%0A')); process.exitCode = 1; });

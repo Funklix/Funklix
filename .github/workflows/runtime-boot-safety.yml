@@ -54,6 +54,7 @@ jobs:
           node --check knowledge-module-runtime-adapter.js
           node --check app.js
           node --check canonical-brand-reader.js
+          node --check scripts/check-bw36-22b3-living-signals.js
           node --check home-foundation.js
           node --check scripts/check-bw36-22b2-real-brand-avatar.js
           node --check api/_ai-brain-learning-context.js
@@ -428,10 +429,27 @@ jobs:
           node -e 'require("fs").appendFileSync(process.env.GITHUB_ENV, "CHROMIUM_PATH=" + require("playwright-core").chromium.executablePath() + "\n")'
       - name: Check approved Brand Learnings in Advice (disposable PostgreSQL, mocked OpenAI)
         run: node scripts/check-bw36-20-approved-learning-ai-brain.js
-      - name: Check BW-36.21A-R2.1 safe Workspace switching (Chromium)
-        run: npm run check:bw36.21ar2.1
+      # Keep the Home regression cluster early; all existing checks remain.
       - name: Check BW-36.21A Home foundation (Chromium)
         run: npm run check:bw36.21a
+      - name: Check BW-36.21B1 Home Intelligence (Chromium, provider-free)
+        run: npm run check:bw36.21b1
+      - name: Check BW-36.21B2 Home Campaign Insights and AI Brain (Chromium, provider-free)
+        run: npm run check:bw36.21b2
+      - name: Check BW-36.22A compact Home and continuation (Chromium, provider-free)
+        run: npm run check:bw36.22a
+      - name: Check BW-36.22B1 Living Workspace foundation (Chromium, provider-free)
+        run: npm run check:bw36.22b1
+      - name: Check BW-36.22B1R1 current continuation name (Chromium, provider-free)
+        run: npm run check:bw36.22b1r1
+      - name: Check BW-36.22B2 real Brand Avatar and contextual personality
+        run: npm run check:bw36.22b2
+      - name: Check BW-36.22B3 Living Signals and contextual onboarding
+        run: npm run check:bw36.22b3
+      - name: Check BW-36.22B2R1 canonical conflict reload recovery
+        run: npm run check:bw36.22b2r1
+      - name: Check BW-36.21A-R2.1 safe Workspace switching (Chromium)
+        run: npm run check:bw36.21ar2.1
       - name: Check BW-36.20R1 provider storage and revalidation errors (mocked OpenAI)
         run: node scripts/check-bw36-20r1-learning-integration-review-fixes.js
       - name: Check Brand Profile entry and Workspace actions in Chromium
@@ -493,20 +511,6 @@ jobs:
         run: npm run check:bw36.21ar2.2
       - name: Check BW-36.21A-R2.3 Brand and Board context consistency
         run: npm run check:bw36.21ar2.3
-      - name: Check BW-36.21B1 Home Intelligence (Chromium, provider-free)
-        run: npm run check:bw36.21b1
-      - name: Check BW-36.21B2 Home Campaign Insights and AI Brain (Chromium, provider-free)
-        run: npm run check:bw36.21b2
-      - name: Check BW-36.22A compact Home and continuation (Chromium, provider-free)
-        run: npm run check:bw36.22a
-      - name: Check BW-36.22B1 Living Workspace foundation (Chromium, provider-free)
-        run: npm run check:bw36.22b1
-      - name: Check BW-36.22B1R1 current continuation name (Chromium, provider-free)
-        run: npm run check:bw36.22b1r1
-      - name: Check BW-36.22B2 real Brand Avatar and contextual personality
-        run: npm run check:bw36.22b2
-      - name: Check BW-36.22B2R1 canonical conflict reload recovery
-        run: npm run check:bw36.22b2r1
       - name: Check Knowledge Module browser globals
         run: node scripts/check-knowledge-module-browser-globals.js
       - name: Check BW-36.23A protected Brand write contract and controllers

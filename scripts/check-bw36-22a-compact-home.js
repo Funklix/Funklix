@@ -131,9 +131,15 @@ async function check(name, run) { await run(); passed++;results.push(name);conso
         if(width<768){const bounds=await p.locator('#dashboard-view').boundingBox();assert(bounds.y+bounds.height<=rects.overlay.y+1,'Home scroll viewport overlaps fixed context controls '+JSON.stringify({width,height,theme,language,collapsed,bounds,overlay:rects.overlay}));}
         const file=`home-${width}-${theme}-${language}.png`;await p.screenshot({path:path.join(out,file)});
         await action(p,'expand').click();assert.equal(await cards(p).count(),10);
-        const last=cards(p).last().locator('button');await last.focus();await last.scrollIntoViewIfNeeded();await p.waitForTimeout(40);
-        const collision=await last.evaluate(e=>{const a=e.getBoundingClientRect();return [...document.querySelectorAll('.sidebar,.sidebar > .workspace-context')].filter(x=>getComputedStyle(x).position==='fixed').some(x=>{const b=x.getBoundingClientRect();return a.right>b.left&&a.left<b.right&&a.bottom>b.top&&a.top<b.bottom;});});assert.equal(collision,false,'focused card covered '+width);
-        rects.focusTarget=await last.boundingBox();rects.focusCollisions=collision;rects.scrollViewport=await p.locator('#dashboard-view').boundingBox();
+        const focusGeometry=await p.evaluate(()=>{
+          const card=[...document.querySelectorAll('.home-board-card')].at(-1),current=card.querySelector('button');
+          current.focus();current.scrollIntoView({block:'nearest',inline:'nearest',behavior:'instant'});
+          const a=current.getBoundingClientRect();
+          return {focused:document.activeElement===current,target:a.toJSON(),scrollViewport:document.querySelector('#dashboard-view').getBoundingClientRect().toJSON(),
+            covered:[...document.querySelectorAll('.sidebar,.sidebar > .workspace-context')].filter(x=>getComputedStyle(x).position==='fixed').some(x=>{const b=x.getBoundingClientRect();return a.right>b.left&&a.left<b.right&&a.bottom>b.top&&a.top<b.bottom;})};
+        });
+        assert.equal(focusGeometry.focused,true,'Current expanded card has focus');assert.equal(focusGeometry.covered,false,'focused card covered '+width);
+        rects.focusTarget=focusGeometry.target;rects.focusCollisions=focusGeometry.covered;rects.scrollViewport=focusGeometry.scrollViewport;
         if(width===1440||width===375)await p.screenshot({path:path.join(out,`expanded-${width}-${theme}-${language}.png`)});
         await action(p,'expand').click();geometry.push({width,height,theme,language,collapsed,file,...rects});
       }
@@ -141,11 +147,17 @@ async function check(name, run) { await run(); passed++;results.push(name);conso
       await p.setViewportSize({width:320,height:740});await p.evaluate(()=>{state.workspaceCatalog.value=structuredClone(state.workspaceCatalog.value);const w=state.workspaceCatalog.value.workspaces[0];w.name='Long Workspace name '.repeat(8);w.brands[0].name='Langer Markenname '.repeat(8);w.boards[0].name='Long campaign title '.repeat(8);document.documentElement.style.fontSize='200%';refreshDashboardIfVisible();});
       assert.equal(await p.evaluate(()=>document.documentElement.scrollWidth),320);
       await p.emulateMedia({forcedColors:'active'});await p.keyboard.press('Tab');await action(p,'header-board').focus();
-      assert.equal(await action(p,'header-board').evaluate(e=>getComputedStyle(e).outlineStyle),'solid');
+      // Resolve the current control and its focus/style in one browser task.
+      // A Home redraw can detach Locator.evaluate's pre-resolved handle.
+      const focusOutline=await p.evaluate(()=>{
+        const current=document.querySelector('#home-foundation [data-home-action="header-board"]');
+        return {focused:!!current&&document.activeElement===current,outline:current?getComputedStyle(current).outlineStyle:null};
+      });
+      assert.deepEqual(focusOutline,{focused:true,outline:'solid'});
       fs.writeFileSync(path.join(out,'geometry.json'),JSON.stringify(geometry,null,2));await f.close();
       const current=await fixture();await current.page.screenshot({path:path.join(out,'current-board.png')});await current.close();
       const no=await fixture({root:true});await no.page.locator('#home-workspace-select').selectOption(W);await no.page.screenshot({path:path.join(out,'no-board.png')});await no.close();
     });
     fs.writeFileSync(path.join(out,'validation.json'),JSON.stringify({passed,groups:results},null,2));console.log(`${passed} BW-36.22A groups passed`);
   } finally {await browser.close();}
-})().catch(e=>{console.error(e);process.exitCode=1;});
+})().catch(e=>{console.error(e);if(process.env.GITHUB_ACTIONS==='true')console.error('::error title=Compact Home regression::'+String(e.stack||e).replace(/%/g,'%25').replace(/\r/g,'%0D').replace(/\n/g,'%0A'));process.exitCode=1;});

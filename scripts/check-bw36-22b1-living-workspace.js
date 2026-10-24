@@ -237,7 +237,7 @@ const snapshot = p => p.evaluate(() => JSON.stringify({nodes:state.nodes, edges:
         }
         const control=action(p,'quick-insights'); await control.focus(); await refresh(p);
         assert.equal(await p.evaluate(()=>document.activeElement?.dataset.homeAction),'quick-insights');
-        assert.equal(await control.evaluate(e=>getComputedStyle(e).outlineWidth),'3px');
+        assert.equal(await p.evaluate(()=>getComputedStyle(document.querySelector('#home-foundation [data-home-action="quick-insights"]')).outlineWidth),'3px');
         for(const selector of ['[data-home-action=quick-insights]', '.home-brand-card button']) {
           const result = await p.evaluate(selector => {
             const targets = [...document.querySelectorAll('#home-foundation ' + selector)], e = targets.at(-1);
@@ -261,4 +261,4 @@ const snapshot = p => p.evaluate(() => JSON.stringify({nodes:state.nodes, edges:
     fs.writeFileSync(path.join(out,'geometry.json'),JSON.stringify(geometry,null,2));
     fs.writeFileSync(path.join(out,'validation.json'),JSON.stringify({passed,groups},null,2)); console.log(`${passed} BW-36.22B1 groups passed`);
   } finally { await browser.close(); }
-})().catch(e=>{console.error(e);process.exitCode=1;});
+})().catch(e=>{console.error(e); if (process.env.GITHUB_ACTIONS === 'true') console.error('::error title=B1 Living Workspace regression::' + String(e.stack || e).replace(/%/g, '%25').replace(/\r/g, '%0D').replace(/\n/g, '%0A')); process.exitCode = 1;});
