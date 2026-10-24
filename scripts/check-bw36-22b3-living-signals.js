@@ -73,6 +73,9 @@ const fullBrand = () => ({ id: B, name: 'Complete Brand', logo_revision: 1, logo
       assert.equal(f.requests.length, reads, 'Presentation redraw adds no reads');
       await p.keyboard.press('Enter'); await p.waitForFunction(() => state.activeView === 'brand-profile' && brandProfileController);
       assert.equal(await p.evaluate(() => brandProfileController.state.section), 0);
+      // Exercise the actual confirmed-read reconciliation that also follows a
+      // Profile save. No additional write is needed to verify catalog replacement.
+      await p.evaluate(() => reconcileConfirmedBrand(brandProfileController.state.brand));
       await p.evaluate(() => closeCanonicalBrandDetail()); await settled(p);
       assert.equal(await p.evaluate(() => ['onboarding-profile:' + state.session.brandId, 'living-title'].includes(document.activeElement?.dataset.homeFocus)), true, 'Origin or stable Home heading while canonical readiness refreshes');
       await signal(p, 'diagnostic').locator('button').press('Enter');

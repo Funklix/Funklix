@@ -864,7 +864,14 @@
           if (text) { text.setAttribute('tabindex', '-1'); text.focus({ preventScroll: true }); }
         }
         else if (action === 'onboarding-profile' && m.brand?.id === id && avatarStatus === 'ready' && onboarding) {
-          const origin = () => sameScope(c, context()) ? host.querySelector('[data-home-action=onboarding-profile]') || host.querySelector('#home-living-title') : null;
+          const origin = () => {
+            const current = context();
+            // A confirmed Profile save replaces the catalog projection. Resolve
+            // fresh controls for the same actor/Workspace/Brand after returning.
+            if (current.view !== 'home' || current.account !== c.account || current.identity !== c.identity
+              || current.workspaceId !== c.workspaceId || model(current).brand?.id !== id) return null;
+            return host.querySelector('[data-home-action=onboarding-profile]') || host.querySelector('#home-living-title');
+          };
           actions.profile({ ...m.brand, workspace_id: m.workspace.id, section: onboarding.section }, origin);
         }
         else if (action === 'avatar-retry' && m.brand?.id === id) { invalidateAvatar(); void loadAvatar(true); host.querySelector('.home-avatar-slot')?.focus({ preventScroll: true }); }
