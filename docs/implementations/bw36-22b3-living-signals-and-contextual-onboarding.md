@@ -39,5 +39,5 @@ Chromium fixtures establish application behavior and layout with the unchanged s
 - `language.js`: EN/DE presentation templates.
 - `brand-profile-setup.js`, `app.js`: existing Profile section entry and lazy return-focus support.
 - `scripts/check-bw36-22b3-living-signals.js`, `package.json`, `.github/workflows/runtime-boot-safety.yml`: provider-free acceptance and regression registration.
-- `scripts/check-bw36-21a-home-foundation.js`: preserve every existing assertion and expose error stacks/internal overflow in CI diagnostics when log downloads are unavailable.
+- Existing Home foundation, Intelligence, compact Home, B1 and B2 scripts: preserve every assertion and expose failure stacks in CI annotations when log downloads are unavailable. Home foundation also reports internal overflow measurements. The workflow groups the existing Home cluster early without removing or duplicating any of its 201 run blocks.
 - This implementation record and `bw36-22b3-visuals/`: review evidence.

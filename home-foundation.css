@@ -250,6 +250,7 @@
   #home-foundation .home-living-board { margin-block: 12px; }
   #home-foundation .home-living-signals { margin-top: 14px; }
   #home-foundation .home-profile-next { padding-block: 12px; }
+  #home-foundation .home-quick-action { padding: 12px 14px; gap: 12px; }
 }
 @media (forced-colors: active) {
   #home-foundation :is(.home-signal, .home-profile-next) { border: 1px solid CanvasText; }

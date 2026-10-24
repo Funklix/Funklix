@@ -15,6 +15,8 @@ Baseline: merged `main` at `7c5371e63a9c4cee7ba2787343a4e8d1f71789c3`, including
 
 The first B3 test runs corrected fixture expectations (persisted logo metadata, the responsibility dialog ID and the actual three owned incomplete nodes). The dialog test now waits for the existing team-loading hold to finish before Escape, then waits for its native close/focus event. Product timing and permissions are unchanged. An initial B1 run exposed a real desktop geometry regression from the added content; compact desktop spacing and the next-step action layout fix it. No existing B1/B2 assertion was relaxed or removed.
 
+Later CI measurements found German quick actions ending at 904.125px in a 900px viewport, with different font wrapping from the local system browser. Desktop quick-action padding and gaps are compacted to give labels more room while retaining text sizes and touch targets. Earlier intermittent Home Intelligence/compact Home failures did not reproduce locally or in paired follow-up jobs; their original assertions remain, with diagnostic annotations added. The same 201 run blocks now execute the Home cluster early. Final matrix status and remaining review findings are reported in the PR delivery.
+
 ## Actual application screenshots
 
 These captures use the production Home/Profile code and existing authorized local API fixture. Providers are rejected, requests/writes are recorded, and the original accepted 360×240 B2 Avatar fixture is unchanged. It is synthetic test art, not a customer Avatar or generated mascot. The mobile signal and next-step captures show actual Home scroll positions above the fixed mobile controls.
