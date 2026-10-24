@@ -221,4 +221,4 @@ const fullBrand = () => ({ id: B, name: 'Complete Brand', logo_revision: 1, logo
   } finally { await browser.close(); }
   fs.writeFileSync(path.join(out, 'validation.json'), JSON.stringify({ groups: records, geometry }, null, 2));
   console.log(records.length + ' B3 acceptance groups passed');
-})().catch(error => { console.error(error); process.exitCode = 1; });
+})().catch(error => { console.error(error); if (process.env.GITHUB_ACTIONS === 'true') console.error('::error title=B3 Living Signals regression::' + String(error.stack || error).replace(/%/g, '%25').replace(/\r/g, '%0D').replace(/\n/g, '%0A')); process.exitCode = 1; });

@@ -215,4 +215,4 @@ async function check(name, run) { await run(); groups++; console.log('PASS ' + n
     });
   } finally { await browser.close(); }
   console.log(groups + ' B2 acceptance groups passed');
-})().catch(error => { console.error(error); process.exitCode = 1; });
+})().catch(error => { console.error(error); if (process.env.GITHUB_ACTIONS === 'true') console.error('::error title=B2 Avatar regression::' + String(error.stack || error).replace(/%/g, '%25').replace(/\r/g, '%0D').replace(/\n/g, '%0A')); process.exitCode = 1; });

@@ -261,4 +261,4 @@ const snapshot = p => p.evaluate(() => JSON.stringify({nodes:state.nodes, edges:
     fs.writeFileSync(path.join(out,'geometry.json'),JSON.stringify(geometry,null,2));
     fs.writeFileSync(path.join(out,'validation.json'),JSON.stringify({passed,groups},null,2)); console.log(`${passed} BW-36.22B1 groups passed`);
   } finally { await browser.close(); }
-})().catch(e=>{console.error(e);process.exitCode=1;});
+})().catch(e=>{console.error(e); if (process.env.GITHUB_ACTIONS === 'true') console.error('::error title=B1 Living Workspace regression::' + String(e.stack || e).replace(/%/g, '%25').replace(/\r/g, '%0D').replace(/\n/g, '%0A')); process.exitCode = 1;});
