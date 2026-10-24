@@ -1,0 +1,16 @@
+PASS continuation: matching current, selected ordering, foreign-current fallback, viewer and unauthorized/unknown dates
+PASS first-screen hierarchy, one H1, full detailed Home and all legacy static IDs preserved
+PASS Workspace/Brand orientation, generic greeting, saved identity and timestamp with no recency/progress invention
+PASS confirmed missing Avatar stays honest and static; contextual bubble stays truthful across runtime changes
+PASS selected Brand/current Board mismatch chooses connected continuation without relabeling Brain or mutating Canvas
+PASS explicit foreign-current fallback, hidden association and unassigned scope remain distinguishable
+PASS Brain stage and emoji shortcut use existing keyboard destination, preserve draft and never infer
+PASS Insights shortcut uses current Board destination with no inference or Canvas mutation
+PASS Learnings shortcut opens existing selected-Brand Profile section
+PASS responsibilities shortcut opens existing manager and restores origin after redraw
+PASS viewer and unavailable Learning access give honest keyboard-discoverable alternatives and block activation
+PASS no Workspace/no Brands/no Boards, loading/error/logout/account replacement and Workspace switching retire identities
+PASS forged/stale hero and quick actions reject changed Board generation, loading and lost access
+PASS repeated render introduces no additional reads, writes or Canvas changes after the selected canonical read
+PASS Chromium Light reference matrix, Dark/system readability, geometry, keyboard, reduced motion and fixed-control clearance
+15 BW-36.22B1 groups passed

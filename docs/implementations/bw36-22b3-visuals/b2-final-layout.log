@@ -1,0 +1,9 @@
+PASS shared canonical reader deduplicates and enforces every scope boundary before/after JSON, access, revision and timeout
+PASS message priority, honest fallback, Brand/Board labels, invalid scopes and no invented metrics
+PASS saved approved original image, missing and unapproved states; Image failure/retry; keyboard Profile Avatar entry and real save refresh
+PASS canonical failure is not absence; optional loading does not block Home, Board or Brain; stale selected-Brand response is discarded
+PASS accepted selected-Brand image stays independent of the open Board Brand and catalog logos
+PASS account, Workspace, catalog and revoked Brand retire pending identity; Board access never grants Brand access
+PASS manual eligible messages, stable selection, EN/DE, keyboard and screen reader naming; no automatic inference or timed rotation
+PASS Light desktop/mobile original asset fidelity, Dark baseline, no motion and contextual Brain eligibility
+8 B2 acceptance groups passed

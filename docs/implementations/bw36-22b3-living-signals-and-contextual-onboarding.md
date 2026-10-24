@@ -20,7 +20,7 @@ The next step names the selected Brand and specific Profile section. Editors rec
 
 ## Presentation and preserved contracts
 
-The pills sit below continuation, with a compact next-step surface beside the accepted Avatar. Semantic theme tokens provide the Dark baseline; Light uses muted mint/lavender status surfaces. The next-step action shares its row on desktop and stacks on phones. Small desktop spacing adjustments preserve the existing first-screen quick-action requirement. Names and scope text wrap, native controls retain 44px targets, existing focus rings remain visible and EN/DE strings cover the new presentation. There is no new animation or automatic message rotation.
+The pills sit below continuation, with a compact next-step surface beside the accepted Avatar. Semantic theme tokens provide the Dark baseline; Light uses muted mint/lavender status surfaces. The next-step action shares its row on desktop and stacks on phones. Small desktop spacing adjustments preserve the existing first-screen quick-action requirement. Continuation and Brain CTAs use explicit wrapping label elements and reserve their decorative arrow width at enlarged text sizes. Names and scope text wrap, native controls retain 44px targets, existing focus rings remain visible and EN/DE strings cover the new presentation. There is no new animation or automatic message rotation.
 
 B1/B2 composition, accepted original Avatar, deterministic/manual messages, all legacy IDs, detailed Home sections and destinations remain. There are no new API endpoints, reads, caches, provider calls, timers, polling, schema/DDL changes, Brand writes, generation paths or history changes.
 
@@ -39,4 +39,5 @@ Chromium fixtures establish application behavior and layout with the unchanged s
 - `language.js`: EN/DE presentation templates.
 - `brand-profile-setup.js`, `app.js`: existing Profile section entry and lazy return-focus support.
 - `scripts/check-bw36-22b3-living-signals.js`, `package.json`, `.github/workflows/runtime-boot-safety.yml`: provider-free acceptance and regression registration.
+- `scripts/check-bw36-21a-home-foundation.js`: preserve every existing assertion and expose error stacks/internal overflow in CI diagnostics when log downloads are unavailable.
 - This implementation record and `bw36-22b3-visuals/`: review evidence.
