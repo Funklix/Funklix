@@ -228,6 +228,7 @@
 #home-foundation .home-signal { display: flex; flex-direction: column; gap: 5px; width: 100%; min-height: 44px; height: 100%; padding: 10px 12px; border: 1px solid var(--fk-color-border-control, var(--fk-border)); border-radius: 18px; background: var(--fk-color-surface-elevated, var(--fk-surface)); color: var(--fk-color-text-primary, var(--fk-text)); font: inherit; text-align: start; cursor: pointer; overflow-wrap: anywhere; }
 #home-foundation .home-signal strong { font-size: .85rem; line-height: 1.4; }
 #home-foundation .home-signal span { font-size: .75rem; line-height: 1.5; color: var(--fk-color-text-secondary, var(--fk-text-muted)); }
+#home-foundation .home-signal { transform: none; transition: none; }
 #home-foundation .home-signal:hover { border-color: var(--home-ink); }
 #home-foundation .home-profile-next { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 12px; margin-top: 14px; padding: 14px 16px; border: 1px solid var(--fk-color-border-default, var(--fk-border)); border-radius: 18px; background: var(--fk-color-surface-elevated, var(--fk-surface)); }
 #home-foundation .home-profile-next h2 { margin: 0; font-size: .9rem; }

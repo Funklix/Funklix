@@ -205,7 +205,11 @@ const fullBrand = () => ({ id: B, name: 'Complete Brand', logo_revision: 1, logo
         await p.screenshot({ path: path.join(out, `next-step-${width}-${theme}-${language}.png`), animations: 'disabled' });
         geometry.push({ width, height, theme, language, ...metrics });
       }
+      await p.setViewportSize({ width: 720, height: 1000 });
       await p.evaluate(() => { document.documentElement.style.fontSize = '200%'; refreshDashboardIfVisible(); });
+      await signal(p, 'learning').locator('button').hover();
+      assert.equal(await signal(p, 'learning').locator('button').evaluate(e => getComputedStyle(e).transform), 'none', 'Signals must not inherit global hover scaling');
+      assert.equal(await p.locator('#home-foundation').evaluate(e => e.scrollWidth > e.getBoundingClientRect().width + 1), false, 'Hovered signals contain enlarged text in Home');
       assert.equal(await p.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
       await p.emulateMedia({ forcedColors: 'active' }); await p.locator('[data-home-action=onboarding-profile]').focus();
       assert.notEqual(await p.locator('[data-home-action=onboarding-profile]').evaluate(e => getComputedStyle(e).outlineStyle), 'none');
