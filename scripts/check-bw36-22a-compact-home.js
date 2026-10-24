@@ -141,7 +141,13 @@ async function check(name, run) { await run(); passed++;results.push(name);conso
       await p.setViewportSize({width:320,height:740});await p.evaluate(()=>{state.workspaceCatalog.value=structuredClone(state.workspaceCatalog.value);const w=state.workspaceCatalog.value.workspaces[0];w.name='Long Workspace name '.repeat(8);w.brands[0].name='Langer Markenname '.repeat(8);w.boards[0].name='Long campaign title '.repeat(8);document.documentElement.style.fontSize='200%';refreshDashboardIfVisible();});
       assert.equal(await p.evaluate(()=>document.documentElement.scrollWidth),320);
       await p.emulateMedia({forcedColors:'active'});await p.keyboard.press('Tab');await action(p,'header-board').focus();
-      assert.equal(await action(p,'header-board').evaluate(e=>getComputedStyle(e).outlineStyle),'solid');
+      // Resolve the current control and its focus/style in one browser task.
+      // A Home redraw can detach Locator.evaluate's pre-resolved handle.
+      const focusOutline=await p.evaluate(()=>{
+        const current=document.querySelector('#home-foundation [data-home-action="header-board"]');
+        return {focused:!!current&&document.activeElement===current,outline:current?getComputedStyle(current).outlineStyle:null};
+      });
+      assert.deepEqual(focusOutline,{focused:true,outline:'solid'});
       fs.writeFileSync(path.join(out,'geometry.json'),JSON.stringify(geometry,null,2));await f.close();
       const current=await fixture();await current.page.screenshot({path:path.join(out,'current-board.png')});await current.close();
       const no=await fixture({root:true});await no.page.locator('#home-workspace-select').selectOption(W);await no.page.screenshot({path:path.join(out,'no-board.png')});await no.close();

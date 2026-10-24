@@ -17,6 +17,8 @@ The first B3 test runs corrected fixture expectations (persisted logo metadata, 
 
 Later CI measurements found German quick actions ending at 904.125px in a 900px viewport, with different font wrapping from the local system browser. Desktop quick-action padding and gaps are compacted to give labels more room while retaining text sizes and touch targets. Earlier intermittent Home Intelligence/compact Home failures did not reproduce locally or in paired follow-up jobs; their original assertions remain, with diagnostic annotations added. The same 201 run blocks now execute the Home cluster early. Final matrix status and remaining review findings are reported in the PR delivery.
 
+The compact Home forced-colors failure was subsequently diagnosed as `getComputedStyle` reading a button detached during a legitimate redraw. The check now resolves the current control atomically and requires both actual focus and the original solid outline, without retries or product timing changes. [All 11 compact Home groups pass locally](compact-home-final.log).
+
 ## Actual application screenshots
 
 These captures use the production Home/Profile code and existing authorized local API fixture. Providers are rejected, requests/writes are recorded, and the original accepted 360×240 B2 Avatar fixture is unchanged. It is synthetic test art, not a customer Avatar or generated mascot. The mobile signal and next-step captures show actual Home scroll positions above the fixed mobile controls.
