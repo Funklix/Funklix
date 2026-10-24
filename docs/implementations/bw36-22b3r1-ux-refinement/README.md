@@ -90,3 +90,26 @@ Review found no unresolved product regression in the inspected scope. Exact-clas
 - `home-foundation.js`
 - `scripts/check-bw36-22b1-living-workspace.js`
 - `scripts/check-bw36-22b2-real-brand-avatar.js`
+
+
+## Avatar fidelity follow-up on PR #813
+
+The evidence-only head `c36facd9726ecc24d7844d40177718de377b1b33` later failed B2 line 83 in [the PostgreSQL 17.6 job](https://github.com/Funklix/Funklix/actions/runs/40092329961/job/120867382486); the 18.4 job passed. This supersedes any interpretation that the earlier green source run guaranteed the later evidence-head run.
+
+**Root cause: a stale DOM element in the browser test.** Home `draw()` calls `host.replaceChildren()` during legitimate metadata, Learning and Avatar updates. `Locator.evaluate` can resolve an image before a redraw and execute its callback after that image is detached. The detached image keeps its intrinsic 360×240 dimensions, while Chromium returns an empty computed-style declaration. Both `object-fit: contain` rules remain present in `home-foundation.css`, including its later original-image rule; the new B3R1 rules do not override image containment. The stylesheet is linked normally in `index.html` and served as `text/css` by the unmodified Home fixture.
+
+Using the original browser fixture on exact head `c36facd`, a controlled real Home redraw reproduced the reported shape:
+
+```json
+{"stale":{"w":360,"h":240,"fit":"","connected":false,"current":false},"live":{"w":360,"h":240,"fit":"contain","connected":true,"stylesheet":"http://localhost/home-foundation.css","rules":283,"unstyled":"fill"}}
+```
+
+The original unmodified B2 suite also passed locally, consistent with an intermittent scheduling race. The controlled reproduction retains the old element across `refreshDashboardIfVisible()` to expose the relevant scheduling boundary without modifying production CSS or rendering. Local Chromium was 151.0.7922.173; installing the exact CI Playwright Chromium build was denied by this environment's CDN policy. The final GitHub matrix validates the exact CI browser setup.
+
+The fix is limited to `scripts/check-bw36-22b2-real-brand-avatar.js`: both image-style measurements now query the current connected, ready image and capture its dimensions/style/geometry in one browser callback. The readiness wait returns the snapshot regardless of its `objectFit` value, so it cannot wait away a rendering failure. The exact `{ w: 360, h: 240, fit: 'contain' }` assertion and the visual-matrix containment assertion remain. The test forces a real redraw and checks the preceding image is detached before measuring the current image.
+
+A negative control appended `object-fit: cover !important` only to the fixture's in-memory stylesheet response. The fixed B2 test failed at the unchanged fidelity assertion with `fit: 'cover'`, confirming that the actual rendering contract remains enforced. This override is not in the repository or application stylesheet.
+
+No production component, stylesheet, original Avatar asset, fixture transport, Brand Profile persistence, canonical reader, PostgreSQL/TLS/RLS code or migration was changed by this follow-up. The original image dimensions, aspect ratio, background and contain rendering are preserved.
+
+Validation commands: `npm run check:bw36.22b1`, `npm run check:bw36.22b2`, `npm run check:bw36.22b3`, `npm run check:bw36.21b1`, and `npm run check:bw36.22a`. The repository has no separate B3R1 command: its toolbar geometry, responsive/keyboard and complementary-evidence coverage resides in these existing Home suites. Complete Runtime Boot Safety runs unchanged on PostgreSQL 17.6 and 18.4 in GitHub. Final commit CI conclusions and the fresh Codex review outcome are reported in the PR conversation and delivery, so recording results does not invalidate the tested final head with another documentation commit.

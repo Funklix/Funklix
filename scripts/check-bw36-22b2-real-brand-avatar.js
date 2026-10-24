@@ -80,7 +80,22 @@ async function check(name, run) { await run(); groups++; console.log('PASS ' + n
       await refresh(p); await ready(p); assert.equal(await accepted(p).count(), 0);
       f.r.db.brands[0].brand_core.brandDNA.userApproved = true; await refresh(p); await accepted(p).waitFor();
       assert.equal(await accepted(p).getAttribute('src'), '/fixture-avatar.png');
-      const size = await accepted(p).evaluate(e => ({ w: e.naturalWidth, h: e.naturalHeight, fit: getComputedStyle(e).objectFit })); assert.deepEqual(size, { w: 360, h: 240, fit: 'contain' });
+      // A Home redraw can detach an image after Locator resolves it. Detached
+      // images retain intrinsic dimensions but have no computed style. Exercise
+      // that boundary, then resolve and measure the current image atomically.
+      // Wait only for readiness, never for the expected object-fit value.
+      const previousImage = await accepted(p).elementHandle();
+      await p.evaluate(() => { refreshDashboardIfVisible(); clearAutosaveTimer(); });
+      await accepted(p).waitFor();
+      assert.equal(await previousImage.evaluate(image => image.isConnected), false);
+      const sizeSnapshot = await p.waitForFunction(() => {
+        const image = document.querySelector('#home-foundation [data-avatar-state=ready] > img');
+        if (!image?.isConnected) return false;
+        return { w: image.naturalWidth, h: image.naturalHeight, fit: getComputedStyle(image).objectFit };
+      });
+      const size = await sizeSnapshot.jsonValue(); await sizeSnapshot.dispose();
+      assert.deepEqual(size, { w: 360, h: 240, fit: 'contain' });
+      await previousImage.dispose();
       f.r.db.brands[0].brand_core.brandDNA.avatar.imageUrl = '/missing-avatar.png'; await refresh(p); await p.getByRole('button', { name: 'Retry Brand Avatar', exact: true }).waitFor();
       await p.screenshot({ path: path.join(out, 'home-image-error-light-en.png') });
       assert((await p.locator('.home-avatar-slot').innerText()).includes('unavailable')); assert.equal(await p.getByRole('button', { name: 'Open Brand Avatar', exact: true }).count(), 0);
@@ -196,10 +211,14 @@ async function check(name, run) { await run(); groups++; console.log('PASS ' + n
           await document.fonts.ready; await new Promise(requestAnimationFrame);
           for (const animation of document.getAnimations()) if (animation.effect?.getTiming().iterations !== Infinity) animation.finish();
         });
-        const result = await p.locator('.home-avatar-stage').evaluate(e => {
-          const image = e.querySelector('img'), r = image.getBoundingClientRect(), s = e.getBoundingClientRect();
+        const snapshot = await p.waitForFunction(() => {
+          const e = document.querySelector('#home-foundation .home-avatar-stage');
+          const image = e?.querySelector('[data-avatar-state=ready] > img');
+          if (!image?.isConnected) return false;
+          const r = image.getBoundingClientRect(), s = e.getBoundingClientRect();
           return { image: r.toJSON(), stage: s.toJSON(), fit: getComputedStyle(image).objectFit, natural: [image.naturalWidth,image.naturalHeight], motion: [e,...e.querySelectorAll('*')].some(e => getComputedStyle(e).animationName !== 'none'), overflow: document.documentElement.scrollWidth > innerWidth };
         });
+        const result = await snapshot.jsonValue(); await snapshot.dispose();
         assert.equal(result.fit, 'contain'); assert.equal(result.motion, false); assert.equal(result.overflow, false);
         assert(result.image.left >= result.stage.left && result.image.right <= result.stage.right);
         assert.equal(await p.locator('[data-home-action=stage-brain]').count(), 1);
