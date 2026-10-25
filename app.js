@@ -6549,9 +6549,9 @@ function renderAiBrainTranscript(transcript) {
       const current = document.createElement("small"); current.textContent = aiBrainText("current"); user.append(failure, retry, current);
     }
     transcript.appendChild(user);
-    if (turn.status === "pending") { const loading = document.createElement("article"); loading.className = "ai-brain-message is-advisor is-loading"; loading.setAttribute("role", "status"); loading.append(createAiBrainAdvisorAvatar(turn.advisorIdentity), document.createTextNode(aiBrainTurnText(turn, "pending"))); transcript.appendChild(loading); }
+    if (turn.status === "pending") { const loading = document.createElement("article"); loading.className = "ai-brain-message is-advisor is-loading"; loading.dataset.turnId = turn.id; loading.setAttribute("role", "status"); loading.append(createAiBrainAdvisorAvatar(turn.advisorIdentity), document.createTextNode(aiBrainTurnText(turn, "pending"))); transcript.appendChild(loading); }
     if (!turn.answer) return;
-    const advisor = document.createElement("article"); advisor.className = "ai-brain-message is-advisor";
+    const advisor = document.createElement("article"); advisor.className = "ai-brain-message is-advisor"; advisor.dataset.turnId = turn.id;
     const advisorLabel = document.createElement("strong"); advisorLabel.className = "ai-brain-speaker"; advisorLabel.textContent = uiText("AI Brain");
     const formatted = document.createElement("div"); formatted.className = "ai-brain-formatted-answer"; renderAiBrainFormattedAnswer(formatted, turn.answer);
     advisor.append(createAiBrainAdvisorAvatar(turn.advisorIdentity), advisorLabel, formatted);
@@ -6585,19 +6585,104 @@ function renderAiBrainTranscript(transcript) {
     transcript.appendChild(advisor);
   });
 }
+// Scroll metadata belongs to the retained view element, never to conversation state.
+// Capture a visible message anchor so reflow above the viewport cannot move the reader.
+function aiBrainScrollSnapshot(transcript) {
+  const bounds = transcript.getBoundingClientRect();
+  const anchor = Array.from(transcript.children).find((node) => node.getBoundingClientRect().bottom > bounds.top);
+  return { top: transcript.scrollTop, latest: transcript.scrollHeight - transcript.clientHeight - transcript.scrollTop <= 4,
+    turnId: anchor?.dataset.turnId, advisor: anchor?.classList.contains("is-advisor"), offset: anchor ? anchor.getBoundingClientRect().top - bounds.top : 0 };
+}
+function aiBrainViewIsVisible() {
+  return !el.aiBrainView || (state.activeView === "ai_brain" && !el.aiBrainView.classList.contains("hidden"));
+}
+function restoreAiBrainScroll(transcript, saved) {
+  if (!saved) return;
+  if (saved.latest) { transcript.scrollTop = transcript.scrollHeight; return; }
+  const anchor = Array.from(transcript.children).find((node) => node.dataset.turnId === saved.turnId && node.classList.contains("is-advisor") === saved.advisor);
+  transcript.scrollTop = saved.top;
+  if (anchor) transcript.scrollTop += anchor.getBoundingClientRect().top - transcript.getBoundingClientRect().top - saved.offset;
+}
+function bindAiBrainScroll(transcript, saved, revealTurnId) {
+  const root = el.aiBrainSummary, identity = aiBrainIdentity(), requestId = state.aiBrain.requestId;
+  const jump = root.querySelector(".ai-brain-jump-latest");
+  const current = () => root.querySelector(".ai-brain-transcript") === transcript && aiBrainIdentity() === identity && state.aiBrain.requestId === requestId && aiBrainViewIsVisible();
+  const remember = () => {
+    if (!current()) return;
+    root.aiBrainScroll = { identity, ...aiBrainScrollSnapshot(transcript) };
+    jump.hidden = root.aiBrainScroll.latest;
+  };
+  root.aiBrainScrollDeferred = !aiBrainViewIsVisible();
+  if (aiBrainViewIsVisible()) {
+    if (revealTurnId) {
+      const user = Array.from(transcript.children).find((node) => node.dataset.turnId === revealTurnId && node.classList.contains("is-user"));
+      if (user) transcript.scrollTop += user.getBoundingClientRect().top - transcript.getBoundingClientRect().top - 12;
+    } else restoreAiBrainScroll(transcript, saved);
+    remember();
+  } else if (saved) root.aiBrainScroll = { identity, ...saved };
+  transcript.addEventListener("scroll", remember, { passive: true });
+  jump.addEventListener("click", () => {
+    if (!current()) return;
+    transcript.scrollTop = transcript.scrollHeight;
+    transcript.focus({ preventScroll: true });
+    remember();
+  });
+  // Handles viewport/keyboard changes, Avatar image loading and wrapping without timers.
+  const observer = new ResizeObserver(() => {
+    if (!current()) return;
+    const previous = root.aiBrainScroll;
+    if (previous?.identity === identity) restoreAiBrainScroll(transcript, previous);
+    root.aiBrainScrollDeferred = false;
+    remember();
+  });
+  observer.observe(transcript);
+  Array.from(transcript.children).forEach((node) => observer.observe(node));
+  root.aiBrainScrollObserver = observer;
+  if (el.aiBrainView && window.visualViewport) {
+    const viewport = window.visualViewport;
+    const fitViewport = () => {
+      if (!current()) return;
+      el.aiBrainView.classList.toggle("ai-brain-compact-viewport", viewport.height <= 640);
+      const sidebar = document.querySelector(".sidebar");
+      const bottomInset = sidebar && getComputedStyle(sidebar).position === "fixed" ? sidebar.getBoundingClientRect().height : 0;
+      el.aiBrainView.style.maxHeight = `${Math.max(160, viewport.height + viewport.offsetTop - el.aiBrainView.getBoundingClientRect().top - bottomInset)}px`;
+    };
+    viewport.addEventListener("resize", fitViewport);
+    viewport.addEventListener("scroll", fitViewport);
+    fitViewport();
+    root.aiBrainViewportCleanup = () => {
+      viewport.removeEventListener("resize", fitViewport);
+      viewport.removeEventListener("scroll", fitViewport);
+      el.aiBrainView.style.maxHeight = "";
+    };
+  }
+}
+
 function renderAiBrain() {
+  const { revealTurnId = null } = arguments[0] || {};
   if (!el.aiBrainSummary) return;
+  const previousTranscript = el.aiBrainSummary.querySelector(".ai-brain-transcript");
+  const sameIdentity = (!el.aiBrainSummary.aiBrainRenderedIdentity || el.aiBrainSummary.aiBrainRenderedIdentity === aiBrainIdentity())
+    && (!state.aiBrain.identity || state.aiBrain.identity === aiBrainIdentity());
+  const savedScroll = sameIdentity && (!el.aiBrainSummary.aiBrainScrollDeferred && aiBrainViewIsVisible() && previousTranscript?.clientHeight
+    ? aiBrainScrollSnapshot(previousTranscript) : el.aiBrainSummary.aiBrainScroll?.identity === aiBrainIdentity() ? el.aiBrainSummary.aiBrainScroll : null);
+  el.aiBrainSummary.aiBrainScrollObserver?.disconnect();
+  el.aiBrainSummary.aiBrainViewportCleanup?.();
+  if (!sameIdentity) el.aiBrainSummary.aiBrainScroll = null;
+  const openLearnings = sameIdentity ? Array.from(el.aiBrainSummary.querySelectorAll(".ai-brain-learning-context[open]"), (node) => node.closest("[data-turn-id]")?.dataset.turnId) : [];
   const focused = document.activeElement;
-  const composerFocus = focused?.id && ["ai-brain-question", "ai-brain-mode"].includes(focused.id) && el.aiBrainSummary.contains(focused)
+  const composerFocus = sameIdentity && focused?.id && ["ai-brain-question", "ai-brain-mode", "ai-brain-transcript", "ai-brain-jump-latest", "ai-brain-context"].includes(focused.id) && el.aiBrainSummary.contains(focused)
     ? { id: focused.id, start: focused.selectionStart, end: focused.selectionEnd, direction: focused.selectionDirection } : null;
-  const preservedComposerValue = el.aiBrainSummary.querySelector("#ai-brain-question")?.value || "";
+  const preservedComposerValue = sameIdentity ? el.aiBrainSummary.querySelector("#ai-brain-question")?.value || "" : "";
   if (state.aiBrain.identity && state.aiBrain.identity !== aiBrainIdentity()) invalidateAiBrainRequest();
+  el.aiBrainSummary.aiBrainRenderedIdentity = aiBrainIdentity();
   const canAsk = !!state.user?.email && !!state.currentBoardId && state.boardAccess?.canEdit === true;
   const adviceMode = AI_BRAIN_MODES[state.aiBrain.adviceMode] ? state.aiBrain.adviceMode : "general";
   const selected = state.selectedPrimary ? getNode(state.selectedPrimary) : null; const unsaved = !!state.isDirty;
-  el.aiBrainSummary.innerHTML = `<section class="ai-brain-wrap ai-brain-conversation"><header class="ai-brain-header"><div><h3>${escapeHtml(uiText("AI Brain"))}</h3><p>${escapeHtml(uiText("Read-only Brand and campaign advisor"))}</p></div><span class="ai-brain-readonly">${aiBrainProposalText("advisor")}</span></header><div class="ai-brain-context" aria-label="${escapeHtml(uiText("Advice context"))}"><span>${escapeHtml(uiText("Board"))}: ${escapeHtml(state.currentBoardName || uiText("Current Board"))}</span><span>${escapeHtml(uiFormat(state.nodes.length === 1 ? "{count} Canvas node" : "{count} Canvas nodes", { count: state.nodes.length }))}</span>${selected ? `<span>${escapeHtml(uiText("Selected"))}: ${escapeHtml(selected.title || selected.type || uiText("Node"))}</span>` : ""}<span class="${unsaved ? "is-unsaved" : ""}">${escapeHtml(uiText(unsaved ? "Includes unsaved Canvas changes" : "Saved Canvas context"))}</span></div>${canAsk ? `<div class="ai-brain-transcript" aria-live="polite"></div><form id="ai-brain-form" class="ai-brain-composer"><label for="ai-brain-question">${escapeHtml(uiText("Your strategic question"))}</label><div class="ai-brain-focus"><label for="ai-brain-mode">${escapeHtml(uiText("Conversation focus"))}</label><select id="ai-brain-mode" aria-describedby="ai-brain-mode-description ai-brain-mode-guidance" ${state.aiBrain.status === "loading" ? "disabled" : ""}>${Object.entries(AI_BRAIN_MODES).map(([value, mode]) => `<option value="${value}" ${value === adviceMode ? "selected" : ""}>${escapeHtml(uiText(mode.title))}</option>`).join("")}</select><small id="ai-brain-mode-description">${escapeHtml(uiText(AI_BRAIN_MODES[adviceMode].description))}</small><small id="ai-brain-mode-guidance">${escapeHtml(uiText("Optional. Your question leads the conversation."))}</small></div>${!state.nodes.length ? `<p class="ai-brain-empty-canvas">${escapeHtml(uiText("This Canvas is empty. Advice can use the available Brand context; campaign-specific conclusions are limited."))}</p>` : ""}<textarea id="ai-brain-question" maxlength="2000" placeholder="${escapeHtml(uiText("Ask about your Brand or campaign…"))}" required></textarea><div><small>${escapeHtml(uiText("AI advice is qualitative. No changes will be made."))}</small><button type="submit" ${state.aiBrain.status === "loading" ? "disabled" : ""}>${escapeHtml(uiText(state.aiBrain.status === "loading" ? "Thinking…" : "Ask AI Brain"))}</button></div></form>` : `<div class="ai-brain-unavailable"><h4>${escapeHtml(uiText("AI Brain advice is unavailable"))}</h4><p>${escapeHtml(uiText(!state.currentBoardId ? "Open a saved Board with edit access to use AI Brain." : "New advice is available only to authenticated editors."))}</p></div>`}</section>`;
+  el.aiBrainSummary.innerHTML = `<section class="ai-brain-wrap ai-brain-conversation"><header class="ai-brain-header"><div><h3>${escapeHtml(uiText("AI Brain"))}</h3><p>${escapeHtml(uiText("Read-only Brand and campaign advisor"))}</p></div><span class="ai-brain-readonly">${aiBrainProposalText("advisor")}</span></header><div id="ai-brain-context" class="ai-brain-context" role="region" tabindex="0" aria-label="${escapeHtml(uiText("Advice context"))}"><span>${escapeHtml(uiText("Board"))}: ${escapeHtml(state.currentBoardName || uiText("Current Board"))}</span><span>${escapeHtml(uiFormat(state.nodes.length === 1 ? "{count} Canvas node" : "{count} Canvas nodes", { count: state.nodes.length }))}</span>${selected ? `<span>${escapeHtml(uiText("Selected"))}: ${escapeHtml(selected.title || selected.type || uiText("Node"))}</span>` : ""}<span class="${unsaved ? "is-unsaved" : ""}">${escapeHtml(uiText(unsaved ? "Includes unsaved Canvas changes" : "Saved Canvas context"))}</span></div>${canAsk ? `<div class="ai-brain-thread"><div id="ai-brain-transcript" class="ai-brain-transcript" role="region" tabindex="0" aria-label="${escapeHtml(uiText("AI Brain conversation"))}" aria-live="polite" aria-busy="${state.aiBrain.status === "loading"}"></div><button id="ai-brain-jump-latest" type="button" class="ai-brain-jump-latest" aria-controls="ai-brain-transcript" hidden>${escapeHtml(uiText("Jump to latest"))}</button></div><form id="ai-brain-form" class="ai-brain-composer"><label for="ai-brain-question">${escapeHtml(uiText("Your strategic question"))}</label><div class="ai-brain-focus"><label for="ai-brain-mode">${escapeHtml(uiText("Conversation focus"))}</label><select id="ai-brain-mode" aria-describedby="ai-brain-mode-description ai-brain-mode-guidance" ${state.aiBrain.status === "loading" ? "disabled" : ""}>${Object.entries(AI_BRAIN_MODES).map(([value, mode]) => `<option value="${value}" ${value === adviceMode ? "selected" : ""}>${escapeHtml(uiText(mode.title))}</option>`).join("")}</select><small id="ai-brain-mode-description">${escapeHtml(uiText(AI_BRAIN_MODES[adviceMode].description))}</small><small id="ai-brain-mode-guidance">${escapeHtml(uiText("Optional. Your question leads the conversation."))}</small></div>${!state.nodes.length ? `<p class="ai-brain-empty-canvas">${escapeHtml(uiText("This Canvas is empty. Advice can use the available Brand context; campaign-specific conclusions are limited."))}</p>` : ""}<textarea id="ai-brain-question" maxlength="2000" placeholder="${escapeHtml(uiText("Ask about your Brand or campaign…"))}" required></textarea><div><small>${escapeHtml(uiText("AI advice is qualitative. No changes will be made."))}</small><button type="submit" ${state.aiBrain.status === "loading" ? "disabled" : ""}>${escapeHtml(uiText(state.aiBrain.status === "loading" ? "Thinking…" : "Ask AI Brain"))}</button></div></form>` : `<div class="ai-brain-unavailable"><h4>${escapeHtml(uiText("AI Brain advice is unavailable"))}</h4><p>${escapeHtml(uiText(!state.currentBoardId ? "Open a saved Board with edit access to use AI Brain." : "New advice is available only to authenticated editors."))}</p></div>`}</section>`;
   const headerTitle = el.aiBrainSummary.querySelector(".ai-brain-header > div"); if (headerTitle) headerTitle.prepend(createAiBrainAdvisorAvatar());
   const transcript = el.aiBrainSummary.querySelector(".ai-brain-transcript"); if (transcript) renderAiBrainTranscript(transcript);
+  el.aiBrainSummary.querySelectorAll(".ai-brain-learning-context").forEach((node) => { node.open = openLearnings.includes(node.closest("[data-turn-id]")?.dataset.turnId); });
   const composer = el.aiBrainSummary.querySelector("#ai-brain-question"); if (composer && preservedComposerValue) composer.value = preservedComposerValue;
   el.aiBrainSummary.querySelector("#ai-brain-mode")?.addEventListener("change", (event) => {
     if (state.aiBrain.status === "loading" || !Object.prototype.hasOwnProperty.call(AI_BRAIN_MODES, event.target.value)) return;
@@ -6612,9 +6697,10 @@ function renderAiBrain() {
   el.aiBrainSummary.querySelectorAll("[data-ai-brain-cancel]").forEach((button) => button.addEventListener("click", () => cancelAiBrainNodeProposal(button.dataset.aiBrainCancel)));
   el.aiBrainSummary.querySelectorAll("[data-ai-brain-create]").forEach((button) => button.addEventListener("click", () => applyAiBrainNodeProposal(button.dataset.aiBrainCreate)));
   translateInterface(el.aiBrainSummary);
+  if (transcript) bindAiBrainScroll(transcript, savedScroll, revealTurnId);
   if (composerFocus) {
     const target = el.aiBrainSummary.querySelector(`#${composerFocus.id}`);
-    if (target && !target.disabled) { target.focus({ preventScroll: true }); if (composerFocus.id === "ai-brain-question") target.setSelectionRange(composerFocus.start, composerFocus.end, composerFocus.direction); }
+    if (target && !target.disabled && !target.hidden) { target.focus({ preventScroll: true }); if (composerFocus.id === "ai-brain-question") target.setSelectionRange(composerFocus.start, composerFocus.end, composerFocus.direction); }
   }
 }
 async function requestAiBrainAdvice(event, retryTurnId = null) {
@@ -6625,7 +6711,7 @@ async function requestAiBrainAdvice(event, retryTurnId = null) {
   const adviceMode = existing ? existing.adviceMode || "general" : state.aiBrain.adviceMode || "general";
   const responseLanguage = state.uiLanguage === "de" ? "de" : "en"; const controller = new AbortController(); const requestId = state.aiBrain.requestId + 1; const advisorIdentity = captureAiBrainAdvisorIdentity(requestId); const identity = aiBrainIdentity(); const contextIdentity = aiBrainRequestContextIdentity(); const selectedNodeId = state.selectedPrimary || null; const canvas = aiBrainCanvasProjection(); const conversationHistory = aiBrainConversationHistory(existing?.id || null);
   const turn = existing || { id: `turn-${requestId}`, question }; const messages = existing ? state.aiBrain.messages.map((item) => item.id === turn.id ? { ...item, status: "pending", adviceMode, responseLanguage, advisorIdentity, errorCode: "", answer: "" } : item) : [...state.aiBrain.messages, { ...turn, status: "pending", adviceMode, responseLanguage, advisorIdentity }];
-  state.aiBrain = { ...state.aiBrain, status: "loading", requestId, controller, identity, error: "", messages }; renderAiBrain();
+  state.aiBrain = { ...state.aiBrain, status: "loading", requestId, controller, identity, error: "", messages }; renderAiBrain({ revealTurnId: turn.id });
   try {
     const response = await fetch("/api/ai-brain/advice", { method: "POST", headers: { "Content-Type": "application/json", "X-AI-Brain-Generation": String(requestId) }, signal: controller.signal, body: JSON.stringify({ board_id: state.currentBoardId, question, advice_mode: adviceMode, selected_node_id: selectedNodeId, canvas_context: canvas, response_language: responseLanguage, conversation_history: conversationHistory.exchanges, conversation_history_truncated: conversationHistory.truncated }) });
     const data = await response.json().catch(() => ({}));
@@ -6640,7 +6726,9 @@ async function requestAiBrainAdvice(event, retryTurnId = null) {
     if (error?.name === "AbortError" || state.aiBrain.requestId !== requestId) return;
     state.aiBrain = { ...state.aiBrain, status: "error", controller: null, messages: state.aiBrain.messages.map((item) => item.id === turn.id ? { ...item, status: "failed", errorCode: error.code || "generic" } : item) };
   }
-  renderAiBrain();
+  const transcript = el.aiBrainSummary.querySelector(".ai-brain-transcript");
+  const following = aiBrainViewIsVisible() && transcript && aiBrainScrollSnapshot(transcript).latest;
+  renderAiBrain({ revealTurnId: following ? turn.id : null });
 }
 
 function aiBrainNodePlacement() {

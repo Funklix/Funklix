@@ -576,6 +576,8 @@
     "Explore distinct ideas that fit your Brand and campaign.": "Entwickle unterschiedliche Ideen, die zu deiner Brand und Kampagne passen.",
     "Find missing assumptions, evidence or campaign elements.": "Finde fehlende Annahmen, Belege oder Kampagnenelemente.",
     "Compare options against your goals, constraints and Brand context.": "Vergleiche Optionen anhand deiner Ziele, Rahmenbedingungen und Brand.",
+    "AI Brain conversation": "AI-Brain-Gespräch",
+    "Jump to latest": "Zur neuesten Nachricht",
     "Conversation focus": "Gesprächsfokus",
     "Optional. Your question leads the conversation.": "Optional. Deine Frage bestimmt das Gespräch.",
     "Ask a question, or choose a focus to review strategy, explore ideas, find gaps or evaluate options.": "Stelle eine Frage oder wähle einen Fokus, um die Strategie zu prüfen, Ideen zu erkunden, Lücken zu finden oder Optionen zu bewerten.",

@@ -55,6 +55,7 @@ jobs:
           node --check app.js
           node --check api/ai-brain/advice.js
           node --check scripts/check-bw37-1a-strategic-advisor.js
+          node --check scripts/check-bw37-1a-r1-workspace.js
           node --check canonical-brand-reader.js
           node --check scripts/check-bw36-22b3-living-signals.js
           node --check home-foundation.js
@@ -429,6 +430,8 @@ jobs:
         run: |
           npx playwright-core install --with-deps chromium
           node -e 'require("fs").appendFileSync(process.env.GITHUB_ENV, "CHROMIUM_PATH=" + require("playwright-core").chromium.executablePath() + "\n")'
+      - name: Check BW-37.1A-R1 workspace and scroll lifecycle (Chromium)
+        run: npm run check:bw37.1ar1
       - name: Check BW-37.1A Strategic Advisor (mocked provider)
         run: npm run check:bw37.1a
       - name: Check approved Brand Learnings in Advice (disposable PostgreSQL, mocked OpenAI)
