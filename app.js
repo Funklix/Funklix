@@ -6638,24 +6638,7 @@ function bindAiBrainScroll(transcript, saved, revealTurnId) {
   observer.observe(transcript);
   Array.from(transcript.children).forEach((node) => observer.observe(node));
   root.aiBrainScrollObserver = observer;
-  if (el.aiBrainView && window.visualViewport) {
-    const viewport = window.visualViewport;
-    const fitViewport = () => {
-      if (!current()) return;
-      el.aiBrainView.classList.toggle("ai-brain-compact-viewport", viewport.height <= 640);
-      const sidebar = document.querySelector(".sidebar");
-      const bottomInset = sidebar && getComputedStyle(sidebar).position === "fixed" ? sidebar.getBoundingClientRect().height : 0;
-      el.aiBrainView.style.maxHeight = `${Math.max(160, viewport.height + viewport.offsetTop - el.aiBrainView.getBoundingClientRect().top - bottomInset)}px`;
-    };
-    viewport.addEventListener("resize", fitViewport);
-    viewport.addEventListener("scroll", fitViewport);
-    fitViewport();
-    root.aiBrainViewportCleanup = () => {
-      viewport.removeEventListener("resize", fitViewport);
-      viewport.removeEventListener("scroll", fitViewport);
-      el.aiBrainView.style.maxHeight = "";
-    };
-  }
+  root.aiBrainViewportCleanup = globalThis.FunklixAiBrainViewport?.bind(el.aiBrainView, current);
 }
 
 function renderAiBrain() {

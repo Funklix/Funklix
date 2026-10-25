@@ -53,6 +53,7 @@ jobs:
           node --check knowledge-module-identity.js
           node --check knowledge-module-runtime-adapter.js
           node --check app.js
+          node --check ai-brain-workspace-viewport.js
           node --check api/ai-brain/advice.js
           node --check scripts/check-bw37-1a-strategic-advisor.js
           node --check scripts/check-bw37-1a-r1-workspace.js
