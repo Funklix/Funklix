@@ -1,0 +1,22 @@
+# BW-37.1B-R1 — Conversational Brand Advisor
+
+Base: merged main `8627b47` (PR #819). No production data or paid provider calls.
+
+## Confirmed causes and changes
+
+- `requestAiBrainAdvice` appended a pending turn, then `renderAiBrain` preserved the unchanged composer DOM value. Acceptance now transfers the question to the turn and clears only matching submitted text synchronously before rendering. Retry keeps the original question/mode and never clears the draft. Completion does not write composer values. Invalid retry IDs cannot submit the current draft. Active abort failures settle as failed; invalidated account/Board lifecycles still discard late responses. Native submission focuses the fresh composer; existing caret, navigation and scroll restoration remain intact.
+- Advice permitted headings/lists and strongly specified analysis, but lacked an explicit colleague-like conversational default or approved style projection. Advice now prefers direct, concise connected paragraphs, considered judgments and useful follow-ups, with structure only when helpful/requested. All five mode policies, evidence, language, history, model and provider/storage safeguards remain.
+- Advice receives raw Canonical Core and Board snapshots; `_brand-brain-context` is a separate generation helper whose broad normalization does not enforce DNA approval. The new Advice-only projection uses native `brandDNA.userApproved === true`, known primary/secondary archetype communication styles and accepted recommended voice, plus persisted top-level tone. It does not infer approval from persistence, generated timestamps, draft objects, confidence or module acceptance. Independently authorized canonical identity takes precedence; the campaign snapshot remains separate with constraints intact. When canonical identity is available but has no approved DNA, historical snapshot DNA is not revived. Without canonical access, only the authorized Board snapshot can supply style. Raw context and style remain untrusted data. No Brand persistence changes or additional reads.
+- The Content-node CTA previously accepted any successful non-clarification turn with edit access. A bounded deterministic UI predicate now requires an explicit EN/DE asset/concept label and either substantial labelled draft copy plus CTA, or audience/message/purpose fields. Renderer and preparation handler share the predicate; mode alone never qualifies. Preview, cancellation, authorization/freshness checks and explicit one-node creation remain unchanged. Ordinary Advice performs no extra inference.
+
+## Verification
+
+`npm run check:bw37.1br1` uses disposable SQL and the actual application shell with mocked Advice/proposal transports. It covers five modes EN/DE; approval/default/snapshot precedence; Board-only isolation; freshness and one call; clearing after local acceptance; original user bubbles; newer drafts/caret/navigation; network/409/503/abort/retry; invalid retry; stale Canvas/account/Board responses; conservative CTA; explicit preview/cancel/create; native keyboard focus; desktop/375/320 Light/Dark. Existing BW-37.1A browser tests now explicitly enter fresh questions before two new submissions; their stale/invalidation assertions are retained. Existing BW-37 workspace suite covers long transcripts and Jump to latest.
+
+All BW-26/BW-28 and BW-36.20/20R1 plus BW-37 focused regressions pass. The full Runtime Boot Safety workflow includes this new suite in both existing PostgreSQL 17.6/18.4 matrix jobs. Final local and GitHub matrix outcomes are recorded on the PR.
+
+## Review and limitations
+
+Code review checked approval selection, independent authorization, token accounting (the projection is inside the existing complete-message budget), stale/abort lifecycle, retry deduplication, DOM safety and the explicit mutation boundary. No authorization, Learning governance, schema/migration, TLS, model, automatic retry, Canvas autosave or deployment changes.
+
+The deterministic CTA intentionally misses unlabelled or ambiguous reusable copy; it is a conservative affordance, not semantic verification or authorization. A model can still ignore conversational instructions; mocked responses establish prompt/context/lifecycle contracts, not live EN/DE personality quality. No live Appics Core was accessed: Explorer/Creator examples are fictional fixtures. Human semantic review on authorized real answers remains useful. Existing pre-dispatch revalidation cannot retract context already sent to a provider.

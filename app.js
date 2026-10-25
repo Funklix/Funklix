@@ -6440,6 +6440,23 @@ function validateAiBrainNodeProposal(input, sourceTurnId) {
   if (!proposalId || !turnId || turnId !== sourceTurnId || input.node_type !== "Content" || !title || !body || rationale === null) return null;
   return Object.assign(Object.create(null), { proposal_id: proposalId, source_turn_id: turnId, node_type: "Content", title, body, ...(rationale ? { rationale } : {}) });
 }
+// Bounded, conservative UI affordance, never authorization or a model classifier.
+// Require an explicitly labelled reusable asset, not merely a strategic keyword.
+function aiBrainHasReusableContent(turn) {
+  if (turn?.status !== "success" || turn.referenceResolution === "clarification" || typeof turn.answer !== "string" || turn.answer.length > 12000) return false;
+  const text = turn.answer.replace(/\r\n?/g, "\n");
+  const lines = text.split("\n").map(line => line.replace(/^\s*(?:#{1,4}\s*|[-*]\s+|\d{1,3}\.\s+)/, "").replace(/\*\*/g, "").trim());
+  const asset = /^(?:(?:proposed |draft |vorgeschlagener? |entwurf: ?)?(?:social(?: media)? post|linkedin(?: post|-beitrag)?|instagram(?: post|-beitrag)?|landing[- ]?page(?: copy| text|-text)?|campaign asset|kampagnenmotiv|content concept|content-konzept|beitragsentwurf|post draft|post-entwurf))(?:\s*[:—–-]|$)/i;
+  const start = lines.findIndex(line => asset.test(line));
+  if (start < 0) return false;
+  const section = lines.slice(start).join("\n");
+  const field = label => new RegExp(`^(?:${label}):\\s*\\S.{7,}`, "im").test(section);
+  // A concrete concept must specify all three, rather than management tasks.
+  if (field("audience|zielgruppe") && field("message|botschaft|kernbotschaft") && field("purpose|ziel|zweck")) return true;
+  // Draft copy needs a labelled substantial body and an explicit audience action.
+  const copy = section.match(/^(?:caption|copy|post text|post-text|beitragstext|text|headline|headline claim|überschrift):\s*([\s\S]+)/im)?.[1] || "";
+  return copy.length >= 80 && /^(?:cta|call to action|handlungsaufforderung):\s*\S.{5,}/im.test(copy);
+}
 function canUseAiBrainProposal() { return !!state.user?.email && !!state.currentBoardId && state.boardAccess?.canEdit === true && !state.publicBoardToken; }
 function setTurnProposal(turnId, updater) {
   state.aiBrain.messages = state.aiBrain.messages.map((turn) => turn.id === turnId ? { ...turn, proposal: updater(turn.proposal) } : turn);
@@ -6450,7 +6467,7 @@ function cancelAiBrainNodeProposal(turnId) {
 }
 async function requestAiBrainNodeProposal(turnId) {
   const turn = state.aiBrain.messages.find((item) => item.id === turnId && item.status === "success" && item.answer && item.referenceResolution !== "clarification");
-  if (!turn || !canUseAiBrainProposal() || turn.proposal?.status === "requesting" || turn.proposal?.status === "applying" || turn.proposal?.status === "applied") return renderAiBrain();
+  if (!turn || !aiBrainHasReusableContent(turn) || !canUseAiBrainProposal() || turn.proposal?.status === "requesting" || turn.proposal?.status === "applying" || turn.proposal?.status === "applied") return renderAiBrain();
   const uiLanguage = state.uiLanguage === "de" ? "de" : "en"; const contentLanguage = state.campaignLanguage === "de" ? "de" : "en";
   const boardId = state.currentBoardId; const accountIdentity = state.user.email; const contextIdentity = aiBrainRequestContextIdentity(); const lifecycle = state.boardLoadGeneration;
   const controller = new AbortController(); setTurnProposal(turnId, () => ({ status: "requesting", uiLanguage, contentLanguage, boardId, accountIdentity, contextIdentity, lifecycle, controller })); renderAiBrain();
@@ -6567,7 +6584,7 @@ function renderAiBrainTranscript(transcript) {
       section.append(heading, list); advisor.appendChild(section);
     }
     if (turn.meta) { const meta = document.createElement("small"); meta.textContent = turn.meta; advisor.appendChild(meta); }
-    const proposal = turn.proposal; const eligible = turn.status === "success" && turn.referenceResolution !== "clarification" && canUseAiBrainProposal() && proposal?.status !== "applied";
+    const proposal = turn.proposal; const eligible = aiBrainHasReusableContent(turn) && canUseAiBrainProposal() && proposal?.status !== "applied";
     if (eligible && (!proposal || ["cancelled", "failed", "stale"].includes(proposal.status))) {
       const prepare = document.createElement("button"); prepare.type = "button"; prepare.className = "ai-brain-proposal-prepare"; prepare.dataset.aiBrainPrepare = turn.id;
       prepare.textContent = proposal?.status === "failed" ? aiBrainProposalText("retry") : aiBrainProposalText("prepare"); advisor.appendChild(prepare);
@@ -6693,11 +6710,17 @@ async function requestAiBrainAdvice(event, retryTurnId = null) {
   event?.preventDefault();
   if (state.aiBrain.status === "loading" || !state.user?.email || !state.currentBoardId || state.boardAccess?.canEdit !== true) return renderAiBrain();
   const existing = retryTurnId ? state.aiBrain.messages.find((turn) => turn.id === retryTurnId && turn.status === "failed") : null;
+  if (retryTurnId && !existing) return;
   const input = el.aiBrainSummary.querySelector("#ai-brain-question"); const question = existing?.question || input?.value.trim(); if (!question) return;
   const adviceMode = existing ? existing.adviceMode || "general" : state.aiBrain.adviceMode || "general";
   const responseLanguage = state.uiLanguage === "de" ? "de" : "en"; const controller = new AbortController(); const requestId = state.aiBrain.requestId + 1; const advisorIdentity = captureAiBrainAdvisorIdentity(requestId); const identity = aiBrainIdentity(); const contextIdentity = aiBrainRequestContextIdentity(); const selectedNodeId = state.selectedPrimary || null; const canvas = aiBrainCanvasProjection(); const conversationHistory = aiBrainConversationHistory(existing?.id || null);
   const turn = existing || { id: `turn-${requestId}`, question }; const messages = existing ? state.aiBrain.messages.map((item) => item.id === turn.id ? { ...item, status: "pending", adviceMode, responseLanguage, advisorIdentity, errorCode: "", answer: "" } : item) : [...state.aiBrain.messages, { ...turn, status: "pending", adviceMode, responseLanguage, advisorIdentity }];
-  state.aiBrain = { ...state.aiBrain, status: "loading", requestId, controller, identity, error: "", messages }; renderAiBrain({ revealTurnId: turn.id });
+  state.aiBrain = { ...state.aiBrain, status: "loading", requestId, controller, identity, error: "", messages };
+  // The local user turn now owns this text. Clear synchronously before rendering;
+  // completion and retry never write to the composer or erase a newer draft.
+  if (!existing && input?.value.trim() === question) input.value = "";
+  if (event?.type === "submit") input?.focus({ preventScroll: true });
+  renderAiBrain({ revealTurnId: turn.id });
   try {
     const response = await fetch("/api/ai-brain/advice", { method: "POST", headers: { "Content-Type": "application/json", "X-AI-Brain-Generation": String(requestId) }, signal: controller.signal, body: JSON.stringify({ board_id: state.currentBoardId, question, advice_mode: adviceMode, selected_node_id: selectedNodeId, canvas_context: canvas, response_language: responseLanguage, conversation_history: conversationHistory.exchanges, conversation_history_truncated: conversationHistory.truncated }) });
     const data = await response.json().catch(() => ({}));
@@ -6709,7 +6732,7 @@ async function requestAiBrainAdvice(event, retryTurnId = null) {
     const assumptions = Array.isArray(data.assumptions) ? data.assumptions.filter((value) => typeof value === "string").slice(0, 20) : [];
     state.aiBrain = { ...state.aiBrain, status: "success", controller: null, messages: state.aiBrain.messages.map((item) => item.id === turn.id ? { ...item, status: "success", answer: data.answer, responseLanguage, assumptions, approvedLearnings: data.context?.approved_learnings || null, referenceResolution: data.context?.reference_resolution || "none", proposal: null, meta: `${scope}. ${data.disclaimer}` } : item) };
   } catch (error) {
-    if (error?.name === "AbortError" || state.aiBrain.requestId !== requestId) return;
+    if (state.aiBrain.requestId !== requestId || state.aiBrain.identity !== identity || aiBrainIdentity() !== identity) return;
     state.aiBrain = { ...state.aiBrain, status: "error", controller: null, messages: state.aiBrain.messages.map((item) => item.id === turn.id ? { ...item, status: "failed", errorCode: error.code || "generic" } : item) };
   }
   const transcript = el.aiBrainSummary.querySelector(".ai-brain-transcript");

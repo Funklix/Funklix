@@ -165,10 +165,13 @@ async function browserChecks() {
     // Selected Brand is presentation preference, not conversation identity.
     await page.evaluate(() => { state.activeBrandId = 'Y'; renderAiBrain(); });
     assert.equal(await select.inputValue(), 'find_gaps'); assert.equal(await page.evaluate(() => state.aiBrain.messages.length), 2);
+    // Each new turn now starts with a fresh composer after acceptance.
+    await question.fill('Review the current Canvas');
     // Stale Canvas answers never become a successful turn.
     await page.evaluate(() => { window.pending = requestAiBrainAdvice(); state.nodes[0].title = 'Changed during inference'; });
     await page.evaluate(async () => { release(); await pending; });
     assert.equal(await page.evaluate(() => state.aiBrain.messages.at(-1).errorCode), 'changed');
+    await question.fill('Review before switching');
     // Explicit invalidation aborts pending work, resets mode, suppresses late output.
     await page.evaluate(() => { window.pending = requestAiBrainAdvice(); window.signal = state.aiBrain.controller.signal; invalidateAiBrainRequest(); renderAiBrain(); });
     assert(await page.evaluate(() => signal.aborted)); assert.equal(await select.inputValue(), 'general');
