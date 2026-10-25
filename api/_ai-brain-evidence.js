@@ -21,16 +21,8 @@ function prepareEvidence({ nodes, edges, selectedNode }) {
   const ordered = [...nodes.filter(node => priority.has(node.id)), ...nodes.filter(node => !priority.has(node.id))];
   // Always prioritize the selected object even when it appears late in Canvas order.
   if (selectedNode) ordered.splice(0, 0, ...ordered.splice(ordered.findIndex(node => node.id === selectedId), 1));
-  const indexed = []; let characters = 0;
-  for (const node of ordered) {
-    const entry = { id: node.id, title: node.title || '', type: node.type,
-      fields: Object.fromEntries(COPY_FIELDS.filter(field => present(at(node, field))).map(field => [field, excerpt(at(node, field))])) };
-    const size = JSON.stringify([entry, node.audience || '', node.tone || '', node.title || '', node.title || '']).length;
-    if (indexed.length >= MAX_NODES || characters + size > MAX_CHARACTERS) continue;
-    indexed.push(entry); characters += size;
-  }
-  const ids = new Set(indexed.map(node => node.id));
-  const group = field => {
+  const group = (field, entries) => {
+    const ids = new Set(entries.map(node => node.id));
     const groups = new Map();
     for (const node of nodes.filter(node => ids.has(node.id) && present(node[field]))) {
       if (!groups.has(node[field])) groups.set(node[field], []);
@@ -38,13 +30,24 @@ function prepareEvidence({ nodes, edges, selectedNode }) {
     }
     return [...groups].map(([value, members]) => ({ value, nodes: members }));
   };
+  const indexView = entries => ({ nodes: entries, audienceGroups: group('audience', entries), toneGroups: group('tone', entries) });
+  const indexed = [];
+  for (const node of ordered) {
+    if (indexed.length >= MAX_NODES) break;
+    const entry = { id: node.id, title: node.title || '', type: node.type,
+      fields: Object.fromEntries(COPY_FIELDS.filter(field => present(at(node, field))).map(field => [field, excerpt(at(node, field))])) };
+    // Bound the actual duplicated quotation/group serialization, including IDs,
+    // titles, JSON escaping and grouping overhead, rather than a size estimate.
+    if (JSON.stringify(indexView([...indexed, entry])).length > MAX_CHARACTERS) continue;
+    indexed.push(entry);
+  }
   const distinct = field => new Set(nodes.map(node => node[field]).filter(present)).size;
   const landing = nodes.filter(node => node.type === 'Landing Page');
   const explicitCta = nodes.filter(node => ['cta', 'social.cta', 'landingPage.cta'].some(field => present(at(node, field))));
   return {
     version: 'advice_evidence_v1',
     sources: {
-      canonicalBrandCore: 'Current independently authorized Brand identity; value holds raw saved Core, not uniformly approved content.',
+      canonicalBrandCore: 'Current independently authorized Brand identity; value holds raw saved Core, not uniformly approved content. Native keys may include brandCore (positioning), valueProposition, personas (name/note), messagingPillars, toneOfVoice, brandDNA and customTiles/moduleData. Inspect actual keys and nested lifecycle; do not assume populated fields.',
       boardBrandCore: 'Raw saved campaign snapshot and constraints; revision/time in boardBrandCoreProvenance. Conflicts remain separate.',
       workingCanvas: 'Validated working nodes/edges, potentially unsaved. Node id is identity; titles may repeat. Only supplied fields are knowable.',
       approvedBrandLearnings: 'Separate supplementary approved statements with L refs; module acceptance does not confer Learning approval.',
@@ -52,8 +55,7 @@ function prepareEvidence({ nodes, edges, selectedNode }) {
     },
     coverage: { indexedNodes: indexed.length, totalNodes: nodes.length, omittedNodes: nodes.length - indexed.length,
       scope: 'Groups and quotations cover indexed nodes only; omitted entries/fields are not absence. Full supplied values remain in workingCanvas. Browser projection may already omit/truncate native data.' },
-    nodes: indexed,
-    audienceGroups: group('audience'), toneGroups: group('tone'),
+    ...indexView(indexed),
     selectedNeighborhood: { selectedId, incoming: [...new Set(incoming)], outgoing: [...new Set(outgoing)],
       scope: 'Complete direct endpoint IDs from supplied edges only; resolve titles/fields in workingCanvas. An edge proves connection, not dependency or intent.' },
     diagnosticScope: {

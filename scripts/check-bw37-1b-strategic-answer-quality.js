@@ -54,7 +54,9 @@ function evidenceChecks() {
   assert(validateCanvasContext({ nodes: large, edges: manyEdges }, 'n199').ok);
   const indexed = prepareEvidence({ nodes: large, edges: manyEdges, selectedNode: large[199] });
   assert.equal(indexed.nodes[0].id, 'n199'); assert(indexed.coverage.omittedNodes > 0);
-  assert(indexed.nodes.length <= 24); assert(JSON.stringify(indexed).length < 100000);
+  assert(indexed.nodes.length <= 24);
+  assert(JSON.stringify({ nodes: indexed.nodes, audienceGroups: indexed.audienceGroups, toneGroups: indexed.toneGroups }).length <= 32000);
+  assert(JSON.stringify(indexed).length < 100000);
   assert.equal(indexed.nodes[0].fields.content.quote, '界'.repeat(180)); assert(indexed.nodes[0].fields.content.excerpted);
   assert.equal(indexed.selectedNeighborhood.outgoing.length, 199);
   assert.equal(validateCanvasContext({ nodes: [...large, large[0]], edges: [] }, null).status, 413);
