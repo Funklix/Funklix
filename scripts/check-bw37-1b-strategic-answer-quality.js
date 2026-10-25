@@ -117,7 +117,7 @@ async function apiChecks() {
     await f.insert({ brand: f.OTHER, statement: 'Community engagement CROSS BRAND SECRET' });
     for (const advice_mode of [undefined, 'general', 'review_strategy', 'explore_ideas', 'find_gaps', 'evaluate_options']) for (const response_language of ['en', 'de']) {
       f.calls.length = 0;
-      const history = [{ user: 'Three ideas', assistant: '1. Process\n2. Choice\n3. Collaboration' }];
+      const history = [{ user: 'Three ideas', assistant: '1. Community process\n2. Choice\n3. Collaboration' }];
       const response = await f.invoke({ ...(advice_mode ? { advice_mode } : {}), response_language, question: 'Expand the second idea', selected_node_id: 'selected', canvas_context: { nodes, edges }, conversation_history: history });
       assert.equal(response.statusCode, 200); assert.equal(f.calls.length, 1);
       const call = f.calls[0], input = call.input, context = JSON.parse(input[1].content.split('\n').slice(1).join('\n'));
@@ -141,7 +141,7 @@ async function apiChecks() {
     const without = f.context.tokens(noIndex, f.context.modelConstraints()); assert(total > without);
     f.env.OPENAI_AI_BRAIN_MODEL = 'fixture'; f.env.OPENAI_AI_BRAIN_CONTEXT_MODEL = 'fixture'; f.env.OPENAI_AI_BRAIN_TOKEN_ENCODING = 'o200k_base'; f.env.OPENAI_AI_BRAIN_CONTEXT_TOKENS = String(without + 5120);
     f.calls.length = 0;
-    const tooLarge = await f.invoke({ advice_mode: 'evaluate_options', response_language: 'de', question: 'Expand the second idea', selected_node_id: 'selected', canvas_context: { nodes, edges }, conversation_history: [{ user: 'Three ideas', assistant: '1. Process\n2. Choice\n3. Collaboration' }] });
+    const tooLarge = await f.invoke({ advice_mode: 'evaluate_options', response_language: 'de', question: 'Expand the second idea', selected_node_id: 'selected', canvas_context: { nodes, edges }, conversation_history: [{ user: 'Three ideas', assistant: '1. Community process\n2. Choice\n3. Collaboration' }] });
     assert.equal(tooLarge.statusCode, 422); assert.equal(f.calls.length, 0);
     await f.reset(); await f.pg.exec('DELETE FROM brand_members');
     assert.equal((await f.invoke()).statusCode, 200);
