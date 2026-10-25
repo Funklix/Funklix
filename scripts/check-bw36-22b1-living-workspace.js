@@ -74,7 +74,9 @@ const snapshot = p => p.evaluate(() => JSON.stringify({nodes:state.nodes, edges:
       assert.equal(await p.locator('.home-avatar-art').getAttribute('aria-hidden'),'true');
       await p.evaluate(()=>{state.nodes[0].title='Changed';refreshDashboardIfVisible();});
       assert.equal(await p.locator('.home-avatar-message').innerText(),'Your saved Board Autumn Launch is here when you are ready.', 'When diagnostics become stale, responsibility moves into the signals and the default bubble complements it with verified saved identity');
-      assert(await p.evaluate(()=>{const e=document.querySelector('.home-avatar-stage');return [e,...e.querySelectorAll('*')].every(n=>getComputedStyle(n).animationName==='none');}));
+      assert(await p.evaluate(()=>{const e=document.querySelector('.home-avatar-stage');return [e,...e.querySelectorAll('*')].filter(n=>!n.closest('.home-avatar-art')).every(n=>getComputedStyle(n).animationName==='none');}), 'Avatar, placeholder and automatic speech remain static; only aria-hidden decoration may move');
+      await p.emulateMedia({reducedMotion:'reduce'});
+      assert(await p.evaluate(()=>{const e=document.querySelector('.home-avatar-stage');return [e,...e.querySelectorAll('*')].every(n=>getComputedStyle(n).animationName==='none');}), 'Reduced motion also stops every decorative element');
       await f.close();
     });
     await check('selected Brand/current Board mismatch chooses connected continuation without relabeling Brain or mutating Canvas', async () => {

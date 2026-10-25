@@ -475,6 +475,9 @@
         for (const signal of signals) {
           const item = node('li'); item.dataset.signalSource = signal.source;
           const control = placed('', signal.action, signal.id, 'signal'); control.className = 'home-signal';
+          // Reuse the workspace's restrained text-symbol icon treatment.
+          const icon = node('span', 'home-signal-icon', { learning: '✧', diagnostic: '◎', responsibility: '✓', saved: '▤' }[signal.source]);
+          icon.setAttribute('aria-hidden', 'true'); control.append(icon);
           control.append(node('strong', '', t(signal.text).replace(/\{(\w+)\}/g, (_, key) => signal.values?.[key] ?? '')),
             node('span', '', t(signal.scope).replace('{name}', signal.name)));
           if (signal.note) control.append(node('span', '', t(signal.note)));
@@ -883,7 +886,7 @@
           messageKey = messages[(index + (action === 'message-next' ? 1 : messages.length - 1)) % messages.length].key;
           draw();
           const text = host.querySelector('#home-avatar-message');
-          if (text) { text.setAttribute('tabindex', '-1'); text.focus({ preventScroll: true }); }
+          if (text) { text.dataset.manualChange = ''; text.setAttribute('tabindex', '-1'); text.focus({ preventScroll: true }); }
         }
         else if (action === 'onboarding-profile' && m.brand?.id === id && avatarStatus === 'ready' && onboarding) {
           const origin = () => {

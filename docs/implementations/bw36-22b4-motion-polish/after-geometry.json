@@ -1,0 +1,194 @@
+[
+  {
+    "width": 1440,
+    "theme": "light",
+    "geometry": {
+      "x": 283.1875,
+      "y": 161,
+      "width": 1113.625,
+      "height": 640.828125
+    },
+    "image": {
+      "src": "/fixture-avatar.png",
+      "w": 360,
+      "h": 240,
+      "fit": "contain",
+      "transform": "none",
+      "animation": "none",
+      "filter": "none",
+      "opacity": "1",
+      "x": 14,
+      "y": 14,
+      "width": 228.125,
+      "height": 228.125
+    }
+  },
+  {
+    "width": 1440,
+    "theme": "dark",
+    "geometry": {
+      "x": 283.1875,
+      "y": 161,
+      "width": 1113.625,
+      "height": 640.828125
+    },
+    "image": {
+      "src": "/fixture-avatar.png",
+      "w": 360,
+      "h": 240,
+      "fit": "contain",
+      "transform": "none",
+      "animation": "none",
+      "filter": "none",
+      "opacity": "1",
+      "x": 13,
+      "y": 13,
+      "width": 230.125,
+      "height": 230.125
+    }
+  },
+  {
+    "width": 1280,
+    "theme": "light",
+    "geometry": {
+      "x": 112.390625,
+      "y": 161,
+      "width": 1129.21875,
+      "height": 641.40625
+    },
+    "image": {
+      "src": "/fixture-avatar.png",
+      "w": 360,
+      "h": 240,
+      "fit": "contain",
+      "transform": "none",
+      "animation": "none",
+      "filter": "none",
+      "opacity": "1",
+      "x": 14,
+      "y": 14,
+      "width": 231.71875,
+      "height": 231.71875
+    }
+  },
+  {
+    "width": 1280,
+    "theme": "dark",
+    "geometry": {
+      "x": 112.390625,
+      "y": 161,
+      "width": 1129.21875,
+      "height": 641.40625
+    },
+    "image": {
+      "src": "/fixture-avatar.png",
+      "w": 360,
+      "h": 240,
+      "fit": "contain",
+      "transform": "none",
+      "animation": "none",
+      "filter": "none",
+      "opacity": "1",
+      "x": 13,
+      "y": 13,
+      "width": 233.71875,
+      "height": 233.71875
+    }
+  },
+  {
+    "width": 375,
+    "theme": "light",
+    "geometry": {
+      "x": 16,
+      "y": -610,
+      "width": 343,
+      "height": 1561.1875
+    },
+    "image": {
+      "src": "/fixture-avatar.png",
+      "w": 360,
+      "h": 240,
+      "fit": "contain",
+      "transform": "none",
+      "animation": "none",
+      "filter": "none",
+      "opacity": "1",
+      "x": 14,
+      "y": 14,
+      "width": 192,
+      "height": 192
+    }
+  },
+  {
+    "width": 375,
+    "theme": "dark",
+    "geometry": {
+      "x": 16,
+      "y": -610,
+      "width": 343,
+      "height": 1561.1875
+    },
+    "image": {
+      "src": "/fixture-avatar.png",
+      "w": 360,
+      "h": 240,
+      "fit": "contain",
+      "transform": "none",
+      "animation": "none",
+      "filter": "none",
+      "opacity": "1",
+      "x": 13,
+      "y": 13,
+      "width": 194,
+      "height": 194
+    }
+  },
+  {
+    "width": 320,
+    "theme": "light",
+    "geometry": {
+      "x": 16,
+      "y": -702,
+      "width": 288,
+      "height": 1670.953125
+    },
+    "image": {
+      "src": "/fixture-avatar.png",
+      "w": 360,
+      "h": 240,
+      "fit": "contain",
+      "transform": "none",
+      "animation": "none",
+      "filter": "none",
+      "opacity": "1",
+      "x": 14,
+      "y": 14,
+      "width": 192,
+      "height": 192
+    }
+  },
+  {
+    "width": 320,
+    "theme": "dark",
+    "geometry": {
+      "x": 16,
+      "y": -702,
+      "width": 288,
+      "height": 1670.953125
+    },
+    "image": {
+      "src": "/fixture-avatar.png",
+      "w": 360,
+      "h": 240,
+      "fit": "contain",
+      "transform": "none",
+      "animation": "none",
+      "filter": "none",
+      "opacity": "1",
+      "x": 13,
+      "y": 13,
+      "width": 194,
+      "height": 194
+    }
+  }
+]

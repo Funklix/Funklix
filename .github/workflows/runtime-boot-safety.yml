@@ -446,6 +446,8 @@ jobs:
         run: npm run check:bw36.22b2
       - name: Check BW-36.22B3 Living Signals and contextual onboarding
         run: npm run check:bw36.22b3
+      - name: Check BW-36.22B4 Living Workspace motion and visual states
+        run: node scripts/check-bw36-22b4-motion-polish.js
       - name: Check BW-36.22B2R1 canonical conflict reload recovery
         run: npm run check:bw36.22b2r1
       - name: Check BW-36.21A-R2.1 safe Workspace switching (Chromium)
