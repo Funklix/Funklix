@@ -17,12 +17,24 @@ async function imageSnapshot(p) {
       x: r.x - e.parentElement.getBoundingClientRect().x, y: r.y - e.parentElement.getBoundingClientRect().y, width: r.width, height: r.height };
   })).jsonValue();
 }
+async function decorativeAnimations(p) {
+  // Home can redraw while the browser is registering CSS/pseudo-element motion.
+  // Re-resolve the connected decoration each frame; never retain a replaced node.
+  return (await p.waitForFunction(() => {
+    const art = document.querySelector('.home-avatar-art');
+    if (!art?.isConnected) return null;
+    const animations = art.getAnimations({ subtree: true });
+    const names = animations.filter(a => a.playState === 'running' && !a.pending).map(a => a.animationName);
+    return names.includes('home-b4-orbit') && names.includes('home-b4-glow') ? names : null;
+  }, null, { polling: 'raf', timeout: 15000 })).jsonValue();
+}
 (async () => {
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || '/usr/bin/chromium', args: ['--no-sandbox'] });
   try {
     const fixture = require('./fixtures/home-browser')(browser);
     for (const width of [1440, 1280, 375, 320]) for (const theme of ['light', 'dark']) {
       const f = await fixture(), p = f.page;
+      await p.emulateMedia({ reducedMotion: 'no-preference', forcedColors: 'none' });
       if (baseline) {
         for (const file of ['home-foundation.css', 'home-foundation.js']) await p.route('**/' + file, r => r.fulfill({
           contentType: file.endsWith('css') ? 'text/css' : 'application/javascript',
@@ -43,6 +55,12 @@ async function imageSnapshot(p) {
       await p.waitForTimeout(400);
       let image = await imageSnapshot(p);
       assert.deepEqual([image.src,image.w,image.h,image.fit,image.transform,image.animation,image.filter,image.opacity], ['/fixture-avatar.png',360,240,'contain','none','none','none','1']);
+      if (!baseline) {
+        // Check live motion before screenshots temporarily cancel/restart infinite
+        // animations. Keep the required orbit/glow assertion on every viewport.
+        const animations = await decorativeAnimations(p);
+        assert(animations.includes('home-b4-orbit') && animations.includes('home-b4-glow'));
+      }
       const prefix = `${baseline?'before':'after'}-${width}-${theme}`;
       await p.screenshot({path:path.join(out,prefix+'.png'),animations:'disabled'});
       for (let attempt=0; ; attempt++) {
@@ -58,8 +76,6 @@ async function imageSnapshot(p) {
         const initialRequests=f.requests.length;
         const initialText=await p.locator('#home-avatar-message').textContent();
         assert.equal(await p.locator('#home-avatar-message').getAttribute('data-manual-change'), null);
-        const animations=await p.locator('.home-avatar-art').evaluate(e => e.getAnimations({subtree:true}).map(a=>a.animationName));
-        assert(animations.includes('home-b4-orbit') && animations.includes('home-b4-glow'));
         await p.waitForTimeout(260);
         assert.equal(await p.locator('#home-avatar-message').textContent(),initialText, 'No automatic message change');
         assert.deepEqual(await imageSnapshot(p),image, 'Decorative motion cannot move or transform image');
