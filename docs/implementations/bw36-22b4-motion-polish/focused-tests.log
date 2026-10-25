@@ -1,0 +1,172 @@
+### b1-final.log
+
+> check:bw36.22b1
+> node scripts/check-bw36-22b1-living-workspace.js
+
+PASS continuation: matching current, selected ordering, foreign-current fallback, viewer and unauthorized/unknown dates
+PASS first-screen hierarchy, one H1, full detailed Home and all legacy static IDs preserved
+PASS Workspace/Brand orientation, generic greeting, saved identity and timestamp with no recency/progress invention
+PASS confirmed missing Avatar stays honest and static; contextual bubble stays truthful across runtime changes
+PASS selected Brand/current Board mismatch chooses connected continuation without relabeling Brain or mutating Canvas
+PASS explicit foreign-current fallback, hidden association and unassigned scope remain distinguishable
+PASS Brain stage and emoji shortcut use existing keyboard destination, preserve draft and never infer
+PASS Insights shortcut uses current Board destination with no inference or Canvas mutation
+PASS Learnings shortcut opens existing selected-Brand Profile section
+PASS responsibilities shortcut opens existing manager and restores origin after redraw
+PASS viewer and unavailable Learning access give honest keyboard-discoverable alternatives and block activation
+PASS no Workspace/no Brands/no Boards, loading/error/logout/account replacement and Workspace switching retire identities
+PASS forged/stale hero and quick actions reject changed Board generation, loading and lost access
+PASS repeated render introduces no additional reads, writes or Canvas changes after the selected canonical read
+PASS Chromium Light reference matrix, Dark/system readability, geometry, keyboard, reduced motion and fixed-control clearance
+15 BW-36.22B1 groups passed
+
+### b2.log
+PASS shared canonical reader deduplicates and enforces every scope boundary before/after JSON, access, revision and timeout
+PASS message priority, honest fallback, Brand/Board labels, invalid scopes and no invented metrics
+PASS saved approved original image, missing and unapproved states; Image failure/retry; keyboard Profile Avatar entry and real save refresh
+PASS canonical failure is not absence; optional loading does not block Home, Board or Brain; stale selected-Brand response is discarded
+PASS accepted selected-Brand image stays independent of the open Board Brand and catalog logos
+PASS account, Workspace, catalog and revoked Brand retire pending identity; Board access never grants Brand access
+PASS manual eligible messages, stable selection, EN/DE, keyboard and screen reader naming; no automatic inference or timed rotation
+PASS Light desktop/mobile original asset fidelity, Dark baseline, no motion and contextual Brain eligibility
+8 B2 acceptance groups passed
+
+### bw36.22b1r1.log
+
+> check:bw36.22b1r1
+> node scripts/check-bw36-22b1r1-current-continuation-name.js
+
+PASS pure candidate names, authorization, association, switching and immutable metadata
+PASS real rehydration, stale catalog, other labels, accessible names, identity and no reads/writes
+PASS Board generation, account and Workspace transitions retire names and captured actions
+PASS view-only hydrated card and accessible action label retain Board identity
+
+### bw36.22b2r1.log
+
+> check:bw36.22b2r1
+> node scripts/check-bw36-22b2r1-canonical-conflict-reload.js
+
+PASS initial authorized canonical GET; ordinary Home/Profile pending and settled deduplication
+PASS 409 conflict reload bypasses settled detail; repeated reload and accepted save bypass; draft revision retained
+PASS overlapping forced reloads supersede old headers/JSON even when transport ignores abort
+PASS accepted newer save retires an old Profile reload without overwriting its state
+PASS failed reload/retry and overlapping reload retain unsaved conflict draft
+PASS Brand, Workspace, account, catalog generation and access changes cannot apply stale reload success or failure
+PASS fresh reads still reject malformed identity, access and revision; unauthorized context does not GET
+PASS real 409, explicit conflict button, retained input, Cancel/Discard and deliberate reconciliation save; Home Avatar refresh
+PASS guided Profile 409 reload rebases untouched fields and retains local inputs before deliberate Save
+BW-36.22B2R1: 9 groups PASS; local intercepted transport only, no AI/provider calls or Canvas/Board writes.
+
+### bw36.22b3.log
+
+> check:bw36.22b3
+> node scripts/check-bw36-22b3-living-signals.js
+
+PASS eligible evidence is bounded, precisely scoped and immutable; exact responsibility ownership and duplicate rejection
+PASS canonical readiness selects one real section, complete/neutral never incomplete; permission and unknown failures
+PASS real signal destinations, selected Brand/Board mismatch, keyboard navigation, redraw and origin focus; no writes or added reads
+PASS canonical section deep links, complete readiness, read-only guidance, loading and denied/failed reads
+PASS Learning capability, invalid aggregates, loading/denial; responsibility and saved continuation fallbacks
+PASS Brand, Workspace, catalog and account switches retire pending onboarding and Learning results; detached/forged controls cannot navigate
+PASS Light/Dark, EN/DE, desktop/mobile and text enlargement: readable signals, accepted Avatar, keyboard focus and static composition
+7 B3 acceptance groups passed
+
+### bw36.21b1.log
+
+> check:bw36.21b1
+> node scripts/check-bw36-21b1-home-intelligence.js
+
+PASS aggregate projection: pagination, sparse zero, missing/malformed fields and exact Brand
+PASS real signed Learning route independently enforces identity and Brand roles; Board ownership gives no Learning access
+PASS selected Brand counts and current Board responsibilities remain separate, bounded and read-only composition
+PASS empty library, absent aggregate, malformed count and API error distinguish genuine zero
+PASS Brand viewer uses server capability and correct explicit Profile Learnings target; return refreshes without revision bump
+PASS Profile Learnings handoff preserves busy and dirty leave guards, Cancel and explicit Discard
+PASS pending Learning read rejects stale brand result
+PASS pending Learning read rejects stale workspace result
+PASS pending Learning read rejects stale logout result
+PASS pending Learning read rejects stale account result
+PASS Board-only access, hidden association and no selected Brand never read its Learnings
+PASS no Workspace and no Board preserve useful navigation
+PASS live unsaved, replacement/deletion, completion aliases, ambiguous identity and Board generation guard
+PASS viewer Board manager remains view-only; revocation removes nodes
+PASS lifecycle event and focus resume refresh independently of canonical revision; unrelated Brand event does not
+PASS EN/DE, Light/Dark/system, mobile, long names, reduced motion, native keyboard and screenshots
+PASS responsibility summary refuses stale/duplicate identity and matches only actual owner email
+BW-36.21B1 PASS 17 groups (all I/O mocked, zero production SQL or paid AI)
+
+### bw36.21b2.log
+
+> check:bw36.21b2
+> node scripts/check-bw36-21b2-home-insights-brain.js
+
+PASS fresh saved Board: real deterministic findings, identifiers, severities, provenance; render makes no writes or AI requests
+PASS Home refreshes missing/stale evidence; failures and pending work never imply all-clear
+PASS actual diagnostic exception and malformed snapshot are isolated from other Home modules
+PASS pending Board rehydration hides outgoing findings and does not accept the previous generation
+PASS live-unsaved snapshot and every relevant fingerprint edit automatically refreshes on Home
+PASS empty Canvas, no applicable nodes and valid snapshot without findings remain distinct
+PASS global trust and CTA diagnostics without eligible nodes are not presented as affected campaign items
+PASS Insights and AI Brain navigation use existing adapters, retain Canvas and focus; no automatic question or provider submission
+PASS existing finding-node adapter focuses its exact current target without Canvas mutation or reduced-motion pulse
+PASS stale click rejected before observer refresh: delete
+PASS stale click rejected before observer refresh: replace
+PASS stale click rejected before observer refresh: duplicate
+PASS stale click rejected before observer refresh: fingerprint
+PASS stale click rejected before observer refresh: board
+PASS stale click rejected before observer refresh: generation
+PASS stale click rejected before observer refresh: permission
+PASS stale click rejected before observer refresh: hydrating
+PASS stale click rejected before observer refresh: account
+PASS stale click rejected before observer refresh: logout
+PASS stale click rejected before observer refresh: workspace
+PASS stale click rejected before observer refresh: edit
+PASS selected Brand Y never substitutes for current Board X; authorized labels, B1 and mismatch notice preserved
+PASS hidden and absent Brand association stay neutral; Brain remains Board-edit scoped without independent knowledge fetch
+PASS Board viewer, revoked access, no saved Board, hydration and public token have no Brain action
+PASS root Home/no Workspace useful; direct route and reload rehydrate Board; account replacement/logout clear private findings
+PASS automatic Home work discards pending Board/account/Workspace/access/hydration/Canvas changes before calculation
+PERF 20,000 nodes {"initialMs":129,"engineMs":5.400000000023283,"fiveRendersMs":379.29999999998836}
+PASS large Canvas: deferred once, exact Insights parity, reused snapshot, bounded render cost, zero mutation/writes/providers
+PASS automatic calculation failure is unavailable and deduplicated; Canvas edit recovers; timeout fallback works
+PASS pending analyzing state is localized in EN/DE and Light/Dark
+PASS EN/DE, Light/Dark/system, desktop/tablet/mobile, long labels, native keyboard, focus stability and visual evidence
+BW-36.21B2 PASS 30 groups (real diagnostics, all transport mocked, zero provider calls/writes)
+
+### bw36.22a.log
+
+> check:bw36.22a
+> node scripts/check-bw36-22a-compact-home.js
+
+PASS DOM order, unique IDs, compact selectors and guarded header continuation
+PASS Brand preference, mismatch actions, Profile and all Brand exploration remain independent of Board association
+PASS fixed Learning, assigned-to-me, engine finding order; summaries reuse requests and current evidence
+PASS unknown, denied, malformed, zero and read-only Learning sources never become review recommendations
+PASS responsibility matching, completed and duplicate exclusions; diagnostic staleness removes summary
+PASS six authorized cards, reversible expansion, exact model grouping/order, partial metadata and current highlighting
+PASS fallback is existing first authorized Board; no Board/empty Canvas has no fabricated task; hidden association stays distinct
+PASS captured scope rejects forged/stale Next Moves and current evidence; navigation makes no writes
+PASS focus survives async redraw; selector labels and keyboard reading order
+PASS mobile scroll clip is immediate and every Home action remains reachable across repeated shell changes
+PASS Chromium visual matrix, full labels, theme/system, fixed overlay/focus geometry and continuation
+11 BW-36.22A groups passed
+
+### before-final.log
+PASS before-1440-light original image, responsive layout
+PASS before-1440-dark original image, responsive layout
+PASS before-1280-light original image, responsive layout
+PASS before-1280-dark original image, responsive layout
+PASS before-375-light original image, responsive layout
+PASS before-375-dark original image, responsive layout
+PASS before-320-light original image, responsive layout
+PASS before-320-dark original image, responsive layout
+
+### after-final.log
+PASS after-1440-light original image, responsive layout / manual-only speech / states / reduced motion / zero requests
+PASS after-1440-dark original image, responsive layout / manual-only speech / states / reduced motion / zero requests
+PASS after-1280-light original image, responsive layout / manual-only speech / states / reduced motion / zero requests
+PASS after-1280-dark original image, responsive layout / manual-only speech / states / reduced motion / zero requests
+PASS after-375-light original image, responsive layout / manual-only speech / states / reduced motion / zero requests
+PASS after-375-dark original image, responsive layout / manual-only speech / states / reduced motion / zero requests
+PASS after-320-light original image, responsive layout / manual-only speech / states / reduced motion / zero requests
+PASS after-320-dark original image, responsive layout / manual-only speech / states / reduced motion / zero requests
