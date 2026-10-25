@@ -15,3 +15,7 @@ This folder tracks high-level product direction. Dates are intentionally omitted
 - Simulation
 - Onboarding
 - Collaboration
+
+## Audit References
+
+- [BW-37 — AI Brain 2.0 Strategic Advisor Audit](../audits/bw37-ai-brain-2-strategic-advisor-audit.md) — verified baseline and proposed BW-37.1A MVP; BW-37.1B/C/D remain deferred recommendations, not implementation commitments.

@@ -27,3 +27,7 @@ Use this workflow for future Codex and human-led work:
 - Major features require an audit before implementation.
 - Architectural decisions should be documented as ADRs.
 - Constitution documents are stable references and should only change intentionally.
+
+## Product Audits
+
+- [BW-37 — AI Brain 2.0 Strategic Advisor Audit](./audits/bw37-ai-brain-2-strategic-advisor-audit.md) — approved audit reference with verified implementation findings, proposed BW-37.1A MVP, deferred recommendations and the complete implementation prompt.
