@@ -6455,7 +6455,8 @@ function aiBrainHasReusableContent(turn) {
   if (field("audience|zielgruppe") && field("message|botschaft|kernbotschaft") && field("purpose|ziel|zweck")) return true;
   // Draft copy needs a labelled substantial body and an explicit audience action.
   const copy = section.match(/^(?:caption|copy|post text|post-text|beitragstext|text|headline|headline claim|überschrift):\s*([\s\S]+)/im)?.[1] || "";
-  return copy.length >= 80 && /^(?:cta|call to action|handlungsaufforderung):\s*\S.{5,}/im.test(copy);
+  const body = copy.split(/^(?:cta|call to action|handlungsaufforderung):/im)[0].trim();
+  return body.length >= 80 && /^(?:cta|call to action|handlungsaufforderung):\s*\S.{5,}/im.test(copy);
 }
 function canUseAiBrainProposal() { return !!state.user?.email && !!state.currentBoardId && state.boardAccess?.canEdit === true && !state.publicBoardToken; }
 function setTurnProposal(turnId, updater) {
