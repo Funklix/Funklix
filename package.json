@@ -5,6 +5,7 @@
     "pg": "^8.13.1"
   },
   "scripts": {
+    "check:bw37.1br1": "node scripts/check-bw37-1b-r1-conversational-advisor.js",
     "check:bw37.1ar1": "node scripts/check-bw37-1a-r1-workspace.js",
     "check:bw37.1b": "node scripts/check-bw37-1b-strategic-answer-quality.js",
     "check:bw37.1a": "node scripts/check-bw37-1a-strategic-advisor.js",
