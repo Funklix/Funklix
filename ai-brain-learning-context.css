@@ -4,3 +4,18 @@
 .ai-brain-learning-context p { margin-block: 8px; }
 .ai-brain-learning-context ul { padding-inline-start: 20px; }
 .ai-brain-learning-context li + li { margin-top: 8px; }
+
+/* BW-37.1A: optional focus stays subordinate to the freeform composer. */
+.ai-brain-composer > .ai-brain-focus { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: 6px 12px; }
+.ai-brain-focus label { align-self: center; }
+.ai-brain-focus small { grid-column: 1 / -1; overflow-wrap: anywhere; }
+.ai-brain-focus select { width: 100%; min-width: 0; min-height: 44px; padding: 8px; border: 1px solid var(--fk-color-border-control, #d7dbeb); border-radius: 9px; background: var(--fk-color-surface-input, #fff); color: var(--fk-color-text-primary, #3a4165); font: inherit; }
+.ai-brain-focus select:focus-visible { outline: 2px solid #806df5; outline-offset: 2px; }
+.ai-brain-composer button { min-height: 44px; }
+.ai-brain-composer textarea { min-width: 0; width: 100%; box-sizing: border-box; }
+.ai-brain-empty-canvas { margin: 0; color: var(--fk-color-text-muted, #737b99); font-size: .8rem; overflow-wrap: anywhere; }
+@media (max-width: 600px) {
+  .ai-brain-composer > .ai-brain-focus { grid-template-columns: minmax(0, 1fr); }
+  .ai-brain-composer > div:not(.ai-brain-focus) { flex-direction: column; align-items: stretch; }
+  .ai-brain-focus select { font-size: .85rem; }
+}
