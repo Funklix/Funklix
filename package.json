@@ -5,6 +5,7 @@
     "pg": "^8.13.1"
   },
   "scripts": {
+    "check:bw37.1a": "node scripts/check-bw37-1a-strategic-advisor.js",
     "check:bw36.22b2r1": "node scripts/check-bw36-22b2r1-canonical-conflict-reload.js",
     "check:bw36.21ar2.3": "node scripts/check-bw36-21a-r2-3-brand-board-context.js",
     "check:bw36.21ar2.2": "node scripts/check-bw36-21a-r2-2-multiple-workspaces.js && node scripts/check-bw36-21a-r2-2-brand-navigation.js",
