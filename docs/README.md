@@ -30,4 +30,5 @@ Use this workflow for future Codex and human-led work:
 
 ## Product Audits
 
+- [BW-37.1B — Strategic Answer Quality & Context Intelligence Audit](./audits/bw37-1b-strategic-answer-quality-audit.md) — verified context provenance, evidence and formatting limitations, proposed minimal package, evaluation matrix and copyable implementation prompt; documentation only.
 - [BW-37 — AI Brain 2.0 Strategic Advisor Audit](./audits/bw37-ai-brain-2-strategic-advisor-audit.md) — approved audit reference with verified implementation findings, proposed BW-37.1A MVP, deferred recommendations and the complete implementation prompt.
