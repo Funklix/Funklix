@@ -6384,7 +6384,7 @@ function renderAiBrainLearningContext(advisor, turn) {
   advisor.appendChild(details);
 }
 function aiBrainRequestContextIdentity() {
-  return `${aiBrainIdentity()}|${state.boardAccess?.canEdit === true}|${state.selectedPrimary || ""}|${JSON.stringify(state.nodes.map((node) => [node.id, node.type, node.title, node.content, node.status, node.audience, node.channel, node.funnelStage, node.tone, node.social, node.landingPage]))}|${JSON.stringify(state.edges)}`;
+  return `${aiBrainIdentity()}|${state.boardAccess?.canEdit === true}|${state.selectedPrimary || ""}|${JSON.stringify(aiBrainCanvasProjection())}`;
 }
 function aiBrainCanvasProjection() {
   const string = (value, max) => typeof value === "string" ? value.slice(0, max) : "";
@@ -6499,13 +6499,16 @@ function renderAiBrainFormattedAnswer(container, answer) {
       const element = document.createElement(`h${Math.min(heading[1].length + 2, 6)}`); appendAiBrainInline(element, heading[2]); container.appendChild(element); index += 1; continue;
     }
     const unordered = lines[index].match(/^ {0,3}[-*+]\s+(.+)$/);
-    const ordered = lines[index].match(/^ {0,3}\d{1,3}\.\s+(.+)$/);
+    const ordered = lines[index].match(/^ {0,3}(\d{1,3})\.\s+(.+)$/);
     if (unordered || ordered) {
       const list = document.createElement(unordered ? "ul" : "ol");
-      const pattern = unordered ? /^ {0,3}[-*+]\s+(.+)$/ : /^ {0,3}\d{1,3}\.\s+(.+)$/;
+      if (ordered) list.start = Number(ordered[1]); // bounded decimal 0–999 from the fixed pattern
+      const pattern = unordered ? /^ {0,3}[-*+]\s+(.+)$/ : /^ {0,3}(\d{1,3})\.\s+(.+)$/;
       while (index < lines.length) {
         const itemMatch = lines[index].match(pattern); if (!itemMatch) break;
-        const item = document.createElement("li"); appendAiBrainInline(item, itemMatch[1]); list.appendChild(item); index += 1;
+        const item = document.createElement("li");
+        if (ordered) item.value = Number(itemMatch[1]);
+        appendAiBrainInline(item, itemMatch[ordered ? 2 : 1]); list.appendChild(item); index += 1;
       }
       container.appendChild(list); continue;
     }

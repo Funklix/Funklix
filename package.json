@@ -6,6 +6,7 @@
   },
   "scripts": {
     "check:bw37.1ar1": "node scripts/check-bw37-1a-r1-workspace.js",
+    "check:bw37.1b": "node scripts/check-bw37-1b-strategic-answer-quality.js",
     "check:bw37.1a": "node scripts/check-bw37-1a-strategic-advisor.js",
     "check:bw36.22b2r1": "node scripts/check-bw36-22b2r1-canonical-conflict-reload.js",
     "check:bw36.21ar2.3": "node scripts/check-bw36-21a-r2-3-brand-board-context.js",
