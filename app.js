@@ -6424,7 +6424,7 @@ function completeAiBrainBrandSources() {
     if ((!source.workspaceId || source.workspaceId === workspace?.id)
       && workspace?.boards.some(b => b.id === state.currentBoardId && b.brand_id === source.brandId)) {
       source.workspaceId = workspace.id;
-      if (source.campaignScope?.workspaceRevision === undefined && source.campaignScope?.brandRevision === undefined) {
+      if (source.campaignScope && source.campaignScope.workspaceRevision === undefined && source.campaignScope.brandRevision === undefined) {
         source.campaignScope.workspaceRevision = workspace.revision;
         source.campaignScope.brandRevision = workspace.brands.find(b => b.id === source.brandId)?.revision;
       }
@@ -6611,6 +6611,7 @@ function aiBrainCampaignBrief(turn) {
 }
 function aiBrainCampaignSourceCurrent(turn, checkCanvas = true) {
   const source = turn?.brandProposalSource, catalog = state.workspaceCatalog;
+  if (!catalog) return false;
   const workspace = catalog.value?.workspaces.find(w => w.id === source?.workspaceId);
   const brand = workspace?.brands.find(b => b.id === source?.brandId);
   return !!source?.campaignScope && !turn.campaignCreated && !turn.campaignInvalid && turn.status === 'success' && turn.referenceResolution !== 'clarification'
