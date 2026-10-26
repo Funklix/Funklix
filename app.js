@@ -12242,7 +12242,10 @@ function showCampaignCreationFeedback(code) {
 function openStableCampaignCreation({briefing = {}, turn = null} = {}) {
   if (campaignCreationController?.dialog.isConnected) { campaignCreationController.dialog.focus(); return; }
   let context;
-  try { context = resolveCampaignCreationContext(); } catch (error) { showCampaignCreationFeedback(error.code); return; }
+  try {
+    if (turn && !aiBrainCampaignSourceCurrent(turn)) throw window.FunklixCampaignCreation.error('CONFLICT');
+    context = resolveCampaignCreationContext();
+  } catch (error) { showCampaignCreationFeedback(error.code); return; }
   document.getElementById('campaign-creation-feedback')?.remove();
   let saved = false;
   const assertSource = () => { if (turn && !saved && !aiBrainCampaignSourceCurrent(turn, false)) throw window.FunklixCampaignCreation.error('CONFLICT'); };
@@ -12275,11 +12278,24 @@ function openStableCampaignCreation({briefing = {}, turn = null} = {}) {
       const requestId = crypto.randomUUID();
       let command = null;
       startCampaignV3Creation(controller.dialog, { ...setup, campaignLanguage: state.campaignLanguage }, {
-        assertCurrent: () => { boundary.assertCurrent(); assertSource(); },
+        assertCurrent: () => {
+          try { boundary.assertCurrent(); assertSource(); }
+          catch (error) {
+            if (turn && !command && !saved && error.code === 'CONFLICT') error.campaignPreCommitRejected = true;
+            throw error;
+          }
+        },
         beforeGenerate: turn ? () => revalidateAiBrainCampaignSource(turn, false) : null,
         rollback: () => { boundary.assertCurrent(); applyCampaignState(originalCanvas, uiText('Saved'), { memoryOnly: true }); state.isDirty = false; },
         persist: async result => {
-          if (turn && !saved) await revalidateAiBrainCampaignSource(turn, false, !command);
+          if (turn && !saved) {
+            try { await revalidateAiBrainCampaignSource(turn, false, !command); }
+            catch (error) {
+              // No save has been dispatched: a known source rejection is safe to roll back.
+              if (!command && error.code === 'CONFLICT') error.campaignPreCommitRejected = true;
+              throw error;
+            }
+          }
           if (!command) command = window.FunklixCampaignCreation.request({
             contract: window.FunklixCampaignCreation.CONTRACT, request_id: requestId,
             board_id: context.board.id, workspace_id: context.workspace.id, brand_id: context.brand.id,
@@ -12302,7 +12318,10 @@ function openStableCampaignCreation({briefing = {}, turn = null} = {}) {
     },
     onClose: () => {
       campaignCreationController = null;
-      if (turn && !saved && aiBrainCampaignSourceCurrent(turn, false)) {
+      const source = turn?.brandProposalSource;
+      if (source && !saved && source.account === state.user && source.email === state.user?.email
+        && source.identity === aiBrainIdentity() && source.workspaceId === state.workspaceCatalog.activeWorkspaceId
+        && source.brandId === state.boardBrandAssociation.brandId) {
         if (state.activeView !== 'ai_brain') setActiveView('ai_brain');
         el.aiBrainSummary.querySelector(`[data-ai-brain-campaign="${turn.id}"]`)?.focus({preventScroll:true});
       }
@@ -14857,6 +14876,14 @@ async function startCampaignV3Creation(overlay, setup, options) {
       await waitForCampaignV3ModalStep(360);
       renderCampaignV3ReadyState(overlay, result, options.onReveal);
     } catch (error) {
+      if (error.campaignPreCommitRejected) {
+        try { options.rollback(); result = null; }
+        catch (rollbackError) {
+          // A retired Board cannot receive rollback; its new identity is untouched.
+          if (rollbackError.code === 'CONFLICT') result = null;
+          else error = rollbackError;
+        }
+      }
       const confirmed = options.confirmed();
       const blocked = ['CONFLICT','STALE_REVISION','PERMISSION_DENIED','AUTHENTICATION_REQUIRED','BOARD_MISSING','BRAND_MISSING'].includes(error.code);
       const message = confirmed ? uiText('Your campaign is saved. Try opening it again.')

@@ -27,12 +27,12 @@ async function browsers() {
   const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH||'/usr/bin/chromium',args:['--no-sandbox']});
   try {
     const f=await require('./fixtures/home-browser')(browser)({empty:true}),p=f.page;
-    let adviceAnswer=answer,adviceCalls=0,generationCalls=0,saveCalls=0,failGeneration=false,holdCatalog=null,loseSaveResponse=false;
+    let adviceAnswer=answer,adviceCalls=0,generationCalls=0,saveCalls=0,failGeneration=false,holdCatalog=null,loseSaveResponse=false,changeOnGenerate=false;
     const campaign=campaignFixture();campaign.db.boards=clone(f.r.db.boards);
     await p.route('**/api/ai-brain/advice', async route=>{adviceCalls++;const body=route.request().postDataJSON();await route.fulfill({json:{answer:adviceAnswer,assumptions:[],disclaimer:'Fictional proposal',context:{response_language:body.response_language,reference_resolution:'none',canonicalBrandCore:true}}});});
     await p.route('**/api/workspaces',async route=>{if(holdCatalog){const hold=holdCatalog;holdCatalog=null;hold.started();await hold.wait;}await route.fulfill({json:f.c});});
     await p.route(/\/api\/boards\?scope=brand&brand_id=/,route=>route.fulfill({json:{boards:f.r.db.boards.map(b=>({...b,access_role:'owner'}))}}));
-    await p.route('**/api/generate-campaign',async route=>{generationCalls++;if(failGeneration)return route.fulfill({status:503,json:{error:'Mock failure'}});await route.fulfill({json:{nodes:v3.createCampaignV3MockNodes(route.request().postDataJSON(),'grouped')}});});
+    await p.route('**/api/generate-campaign',async route=>{generationCalls++;if(changeOnGenerate){changeOnGenerate=false;f.c.workspaces[0].revision++;}if(failGeneration)return route.fulfill({status:503,json:{error:'Mock failure'}});await route.fulfill({json:{nodes:v3.createCampaignV3MockNodes(route.request().postDataJSON(),'grouped')}});});
     await p.route('**/api/refine-node',async route=>{const n=route.request().postDataJSON().currentContent;await route.fulfill({json:{title:n.title,content:n.content||'A specific campaign story with a clear creative invitation.',caption:n.caption||''}});});
     await p.route('**/api/campaigns',async route=>{saveCalls++;const out=await campaign.call(route.request().postDataJSON());await route.fulfill({status:out.statusCode,json:loseSaveResponse&&out.statusCode<300?{}:out.body});});
     const baseline=clone(f.c),dialog=p.locator('#campaign-creation-dialog'),cta=p.locator('[data-ai-brain-campaign]');
@@ -97,12 +97,21 @@ async function browsers() {
     // A remote revocation between editing and explicit Generate rejects before the provider.
     await boot();await ask();await cta.click();await dialog.waitFor();await dialog.getByRole('button',{name:'Continue',exact:true}).click();f.c.workspaces[0].boards[0].role='viewer';await dialog.getByRole('button',{name:'Generate Campaign',exact:true}).click();await p.locator('#campaign-creation-feedback').waitFor();assert.equal(generationCalls,0);
     console.log('PASS actual Advice success/render/CTA, editable Creator initialization, EN/DE/themes/mobile/keyboard/focus/caret/scroll, zero-write/call cancel, source/local/remote races and independent roles');
+    // Automated review P2: a known source rejection before the first save must
+    // roll back provisional nodes and permit Close, preserving the conversation.
+    await boot();await ask();await p.locator('#ai-brain-question').fill('A draft retained after rejection');
+    await cta.click();await dialog.waitFor();await dialog.getByRole('button',{name:'Continue',exact:true}).click();
+    await dialog.locator('#campaign-v3-variations').fill('1');await dialog.locator('#campaign-v3-posts').fill('1');
+    changeOnGenerate=true;await dialog.getByRole('button',{name:'Generate Campaign',exact:true}).click();await dialog.locator('#campaign-v3-error-close').waitFor();
+    assert(await dialog.locator('#campaign-v3-error-close').isEnabled());assert.equal(saveCalls,0);assert.equal(await p.evaluate(()=>state.nodes.length),0);
+    await dialog.locator('#campaign-v3-error-close').click();assert.equal(await dialog.count(),0);assert.equal(await p.evaluate(()=>state.activeView),'ai_brain');assert.equal(await p.locator('#ai-brain-question').inputValue(),'A draft retained after rejection');assert.equal(await cta.count(),0);
+    const generationStart=generationCalls;
     // Execute the unchanged production V3 workflow and real signed transactional owner.
     await boot();await ask();await cta.click();await dialog.waitFor();await dialog.getByRole('button',{name:'Continue',exact:true}).click();
     await dialog.locator('#campaign-v3-variations').fill('1');await dialog.locator('#campaign-v3-posts').fill('1');
     failGeneration=true;await dialog.getByRole('button',{name:'Generate Campaign',exact:true}).click();await dialog.locator('#campaign-v3-error-retry').waitFor();assert.equal(saveCalls,0);assert.equal(await p.evaluate(()=>state.nodes.length),0);
-    failGeneration=false;campaign.options.saveFail=true;await dialog.locator('#campaign-v3-error-retry').click();await dialog.getByText('Campaign generated, but not saved yet.',{exact:true}).waitFor();assert.equal(generationCalls,2);assert.equal(campaign.writes(),0);
-    campaign.options.saveFail=false;await dialog.locator('#campaign-v3-error-retry').click();await dialog.locator('#campaign-v3-reveal').waitFor();assert.equal(generationCalls,2);assert.equal(saveCalls,2);assert.equal(campaign.writes(),1);
+    failGeneration=false;campaign.options.saveFail=true;await dialog.locator('#campaign-v3-error-retry').click();await dialog.getByText('Campaign generated, but not saved yet.',{exact:true}).waitFor();assert.equal(generationCalls,generationStart+2);assert.equal(campaign.writes(),0);
+    campaign.options.saveFail=false;await dialog.locator('#campaign-v3-error-retry').click();await dialog.locator('#campaign-v3-reveal').waitFor();assert.equal(generationCalls,generationStart+2);assert.equal(saveCalls,2);assert.equal(campaign.writes(),1);
     await dialog.locator('#campaign-v3-reveal').click();assert.equal(await dialog.count(),0);await p.evaluate(()=>{setActiveView('ai_brain');renderAiBrain();});assert.equal(await cta.count(),0);assert.equal(await p.evaluate(()=>state.aiBrain.messages[0].campaignCreated),true);
     assert.equal(await p.evaluate(()=>state.aiBrain.messages.length),1);assert.equal(campaign.db.boards.length,1);assert.equal(campaign.db.brands[0].brand_core.brandCore,'Original positioning');
     // A committed response lost before confirmation must replay Save without requiring

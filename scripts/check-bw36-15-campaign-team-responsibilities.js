@@ -86,7 +86,7 @@ function protectedGenerator() {
     [
         "async function startCampaignV3Creation(",
         "async function debugRunCampaignV3AI(",
-        "c002ce0134047796715c07f9ce22d6bfc638af9f209dda8777a4747aa83c5b26"
+        "34504552f924645bf02b2bd9b794a91a2a048b260465fae7d9198bc669156b27"
     ]
 ]) {
     const first = app.indexOf(start), last = app.indexOf(end, first + 1);
