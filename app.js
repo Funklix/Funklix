@@ -6518,7 +6518,7 @@ function aiBrainValueProposition(turn) {
     if (value.at(-1) !== quotes[value[0]]) return null;
     value = value.slice(1, -1);
   }
-  if (/(?:brand dna|brand core|founder story|mission|vision|tagline|option(?:\s+[a-z]+)?|alternative(?:\s+[a-z]+)?)\s*:|["“”„«»*`?]|\b(?:maybe|might|could|perhaps|vielleicht|könnte|eventuell)\b|^(?:[-#>]|\d+[.)])/i.test(value)) return null;
+  if (/(?:rationale|begründung|assumption|annahme|reasons for strength|gründe für die stärke|brand dna|brand core|founder story|mission|vision|tagline|option(?:\s+[a-z]+)?|alternative(?:\s+[a-z]+)?)\s*:|["“”„«»*`?]|\b(?:maybe|might|could|perhaps|vielleicht|könnte|eventuell)\b|^(?:[-#>]|\d+[.)])/i.test(value)) return null;
   if (!value.trim() || value.length > 2000 || /[\u0000-\u001f\u007f]|(?:value proposition|nutzenversprechen)\s*:|https?:\/\/|\d|guarantee|garantier|proven|bewiesen/i.test(value)) return null;
   return { path: '/brand_core/valueProposition', value, excerpt: text };
 }

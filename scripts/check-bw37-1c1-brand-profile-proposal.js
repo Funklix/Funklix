@@ -58,6 +58,12 @@ function eligibility() {
     '**Proposed Brand Value Proposition:**\n\n' + appicsValue + '\nA second paragraph.',
     'Proposed Brand Value Proposition: A clear choice.\n\nRationale: Suggested Brand Value Proposition: A different choice.'
   ]) assert.equal(select(text), null, text);
+  // An explanation cannot stand in for missing proposed wording (Codex P2).
+  for (const explanation of ['Rationale: Clearer audience benefit.', 'Begründung: Klarer Nutzen.', 'Assumption: Audience priorities stay the same.', 'Annahme: Die Zielgruppe bleibt gleich.', 'Reasons for Strength:', 'Gründe für die Stärke:']) {
+    for (const label of ['Proposed Value Proposition:', '**Proposed Brand Value Proposition:**', 'Vorgeschlagenes Nutzenversprechen:']) {
+      for (const gap of [' ', '\n', '\n\n']) assert.equal(select(label + gap + explanation),null,'Missing value before '+explanation);
+    }
+  }
   assert.equal(select(appicsAnswer, 'Discuss our audience and brand strategy'), null);
   for (const adviceMode of ['general','review_strategy','explore_ideas','find_gaps','evaluate_options']) {
     for (const text of [answer, german]) assert(c.aiBrainValueProposition({status:'success',question,answer:text,adviceMode}));
