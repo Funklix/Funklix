@@ -437,6 +437,8 @@ jobs:
         run: npm run check:bw37.1ar1
       - name: Check BW-37.1B-R1 conversational advisor (disposable SQL, mocked provider, Chromium)
         run: npm run check:bw37.1br1
+      - name: Check BW-37.1C-1 Brand Profile draft proposal (owner controllers, mocked provider, Chromium)
+        run: npm run check:bw37.1c1
       - name: Check BW-37.1B Strategic Answer Quality (disposable SQL, mocked provider)
         run: npm run check:bw37.1b
       - name: Check BW-37.1A Strategic Advisor (mocked provider)

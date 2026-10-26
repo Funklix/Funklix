@@ -3326,6 +3326,15 @@ function reconcileConfirmedBrand(confirmed) {
       logo_url: previous.logo_url, logo_revision: previous.logo_revision,
       logo_source: previous.logo_source, logo_updated_at: previous.logo_updated_at };
   }
+  // reload() also reconciles read-only canonical data. An unchanged reload must
+  // not revoke the source of a dirty staged draft; changed truth still does.
+  const beforeCore = previous?.brand_core || {}, afterCore = confirmed.brand_core;
+  if (previous?.id !== confirmed.id || previous.revision !== confirmed.revision
+    || Object.hasOwn(beforeCore, 'valueProposition') !== Object.hasOwn(afterCore, 'valueProposition')
+    || !window.BrandWriteContract.equal(beforeCore.valueProposition, afterCore.valueProposition)
+    || confirmed.access?.canEditCanonicalBrand !== true) {
+    state.aiBrain.messages.forEach(turn => { if (turn.brandProposalSource?.brandId === confirmed.id) turn.brandProposalInvalid = true; });
+  }
   canonicalBrandDetail.brand = confirmed;
   sidebarProfileCache.set(confirmed.id, confirmed.brand_core);
   const catalog = state.workspaceCatalog.value;
@@ -3698,6 +3707,7 @@ function closeCanonicalBrandDetail({ restoreFocus = true, navigate = true, resum
   canonicalBrandDetail = { status: "closed", requestId: previous.requestId + 1, saveId: previous.saveId + 1, brandId: "", userEmail: "", brand: null, draft: null, controller: null, saveController: null, returnFocus: null };
   if (el.brandWorkspaceDetail?.open) el.brandWorkspaceDetail.close();
   const page = brandProfilePage; brandProfilePage = null;
+  el.brandWorkspaceDetail?.querySelector('[data-ai-brand-return]')?.remove();
   el.brandWorkspaceDetail?.classList.remove('profile-page-mode');
   if (el.brandWorkspaceDetail) document.body.append(el.brandWorkspaceDetail);
   if (page && navigate && state.activeView === 'brand-profile') setActiveView(page.returnView);
@@ -3824,7 +3834,8 @@ function openRegularBrandProfile(target = null, returnFocus = null) {
   el.brandWorkspaceDetailTitle?.focus();
   if (entry.kind === 'brand') {
     state.workspaceCatalog.activeWorkspaceId = entry.workspace.id;
-    void loadCanonicalBrandDetail();
+    if (target?.brainProposal === true) return loadCanonicalBrandDetail({ force: true });
+    return loadCanonicalBrandDetail();
   } else {
     canonicalBrandDetail.status = entry.kind; renderCanonicalBrandDetail();
   }
@@ -6386,6 +6397,11 @@ function renderAiBrainLearningContext(advisor, turn) {
 function aiBrainRequestContextIdentity() {
   return `${aiBrainIdentity()}|${state.boardAccess?.canEdit === true}|${state.selectedPrimary || ""}|${JSON.stringify(aiBrainCanvasProjection())}`;
 }
+function captureAiBrainBrandSource() {
+  return { account: state.user, email: state.user?.email, identity: aiBrainIdentity(), context: aiBrainRequestContextIdentity(),
+    workspaceId: state.workspaceCatalog?.activeWorkspaceId, generation: state.workspaceCatalog?.generation,
+    brandId: state.boardBrandAssociation?.brandId };
+}
 function aiBrainCanvasProjection() {
   const string = (value, max) => typeof value === "string" ? value.slice(0, max) : "";
   const nested = (value, keys) => !value || typeof value !== "object" || Array.isArray(value) ? undefined : Object.fromEntries(keys.flatMap((key) => {
@@ -6419,6 +6435,7 @@ function aiBrainConversationHistory(excludedTurnId = null) {
   return { exchanges: history, truncated };
 }
 function invalidateAiBrainRequest() {
+  document.getElementById('ai-brand-proposal-dialog')?.remove();
   state.aiBrain.controller?.abort();
   state.aiBrain.messages.forEach((turn) => turn.proposal?.controller?.abort?.());
   state.aiBrain = { adviceMode: "general", status: "idle", messages: [], requestId: state.aiBrain.requestId + 1, controller: null, identity: aiBrainIdentity(), error: "", appliedProposalIds: new Set() };
@@ -6457,6 +6474,195 @@ function aiBrainHasReusableContent(turn) {
   const copy = section.match(/^(?:caption|copy|post text|post-text|beitragstext|text|headline|headline claim|überschrift):\s*([\s\S]+)/im)?.[1] || "";
   const body = copy.split(/^(?:cta|call to action|handlungsaufforderung):/im)[0].trim();
   return body.length >= 80 && /^(?:cta|call to action|handlungsaufforderung):\s*\S.{5,}/im.test(copy);
+}
+// A deliberately small supported format. Labels are an affordance, never proof
+// of truth or permission. No whole-answer copying or inference-based extraction.
+function aiBrainValueProposition(turn) {
+  if (turn?.status !== 'success' || turn.referenceResolution === 'clarification'
+    || typeof turn.answer !== 'string' || turn.answer.length > 12000 || typeof turn.question !== 'string'
+    || !/(?:value proposition|nutzenversprechen)/i.test(turn.question)
+    || !/(?:brand|profile|marke|profil)/i.test(turn.question)
+    || /(?:campaign|kampagne)/i.test(turn.question) && !/(?:brand profile|markenprofil|brand-profil)/i.test(turn.question)
+    || !/(?:suggest|propos|replac|rewrit|formulat|vorschlag|vorschlagen|ersetzen|formuliere)/i.test(turn.question)) return null;
+  const text = turn.answer.replace(/\r\n?/g, '\n');
+  const match = text.match(/^(?:\*\*)?(?:Proposed (?:replacement )?Value Proposition|Suggested Value Proposition|Vorgeschlagenes (?:neues )?Nutzenversprechen)(?:\*\*)?:[ \t]*(?:\*\*)?([^\n]+)(?:\n\n(?:Rationale|Begründung|Assumption|Annahme):[^\n]+)?\s*$/i);
+  if (!match) return null;
+  const value = match[1].replace(/\*\*$/, '').trim();
+  if (!value || value.length > 2000 || /[\u0000-\u001f\u007f]|(?:value proposition|nutzenversprechen)\s*:|https?:\/\/|\d|guarantee|garantier|proven|bewiesen/i.test(value)) return null;
+  return { path: '/brand_core/valueProposition', value, excerpt: text };
+}
+function aiBrainBrandSourceCurrent(turn) {
+  const source = turn?.brandProposalSource, catalog = state.workspaceCatalog;
+  const workspace = catalog.value?.workspaces.find(w => w.id === source?.workspaceId);
+  const brand = workspace?.brands.find(b => b.id === source?.brandId);
+  return !!source && turn.status === 'success' && turn.referenceResolution !== 'clarification'
+    && !turn.brandProposalInvalid && source.account === state.user && source.email === state.user?.email
+    && source.answer === turn.answer && source.question === turn.question
+    && source.identity === aiBrainIdentity() && source.context === aiBrainRequestContextIdentity()
+    && source.generation === catalog.generation && source.workspaceId === catalog.activeWorkspaceId
+    && catalog.status === 'ready' && state.boardBrandAssociation.brandId === source.brandId
+    && workspace?.boards.some(b => b.id === state.currentBoardId && b.brand_id === source.brandId)
+    && ['owner','admin','editor'].includes(brand?.role) && canUseAiBrainProposal();
+}
+function aiBrainBrandCopy(key) {
+  const copy = {
+    action: ['Suggest Brand Update', 'Brand-Änderung vorschlagen'], title: ['Value Proposition proposal', 'Vorschlag zum Nutzenversprechen'],
+    current: ['Current canonical value', 'Aktueller kanonischer Wert'], proposed: ['Editable suggestion', 'Bearbeitbarer Vorschlag'],
+    source: ['Exact source excerpt', 'Exakter Quellauszug'], stage: ['Use in Profile draft', 'Im Profilentwurf verwenden'],
+    cancel: ['Cancel', 'Abbrechen'], back: ['Return to conversation', 'Zurück zum Gespräch'],
+    notice: ['AI proposal, not verified fact. Only the draft changes. Save separately in Brand Profile.', 'KI-Vorschlag, keine bestätigte Tatsache. Nur der Entwurf ändert sich. Speichere separat im Brand Profile.'],
+    stale: ['Context, access or Brand changed. Return and prepare a new comparison. Your suggestion is retained here.', 'Kontext, Zugriff oder Brand geändert. Kehre zurück und vergleiche erneut. Dein Vorschlag bleibt hier erhalten.'],
+    blocked: ['Save or discard the existing Profile draft before using this suggestion. Open Brand Profile to continue.', 'Speichere oder verwerfe zuerst den bestehenden Profilentwurf. Öffne dazu das Brand Profile.'],
+    invalid: ['Enter a nonempty suggestion of at most 2,000 characters.', 'Gib einen Vorschlag mit höchstens 2.000 Zeichen ein.'],
+    staged: ['Suggestion staged in the Profile draft. Save Brand Profile explicitly to persist it.', 'Vorschlag im Profilentwurf. Speichere das Brand Profile ausdrücklich, um ihn zu übernehmen.'],
+    missing: ['Field absent', 'Feld nicht vorhanden'], null: ['Null value', 'Null-Wert'], empty: ['Empty string', 'Leere Zeichenfolge'],
+    loading: ['Checking current access and Brand…', 'Aktueller Zugriff und Brand werden geprüft…']
+  };
+  return copy[key][state.uiLanguage === 'de' ? 1 : 0];
+}
+async function readAiBrainProposalBrand(turn, answer, question) {
+  if (!aiBrainBrandSourceCurrent(turn) || turn.answer !== answer || turn.question !== question
+    || !state.aiBrain.messages.includes(turn)) throw new Error('STALE_SOURCE');
+  const source = turn.brandProposalSource;
+  const read = async url => {
+    const controller = new AbortController(), timeout = setTimeout(() => controller.abort(), 12000);
+    try {
+      const response = await fetch(url, { signal: controller.signal, credentials: 'same-origin', cache: 'no-store', headers: { Accept: 'application/json' } });
+      const value = await response.json();
+      if ([401,403,404].includes(response.status)) turn.brandProposalInvalid = true;
+      if (!response.ok || !aiBrainBrandSourceCurrent(turn) || turn.answer !== answer || turn.question !== question
+        || !state.aiBrain.messages.includes(turn)) throw new Error('UNAVAILABLE');
+      return value;
+    } finally { clearTimeout(timeout); }
+  };
+  // The read-only catalog resolves persisted associations and independent roles.
+  // Board detail GET may enrich editor identity, so it is not a zero-write read.
+  const catalog = await read('/api/workspaces');
+  const workspace = catalog.workspaces?.find(w => w.id === source.workspaceId);
+  if (!workspace?.boards?.some(b => b.id === state.currentBoardId && b.brand_id === source.brandId
+      && ['owner','editor','brand_owner','brand_admin','brand_editor'].includes(b.role))
+    || !workspace.brands?.some(b => b.id === source.brandId && ['owner','admin','editor'].includes(b.role))) {
+    turn.brandProposalInvalid = true; throw new Error('UNAVAILABLE');
+  }
+  const brand = await read(`/api/brands/${encodeURIComponent(source.brandId)}`);
+  if (!isCanonicalBrandDetail(brand, source.brandId) || brand.access.canEditCanonicalBrand !== true
+    || !['owner','admin','editor'].includes(brand.access.role)) {
+    if (brand?.access?.canEditCanonicalBrand === false) turn.brandProposalInvalid = true;
+    throw new Error('UNAVAILABLE');
+  }
+  return brand;
+}
+function aiBrainProfileBlocked() {
+  const s = brandProfileController?.state;
+  return canonicalBrandDraftDirty() || canonicalBrandDetail.status === 'submitting' || !!s &&
+    (brandProfileController.dirty() || brandProfileController.busy() || s.deferred || s.syncRequired || s.reconciliationWarning
+      || Object.keys(s.proposals).length || s.file || s.candidate || s.dnaDraft || s.avatarDraft || s.avatarDirection);
+}
+async function openAiBrainBrandProposal(turnId) {
+  if (document.getElementById('ai-brand-proposal-dialog')) return;
+  const turn = state.aiBrain.messages.find(t => t.id === turnId), candidate = aiBrainValueProposition(turn);
+  if (!candidate || !aiBrainBrandSourceCurrent(turn) || turn.brandUpdateStaged) return;
+  const answer = turn.answer, question = turn.question, origin = document.activeElement;
+  const composer = el.aiBrainSummary.querySelector('#ai-brain-question');
+  const caret = composer ? [composer.selectionStart, composer.selectionEnd, composer.selectionDirection] : null;
+  const dialog = document.createElement('dialog'); dialog.id = 'ai-brand-proposal-dialog'; dialog.className = 'brand-leave-dialog ai-brand-proposal';
+  dialog.sourceCurrent = () => aiBrainBrandSourceCurrent(turn) && turn.answer === answer && turn.question === question;
+  dialog.setAttribute('aria-labelledby', 'ai-brand-proposal-title');
+  const node = (tag, text, parent = dialog) => { const n = document.createElement(tag); n.textContent = text; parent.append(n); return n; };
+  const title = node('h2', aiBrainBrandCopy('title')); title.id = 'ai-brand-proposal-title';
+  node('p', aiBrainBrandCopy('notice'));
+  const destination = node('p', '');
+  const status = node('p', aiBrainBrandCopy('loading')); status.setAttribute('role', 'status');
+  const current = node('p', ''); current.dataset.aiBrandCurrent = 'true';
+  const label = node('label', aiBrainBrandCopy('proposed')); label.htmlFor = 'ai-brand-proposal-value';
+  const input = node('textarea', ''); input.id = label.htmlFor; input.value = candidate.value; input.maxLength = 2000;
+  const excerpt = node('details', ''); node('summary', aiBrainBrandCopy('source'), excerpt); node('p', candidate.excerpt, excerpt);
+  const actions = node('div', ''); actions.className = 'brand-leave-actions';
+  const cancel = node('button', aiBrainBrandCopy('cancel'), actions), stage = node('button', aiBrainBrandCopy('stage'), actions);
+  cancel.type = stage.type = 'button'; stage.disabled = true; stage.className = 'fk-btn fk-btn-primary'; stage.dataset.aiBrandStage = 'true';
+  let staging = false, openedProfile = false;
+  const close = () => {
+    if (staging) return;
+    dialog.close(); dialog.remove();
+    if (openedProfile && state.activeView === 'brand-profile') closeCanonicalBrandDetail({ restoreFocus: false });
+    if (state.activeView === 'ai_brain' && turn.brandProposalInvalid) renderAiBrain();
+    const c = el.aiBrainSummary.querySelector('#ai-brain-question'); if (c && caret) c.setSelectionRange(...caret);
+    if (origin?.isConnected) origin.focus({ preventScroll: true });
+    else if (state.activeView === 'ai_brain') el.aiBrainSummary.querySelector('#ai-brain-question')?.focus({ preventScroll: true });
+  };
+  cancel.addEventListener('click', close); dialog.addEventListener('cancel', e => { e.preventDefault(); close(); });
+  document.body.append(dialog); dialog.showModal(); cancel.focus();
+  let baseline, comparisonValid = false;
+  const expected = brand => Object.hasOwn(brand.brand_core, 'valueProposition') ? { exists: true, value: brand.brand_core.valueProposition } : { exists: false };
+  try {
+    if (aiBrainProfileBlocked()) { status.textContent = aiBrainBrandCopy('blocked'); return; }
+    baseline = await readAiBrainProposalBrand(turn, answer, question);
+    if (!dialog.isConnected) return;
+    const old = expected(baseline);
+    current.textContent = `${aiBrainBrandCopy('current')} — ${baseline.name}: ${!old.exists ? aiBrainBrandCopy('missing') : old.value === null ? aiBrainBrandCopy('null') : old.value === '' ? aiBrainBrandCopy('empty') : typeof old.value === 'string' ? old.value : JSON.stringify(old.value)}`;
+    title.textContent = `${aiBrainBrandCopy('title')} — ${baseline.name}`;
+    const workspace = state.workspaceCatalog.value.workspaces.find(w => w.id === turn.brandProposalSource.workspaceId);
+    destination.textContent = `${workspace.name} / ${state.currentBoardName} / ${baseline.name}`;
+    comparisonValid = true;
+    status.textContent = ''; stage.disabled = baseline.brand_core.valueProposition === input.value;
+    input.addEventListener('input', () => { stage.disabled = !comparisonValid || !input.value.trim() || input.value.length > 2000 || input.value === baseline.brand_core.valueProposition; });
+  } catch {
+    if (turn.brandProposalSource.account !== state.user || turn.brandProposalSource.identity !== aiBrainIdentity()) dialog.remove();
+    if (dialog.isConnected) { current.textContent = ''; excerpt.remove(); status.textContent = aiBrainBrandCopy('stale'); }
+    return;
+  }
+  stage.addEventListener('click', async () => {
+    if (staging || !comparisonValid) return;
+    const value = input.value;
+    if (!value.trim() || value.length > 2000) { status.textContent = aiBrainBrandCopy('invalid'); return; }
+    staging = true; cancel.disabled = true; stage.disabled = true; input.disabled = true; status.textContent = aiBrainBrandCopy('loading');
+    try {
+      const fresh = await readAiBrainProposalBrand(turn, answer, question);
+      if (!dialog.isConnected) return;
+      if (fresh.revision !== baseline.revision || !window.BrandWriteContract.equal(expected(fresh), expected(baseline))) throw new Error('STALE');
+      if (aiBrainProfileBlocked()) { status.textContent = aiBrainBrandCopy('blocked'); return; }
+      // The existing destination loader mounts a canonical baseline, never AI text.
+      openedProfile = true;
+      await openRegularBrandProfile({ id: fresh.id, workspace_id: turn.brandProposalSource.workspaceId, brainProposal: true },
+        () => el.aiBrainSummary.querySelector(`[data-ai-brand-proposal="${turn.id}"]`));
+      // Profile is a nonmodal dialog. Restore this review dialog's top-layer and
+      // Escape ownership after mounting the destination underneath it.
+      if (dialog.isConnected) { dialog.close(); dialog.showModal(); }
+      if (!dialog.isConnected || !brandProfileController || canonicalBrandDetail.brandId !== fresh.id) throw new Error('DESTINATION');
+      const staged = await brandProfileController.stageValueProposition({ path: candidate.path, value, revision: baseline.revision,
+        expected: expected(baseline), revalidate: async comparison => {
+          try {
+            const b = await readAiBrainProposalBrand(turn, answer, question);
+            return b.access.canEditCanonicalBrand === true && (!comparison || b.revision === comparison.revision
+              && window.BrandWriteContract.equal(expected(b), comparison.expected));
+          } catch { return false; }
+        } });
+      if (!staged) throw new Error('STALE');
+      turn.brandUpdateStaged = true;
+      dialog.close(); dialog.remove();
+      brandProfileController.state.message = aiBrainBrandCopy('staged'); brandProfileController.render();
+      const back = document.createElement('button'); back.type = 'button'; back.className = 'fk-btn fk-btn-secondary'; back.dataset.aiBrandReturn = 'true'; back.textContent = aiBrainBrandCopy('back');
+      back.addEventListener('click', () => {
+        const resume = () => {
+          if (!closeCanonicalBrandDetail({ restoreFocus: false })) return;
+          if (turn.brandProposalSource.account !== state.user || turn.brandProposalSource.identity !== aiBrainIdentity()) return;
+          setActiveView('ai_brain');
+          const c = el.aiBrainSummary.querySelector('#ai-brain-question'); if (c && caret) c.setSelectionRange(...caret);
+        };
+        if (guardBrandProfileLeave(resume)) resume();
+      });
+      // Outside the Profile rerendered content so it survives edits and Save.
+      const existing = el.brandWorkspaceDetail.querySelector('[data-ai-brand-return]'); existing?.remove();
+      el.brandWorkspaceDetailTitle.after(back); back.focus({ preventScroll: true });
+    } catch {
+      comparisonValid = false;
+      if (turn.brandProposalSource.account !== state.user || turn.brandProposalSource.identity !== aiBrainIdentity()) dialog.remove();
+      if (dialog.isConnected) { current.textContent = ''; excerpt.remove(); status.textContent = aiBrainBrandCopy('stale'); }
+    } finally {
+      staging = false; cancel.disabled = false; input.disabled = false;
+      if (dialog.isConnected) cancel.focus({ preventScroll: true });
+    }
+  });
 }
 function canUseAiBrainProposal() { return !!state.user?.email && !!state.currentBoardId && state.boardAccess?.canEdit === true && !state.publicBoardToken; }
 function setTurnProposal(turnId, updater) {
@@ -6585,6 +6791,10 @@ function renderAiBrainTranscript(transcript) {
       section.append(heading, list); advisor.appendChild(section);
     }
     if (turn.meta) { const meta = document.createElement("small"); meta.textContent = turn.meta; advisor.appendChild(meta); }
+    if (aiBrainValueProposition(turn) && aiBrainBrandSourceCurrent(turn) && !turn.brandUpdateStaged) {
+      const suggest = document.createElement('button'); suggest.type = 'button'; suggest.className = 'ai-brain-proposal-prepare';
+      suggest.dataset.aiBrandProposal = turn.id; suggest.textContent = aiBrainBrandCopy('action'); advisor.appendChild(suggest);
+    }
     const proposal = turn.proposal; const eligible = aiBrainHasReusableContent(turn) && canUseAiBrainProposal() && proposal?.status !== "applied";
     if (eligible && (!proposal || ["cancelled", "failed", "stale"].includes(proposal.status))) {
       const prepare = document.createElement("button"); prepare.type = "button"; prepare.className = "ai-brain-proposal-prepare"; prepare.dataset.aiBrainPrepare = turn.id;
@@ -6663,10 +6873,14 @@ function bindAiBrainScroll(transcript, saved, revealTurnId) {
 }
 
 function renderAiBrain() {
+  const brandPreview = document.getElementById('ai-brand-proposal-dialog');
+  if (brandPreview && !brandPreview.sourceCurrent()) brandPreview.remove();
   const { revealTurnId = null } = arguments[0] || {};
   if (!el.aiBrainSummary) return;
+  if (state.aiBrain.account && state.aiBrain.account !== state.user) invalidateAiBrainRequest();
   const previousTranscript = el.aiBrainSummary.querySelector(".ai-brain-transcript");
-  const sameIdentity = (!el.aiBrainSummary.aiBrainRenderedIdentity || el.aiBrainSummary.aiBrainRenderedIdentity === aiBrainIdentity())
+  const sameIdentity = (!el.aiBrainSummary.aiBrainRenderedAccount || el.aiBrainSummary.aiBrainRenderedAccount === state.user)
+    && (!el.aiBrainSummary.aiBrainRenderedIdentity || el.aiBrainSummary.aiBrainRenderedIdentity === aiBrainIdentity())
     && (!state.aiBrain.identity || state.aiBrain.identity === aiBrainIdentity());
   const savedScroll = sameIdentity && (!el.aiBrainSummary.aiBrainScrollDeferred && aiBrainViewIsVisible() && previousTranscript?.clientHeight
     ? aiBrainScrollSnapshot(previousTranscript) : el.aiBrainSummary.aiBrainScroll?.identity === aiBrainIdentity() ? el.aiBrainSummary.aiBrainScroll : null);
@@ -6680,6 +6894,7 @@ function renderAiBrain() {
   const preservedComposerValue = sameIdentity ? el.aiBrainSummary.querySelector("#ai-brain-question")?.value || "" : "";
   if (state.aiBrain.identity && state.aiBrain.identity !== aiBrainIdentity()) invalidateAiBrainRequest();
   el.aiBrainSummary.aiBrainRenderedIdentity = aiBrainIdentity();
+  el.aiBrainSummary.aiBrainRenderedAccount = state.user;
   const canAsk = !!state.user?.email && !!state.currentBoardId && state.boardAccess?.canEdit === true;
   const adviceMode = AI_BRAIN_MODES[state.aiBrain.adviceMode] ? state.aiBrain.adviceMode : "general";
   const selected = state.selectedPrimary ? getNode(state.selectedPrimary) : null; const unsaved = !!state.isDirty;
@@ -6698,6 +6913,7 @@ function renderAiBrain() {
   el.aiBrainSummary.querySelector("#ai-brain-form")?.addEventListener("submit", requestAiBrainAdvice);
   el.aiBrainSummary.querySelectorAll("[data-ai-brain-retry]").forEach((button) => button.addEventListener("click", () => requestAiBrainAdvice(null, button.dataset.aiBrainRetry)));
   el.aiBrainSummary.querySelectorAll("[data-ai-brain-prepare]").forEach((button) => button.addEventListener("click", () => requestAiBrainNodeProposal(button.dataset.aiBrainPrepare)));
+  el.aiBrainSummary.querySelectorAll('[data-ai-brand-proposal]').forEach(button => button.addEventListener('click', () => openAiBrainBrandProposal(button.dataset.aiBrandProposal)));
   el.aiBrainSummary.querySelectorAll("[data-ai-brain-cancel]").forEach((button) => button.addEventListener("click", () => cancelAiBrainNodeProposal(button.dataset.aiBrainCancel)));
   el.aiBrainSummary.querySelectorAll("[data-ai-brain-create]").forEach((button) => button.addEventListener("click", () => applyAiBrainNodeProposal(button.dataset.aiBrainCreate)));
   translateInterface(el.aiBrainSummary);
@@ -6714,9 +6930,10 @@ async function requestAiBrainAdvice(event, retryTurnId = null) {
   if (retryTurnId && !existing) return;
   const input = el.aiBrainSummary.querySelector("#ai-brain-question"); const question = existing?.question || input?.value.trim(); if (!question) return;
   const adviceMode = existing ? existing.adviceMode || "general" : state.aiBrain.adviceMode || "general";
+  const brandProposalSource = captureAiBrainBrandSource();
   const responseLanguage = state.uiLanguage === "de" ? "de" : "en"; const controller = new AbortController(); const requestId = state.aiBrain.requestId + 1; const advisorIdentity = captureAiBrainAdvisorIdentity(requestId); const identity = aiBrainIdentity(); const contextIdentity = aiBrainRequestContextIdentity(); const selectedNodeId = state.selectedPrimary || null; const canvas = aiBrainCanvasProjection(); const conversationHistory = aiBrainConversationHistory(existing?.id || null);
   const turn = existing || { id: `turn-${requestId}`, question }; const messages = existing ? state.aiBrain.messages.map((item) => item.id === turn.id ? { ...item, status: "pending", adviceMode, responseLanguage, advisorIdentity, errorCode: "", answer: "" } : item) : [...state.aiBrain.messages, { ...turn, status: "pending", adviceMode, responseLanguage, advisorIdentity }];
-  state.aiBrain = { ...state.aiBrain, status: "loading", requestId, controller, identity, error: "", messages };
+  state.aiBrain = { ...state.aiBrain, account: state.user, status: "loading", requestId, controller, identity, error: "", messages };
   // The local user turn now owns this text. Clear synchronously before rendering;
   // completion and retry never write to the composer or erase a newer draft.
   if (!existing && input?.value.trim() === question) input.value = "";
@@ -6731,7 +6948,7 @@ async function requestAiBrainAdvice(event, retryTurnId = null) {
     if (data.context?.response_language !== responseLanguage) { const error = new Error("AI Brain response language identity mismatch"); error.code = "response_language_mismatch"; throw error; }
     const scope = [`Board Brand Core`, data.context?.canonicalBrandCore ? "Canonical Brand Core" : null, `${data.context?.canvasNodes || 0} Canvas nodes`].filter(Boolean).join(" · ");
     const assumptions = Array.isArray(data.assumptions) ? data.assumptions.filter((value) => typeof value === "string").slice(0, 20) : [];
-    state.aiBrain = { ...state.aiBrain, status: "success", controller: null, messages: state.aiBrain.messages.map((item) => item.id === turn.id ? { ...item, status: "success", answer: data.answer, responseLanguage, assumptions, approvedLearnings: data.context?.approved_learnings || null, referenceResolution: data.context?.reference_resolution || "none", proposal: null, meta: `${scope}. ${data.disclaimer}` } : item) };
+    state.aiBrain = { ...state.aiBrain, status: "success", controller: null, messages: state.aiBrain.messages.map((item) => item.id === turn.id ? { ...item, status: "success", answer: data.answer, responseLanguage, assumptions, brandProposalSource: { ...brandProposalSource, answer: data.answer, question }, brandProposalInvalid: false, brandUpdateStaged: false, approvedLearnings: data.context?.approved_learnings || null, referenceResolution: data.context?.reference_resolution || "none", proposal: null, meta: `${scope}. ${data.disclaimer}` } : item) };
   } catch (error) {
     if (state.aiBrain.requestId !== requestId || state.aiBrain.identity !== identity || aiBrainIdentity() !== identity) return;
     state.aiBrain = { ...state.aiBrain, status: "error", controller: null, messages: state.aiBrain.messages.map((item) => item.id === turn.id ? { ...item, status: "failed", errorCode: error.code || "generic" } : item) };
