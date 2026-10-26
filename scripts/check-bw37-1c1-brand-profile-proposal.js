@@ -55,7 +55,7 @@ function eligibility() {
   assert.equal(select(appicsReportedAnswer)?.value, appicsReportedValue);
   assert.equal(select(appicsReportedAnswer)?.excerpt, appicsReportedAnswer);
   assert.equal(select(appicsReportedAnswer.replace(/\n2\./, '\n2)').replace(/\n/g,'\r\n'))?.value, appicsReportedValue);
-  for (const extra of ['Proposed Value Proposition: Another choice.', 'Mission: Another field.', 'Alternative wording: Another choice.', '"A second possible replacement."', '2) "A second possible replacement."']) {
+  for (const extra of ['Proposed Value Proposition: Another choice.', 'Mission: Another field.', 'Alternative wording: Another choice.', '"A second possible replacement."', '2) "A second possible replacement."', 'Suggested replacement: "Another choice."', '**Proposed replacement:** Another choice.', '**"A second quoted candidate."**', 'Target audience: Creators.', 'Tone of Voice: Friendly.', 'Rationale: Suggested replacement: Another choice.']) {
     assert.equal(select(appicsReportedAnswer+'\n'+extra),null,extra);
   }
   assert.equal(select(appicsReportedAnswer.replace('"'+appicsReportedValue+'"\n','')),null);

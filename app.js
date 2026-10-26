@@ -6545,7 +6545,7 @@ function aiBrainValueProposition(turn) {
       if (!content || !prose && !count) return null;
     } else return null;
     // A rationale must not smuggle another candidate or an unrelated field.
-    if (/(?:value proposition|nutzenversprechen|brand dna|brand core|founder story|mission|vision|tagline|option(?:\s+[a-z0-9]+)?|alternative(?:\s+[a-z0-9]+)?)\s*(?:\*\*)?\s*:|(?:proposed|suggested|replacement|alternative|vorgeschlagene[rs]?)\s+(?:replacement\s+)?(?:wording|text|formulierung)\s*(?:\*\*)?\s*:|^\s*(?:\d+[.)]\s*)?["“„«]/im.test(remainder)) return null;
+    if (/(?:value proposition|nutzenversprechen|brand dna|brand core|founder story|brand description|brand name|brand assets|target audience|zielgruppe|personas?|tone of voice|brand voice|messaging pillars|content guidelines|keywords|voice examples|mission|vision|tagline|option(?:\s+[a-z0-9]+)?|alternative(?:\s+[a-z0-9]+)?)\s*(?:\*\*)?\s*:|(?:proposed|suggested|replacement|alternative|vorgeschlagene[rs]?)\s+(?:replacement\s+)?(?:wording|text|formulierung|replacement|ersatz)\s*(?:\*\*)?\s*:|^\s*(?:\d+[.)]\s*)?(?:\*\*)?(?:proposed|suggested|replacement|alternative|vorgeschlagene[rs]?)\b[^:\n]{0,80}:|^\s*(?:\d+[.)]\s*)?(?:\*\*)?["“„«]/im.test(remainder)) return null;
   }
   // Strip only a complete pair of quotation marks (or legacy value bold).
   if (value.startsWith('**') && value.endsWith('**')) value = value.slice(2, -2).trim();
@@ -6554,7 +6554,7 @@ function aiBrainValueProposition(turn) {
     if (value.at(-1) !== quotes[value[0]]) return null;
     value = value.slice(1, -1);
   }
-  if (/(?:rationale|begründung|assumption|annahme|reasons for strength|gründe für die stärke|explanation|erklärung|erläuterung|brand dna|brand core|founder story|mission|vision|tagline|option(?:\s+[a-z]+)?|alternative(?:\s+[a-z]+)?)\s*:|["“”„«»*`?]|\b(?:maybe|might|could|perhaps|vielleicht|könnte|eventuell)\b|^(?:[-#>]|\d+[.)])/i.test(value)) return null;
+  if (/(?:rationale|begründung|assumption|annahme|reasons for strength|gründe für die stärke|explanation|erklärung|erläuterung|brand dna|brand core|founder story|brand description|brand name|brand assets|target audience|zielgruppe|personas?|tone of voice|brand voice|messaging pillars|content guidelines|keywords|voice examples|mission|vision|tagline|option(?:\s+[a-z]+)?|alternative(?:\s+[a-z]+)?)\s*:|["“”„«»*`?]|\b(?:maybe|might|could|perhaps|vielleicht|könnte|eventuell)\b|^(?:[-#>]|\d+[.)])/i.test(value)) return null;
   if (!value.trim() || value.length > 2000 || /[\u0000-\u001f\u007f]|(?:value proposition|nutzenversprechen)\s*:|https?:\/\/|\d|guarantee|garantier|proven|bewiesen/i.test(value)) return null;
   return { path: '/brand_core/valueProposition', value, excerpt: text };
 }
