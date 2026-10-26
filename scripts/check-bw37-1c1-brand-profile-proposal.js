@@ -105,11 +105,12 @@ async function browserChecks() {
     // Real shell rejects source/account/Canvas/catalog and independent role changes.
     for (const status of [401,403,404,503,200]) {
       await p.evaluate(()=>{state.uiLanguage='en';invalidateAiBrainRequest();renderAiBrain();});await submit();
+      await p.locator('#ai-brain-question').fill('Keep this permission-check draft');await p.locator('#ai-brain-question').evaluate(n=>n.setSelectionRange(2,7,'backward'));
       const denied=route=>route.fulfill({status,json:status===200?{id:'malformed'}:{code:'UNAVAILABLE'}});
       await p.route('**/api/brands/22222222-2222-4222-8222-222222222222',denied);
       await p.locator('[data-ai-brand-proposal]').click();await p.waitForFunction(()=>document.querySelector('#ai-brand-proposal-dialog [role=status]')?.textContent.includes('changed'));
       assert.equal(await p.locator('[data-ai-brand-current]').textContent(),'');assert(await p.locator('[data-ai-brand-stage]').isDisabled());
-      await p.keyboard.press('Escape');await p.unroute('**/api/brands/22222222-2222-4222-8222-222222222222',denied);
+      await p.keyboard.press('Escape');assert.equal(await p.locator('#ai-brain-question').inputValue(),'Keep this permission-check draft');assert.deepEqual(await p.locator('#ai-brain-question').evaluate(n=>[n.selectionStart,n.selectionEnd,n.selectionDirection]),[2,7,'backward']);await p.unroute('**/api/brands/22222222-2222-4222-8222-222222222222',denied);
     }
     for (const role of [null,'viewer']) {
       await p.evaluate(()=>{invalidateAiBrainRequest();renderAiBrain();});await submit();

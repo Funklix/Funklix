@@ -6586,6 +6586,7 @@ async function openAiBrainBrandProposal(turnId) {
     dialog.close(); dialog.remove();
     if (openedProfile && state.activeView === 'brand-profile') closeCanonicalBrandDetail({ restoreFocus: false });
     if (state.activeView === 'ai_brain' && turn.brandProposalInvalid) renderAiBrain();
+    const c = el.aiBrainSummary.querySelector('#ai-brain-question'); if (c && caret) c.setSelectionRange(...caret);
     if (origin?.isConnected) origin.focus({ preventScroll: true });
     else if (state.activeView === 'ai_brain') el.aiBrainSummary.querySelector('#ai-brain-question')?.focus({ preventScroll: true });
   };
