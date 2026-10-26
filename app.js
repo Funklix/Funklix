@@ -6485,9 +6485,40 @@ function aiBrainValueProposition(turn) {
     || /(?:campaign|kampagne)/i.test(turn.question) && !/(?:brand profile|markenprofil|brand-profil)/i.test(turn.question)
     || !/(?:suggest|propos|replac|rewrit|formulat|vorschlag|vorschlagen|ersetzen|formuliere)/i.test(turn.question)) return null;
   const text = turn.answer.replace(/\r\n?/g, '\n');
-  const match = text.match(/^(?:\*\*)?(?:Proposed (?:replacement )?Value Proposition|Suggested Value Proposition|Vorgeschlagenes (?:neues )?Nutzenversprechen)(?:\*\*)?:[ \t]*(?:\*\*)?([^\n]+)(?:\n\n(?:Rationale|Begründung|Assumption|Annahme):[^\n]+)?\s*$/i);
+  const lines = text.trim().split('\n');
+  // Only balanced bold around a label, with the colon inside or outside it.
+  const labelLine = line => line.trim().replace(/^\*\*([^*]+)\*\*(:?)(?=[ \t]|$)/, '$1$2');
+  const match = labelLine(lines.shift()).match(/^(?:Proposed (?:replacement )?(?:Brand )?Value Proposition|Suggested (?:Brand )?Value Proposition|Vorgeschlagenes (?:neues )?Nutzenversprechen):[ \t]*(.*)$/i);
   if (!match) return null;
-  const value = match[1].replace(/\*\*$/, '').trim();
+  let value = match[1].trim();
+  if (!value) {
+    while (lines[0]?.trim() === '') lines.shift();
+    value = lines.shift()?.trim() || '';
+  }
+  // A value occupies exactly one line; all remaining text must be a known,
+  // separately labeled explanation. Never fall back to copying the answer.
+  const remainder = lines.join('\n').trim();
+  if (remainder) {
+    if (lines[0]?.trim() !== '') return null;
+    const explanation = remainder.split('\n');
+    const heading = labelLine(explanation.shift());
+    if (/^(?:Rationale|Begründung|Assumption|Annahme):[ \t]*\S[^\n]*$/i.test(heading)) {
+      if (explanation.length) return null;
+    } else if (/^(?:Reasons for Strength|Gründe für die Stärke):$/i.test(heading)) {
+      const reasons = explanation.filter(line => line.trim());
+      if (!reasons.length || reasons.some((line, i) => !line.startsWith(`${i + 1}. `) || !/^\d+\. \S/.test(line))) return null;
+    } else return null;
+    // A rationale must not smuggle another candidate or an unrelated field.
+    if (/(?:value proposition|nutzenversprechen|brand dna|brand core|founder story|mission|vision|tagline|option(?:\s+[a-z0-9]+)?|alternative(?:\s+[a-z0-9]+)?)\s*(?:\*\*)?\s*:|(?:proposed|suggested|vorgeschlagen)|["“”„«»]/i.test(remainder)) return null;
+  }
+  // Strip only a complete pair of quotation marks (or legacy value bold).
+  if (value.startsWith('**') && value.endsWith('**')) value = value.slice(2, -2).trim();
+  const quotes = { '"': '"', '“': '”', '„': '“', '«': '»' };
+  if (quotes[value[0]]) {
+    if (value.at(-1) !== quotes[value[0]]) return null;
+    value = value.slice(1, -1);
+  }
+  if (/["“”„«»*`?]|\b(?:maybe|might|could|perhaps|vielleicht|könnte|eventuell)\b|^(?:[-#>]|\d+[.)])/i.test(value)) return null;
   if (!value || value.length > 2000 || /[\u0000-\u001f\u007f]|(?:value proposition|nutzenversprechen)\s*:|https?:\/\/|\d|guarantee|garantier|proven|bewiesen/i.test(value)) return null;
   return { path: '/brand_core/valueProposition', value, excerpt: text };
 }
