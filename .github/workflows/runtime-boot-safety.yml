@@ -430,9 +430,26 @@ jobs:
       - name: Guided Brand Profile setup regression
         run: npm run check:bw36.13r4
       - name: Install focused browser fixture
+        timeout-minutes: 5
         run: |
-          npx playwright-core install --with-deps chromium
-          node -e 'require("fs").appendFileSync(process.env.GITHUB_ENV, "CHROMIUM_PATH=" + require("playwright-core").chromium.executablePath() + "\n")'
+          # Hosted Ubuntu already supplies browser libraries. Avoid apt repository
+          # retries; retain Chromium matched to the installed Playwright version.
+          npx playwright-core install chromium
+          node - <<'JS'
+          const fs = require('fs');
+          const { chromium } = require('playwright-core');
+          (async () => {
+            const executablePath = chromium.executablePath();
+            const browser = await chromium.launch({ executablePath, args: ['--no-sandbox'], timeout: 30000 });
+            try {
+              const page = await browser.newPage();
+              await page.setContent('<title>Runtime Boot Safety browser ready</title>');
+              if (await page.title() !== 'Runtime Boot Safety browser ready') throw new Error('Browser smoke check failed');
+              console.log(`Verified Chromium ${browser.version()} at ${executablePath}`);
+            } finally { await browser.close(); }
+            fs.appendFileSync(process.env.GITHUB_ENV, `CHROMIUM_PATH=${executablePath}\n`);
+          })().catch(error => { console.error(error); process.exitCode = 1; });
+          JS
       - name: Check BW-37.1A-R1 workspace and scroll lifecycle (Chromium)
         run: npm run check:bw37.1ar1
       - name: Check BW-37.1B-R1 conversational advisor (disposable SQL, mocked provider, Chromium)
