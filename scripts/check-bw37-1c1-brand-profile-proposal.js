@@ -52,6 +52,7 @@ function eligibility() {
     appicsAnswer.replace(`"${appicsValue}"`, 'Guaranteed proven growth of 50 percent.'),
     appicsAnswer.replace(`"${appicsValue}"`, 'Maybe this could work?'),
     'Strategy discussion: ' + appicsValue,
+    ...['\"\"','\" \"','“ ”','„ “'].map(value=>'Proposed Brand Value Proposition: '+value),
     'Proposed Brand Value Proposition: Brand DNA: Creator',
     'Proposed Brand Value Proposition: Option A: One choice. Option B: Another choice.',
     '**Proposed Brand Value Proposition:**\n\n' + appicsValue + '\nA second paragraph.',
