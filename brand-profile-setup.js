@@ -126,6 +126,7 @@
     const pendingWrite = {};
     let pendingLogo = null;
     let acceptanceOperation = null;
+    let brainDraft = null;
     const state = {
       brand: options.brand, name: options.brand.name, core: clone(options.brand.brand_core),
       website: options.website || options.brand.brand_core?.brandAssets?.domain || options.brand.brand_core?.website || '',
@@ -338,8 +339,40 @@
         return true;
       });
     }
+    // This destination-owned seam deliberately does not use website adoption.
+    // The canonical record establishes baseline before any draft value changes.
+    async function stageValueProposition(input) {
+      const ready = () => current() && !state.readOnly && !flight && !state.pending && !state.returning
+        && !state.deferred && !state.syncRequired && !state.reconciliationWarning && !contentDirty()
+        && !Object.keys(state.proposals).length && !state.file && !state.candidate && !state.dnaDraft && !state.avatarDraft && !state.avatarDirection;
+      if (!ready() || input?.path !== '/brand_core/valueProposition' || typeof input.value !== 'string'
+        || !input.value.trim() || input.value.length > 2000 || typeof input.revalidate !== 'function') return false;
+      const matches = brand => brand?.id === state.brand.id && brand.revision === input.revision
+        && brand.access?.canEditCanonicalBrand === true && ['owner','admin','editor'].includes(brand.access.role)
+        && writes.equal(Object.hasOwn(brand.brand_core, 'valueProposition')
+          ? { exists: true, value: brand.brand_core.valueProposition } : { exists: false }, input.expected);
+      const comparison = { revision: input.revision, expected: clone(input.expected) };
+      if (!matches(state.brand) || !await input.revalidate(comparison)) return false;
+      const fresh = await verifyBrand();
+      if (!ready() || !fresh || !matches(fresh) || !await input.revalidate(comparison) || !ready()) return false;
+      if (writes.equal(fresh.brand_core.valueProposition, input.value)) return false;
+      brainDraft = { revision: input.revision, expected: clone(input.expected), revalidate: input.revalidate };
+      state.core.valueProposition = input.value;
+      state.section = 0;
+      changed();
+      return true;
+    }
     function save() {
       return run('Saving Brand Profile…', async () => {
+        if (brainDraft && (state.brand.revision !== brainDraft.revision
+          || !writes.equal(Object.hasOwn(state.brand.brand_core, 'valueProposition')
+            ? { exists: true, value: state.brand.brand_core.valueProposition } : { exists: false }, brainDraft.expected)
+          || !await brainDraft.revalidate())) {
+          state.message = options.language?.() === 'de'
+            ? 'Der Vorschlag ist veraltet. Kehre zum Gespräch zurück und vergleiche erneut. Deine Eingaben bleiben erhalten.'
+            : 'This proposal is stale. Return to the conversation and compare again. Your inputs are retained.';
+          return false;
+        }
         const name = state.name.trim();
         if (!name || name.length > 160) { state.message = 'Enter a Brand name between 1 and 160 characters.'; return false; }
         let domain = '';
@@ -361,6 +394,7 @@
         if (!brand || !validateBrand(brand, state.brand.id) || brand.revision !== revision + (command.changes.length ? 1 : 0) || brand.name !== name
           || !writes.equal(brand.brand_core, expectedCore) || brand.logo_revision !== state.brand.logo_revision || brand.logo_url !== state.brand.logo_url) { state.brand = result.payload; state.syncRequired = true; state.message = 'Brand Profile saved on the server. Reload saved Brand to synchronize. Your inputs are retained.'; return false; }
         state.brand = brand;
+        brainDraft = null;
         // Inputs may change during an in-flight save. Clear only the submitted draft.
         if (draftSignature() === submitted) { state.name = brand.name; state.core = editableCore(brand.brand_core); state.website = domain; }
         baseline = stable({ name: brand.name.trim(), website: domain, core: editableCore(brand.brand_core) });
@@ -539,6 +573,7 @@
       try { const saved = await save(); if (saved) { state.avatarDraft = null; state.avatarDirection = ''; } changed(); return saved; } finally { acceptanceOperation = null; }
     }
     function discard() {
+      brainDraft = null;
       state.name = state.brand.name; state.core = editableCore(state.brand.brand_core); state.website = state.core.brandAssets?.domain || state.core.website || '';
       baseline = draftSignature(); state.dirty = false; state.file = null; state.fileData = null; state.candidate = null; state.proposals = {}; state.dnaDraft = null; state.avatarDraft = null; state.avatarDirection = ''; state.dnaPreflight = null;
     }
@@ -549,8 +584,8 @@
       return true;
     }
     return { state, current, belongsToAccount(account) { return account === captured.account; }, refreshContext, analyze, save, upload, removeLogo, useLogo, chooseFile, applyProposal, keepProposal, retryAutomatic, reload,
-      discard, requestDna, generateDna, acceptDna, generateAvatar, acceptAvatar, contentDirty,
-      subscribe(fn) { notify = fn; }, invalidate() { alive = false; state.file = null; state.fileData = null; state.candidate = null; state.proposals = {}; state.dnaDraft = null; state.avatarDraft = null; state.avatarDirection = ''; state.core = {}; state.website = ''; state.name = ''; },
+      discard, stageValueProposition, requestDna, generateDna, acceptDna, generateAvatar, acceptAvatar, contentDirty,
+      subscribe(fn) { notify = fn; }, invalidate() { alive = false; brainDraft = null; state.file = null; state.fileData = null; state.candidate = null; state.proposals = {}; state.dnaDraft = null; state.avatarDraft = null; state.avatarDirection = ''; state.core = {}; state.website = ''; state.name = ''; },
       dirty() { return contentDirty(); }, busy() { return !!state.pending; } };
   }
 

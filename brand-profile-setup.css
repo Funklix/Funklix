@@ -73,3 +73,8 @@
 .brand-delete-dialog :focus-visible{outline:3px solid var(--fk-color-focus-ring);outline-offset:3px}
 @media(max-width:480px){.brand-delete-dialog{padding:16px}.brand-delete-actions{display:grid;grid-template-columns:1fr}}
 @media(forced-colors:active){.brand-delete-blocked,.profile-proposal-error{border-color:CanvasText;background:Canvas;color:CanvasText}}
+.ai-brand-proposal { box-sizing: border-box; width: min(560px, calc(100% - 24px)); max-height: calc(100% - 24px); overflow: auto; overflow-wrap: anywhere; }
+.ai-brand-proposal textarea { box-sizing: border-box; width: 100%; min-height: 120px; resize: vertical; color: inherit; background: var(--fk-color-surface-input); border: 1px solid var(--fk-color-border-default); border-radius: 8px; padding: 10px; font: inherit; }
+.ai-brand-proposal p { white-space: pre-wrap; }
+.ai-brand-proposal button { min-height: 44px; white-space: normal; }
+.ai-brand-proposal :focus-visible { outline: 2px solid var(--fk-color-focus-ring); outline-offset: 2px; }

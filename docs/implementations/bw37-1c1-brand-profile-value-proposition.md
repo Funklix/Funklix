@@ -1,0 +1,31 @@
+# BW-37.1C-1 — AI Brain → Brand Profile Value Proposition proposal
+
+Base: latest merged main `1a094fcc0284072773b6c60bedec7122711fa03b`, including #821. Implements the approved [audit, Sections A–K](../audits/bw37-1c-ai-brain-action-handoffs-audit.md). No APIs, migrations, provider requests or persistent objects were added.
+
+## Behavior and ownership
+
+A successful, non-clarification answer can offer **Suggest Brand Update**. All five conversation modes use the same conservative eligibility rule. The original question must request proposed/replacement Value Proposition wording for the Brand/Profile. Campaign-only questions, unlabeled or mixed answers, multiple results, other fields, numeric/performance guarantees and empty/oversized values do not qualify. Supported answer formats are a single `Proposed Value Proposition: …`, `Proposed replacement Value Proposition: …`, `Suggested Value Proposition: …` or `Vorgeschlagenes Nutzenversprechen: …` line, optionally followed by a separate labeled rationale/assumption paragraph. Limited bold labels are accepted. Values are exact, nonempty strings up to 2,000 characters; nothing is silently truncated. This does not require a new Advice response schema or prompt template.
+
+The compact native dialog identifies Workspace/Board/Brand, shows the exact current field representation (including absent/null/blank), an editable suggestion and exact source excerpt. The copy explicitly labels AI wording as a proposal rather than verified fact. Opening, editing, canceling and staging make no persistent write and no inference call. EN/DE copy, existing theme tokens, native modal keyboard/focus/Escape, narrow layouts and zoom are covered.
+
+**Use in Profile draft** opens the existing guided Profile and invokes its destination-owned `stageValueProposition` method. Canonical data establishes the baseline first. The seam accepts only `/brand_core/valueProposition`, checks exact expected value/existence and revision, validates source scope and independently rereads edit authorization. It rejects dirty/manual drafts, pending operations, deferred or unsynchronized state and unresolved website/generation inputs. It never invokes website `applyProposal`/`persistSuggestions`. Duplicate staging and equal-value suggestions are no-ops.
+
+Only a separate deliberate Profile Save invokes the existing `profile_edit`, `canonical-brand-write/v1` command, exact revision/old-value checks, mutation identity, applicable protected review, restricted SQL write/history and authoritative read/reconciliation. Unrelated and unknown Core fields, Founder Story/modules, accepted DNA/Avatar and Board snapshot remain untouched. The excerpt is ephemeral review UI; it is never added as a write-payload provenance field.
+
+## Authorization and freshness
+
+The source captures account object/email, Board/load/Canvas identity, Workspace/catalog generation, persisted Brand association and exact successful question/answer. Sidebar Brand Y never retargets Board X. A cached catalog edit role is necessary for the affordance; preparation, staging and source revalidation for Save use fresh authenticated, no-cache reads of `/api/workspaces` and canonical Brand detail. The catalog is the existing read-only owner of persisted Board/Brand/Workspace associations and independent roles; unlike Board-detail GET, it does not enrich editor identity. Missing/revoked membership, active identity, Board edit or canonical Brand edit fails closed without showing current canonical values in the proposal preview.
+
+An old field or revision change requires a fresh comparison. Profile reload retains safe edits but cannot silently authorize a previously staged replacement against a new revision. The existing save contract handles conflicts, failure and exact lost-response retries. Successful reconciliation invalidates affected proposals while retaining the conversation. Return to conversation goes through the Profile save/discard/cancel guard and preserves same-Board transcript, composer/caret, mode, disclosure and scroll. Account/Board/load changes clear protected preview state; another account cannot revive a source intent.
+
+## Verification
+
+`npm run check:bw37.1c1` exercises production extraction, actual Profile sessions, signed-session Brand handlers/protected service and the real application shell with fictional data and mocked Advice. It checks exact one-field commands, absent/null/blank values, unrelated knowledge retention, blocked draft/busy/scope states, Board-only/viewer/anonymous and revoked identity/membership, 401/403/404/409/503/malformed results, conflicting revisions and blocked reload/rebase, lost reply/idempotent retry, newer edits, source/association changes, zero-write staging, separate Save, sidebar Y/Board X, EN/DE, Light/Dark, keyboard, mobile and long-conversation restoration. It is registered in both existing Runtime Boot Safety PostgreSQL matrix jobs.
+
+Full matrix results and GitHub CI status are reported on the PR. The local workflow runner executes every test/syntax step with disposable PostgreSQL 17.6 and 18.4; dependencies are installed once and the already installed Chromium binary substitutes for the workflow's browser installation step. Initial integration failures and their corrected reruns are recorded in the delivery report; existing tests were not weakened.
+
+## Review and limits
+
+Review focused on owner separation, independent authorization, exact source/baseline capture, no-write staging, cancellation races, safe DOM rendering, preservation of newer drafts, conflict recovery and existing Advice/Content/Profile compatibility. No merge, deployment, production SQL or paid evaluation was performed.
+
+The deterministic format intentionally omits many natural-language suggestions and cannot verify product claims or semantic truth. Humans review the wording before saving. Authorization is rechecked at operation boundaries; it is not continuous revocation. Conversation/source references remain in-memory and disappear on reload. Durable AI provenance, Campaign Creator, Content eligibility expansion, Learnings, tasks and decisions remain deferred. Existing generation/proposal transport gaps documented in the audit are unchanged and are not inherited by this zero-inference bridge.
