@@ -16,7 +16,7 @@ function extraction() {
   assert(!Object.hasOwn(select(answer.replace('Suggested channels: Instagram and TikTok.', 'Suggested channels: Avoid Instagram; use TikTok.')),'channel'));
   assert.equal(select(answer+'\n\nAnother campaign could target customers to build awareness.'),null);
   assert(!Object.hasOwn(select(answer.split('\n\n').slice(0,2).join('\n\n')),'channel'));
-  for(const text of ['', 'Thank you!', 'Campaign concept: #MyAppicsStory', 'Discuss the Brand and its audience.', 'Proposed Value Proposition: Creators build a community together.', 'Campaign diagnostics: build stronger targeting for customers in your launch.', 'Maybe create a campaign?', 'Launch a campaign to increase awareness.', 'Option A: Campaign for creators to build a community.\n\nOption B: Launch another campaign.', answer+'x'.repeat(12000), answer.replace('Launch','No campaign: Launch'), answer.replace('The goal','Is the goal?')]) assert.equal(select(text),null,text);
+  for(const text of ['', 'Thank you!', 'Campaign concept: #MyAppicsStory', 'Discuss the Brand and its audience.', 'Proposed Value Proposition: Creators build a community together.', 'Campaign diagnostics: build stronger targeting for customers in your launch.', 'Your product launch lacks a clear message for customers. Build awareness across channels.', 'Your launch strategy should build a strong community among creators and increase awareness across channels.', 'Proposed Value Proposition: Launch a new community for creators to build awareness of their stories.', 'Maybe create a campaign?', 'Launch a campaign to increase awareness.', 'Option A: Campaign for creators to build a community.\n\nOption B: Launch another campaign.', answer+'x'.repeat(12000), answer.replace('Launch','No campaign: Launch'), answer.replace('The goal','Is the goal?')]) assert.equal(select(text),null,text);
   for(const status of ['failed','pending']) assert.equal(select(answer,{status}),null);
   assert.equal(select(answer,{referenceResolution:'clarification'}),null);
   for(const adviceMode of ['general','review_strategy','explore_ideas','find_gaps','evaluate_options']) assert(select(answer,{adviceMode}));
@@ -69,7 +69,7 @@ async function browsers() {
     await p.setViewportSize({width:1440,height:900});
     await p.evaluate(()=>state.uiLanguage=language.setUiLanguage('de'));adviceAnswer=german;
     await ask();await cta.last().click();await dialog.waitFor();assert.equal(await dialog.locator('#campaign-creation-idea').inputValue(),german.split('\n\n')[0]);await p.keyboard.press('Escape');
-    for(const text of ['General strategy: focus on community and listen to your customers.', 'Proposed Value Proposition: Creators build a community together.', 'Campaign concept: #MyAppicsStory']) {
+    for(const text of ['General strategy: focus on community and listen to your customers.', 'Your product launch lacks a clear message for customers. Build awareness across channels.', 'Proposed Value Proposition: Creators build a community together.', 'Campaign concept: #MyAppicsStory']) {
       await boot();adviceAnswer=text;await ask();assert.equal(await cta.count(),0);
     }
     adviceAnswer=answer;

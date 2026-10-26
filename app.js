@@ -6465,7 +6465,7 @@ function aiBrainConversationHistory(excludedTurnId = null) {
   return { exchanges: history, truncated };
 }
 function invalidateAiBrainRequest() {
-  if (campaignCreationController?.brainSource) {
+  if (typeof campaignCreationController !== 'undefined' && campaignCreationController?.brainSource) {
     state.activeCampaignGeneration = null;
     campaignCreationController.dialog.dataset.campaignV3Busy = 'false';
     campaignCreationController.close();
@@ -6595,10 +6595,14 @@ function aiBrainCampaignBrief(turn) {
     else break;
   }
   const additionalContext = context.join('\n\n'), selected = idea + '\n\n' + additionalContext;
+  const identified = /#[\p{L}\d_]{3,}|["“„«][^"”“»\n]{3,100}["”“»]|\b(?:named|called|namens|heißt)\b/iu.test(idea);
+  const proposed = /^(?:(?:a|one|suggested|proposed|recommended|eine|vorgeschlagene)\s+)?(?:(?:product[- ]launch|community)\s+)?(?:campaign (?:idea|concept|proposal)|kampagnenidee|kampagnenkonzept|kampagnenname|kampagnentitel)\s*[:—–-]|^(?:(?:we|you) (?:could|should) |let[’']s )?(?:launch|run|start|introduce|starte[n]?|entwickle[n]?)\b/i.test(idea);
+  if (/^(?:(?:proposed|suggested|replacement|vorgeschlagenes|neues)\s+)*(?:brand )?(?:value proposition|nutzenversprechen|rationale|explanation|begründung|erklärung)\s*:/i.test(idea)
+    || !identified && !proposed) return null;
   if (idea.length < 60 || idea.length > 2000 || additionalContext.length > 4000
     || !purpose.test(selected) || !audience.test(selected)
     || /\?|\b(?:no campaign|not a campaign|keine kampagne|campaign diagnostics|kampagnendiagnose)\b/i.test(selected)
-    || !/(?:#[\p{L}\d_]{3,}|["“„«][^"”“»\n]{3,100}["”“»]|\b(?:concept|proposal|launch|named|called|idee|konzept|vorschlag|namens|heißt|produkteinführung)\b)/iu.test(idea)) return null;
+    || /\b(?:lacks?|missing|diagnostics?|fehlt|fehlen|diagnose)\b/i.test(idea)) return null;
   // Only explicit channel suggestions configure setup; mere platform mentions do not.
   const channelParagraphs = [idea, ...context].filter(p => /\b(?:channels?|kanal|kanäle)\s*:|\b(?:publish|post|share) on\b|\bauf (?:LinkedIn|Facebook|X|Instagram|TikTok).{0,40}(?:teilen|veröffentlichen)/i.test(p)
     && !/\b(?:not|no|avoid|without|undecided|nicht|keine?|ohne|unklar)\b/i.test(p));
