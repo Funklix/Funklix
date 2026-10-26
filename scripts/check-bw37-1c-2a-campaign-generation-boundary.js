@@ -59,7 +59,7 @@ async function fixture() {
     const result = await pg.query(sql, args);
     result.rowCount = result.rows.length; // node-postgres SELECT transport contract
     if (/^BEGIN/.test(sql)) f.transactions++;
-    if (/^(COMMIT|ROLLBACK)/.test(sql)) f.transactions--;
+    if (/^(COMMIT|ROLLBACK)/.test(sql) && f.transactions > 0) f.transactions--;
     return f.rows ? f.rows(sql, result) : result;
   };
   const db = { query, connect: async () => ({ query, release() { f.released++; } }) };
@@ -89,7 +89,9 @@ async function fixture() {
   }
   const auth = load('api/_auth-session.js');
   const handlers = { generate: load('api/generate-campaign.js'), repair: load('api/refine-node.js') };
+  load('api/_write-maintenance.js').guardPool(db);
   f.reset = async () => {
+    delete f.env.TENDRA_WRITE_MAINTENANCE;
     f.beforeQuery = f.rows = f.provider = null; f.calls.length = f.queries.length = 0;
     f.answer = JSON.stringify({ nodes: [], edges: [] });
     await pg.exec('DELETE FROM board_editors; DELETE FROM boards; DELETE FROM brand_members; DELETE FROM brands; DELETE FROM workspace_memberships; DELETE FROM workspaces; DELETE FROM app_identities;');
@@ -103,7 +105,9 @@ async function fixture() {
     await pg.query("INSERT INTO board_editors VALUES ($1,$2,'editor')", [BOARD, ACTOR]);
   };
   f.invoke = async (kind, body, { user = { email: ACTOR }, cookie, method = 'POST' } = {}) => {
-    const res = { statusCode: 200, headers: {}, setHeader(k, v) { this.headers[k] = v; }, status(code) { this.statusCode = code; return this; }, json(body) { this.body = clone(body); return this; } };
+    const res = { statusCode: 200, headers: {}, setHeader(k, v) { this.headers[k] = v; }, removeHeader(k) { delete this.headers[k]; },
+      status(code) { this.statusCode = code; return this; }, json(body) { return this.end(JSON.stringify(body)); },
+      end(body) { if (body) this.body = JSON.parse(body); return this; } };
     await handlers[kind]({ method, body, headers: { cookie: cookie ?? (user ? `funklix_session=${auth.createSessionToken(user)}` : '') } }, res);
     assert.equal(f.transactions, 0); assert.equal(res.headers['Cache-Control'], 'private, no-store');
     return res;
@@ -253,7 +257,16 @@ async function main() {
       assert.equal(result.statusCode, 200, `${nodeType}: existing Inspector refinement`);
       assert.deepEqual(result.body, JSON.parse(f.answer));
     }
+    await f.reset(); f.env.TENDRA_WRITE_MAINTENANCE = '1';
+    for (const kind of Object.keys(inputs)) {
+      assert.equal((await f.invoke(kind, inputs[kind](), { user: null })).statusCode, 401);
+      const result = await f.invoke(kind, inputs[kind]());
+      assert.equal(result.statusCode, 503); assert.equal(result.body.code, 'TENDRA_WRITE_MAINTENANCE');
+      assert.equal(result.headers['Retry-After'], '60'); assert.equal(f.calls.length, 0);
+    }
+    delete f.env.TENDRA_WRITE_MAINTENANCE;
     console.log('PASS generation EN/DE/ES, malformed/missing setup and repair fields, exact main provider schemas, unchanged repair JSON contract; zero domain writes');
+    console.log('PASS existing central maintenance response and database gate: retryable 503, auth retained, no paid generation during maintenance');
   } finally { await f.pg.close(); }
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });

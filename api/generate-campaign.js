@@ -513,3 +513,6 @@ Return ONLY strict JSON with this shape:
 };
 
 module.exports.normalizeCampaignLanguage = normalizeCampaignLanguage;
+
+// Retain the central response boundary for every database-dependent HTTP route.
+module.exports = require('./_write-maintenance').withMaintenanceResponse(module.exports);

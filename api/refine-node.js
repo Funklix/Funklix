@@ -113,3 +113,6 @@ Return strict JSON only:
     return generation.respond(res, error);
   }
 };
+
+// Retain the central response boundary for every database-dependent HTTP route.
+module.exports = require('./_write-maintenance').withMaintenanceResponse(module.exports);

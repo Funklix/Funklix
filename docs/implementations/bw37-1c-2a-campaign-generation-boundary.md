@@ -28,7 +28,7 @@ Both routes require a signed session, a UUID Board ID, an allowlisted JSON objec
 
 Legacy `brandBrainData` is accepted only as a bounded object for older clients and ignored as a source. Current Creator generation and repair requests stop sending it. Other existing refine callers can keep their request shape. Briefing, generated node summaries and campaign text remain untrusted user task input. Fixed system policy makes this distinction explicit; it cannot guarantee model obedience or factual truth.
 
-Every OpenAI request in both routes now sets `store:false`. Model, endpoint, schema, response format, request count, provider timeout behavior and explicit retry lifecycle are retained. Errors retain their existing 500/502 classes while removing raw provider bodies/text and internal exception details; protected responses use `Cache-Control: private, no-store`. No automatic retry, quota, new provider or additional paid inference is introduced.
+Every OpenAI request in both routes now sets `store:false`. Model, endpoint, schema, response format, request count, provider timeout behavior and explicit retry lifecycle are retained. Errors retain their existing 500/502 classes while removing raw provider bodies/text and internal exception details; protected responses use `Cache-Control: private, no-store`. Both newly database-dependent routes retain the repository's central `withMaintenanceResponse` boundary. No automatic retry, quota, new provider or additional paid inference is introduced.
 
 ## Preserved owner behavior
 
@@ -65,6 +65,8 @@ Verified local results:
 - `check:bw37.1br1` and `check:bw37.1c1`: PASS actual conversational-advisor and Profile handoff API/owner/browser regressions.
 
 Codex review of the first commit identified one P2 compatibility issue: limiting the shared refine route to V3's six types disabled existing Visual Concept/Image Brief Inspector actions. The correction accepts all eight existing types; the boundary regression reads the actual browser `NODE_TYPES` registry and exercises each type through the protected production route. No new Canvas type or schema is introduced.
+
+The first full CI pass reached the final maintenance check on PostgreSQL 17.6 and correctly rejected the newly database-dependent routes without central response wrappers. Both now use the existing wrapper; the maintenance regression is retained unchanged. The new boundary suite also uses the real database guard and verifies maintenance-mode authentication, retryable 503 responses and zero provider calls. The existing gate fails closed on the new context transaction/session statements during maintenance; its SQL allowlist is not expanded. The 18.4 job also encountered an unchanged Home screenshot-scroll DOM-detachment race; its local final-code Home regression passes. Final CI status is tracked on the PR rather than inferred from these partial runs.
 
 The full Runtime Boot Safety matrix runs on the PR, including the new suite against disposable PostgreSQL 17.6/18.4; final commit/check results are reported in the PR checks and delivery report. Every preexisting step remains. Local browser download is denied by the environment's Chromium CDN policy; local browser regressions use installed Chromium. GitHub CI uses #824's unchanged five-minute matched Chromium installation and real 30-second launch/page-title probe.
 

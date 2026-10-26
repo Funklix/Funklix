@@ -68,7 +68,7 @@ function protectedGenerator() {
   const digest = source => crypto.createHash('sha256').update(source).digest('hex');
   const expected = {
     "campaign-v3.js": "b9e05a42fcf85ec6f070da2473655d3ee64140b2a0a2c175afc1cd3bb3a5cf1c",
-    "api/generate-campaign.js": "b29ebe254a048f6c8abe666b7e154b741c6ff84eb3bdc1b28c2c41e257d60f8b",
+    "api/generate-campaign.js": "e8ecdaeb07c43467e57c2ac016ef46231261974a839522eea967fb7b59bb3179",
     "api/_campaign-creation.js": "4a39f62c6411bf1b4dc837c8b89e2b3a4b9ea7b3f334a928a62554fc7be8e963",
     "campaign-creation.js": "4e14fd829b822f0efd2f83dac6e0fd407093c3f300b2e1e9f2bb750a5135388d",
     "campaign-creation-dialog.js": "d114e098d4dc8c93105099e5d4f300f4a3ea7bd264bd1e55e0a6fdf5dbc51f53"
