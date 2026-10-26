@@ -120,6 +120,7 @@ async function browserChecks() {
     await p.evaluate(()=>{invalidateAiBrainRequest();renderAiBrain();});await submit();await p.locator('[data-ai-brand-proposal]').click();await p.waitForFunction(()=>!document.querySelector('[data-ai-brand-stage]')?.disabled);
     f.r.db.brands[0].revision++;f.r.db.brands[0].brand_core.valueProposition='Changed concurrently';
     const writesBefore=f.writes.length;await p.locator('[data-ai-brand-stage]').click();await p.waitForFunction(()=>document.querySelector('#ai-brand-proposal-dialog [role=status]')?.textContent.includes('changed'));
+    await p.locator('#ai-brand-proposal-value').fill('A retained edit after the comparison became stale.');assert(await p.locator('[data-ai-brand-stage]').isDisabled(),'Editing cannot revive a stale comparison');
     assert.equal(f.writes.length,writesBefore);await p.keyboard.press('Escape');
     // An expired association and fresh Workspace membership cannot be replaced by sidebar Y.
     await p.evaluate(()=>{invalidateAiBrainRequest();renderAiBrain();});await submit();

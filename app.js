@@ -6529,6 +6529,7 @@ async function readAiBrainProposalBrand(turn, answer, question) {
     try {
       const response = await fetch(url, { signal: controller.signal, credentials: 'same-origin', cache: 'no-store', headers: { Accept: 'application/json' } });
       const value = await response.json();
+      if ([401,403,404].includes(response.status)) turn.brandProposalInvalid = true;
       if (!response.ok || !aiBrainBrandSourceCurrent(turn) || turn.answer !== answer || turn.question !== question
         || !state.aiBrain.messages.includes(turn)) throw new Error('UNAVAILABLE');
       return value;
@@ -6540,17 +6541,22 @@ async function readAiBrainProposalBrand(turn, answer, question) {
   const workspace = catalog.workspaces?.find(w => w.id === source.workspaceId);
   if (!workspace?.boards?.some(b => b.id === state.currentBoardId && b.brand_id === source.brandId
       && ['owner','editor','brand_owner','brand_admin','brand_editor'].includes(b.role))
-    || !workspace.brands?.some(b => b.id === source.brandId && ['owner','admin','editor'].includes(b.role))) throw new Error('UNAVAILABLE');
+    || !workspace.brands?.some(b => b.id === source.brandId && ['owner','admin','editor'].includes(b.role))) {
+    turn.brandProposalInvalid = true; throw new Error('UNAVAILABLE');
+  }
   const brand = await read(`/api/brands/${encodeURIComponent(source.brandId)}`);
   if (!isCanonicalBrandDetail(brand, source.brandId) || brand.access.canEditCanonicalBrand !== true
-    || !['owner','admin','editor'].includes(brand.access.role)) throw new Error('UNAVAILABLE');
+    || !['owner','admin','editor'].includes(brand.access.role)) {
+    if (brand?.access?.canEditCanonicalBrand === false) turn.brandProposalInvalid = true;
+    throw new Error('UNAVAILABLE');
+  }
   return brand;
 }
 function aiBrainProfileBlocked() {
   const s = brandProfileController?.state;
   return canonicalBrandDraftDirty() || canonicalBrandDetail.status === 'submitting' || !!s &&
     (brandProfileController.dirty() || brandProfileController.busy() || s.deferred || s.syncRequired || s.reconciliationWarning
-      || Object.keys(s.proposals).length || s.file || s.dnaDraft || s.avatarDraft);
+      || Object.keys(s.proposals).length || s.file || s.candidate || s.dnaDraft || s.avatarDraft || s.avatarDirection);
 }
 async function openAiBrainBrandProposal(turnId) {
   if (document.getElementById('ai-brand-proposal-dialog')) return;
@@ -6579,11 +6585,13 @@ async function openAiBrainBrandProposal(turnId) {
     if (staging) return;
     dialog.close(); dialog.remove();
     if (openedProfile && state.activeView === 'brand-profile') closeCanonicalBrandDetail({ restoreFocus: false });
+    if (state.activeView === 'ai_brain' && turn.brandProposalInvalid) renderAiBrain();
     if (origin?.isConnected) origin.focus({ preventScroll: true });
+    else if (state.activeView === 'ai_brain') el.aiBrainSummary.querySelector('#ai-brain-question')?.focus({ preventScroll: true });
   };
   cancel.addEventListener('click', close); dialog.addEventListener('cancel', e => { e.preventDefault(); close(); });
   document.body.append(dialog); dialog.showModal(); cancel.focus();
-  let baseline;
+  let baseline, comparisonValid = false;
   const expected = brand => Object.hasOwn(brand.brand_core, 'valueProposition') ? { exists: true, value: brand.brand_core.valueProposition } : { exists: false };
   try {
     if (aiBrainProfileBlocked()) { status.textContent = aiBrainBrandCopy('blocked'); return; }
@@ -6594,14 +6602,16 @@ async function openAiBrainBrandProposal(turnId) {
     title.textContent = `${aiBrainBrandCopy('title')} — ${baseline.name}`;
     const workspace = state.workspaceCatalog.value.workspaces.find(w => w.id === turn.brandProposalSource.workspaceId);
     destination.textContent = `${workspace.name} / ${state.currentBoardName} / ${baseline.name}`;
+    comparisonValid = true;
     status.textContent = ''; stage.disabled = baseline.brand_core.valueProposition === input.value;
-    input.addEventListener('input', () => { stage.disabled = !input.value.trim() || input.value.length > 2000 || input.value === baseline.brand_core.valueProposition; });
+    input.addEventListener('input', () => { stage.disabled = !comparisonValid || !input.value.trim() || input.value.length > 2000 || input.value === baseline.brand_core.valueProposition; });
   } catch {
     if (turn.brandProposalSource.account !== state.user || turn.brandProposalSource.identity !== aiBrainIdentity()) dialog.remove();
     if (dialog.isConnected) { current.textContent = ''; excerpt.remove(); status.textContent = aiBrainBrandCopy('stale'); }
     return;
   }
   stage.addEventListener('click', async () => {
+    if (staging || !comparisonValid) return;
     const value = input.value;
     if (!value.trim() || value.length > 2000) { status.textContent = aiBrainBrandCopy('invalid'); return; }
     staging = true; cancel.disabled = true; stage.disabled = true; input.disabled = true; status.textContent = aiBrainBrandCopy('loading');
@@ -6644,6 +6654,7 @@ async function openAiBrainBrandProposal(turnId) {
       const existing = el.brandWorkspaceDetail.querySelector('[data-ai-brand-return]'); existing?.remove();
       el.brandWorkspaceDetailTitle.after(back); back.focus({ preventScroll: true });
     } catch {
+      comparisonValid = false;
       if (turn.brandProposalSource.account !== state.user || turn.brandProposalSource.identity !== aiBrainIdentity()) dialog.remove();
       if (dialog.isConnected) { current.textContent = ''; excerpt.remove(); status.textContent = aiBrainBrandCopy('stale'); }
     } finally {
