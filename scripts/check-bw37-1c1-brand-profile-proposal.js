@@ -64,6 +64,7 @@ function eligibility() {
   assert.equal(select(appicsNaturalAnswer)?.excerpt, appicsNaturalAnswer);
   const naturalGerman = '**Vorgeschlagenes neues Nutzenversprechen:**\n\n„Kreative teilen ihre Ideen in einer Gemeinschaft, die ihre eigene Stimme schätzt.“\n\n**Gründe für die Stärke:**\n\n1. **Klarheit:** Der Nutzen steht im Mittelpunkt.\n   Die Zielgruppe wird direkt angesprochen.\n\n2) **Gemeinschaft:** Eigene Ideen bleiben erkennbar.\n\n3. **Fokus:** Die Formulierung bleibt verständlich.\n\nInsgesamt, wird der Nutzen deutlicher.';
   assert.equal(select(naturalGerman)?.value, 'Kreative teilen ihre Ideen in einer Gemeinschaft, die ihre eigene Stimme schätzt.');
+  assert.equal(select('Vorgeschlagenes Nutzenversprechen:\n„Kreative teilen ihre Ideen gemeinsam.“\nErklärung:\nDiese Formulierung stärkt den Nutzen.\n1. Klarheit: Die Aussage „Ideen gemeinsam“ spricht die Zielgruppe an.\n2) Gemeinschaft: Die eigene Stimme bleibt sichtbar.\nDie Formulierung passt zur Marke.')?.value,'Kreative teilen ihre Ideen gemeinsam.');
   assert.equal(select(appicsNaturalAnswer.replace('2)', '4)')), null);
   assert.equal(select(appicsNaturalAnswer + '\nMission: A different field.'), null);
   assert.equal(select(appicsNaturalAnswer + '\nSuggested Brand Value Proposition: Another value.'), null);
@@ -158,6 +159,7 @@ function prepareAppicsBoard(r) {
   r.db.boards[0].canvas_json.nodes = Array.from({length:36}, (_,i)=>({...structuredClone(template), id:'appics-'+i, title:'Appics idea '+i}));
   r.db.brands[0].owner_email = 'independent-owner@example.test';
   r.db.brandRole = 'editor';
+  r.db.brands[0].brand_core.valueProposition = 'A place for creators to share their passions.';
 }
 async function catalogLifecycle() {
   const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH||'/usr/bin/chromium',args:['--no-sandbox']});
@@ -274,6 +276,7 @@ async function browserChecks() {
     await p.evaluate(()=>{state.session.brandId='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';renderAiBrain();});
     await p.locator('[data-ai-brand-proposal]').click();await p.waitForFunction(()=>!document.querySelector('[data-ai-brand-stage]')?.disabled);
     assert((await p.locator('[data-ai-brand-current]').textContent()).includes('Canvas Brand X'));
+    assert((await p.locator('[data-ai-brand-current]').textContent()).includes(f.r.db.brands[0].brand_core.valueProposition),'Preview shows the exact independently read canonical value');
     assert.equal(await p.locator('#ai-brand-proposal-value').inputValue(),appicsReportedValue);
     assert(!(await p.locator('#ai-brand-proposal-value').inputValue()).includes('Reasons for Strength'));
     await p.locator('#ai-brand-proposal-value').fill('An edited suggestion with <script>inert text</script>.');

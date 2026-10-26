@@ -6540,7 +6540,7 @@ function aiBrainValueProposition(turn) {
           if (!count || summary) return null;
           summary = true;
         } else if ((!count && !prose) || summary || /^(?:[-#>]|\d+[.)])/.test(line.trim())) return null;
-        // Other lines only continue a numbered explanation; never a value.
+        // Other lines belong only to the explicitly headed explanation, never the value.
       }
       if (!content || !prose && !count) return null;
     } else return null;
