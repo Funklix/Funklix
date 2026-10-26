@@ -52,6 +52,8 @@ function eligibility() {
     appicsAnswer.replace(`"${appicsValue}"`, 'Guaranteed proven growth of 50 percent.'),
     appicsAnswer.replace(`"${appicsValue}"`, 'Maybe this could work?'),
     'Strategy discussion: ' + appicsValue,
+    'Proposed Brand Value Proposition: Brand DNA: Creator',
+    'Proposed Brand Value Proposition: Option A: One choice. Option B: Another choice.',
     '**Proposed Brand Value Proposition:**\n\n' + appicsValue + '\nA second paragraph.',
     'Proposed Brand Value Proposition: A clear choice.\n\nRationale: Suggested Brand Value Proposition: A different choice.'
   ]) assert.equal(select(text), null, text);
@@ -131,6 +133,7 @@ async function browserChecks() {
     await p.locator('#ai-brand-proposal-value').fill('An edited proposal for independent makers.');
     await p.locator('[data-ai-brand-stage]').click();await p.waitForSelector('[data-ai-brand-return]');
     assert.equal(await p.evaluate(()=>state.activeView),'brand-profile');assert(await p.evaluate(()=>brandProfileController.contentDirty()));
+    assert.equal(await p.evaluate(()=>brandProfileController.state.core.valueProposition),'An edited proposal for independent makers.');
     assert.equal(f.writes.length,0);assert.equal(JSON.stringify(f.r.db.brands),before);assert.equal(calls,1);
     assert(await p.evaluate(()=>brandProfileController.reload()));
     assert(await p.evaluate(()=>brandProfileController.contentDirty()));
@@ -139,6 +142,7 @@ async function browserChecks() {
     await p.locator('[data-ai-brand-return]').click();await p.waitForSelector('#brand-leave-dialog');await p.locator('[data-keep-editing]').click();
     assert.equal(await p.evaluate(()=>state.activeView),'brand-profile');
     assert(await p.evaluate(()=>brandProfileController.save()));assert.equal(f.writes.filter(r=>r.method==='PUT').length,1);
+    assert.equal(f.r.db.brands[0].brand_core.valueProposition,'An edited proposal for independent makers.');
     await p.locator('[data-ai-brand-return]').click();await p.waitForSelector('#ai-brain-question');
     assert.equal(await p.locator('#ai-brain-question').inputValue(),'Keep this new draft');assert.deepEqual(await p.locator('#ai-brain-question').evaluate(n=>[n.selectionStart,n.selectionEnd,n.selectionDirection]),[2,7,'backward']);
     assert.equal(await p.evaluate(()=>JSON.stringify(state.brandCore)),snapshot);assert.equal(calls,1);assert.equal(await p.locator('[data-ai-brand-proposal]').count(),0);
