@@ -22,7 +22,7 @@ module.exports = async function handler(req, res) {
     const validNode = node => generation.object(node) && Object.keys(node).every(key => nodeKeys.includes(key))
       && Object.entries(node).every(([key, value]) => ['metadata', 'social', 'landingPage'].includes(key)
         ? generation.object(value) : typeof value === 'string');
-    if (!['Idea', 'Campaign Variation', 'Content', 'Social Media Posting', 'Landing Page', 'Email Campaign'].includes(nodeType)
+    if (!['Idea', 'Campaign Variation', 'Content', 'Social Media Posting', 'Landing Page', 'Email Campaign', 'Visual Concept', 'Image Brief'].includes(nodeType)
       || typeof instruction !== 'string' || !instruction.trim() || instruction.length > 256 * 1024
       || !Object.hasOwn(req.body, 'currentContent') || !Object.keys(currentContent || {}).length
       || !validNode(currentContent) || (parentNode !== null && !validNode(parentNode))

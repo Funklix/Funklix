@@ -242,6 +242,17 @@ async function main() {
     }
     f.answer = JSON.stringify({ title: 'Repaired pillar', content: 'Specific fictional copy', caption: '' });
     assert.deepEqual((await f.invoke('repair', inputs.repair())).body, JSON.parse(f.answer));
+    // Shared Inspector refinement supports all existing Canvas types, not just V3's six.
+    // Read the actual UI registry so adding/removing a supported type cannot evade this test.
+    const app = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8');
+    const registry = app.slice(app.indexOf('const NODE_TYPES = ') + 'const NODE_TYPES = '.length, app.indexOf('const NEXT_STEP_NODE_TYPE'));
+    const types = Object.keys(vm.runInNewContext(`(${registry.trim().replace(/;$/, '')})`));
+    assert(types.includes('Visual Concept')); assert(types.includes('Image Brief'));
+    for (const nodeType of types) {
+      const result = await f.invoke('repair', { ...inputs.repair(), nodeType });
+      assert.equal(result.statusCode, 200, `${nodeType}: existing Inspector refinement`);
+      assert.deepEqual(result.body, JSON.parse(f.answer));
+    }
     console.log('PASS generation EN/DE/ES, malformed/missing setup and repair fields, exact main provider schemas, unchanged repair JSON contract; zero domain writes');
   } finally { await f.pg.close(); }
 }
