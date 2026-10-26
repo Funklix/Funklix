@@ -3319,13 +3319,21 @@ function renderCanonicalBrandDetail() {
 }
 
 function reconcileConfirmedBrand(confirmed) {
-  state.aiBrain.messages.forEach(turn => { if (turn.brandProposalSource?.brandId === confirmed.id) turn.brandProposalInvalid = true; });
   const previous = canonicalBrandDetail.brand;
   if (previous?.id === confirmed.id) {
     if (previous.revision > confirmed.revision) return;
     if (previous.logo_revision > confirmed.logo_revision) confirmed = { ...confirmed,
       logo_url: previous.logo_url, logo_revision: previous.logo_revision,
       logo_source: previous.logo_source, logo_updated_at: previous.logo_updated_at };
+  }
+  // reload() also reconciles read-only canonical data. An unchanged reload must
+  // not revoke the source of a dirty staged draft; changed truth still does.
+  const beforeCore = previous?.brand_core || {}, afterCore = confirmed.brand_core;
+  if (previous?.id !== confirmed.id || previous.revision !== confirmed.revision
+    || Object.hasOwn(beforeCore, 'valueProposition') !== Object.hasOwn(afterCore, 'valueProposition')
+    || !window.BrandWriteContract.equal(beforeCore.valueProposition, afterCore.valueProposition)
+    || confirmed.access?.canEditCanonicalBrand !== true) {
+    state.aiBrain.messages.forEach(turn => { if (turn.brandProposalSource?.brandId === confirmed.id) turn.brandProposalInvalid = true; });
   }
   canonicalBrandDetail.brand = confirmed;
   sidebarProfileCache.set(confirmed.id, confirmed.brand_core);

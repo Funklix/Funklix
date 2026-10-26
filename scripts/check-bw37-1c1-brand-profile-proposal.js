@@ -77,6 +77,10 @@ async function browserChecks() {
     await p.locator('[data-ai-brand-stage]').click();await p.waitForSelector('[data-ai-brand-return]');
     assert.equal(await p.evaluate(()=>state.activeView),'brand-profile');assert(await p.evaluate(()=>brandProfileController.contentDirty()));
     assert.equal(f.writes.length,0);assert.equal(JSON.stringify(f.r.db.brands),before);assert.equal(calls,1);
+    assert(await p.evaluate(()=>brandProfileController.reload()));
+    assert(await p.evaluate(()=>brandProfileController.contentDirty()));
+    assert.equal(await p.evaluate(()=>state.aiBrain.messages.at(-1).brandProposalInvalid),false,'An unchanged canonical reload must preserve the staged comparison');
+    assert.equal(f.writes.length,0);
     await p.locator('[data-ai-brand-return]').click();await p.waitForSelector('#brand-leave-dialog');await p.locator('[data-keep-editing]').click();
     assert.equal(await p.evaluate(()=>state.activeView),'brand-profile');
     assert(await p.evaluate(()=>brandProfileController.save()));assert.equal(f.writes.filter(r=>r.method==='PUT').length,1);
