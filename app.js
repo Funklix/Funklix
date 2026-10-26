@@ -12038,7 +12038,6 @@ async function fetchGeneratedCampaignPlan(ideaText, contextText, setupOptions = 
       campaignIdea: ideaText,
       additionalContext: contextText,
       boardId: getCurrentBrandBrainBoardId(),
-      brandBrainData: state.brandCore,
       campaignLanguage,
       ...setup
     })
@@ -13939,7 +13938,6 @@ async function repairCampaignV3Node({ node, nodeType, issues, campaignContext })
       currentContent: campaignV3RepairNodeSummary(node),
       instruction,
       boardId: getCurrentBrandBrainBoardId(),
-      brandBrainData: state.brandCore,
       campaignContext: JSON.stringify(campaignContext)
     })
   });

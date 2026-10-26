@@ -1,4 +1,5 @@
-const { buildBrandBrainContext } = require("./_brand-brain-context");
+const generation = require('./_campaign-generation-context');
+const { getSessionUser } = require('./_auth-session');
 
 const CAMPAIGN_CHAIN_TYPES = ["Idea", "Campaign Variation", "Content", "Social Media Posting", "Landing Page", "Email Campaign"];
 const ANGLE_FAMILIES = ["Emotional", "Rational", "Authority", "Community", "Transformation", "Opportunity", "Trust", "Contrarian"];
@@ -21,16 +22,17 @@ function normalizeChannel(channel = "LinkedIn") {
 }
 
 module.exports = async function handler(req, res) {
+  res.setHeader?.('Cache-Control', 'private, no-store');
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) return res.status(500).json({ error: "Server is missing OPENAI_API_KEY" });
-
   try {
+    const user = getSessionUser(req);
+    if (!user?.email) return res.status(401).json({ error: 'Authentication required' });
+    generation.validateBody(req.body, ['campaignIdea', 'additionalContext', 'brandBrainData', 'boardId',
+      'variationCount', 'postsPerVariation', 'includeLandingPage', 'includeEmailCampaign', 'channel', 'campaignLanguage']);
     const {
       campaignIdea = "",
       additionalContext = "",
-      brandBrainData = {},
       boardId = "",
       variationCount: rawVariationCount = 3,
       postsPerVariation: rawPostsPerVariation = 5,
@@ -39,9 +41,15 @@ module.exports = async function handler(req, res) {
       channel: rawChannel = "LinkedIn",
       campaignLanguage: rawCampaignLanguage = "en"
     } = req.body || {};
-    if (!campaignIdea.trim()) {
-      return res.status(400).json({ error: "campaignIdea is required" });
-    }
+    if (typeof campaignIdea !== 'string' || !campaignIdea.trim() || campaignIdea.length > 2000
+      || typeof additionalContext !== 'string' || additionalContext.length > 4000
+      || ![rawVariationCount, rawPostsPerVariation].every(value => Number.isSafeInteger(value) || (typeof value === 'string' && /^\d{1,3}$/.test(value)))
+      || typeof includeLandingPage !== 'boolean' || typeof includeEmailCampaign !== 'boolean'
+      || !['LinkedIn', 'Facebook', 'X', 'Instagram', 'TikTok', 'Mixed'].includes(rawChannel)
+      || typeof rawCampaignLanguage !== 'string' || !Object.hasOwn(CAMPAIGN_LANGUAGES, rawCampaignLanguage)) generation.fail('VALIDATION', 400);
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) return res.status(500).json({ error: "Server is missing OPENAI_API_KEY" });
+    const dataContext = await generation.capture({ boardId, user });
 
     const variationCount = clampInteger(rawVariationCount, 3, 1, 10);
     const postsPerVariation = clampInteger(rawPostsPerVariation, 5, 1, 20);
@@ -50,7 +58,7 @@ module.exports = async function handler(req, res) {
     const campaignLanguageName = CAMPAIGN_LANGUAGES[campaignLanguage];
     const shouldIncludeLandingPage = includeLandingPage !== false;
     const shouldIncludeEmailCampaign = includeEmailCampaign !== false;
-    const brandBrainContext = buildBrandBrainContext(boardId, brandBrainData);
+    const brandBrainContext = generation.context(dataContext);
     const nodesPerVariation = 2 + postsPerVariation + (shouldIncludeLandingPage ? 1 : 0) + (shouldIncludeEmailCampaign ? 1 : 0);
     const expectedNodeCount = 1 + variationCount * nodesPerVariation;
     const expectedEdgeCount = variationCount * (2 + postsPerVariation + (shouldIncludeLandingPage ? postsPerVariation : 0) + (shouldIncludeEmailCampaign ? (shouldIncludeLandingPage ? 1 : postsPerVariation) : 0));
@@ -364,6 +372,7 @@ Return ONLY strict JSON with this shape:
   ]
 }`;
 
+    await generation.revalidate({ data: dataContext, user });
     const response = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
       headers: {
@@ -372,10 +381,11 @@ Return ONLY strict JSON with this shape:
       },
       body: JSON.stringify({
         model: "gpt-4o-mini",
+        store: false,
         input: [
           {
             role: "system",
-            content: "You are a senior campaign strategist creating a multi-variation Campaign Canvas plan. Return only strict JSON matching the schema."
+            content: `You are a senior campaign strategist creating a multi-variation Campaign Canvas plan. Return only strict JSON matching the schema. ${generation.POLICY}`
           },
           {
             role: "user",
@@ -466,17 +476,18 @@ Return ONLY strict JSON with this shape:
     });
 
     if (!response.ok) {
-      const errorBody = await response.text();
-      return res.status(502).json({ error: `OpenAI API error: ${errorBody}` });
+      await generation.revalidate({ data: dataContext, user });
+      return res.status(502).json({ error: 'OpenAI API error' });
     }
 
     const data = await response.json();
+    await generation.revalidate({ data: dataContext, user });
     const outputItemText = (data?.output || [])
       .flatMap((item) => item?.content || [])
       .find((contentItem) => contentItem?.type === "output_text" && contentItem?.text)?.text || "";
     const rawText = data?.output_text || data?.output?.[0]?.content?.[0]?.text || outputItemText || "";
     if (!rawText) {
-      return res.status(500).json({ error: "OpenAI returned empty output", data });
+      return res.status(500).json({ error: "OpenAI returned empty output" });
     }
     try {
       const parsed = JSON.parse(rawText);
@@ -494,10 +505,10 @@ Return ONLY strict JSON with this shape:
         }
       });
     } catch (parseError) {
-      return res.status(500).json({ error: "Failed to parse OpenAI JSON", rawText });
+      return res.status(500).json({ error: "Failed to parse OpenAI JSON" });
     }
   } catch (error) {
-    return res.status(500).json({ error: error?.message || "Failed to generate campaign" });
+    return generation.respond(res, error);
   }
 };
 

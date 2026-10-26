@@ -1,22 +1,36 @@
-const { buildBrandBrainContext } = require("./_brand-brain-context");
+const generation = require('./_campaign-generation-context');
+const { getSessionUser } = require('./_auth-session');
 
 module.exports = async function handler(req, res) {
+  res.setHeader?.('Cache-Control', 'private, no-store');
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) return res.status(500).json({ error: "Server is missing OPENAI_API_KEY" });
-
   try {
+    const user = getSessionUser(req);
+    if (!user?.email) return res.status(401).json({ error: 'Authentication required' });
+    generation.validateBody(req.body, ['nodeType', 'currentContent', 'instruction', 'brandBrainData', 'boardId',
+      'parentNode', 'campaignContext', 'connectedNodeContext']);
     const {
       nodeType = "",
       currentContent = {},
       instruction = "",
-      brandBrainData = {},
       boardId = "",
       parentNode = null,
       campaignContext = ""
     } = req.body || {};
-    const brandBrainContext = buildBrandBrainContext(boardId, brandBrainData);
+    const nodeKeys = ['id', 'tempId', 'type', 'title', 'description', 'content', 'caption', 'metadata', 'social', 'landingPage'];
+    const validNode = node => generation.object(node) && Object.keys(node).every(key => nodeKeys.includes(key))
+      && Object.entries(node).every(([key, value]) => ['metadata', 'social', 'landingPage'].includes(key)
+        ? generation.object(value) : typeof value === 'string');
+    if (!['Idea', 'Campaign Variation', 'Content', 'Social Media Posting', 'Landing Page', 'Email Campaign'].includes(nodeType)
+      || typeof instruction !== 'string' || !instruction.trim() || instruction.length > 256 * 1024
+      || !Object.hasOwn(req.body, 'currentContent') || !Object.keys(currentContent || {}).length
+      || !validNode(currentContent) || (parentNode !== null && !validNode(parentNode))
+      || typeof campaignContext !== 'string' || campaignContext.length > 256 * 1024) generation.fail('VALIDATION', 400);
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) return res.status(500).json({ error: "Server is missing OPENAI_API_KEY" });
+    const dataContext = await generation.capture({ boardId, user });
+    const brandBrainContext = generation.context(dataContext);
     const parentNodeSection = parentNode
       ? `Parent node: ${JSON.stringify(parentNode)}`
       : "Parent node: none";
@@ -38,6 +52,7 @@ Return strict JSON only:
   "caption": ""
 }`;
 
+    await generation.revalidate({ data: dataContext, user });
     const response = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
       headers: {
@@ -46,10 +61,11 @@ Return strict JSON only:
       },
       body: JSON.stringify({
         model: "gpt-4o-mini",
+        store: false,
         input: [
           {
             role: "system",
-            content: "You are a senior marketing strategist refining campaign content. You always consider brand voice, campaign context, and strategic intent."
+            content: `You are a senior marketing strategist refining campaign content. You always consider brand voice, campaign context, and strategic intent. ${generation.POLICY}`
           },
           {
             role: "user",
@@ -77,22 +93,23 @@ Return strict JSON only:
     });
 
     if (!response.ok) {
-      const errorBody = await response.text();
-      return res.status(502).json({ error: `OpenAI API error: ${errorBody}` });
+      await generation.revalidate({ data: dataContext, user });
+      return res.status(502).json({ error: 'OpenAI API error' });
     }
 
     const data = await response.json();
+    await generation.revalidate({ data: dataContext, user });
     const outputItemText = (data?.output || [])
       .flatMap((item) => item?.content || [])
       .find((c) => c?.type === "output_text" && c?.text)?.text || "";
     const rawText = data?.output_text || data?.output?.[0]?.content?.[0]?.text || outputItemText || "";
-    if (!rawText) return res.status(500).json({ error: "OpenAI returned empty output", data });
+    if (!rawText) return res.status(500).json({ error: "OpenAI returned empty output" });
     try {
       return res.status(200).json(JSON.parse(rawText));
     } catch (_error) {
-      return res.status(500).json({ error: "Failed to parse OpenAI JSON", rawText });
+      return res.status(500).json({ error: "Failed to parse OpenAI JSON" });
     }
   } catch (error) {
-    return res.status(500).json({ error: error?.message || "Failed to refine node" });
+    return generation.respond(res, error);
   }
 };

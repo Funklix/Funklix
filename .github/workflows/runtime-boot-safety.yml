@@ -55,6 +55,10 @@ jobs:
           node --check app.js
           node --check ai-brain-workspace-viewport.js
           node --check api/ai-brain/advice.js
+          node --check api/_campaign-generation-context.js
+          node --check api/generate-campaign.js
+          node --check api/refine-node.js
+          node --check scripts/check-bw37-1c-2a-campaign-generation-boundary.js
           node --check api/_ai-brain-evidence.js
           node --check scripts/check-bw37-1b-strategic-answer-quality.js
           node --check scripts/check-bw37-1a-strategic-advisor.js
@@ -506,6 +510,11 @@ jobs:
       - name: Check complete Campaign V3 generation in Chromium
         timeout-minutes: 5
         run: npm run check:bw36.14r1
+      - name: Check Campaign Creator generation boundary (disposable SQL, mocked provider)
+        env:
+          BW37_GENERATION_DISPOSABLE: '1'
+          BW37_GENERATION_TEST_URL: postgres://bw23_fixture_admin:disposable-bw36-23-fixture@127.0.0.1:5432/postgres
+        run: npm run check:bw37.1c2a
       - name: Check BW-36.15 guided campaign responsibilities
         run: npm run check:bw36.15
       - name: Check BW-36.15R1 responsibility workspace continuity
