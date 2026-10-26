@@ -5,7 +5,7 @@ const { runtime, W, B, D, EMAIL, clone } = require('./bw36-13r5-local-runtime');
 const ROOT = path.resolve(__dirname, '../..'), Y = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', W2 = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const payload = (id = B, counts = {proposed:73,approved:121}) => ({contract:'brand_learnings_v1',brand:{id},counts,can_write:true,learnings:[],has_more:false,offset:0});
 module.exports = browser => {
-  async function fixture({viewer=false, hidden=false, noBrand=false, root=false, noWorkspace=false, empty=false, analyzed=false, manyBoards=false}={}) {
+  async function fixture({viewer=false, hidden=false, noBrand=false, root=false, noWorkspace=false, empty=false, analyzed=false, manyBoards=false, prepare=null}={}) {
     const r=runtime();r.db.boards[0].name='Autumn Launch';
     r.db.brands[0].name='Canvas Brand X';r.db.brands.push({...clone(r.db.brands[0]),id:Y,name:'Selected Brand Y'});
     r.db.boards[0].canvas_json.nodes = [
@@ -15,6 +15,7 @@ module.exports = browser => {
     if(empty)r.db.boards[0].canvas_json.nodes=[];
     r.db.boards[0].canvas_json.nodes.push(...(empty?[]:[{...r.db.boards[0].canvas_json.nodes[0],id:'landing',type:'Landing Page',title:'Campaign destination',landingPage:{cta:'',trust:''},audience:'Audience B'}]));
     if (manyBoards) for (let i=1;i<10;i++) r.db.boards.push({...clone(r.db.boards[0]),id:`cccccccc-cccc-4ccc-8ccc-${String(i).padStart(12,'0')}`,name:'Saved campaign '+i,brand_id:i<5?Y:i<8?B:null,updated_at:i===9?null:`2026-10-${String(19-i).padStart(2,'0')}T10:00:00.000Z`});
+    if (prepare) prepare(r);
     const c=r.catalog();c.request_id='0123456789abcdef01234567';
     for(const w of c.workspaces){w.avatar_url=null;w.locale='en';for(const x of [...w.brands,...w.boards])delete x.workspace_id;}
     if(noBrand){r.db.boards[0].brand_id=null;c.workspaces[0].brands=[];c.workspaces[0].boards[0].brand_id=null;}

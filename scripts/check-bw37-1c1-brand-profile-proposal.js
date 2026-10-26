@@ -21,10 +21,52 @@ const appicsAnswer = `**Proposed Brand Value Proposition:**
 2. **Focus on Individuality:** ...
 3. **Clarity on Benefits:** ...`;
 
+const appicsNaturalAnswer = `**Proposed Brand Value Proposition:**
+
+“${appicsValue}”
+
+**Reasons for Strength:**
+
+1. **Emphasis on Empowerment:** Appics connects creative expression with tangible rewards.
+   People can share the passions that matter to them.
+
+2) **Focus on Individuality:** The wording emphasizes a distinctive voice and a supportive community.
+   It connects the audience benefit to the platform positioning.
+
+3. **Clarity on Benefits:** The proposal describes both expression and rewards.
+
+Overall, this makes the audience benefit easier to understand.`;
+
+// Verbatim failing reply supplied during R2. Explanation is separate from the
+// candidate even without a blank separator, and quotes in reasons are not values.
+const appicsReportedValue = 'Transform Your Passion into Profit: Join APPICS to Monetize Your Creativity in a Decentralized Community.';
+const appicsReportedAnswer = `Proposed Value Proposition:
+"${appicsReportedValue}"
+Explanation:
+This proposed wording enhances the original value proposition by emphasizing not just the earning potential but also the personal connection to creativity. It incorporates the following strengths:
+1. Emotional Connection: The phrase "Transform Your Passion" resonates with the target audience of content creators, making the offering feel personal and aspirational.
+2. Clear Call to Action: Using “Join APPICS” actively invites the audience to participate, creating a sense of belonging and community.
+3. Decentralization Highlight: Explicitly stating "in a Decentralized Community" reinforces the unique selling point of APPICS compared to traditional social media platforms, emphasizing user empowerment and community engagement.
+This adjustment aligns well with the brand's focus on empowerment, creativity, and the decentralized nature of the platform, making it more compelling to the audience.`;
+
 function eligibility() {
   const c = {}; vm.runInNewContext(app.slice(app.indexOf('function aiBrainValueProposition'), app.indexOf('function aiBrainBrandSourceCurrent')), c);
   const select = (text, q = appicsQuestion) => c.aiBrainValueProposition({status:'success',question:q,answer:text});
+  assert.equal(select(appicsReportedAnswer)?.value, appicsReportedValue);
+  assert.equal(select(appicsReportedAnswer)?.excerpt, appicsReportedAnswer);
+  assert.equal(select(appicsReportedAnswer.replace(/\n2\./, '\n2)').replace(/\n/g,'\r\n'))?.value, appicsReportedValue);
+  for (const extra of ['Proposed Value Proposition: Another choice.', 'Mission: Another field.', 'Alternative wording: Another choice.', '"A second possible replacement."', '2) "A second possible replacement."']) {
+    assert.equal(select(appicsReportedAnswer+'\n'+extra),null,extra);
+  }
+  assert.equal(select(appicsReportedAnswer.replace('"'+appicsReportedValue+'"\n','')),null);
   assert.equal(select(appicsAnswer)?.value, appicsValue);
+  assert.equal(select(appicsNaturalAnswer)?.value, appicsValue);
+  assert.equal(select(appicsNaturalAnswer)?.excerpt, appicsNaturalAnswer);
+  const naturalGerman = '**Vorgeschlagenes neues Nutzenversprechen:**\n\n„Kreative teilen ihre Ideen in einer Gemeinschaft, die ihre eigene Stimme schätzt.“\n\n**Gründe für die Stärke:**\n\n1. **Klarheit:** Der Nutzen steht im Mittelpunkt.\n   Die Zielgruppe wird direkt angesprochen.\n\n2) **Gemeinschaft:** Eigene Ideen bleiben erkennbar.\n\n3. **Fokus:** Die Formulierung bleibt verständlich.\n\nInsgesamt, wird der Nutzen deutlicher.';
+  assert.equal(select(naturalGerman)?.value, 'Kreative teilen ihre Ideen in einer Gemeinschaft, die ihre eigene Stimme schätzt.');
+  assert.equal(select(appicsNaturalAnswer.replace('2)', '4)')), null);
+  assert.equal(select(appicsNaturalAnswer + '\nMission: A different field.'), null);
+  assert.equal(select(appicsNaturalAnswer + '\nSuggested Brand Value Proposition: Another value.'), null);
   assert.equal(select(appicsAnswer)?.path, '/brand_core/valueProposition');
   assert.equal(select(appicsAnswer)?.excerpt, appicsAnswer);
   for (const label of ['Proposed Value Proposition', 'Proposed replacement Value Proposition', 'Suggested Value Proposition', 'Proposed Brand Value Proposition', 'Proposed replacement Brand Value Proposition', 'Suggested Brand Value Proposition', 'Vorgeschlagenes Nutzenversprechen', 'Vorgeschlagenes neues Nutzenversprechen']) {
@@ -59,7 +101,7 @@ function eligibility() {
     'Proposed Brand Value Proposition: A clear choice.\n\nRationale: Suggested Brand Value Proposition: A different choice.'
   ]) assert.equal(select(text), null, text);
   // An explanation cannot stand in for missing proposed wording (Codex P2).
-  for (const explanation of ['Rationale: Clearer audience benefit.', 'Begründung: Klarer Nutzen.', 'Assumption: Audience priorities stay the same.', 'Annahme: Die Zielgruppe bleibt gleich.', 'Reasons for Strength:', 'Gründe für die Stärke:']) {
+  for (const explanation of ['Rationale: Clearer audience benefit.', 'Begründung: Klarer Nutzen.', 'Assumption: Audience priorities stay the same.', 'Annahme: Die Zielgruppe bleibt gleich.', 'Reasons for Strength:', 'Gründe für die Stärke:', 'Explanation:', 'Erklärung:', 'Erläuterung:']) {
     for (const label of ['Proposed Value Proposition:', '**Proposed Brand Value Proposition:**', 'Vorgeschlagenes Nutzenversprechen:']) {
       for (const gap of [' ', '\n', '\n\n']) assert.equal(select(label + gap + explanation),null,'Missing value before '+explanation);
     }
@@ -110,12 +152,113 @@ async function controllers() {
   const revoked=runtime();let allowed=true;assert(await revoked.session.stageValueProposition({...input(revoked),revalidate:async()=>allowed}));allowed=false;assert.equal(await revoked.session.save(),false);assert.equal(revoked.requests.filter(r=>r.method==='PUT').length,0);assert(revoked.session.contentDirty());
   console.log('PASS actual Profile staging/explicit one-field save, exact null/absent/blank baseline, preserved knowledge, blocked drafts/scope, revoked source, lost reply exact retry');
 }
+function prepareAppicsBoard(r) {
+  const template = r.db.boards[0].canvas_json.nodes[0];
+  r.db.boards[0].name = 'Appics DEMO 2';
+  r.db.boards[0].canvas_json.nodes = Array.from({length:36}, (_,i)=>({...structuredClone(template), id:'appics-'+i, title:'Appics idea '+i}));
+  r.db.brands[0].owner_email = 'independent-owner@example.test';
+  r.db.brandRole = 'editor';
+}
+async function catalogLifecycle() {
+  const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH||'/usr/bin/chromium',args:['--no-sandbox']});
+  try {
+    const f=await require('./fixtures/home-browser')(browser)({prepare:prepareAppicsBoard}),p=f.page;
+    // Execute the production catalog SQL/ACL/projection against real SQL, then
+    // pass that response through the actual browser loader and renderer.
+    const {PGlite}=require('@electric-sql/pglite');
+    const {loadWorkspaceCatalog}=require('../api/_workspace-catalog');
+    const {W,B,D,EMAIL}=require('./fixtures/bw36-13r5-local-runtime');
+    const pg=new PGlite();
+    await pg.exec(`CREATE TABLE workspaces(id uuid,name text,avatar_url text,locale text,revision bigint,status text);
+      CREATE TABLE workspace_memberships(workspace_id uuid,identity_id uuid,role text,status text);
+      CREATE TABLE brands(id uuid,workspace_id uuid,name text,revision bigint,owner_email text,logo_object_path text,logo_mime_type text,logo_source text,logo_revision bigint);
+      CREATE TABLE brand_members(brand_id uuid,email text,role text);
+      CREATE TABLE boards(id uuid,workspace_id uuid,brand_id uuid,name text,owner_email text);
+      CREATE TABLE board_editors(board_id uuid,email text,role text);`);
+    const I='44444444-4444-4444-8444-444444444444';
+    await pg.query("INSERT INTO workspaces VALUES ($1,'Appics Workspace',null,'en',1,'active')",[W]);
+    await pg.query("INSERT INTO workspace_memberships VALUES ($1,$2,'owner','accepted')",[W,I]);
+    await pg.query("INSERT INTO brands VALUES ($1,$2,'Appics',1,'independent-owner@example.test',null,null,null,0)",[B,W]);
+    await pg.query("INSERT INTO boards VALUES ($1,$2,$3,'Appics DEMO 2',$4)",[D,W,B,EMAIL]);
+    await pg.query("INSERT INTO brand_members VALUES ($1,$2,'editor')",[B,EMAIL]);
+    const project = async role => {
+      await pg.query('UPDATE brand_members SET role=$1',[role]);
+      return {contract:'workspace_catalog_v1',request_id:f.c.request_id,
+        workspaces:await loadWorkspaceCatalog({db:pg,identityId:I,canonicalEmail:EMAIL})};
+    };
+    let release, held, role='editor', calls=0;
+    await p.route('**/api/workspaces',async route=>{if(held)await held;return route.fulfill({json:await project(role)});});
+    await p.route('**/api/ai-brain/advice',route=>{calls++;return route.fulfill({json:{answer:appicsNaturalAnswer,context:{response_language:'en',canvasNodes:36},disclaimer:'Proposal only.'}});});
+    await p.evaluate(()=>setActiveView('ai_brain'));
+    const submit = async () => {await p.locator('#ai-brain-question').fill(appicsQuestion);await p.locator('#ai-brain-form [type=submit]').click();await p.waitForFunction(()=>state.aiBrain.status==='success');};
+    for(const initial of [false,true]) {
+      held=new Promise(r=>release=r);
+      await p.evaluate(initial=>{invalidateAiBrainRequest();if(initial)clearWorkspaceCatalog();void retryWorkspaceCatalog();},initial);
+      await submit();
+      assert.equal(await p.locator('[data-ai-brand-proposal]').count(),0,'Pending metadata cannot authorize an action');
+      assert(await p.evaluate(()=>!!aiBrainValueProposition(state.aiBrain.messages.at(-1))),'Content is independently eligible');
+      await p.locator('#ai-brain-question').fill('Preserve a newer question');
+      release();held=null;
+      await p.waitForFunction(()=>state.workspaceCatalog.status==='ready');
+      await p.waitForSelector('[data-ai-brand-proposal]');
+      assert.equal(await p.locator('[data-ai-brand-proposal]').innerText(),'Suggest Brand Update');
+      if (process.env.BW37_C1_EVIDENCE_DIR && initial) {
+        const dir=process.env.BW37_C1_EVIDENCE_DIR;fs.mkdirSync(dir,{recursive:true});
+        await p.locator('[data-ai-brand-proposal]').scrollIntoViewIfNeeded();
+        await p.screenshot({path:dir+'/appics-36-nodes-action.png',fullPage:true});
+        fs.writeFileSync(dir+'/appics-render-evidence.json',JSON.stringify(await p.evaluate(()=>({
+          nodes:state.nodes.length,board:state.currentBoardName,catalogStatus:state.workspaceCatalog.status,
+          brandRole:state.workspaceCatalog.value.workspaces[0].brands[0].role,
+          candidate:aiBrainValueProposition(state.aiBrain.messages.at(-1)).value,
+          sourceCurrent:aiBrainBrandSourceCurrent(state.aiBrain.messages.at(-1)),
+          button:document.querySelector('[data-ai-brand-proposal]').textContent
+        })),null,2));
+      }
+      assert.equal(await p.locator('#ai-brain-question').inputValue(),'Preserve a newer question');
+      await p.locator('[data-ai-brand-proposal]').click();await p.waitForFunction(()=>!document.querySelector('[data-ai-brand-stage]')?.disabled);
+      assert.equal(await p.locator('#ai-brand-proposal-value').inputValue(),appicsValue);
+      await p.keyboard.press('Escape');
+    }
+    let adviceRelease;
+    const adviceHeld=new Promise(r=>adviceRelease=r);
+    const slowAdvice=async route=>{calls++;await adviceHeld;return route.fulfill({json:{answer:appicsAnswer,context:{response_language:'en'},disclaimer:'Proposal only.'}});};
+    await p.route('**/api/ai-brain/advice',slowAdvice);
+    held=new Promise(r=>release=r);
+    await p.evaluate(()=>{invalidateAiBrainRequest();clearWorkspaceCatalog();void retryWorkspaceCatalog();});
+    await p.locator('#ai-brain-question').fill(appicsQuestion);await p.locator('#ai-brain-form [type=submit]').click();
+    release();held=null;await p.waitForFunction(()=>state.workspaceCatalog.status==='ready');
+    assert.equal(await p.locator('[data-ai-brand-proposal]').count(),0);
+    adviceRelease();await p.waitForSelector('[data-ai-brand-proposal]');
+    await p.unroute('**/api/ai-brain/advice',slowAdvice);
+    // A newer refresh must not rebase a previously captured successful source.
+    await p.evaluate(()=>{void retryWorkspaceCatalog();});
+    await p.waitForFunction(()=>state.workspaceCatalog.status==='ready');
+    assert.equal(await p.locator('[data-ai-brand-proposal]').count(),0);
+    for(const denied of [null,'viewer']) {
+      role=denied;held=new Promise(r=>release=r);
+      await p.evaluate(()=>{invalidateAiBrainRequest();void retryWorkspaceCatalog();});await submit();release();held=null;
+      await p.waitForFunction(()=>state.workspaceCatalog.status==='ready');
+      assert.equal(await p.locator('[data-ai-brand-proposal]').count(),0,'Missing/viewer Brand authority fails closed');
+      assert.equal(await p.locator('[data-ai-brand-current]').count(),0);
+    }
+    // A Board association change during loading cannot acquire a new target.
+    role='editor';held=new Promise(r=>release=r);
+    await p.evaluate(()=>{invalidateAiBrainRequest();void retryWorkspaceCatalog();});await submit();
+    await p.evaluate(()=>{state.boardBrandAssociation.brandId=null;});release();held=null;
+    await p.waitForFunction(()=>state.workspaceCatalog.status==='ready');
+    assert.equal(await p.locator('[data-ai-brand-proposal]').count(),0);
+    assert.equal(calls,6);assert.equal(f.writes.length,0);assert.deepEqual(f.errors,[]);await pg.close();
+    console.log('PASS 36-node Appics editor: production catalog SQL/ACL/projection/load/render, late refresh and first-load action visible automatically; pending/absent/viewer/stale generation/changed association hidden; composer retained; zero writes/extra inference');
+  } finally {await browser.close();}
+}
 async function browserChecks() {
   const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH||'/usr/bin/chromium',args:['--no-sandbox']});
   try {
-    const f=await require('./fixtures/home-browser')(browser)({empty:true}),p=f.page;
+    const f=await require('./fixtures/home-browser')(browser)({prepare:prepareAppicsBoard}),p=f.page;
+    assert.equal(await p.evaluate(()=>state.nodes.length),36);
+    assert.equal(await p.evaluate(()=>state.workspaceCatalog.value.workspaces[0].brands[0].role),'editor');
     let calls=0, live=true;
-    await p.route('**/api/ai-brain/advice',route=>{calls++;const b=route.request().postDataJSON();return route.fulfill({json:{answer:live?appicsAnswer:b.response_language==='de'?german:answer,context:{response_language:b.response_language},disclaimer:'Proposal only.'}});});
+    await p.route('**/api/ai-brain/advice',route=>{calls++;const b=route.request().postDataJSON();return route.fulfill({json:{answer:live?appicsReportedAnswer:b.response_language==='de'?german:answer,context:{response_language:b.response_language},disclaimer:'Proposal only.'}});});
     await p.evaluate(()=>setActiveView('ai_brain'));
     const submit=async()=>{await p.locator('#ai-brain-question').fill(live?appicsQuestion:question);await p.locator('#ai-brain-form [type=submit]').click();await p.waitForSelector('[data-ai-brand-proposal]');};
     await submit();
@@ -131,7 +274,7 @@ async function browserChecks() {
     await p.evaluate(()=>{state.session.brandId='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';renderAiBrain();});
     await p.locator('[data-ai-brand-proposal]').click();await p.waitForFunction(()=>!document.querySelector('[data-ai-brand-stage]')?.disabled);
     assert((await p.locator('[data-ai-brand-current]').textContent()).includes('Canvas Brand X'));
-    assert.equal(await p.locator('#ai-brand-proposal-value').inputValue(),appicsValue);
+    assert.equal(await p.locator('#ai-brand-proposal-value').inputValue(),appicsReportedValue);
     assert(!(await p.locator('#ai-brand-proposal-value').inputValue()).includes('Reasons for Strength'));
     await p.locator('#ai-brand-proposal-value').fill('An edited suggestion with <script>inert text</script>.');
     assert.equal(f.writes.length,0);assert.equal(JSON.stringify(f.r.db.brands),before);assert.equal(calls,1);
@@ -150,6 +293,8 @@ async function browserChecks() {
     assert.equal(await p.evaluate(()=>state.activeView),'brand-profile');
     assert(await p.evaluate(()=>brandProfileController.save()));assert.equal(f.writes.filter(r=>r.method==='PUT').length,1);
     assert.equal(f.r.db.brands[0].brand_core.valueProposition,'An edited proposal for independent makers.');
+    const savedBrands=JSON.parse(before);savedBrands[0].brand_core.valueProposition='An edited proposal for independent makers.';
+    assert.deepEqual(f.r.db.brands.map(b=>b.brand_core),savedBrands.map(b=>b.brand_core),'Separate Save changes only the proposed canonical field');
     await p.locator('[data-ai-brand-return]').click();await p.waitForSelector('#ai-brain-question');
     assert.equal(await p.locator('#ai-brain-question').inputValue(),'Keep this new draft');assert.deepEqual(await p.locator('#ai-brain-question').evaluate(n=>[n.selectionStart,n.selectionEnd,n.selectionDirection]),[2,7,'backward']);
     assert.equal(await p.evaluate(()=>JSON.stringify(state.brandCore)),snapshot);assert.equal(calls,1);assert.equal(await p.locator('[data-ai-brand-proposal]').count(),0);
@@ -183,7 +328,7 @@ async function browserChecks() {
       await p.evaluate(()=>{invalidateAiBrainRequest();renderAiBrain();});await submit();
       const brand=f.r.db.brands[0],owner=brand.owner_email;brand.owner_email='other@example.test';f.r.db.brandRole=role;
       await p.locator('[data-ai-brand-proposal]').click();await p.waitForFunction(()=>document.querySelector('#ai-brand-proposal-dialog [role=status]')?.textContent.includes('changed'));
-      assert.equal(await p.locator('[data-ai-brand-current]').textContent(),'');await p.keyboard.press('Escape');brand.owner_email=owner;f.r.db.brandRole=null;
+      assert.equal(await p.locator('[data-ai-brand-current]').textContent(),'');await p.keyboard.press('Escape');brand.owner_email=owner;f.r.db.brandRole='editor';
     }
     await p.evaluate(()=>{invalidateAiBrainRequest();renderAiBrain();});await submit();await p.locator('[data-ai-brand-proposal]').click();await p.waitForFunction(()=>!document.querySelector('[data-ai-brand-stage]')?.disabled);
     f.r.db.brands[0].revision++;f.r.db.brands[0].brand_core.valueProposition='Changed concurrently';
@@ -263,4 +408,4 @@ async function conversationReturn() {
     console.log('PASS real long conversation Return preserves mode, transcript, unsent draft/caret, Learning disclosure and scroll anchor without inference');
   } finally {await browser.close();}
 }
-(async()=>{eligibility();await controllers();await ownerBoundaries();await browserChecks();await conversationReturn();})().catch(e=>{console.error(e);process.exitCode=1;});
+(async()=>{eligibility();await controllers();await ownerBoundaries();await catalogLifecycle();await browserChecks();await conversationReturn();})().catch(e=>{console.error(e);process.exitCode=1;});

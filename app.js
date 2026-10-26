@@ -5349,6 +5349,7 @@ function loadAuthorizedWorkspaceCatalog(identity = (state.user?.email || "").tri
     });
     state.session.workspaceId = lifecycle.activeWorkspaceId;
     renderWorkspaceSidebar();
+    if (state.activeView === 'ai_brain') renderAiBrain();
     return catalog;
   }).catch((error) => {
     if (state.workspaceCatalog !== lifecycle || lifecycle.generation !== generation || identity !== (state.user?.email || "").trim().toLowerCase()) return null;
@@ -5356,6 +5357,7 @@ function loadAuthorizedWorkspaceCatalog(identity = (state.user?.email || "").tri
     lifecycle.status = !clearsContext&&lifecycle.value ? "stale" : "error"; lifecycle.error = { code, stage: error?.stage || "response" }; lifecycle.promise = null;
     if(clearsContext){lifecycle.value=null;lifecycle.activeWorkspaceId=null;state.session.workspaceId=null;state.session.brandId=null;}
     renderWorkspaceSidebar();
+    if (state.activeView === 'ai_brain') renderAiBrain();
     return null;
   });
   return lifecycle.promise;
@@ -6398,9 +6400,31 @@ function aiBrainRequestContextIdentity() {
   return `${aiBrainIdentity()}|${state.boardAccess?.canEdit === true}|${state.selectedPrimary || ""}|${JSON.stringify(aiBrainCanvasProjection())}`;
 }
 function captureAiBrainBrandSource() {
+  // The approved loader owns missing/stale metadata and deduplicates requests.
+  if (state.workspaceCatalog && state.workspaceCatalog.status !== 'ready') void loadAuthorizedWorkspaceCatalog();
   return { account: state.user, email: state.user?.email, identity: aiBrainIdentity(), context: aiBrainRequestContextIdentity(),
     workspaceId: state.workspaceCatalog?.activeWorkspaceId, generation: state.workspaceCatalog?.generation,
-    brandId: state.boardBrandAssociation?.brandId };
+    brandId: state.boardBrandAssociation?.brandId, catalogPending: ["loading", "refreshing"].includes(state.workspaceCatalog?.status) };
+}
+// Complete only the catalog load that was already pending for this source.
+// Never rebase a completed source onto a later catalog/account/Board generation.
+function completeAiBrainBrandSources() {
+  const catalog = state.workspaceCatalog;
+  if (catalog?.status !== 'ready' || catalog.identity !== (state.user?.email || '').trim().toLowerCase()) return;
+  for (const turn of state.aiBrain.messages) {
+    const source = turn.brandProposalSource;
+    if (!source?.catalogPending || source.generation !== catalog.generation || turn.brandProposalInvalid
+      || turn.status !== 'success' || source.account !== state.user || source.email !== state.user?.email
+      || source.identity !== aiBrainIdentity() || source.context !== aiBrainRequestContextIdentity()
+      || source.answer !== turn.answer || source.question !== turn.question
+      || source.brandId !== state.boardBrandAssociation.brandId) continue;
+    const workspace = catalog.value?.workspaces.find(w => w.id === catalog.activeWorkspaceId);
+    if ((!source.workspaceId || source.workspaceId === workspace?.id)
+      && workspace?.boards.some(b => b.id === state.currentBoardId && b.brand_id === source.brandId)) {
+      source.workspaceId = workspace.id;
+      source.catalogPending = false;
+    }
+  }
 }
 function aiBrainCanvasProjection() {
   const string = (value, max) => typeof value === "string" ? value.slice(0, max) : "";
@@ -6499,17 +6523,29 @@ function aiBrainValueProposition(turn) {
   // separately labeled explanation. Never fall back to copying the answer.
   const remainder = lines.join('\n').trim();
   if (remainder) {
-    if (lines[0]?.trim() !== '') return null;
     const explanation = remainder.split('\n');
     const heading = labelLine(explanation.shift());
     if (/^(?:Rationale|Begründung|Assumption|Annahme):[ \t]*\S[^\n]*$/i.test(heading)) {
       if (explanation.length) return null;
-    } else if (/^(?:Reasons for Strength|Gründe für die Stärke):$/i.test(heading)) {
-      const reasons = explanation.filter(line => line.trim());
-      if (!reasons.length || reasons.some((line, i) => !line.startsWith(`${i + 1}. `) || !/^\d+\. \S/.test(line))) return null;
+    } else if (/^(?:Reasons for Strength|Gründe für die Stärke|Explanation|Erklärung|Erläuterung):$/i.test(heading)) {
+      const prose = /^(?:Explanation|Erklärung|Erläuterung):$/i.test(heading);
+      let count = 0, summary = false, content = false;
+      for (const line of explanation) {
+        if (!line.trim()) continue;
+        content = true;
+        const numbered = line.trim().match(/^(\d+)[.)]\s+\S/);
+        if (numbered) {
+          if (summary || Number(numbered[1]) !== ++count) return null;
+        } else if (/^(?:Overall|In summary|Zusammenfassend|Insgesamt)[,:]\s+\S/i.test(line.trim())) {
+          if (!count || summary) return null;
+          summary = true;
+        } else if ((!count && !prose) || summary || /^(?:[-#>]|\d+[.)])/.test(line.trim())) return null;
+        // Other lines only continue a numbered explanation; never a value.
+      }
+      if (!content || !prose && !count) return null;
     } else return null;
     // A rationale must not smuggle another candidate or an unrelated field.
-    if (/(?:value proposition|nutzenversprechen|brand dna|brand core|founder story|mission|vision|tagline|option(?:\s+[a-z0-9]+)?|alternative(?:\s+[a-z0-9]+)?)\s*(?:\*\*)?\s*:|(?:proposed|suggested|vorgeschlagen)|["“”„«»]/i.test(remainder)) return null;
+    if (/(?:value proposition|nutzenversprechen|brand dna|brand core|founder story|mission|vision|tagline|option(?:\s+[a-z0-9]+)?|alternative(?:\s+[a-z0-9]+)?)\s*(?:\*\*)?\s*:|(?:proposed|suggested|replacement|alternative|vorgeschlagene[rs]?)\s+(?:replacement\s+)?(?:wording|text|formulierung)\s*(?:\*\*)?\s*:|^\s*(?:\d+[.)]\s*)?["“„«]/im.test(remainder)) return null;
   }
   // Strip only a complete pair of quotation marks (or legacy value bold).
   if (value.startsWith('**') && value.endsWith('**')) value = value.slice(2, -2).trim();
@@ -6518,7 +6554,7 @@ function aiBrainValueProposition(turn) {
     if (value.at(-1) !== quotes[value[0]]) return null;
     value = value.slice(1, -1);
   }
-  if (/(?:rationale|begründung|assumption|annahme|reasons for strength|gründe für die stärke|brand dna|brand core|founder story|mission|vision|tagline|option(?:\s+[a-z]+)?|alternative(?:\s+[a-z]+)?)\s*:|["“”„«»*`?]|\b(?:maybe|might|could|perhaps|vielleicht|könnte|eventuell)\b|^(?:[-#>]|\d+[.)])/i.test(value)) return null;
+  if (/(?:rationale|begründung|assumption|annahme|reasons for strength|gründe für die stärke|explanation|erklärung|erläuterung|brand dna|brand core|founder story|mission|vision|tagline|option(?:\s+[a-z]+)?|alternative(?:\s+[a-z]+)?)\s*:|["“”„«»*`?]|\b(?:maybe|might|could|perhaps|vielleicht|könnte|eventuell)\b|^(?:[-#>]|\d+[.)])/i.test(value)) return null;
   if (!value.trim() || value.length > 2000 || /[\u0000-\u001f\u007f]|(?:value proposition|nutzenversprechen)\s*:|https?:\/\/|\d|guarantee|garantier|proven|bewiesen/i.test(value)) return null;
   return { path: '/brand_core/valueProposition', value, excerpt: text };
 }
@@ -6531,7 +6567,9 @@ function aiBrainBrandSourceCurrent(turn) {
     && source.answer === turn.answer && source.question === turn.question
     && source.identity === aiBrainIdentity() && source.context === aiBrainRequestContextIdentity()
     && source.generation === catalog.generation && source.workspaceId === catalog.activeWorkspaceId
-    && catalog.status === 'ready' && state.boardBrandAssociation.brandId === source.brandId
+    && catalog.status === 'ready' && catalog.identity === (source.email || '').trim().toLowerCase()
+    && state.boardBrandAssociation.boardId === state.currentBoardId && !state.isBoardLoading && !state.isBoardHydrating
+    && state.boardBrandAssociation.brandId === source.brandId
     && workspace?.boards.some(b => b.id === state.currentBoardId && b.brand_id === source.brandId)
     && ['owner','admin','editor'].includes(brand?.role) && canUseAiBrainProposal();
 }
@@ -6904,6 +6942,7 @@ function bindAiBrainScroll(transcript, saved, revealTurnId) {
 }
 
 function renderAiBrain() {
+  completeAiBrainBrandSources();
   const brandPreview = document.getElementById('ai-brand-proposal-dialog');
   if (brandPreview && !brandPreview.sourceCurrent()) brandPreview.remove();
   const { revealTurnId = null } = arguments[0] || {};
