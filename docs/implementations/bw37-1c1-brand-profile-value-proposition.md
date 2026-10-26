@@ -12,6 +12,8 @@ The compact native dialog identifies Workspace/Board/Brand, shows the exact curr
 
 Only a separate deliberate Profile Save invokes the existing `profile_edit`, `canonical-brand-write/v1` command, exact revision/old-value checks, mutation identity, applicable protected review, restricted SQL write/history and authoritative read/reconciliation. Unrelated and unknown Core fields, Founder Story/modules, accepted DNA/Avatar and Board snapshot remain untouched. The excerpt is ephemeral review UI; it is never added as a write-payload provenance field.
 
+For a staged Brain draft, an unchanged name and website retain their exact canonical representation. In particular, URL normalization or a legacy top-level `website` must not introduce an incidental `/brand_core/brandAssets/domain` change during the later Save. Tests assert a one-field command for these representations too.
+
 ## Authorization and freshness
 
 The source captures account object/email, Board/load/Canvas identity, Workspace/catalog generation, persisted Brand association and exact successful question/answer. Sidebar Brand Y never retargets Board X. A cached catalog edit role is necessary for the affordance; preparation, staging and source revalidation for Save use fresh authenticated, no-cache reads of `/api/workspaces` and canonical Brand detail. The catalog is the existing read-only owner of persisted Board/Brand/Workspace associations and independent roles; unlike Board-detail GET, it does not enrich editor identity. Missing/revoked membership, active identity, Board edit or canonical Brand edit fails closed without showing current canonical values in the proposal preview.

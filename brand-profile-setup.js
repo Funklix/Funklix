@@ -373,13 +373,15 @@
             : 'This proposal is stale. Return to the conversation and compare again. Your inputs are retained.';
           return false;
         }
-        const name = state.name.trim();
-        if (!name || name.length > 160) { state.message = 'Enter a Brand name between 1 and 160 characters.'; return false; }
+        const name = brainDraft && state.name === state.brand.name ? state.brand.name : state.name.trim();
+        if (!name.trim() || name.length > 160) { state.message = 'Enter a Brand name between 1 and 160 characters.'; return false; }
         let domain = '';
         if (state.website.trim()) { try { domain = website(state.website); } catch { state.message = 'Enter a valid public HTTPS website.'; return false; } }
         const submitted = draftSignature();
         const core = clone(state.core);
-        if (object(core.brandAssets) || domain) core.brandAssets = { ...(object(core.brandAssets) ? core.brandAssets : {}), domain };
+        const unchangedBrainWebsite = brainDraft && normalizedWebsite(state.website)
+          === normalizedWebsite(state.brand.brand_core?.brandAssets?.domain || state.brand.brand_core?.website || '');
+        if (!unchangedBrainWebsite && (object(core.brandAssets) || domain)) core.brandAssets = { ...(object(core.brandAssets) ? core.brandAssets : {}), domain };
         const revision = state.brand.revision;
         // UI defaults are presentation; unchanged defaults never become write intent.
         const editableBaseline = editableCore(state.brand.brand_core);

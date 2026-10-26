@@ -22,21 +22,26 @@ function eligibility() {
 const input = f => ({path:'/brand_core/valueProposition',value:'A considered new positioning proposal.',revision:1,expected:{exists:false},revalidate:async()=>true});
 async function controllers() {
   for (const old of [undefined, null, '', 'Old exact text']) {
-    const f=runtime(),s=f.session, original=f.brand.brand_core;
+    const f=runtime();
     // Recreate the actual session with each canonical representation.
     const profile=require('../brand-profile-setup'), brand=f.brand;
+    // Existing URL representation and legacy website placement are not AI intent.
+    if(old===null)brand.brand_core.brandAssets={domain:'https://example.test',future:'retained'};
+    if(old==='')brand.brand_core.website='https://legacy.example.test';
     if(old!==undefined)brand.brand_core.valueProposition=old;
     let stored=structuredClone(brand),puts=[];
     const session=profile.createSession({brand,getContext:()=>f.context,validateBrand:b=>b?.id===brand.id,onSave(){},fetchImpl:async(url,init={})=>{
       if(init.method==='PUT'){const cmd=JSON.parse(init.body);puts.push(cmd);stored={...stored,...require('../brand-write-contract').apply(stored,cmd),revision:2};}
       return {ok:true,status:200,json:async()=>structuredClone(stored)};
     }});
+    const beforeCore=structuredClone(brand.brand_core);delete beforeCore.valueProposition;
     const proposal={...input(f),expected:old===undefined?{exists:false}:{exists:true,value:old}};
+    if(typeof old==='string'&&old.trim())assert.equal(await session.stageValueProposition({...proposal,value:old}),false);
     assert(await session.stageValueProposition(proposal));assert.equal(puts.length,0);assert(session.contentDirty());assert.equal(session.state.brand.revision,1);
     assert.equal(await session.stageValueProposition(proposal),false,'Cannot silently stage twice over a draft');
     assert(await session.save());assert.equal(puts.length,1);assert.equal(puts[0].operation,'profile_edit');assert.equal(puts[0].contract,'canonical-brand-write/v1');assert.equal(puts[0].expected_revision,'1');
     assert.deepEqual(puts[0].changes,[{path:proposal.path,action:old===undefined?'add':'replace',expected:proposal.expected,value:proposal.value}]);assert(!Object.hasOwn(puts[0],'source'));
-    const core=structuredClone(stored.brand_core);delete core.valueProposition;assert.deepEqual(core,original);assert(!session.contentDirty());
+    const core=structuredClone(stored.brand_core);delete core.valueProposition;assert.deepEqual(core,beforeCore);assert(!session.contentDirty());
   }
   for(const mutate of [f=>f.session.state.core.brandCore='Manual',f=>f.session.state.pending='Busy',f=>f.session.state.deferred=true,f=>f.session.state.syncRequired=true,f=>f.session.state.readOnly=true,f=>f.context.account={},f=>f.context.brandId='other',f=>f.context.workspaceId='other',f=>f.context.generation++]) {
     const f=runtime();mutate(f);assert.equal(await f.session.stageValueProposition(input(f)),false);assert.equal(f.requests.length,0);
