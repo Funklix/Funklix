@@ -7,8 +7,64 @@ const app = fs.readFileSync('app.js', 'utf8');
 const answer = 'Proposed Value Proposition: Independent makers explore new formats together, with room for their own creative choices.';
 const german = 'Vorgeschlagenes Nutzenversprechen: Kreative erkunden gemeinsam neue Formate und behalten Raum für eigene Entscheidungen.';
 const question = 'Suggest a replacement Value Proposition for the Brand Profile';
+
+// Exact live Appics DEMO 2 reproduction; reason bodies were supplied as ellipses.
+const appicsQuestion = 'Please suggest one specific replacement for our current Brand Value Proposition, using the approved positioning and audience information. Give me the exact proposed wording and briefly explain why it would be stronger.';
+const appicsValue = 'Unlock your creativity and earn real rewards on a decentralized platform that values your unique voice. With Appics, you can share your passions freely and transform social media into a source of income, empowering you to thrive in a community that celebrates individuality and creativity.';
+const appicsAnswer = `**Proposed Brand Value Proposition:**
+
+"${appicsValue}"
+
+**Reasons for Strength:**
+
+1. **Emphasis on Empowerment:** ...
+2. **Focus on Individuality:** ...
+3. **Clarity on Benefits:** ...`;
+
 function eligibility() {
   const c = {}; vm.runInNewContext(app.slice(app.indexOf('function aiBrainValueProposition'), app.indexOf('function aiBrainBrandSourceCurrent')), c);
+  const select = (text, q = appicsQuestion) => c.aiBrainValueProposition({status:'success',question:q,answer:text});
+  assert.equal(select(appicsAnswer)?.value, appicsValue);
+  assert.equal(select(appicsAnswer)?.path, '/brand_core/valueProposition');
+  assert.equal(select(appicsAnswer)?.excerpt, appicsAnswer);
+  for (const label of ['Proposed Value Proposition', 'Proposed replacement Value Proposition', 'Suggested Value Proposition', 'Proposed Brand Value Proposition', 'Proposed replacement Brand Value Proposition', 'Suggested Brand Value Proposition', 'Vorgeschlagenes Nutzenversprechen', 'Vorgeschlagenes neues Nutzenversprechen']) {
+    for (const heading of [label + ':', `**${label}:**`, `**${label}**:`]) {
+      for (const quoted of [appicsValue, `"${appicsValue}"`, `“${appicsValue}”`, `„${appicsValue}“`]) {
+        for (const gap of [' ', '\n', '\n\n']) assert.equal(select(heading + gap + quoted)?.value, appicsValue);
+      }
+    }
+  }
+  for (const suffix of ['Rationale: Clearer audience benefit.', 'Begründung: Klarer Nutzen.', 'Assumption: Audience priorities stay the same.', 'Annahme: Die Zielgruppe bleibt gleich.']) {
+    assert.equal(select(answer + '\n\n' + suffix)?.value, answer.split(': ')[1]);
+  }
+  assert.equal(select(appicsAnswer.replace(/\n/g, '\r\n'))?.value, appicsValue);
+  assert.equal(select('**Vorgeschlagenes Nutzenversprechen:**\n\n„Kreative entdecken gemeinsam neue Möglichkeiten.“\n\n**Gründe für die Stärke:**\n\n1. **Klarheit:** Direkter Nutzen.')?.value, 'Kreative entdecken gemeinsam neue Möglichkeiten.');
+  for (const text of [
+    appicsAnswer + '\n\nProposed Value Proposition: Another choice.',
+    appicsAnswer.replace('2. **Focus on Individuality:** ...', '2. **Proposed Brand Value Proposition:** A competing proposal.'),
+    appicsAnswer.replace('2. **Focus on Individuality:** ...', '2. Brand DNA: Unrelated field.'),
+    appicsAnswer.replace('2. **Focus on Individuality:** ...', '2. Option B: Another proposal.'),
+    appicsAnswer.replace('2. **Focus on Individuality:** ...', '2. "Another proposal."'),
+    appicsAnswer.replace('**Reasons for Strength:**', '**Other suggestions:**'),
+    appicsAnswer.replace('**Proposed Brand Value Proposition:**', '**Proposed Brand Value Proposition:'),
+    appicsAnswer.replace(`"${appicsValue}"`, `"${appicsValue}`),
+    appicsAnswer.replace(`"${appicsValue}"`, `"${appicsValue}" or "Another choice."`),
+    appicsAnswer.replace(`"${appicsValue}"`, 'Guaranteed proven growth of 50 percent.'),
+    appicsAnswer.replace(`"${appicsValue}"`, 'Maybe this could work?'),
+    'Strategy discussion: ' + appicsValue,
+    ...['\"\"','\" \"','“ ”','„ “'].map(value=>'Proposed Brand Value Proposition: '+value),
+    'Proposed Brand Value Proposition: Brand DNA: Creator',
+    'Proposed Brand Value Proposition: Option A: One choice. Option B: Another choice.',
+    '**Proposed Brand Value Proposition:**\n\n' + appicsValue + '\nA second paragraph.',
+    'Proposed Brand Value Proposition: A clear choice.\n\nRationale: Suggested Brand Value Proposition: A different choice.'
+  ]) assert.equal(select(text), null, text);
+  // An explanation cannot stand in for missing proposed wording (Codex P2).
+  for (const explanation of ['Rationale: Clearer audience benefit.', 'Begründung: Klarer Nutzen.', 'Assumption: Audience priorities stay the same.', 'Annahme: Die Zielgruppe bleibt gleich.', 'Reasons for Strength:', 'Gründe für die Stärke:']) {
+    for (const label of ['Proposed Value Proposition:', '**Proposed Brand Value Proposition:**', 'Vorgeschlagenes Nutzenversprechen:']) {
+      for (const gap of [' ', '\n', '\n\n']) assert.equal(select(label + gap + explanation),null,'Missing value before '+explanation);
+    }
+  }
+  assert.equal(select(appicsAnswer, 'Discuss our audience and brand strategy'), null);
   for (const adviceMode of ['general','review_strategy','explore_ideas','find_gaps','evaluate_options']) {
     for (const text of [answer, german]) assert(c.aiBrainValueProposition({status:'success',question,answer:text,adviceMode}));
     for (const text of ['', 'Campaign concept: #MyAppicsStory', answer+'\n'+german, answer+'\nBrand DNA: Creator', 'Value Proposition: Unlabelled', answer+'\nOption B: Other', 'Proposed Value Proposition: '+ 'x'.repeat(2001), 'Proposed Value Proposition: Guaranteed growth of 50 percent']) assert.equal(c.aiBrainValueProposition({status:'success',question,answer:text,adviceMode}), null);
@@ -58,17 +114,25 @@ async function browserChecks() {
   const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH||'/usr/bin/chromium',args:['--no-sandbox']});
   try {
     const f=await require('./fixtures/home-browser')(browser)({empty:true}),p=f.page;
-    let calls=0;
-    await p.route('**/api/ai-brain/advice',route=>{calls++;const b=route.request().postDataJSON();return route.fulfill({json:{answer:b.response_language==='de'?german:answer,context:{response_language:b.response_language},disclaimer:'Proposal only.'}});});
+    let calls=0, live=true;
+    await p.route('**/api/ai-brain/advice',route=>{calls++;const b=route.request().postDataJSON();return route.fulfill({json:{answer:live?appicsAnswer:b.response_language==='de'?german:answer,context:{response_language:b.response_language},disclaimer:'Proposal only.'}});});
     await p.evaluate(()=>setActiveView('ai_brain'));
-    const submit=async()=>{await p.locator('#ai-brain-question').fill(question);await p.locator('#ai-brain-form [type=submit]').click();await p.waitForSelector('[data-ai-brand-proposal]');};
+    const submit=async()=>{await p.locator('#ai-brain-question').fill(live?appicsQuestion:question);await p.locator('#ai-brain-form [type=submit]').click();await p.waitForSelector('[data-ai-brand-proposal]');};
     await submit();
+    for (const role of [null,'viewer']) {
+      await p.evaluate(role=>{const catalog=structuredClone(state.workspaceCatalog.value);catalog.workspaces[0].brands.find(b=>b.id===state.boardBrandAssociation.brandId).role=role;state.workspaceCatalog.value=catalog;renderAiBrain();},role);
+      assert.equal(await p.locator('[data-ai-brand-proposal]').count(),0,'Board edit alone cannot expose Brand action');
+    }
+    await p.evaluate(()=>{const catalog=structuredClone(state.workspaceCatalog.value);catalog.workspaces[0].brands.find(b=>b.id===state.boardBrandAssociation.brandId).role='owner';state.workspaceCatalog.value=catalog;renderAiBrain();});
+    assert.equal(await p.locator('[data-ai-brand-proposal]').count(),1);
     await p.locator('#ai-brain-question').fill('Keep this new draft');await p.locator('#ai-brain-question').evaluate(n=>n.setSelectionRange(2,7,'backward'));
     const before=JSON.stringify(f.r.db.brands),snapshot=await p.evaluate(()=>JSON.stringify(state.brandCore));
     // Sidebar Y must not retarget the Board's canonical Brand X.
     await p.evaluate(()=>{state.session.brandId='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';renderAiBrain();});
     await p.locator('[data-ai-brand-proposal]').click();await p.waitForFunction(()=>!document.querySelector('[data-ai-brand-stage]')?.disabled);
     assert((await p.locator('[data-ai-brand-current]').textContent()).includes('Canvas Brand X'));
+    assert.equal(await p.locator('#ai-brand-proposal-value').inputValue(),appicsValue);
+    assert(!(await p.locator('#ai-brand-proposal-value').inputValue()).includes('Reasons for Strength'));
     await p.locator('#ai-brand-proposal-value').fill('An edited suggestion with <script>inert text</script>.');
     assert.equal(f.writes.length,0);assert.equal(JSON.stringify(f.r.db.brands),before);assert.equal(calls,1);
     await p.keyboard.press('Escape');assert.equal(await p.locator('#ai-brand-proposal-dialog').count(),0);assert.equal(await p.locator('#ai-brain-question').inputValue(),'Keep this new draft');
@@ -76,6 +140,7 @@ async function browserChecks() {
     await p.locator('#ai-brand-proposal-value').fill('An edited proposal for independent makers.');
     await p.locator('[data-ai-brand-stage]').click();await p.waitForSelector('[data-ai-brand-return]');
     assert.equal(await p.evaluate(()=>state.activeView),'brand-profile');assert(await p.evaluate(()=>brandProfileController.contentDirty()));
+    assert.equal(await p.evaluate(()=>brandProfileController.state.core.valueProposition),'An edited proposal for independent makers.');
     assert.equal(f.writes.length,0);assert.equal(JSON.stringify(f.r.db.brands),before);assert.equal(calls,1);
     assert(await p.evaluate(()=>brandProfileController.reload()));
     assert(await p.evaluate(()=>brandProfileController.contentDirty()));
@@ -84,9 +149,11 @@ async function browserChecks() {
     await p.locator('[data-ai-brand-return]').click();await p.waitForSelector('#brand-leave-dialog');await p.locator('[data-keep-editing]').click();
     assert.equal(await p.evaluate(()=>state.activeView),'brand-profile');
     assert(await p.evaluate(()=>brandProfileController.save()));assert.equal(f.writes.filter(r=>r.method==='PUT').length,1);
+    assert.equal(f.r.db.brands[0].brand_core.valueProposition,'An edited proposal for independent makers.');
     await p.locator('[data-ai-brand-return]').click();await p.waitForSelector('#ai-brain-question');
     assert.equal(await p.locator('#ai-brain-question').inputValue(),'Keep this new draft');assert.deepEqual(await p.locator('#ai-brain-question').evaluate(n=>[n.selectionStart,n.selectionEnd,n.selectionDirection]),[2,7,'backward']);
     assert.equal(await p.evaluate(()=>JSON.stringify(state.brandCore)),snapshot);assert.equal(calls,1);assert.equal(await p.locator('[data-ai-brand-proposal]').count(),0);
+    live=false;
     // New authorized source; EN/DE and responsive modal keyboard boundaries.
     for(const language of ['en','de']) for(const width of [1440,375,320]) for(const theme of ['light','dark']) {
       await p.evaluate(({language,theme})=>{state.uiLanguage=language;window.FunklixTheme.setPreference(theme);invalidateAiBrainRequest();renderAiBrain();},{language,theme});await p.setViewportSize({width,height:850});
