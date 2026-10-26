@@ -1,0 +1,55 @@
+# BW-37.1C-2B — AI Brain → Campaign Creator handoff
+
+Base: latest merged main `85832ec3c44b01c2ccfb95ddbc1d57fa0e6e0df3`, including PR #825. Verified 2026-10-26 (Europe/Berlin). Dedicated branch: `bw37-1c-2b-ai-brain-campaign-handoff`.
+
+## Verified owners and integration points
+
+- `app.js`: Advice success stores the exact successful question/answer and ephemeral source identity. `renderAiBrainTranscript` and `renderAiBrain` own the contextual action and binding. Existing Content and Brand Profile handoffs retain their independent owners and eligibility. The action area shows at most two preparation actions when all three could qualify.
+- `app.js`: `captureAiBrainBrandSource`, `completeAiBrainBrandSources`, `aiBrainIdentity`, `aiBrainRequestContextIdentity` and account/Board invalidation own source identity. Campaign metadata extends the existing ephemeral source capture; canonical edit eligibility is never reused as Creator authorization.
+- `api/workspaces.js`, `api/_workspace-catalog.js` and existing `/api/boards?scope=brand&brand_id=…` GET own authorized saved associations, independent roles and the saved Board revision. The bridge performs authenticated, no-store reads, without using Board-detail GET's editor-enrichment behavior. It never fetches canonical Brand detail.
+- `app.js`: `resolveCampaignCreationContext`, `campaignCreationIdentity`, `openStableCampaignCreation`; `campaign-creation-dialog.js`: `mount` own entry validation and the two-step editable briefing/setup. A small initialization-only `briefing` argument populates existing fields.
+- `app.js`: `startCampaignV3Creation`, `runCampaignV3AICompatibility`, normalization, quality/repair, real Canvas adapter and persistence callbacks; `campaign-v3.js`, `campaign-creation.js`, `api/_campaign-creation.js` retain generation, provisional nodes, rollback, autosave suppression, transactional commit, immutable retry/reconciliation and Reveal. One optional pre-generation source-read hook runs for explicit initial generation and AI retry; ordinary Creator uses no hook.
+- `api/_campaign-generation-context.js`, `api/generate-campaign.js` and `api/refine-node.js` remain byte-for-byte unchanged. #825's signed session, independent canonical ACL, saved snapshot, protected context, freshness, model/schema and `store:false` guarantees remain in their server owners.
+
+These boundaries were traced and reported before implementation. No migration, endpoint, Canvas schema, Advice schema, provider or inference contract changes.
+
+## Eligibility and editable transfer
+
+`aiBrainCampaignBrief` conservatively interprets one bounded successful answer in every conversation mode. It requires an identifiable campaign/launch concept, purpose and audience. A hashtag, named/quoted idea or explicit campaign concept can qualify in natural paragraphs or simple headings. It does not demand rigid Markdown labels. Empty, failed, clarification, question, vague, diagnostic-only, Value Proposition-only, competing-option, oversized and unsupported code-block answers are excluded. The rule cannot establish strategic quality or factual truth.
+
+The campaign paragraph (and following explanation for a short heading) becomes `campaignIdea`, within 2,000 characters. Contiguous relevant purpose/audience/message/strategy/channel paragraphs become `additionalContext`, within 4,000 characters. These are existing Creator fields; no audience/message schema is invented. Selected wording stays in its original language. No question, earlier turn, full transcript or canonical Brand value is appended. Oversized selections fail closed rather than being truncated. Clear explicit supported channel suggestions can initialize one channel or `Mixed`; negated/unclear suggestions retain the Creator default. Counts, LP/email switches and all absent fields keep existing defaults. The seam initializes textareas through `.value`; model text remains untrusted editable task input.
+
+Previously, users manually copied a Brain concept into Creator. Now **Create Campaign / Kampagne erstellen** opens that same Creator beneath a native modal, already populated. Users edit the brief, continue to setup, change channels/counts, go Back, Cancel/Escape, or deliberately Generate. Initialization never repeats on Back or edits. Opening/editing/canceling performs zero inference and no Campaign/Canvas writes.
+
+## Authorization, freshness and lifecycle
+
+Source identity binds the account object/email, exact successful turn/question/answer, Board/load/Canvas identity, selected context, Workspace/catalog generation, saved Board revision and persisted Brand association. Workspace/Brand revisions are captured as metadata. The existing same-generation pending-catalog completion can finish missing source metadata; it cannot rebase a completed source onto later identity/catalog state.
+
+Cached authorization controls the affordance. Opening and Generate independently reread the catalog and saved Board revision, then invoke the existing saved-Board/clean-Canvas entry guard. Fresh reads reject missing/revoked membership, Board edit access, changed association, changed Workspace/Brand revision or remote saved-Board revision. Each generation/repair/application boundary retains the existing Creator identity checks plus exact source checks. Explicit AI retry rereads source authorization. The first commit rereads catalog and Board revision. Save-only retries reauthorize the catalog and use the existing immutable transaction/replay contract to reconcile a potentially already committed revision; they do not reject their own unknown-outcome revision or rerun inference. Confirmation consumes the source action.
+
+A Board editor with independent Brand **read** access does not need canonical Brand **edit** access. A Board-only collaborator whose Brand association is hidden remains blocked by existing Creator entry requirements; this bridge does not broaden catalog visibility or copy protected canonical information to them. Sidebar Brand Y never substitutes for persisted Board Brand X. Server generation still independently decides which canonical context is authorized.
+
+The conversation stays mounted during brief review/cancel. Draft/caret, mode, disclosure and transcript scroll retain the existing owner behavior; native modal focus returns without scrolling. After a failed generation, closing uses the existing rollback and returns to the same conversation when source scope is still current. Account/Board invalidation retires an open Brain-origin Creator, cancels its local generation token and clears Brain state. Already dispatched provider or commit requests cannot be retracted; existing server authorization/revision and immutable reconciliation remain authoritative.
+
+## Changed files
+
+1. `app.js` — bounded concept selection, scoped source metadata/reads, CTA, Creator integration and invalidation.
+2. `campaign-creation-dialog.js` — supported-field initialization and focus restoration without scroll.
+3. `scripts/check-bw37-1c-2b-ai-brain-campaign-handoff.js` — deterministic extraction and actual full-shell/controller/V3/transaction tests.
+4. `scripts/check-bw36-14r1-restore-complete-campaign-v3.js` — export its existing disposable signed-transaction fixture for the new suite; existing assertions unchanged.
+5. `scripts/check-bw36-15-campaign-team-responsibilities.js` — update only the dialog and explicit-generation-hook byte guards; all other V3/server hashes and assertions retained.
+6. `package.json` — register `check:bw37.1c2b`.
+7. `.github/workflows/runtime-boot-safety.yml` — syntax and browser regression registration in both existing PostgreSQL jobs; all earlier checks retained.
+8. This implementation record.
+
+## Validation and review
+
+The focused suite uses fictional disposable fixtures, mocked Advice/generation/repair transport, the real shell, source/entry/dialog controllers, real V3 generation/validation/quality/Canvas path and existing signed transactional Campaign owner. It exercises Appics-like EN/DE natural concepts and negatives; exact field population/editability; no extra inference/write on open/edit/cancel; independent roles/hidden association/sidebar mismatch; local and remote source/account/Board/Workspace/catalog/association/revision races; dirty/saving guards; native keyboard/focus/caret/scroll and Light/Dark at 320/375/1440px; explicit generation failure/rollback/retry; save-only retry; commit/reveal and consumed source. Existing BW-26 Content, BW-28 Insights, BW-36 lifecycle/Creator/knowledge and BW-37 Advice/Profile suites remain registered unchanged.
+
+Full Runtime Boot Safety is run on the PR for PostgreSQL 17.6 and 18.4. A local runner also executes every workflow test/syntax command on task-specific disposable containers for both versions, substituting dependencies installed once and installed Chromium for browser installation. Actual final results are reported with the PR; partial progress is not a full matrix pass.
+
+Codex implementation review identified and addressed: remote Board revision freshness (read-only list owner); save-only retry must tolerate its own unknown-outcome committed revision; account/Board invalidation must retire protected modal state; channel negation must not configure an excluded channel; all-three eligibility must keep at most two compact preparation actions. Tests use a mutable clone when simulating changes to the production frozen catalog; assertions were not relaxed. No claim of a separate reviewer approval is made here.
+
+## Limits
+
+Deterministic eligibility intentionally omits unsupported prose, languages beyond the bounded EN/DE vocabulary, multiple alternatives and oversized briefs. It cannot verify claims or live-model semantic quality. The existing Board list is bounded to 200 results; if the Board is absent, freshness fails closed. A hidden Brand association remains an existing Creator limitation. Revalidation occurs at consequential boundaries, not continuously; already transmitted context cannot be recalled. Transcript/source intents are ephemeral and disappear on reload. No durable AI provenance, new persistence, new authorization grants, paid evaluation, merge or deployment is introduced.

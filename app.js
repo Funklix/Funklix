@@ -6404,6 +6404,8 @@ function captureAiBrainBrandSource() {
   if (state.workspaceCatalog && state.workspaceCatalog.status !== 'ready') void loadAuthorizedWorkspaceCatalog();
   return { account: state.user, email: state.user?.email, identity: aiBrainIdentity(), context: aiBrainRequestContextIdentity(),
     workspaceId: state.workspaceCatalog?.activeWorkspaceId, generation: state.workspaceCatalog?.generation,
+    campaignScope: { revision: state.lastKnownUpdatedAt, workspaceRevision: state.workspaceCatalog?.value?.workspaces.find(w => w.id === state.workspaceCatalog.activeWorkspaceId)?.revision,
+      brandRevision: state.workspaceCatalog?.value?.workspaces.flatMap(w => w.brands).find(b => b.id === state.boardBrandAssociation?.brandId)?.revision },
     brandId: state.boardBrandAssociation?.brandId, catalogPending: ["loading", "refreshing"].includes(state.workspaceCatalog?.status) };
 }
 // Complete only the catalog load that was already pending for this source.
@@ -6422,6 +6424,10 @@ function completeAiBrainBrandSources() {
     if ((!source.workspaceId || source.workspaceId === workspace?.id)
       && workspace?.boards.some(b => b.id === state.currentBoardId && b.brand_id === source.brandId)) {
       source.workspaceId = workspace.id;
+      if (source.campaignScope?.workspaceRevision === undefined && source.campaignScope?.brandRevision === undefined) {
+        source.campaignScope.workspaceRevision = workspace.revision;
+        source.campaignScope.brandRevision = workspace.brands.find(b => b.id === source.brandId)?.revision;
+      }
       source.catalogPending = false;
     }
   }
@@ -6459,6 +6465,11 @@ function aiBrainConversationHistory(excludedTurnId = null) {
   return { exchanges: history, truncated };
 }
 function invalidateAiBrainRequest() {
+  if (campaignCreationController?.brainSource) {
+    state.activeCampaignGeneration = null;
+    campaignCreationController.dialog.dataset.campaignV3Busy = 'false';
+    campaignCreationController.close();
+  }
   document.getElementById('ai-brand-proposal-dialog')?.remove();
   state.aiBrain.controller?.abort();
   state.aiBrain.messages.forEach((turn) => turn.proposal?.controller?.abort?.());
@@ -6558,6 +6569,103 @@ function aiBrainValueProposition(turn) {
   if (!value.trim() || value.length > 2000 || /[\u0000-\u001f\u007f]|(?:value proposition|nutzenversprechen)\s*:|https?:\/\/|\d|guarantee|garantier|proven|bewiesen/i.test(value)) return null;
   return { path: '/brand_core/valueProposition', value, excerpt: text };
 }
+// Bounded interpretation of one successful result. No inference or transcript copy.
+function aiBrainCampaignBrief(turn) {
+  if (turn?.status !== 'success' || turn.referenceResolution === 'clarification'
+    || typeof turn.answer !== 'string' || turn.answer.length > 12000) return null;
+  const text = turn.answer.replace(/\r\n?/g, '\n').trim();
+  if (!text || /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]|```/.test(text)
+    || /\b(?:another|alternative|second|different|weitere|zweite|andere)\s+(?:campaign|kampagne|kampagnenidee)\b/i.test(text)
+    || /(?:^|\n)\s*(?:#{1,4}\s*)?(?:\*\*)?(?:option|alternative|concept|konzept)\s+(?:[A-C1-9])\s*[:.)]/im.test(text)) return null;
+  const paragraphs = text.split(/\n\s*\n/).map(p => p.replace(/\*\*/g, '').replace(/^#{1,4}\s+/gm, '').trim()).filter(Boolean);
+  const campaign = /\b(?:campaign|kampagne|kampagnenidee|kampagnenkonzept|kampagnenname|kampagnentitel|launch|produkteinführung)\b/i;
+  const purpose = /\b(?:purpose|goal|objective|aim|increase|build|encourage|invite|promote|launch|ziel|zweck|stärken|steigern|fördern|einladen|gewinnen)\b/i;
+  const audience = /\b(?:audience|target(?:ing|s)?|creators|customers|community|zielgruppe|richtet sich an|kreative|kunden|gemeinschaft)\b/i;
+  const supporting = /\b(?:message|messaging|strategy|context|channel|channels|share|story|stories|botschaft|strategie|kontext|kanal|kanäle|teilen|geschichte)\b/i;
+  const start = paragraphs.findIndex(p => campaign.test(p));
+  if (start < 0) return null;
+  // A short heading belongs to its next paragraph. A campaign mention alone is insufficient.
+  let idea = paragraphs[start], next = start + 1;
+  if (idea.length < 100 && next < paragraphs.length) idea += '\n\n' + paragraphs[next++];
+  const context = [];
+  for (; next < paragraphs.length; next++) {
+    const p = paragraphs[next];
+    if (campaign.test(p) || purpose.test(p) || audience.test(p) || supporting.test(p)
+      || /\b(?:LinkedIn|Facebook|Instagram|TikTok)\b/.test(p)) context.push(p);
+    else break;
+  }
+  const additionalContext = context.join('\n\n'), selected = idea + '\n\n' + additionalContext;
+  if (idea.length < 60 || idea.length > 2000 || additionalContext.length > 4000
+    || !purpose.test(selected) || !audience.test(selected)
+    || /\?|\b(?:no campaign|not a campaign|keine kampagne|campaign diagnostics|kampagnendiagnose)\b/i.test(selected)
+    || !/(?:#[\p{L}\d_]{3,}|["“„«][^"”“»\n]{3,100}["”“»]|\b(?:concept|proposal|launch|named|called|idee|konzept|vorschlag|namens|heißt|produkteinführung)\b)/iu.test(idea)) return null;
+  // Only explicit channel suggestions configure setup; mere platform mentions do not.
+  const channelParagraphs = [idea, ...context].filter(p => /\b(?:channels?|kanal|kanäle)\s*:|\b(?:publish|post|share) on\b|\bauf (?:LinkedIn|Facebook|X|Instagram|TikTok).{0,40}(?:teilen|veröffentlichen)/i.test(p)
+    && !/\b(?:not|no|avoid|without|undecided|nicht|keine?|ohne|unklar)\b/i.test(p));
+  const channels = ['LinkedIn','Facebook','X','Instagram','TikTok'].filter(c => channelParagraphs.some(p => new RegExp(`\\b${c}\\b`).test(p)));
+  return { campaignIdea: idea, additionalContext, ...(channels.length ? {channel: channels.length === 1 ? channels[0] : 'Mixed'} : {}) };
+}
+function aiBrainCampaignSourceCurrent(turn, checkCanvas = true) {
+  const source = turn?.brandProposalSource, catalog = state.workspaceCatalog;
+  const workspace = catalog.value?.workspaces.find(w => w.id === source?.workspaceId);
+  const brand = workspace?.brands.find(b => b.id === source?.brandId);
+  return !!source?.campaignScope && !turn.campaignCreated && !turn.campaignInvalid && turn.status === 'success' && turn.referenceResolution !== 'clarification'
+    && state.aiBrain.messages.includes(turn) && source.account === state.user && source.email === state.user?.email
+    && source.answer === turn.answer && source.question === turn.question && source.identity === aiBrainIdentity()
+    && (!checkCanvas || source.context === aiBrainRequestContextIdentity())
+    && (!checkCanvas || source.campaignScope.revision === state.lastKnownUpdatedAt)
+    && source.campaignScope.workspaceRevision === workspace?.revision && source.campaignScope.brandRevision === brand?.revision
+    && catalog.status === 'ready' && source.generation === catalog.generation
+    && catalog.identity === (source.email || '').trim().toLowerCase() && source.workspaceId === catalog.activeWorkspaceId
+    && state.boardBrandAssociation.boardId === state.currentBoardId && state.boardBrandAssociation.brandId === source.brandId
+    && !state.isBoardLoading && !state.isBoardHydrating && canUseAiBrainProposal()
+    && workspace?.boards.some(b => b.id === state.currentBoardId && b.brand_id === source.brandId && ['owner','editor'].includes(b.role))
+    && workspace.brands.some(b => b.id === source.brandId && ['owner','admin','editor','viewer'].includes(b.role));
+}
+async function revalidateAiBrainCampaignSource(turn, checkCanvas = true, checkRevision = true) {
+  const fail = () => { throw window.FunklixCampaignCreation.error('CONFLICT'); };
+  if (!aiBrainCampaignSourceCurrent(turn, checkCanvas)) fail();
+  const source = turn.brandProposalSource;
+  const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 12000);
+  try {
+    const response = await fetch('/api/workspaces', {credentials:'same-origin',cache:'no-store',headers:{Accept:'application/json'},signal:controller.signal});
+    const catalog = await response.json();
+    if (!response.ok || !aiBrainCampaignSourceCurrent(turn, checkCanvas)) fail();
+    const matches = catalog.workspaces?.filter(w => w.id === source.workspaceId);
+    const workspace = matches?.length === 1 && matches[0];
+    if (catalog.contract !== 'workspace_catalog_v1' || workspace?.revision !== source.campaignScope.workspaceRevision
+      || !workspace?.boards?.some(b => b.id === state.currentBoardId && b.brand_id === source.brandId && ['owner','editor'].includes(b.role))
+      || !workspace.brands?.some(b => b.id === source.brandId && b.revision === source.campaignScope.brandRevision && ['owner','admin','editor','viewer'].includes(b.role))) {
+      turn.campaignInvalid = true; fail();
+    }
+    if (checkRevision) {
+      // The existing list GET is read-only; Board-detail GET can enrich editor identity.
+      const boardResponse = await fetch(`/api/boards?scope=brand&brand_id=${encodeURIComponent(source.brandId)}`, {
+        credentials:'same-origin',cache:'no-store',headers:{Accept:'application/json'},signal:controller.signal });
+      const boards = await boardResponse.json();
+      const matches = boards.boards?.filter(b => b.id === state.currentBoardId);
+      if (!boardResponse.ok || !aiBrainCampaignSourceCurrent(turn, checkCanvas) || matches?.length !== 1
+        || matches[0].brand_id !== source.brandId || matches[0].updated_at !== source.campaignScope.revision
+        || !['owner','editor','brand_owner','brand_admin','brand_editor'].includes(matches[0].access_role)) fail();
+    }
+  } finally { clearTimeout(timer); }
+}
+let aiBrainCampaignOpening = false;
+async function openAiBrainCampaign(turnId) {
+  if (aiBrainCampaignOpening || campaignCreationController?.dialog.isConnected) return;
+  const turn = state.aiBrain.messages.find(t => t.id === turnId), briefing = aiBrainCampaignBrief(turn);
+  if (!briefing || !aiBrainCampaignSourceCurrent(turn)) return;
+  aiBrainCampaignOpening = true;
+  try {
+    resolveCampaignCreationContext();
+    await revalidateAiBrainCampaignSource(turn);
+    // No navigation is needed to review/edit/cancel: the conversation stays mounted.
+    openStableCampaignCreation({briefing, turn});
+  } catch (error) {
+    if (turn?.brandProposalSource?.account === state.user && turn.brandProposalSource.identity === aiBrainIdentity()) showCampaignCreationFeedback(error.code || 'CONFLICT');
+  } finally { aiBrainCampaignOpening = false; }
+}
+
 function aiBrainBrandSourceCurrent(turn) {
   const source = turn?.brandProposalSource, catalog = state.workspaceCatalog;
   const workspace = catalog.value?.workspaces.find(w => w.id === source?.workspaceId);
@@ -6860,11 +6968,17 @@ function renderAiBrainTranscript(transcript) {
       section.append(heading, list); advisor.appendChild(section);
     }
     if (turn.meta) { const meta = document.createElement("small"); meta.textContent = turn.meta; advisor.appendChild(meta); }
-    if (aiBrainValueProposition(turn) && aiBrainBrandSourceCurrent(turn) && !turn.brandUpdateStaged) {
+    const campaignEligible = !!aiBrainCampaignBrief(turn) && aiBrainCampaignSourceCurrent(turn);
+    const brandEligible = !!aiBrainValueProposition(turn) && aiBrainBrandSourceCurrent(turn) && !turn.brandUpdateStaged;
+    if (campaignEligible) {
+      const create = document.createElement('button'); create.type = 'button'; create.className = 'ai-brain-proposal-prepare';
+      create.dataset.aiBrainCampaign = turn.id; create.textContent = state.uiLanguage === 'de' ? 'Kampagne erstellen' : 'Create Campaign'; advisor.appendChild(create);
+    }
+    if (brandEligible) {
       const suggest = document.createElement('button'); suggest.type = 'button'; suggest.className = 'ai-brain-proposal-prepare';
       suggest.dataset.aiBrandProposal = turn.id; suggest.textContent = aiBrainBrandCopy('action'); advisor.appendChild(suggest);
     }
-    const proposal = turn.proposal; const eligible = aiBrainHasReusableContent(turn) && canUseAiBrainProposal() && proposal?.status !== "applied";
+    const proposal = turn.proposal; const eligible = !(campaignEligible && brandEligible) && aiBrainHasReusableContent(turn) && canUseAiBrainProposal() && proposal?.status !== "applied";
     if (eligible && (!proposal || ["cancelled", "failed", "stale"].includes(proposal.status))) {
       const prepare = document.createElement("button"); prepare.type = "button"; prepare.className = "ai-brain-proposal-prepare"; prepare.dataset.aiBrainPrepare = turn.id;
       prepare.textContent = proposal?.status === "failed" ? aiBrainProposalText("retry") : aiBrainProposalText("prepare"); advisor.appendChild(prepare);
@@ -6983,6 +7097,7 @@ function renderAiBrain() {
   el.aiBrainSummary.querySelector("#ai-brain-form")?.addEventListener("submit", requestAiBrainAdvice);
   el.aiBrainSummary.querySelectorAll("[data-ai-brain-retry]").forEach((button) => button.addEventListener("click", () => requestAiBrainAdvice(null, button.dataset.aiBrainRetry)));
   el.aiBrainSummary.querySelectorAll("[data-ai-brain-prepare]").forEach((button) => button.addEventListener("click", () => requestAiBrainNodeProposal(button.dataset.aiBrainPrepare)));
+  el.aiBrainSummary.querySelectorAll('[data-ai-brain-campaign]').forEach(button => button.addEventListener('click', () => openAiBrainCampaign(button.dataset.aiBrainCampaign)));
   el.aiBrainSummary.querySelectorAll('[data-ai-brand-proposal]').forEach(button => button.addEventListener('click', () => openAiBrainBrandProposal(button.dataset.aiBrandProposal)));
   el.aiBrainSummary.querySelectorAll("[data-ai-brain-cancel]").forEach((button) => button.addEventListener("click", () => cancelAiBrainNodeProposal(button.dataset.aiBrainCancel)));
   el.aiBrainSummary.querySelectorAll("[data-ai-brain-create]").forEach((button) => button.addEventListener("click", () => applyAiBrainNodeProposal(button.dataset.aiBrainCreate)));
@@ -12120,34 +12235,47 @@ function showCampaignCreationFeedback(code) {
   host.append(action); const close = document.createElement('button'); close.type = 'button'; close.className = 'fk-btn fk-btn-secondary'; close.textContent = t.cancel; close.addEventListener('click', () => host.remove()); host.append(close);
   document.body.append(host); action.focus();
 }
-function openStableCampaignCreation() {
+function openStableCampaignCreation({briefing = {}, turn = null} = {}) {
   if (campaignCreationController?.dialog.isConnected) { campaignCreationController.dialog.focus(); return; }
   let context;
   try { context = resolveCampaignCreationContext(); } catch (error) { showCampaignCreationFeedback(error.code); return; }
   document.getElementById('campaign-creation-feedback')?.remove();
   let saved = false;
+  const assertSource = () => { if (turn && !saved && !aiBrainCampaignSourceCurrent(turn, false)) throw window.FunklixCampaignCreation.error('CONFLICT'); };
   const boundary = window.FunklixCampaignCreation.createBoundary({ context: campaignCreationIdentity, fetchImpl: fetch,
     onConfirmed: outcome => {
       saved = true;
+      if (turn) turn.campaignCreated = true;
       boundary.assertCurrent();
       state.lastKnownUpdatedAt = outcome.board.updated_at;
       state.isDirty = false;
       refreshLastSavedSnapshot();
     },
     open: outcome => openCreatedCampaign(outcome) });
-  campaignCreationController = window.FunklixCampaignCreationDialog.mount({ context, language: state.uiLanguage,
+  campaignCreationController = window.FunklixCampaignCreationDialog.mount({ context, language: state.uiLanguage, briefing,
     normalize: normalizeCampaignSetupOptions, counts: expectedCampaignV3NodeCounts,
-    submit: setup => {
+    submit: async setup => {
       const controller = campaignCreationController;
+      try {
+        if (turn) await revalidateAiBrainCampaignSource(turn);
+        boundary.assertCurrent();
+        resolveCampaignCreationContext();
+        if (campaignCreationController !== controller || !controller.dialog.isConnected) throw window.FunklixCampaignCreation.error('CONFLICT');
+      } catch (error) {
+        controller.dialog.dataset.campaignV3Busy = 'false'; controller.close();
+        showCampaignCreationFeedback(error.code || 'CONFLICT'); return;
+      }
       controller.suspendAutosave = true;
       clearAutosaveTimer();
       const originalCanvas = serializeState();
       const requestId = crypto.randomUUID();
       let command = null;
       startCampaignV3Creation(controller.dialog, { ...setup, campaignLanguage: state.campaignLanguage }, {
-        assertCurrent: boundary.assertCurrent,
+        assertCurrent: () => { boundary.assertCurrent(); assertSource(); },
+        beforeGenerate: turn ? () => revalidateAiBrainCampaignSource(turn, false) : null,
         rollback: () => { boundary.assertCurrent(); applyCampaignState(originalCanvas, uiText('Saved'), { memoryOnly: true }); state.isDirty = false; },
-        persist: result => {
+        persist: async result => {
+          if (turn && !saved) await revalidateAiBrainCampaignSource(turn, false, !command);
           if (!command) command = window.FunklixCampaignCreation.request({
             contract: window.FunklixCampaignCreation.CONTRACT, request_id: requestId,
             board_id: context.board.id, workspace_id: context.workspace.id, brand_id: context.brand.id,
@@ -12168,7 +12296,14 @@ function openStableCampaignCreation() {
         }
       });
     },
-    onClose: () => { campaignCreationController = null; } });
+    onClose: () => {
+      campaignCreationController = null;
+      if (turn && !saved && aiBrainCampaignSourceCurrent(turn, false)) {
+        if (state.activeView !== 'ai_brain') setActiveView('ai_brain');
+        el.aiBrainSummary.querySelector(`[data-ai-brain-campaign="${turn.id}"]`)?.focus({preventScroll:true});
+      }
+    } });
+  campaignCreationController.brainSource = turn;
 }
 
 const CAMPAIGN_WORKER_STATUS = {
@@ -14680,6 +14815,8 @@ async function startCampaignV3Creation(overlay, setup, options) {
     const generationExperienceStartedAt = Date.now();
     let simulatedProgress = null;
     try {
+      options.assertCurrent();
+      if (!result) await options.beforeGenerate?.();
       options.assertCurrent();
       renderCampaignV3CreationExperience(overlay, setup);
       setCampaignV3ModalBusy(overlay, true);

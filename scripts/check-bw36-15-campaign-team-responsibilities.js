@@ -71,7 +71,7 @@ function protectedGenerator() {
     "api/generate-campaign.js": "e8ecdaeb07c43467e57c2ac016ef46231261974a839522eea967fb7b59bb3179",
     "api/_campaign-creation.js": "4a39f62c6411bf1b4dc837c8b89e2b3a4b9ea7b3f334a928a62554fc7be8e963",
     "campaign-creation.js": "4e14fd829b822f0efd2f83dac6e0fd407093c3f300b2e1e9f2bb750a5135388d",
-    "campaign-creation-dialog.js": "d114e098d4dc8c93105099e5d4f300f4a3ea7bd264bd1e55e0a6fdf5dbc51f53"
+    "campaign-creation-dialog.js": "69d0b58c6709205ca94dadb02052d9529284102dd9e2f9611bd692fe269377d4"
 };
   for (const [file, hash] of Object.entries(expected)) {
     assert.equal(digest(fs.readFileSync(path.join(ROOT, file), 'utf8')), hash, `Protected V3 source changed: ${file}`);
@@ -86,7 +86,7 @@ function protectedGenerator() {
     [
         "async function startCampaignV3Creation(",
         "async function debugRunCampaignV3AI(",
-        "e77246b4d865eb150769e03a44328c46fb0987fd53abeb53ddc59966017598e9"
+        "c002ce0134047796715c07f9ce22d6bfc638af9f209dda8777a4747aa83c5b26"
     ]
 ]) {
     const first = app.indexOf(start), last = app.indexOf(end, first + 1);
