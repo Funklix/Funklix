@@ -294,7 +294,9 @@ async function browserChecks() {
     assert.equal(f.writes.length,0);
     await p.locator('[data-ai-brand-return]').click();await p.waitForSelector('#brand-leave-dialog');await p.locator('[data-keep-editing]').click();
     assert.equal(await p.evaluate(()=>state.activeView),'brand-profile');
-    assert(await p.evaluate(()=>brandProfileController.save()));assert.equal(f.writes.filter(r=>r.method==='PUT').length,1);
+    await p.locator('[data-profile-key="Confirm and save Brand Profile"]').click();
+    await p.waitForFunction(()=>!brandProfileController.contentDirty()&&!brandProfileController.busy());
+    assert.equal(f.writes.filter(r=>r.method==='PUT').length,1);
     assert.equal(f.r.db.brands[0].brand_core.valueProposition,'An edited proposal for independent makers.');
     const savedBrands=JSON.parse(before);savedBrands[0].brand_core.valueProposition='An edited proposal for independent makers.';
     assert.deepEqual(f.r.db.brands.map(b=>b.brand_core),savedBrands.map(b=>b.brand_core),'Separate Save changes only the proposed canonical field');
