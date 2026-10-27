@@ -8,7 +8,9 @@ const app = fs.readFileSync(path.join(root, 'app.js'), 'utf8');
 const endpointSource = fs.readFileSync(path.join(root, 'api/ai-brain/propose-node.js'), 'utf8');
 const workflow = fs.readFileSync(path.join(root, '.github/workflows/runtime-boot-safety.yml'), 'utf8');
 const packageJson = require(path.join(root, 'package.json'));
-const boardId = '123e4567-e89b-42d3-a456-426614174000';
+const {fixture, BOARD:boardId} = require('./fixtures/bw37-1c3a-proposal-runtime');
+process.env.AUTH_SECRET = 'fictional-production-boundary-secret';
+const runtime = fixture();
 const answer = `# Kampagnenidee: Mut zur Klarheit
 
 ## LinkedIn & Instagram
@@ -22,19 +24,11 @@ const answer = `# Kampagnenidee: Mut zur Klarheit
 ${'Eine präzise deutsche Erläuterung mit ä, ö, ü und ß. '.repeat(120)}`;
 assert(answer.length < 12000 && answer.length > 4000);
 const canvas = { nodes: Array.from({ length: 33 }, (_, index) => ({ id: `node-${index}`, type: index % 3 ? 'Content' : 'Idea', title: `Überschrift ${index}`, content: `Inhalt #${index}` })), edges: [] };
-const request = { action: 'propose_content_node', board_id: boardId, source_turn_id: 'turn-de-production', source_answer: answer, selected_node_id: null, canvas_context: canvas, response_language: 'de', content_language: 'de' };
+const request = { action: 'propose_content_node', board_id: boardId, source_turn_id: 'turn-de-production', source_answer: answer, selected_node_id: null, canvas_context: canvas, response_language: 'de', content_language: 'de', expected_scope: runtime.request.expected_scope };
 
-// Load the deployed CommonJS route with controlled session and Board-access boundaries.
-let session = { email: 'owner@example.com' };
-let access = { board: { id: boardId }, access: { canEdit: true, role: 'owner' } };
-let authorizationCalls = 0;
-const mock = (relative, exports) => { const id = require.resolve(path.join(root, relative)); require.cache[id] = { id, filename: id, loaded: true, exports }; };
-mock('api/_auth-session.js', { getSessionUser: () => session });
-mock('api/_board-access.js', { getBoardAccess: async () => { authorizationCalls += 1; return access; } });
-mock('api/_brand-access.js', { isBrandId: (value) => value === boardId });
-const endpointPath = require.resolve(path.join(root, 'api/ai-brain/propose-node.js'));
-delete require.cache[endpointPath];
-const endpoint = require(endpointPath);
+// Exercise the deployed route with signed sessions and the real access helper.
+let session = { id:'owner-id', email:'owner@example.test' };
+const endpoint = runtime.handler;
 assert.strictEqual(typeof endpoint, 'function');
 
 // The production failure was at provider request construction: OpenAI strict
@@ -48,16 +42,15 @@ let providerCalls = 0;
 let capturedProviderBody;
 global.fetch = async (_url, options) => {
   providerCalls += 1; capturedProviderBody = JSON.parse(options.body);
-  return { ok: true, status: 200, json: async () => ({ output_text: JSON.stringify({ node_type: 'Content', title: 'Mut zur Klarheit', body: 'Eine vollständige deutsche Kampagne für LinkedIn und Instagram.', rationale: 'Dieser Inhalt verdichtet die zentrale Idee für den Canvas.' }) }) };
+  return new Response(JSON.stringify({ output_text: JSON.stringify({ node_type: 'Content', title: 'Mut zur Klarheit', body: 'Eine vollständige deutsche Kampagne für LinkedIn und Instagram.', rationale: 'Dieser Inhalt verdichtet die zentrale Idee für den Canvas.' }) }));
 };
 process.env.OPENAI_API_KEY = 'test-only';
-function response() { return { statusCode: 0, body: null, status(value) { this.statusCode = value; return this; }, json(value) { this.body = value; return this; } }; }
-async function invoke(body = request) { const res = response(); await endpoint({ method: 'POST', body, headers: { 'x-ai-brain-generation': '7' } }, res); return res; }
+async function invoke(body = request) { runtime.user = session; runtime.identity.canonical_email = session?.email || 'owner@example.test'; return runtime.invoke(body); }
 
 (async () => {
   const beforeCanvas = JSON.stringify(canvas);
   const owner = await invoke();
-  assert.strictEqual(owner.statusCode, 200); assert.strictEqual(providerCalls, 1); assert.strictEqual(authorizationCalls, 1);
+  assert.strictEqual(owner.statusCode, 200); assert.strictEqual(providerCalls, 1); assert.strictEqual(runtime.capture, 3);
   assert.strictEqual(capturedProviderBody.text.format.schema.required.length, 4);
   assert.strictEqual(owner.body.action, 'propose_content_node');
   assert(owner.body.node_proposal.proposal_id); assert.strictEqual(owner.body.node_proposal.source_turn_id, request.source_turn_id);
@@ -65,11 +58,11 @@ async function invoke(body = request) { const res = response(); await endpoint({
   for (const forbidden of ['board_id', 'id', 'coordinates', 'edges', 'metadata']) assert(!Object.prototype.hasOwnProperty.call(owner.body.node_proposal, forbidden));
   assert.strictEqual(JSON.stringify(canvas), beforeCanvas, 'proposal endpoint must remain read-only');
 
-  access = { board: { id: boardId }, access: { canEdit: true, role: 'editor' } };
+  session = {email:'editor@example.test'}; runtime.role = 'editor';
   const editor = await invoke(); assert.strictEqual(editor.statusCode, 200); assert.strictEqual(providerCalls, 2);
-  access = { board: { id: boardId }, access: { canEdit: false, role: 'viewer' } };
+  runtime.role = 'viewer';
   const viewer = await invoke(); assert.strictEqual(viewer.statusCode, 403); assert.strictEqual(viewer.body.code, 'proposal_forbidden'); assert.strictEqual(providerCalls, 2);
-  access = { board: { id: boardId }, access: { canEdit: false, role: 'public_viewer', publicView: true } };
+  runtime.role = 'public_viewer';
   const publicViewer = await invoke(); assert.strictEqual(publicViewer.statusCode, 403); assert.strictEqual(providerCalls, 2);
   session = null;
   const unauthorized = await invoke(); assert.strictEqual(unauthorized.statusCode, 401); assert.strictEqual(unauthorized.body.code, 'proposal_unauthorized'); assert.strictEqual(providerCalls, 2);

@@ -176,6 +176,7 @@
     "check:bw36.23ar3:postgres": "node scripts/check-bw36-23a-r3-runtime-postgres.js",
     "check:postgres-tls": "node scripts/check-postgres-tls.js",
     "check:write-maintenance": "node scripts/check-write-maintenance.js",
+    "check:bw37.1c3a": "node scripts/check-bw37-1c-3a-content-proposal-security.js && node scripts/check-bw37-1c-3a-content-proposal-browser.js",
     "check:bw36.22b3": "node scripts/check-bw36-22b3-living-signals.js"
   },
   "devDependencies": {

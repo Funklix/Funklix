@@ -12,7 +12,7 @@ const { verifyPublicToken } = require('../_board-public-sharing');
 const { saveResponsibilities } = require('../_campaign-responsibilities');
 
 const BOARD_COLUMNS = 'id, name, canvas_json, brand_core_snapshot, brand_id, brand_core_source_revision, brand_core_source_updated_at, brand_core_snapshot_copied_at, brand_core_snapshot_backup, brand_core_backup_source_revision, brand_core_backup_source_updated_at, brand_core_backup_snapshot_copied_at, brand_core_snapshot_backup_created_at, created_at, updated_at, order_index, owner_id, owner_email, owner_name, owner_avatar, created_by';
-const BOARD_GET_COLUMNS = `${BOARD_COLUMNS}, public_view_enabled, public_view_token_hash`;
+const BOARD_GET_COLUMNS = `${BOARD_COLUMNS}, workspace_id, public_view_enabled, public_view_token_hash`;
 
 function serializeBoardItem(row = {}) {
   const { brand_core_snapshot_backup, brand_core_backup_source_revision, brand_core_backup_source_updated_at,

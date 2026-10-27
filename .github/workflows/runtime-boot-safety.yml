@@ -56,6 +56,11 @@ jobs:
           node --check scripts/check-bw37-1c-2b-ai-brain-campaign-handoff.js
           node --check ai-brain-workspace-viewport.js
           node --check api/ai-brain/advice.js
+          node --check api/ai-brain/propose-node.js
+          node --check api/_ai-brain-proposal-scope.js
+          node --check scripts/fixtures/bw37-1c3a-proposal-runtime.js
+          node --check scripts/check-bw37-1c-3a-content-proposal-security.js
+          node --check scripts/check-bw37-1c-3a-content-proposal-browser.js
           node --check api/_campaign-generation-context.js
           node --check api/generate-campaign.js
           node --check api/refine-node.js
@@ -455,6 +460,9 @@ jobs:
             fs.appendFileSync(process.env.GITHUB_ENV, `CHROMIUM_PATH=${executablePath}\n`);
           })().catch(error => { console.error(error); process.exitCode = 1; });
           JS
+      - name: Check Content proposal security and source lifecycle (real ACL, mocked provider, Chromium)
+        timeout-minutes: 5
+        run: npm run check:bw37.1c3a
       - name: Check BW-37.1A-R1 workspace and scroll lifecycle (Chromium)
         run: npm run check:bw37.1ar1
       - name: Check BW-37.1B-R1 conversational advisor (disposable SQL, mocked provider, Chromium)

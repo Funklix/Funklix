@@ -3029,6 +3029,7 @@ async function pollBoardForRemoteChanges() {
     if (data?.brand_id === null || typeof data?.brand_id === "string") {
       invalidateBoardBrandAssociation();
       state.boardBrandAssociation.brandId = data.brand_id;
+      state.boardBrandAssociation.workspaceId = data.workspace_id;
       state.boardBrandAssociation.visibility = data.brand_visibility === 'hidden' ? 'hidden' : data.brand_id === null ? 'unbranded' : 'visible';
       state.boardBrandAssociation.boardId = String(data.id);
       renderBoardBrandAssociation();
@@ -4705,6 +4706,7 @@ function invalidateBoardBrandAssociation({ clearBoard = false, loadingBoardId = 
   const current = state.boardBrandAssociation;
   state.boardBrandAssociation = {
     brandId: clearBoard ? null : current.brandId,
+    workspaceId: clearBoard ? null : current.workspaceId,
     visibility: clearBoard ? null : current.visibility,
     hydratedGeneration: clearBoard || loadingBoardId ? null : current.hydratedGeneration,
     boardId: loadingBoardId || (clearBoard ? "" : current.boardId),
@@ -6368,8 +6370,8 @@ const AI_BRAIN_TEXT = Object.freeze({
   de: { you: "Du", assumptions: "Annahmen", pending: "Ausstehend…", failed: "Fehlgeschlagen", retry: "Erneut versuchen", current: "Beim erneuten Versuch wird der aktuelle Canvas-Kontext verwendet.", responseLanguage: "Antwortsprache: Deutsch", response_language_mismatch: "AI Brain hat in einer anderen Sprache geantwortet. Bitte versuche es erneut.", malformed_canvas: "Der Canvas-Kontext ist fehlerhaft.", unsupported_canvas: "Diese Canvas-Struktur wird nicht unterstützt.", canvas_too_large: "Der Canvas überschreitet die unterstützte Größe.", invalid_selected_node: "Der ausgewählte Knoten ist nicht mehr verfügbar.", stale_canvas: "Der Canvas-Kontext ist veraltet. Versuche es mit dem aktuellen Canvas erneut.", generic: "AI Brain kann gerade nicht antworten.", changed: "Board, Konto, Zugriff, Auswahl oder Canvas haben sich geändert. Versuche es mit dem aktuellen Kontext erneut." }
 });
 const AI_BRAIN_PROPOSAL_TEXT = Object.freeze({
-  en: { prepare: "Prepare as Content node", preview: "Content node preview", type: "Content node", title: "Title", content: "Content", rationale: "Why this node", create: "Create node", cancel: "Cancel", preparing: "Preparing node…", created: "Node created.", creationAnnouncement: "Content node created.", advisor: "Advisor", invalid: "This proposal is no longer valid.", board: "Your Board changed. Prepare the node again.", canvas: "Your Canvas changed. Prepare the node again.", permission: "You no longer have permission to create this node.", prepareFailed: "The node proposal could not be prepared.", proposal_route_unavailable: "The node proposal service is unavailable.", proposal_unauthorized: "Please sign in again to prepare this node.", proposal_forbidden: "You no longer have permission to create this node.", proposal_request_invalid: "The node proposal request was invalid.", proposal_source_invalid: "The source answer cannot be used for a node proposal.", proposal_canvas_invalid: "The current Canvas cannot be used for this proposal.", proposal_context_changed: "Your Board or Canvas changed. Prepare the node again.", proposal_provider_failed: "The node proposal service could not respond.", proposal_response_invalid: "The node proposal response was invalid.", proposal_language_mismatch: "The node proposal used a different language. Please retry.", proposal_network_failed: "The node proposal could not be reached. Please retry.", proposal_generic_failed: "The node proposal could not be prepared.", createFailed: "The node could not be created.", applied: "This node has already been created.", retry: "Retry preparing node" },
-  de: { prepare: "Als Content-Node vorbereiten", preview: "Vorschau des Content-Nodes", type: "Content-Node", title: "Titel", content: "Inhalt", rationale: "Warum dieser Node", create: "Node erstellen", cancel: "Abbrechen", preparing: "Node wird vorbereitet…", created: "Node wurde erstellt.", creationAnnouncement: "Content-Node wurde erstellt.", advisor: "Berater", invalid: "Dieser Vorschlag ist nicht mehr gültig.", board: "Dein Board hat sich geändert. Bereite den Node erneut vor.", canvas: "Dein Canvas hat sich geändert. Bereite den Node erneut vor.", permission: "Du hast keine Berechtigung mehr, diesen Node zu erstellen.", prepareFailed: "Der Node-Vorschlag konnte nicht vorbereitet werden.", proposal_route_unavailable: "Der Dienst für Node-Vorschläge ist nicht verfügbar.", proposal_unauthorized: "Bitte melde dich erneut an, um diesen Node vorzubereiten.", proposal_forbidden: "Du hast keine Berechtigung mehr, diesen Node zu erstellen.", proposal_request_invalid: "Die Anfrage für den Node-Vorschlag war ungültig.", proposal_source_invalid: "Die Quellantwort kann nicht für einen Node-Vorschlag verwendet werden.", proposal_canvas_invalid: "Der aktuelle Canvas kann nicht für diesen Vorschlag verwendet werden.", proposal_context_changed: "Board oder Canvas haben sich geändert. Bereite den Node erneut vor.", proposal_provider_failed: "Der Dienst für Node-Vorschläge konnte nicht antworten.", proposal_response_invalid: "Die Antwort für den Node-Vorschlag war ungültig.", proposal_language_mismatch: "Der Node-Vorschlag verwendet eine andere Sprache. Bitte versuche es erneut.", proposal_network_failed: "Der Dienst für Node-Vorschläge ist nicht erreichbar. Bitte versuche es erneut.", proposal_generic_failed: "Der Node-Vorschlag konnte nicht vorbereitet werden.", createFailed: "Der Node konnte nicht erstellt werden.", applied: "Dieser Node wurde bereits erstellt.", retry: "Node erneut vorbereiten" }
+  en: { prepare: "Prepare as Content node", preview: "Content node preview", type: "Content node", title: "Title", content: "Content", rationale: "Why this node", create: "Create node", cancel: "Cancel", preparing: "Preparing node…", created: "Node created.", creationAnnouncement: "Content node created.", advisor: "Advisor", invalid: "This proposal is no longer valid.", board: "Your Board changed. Prepare the node again.", canvas: "Your Canvas changed. Prepare the node again.", permission: "You no longer have permission to create this node.", prepareFailed: "The node proposal could not be prepared.", proposal_route_unavailable: "The node proposal service is unavailable.", proposal_unauthorized: "Please sign in again to prepare this node.", proposal_forbidden: "You no longer have permission to create this node.", proposal_request_invalid: "The node proposal request was invalid.", proposal_source_invalid: "The source answer cannot be used for a node proposal.", proposal_canvas_invalid: "The current Canvas cannot be used for this proposal.", proposal_context_changed: "The source context changed. Ask AI Brain again before preparing a node.", proposal_provider_failed: "The node proposal service could not respond.", proposal_response_invalid: "The node proposal response was invalid.", proposal_language_mismatch: "The node proposal used a different language. Please retry.", proposal_network_failed: "The node proposal could not be reached. Please retry.", proposal_generic_failed: "The node proposal could not be prepared.", createFailed: "The node could not be created.", applied: "This node has already been created.", retry: "Retry preparing node" },
+  de: { prepare: "Als Content-Node vorbereiten", preview: "Vorschau des Content-Nodes", type: "Content-Node", title: "Titel", content: "Inhalt", rationale: "Warum dieser Node", create: "Node erstellen", cancel: "Abbrechen", preparing: "Node wird vorbereitet…", created: "Node wurde erstellt.", creationAnnouncement: "Content-Node wurde erstellt.", advisor: "Berater", invalid: "Dieser Vorschlag ist nicht mehr gültig.", board: "Dein Board hat sich geändert. Bereite den Node erneut vor.", canvas: "Dein Canvas hat sich geändert. Bereite den Node erneut vor.", permission: "Du hast keine Berechtigung mehr, diesen Node zu erstellen.", prepareFailed: "Der Node-Vorschlag konnte nicht vorbereitet werden.", proposal_route_unavailable: "Der Dienst für Node-Vorschläge ist nicht verfügbar.", proposal_unauthorized: "Bitte melde dich erneut an, um diesen Node vorzubereiten.", proposal_forbidden: "Du hast keine Berechtigung mehr, diesen Node zu erstellen.", proposal_request_invalid: "Die Anfrage für den Node-Vorschlag war ungültig.", proposal_source_invalid: "Die Quellantwort kann nicht für einen Node-Vorschlag verwendet werden.", proposal_canvas_invalid: "Der aktuelle Canvas kann nicht für diesen Vorschlag verwendet werden.", proposal_context_changed: "Der Quellkontext hat sich geändert. Frage AI Brain erneut, bevor du einen Node vorbereitest.", proposal_provider_failed: "Der Dienst für Node-Vorschläge konnte nicht antworten.", proposal_response_invalid: "Die Antwort für den Node-Vorschlag war ungültig.", proposal_language_mismatch: "Der Node-Vorschlag verwendet eine andere Sprache. Bitte versuche es erneut.", proposal_network_failed: "Der Dienst für Node-Vorschläge ist nicht erreichbar. Bitte versuche es erneut.", proposal_generic_failed: "Der Node-Vorschlag konnte nicht vorbereitet werden.", createFailed: "Der Node konnte nicht erstellt werden.", applied: "Dieser Node wurde bereits erstellt.", retry: "Node erneut vorbereiten" }
 });
 const AI_BRAIN_PROPOSAL_LIMITS = Object.freeze({ id: 80, title: 120, body: 4000, rationale: 500 });
 const AI_BRAIN_PROPOSAL_ERROR_CODES = new Set(["proposal_route_unavailable", "proposal_unauthorized", "proposal_forbidden", "proposal_request_invalid", "proposal_source_invalid", "proposal_canvas_invalid", "proposal_context_changed", "proposal_provider_failed", "proposal_response_invalid", "proposal_language_mismatch", "proposal_network_failed", "proposal_generic_failed"]);
@@ -6399,6 +6401,41 @@ function renderAiBrainLearningContext(advisor, turn) {
 function aiBrainRequestContextIdentity() {
   return `${aiBrainIdentity()}|${state.boardAccess?.canEdit === true}|${state.selectedPrimary || ""}|${JSON.stringify(aiBrainCanvasProjection())}`;
 }
+// Content intent is bound at Advice dispatch, then completed only with that
+// successful response. It never borrows the stricter Creator/Brand eligibility.
+function aiBrainContentLocalContext() {
+  return JSON.stringify([aiBrainRequestContextIdentity(), state.nodes, state.edges]);
+}
+function captureAiBrainContentSource() {
+  const catalog = state.workspaceCatalog, association = state.boardBrandAssociation;
+  return { account: state.user, email: state.user?.email, identity: aiBrainIdentity(),
+    context: aiBrainContentLocalContext(), associationGeneration: association?.generation,
+    boardId: state.currentBoardId, associationBoardId: association?.boardId,
+    expectedScope: { updated_at: state.lastKnownUpdatedAt, brand_id: association?.brandId,
+      workspace_id: association?.workspaceId },
+    workspaceId: catalog?.activeWorkspaceId, catalogGeneration: catalog?.generation,
+    catalogIdentity: catalog?.identity, catalogStatus: catalog?.status,
+    catalogScope: JSON.stringify(catalog?.value) };
+}
+function aiBrainContentSourceCurrent(turn, source = turn?.contentProposalSource) {
+  turn = state.aiBrain.messages.find(item => item.id === turn?.id);
+  if (!source || turn?.contentProposalSource !== source || turn.status !== 'success'
+    || turn.referenceResolution === 'clarification' || !state.aiBrain.messages.includes(turn)
+    || source.turnId !== turn.id || source.answer !== turn.answer || source.question !== turn.question
+    || source.account !== state.user || source.email !== state.user?.email || !canUseAiBrainProposal()
+    || state.isBoardLoading || state.isBoardHydrating) return false;
+  const current = captureAiBrainContentSource();
+  return source.identity === current.identity && source.context === current.context
+    && source.boardId === current.boardId && source.associationBoardId === source.boardId
+    && current.associationBoardId === source.boardId && source.associationGeneration === current.associationGeneration
+    && JSON.stringify(source.expectedScope) === JSON.stringify(current.expectedScope)
+    && typeof source.expectedScope.updated_at === 'string' && !!source.expectedScope.updated_at
+    && ['brand_id', 'workspace_id'].every(key => source.expectedScope[key] === null || typeof source.expectedScope[key] === 'string')
+    && source.workspaceId === current.workspaceId && source.catalogGeneration === current.catalogGeneration
+    && source.catalogIdentity === current.catalogIdentity && source.catalogStatus === current.catalogStatus
+    && source.catalogScope === current.catalogScope;
+}
+
 function captureAiBrainBrandSource() {
   // The approved loader owns missing/stale metadata and deduplicates requests.
   if (state.workspaceCatalog && state.workspaceCatalog.status !== 'ready') void loadAuthorizedWorkspaceCatalog();
@@ -6857,22 +6894,29 @@ function cancelAiBrainNodeProposal(turnId) {
 async function requestAiBrainNodeProposal(turnId) {
   const turn = state.aiBrain.messages.find((item) => item.id === turnId && item.status === "success" && item.answer && item.referenceResolution !== "clarification");
   if (!turn || !aiBrainHasReusableContent(turn) || !canUseAiBrainProposal() || turn.proposal?.status === "requesting" || turn.proposal?.status === "applying" || turn.proposal?.status === "applied") return renderAiBrain();
+  if (!aiBrainContentSourceCurrent(turn)) {
+    setTurnProposal(turnId, () => ({ status: "stale", errorCode: "proposal_context_changed" })); return renderAiBrain();
+  }
+  const source = turn.contentProposalSource;
   const uiLanguage = state.uiLanguage === "de" ? "de" : "en"; const contentLanguage = state.campaignLanguage === "de" ? "de" : "en";
   const boardId = state.currentBoardId; const accountIdentity = state.user.email; const contextIdentity = aiBrainRequestContextIdentity(); const lifecycle = state.boardLoadGeneration;
-  const controller = new AbortController(); setTurnProposal(turnId, () => ({ status: "requesting", uiLanguage, contentLanguage, boardId, accountIdentity, contextIdentity, lifecycle, controller })); renderAiBrain();
+  const controller = new AbortController(); setTurnProposal(turnId, () => ({ status: "requesting", uiLanguage, contentLanguage, boardId, accountIdentity, contextIdentity, lifecycle, source, controller })); renderAiBrain();
   try {
-    const response = await fetch("/api/ai-brain/propose-node", { method: "POST", headers: { "Content-Type": "application/json", "X-AI-Brain-Generation": String(state.aiBrain.requestId) }, signal: controller.signal, body: JSON.stringify({ action: "propose_content_node", board_id: boardId, source_turn_id: turn.id, source_answer: turn.answer, selected_node_id: state.selectedPrimary || null, canvas_context: aiBrainCanvasProjection(), response_language: uiLanguage, content_language: contentLanguage }) });
+    const response = await fetch("/api/ai-brain/propose-node", { method: "POST", headers: { "Content-Type": "application/json", "X-AI-Brain-Generation": String(state.aiBrain.requestId) }, signal: controller.signal, body: JSON.stringify({ action: "propose_content_node", board_id: boardId, source_turn_id: turn.id, source_answer: source.answer, expected_scope: source.expectedScope, selected_node_id: state.selectedPrimary || null, canvas_context: aiBrainCanvasProjection(), response_language: uiLanguage, content_language: contentLanguage }) });
     const contentType = response.headers?.get?.("content-type") || ""; const isJson = /application\/json/i.test(contentType); const data = isJson ? await response.json().catch(() => null) : null; const current = state.aiBrain.messages.find((item) => item.id === turnId)?.proposal;
     if (current?.controller !== controller) return;
+    if (!aiBrainContentSourceCurrent(turn, source)) return setTurnProposal(turnId, () => ({ status: "stale", errorCode: "proposal_context_changed", uiLanguage })), renderAiBrain();
     if (!canUseAiBrainProposal() || state.currentBoardId !== boardId || state.user.email !== accountIdentity || state.boardLoadGeneration !== lifecycle) return setTurnProposal(turnId, () => ({ status: "stale", errorCode: "board", uiLanguage })), renderAiBrain();
     if (aiBrainRequestContextIdentity() !== contextIdentity) return setTurnProposal(turnId, () => ({ status: "stale", errorCode: "canvas", uiLanguage })), renderAiBrain();
     if (!response.ok) { const failure = new Error("proposal failed"); failure.code = AI_BRAIN_PROPOSAL_ERROR_CODES.has(data?.code) ? data.code : ([404, 405].includes(response.status) || !isJson ? "proposal_route_unavailable" : "proposal_generic_failed"); throw failure; }
     if (!data || data.action !== "propose_content_node" || data.context?.board_id !== boardId || data.context?.response_language !== uiLanguage || data.context?.content_language !== contentLanguage) { const failure = new Error("invalid response"); failure.code = "proposal_response_invalid"; throw failure; }
     const proposal = validateAiBrainNodeProposal(data.node_proposal, turn.id); if (!proposal || state.aiBrain.appliedProposalIds.has(proposal.proposal_id)) { const failure = new Error("invalid proposal"); failure.code = "proposal_response_invalid"; throw failure; }
-    setTurnProposal(turnId, () => ({ status: "ready", data: proposal, uiLanguage, contentLanguage, boardId, accountIdentity, contextIdentity, lifecycle })); renderAiBrain();
+    setTurnProposal(turnId, () => ({ status: "ready", data: proposal, uiLanguage, contentLanguage, boardId, accountIdentity, contextIdentity, lifecycle, source })); renderAiBrain();
     el.aiBrainSummary.querySelector(`[data-ai-brain-cancel='${turnId}']`)?.focus();
   } catch (error) {
     if (error?.name === "AbortError") return;
+    if (state.aiBrain.messages.find(item => item.id === turnId)?.proposal?.controller !== controller) return;
+    if (!aiBrainContentSourceCurrent(turn, source)) return setTurnProposal(turnId, () => ({ status: "stale", errorCode: "proposal_context_changed", uiLanguage })), renderAiBrain();
     setTurnProposal(turnId, () => ({ status: "failed", errorCode: error?.code || "proposal_network_failed", uiLanguage })); renderAiBrain();
   }
 }
@@ -6973,6 +7017,9 @@ function renderAiBrainTranscript(transcript) {
       section.append(heading, list); advisor.appendChild(section);
     }
     if (turn.meta) { const meta = document.createElement("small"); meta.textContent = turn.meta; advisor.appendChild(meta); }
+    if (turn.proposal && ['ready', 'requesting'].includes(turn.proposal.status) && !aiBrainContentSourceCurrent(turn, turn.proposal.source)) {
+      turn.proposal.controller?.abort(); turn.proposal = { status: "stale", errorCode: "proposal_context_changed" };
+    }
     const campaignEligible = !!aiBrainCampaignBrief(turn) && aiBrainCampaignSourceCurrent(turn);
     const brandEligible = !!aiBrainValueProposition(turn) && aiBrainBrandSourceCurrent(turn) && !turn.brandUpdateStaged;
     if (campaignEligible) {
@@ -7080,6 +7127,8 @@ function renderAiBrain() {
   const focused = document.activeElement;
   const composerFocus = sameIdentity && focused?.id && ["ai-brain-question", "ai-brain-mode", "ai-brain-transcript", "ai-brain-jump-latest", "ai-brain-context"].includes(focused.id) && el.aiBrainSummary.contains(focused)
     ? { id: focused.id, start: focused.selectionStart, end: focused.selectionEnd, direction: focused.selectionDirection } : null;
+  const previousComposer = sameIdentity ? el.aiBrainSummary.querySelector("#ai-brain-question") : null;
+  const composerSelection = previousComposer ? [previousComposer.selectionStart, previousComposer.selectionEnd, previousComposer.selectionDirection] : null;
   const preservedComposerValue = sameIdentity ? el.aiBrainSummary.querySelector("#ai-brain-question")?.value || "" : "";
   if (state.aiBrain.identity && state.aiBrain.identity !== aiBrainIdentity()) invalidateAiBrainRequest();
   el.aiBrainSummary.aiBrainRenderedIdentity = aiBrainIdentity();
@@ -7092,6 +7141,7 @@ function renderAiBrain() {
   const transcript = el.aiBrainSummary.querySelector(".ai-brain-transcript"); if (transcript) renderAiBrainTranscript(transcript);
   el.aiBrainSummary.querySelectorAll(".ai-brain-learning-context").forEach((node) => { node.open = openLearnings.includes(node.closest("[data-turn-id]")?.dataset.turnId); });
   const composer = el.aiBrainSummary.querySelector("#ai-brain-question"); if (composer && preservedComposerValue) composer.value = preservedComposerValue;
+  if (composer && composerSelection) composer.setSelectionRange(...composerSelection);
   el.aiBrainSummary.querySelector("#ai-brain-mode")?.addEventListener("change", (event) => {
     if (state.aiBrain.status === "loading" || !Object.prototype.hasOwnProperty.call(AI_BRAIN_MODES, event.target.value)) return;
     state.aiBrain.adviceMode = event.target.value;
@@ -7121,6 +7171,7 @@ async function requestAiBrainAdvice(event, retryTurnId = null) {
   const input = el.aiBrainSummary.querySelector("#ai-brain-question"); const question = existing?.question || input?.value.trim(); if (!question) return;
   const adviceMode = existing ? existing.adviceMode || "general" : state.aiBrain.adviceMode || "general";
   const brandProposalSource = captureAiBrainBrandSource();
+  const contentProposalSource = captureAiBrainContentSource();
   const responseLanguage = state.uiLanguage === "de" ? "de" : "en"; const controller = new AbortController(); const requestId = state.aiBrain.requestId + 1; const advisorIdentity = captureAiBrainAdvisorIdentity(requestId); const identity = aiBrainIdentity(); const contextIdentity = aiBrainRequestContextIdentity(); const selectedNodeId = state.selectedPrimary || null; const canvas = aiBrainCanvasProjection(); const conversationHistory = aiBrainConversationHistory(existing?.id || null);
   const turn = existing || { id: `turn-${requestId}`, question }; const messages = existing ? state.aiBrain.messages.map((item) => item.id === turn.id ? { ...item, status: "pending", adviceMode, responseLanguage, advisorIdentity, errorCode: "", answer: "" } : item) : [...state.aiBrain.messages, { ...turn, status: "pending", adviceMode, responseLanguage, advisorIdentity }];
   state.aiBrain = { ...state.aiBrain, account: state.user, status: "loading", requestId, controller, identity, error: "", messages };
@@ -7138,7 +7189,7 @@ async function requestAiBrainAdvice(event, retryTurnId = null) {
     if (data.context?.response_language !== responseLanguage) { const error = new Error("AI Brain response language identity mismatch"); error.code = "response_language_mismatch"; throw error; }
     const scope = [`Board Brand Core`, data.context?.canonicalBrandCore ? "Canonical Brand Core" : null, `${data.context?.canvasNodes || 0} Canvas nodes`].filter(Boolean).join(" · ");
     const assumptions = Array.isArray(data.assumptions) ? data.assumptions.filter((value) => typeof value === "string").slice(0, 20) : [];
-    state.aiBrain = { ...state.aiBrain, status: "success", controller: null, messages: state.aiBrain.messages.map((item) => item.id === turn.id ? { ...item, status: "success", answer: data.answer, responseLanguage, assumptions, brandProposalSource: { ...brandProposalSource, answer: data.answer, question }, brandProposalInvalid: false, brandUpdateStaged: false, approvedLearnings: data.context?.approved_learnings || null, referenceResolution: data.context?.reference_resolution || "none", proposal: null, meta: `${scope}. ${data.disclaimer}` } : item) };
+    state.aiBrain = { ...state.aiBrain, status: "success", controller: null, messages: state.aiBrain.messages.map((item) => item.id === turn.id ? { ...item, status: "success", answer: data.answer, responseLanguage, assumptions, brandProposalSource: { ...brandProposalSource, answer: data.answer, question }, contentProposalSource: { ...contentProposalSource, turnId: turn.id, answer: data.answer, question }, brandProposalInvalid: false, brandUpdateStaged: false, approvedLearnings: data.context?.approved_learnings || null, referenceResolution: data.context?.reference_resolution || "none", proposal: null, meta: `${scope}. ${data.disclaimer}` } : item) };
   } catch (error) {
     if (state.aiBrain.requestId !== requestId || state.aiBrain.identity !== identity || aiBrainIdentity() !== identity) return;
     state.aiBrain = { ...state.aiBrain, status: "error", controller: null, messages: state.aiBrain.messages.map((item) => item.id === turn.id ? { ...item, status: "failed", errorCode: error.code || "generic" } : item) };
@@ -7202,6 +7253,7 @@ function completeAiBrainNodeCreation(nodeId, languageCode) {
 function applyAiBrainNodeProposal(turnId) {
   const turn = state.aiBrain.messages.find((item) => item.id === turnId); const proposal = turn?.proposal;
   if (!turn || turn.status !== "success" || proposal?.status !== "ready") return renderAiBrain();
+  if (!aiBrainContentSourceCurrent(turn, proposal.source)) { setTurnProposal(turnId, () => ({ status: "stale", errorCode: "proposal_context_changed" })); return renderAiBrain(); }
   if (!canUseAiBrainProposal()) { setTurnProposal(turnId, () => ({ ...proposal, status: "stale", errorCode: "permission" })); return renderAiBrain(); }
   if (proposal.boardId !== state.currentBoardId || proposal.accountIdentity !== state.user?.email || proposal.lifecycle !== state.boardLoadGeneration) { setTurnProposal(turnId, () => ({ ...proposal, status: "stale", errorCode: "board" })); return renderAiBrain(); }
   if (proposal.contextIdentity !== aiBrainRequestContextIdentity()) { setTurnProposal(turnId, () => ({ ...proposal, status: "stale", errorCode: "canvas" })); return renderAiBrain(); }
@@ -10450,6 +10502,7 @@ async function loadBoardFromUrlIfPresent(requestedBoardId = null) {
     renderCompactContextBar();
     state.lastKnownUpdatedAt = data?.updated_at || null;
     state.boardBrandAssociation.brandId = data?.brand_visibility === "hidden" ? null : data.brand_id;
+    state.boardBrandAssociation.workspaceId = data.workspace_id;
     state.boardBrandAssociation.visibility = data?.brand_visibility === 'hidden' ? 'hidden' : data.brand_id === null ? 'unbranded' : 'visible';
     state.boardBrandAssociation.boardId = String(data.id);
     refreshActiveWorkspaceContext();
@@ -20927,7 +20980,7 @@ function hydrateCreatedProject(outcome) {
   state.boardLoadGeneration += 1;
   state.currentBoardId = data.id; state.currentBoardName = data.name; state.lastKnownUpdatedAt = data.updated_at;
   state.publicBoardToken = null;
-  state.boardBrandAssociation = { brandId: data.brand_id, boardId: data.id, status: "idle", generation: state.boardBrandAssociation.generation + 1, intendedBrandId: null, message: "" };
+  state.boardBrandAssociation = { brandId: data.brand_id, workspaceId: data.workspace_id, boardId: data.id, status: "idle", generation: state.boardBrandAssociation.generation + 1, intendedBrandId: null, message: "" };
   state.authoritativeBoardBrandCore = { boardId: data.id, loadGeneration: state.boardLoadGeneration, value: clonePlainObject(data.brand_core_snapshot), provenance: normalizeBoardSnapshotProvenance(data), provenanceValid: true, updatedAt: data.updated_at, restoreAvailable: false, backupCreatedAt: null };
   state.brandCore = normalizeBrandCoreState(clonePlainObject(data.brand_core_snapshot), { restoration: true });
   applyBoardAccessFromServer(data.access, "project-command");
