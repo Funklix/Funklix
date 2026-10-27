@@ -34,6 +34,8 @@ assert.equal(c.aiBrainContentAssets({status:'success',answer:incomplete}).length
 // testimonials belonging to that asset, not independent alternative posts.
 const testimonials='LinkedIn post: Customer stories\nCaption:\n"Before the workshop, I had a folder full of unfinished sketches and no confidence to take the next step."\n\n"Working alongside other independent makers gave me a place to explore my own process and finish an experiment."\nCTA: Book your workshop seat today.';
 assert.equal(c.aiBrainContentAssets({status:'success',answer:'LinkedIn post: Two alternatives\n'+quoted}).length,2);
+assert.equal(c.aiBrainContentAssets({status:'success',question:'Write two posts with customer testimonials',answer:testimonials}).length,1,'a request for alternatives cannot override a complete labelled source asset');
+assert.equal(c.aiBrainContentAssets({status:'success',answer:testimonials+'\n\n'+testimonials.replace('Customer stories','More customer stories')}).length,2,'quotes inside two explicit assets do not become separate sources');
 const testimonialsAssets=c.aiBrainContentAssets({status:'success',answer:testimonials});assert.equal(testimonialsAssets.length,1);assert.equal(testimonialsAssets[0].text,testimonials);
 const embedded='A campaign needs a focused individual invitation.\n\n“'+en.split('\n')[1]+'”\n\n## Next steps\nReview the campaign strategy.';
 const embeddedAssets=c.aiBrainContentAssets({status:'success',answer:embedded});assert.equal(embeddedAssets.length,1);assert(!embeddedAssets[0].text.includes('Next steps'));
