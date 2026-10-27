@@ -53,6 +53,7 @@ jobs:
           node --check knowledge-module-identity.js
           node --check knowledge-module-runtime-adapter.js
           node --check app.js
+          node --check scripts/check-bw37-1c-2b-ai-brain-campaign-handoff.js
           node --check ai-brain-workspace-viewport.js
           node --check api/ai-brain/advice.js
           node --check api/_campaign-generation-context.js
@@ -510,6 +511,9 @@ jobs:
       - name: Check complete Campaign V3 generation in Chromium
         timeout-minutes: 5
         run: npm run check:bw36.14r1
+      - name: Check AI Brain Campaign Creator handoff (mocked provider, Chromium)
+        timeout-minutes: 5
+        run: npm run check:bw37.1c2b
       - name: Check Campaign Creator generation boundary (disposable SQL, mocked provider)
         env:
           BW37_GENERATION_DISPOSABLE: '1'

@@ -237,5 +237,5 @@ async function browser({baseline=false,requestDelayMs=0,timeoutMs=180000}={}){
     finally{clearTimeout(cleanupTimer);clearTimeout(watchdog);if(!expired&&!cleanupFailed)clearTimeout(forceExit);}
   }
 }
-module.exports={server,browser};
+module.exports={server,browser,fixture};
 if(require.main===module)(async()=>{await server();await browser();})().catch(e=>{console.error(e);process.exitCode=1;});
