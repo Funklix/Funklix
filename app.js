@@ -6584,7 +6584,11 @@ function aiBrainContentAssets(turn) {
       && /\b(?:invite|help|demonstrate|teach|encourage|einladen|helfen|zeigen|ermutigen)\b/i.test(copy);
     return action || concept;
   };
-  const candidates = quoted.length > 1 ? quoted : starts;
+  // Quotations inside a labelled caption can be testimonials, not alternatives.
+  // Explicit asset boundaries always take precedence over quotation paragraphs.
+  if (!starts.length && /^(?:(?:proposed|suggested)(?: replacement)?(?: brand)? value proposition|vorgeschlagenes(?: neues)? nutzenversprechen):/i.test(plain(lines.find(m => m[0].trim())?.[0] || ''))) return [];
+  const quotedAlternatives = quoted.length > 1 && /\b(?:alternatives|alternativen|options|optionen)|(?:two|2|zwei)\s+(?:posts|beiträge|drafts|entwürfe)\b/i.test(`${turn.question || ''} ${plain(lines.find(m => m[0].trim())?.[0] || '')}`);
+  const candidates = starts.length && !quotedAlternatives ? starts : quoted;
   let ranges = candidates.map((start, index) => ({ start, end: Math.min(candidates[index + 1] ?? answer.length, boundaries.find(b => b > start) ?? answer.length) }));
   if (!ranges.length && /(?:draft|write|formuliere|schreib|entwirf).{0,60}(?:post|beitrag|copy|text|messag|botschaft)|(?:specific|concrete|konkret|reusable|wiederverwendbar).{0,60}(?:content|inhalt).{0,30}(?:idea|idee|concept|konzept)/i.test(turn.question || '')
     && !/(?:campaign brief|campaign concept|kampagnenkonzept|diagnos|you should|du solltest)/i.test(answer)

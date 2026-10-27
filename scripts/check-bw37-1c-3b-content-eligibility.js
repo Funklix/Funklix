@@ -29,4 +29,13 @@ const numberedLabels=en.replace("Here's a LinkedIn post you can use:",'LinkedIn 
 assert.equal(c.aiBrainContentAssets({status:'success',answer:numberedLabels}).length,2);
 const incomplete='Content concept: One\nAudience: Independent makers\n\nContent concept: Two\nMessage: Share the story behind your work.\nPurpose: Invite the community to participate.';
 assert.equal(c.aiBrainContentAssets({status:'success',answer:incomplete}).length,0,'never borrow fields across assets');
+
+// Codex P2 regression: quotations within one supported labelled caption are
+// testimonials belonging to that asset, not independent alternative posts.
+const testimonials='LinkedIn post: Customer stories\nCaption:\n"Before the workshop, I had a folder full of unfinished sketches and no confidence to take the next step."\n\n"Working alongside other independent makers gave me a place to explore my own process and finish an experiment."\nCTA: Book your workshop seat today.';
+assert.equal(c.aiBrainContentAssets({status:'success',answer:'LinkedIn post: Two alternatives\n'+quoted}).length,2);
+const testimonialsAssets=c.aiBrainContentAssets({status:'success',answer:testimonials});assert.equal(testimonialsAssets.length,1);assert.equal(testimonialsAssets[0].text,testimonials);
+const embedded='A campaign needs a focused individual invitation.\n\n“'+en.split('\n')[1]+'”\n\n## Next steps\nReview the campaign strategy.';
+const embeddedAssets=c.aiBrainContentAssets({status:'success',answer:embedded});assert.equal(embeddedAssets.length,1);assert(!embeddedAssets[0].text.includes('Next steps'));
+assert.equal(c.aiBrainContentAssets({status:'success',answer:'Proposed Brand Value Proposition:\n“'+en.split('\n')[1]+'”'}).length,0,'a replacement Brand value alone does not become Content');
 console.log('PASS production eligibility: natural EN/DE, legacy/Markdown/CRLF, all modes, campaign/diagnostic negatives and exact isolated asset offsets');

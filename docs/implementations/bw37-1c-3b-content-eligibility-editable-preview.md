@@ -8,7 +8,7 @@ Previously, Content eligibility required specific labelled fields, later section
 
 `aiBrainContentAssets` applies bounded deterministic rules to successful non-clarification answers of at most 12,000 characters, independently of advice mode. Existing structured EN/DE positive fixtures remain accepted within their individual asset boundary. Natural introductory prose, substantial drafted copy with an audience action, and concrete reusable concepts with format/audience/purpose cues qualify. Content-intent questions can disambiguate unlabelled drafts or concepts. Generic recommendations, diagnostics, questions, acknowledgements and complete campaign briefs without an individual asset do not qualify. These rules improve recall; they are neither semantic classification nor proof of quality/truth.
 
-Offsets always refer to the exact original answer, retaining Markdown, whitespace and CRLF. Independent asset headings, numbered alternatives and distinguishable quoted alternatives produce separate candidates; later asset fields cannot complete an earlier incomplete candidate. Multiple candidates start with no selection and disabled Prepare. Only one selected span is submitted. Unrecognized/ambiguous formats can remain in the conversation instead of being guessed into a node.
+Offsets always refer to the exact original answer, retaining Markdown, whitespace and CRLF. Independent asset headings, numbered alternatives and distinguishable quoted alternatives produce separate candidates; later asset fields cannot complete an earlier incomplete candidate. Explicit asset headings take precedence over quotations within their captions, preserving testimonial posts. Standalone quoted copy can be isolated inside a larger strategic conversation; a Brand value-proposition replacement alone remains excluded. Multiple candidates start with no selection and disabled Prepare. Only one selected span is submitted. Unrecognized/ambiguous formats can remain in the conversation instead of being guessed into a node.
 
 Campaign Creator and protected Brand Profile handoffs retain their owners and eligibility. At most two result actions are prominent; when both existing handoffs also qualify, Content is available in a compact native details disclosure. No unsupported destination type is advertised.
 
@@ -35,14 +35,17 @@ Source review and prepared preview remain inline in the retained conversation. R
 - `check:bw37.1c3b`: production recognition/extraction functions, actual signed read-only Create route with real scope/ACL owners and fictional projection-aware SQL, and actual browser shell/controllers with mocked providers/transport. Covers natural EN/DE, legacy/Markdown/CRLF, mode independence, strategy/diagnostic/campaign negatives, isolated multiple assets, source equality, zero-call opening/selection/edit, one explicit proposal call, required/boundary/control-character edits, inert source/title/body, cancellation/Escape/navigation, composer/caret/mode/scroll, Light/Dark at 320/375/1440 pixels, remote denial and await-time account/source/Board/Workspace/navigation/cancel races, no stale revival, one Content/undo snapshot, Inspector and pending-save/confirmed-save/reload.
 - Existing `check:bw37.1c3a` still exercises actual proposal authentication/projection, independent roles and nullable legacy associations, source-only `store:false`, one inference, body limits/real 25-second deadline, pre/post-inference races and browser one-node/undo/partial-insertion recovery. Its browser interactions now explicitly confirm preparation after zero-cost opening, supply the new response digest and await the new Create boundary. Its 409 assertion additionally proves stale source cannot retry until new advice. Existing assertions are retained.
 - Existing conversational Advisor browser flow also explicitly confirms preparation, mocks the read-only preflight and retains its call-count, cancel, creation and responsive assertions.
-- Full Runtime Boot Safety retains the unchanged PostgreSQL 17.6/18.4 matrix and existing checks. New syntax and focused checks are registered. Actual CI and Codex review outcomes are reported in the PR handoff; a pending matrix/review is not a pass.
+- Full Runtime Boot Safety retains the unchanged PostgreSQL 17.6/18.4 matrix and existing checks. New syntax and focused checks are registered. The initial matrix stopped at the existing BW-36.6 whole-`styles.css` fingerprint assertion. The review rules now live in a dedicated app-shell stylesheet; the baseline stylesheet and all its existing assertions remain unchanged. Actual final CI and Codex review outcomes are reported in the PR handoff; a pending matrix/review is not a pass.
 
 Local Chromium runs require the executor's approved socket-capable sandbox permissions; the initial restricted launch failed before browser execution. GitHub API CLI access is unavailable under this environment's HTTP policy, so the connected GitHub tools are used for PR metadata/review/CI. Git fetch/push use the configured proxy with approved sandbox permissions. No provider call uses live transport or paid credentials.
+
+Automatic Codex review on the initial commit found one P2: quotation splitting could suppress an existing labelled post containing testimonial paragraphs. The recognizer now preserves explicit asset boundaries, with that exact production-function regression fixture; independent quoted alternatives and embedded individual copy retain separate coverage. Final review state is reported in the PR handoff.
 
 ## Exact changed files
 
 - `app.js`
-- `styles.css`
+- `index.html`
+- `ai-brain-content-review.css`
 - `api/_ai-brain-proposal-scope.js`
 - `api/ai-brain/propose-node.js`
 - `api/ai-brain/content-scope.js`
