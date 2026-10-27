@@ -6540,7 +6540,7 @@ function aiBrainHasReusableContent(turn) { return aiBrainContentAssets(turn).len
 function aiBrainContentAssets(turn) {
   if (turn?.status !== "success" || turn.referenceResolution === "clarification" || typeof turn.answer !== "string" || turn.answer.length > 12000) return [];
   const answer = turn.answer;
-  const asset = /(?:social(?: media)? post|linkedin(?: post|-beitrag)?|instagram(?: post|-beitrag)?|landing[- ]?page(?: copy| text|-text)?|campaign (?:asset|messaging)|kampagnen(?:motiv|botschaft)|content(?: concept|-konzept| idea|-idee)|beitragsentwurf|post(?: draft|-entwurf)|(?:post|beitrag|option|alternative)\s*[a-z0-9]+)/i;
+  const asset = /(?:social(?: media)? post|linkedin(?: post|[ -]beitrag)?|instagram(?: post|[ -]beitrag)?|x(?: post|[ -]beitrag)|twitter(?: post|[ -]beitrag)?|landing[- ]?page(?: copy| text|-text)?|campaign (?:asset|messaging)|kampagnen(?:motiv|botschaft)|content(?: concept|-konzept| idea|-idee)|beitragsentwurf|post(?: draft|-entwurf)|(?:post|beitrag|option|alternative)\s*[a-z0-9]+)/i;
   const lines = [...answer.matchAll(/[^\n]*(?:\n|$)/g)].filter(m => m[0]);
   const plain = line => line.replace(/^\s*(?:#{1,6}\s*|[-*]\s+|\d{1,3}[.)]\s+)/, '').replace(/\*\*/g, '').trim();
   const starts = lines.filter(m => {
@@ -6552,15 +6552,16 @@ function aiBrainContentAssets(turn) {
   }).map(m => m.index);
   // Distinct headings bound each asset. Native copy fields, including Markdown
   // fields accepted by the original recognizer, stay inside their own asset.
-  const fieldHeading = /^(?:audience|zielgruppe|message|botschaft|kernbotschaft|purpose|ziel|zweck|caption|copy|post text|post-text|beitragstext|text|headline|headline claim|überschrift|cta|call to action|handlungsaufforderung):/i;
-  const boundaries = lines.filter(m => /^\s*#{1,6}\s/.test(m[0]) && !fieldHeading.test(plain(m[0]))).map(m => m.index);
+  const fieldHeading = /^(?:audience|zielgruppe|message|botschaft|kernbotschaft|purpose|ziel|zweck|caption|tweet|hashtags|copy|post text|post-text|beitragstext|text|headline|headline claim|überschrift|cta|call to action|handlungsaufforderung):/i;
+  const metadataHeading = /^(?:assumptions|annahmen|rationale|begründung|strategic next steps|strategische nächste schritte|ai metadata|ki-metadaten):/i;
+  const boundaries = lines.filter(m => (/^\s*#{1,6}\s/.test(m[0]) && !fieldHeading.test(plain(m[0]))) || metadataHeading.test(plain(m[0]))).map(m => m.index);
   const alternatives = lines.filter(m => /^\s*(?:\d{1,3}[.)]\s|(?:\*\*)?(?:Option|Alternative|Post|Beitrag)\s*[A-Z0-9]+\b)/i.test(m[0])).map(m => m.index);
   const quoted = lines.filter(m => /^\s*["“„«]/.test(m[0])).map(m => m.index);
   const accepted = excerpt => {
     const turn = { answer: excerpt };
     const text = turn.answer.replace(/\r\n?/g, "\n");
-    const lines = text.split("\n").map(line => line.replace(/^\s*(?:#{1,4}\s*|[-*]\s+|\d{1,3}\.\s+)/, "").replace(/\*\*/g, "").trim());
-    const asset = /^(?:(?:proposed |draft |vorgeschlagener? |entwurf: ?)?(?:social(?: media)? post|linkedin(?: post|-beitrag)?|instagram(?: post|-beitrag)?|landing[- ]?page(?: copy| text|-text)?|campaign asset|kampagnenmotiv|content concept|content-konzept|beitragsentwurf|post draft|post-entwurf))(?:\s*[:—–-]|$)/i;
+    const lines = text.split("\n").map(line => line.replace(/^\s*(?:#{1,6}\s*|[-*]\s+|\d{1,3}\.\s+)/, "").replace(/\*\*/g, "").trim());
+    const asset = /^(?:(?:proposed |draft |vorgeschlagener? |entwurf: ?)?(?:social(?: media)? post|linkedin(?: post|[ -]beitrag)?|instagram(?: post|[ -]beitrag)?|x(?: post|[ -]beitrag)|twitter(?: post|[ -]beitrag)?|landing[- ]?page(?: copy| text|-text)?|campaign asset|kampagnenmotiv|content concept|content-konzept|beitragsentwurf|post draft|post-entwurf))(?:\s*[:—–-]|$)/i;
     const start = lines.findIndex(line => asset.test(line));
     if (start < 0) return false;
     const section = lines.slice(start).join("\n");
@@ -6568,7 +6569,7 @@ function aiBrainContentAssets(turn) {
     // A concrete concept must specify all three, rather than management tasks.
     if (field("audience|zielgruppe") && field("message|botschaft|kernbotschaft") && field("purpose|ziel|zweck")) return true;
     // Draft copy needs a labelled substantial body and an explicit audience action.
-    const copy = section.match(/^(?:caption|copy|post text|post-text|beitragstext|text|headline|headline claim|überschrift):\s*([\s\S]+)/im)?.[1] || "";
+    const copy = section.match(/^(?:caption|tweet|copy|post text|post-text|beitragstext|text|headline|headline claim|überschrift):\s*([\s\S]+)/im)?.[1] || "";
     const body = copy.split(/^(?:cta|call to action|handlungsaufforderung):/im)[0].trim();
     return body.length >= 80 && /^(?:cta|call to action|handlungsaufforderung):\s*\S.{5,}/im.test(copy);
   };
@@ -6595,6 +6596,12 @@ function aiBrainContentAssets(turn) {
     && answer.trim().length >= 100 && concrete(answer)) {
     ranges = alternatives.length > 1 ? alternatives.map((start, i) => ({ start, end: alternatives[i + 1] ?? answer.length })) : [{ start: 0, end: answer.length }];
   }
+  // A separator immediately before the next section is framing, not copy.
+  // Keep internal separators and every character inside the selected span.
+  ranges = ranges.map(r => {
+    const separator = answer.slice(r.start, r.end).match(/(?:\r?\n[ \t]*)+(?:-{3,}|\*{3,}|_{3,})[ \t]*(?:\r?\n[ \t]*)*$/);
+    return separator ? { ...r, end: r.start + separator.index } : r;
+  });
   return ranges.filter(r => concrete(answer.slice(r.start, r.end))).map(r => Object.freeze({ ...r, text: answer.slice(r.start, r.end) }));
 }
 // A deliberately small supported format. Labels are an affordance, never proof

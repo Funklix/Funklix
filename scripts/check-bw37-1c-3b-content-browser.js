@@ -1,5 +1,6 @@
 'use strict';
 const assert=require('node:assert/strict'), {chromium}=require('playwright-core');
+const appics=require('node:fs').readFileSync('scripts/fixtures/bw37-1c3b-r1-appics-response.txt','utf8');
 const first="Here's a LinkedIn post you can use:\r\nYour first sketch doesn't need to be perfect. It needs a place to begin. Share the experiment behind your next idea with a community that values the process. Join our next workshop.";
 const second='Hier ist ein konkreter LinkedIn-Beitrag:\nDeine erste Skizze muss nicht perfekt sein. Sie braucht einen Anfang. Teile das Experiment hinter deiner nächsten Idee mit einer Gemeinschaft, die deinen eigenen Weg schätzt. Melde dich zum Workshop an.';
 async function main(){
@@ -12,7 +13,7 @@ async function main(){
   await p.route('**/api/ai-brain/propose-node',async route=>{
    proposalCalls++;const body=route.request().postDataJSON();requests.push(body);
    if(proposalHold){const h=proposalHold;proposalHold=null;h.started();await h.wait;}
-   return route.fulfill({json:{action:'propose_content_node',scope_revision:'a'.repeat(64),node_proposal:{proposal_id:'ux-'+(++sequence),source_turn_id:body.source_turn_id,node_type:'Content',title:'First sketch',body:'Share your first sketch with the creative community.',rationale:'Separate explanation, never body copy.'},context:{board_id:body.board_id,response_language:body.response_language,content_language:body.content_language}}}).catch(()=>{});
+   return route.fulfill({json:{action:'propose_content_node',scope_revision:'a'.repeat(64),node_proposal:{proposal_id:'ux-'+(++sequence),source_turn_id:body.source_turn_id,node_type:'Content',title:body.source_answer.includes('#MyAppicsStory')?(body.source_answer.includes('Instagram')?'Instagram Post':'X Post'):'First sketch',body:body.source_answer.includes('#MyAppicsStory')?body.source_answer.trim():'Share your first sketch with the creative community.',rationale:'Separate explanation, never body copy.'},context:{board_id:body.board_id,response_language:body.response_language,content_language:body.content_language}}}).catch(()=>{});
   });
   await p.route('**/api/ai-brain/content-scope',async route=>{
    scopeCalls++;const body=route.request().postDataJSON();assert.equal(body.scope_revision,'a'.repeat(64));assert.equal(Object.keys(body).length,3);
@@ -30,6 +31,30 @@ async function main(){
   const open=async()=>{await p.locator('[data-ai-brain-prepare]').last().click();await p.locator('[data-ai-brain-prepare-confirm]').waitFor();};
   const ready=async()=>{await open();await p.locator('[data-ai-brain-prepare-confirm]').click();await p.locator('[data-ai-brain-create]').waitFor();};
   const snapshot=()=>p.evaluate(()=>({nodes:JSON.stringify(state.nodes),edges:JSON.stringify(state.edges),history:JSON.stringify(state.history),dirty:state.isDirty,brand:JSON.stringify(state.brandCore)}));
+  // Replay the live answer through both independent selections and the actual
+  // editable preview/Create owner. All provider transport remains mocked.
+  for(const index of [0,1]){
+   answer=appics;await boot();await ask();const original=await snapshot(),paid=proposalCalls,reads=scopeCalls;
+   const sources=await p.evaluate(()=>aiBrainContentAssets(state.aiBrain.messages.at(-1)).map(a=>a.text));assert.equal(sources.length,2);
+   await open();const choice=p.locator('[data-ai-brain-source]');
+   assert.deepEqual(await choice.locator('option').allTextContents(),['Select an asset…','1. ##### Instagram Post','2. ##### X Post']);
+   for(const selected of ['0','1',String(index)])await choice.selectOption(selected);
+   assert.equal(proposalCalls,paid);assert.equal(scopeCalls,reads);assert.deepEqual(await snapshot(),original);
+   assert(await p.evaluate(()=>{const t=state.aiBrain.messages.at(-1);return aiBrainContentSelectionCurrent(t,t.proposal.selection);}));
+   assert.equal(await p.locator('[data-ai-brain-excerpt]').textContent(),sources[index]);
+   await p.locator('[data-ai-brain-prepare-confirm]').click();await p.locator('[data-ai-brain-create]').waitFor();
+   assert.equal(proposalCalls,paid+1);assert.equal(requests.at(-1).source_answer,sources[index]);assert.deepEqual(await snapshot(),original);
+   assert.equal(await p.locator('[data-ai-brain-edit=title]').inputValue(),index===0?'Instagram Post':'X Post');
+   assert.equal(await p.locator('[data-ai-brain-edit=body]').inputValue(),sources[index].trim());
+   const count=await p.evaluate(()=>state.nodes.length),history=await p.evaluate(()=>state.history.length);
+   await p.evaluate(()=>Promise.all([applyAiBrainNodeProposal(state.aiBrain.messages.at(-1).id),applyAiBrainNodeProposal(state.aiBrain.messages.at(-1).id)]));
+   assert.equal(await p.evaluate(()=>state.nodes.length),count+1);assert.equal(await p.evaluate(()=>state.history.length),history+1);
+   assert.equal(await p.evaluate(()=>state.nodes.at(-1).type),'Content');assert.equal(await p.evaluate(()=>state.nodes.at(-1).content),sources[index].trim());
+   assert.equal(proposalCalls,paid+1);assert.equal(scopeCalls,reads+1);
+   await p.evaluate(()=>{clearAutosaveTimer();el.undoButton.click();clearAutosaveTimer();});assert.equal(await p.evaluate(()=>state.nodes.length),count);
+  }
+  console.log('PASS R1 both Appics selections: exact isolated source, zero-call selection, one-call preparation, editable preview, explicit one-node Create, duplicate protection and undo');
+  scopeCalls=0;
   await boot();answer=first+'\n\n'+second;await ask();const before=await snapshot(),n=proposalCalls;
   await p.locator('#ai-brain-question').fill('Keep this newer composer draft');await p.locator('#ai-brain-question').evaluate(n=>n.setSelectionRange(4,9));await p.locator('#ai-brain-mode').selectOption('find_gaps');
   await open();assert.equal(proposalCalls,n);assert.equal(scopeCalls,0);assert(await p.locator('[data-ai-brain-prepare-confirm]').isDisabled());

@@ -41,3 +41,41 @@ const embedded='A campaign needs a focused individual invitation.\n\n“'+en.spl
 const embeddedAssets=c.aiBrainContentAssets({status:'success',answer:embedded});assert.equal(embeddedAssets.length,1);assert(!embeddedAssets[0].text.includes('Next steps'));
 assert.equal(c.aiBrainContentAssets({status:'success',answer:'Proposed Brand Value Proposition:\n“'+en.split('\n')[1]+'”'}).length,0,'a replacement Brand value alone does not become Content');
 console.log('PASS production eligibility: natural EN/DE, legacy/Markdown/CRLF, all modes, campaign/diagnostic negatives and exact isolated asset offsets');
+
+// BW-37.1C-3B-R1: exact live Appics answer, including its fifth-level headings.
+const appics=fs.readFileSync('scripts/fixtures/bw37-1c3b-r1-appics-response.txt','utf8');
+const checkPair=answer=>{
+ const turn={status:'success',answer},assets=c.aiBrainContentAssets(turn);
+ assert.equal(assets.length,2);
+ assert.match(assets[0].text,/Instagram/);assert.match(assets[1].text,/X(?: Post|[- ]Beitrag)/);
+ for(const [i,a] of assets.entries()){
+  assert.equal(a.text,answer.slice(a.start,a.end));assert.match(a.text,/\*\*CTA:\*\*/);assert.match(a.text,/\*\*Hashtags:\*\*/);
+  assert(!a.text.includes('Here are two'));assert(!a.text.includes('Assumptions'));assert(!a.text.includes('---'));
+  assert(!a.text.includes(i===0?'🚀 Tired':'✨ Every'));
+ }
+ assert.match(assets[0].text,/Let’s build a community/);assert.match(assets[0].text,/#CelebrateCreativity #Appics/);
+ assert.match(assets[1].text,/Your voice matters/);assert.match(assets[1].text,/#ContentOwnership #CensorshipFree/);
+ assert(assets[0].end<=assets[1].start);return assets;
+};
+checkPair(appics);
+for(let level=1;level<=6;level++)for(const german of [false,true]){
+ let answer=appics.replaceAll('#####','#'.repeat(level));
+ if(german)answer=answer.replace('Instagram Post','Instagram-Beitrag').replace('X Post','X Beitrag');
+ checkPair(answer);checkPair(answer.replaceAll('\n','\r\n'));
+ // Heading fields are part of the post, even when nested at any level.
+ checkPair(answer.replace(/\*\*(Caption|Tweet|CTA|Hashtags):\*\*/g,`${'#'.repeat(level)} **$1:**`));
+}
+checkPair(appics+'\n\n**Assumptions:** Fictional trailing AI metadata.');
+for(const platform of ['X Post','X-Beitrag','Twitter Post','Twitter-Beitrag']){
+ // No action keyword: this must pass the structured Tweet/CTA owner, not
+ // merely the natural-copy fallback that masked the fifth-level heading gap.
+ const structured=`###### ${platform}\n###### **Tweet:**\nIndependent creators deserve a community where their creative work has lasting value and every unique perspective has a welcoming home.\n###### **CTA:** Become a member today.\n###### **Hashtags:** #Creators`;
+ const result=c.aiBrainContentAssets({status:'success',answer:structured});assert.equal(result.length,1);assert.equal(result[0].text,structured);
+}
+const quotedAppics=appics.replace('Let’s build a community', '"A folder of sketches became my first creative breakthrough."\n\n"Every experiment helped me find my voice."\n\nLet’s build a community');
+checkPair(quotedAppics);
+const internalSeparator=appics.replace('Let’s build a community','---\n\nLet’s build a community');
+const separated=c.aiBrainContentAssets({status:'success',answer:internalSeparator});assert.equal(separated.length,2);assert.match(separated[0].text,/---\n\nLet’s/);
+const single=appics.slice(appics.indexOf('##### X Post'));assert.equal(c.aiBrainContentAssets({status:'success',answer:single})[0].text,single);
+assert.equal(c.aiBrainContentAssets({status:'success',answer:'Here are two posts: Instagram and X. Which should we draft first?'}).length,0);
+console.log('PASS R1 exact Appics pair, EN/DE platforms, six heading levels/fields, CRLF, Tweet validation, metadata, internal testimonials/separators and single/ambiguous responses');
