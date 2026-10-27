@@ -19,6 +19,9 @@ async function main() {
  const {r,body}=await prepared();r.before=n=>{if(n===5)r.membership.status='revoked';};assert.equal((await r.invoke(body,'POST',r.scopeHandler)).statusCode,409);
  for(const bad of [{...body,extra:true},{...body,scope_revision:'invalid'},{...body,expected_scope:{}},null])assert.equal((await r.invoke(bad,'POST',r.scopeHandler)).statusCode,400);
  assert.equal((await r.invoke(body,'GET',r.scopeHandler)).statusCode,405);
+ const maintenance=await prepared(),maintenanceBefore=process.env.TENDRA_WRITE_MAINTENANCE,n=calls;
+ process.env.TENDRA_WRITE_MAINTENANCE='true';
+ try{assert.equal((await maintenance.r.invoke(maintenance.body,'POST',maintenance.r.scopeHandler)).statusCode,200);maintenance.r.user=null;assert.equal((await maintenance.r.invoke(maintenance.body,'POST',maintenance.r.scopeHandler)).statusCode,401);assert.equal(calls,n);}finally{if(maintenanceBefore===undefined)delete process.env.TENDRA_WRITE_MAINTENANCE;else process.env.TENDRA_WRITE_MAINTENANCE=maintenanceBefore;}
  console.log('PASS actual signed Create scope route: owner/editor, independent Brand roles, zero provider calls, revoked access/identity/Workspace/association/revision and unavailable-read rejection');
 }
 main().catch(e=>{console.error(e);process.exitCode=1;}).finally(()=>global.fetch=original);

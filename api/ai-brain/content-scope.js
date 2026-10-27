@@ -26,3 +26,6 @@ module.exports = async function handler(req, res) {
       error instanceof scope.ProposalScopeError ? error.code : 'proposal_generic_failed');
   }
 };
+
+// Preserve the central database response boundary without changing read-only ACLs.
+module.exports = require('../_write-maintenance').withMaintenanceResponse(module.exports);
