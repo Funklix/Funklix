@@ -6410,7 +6410,7 @@ function captureAiBrainContentSource() {
   const catalog = state.workspaceCatalog, association = state.boardBrandAssociation;
   return { account: state.user, email: state.user?.email, identity: aiBrainIdentity(),
     context: aiBrainContentLocalContext(), associationGeneration: association?.generation,
-    boardId: state.currentBoardId, associationBoardId: association?.boardId,
+    boardId: state.currentBoardId, boardName: state.currentBoardName, associationBoardId: association?.boardId,
     expectedScope: { updated_at: state.lastKnownUpdatedAt, brand_id: association?.brandId,
       workspace_id: association?.workspaceId },
     workspaceId: catalog?.activeWorkspaceId, catalogGeneration: catalog?.generation,
@@ -6419,13 +6419,16 @@ function captureAiBrainContentSource() {
 }
 function aiBrainContentSourceCurrent(turn, source = turn?.contentProposalSource) {
   turn = state.aiBrain.messages.find(item => item.id === turn?.id);
-  if (!source || turn?.contentProposalSource !== source || turn.status !== 'success'
+  if (!source || turn?.contentProposalInvalid || turn?.contentProposalSource !== source || turn.status !== 'success'
     || turn.referenceResolution === 'clarification' || !state.aiBrain.messages.includes(turn)
     || source.turnId !== turn.id || source.answer !== turn.answer || source.question !== turn.question
     || source.account !== state.user || source.email !== state.user?.email || !canUseAiBrainProposal()
-    || state.isBoardLoading || state.isBoardHydrating) return false;
+    || state.isBoardLoading || state.isBoardHydrating) {
+    if (turn) turn.contentProposalInvalid = true;
+    return false;
+  }
   const current = captureAiBrainContentSource();
-  return source.identity === current.identity && source.context === current.context
+  const valid = source.identity === current.identity && source.context === current.context
     && source.boardId === current.boardId && source.associationBoardId === source.boardId
     && current.associationBoardId === source.boardId && source.associationGeneration === current.associationGeneration
     && JSON.stringify(source.expectedScope) === JSON.stringify(current.expectedScope)
@@ -6434,6 +6437,8 @@ function aiBrainContentSourceCurrent(turn, source = turn?.contentProposalSource)
     && source.workspaceId === current.workspaceId && source.catalogGeneration === current.catalogGeneration
     && source.catalogIdentity === current.catalogIdentity && source.catalogStatus === current.catalogStatus
     && source.catalogScope === current.catalogScope;
+  if (!valid) turn.contentProposalInvalid = true;
+  return valid;
 }
 
 function captureAiBrainBrandSource() {
@@ -6529,23 +6534,68 @@ function validateAiBrainNodeProposal(input, sourceTurnId) {
   if (!proposalId || !turnId || turnId !== sourceTurnId || input.node_type !== "Content" || !title || !body || rationale === null) return null;
   return Object.assign(Object.create(null), { proposal_id: proposalId, source_turn_id: turnId, node_type: "Content", title, body, ...(rationale ? { rationale } : {}) });
 }
-// Bounded, conservative UI affordance, never authorization or a model classifier.
-// Require an explicitly labelled reusable asset, not merely a strategic keyword.
-function aiBrainHasReusableContent(turn) {
-  if (turn?.status !== "success" || turn.referenceResolution === "clarification" || typeof turn.answer !== "string" || turn.answer.length > 12000) return false;
-  const text = turn.answer.replace(/\r\n?/g, "\n");
-  const lines = text.split("\n").map(line => line.replace(/^\s*(?:#{1,4}\s*|[-*]\s+|\d{1,3}\.\s+)/, "").replace(/\*\*/g, "").trim());
-  const asset = /^(?:(?:proposed |draft |vorgeschlagener? |entwurf: ?)?(?:social(?: media)? post|linkedin(?: post|-beitrag)?|instagram(?: post|-beitrag)?|landing[- ]?page(?: copy| text|-text)?|campaign asset|kampagnenmotiv|content concept|content-konzept|beitragsentwurf|post draft|post-entwurf))(?:\s*[:—–-]|$)/i;
-  const start = lines.findIndex(line => asset.test(line));
-  if (start < 0) return false;
-  const section = lines.slice(start).join("\n");
-  const field = label => new RegExp(`^(?:${label}):\\s*\\S.{7,}`, "im").test(section);
-  // A concrete concept must specify all three, rather than management tasks.
-  if (field("audience|zielgruppe") && field("message|botschaft|kernbotschaft") && field("purpose|ziel|zweck")) return true;
-  // Draft copy needs a labelled substantial body and an explicit audience action.
-  const copy = section.match(/^(?:caption|copy|post text|post-text|beitragstext|text|headline|headline claim|überschrift):\s*([\s\S]+)/im)?.[1] || "";
-  const body = copy.split(/^(?:cta|call to action|handlungsaufforderung):/im)[0].trim();
-  return body.length >= 80 && /^(?:cta|call to action|handlungsaufforderung):\s*\S.{5,}/im.test(copy);
+// Local, bounded recognition is an affordance, never authorization or a
+// classifier call. Keep offsets into the original answer, including CRLF/bold.
+function aiBrainHasReusableContent(turn) { return aiBrainContentAssets(turn).length > 0; }
+function aiBrainContentAssets(turn) {
+  if (turn?.status !== "success" || turn.referenceResolution === "clarification" || typeof turn.answer !== "string" || turn.answer.length > 12000) return [];
+  const answer = turn.answer;
+  const asset = /(?:social(?: media)? post|linkedin(?: post|-beitrag)?|instagram(?: post|-beitrag)?|landing[- ]?page(?: copy| text|-text)?|campaign (?:asset|messaging)|kampagnen(?:motiv|botschaft)|content(?: concept|-konzept| idea|-idee)|beitragsentwurf|post(?: draft|-entwurf)|(?:post|beitrag|option|alternative)\s*[a-z0-9]+)/i;
+  const lines = [...answer.matchAll(/[^\n]*(?:\n|$)/g)].filter(m => m[0]);
+  const plain = line => line.replace(/^\s*(?:#{1,6}\s*|[-*]\s+|\d{1,3}[.)]\s+)/, '').replace(/\*\*/g, '').trim();
+  const starts = lines.filter(m => {
+    const line = plain(m[0]);
+    const label = line.replace(/^(?:proposed |draft |vorgeschlagener? |entwurf:\s*)/i, '');
+    const match = label.match(asset);
+    return !!match && (match.index === 0 && /^(?:\s*[:—–-]|\s+[a-z0-9]+\s*[:—–-]|\s*$)/i.test(label.slice(match[0].length))
+      || /^(?:here(?:'s| is)|try this|how about|hier|so könnte|ein konkreter|als einzelner)/i.test(line));
+  }).map(m => m.index);
+  // Distinct headings bound each asset. Native copy fields, including Markdown
+  // fields accepted by the original recognizer, stay inside their own asset.
+  const fieldHeading = /^(?:audience|zielgruppe|message|botschaft|kernbotschaft|purpose|ziel|zweck|caption|copy|post text|post-text|beitragstext|text|headline|headline claim|überschrift|cta|call to action|handlungsaufforderung):/i;
+  const boundaries = lines.filter(m => /^\s*#{1,6}\s/.test(m[0]) && !fieldHeading.test(plain(m[0]))).map(m => m.index);
+  const alternatives = lines.filter(m => /^\s*(?:\d{1,3}[.)]\s|(?:\*\*)?(?:Option|Alternative|Post|Beitrag)\s*[A-Z0-9]+\b)/i.test(m[0])).map(m => m.index);
+  const quoted = lines.filter(m => /^\s*["“„«]/.test(m[0])).map(m => m.index);
+  const accepted = excerpt => {
+    const turn = { answer: excerpt };
+    const text = turn.answer.replace(/\r\n?/g, "\n");
+    const lines = text.split("\n").map(line => line.replace(/^\s*(?:#{1,4}\s*|[-*]\s+|\d{1,3}\.\s+)/, "").replace(/\*\*/g, "").trim());
+    const asset = /^(?:(?:proposed |draft |vorgeschlagener? |entwurf: ?)?(?:social(?: media)? post|linkedin(?: post|-beitrag)?|instagram(?: post|-beitrag)?|landing[- ]?page(?: copy| text|-text)?|campaign asset|kampagnenmotiv|content concept|content-konzept|beitragsentwurf|post draft|post-entwurf))(?:\s*[:—–-]|$)/i;
+    const start = lines.findIndex(line => asset.test(line));
+    if (start < 0) return false;
+    const section = lines.slice(start).join("\n");
+    const field = label => new RegExp(`^(?:${label}):\\s*\\S.{7,}`, "im").test(section);
+    // A concrete concept must specify all three, rather than management tasks.
+    if (field("audience|zielgruppe") && field("message|botschaft|kernbotschaft") && field("purpose|ziel|zweck")) return true;
+    // Draft copy needs a labelled substantial body and an explicit audience action.
+    const copy = section.match(/^(?:caption|copy|post text|post-text|beitragstext|text|headline|headline claim|überschrift):\s*([\s\S]+)/im)?.[1] || "";
+    const body = copy.split(/^(?:cta|call to action|handlungsaufforderung):/im)[0].trim();
+    return body.length >= 80 && /^(?:cta|call to action|handlungsaufforderung):\s*\S.{5,}/im.test(copy);
+  };
+  const concrete = excerpt => {
+    if (accepted(excerpt)) return true;
+    if (/^(?:audience|zielgruppe|message|botschaft|purpose|zweck):/im.test(excerpt)) return false;
+    const text = excerpt.replace(/\*\*/g, '').trim();
+    const copy = text.replace(/^[^\n]{0,180}(?:\r?\n|:\s*)/, '').trim();
+    if (copy.length < 80 || /^(?:consider|you should|we should|try to|review|analy[sz]e|prüfe|du solltest|wir sollten|überlege|empfehlung|diagnos)/i.test(copy)) return false;
+    const action = /\b(?:join|discover|share|start|book|try|download|sign up|tell us|visit|learn more|komme|entdecke|teile|starte|buche|teste|lade|melde|besuche|erfahre)\b/i.test(copy);
+    const concept = /\b(?:show|feature|portrait|series|story|video|carousel|karussell|zeige|porträt|serie|geschichte)\b/i.test(copy)
+      && /\b(?:audience|creators|customers|founders|community|zielgruppe|kunden|gründer|kreative)\b/i.test(copy)
+      && /\b(?:invite|help|demonstrate|teach|encourage|einladen|helfen|zeigen|ermutigen)\b/i.test(copy);
+    return action || concept;
+  };
+  // Quotations inside a labelled caption can be testimonials, not alternatives.
+  // Explicit asset boundaries always take precedence over quotation paragraphs.
+  if (!starts.length && /^(?:(?:proposed|suggested)(?: replacement)?(?: brand)? value proposition|vorgeschlagenes(?: neues)? nutzenversprechen):/i.test(plain(lines.find(m => m[0].trim())?.[0] || ''))) return [];
+  const quotedAlternatives = starts.length === 1 && quoted.length > 1 && /\b(?:alternatives|alternativen|options|optionen)|(?:two|2|zwei)\s+(?:posts|beiträge|drafts|entwürfe)\b/i.test(plain(lines.find(m => m.index === starts[0])?.[0] || ''));
+  const candidates = starts.length && !quotedAlternatives ? starts : quoted;
+  let ranges = candidates.map((start, index) => ({ start, end: Math.min(candidates[index + 1] ?? answer.length, boundaries.find(b => b > start) ?? answer.length) }));
+  if (!ranges.length && /(?:draft|write|formuliere|schreib|entwirf).{0,60}(?:post|beitrag|copy|text|messag|botschaft)|(?:specific|concrete|konkret|reusable|wiederverwendbar).{0,60}(?:content|inhalt).{0,30}(?:idea|idee|concept|konzept)/i.test(turn.question || '')
+    && !/(?:campaign brief|campaign concept|kampagnenkonzept|diagnos|you should|du solltest)/i.test(answer)
+    && answer.trim().length >= 100 && concrete(answer)) {
+    ranges = alternatives.length > 1 ? alternatives.map((start, i) => ({ start, end: alternatives[i + 1] ?? answer.length })) : [{ start: 0, end: answer.length }];
+  }
+  return ranges.filter(r => concrete(answer.slice(r.start, r.end))).map(r => Object.freeze({ ...r, text: answer.slice(r.start, r.end) }));
 }
 // A deliberately small supported format. Labels are an affordance, never proof
 // of truth or permission. No whole-answer copying or inference-based extraction.
@@ -6883,36 +6933,96 @@ async function openAiBrainBrandProposal(turnId) {
     }
   });
 }
+function aiBrainContentCopy(key) {
+  const copy = {
+    en: { add: 'Add to Canvas', board: 'Destination Board', source: 'Exact original source', suggestion: 'AI-generated suggestion — review before creating.', choose: 'Choose one content asset', placeholder: 'Select an asset…', cost: 'Prepare makes one AI request. Opening, selecting and editing are free of AI requests.', back: 'Return to conversation', fields: 'Title: 1–120 characters. Content: 1–4,000 characters. Both are required.', more: 'More actions', checking: 'Checking Board access…' },
+    de: { add: 'Zum Canvas hinzufügen', board: 'Ziel-Board', source: 'Exakter Originalauszug', suggestion: 'KI-generierter Vorschlag — vor dem Erstellen prüfen.', choose: 'Wähle einen Inhalt', placeholder: 'Inhalt auswählen…', cost: 'Vorbereiten sendet eine KI-Anfrage. Öffnen, Auswählen und Bearbeiten senden keine KI-Anfrage.', back: 'Zurück zum Gespräch', fields: 'Titel: 1–120 Zeichen. Inhalt: 1–4.000 Zeichen. Beide sind erforderlich.', more: 'Weitere Aktionen', checking: 'Board-Zugriff wird geprüft…' }
+  };
+  return (copy[state.uiLanguage] || copy.en)[key];
+}
+function openAiBrainContentReview(turnId) {
+  const turn = state.aiBrain.messages.find(t => t.id === turnId), assets = aiBrainContentAssets(turn);
+  if (!assets.length || !canUseAiBrainProposal() || ['requesting', 'checking', 'applying', 'applied'].includes(turn.proposal?.status)) return;
+  if (!aiBrainContentSourceCurrent(turn)) {
+    setTurnProposal(turnId, () => ({ status: "stale", errorCode: "proposal_context_changed" })); return renderAiBrain();
+  }
+  setTurnProposal(turnId, () => ({ status: 'review', source: turn.contentProposalSource, selection: assets.length === 1 ? assets[0] : null }));
+  renderAiBrain();
+  el.aiBrainSummary.querySelector(`[data-ai-brain-cancel='${turnId}']`)?.focus({ preventScroll: true });
+}
+function aiBrainContentSelectionCurrent(turn, selection) {
+  return !!selection && aiBrainContentAssets(turn).some(a => a.start === selection.start && a.end === selection.end && a.text === selection.text);
+}
+function renderAiBrainContentSource(preview, turn, proposal) {
+  const append = (tag, text) => { const n = document.createElement(tag); n.textContent = text; preview.appendChild(n); return n; };
+  append('p', aiBrainContentCopy('suggestion'));
+  const board = append('p', `${aiBrainContentCopy('board')}: `), name = document.createElement('span'); name.dataset.userContent = 'true'; name.textContent = proposal.source.boardName || proposal.source.boardId; board.appendChild(name);
+  append('p', `${aiBrainProposalText('type')}: Content`);
+  if (proposal.status === 'review') {
+    const assets = aiBrainContentAssets(turn);
+    const label = append('label', aiBrainContentCopy('choose'));
+    const select = document.createElement('select'); select.dataset.aiBrainSource = turn.id;
+    const placeholder = document.createElement('option'); placeholder.value = ''; placeholder.textContent = aiBrainContentCopy('placeholder'); select.appendChild(placeholder);
+    assets.forEach((asset, index) => { const option = document.createElement('option'); option.value = String(index); option.dataset.userContent = 'true'; option.textContent = `${index + 1}. ${asset.text.split(/\r?\n/)[0]}`; option.selected = proposal.selection?.start === asset.start; select.appendChild(option); });
+    label.appendChild(select);
+    select.addEventListener('change', () => {
+      if (!aiBrainContentSourceCurrent(turn, proposal.source)) return cancelAiBrainNodeProposal(turn.id);
+      proposal.selection = select.value === '' ? null : assets[Number(select.value)];
+      excerpt.textContent = proposal.selection?.text || '';
+      preview.querySelector('[data-ai-brain-prepare-confirm]').disabled = !proposal.selection;
+    });
+  }
+  append('strong', aiBrainContentCopy('source'));
+  const copy = append('pre', proposal.selection?.text || ''); copy.dataset.userContent = "true";
+  const excerpt = copy; excerpt.className = 'ai-brain-proposal-copy'; excerpt.dataset.aiBrainExcerpt = turn.id;
+}
+function renderAiBrainContentReview(advisor, turn, proposal) {
+  const preview = document.createElement('section'); preview.className = 'ai-brain-node-preview';
+  renderAiBrainContentSource(preview, turn, proposal);
+  const disclosure = document.createElement('p'); disclosure.textContent = aiBrainContentCopy('cost'); preview.appendChild(disclosure);
+  const actions = document.createElement('div'); actions.className = 'ai-brain-proposal-actions';
+  const cancel = document.createElement('button'); cancel.type = 'button'; cancel.dataset.aiBrainCancel = turn.id; cancel.textContent = aiBrainContentCopy('back');
+  const prepare = document.createElement('button'); prepare.type = 'button'; prepare.dataset.aiBrainPrepareConfirm = turn.id; prepare.textContent = aiBrainProposalText('prepare'); prepare.disabled = !proposal.selection;
+  prepare.addEventListener('click', () => requestAiBrainNodeProposal(turn.id));
+  preview.addEventListener('keydown', e => { if (e.key === 'Escape') { e.preventDefault(); cancelAiBrainNodeProposal(turn.id); } });
+  actions.append(cancel, prepare); preview.appendChild(actions); advisor.appendChild(preview);
+}
 function canUseAiBrainProposal() { return !!state.user?.email && !!state.currentBoardId && state.boardAccess?.canEdit === true && !state.publicBoardToken; }
 function setTurnProposal(turnId, updater) {
   state.aiBrain.messages = state.aiBrain.messages.map((turn) => turn.id === turnId ? { ...turn, proposal: updater(turn.proposal) } : turn);
 }
 function cancelAiBrainNodeProposal(turnId) {
   const turn = state.aiBrain.messages.find((item) => item.id === turnId); if (!turn?.proposal || turn.proposal.status === "applied") return;
+  turn.proposal.controller?.abort();
   setTurnProposal(turnId, () => ({ status: "cancelled" })); renderAiBrain();
+  el.aiBrainSummary.querySelector(`[data-ai-brain-prepare="${turnId}"]`)?.focus({ preventScroll: true });
 }
 async function requestAiBrainNodeProposal(turnId) {
   const turn = state.aiBrain.messages.find((item) => item.id === turnId && item.status === "success" && item.answer && item.referenceResolution !== "clarification");
-  if (!turn || !aiBrainHasReusableContent(turn) || !canUseAiBrainProposal() || turn.proposal?.status === "requesting" || turn.proposal?.status === "applying" || turn.proposal?.status === "applied") return renderAiBrain();
+  if (!turn || !aiBrainHasReusableContent(turn) || !canUseAiBrainProposal() || turn.proposal?.status === "requesting" || turn.proposal?.status === "applying" || turn.proposal?.status === "checking" || turn.proposal?.status === "applied") return renderAiBrain();
   if (!aiBrainContentSourceCurrent(turn)) {
     setTurnProposal(turnId, () => ({ status: "stale", errorCode: "proposal_context_changed" })); return renderAiBrain();
   }
+  const assets = aiBrainContentAssets(turn);
+  const selection = turn.proposal?.selection || (assets.length === 1 ? assets[0] : null);
+  if (!aiBrainContentSelectionCurrent(turn, selection)) return openAiBrainContentReview(turnId);
   const source = turn.contentProposalSource;
   const uiLanguage = state.uiLanguage === "de" ? "de" : "en"; const contentLanguage = state.campaignLanguage === "de" ? "de" : "en";
   const boardId = state.currentBoardId; const accountIdentity = state.user.email; const contextIdentity = aiBrainRequestContextIdentity(); const lifecycle = state.boardLoadGeneration;
-  const controller = new AbortController(); setTurnProposal(turnId, () => ({ status: "requesting", uiLanguage, contentLanguage, boardId, accountIdentity, contextIdentity, lifecycle, source, controller })); renderAiBrain();
+  const controller = new AbortController(); setTurnProposal(turnId, () => ({ status: "requesting", uiLanguage, contentLanguage, boardId, accountIdentity, contextIdentity, lifecycle, source, selection, controller })); renderAiBrain();
+  el.aiBrainSummary.querySelector(`[data-ai-brain-cancel='${turnId}']`)?.focus({ preventScroll: true });
   try {
-    const response = await fetch("/api/ai-brain/propose-node", { method: "POST", headers: { "Content-Type": "application/json", "X-AI-Brain-Generation": String(state.aiBrain.requestId) }, signal: controller.signal, body: JSON.stringify({ action: "propose_content_node", board_id: boardId, source_turn_id: turn.id, source_answer: source.answer, expected_scope: source.expectedScope, selected_node_id: state.selectedPrimary || null, canvas_context: aiBrainCanvasProjection(), response_language: uiLanguage, content_language: contentLanguage }) });
+    const response = await fetch("/api/ai-brain/propose-node", { method: "POST", headers: { "Content-Type": "application/json", "X-AI-Brain-Generation": String(state.aiBrain.requestId) }, signal: controller.signal, body: JSON.stringify({ action: "propose_content_node", board_id: boardId, source_turn_id: turn.id, source_answer: selection.text, expected_scope: source.expectedScope, selected_node_id: state.selectedPrimary || null, canvas_context: aiBrainCanvasProjection(), response_language: uiLanguage, content_language: contentLanguage }) });
     const contentType = response.headers?.get?.("content-type") || ""; const isJson = /application\/json/i.test(contentType); const data = isJson ? await response.json().catch(() => null) : null; const current = state.aiBrain.messages.find((item) => item.id === turnId)?.proposal;
     if (current?.controller !== controller) return;
     if (!aiBrainContentSourceCurrent(turn, source)) return setTurnProposal(turnId, () => ({ status: "stale", errorCode: "proposal_context_changed", uiLanguage })), renderAiBrain();
     if (!canUseAiBrainProposal() || state.currentBoardId !== boardId || state.user.email !== accountIdentity || state.boardLoadGeneration !== lifecycle) return setTurnProposal(turnId, () => ({ status: "stale", errorCode: "board", uiLanguage })), renderAiBrain();
     if (aiBrainRequestContextIdentity() !== contextIdentity) return setTurnProposal(turnId, () => ({ status: "stale", errorCode: "canvas", uiLanguage })), renderAiBrain();
-    if (!response.ok) { const failure = new Error("proposal failed"); failure.code = AI_BRAIN_PROPOSAL_ERROR_CODES.has(data?.code) ? data.code : ([404, 405].includes(response.status) || !isJson ? "proposal_route_unavailable" : "proposal_generic_failed"); throw failure; }
-    if (!data || data.action !== "propose_content_node" || data.context?.board_id !== boardId || data.context?.response_language !== uiLanguage || data.context?.content_language !== contentLanguage) { const failure = new Error("invalid response"); failure.code = "proposal_response_invalid"; throw failure; }
+    if (!response.ok) { if (response.status === 409) state.aiBrain.messages.find(t => t.id === turnId).contentProposalInvalid = true; const failure = new Error("proposal failed"); failure.code = AI_BRAIN_PROPOSAL_ERROR_CODES.has(data?.code) ? data.code : ([404, 405].includes(response.status) || !isJson ? "proposal_route_unavailable" : "proposal_generic_failed"); throw failure; }
+    if (!data || !/^[a-f0-9]{64}$/.test(data.scope_revision) || data.action !== "propose_content_node" || data.context?.board_id !== boardId || data.context?.response_language !== uiLanguage || data.context?.content_language !== contentLanguage) { const failure = new Error("invalid response"); failure.code = "proposal_response_invalid"; throw failure; }
     const proposal = validateAiBrainNodeProposal(data.node_proposal, turn.id); if (!proposal || state.aiBrain.appliedProposalIds.has(proposal.proposal_id)) { const failure = new Error("invalid proposal"); failure.code = "proposal_response_invalid"; throw failure; }
-    setTurnProposal(turnId, () => ({ status: "ready", data: proposal, uiLanguage, contentLanguage, boardId, accountIdentity, contextIdentity, lifecycle, source })); renderAiBrain();
-    el.aiBrainSummary.querySelector(`[data-ai-brain-cancel='${turnId}']`)?.focus();
+    setTurnProposal(turnId, () => ({ status: "ready", data: proposal, uiLanguage, contentLanguage, boardId, accountIdentity, contextIdentity, lifecycle, source, selection, scopeRevision: data.scope_revision })); renderAiBrain();
+    el.aiBrainSummary.querySelector(`[data-ai-brain-cancel='${turnId}']`)?.focus({ preventScroll: true });
   } catch (error) {
     if (error?.name === "AbortError") return;
     if (state.aiBrain.messages.find(item => item.id === turnId)?.proposal?.controller !== controller) return;
@@ -7017,7 +7127,7 @@ function renderAiBrainTranscript(transcript) {
       section.append(heading, list); advisor.appendChild(section);
     }
     if (turn.meta) { const meta = document.createElement("small"); meta.textContent = turn.meta; advisor.appendChild(meta); }
-    if (turn.proposal && ['ready', 'requesting'].includes(turn.proposal.status) && !aiBrainContentSourceCurrent(turn, turn.proposal.source)) {
+    if (turn.proposal && ['review', 'ready', 'requesting', 'checking'].includes(turn.proposal.status) && !aiBrainContentSourceCurrent(turn, turn.proposal.source)) {
       turn.proposal.controller?.abort(); turn.proposal = { status: "stale", errorCode: "proposal_context_changed" };
     }
     const campaignEligible = !!aiBrainCampaignBrief(turn) && aiBrainCampaignSourceCurrent(turn);
@@ -7030,22 +7140,48 @@ function renderAiBrainTranscript(transcript) {
       const suggest = document.createElement('button'); suggest.type = 'button'; suggest.className = 'ai-brain-proposal-prepare';
       suggest.dataset.aiBrandProposal = turn.id; suggest.textContent = aiBrainBrandCopy('action'); advisor.appendChild(suggest);
     }
-    const proposal = turn.proposal; const eligible = !(campaignEligible && brandEligible) && aiBrainHasReusableContent(turn) && canUseAiBrainProposal() && proposal?.status !== "applied";
+    const proposal = turn.proposal; const eligible = !turn.contentProposalInvalid && aiBrainHasReusableContent(turn) && canUseAiBrainProposal() && proposal?.status !== "applied";
     if (eligible && (!proposal || ["cancelled", "failed", "stale"].includes(proposal.status))) {
       const prepare = document.createElement("button"); prepare.type = "button"; prepare.className = "ai-brain-proposal-prepare"; prepare.dataset.aiBrainPrepare = turn.id;
-      prepare.textContent = proposal?.status === "failed" ? aiBrainProposalText("retry") : aiBrainProposalText("prepare"); advisor.appendChild(prepare);
+      prepare.textContent = aiBrainContentCopy('add');
+      if (campaignEligible && brandEligible) {
+        const more = document.createElement('details'), summary = document.createElement('summary'); summary.textContent = aiBrainContentCopy('more'); more.append(summary, prepare); advisor.appendChild(more);
+      } else advisor.appendChild(prepare);
     }
-    if (proposal?.status === "requesting") { const status = document.createElement("div"); status.className = "ai-brain-proposal-status"; status.setAttribute("role", "status"); status.textContent = aiBrainProposalText("preparing", proposal.uiLanguage); advisor.appendChild(status); }
+    if (proposal?.status === 'review') renderAiBrainContentReview(advisor, turn, proposal);
+    if (proposal?.status === "requesting") {
+      const status = document.createElement("div"); status.className = "ai-brain-proposal-status"; status.setAttribute("role", "status"); status.textContent = aiBrainProposalText("preparing", proposal.uiLanguage);
+      const cancel = document.createElement('button'); cancel.type = 'button'; cancel.dataset.aiBrainCancel = turn.id; cancel.textContent = aiBrainProposalText('cancel'); status.appendChild(cancel);
+      status.addEventListener('keydown', e => { if (e.key === 'Escape') { e.preventDefault(); cancelAiBrainNodeProposal(turn.id); } }); advisor.appendChild(status);
+    }
     if (["failed", "stale"].includes(proposal?.status)) { const status = document.createElement("div"); status.className = "ai-brain-proposal-status is-error"; status.setAttribute("role", "alert"); status.textContent = aiBrainProposalText(proposal.errorCode || "invalid", proposal.uiLanguage); advisor.appendChild(status); }
-    if (["ready", "applying"].includes(proposal?.status) && canUseAiBrainProposal() && proposal.boardId === state.currentBoardId && proposal.accountIdentity === state.user?.email) {
+    if (["ready", "checking", "applying"].includes(proposal?.status) && canUseAiBrainProposal() && proposal.boardId === state.currentBoardId && proposal.accountIdentity === state.user?.email) {
       const preview = document.createElement("section"); preview.className = "ai-brain-node-preview"; preview.setAttribute("aria-label", aiBrainProposalText("preview"));
       const heading = document.createElement("h4"); heading.textContent = aiBrainProposalText("preview");
       const type = document.createElement("span"); type.className = "ai-brain-node-type"; type.textContent = aiBrainProposalText("type"); preview.append(heading, type);
-      [["title", proposal.data.title], ["content", proposal.data.body], ...(proposal.data.rationale ? [["rationale", proposal.data.rationale]] : [])].forEach(([key, value]) => { const section = document.createElement("div"); const label = document.createElement("strong"); label.textContent = aiBrainProposalText(key); const copy = document.createElement("div"); copy.className = "ai-brain-proposal-copy"; copy.dataset.userContent = "true"; copy.textContent = value; section.append(label, copy); preview.appendChild(section); });
+      renderAiBrainContentSource(preview, turn, proposal);
+      const limits = document.createElement('p'); limits.textContent = aiBrainContentCopy('fields'); preview.appendChild(limits);
+      [["title", "title", AI_BRAIN_PROPOSAL_LIMITS.title], ["content", "body", AI_BRAIN_PROPOSAL_LIMITS.body]].forEach(([key, field, limit]) => {
+        const label = document.createElement('label'); label.textContent = aiBrainProposalText(key);
+        const input = document.createElement(field === 'body' ? 'textarea' : 'input'); input.dataset.aiBrainEdit = field; input.dataset.userContent = 'true'; input.value = proposal.data[field]; input.required = true;
+        input.setAttribute('aria-label', aiBrainProposalText(key)); input.disabled = proposal.status !== 'ready';
+        input.addEventListener('input', () => {
+          if (!aiBrainContentSourceCurrent(turn, proposal.source)) { setTurnProposal(turn.id, () => ({ status: 'stale', errorCode: 'proposal_context_changed' })); return renderAiBrain(); }
+          proposal.data[field] = input.value;
+          const valid = !!validateAiBrainNodeProposal(proposal.data, turn.id);
+          input.setAttribute('aria-invalid', String(!input.value.trim() || input.value.trim().length > limit));
+          preview.querySelector('[data-ai-brain-create]').disabled = !valid;
+        });
+        label.appendChild(input); preview.appendChild(label);
+      });
+      if (proposal.data.rationale) { const rationale = document.createElement('p'); rationale.dataset.userContent = 'true'; rationale.textContent = `${aiBrainProposalText('rationale')}: ${proposal.data.rationale}`; preview.appendChild(rationale); }
+      preview.addEventListener('keydown', e => { if (e.key === 'Escape') { e.preventDefault(); cancelAiBrainNodeProposal(turn.id); } });
       const actions = document.createElement("div"); actions.className = "ai-brain-proposal-actions";
       const cancel = document.createElement("button"); cancel.type = "button"; cancel.dataset.aiBrainCancel = turn.id; cancel.textContent = aiBrainProposalText("cancel");
-      const create = document.createElement("button"); create.type = "button"; create.dataset.aiBrainCreate = turn.id; create.textContent = aiBrainProposalText("create"); create.disabled = proposal.status === "applying";
-      actions.append(cancel, create); preview.appendChild(actions); advisor.appendChild(preview);
+      const create = document.createElement("button"); create.type = "button"; create.dataset.aiBrainCreate = turn.id; create.textContent = aiBrainProposalText("create"); create.disabled = proposal.status === "applying" || proposal.status === "checking" || !validateAiBrainNodeProposal(proposal.data, turn.id);
+      actions.append(cancel, create);
+      if (proposal.status === 'checking') { const status = document.createElement('p'); status.setAttribute('role', 'status'); status.textContent = aiBrainContentCopy('checking'); preview.appendChild(status); }
+      preview.appendChild(actions); advisor.appendChild(preview);
     }
     if (proposal?.status === "applied") { const status = document.createElement("div"); status.className = "ai-brain-proposal-status is-success"; status.setAttribute("role", "status"); status.textContent = aiBrainProposalText("created", proposal.uiLanguage); advisor.appendChild(status); }
     transcript.appendChild(advisor);
@@ -7151,7 +7287,7 @@ function renderAiBrain() {
   });
   el.aiBrainSummary.querySelector("#ai-brain-form")?.addEventListener("submit", requestAiBrainAdvice);
   el.aiBrainSummary.querySelectorAll("[data-ai-brain-retry]").forEach((button) => button.addEventListener("click", () => requestAiBrainAdvice(null, button.dataset.aiBrainRetry)));
-  el.aiBrainSummary.querySelectorAll("[data-ai-brain-prepare]").forEach((button) => button.addEventListener("click", () => requestAiBrainNodeProposal(button.dataset.aiBrainPrepare)));
+  el.aiBrainSummary.querySelectorAll("[data-ai-brain-prepare]").forEach((button) => button.addEventListener("click", () => openAiBrainContentReview(button.dataset.aiBrainPrepare)));
   el.aiBrainSummary.querySelectorAll('[data-ai-brain-campaign]').forEach(button => button.addEventListener('click', () => openAiBrainCampaign(button.dataset.aiBrainCampaign)));
   el.aiBrainSummary.querySelectorAll('[data-ai-brand-proposal]').forEach(button => button.addEventListener('click', () => openAiBrainBrandProposal(button.dataset.aiBrandProposal)));
   el.aiBrainSummary.querySelectorAll("[data-ai-brain-cancel]").forEach((button) => button.addEventListener("click", () => cancelAiBrainNodeProposal(button.dataset.aiBrainCancel)));
@@ -7189,7 +7325,7 @@ async function requestAiBrainAdvice(event, retryTurnId = null) {
     if (data.context?.response_language !== responseLanguage) { const error = new Error("AI Brain response language identity mismatch"); error.code = "response_language_mismatch"; throw error; }
     const scope = [`Board Brand Core`, data.context?.canonicalBrandCore ? "Canonical Brand Core" : null, `${data.context?.canvasNodes || 0} Canvas nodes`].filter(Boolean).join(" · ");
     const assumptions = Array.isArray(data.assumptions) ? data.assumptions.filter((value) => typeof value === "string").slice(0, 20) : [];
-    state.aiBrain = { ...state.aiBrain, status: "success", controller: null, messages: state.aiBrain.messages.map((item) => item.id === turn.id ? { ...item, status: "success", answer: data.answer, responseLanguage, assumptions, brandProposalSource: { ...brandProposalSource, answer: data.answer, question }, contentProposalSource: { ...contentProposalSource, turnId: turn.id, answer: data.answer, question }, brandProposalInvalid: false, brandUpdateStaged: false, approvedLearnings: data.context?.approved_learnings || null, referenceResolution: data.context?.reference_resolution || "none", proposal: null, meta: `${scope}. ${data.disclaimer}` } : item) };
+    state.aiBrain = { ...state.aiBrain, status: "success", controller: null, messages: state.aiBrain.messages.map((item) => item.id === turn.id ? { ...item, status: "success", answer: data.answer, responseLanguage, assumptions, brandProposalSource: { ...brandProposalSource, answer: data.answer, question }, contentProposalInvalid: false, contentProposalSource: { ...contentProposalSource, turnId: turn.id, answer: data.answer, question }, brandProposalInvalid: false, brandUpdateStaged: false, approvedLearnings: data.context?.approved_learnings || null, referenceResolution: data.context?.reference_resolution || "none", proposal: null, meta: `${scope}. ${data.disclaimer}` } : item) };
   } catch (error) {
     if (state.aiBrain.requestId !== requestId || state.aiBrain.identity !== identity || aiBrainIdentity() !== identity) return;
     state.aiBrain = { ...state.aiBrain, status: "error", controller: null, messages: state.aiBrain.messages.map((item) => item.id === turn.id ? { ...item, status: "failed", errorCode: error.code || "generic" } : item) };
@@ -7250,7 +7386,7 @@ function completeAiBrainNodeCreation(nodeId, languageCode) {
   requestAnimationFrame(selectCreatedNode);
 }
 
-function applyAiBrainNodeProposal(turnId) {
+async function applyAiBrainNodeProposal(turnId) {
   const turn = state.aiBrain.messages.find((item) => item.id === turnId); const proposal = turn?.proposal;
   if (!turn || turn.status !== "success" || proposal?.status !== "ready") return renderAiBrain();
   if (!aiBrainContentSourceCurrent(turn, proposal.source)) { setTurnProposal(turnId, () => ({ status: "stale", errorCode: "proposal_context_changed" })); return renderAiBrain(); }
@@ -7259,6 +7395,23 @@ function applyAiBrainNodeProposal(turnId) {
   if (proposal.contextIdentity !== aiBrainRequestContextIdentity()) { setTurnProposal(turnId, () => ({ ...proposal, status: "stale", errorCode: "canvas" })); return renderAiBrain(); }
   const validated = validateAiBrainNodeProposal(proposal.data, turn.id); if (!validated) { setTurnProposal(turnId, () => ({ ...proposal, status: "failed", errorCode: "invalid" })); return renderAiBrain(); }
   if (state.aiBrain.appliedProposalIds.has(validated.proposal_id)) { setTurnProposal(turnId, () => ({ ...proposal, status: "applied" })); return renderAiBrain(); }
+  if (!aiBrainContentSelectionCurrent(turn, proposal.selection) || !/^[a-f0-9]{64}$/.test(proposal.scopeRevision)) return;
+  const controller = new AbortController(); proposal.controller = controller; proposal.status = 'checking'; renderAiBrain();
+  el.aiBrainSummary.querySelector(`[data-ai-brain-cancel='${turnId}']`)?.focus({ preventScroll: true });
+  try {
+    const response = await fetch('/api/ai-brain/content-scope', { method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: controller.signal,
+      body: JSON.stringify({ board_id: proposal.boardId, expected_scope: proposal.source.expectedScope, scope_revision: proposal.scopeRevision }) });
+    const data = /application\/json/i.test(response.headers?.get?.('content-type') || '') ? await response.json() : null;
+    if (!response.ok || data?.scope_revision !== proposal.scopeRevision) throw new Error('stale');
+    if (state.aiBrain.messages.find(t => t.id === turnId)?.proposal !== proposal || proposal.status !== 'checking') return;
+    if (!aiBrainContentSourceCurrent(turn, proposal.source) || !aiBrainContentSelectionCurrent(turn, proposal.selection)
+      || state.activeView !== 'ai_brain' || !canUseAiBrainProposal()
+      || JSON.stringify(validateAiBrainNodeProposal(proposal.data, turn.id)) !== JSON.stringify(validated)) throw new Error('stale');
+  } catch {
+    if (state.aiBrain.messages.find(t => t.id === turnId)?.proposal !== proposal) return;
+    turn.contentProposalInvalid = true;
+    setTurnProposal(turnId, () => ({ status: "stale", errorCode: "proposal_context_changed" })); return renderAiBrain();
+  }
   proposal.status = "applying"; state.aiBrain.appliedProposalIds.add(validated.proposal_id); renderAiBrain();
   const historyLength = state.history.length; const nodeIdsBefore = new Set(state.nodes.map((item) => item.id)); let node = null;
   try {
@@ -19178,6 +19331,14 @@ function closeInspector({ restoreFocus = true } = {}) {
 }
 
 function setActiveView(view) {
+  if (state.activeView === 'ai_brain' && view !== 'ai_brain') {
+    state.aiBrain.messages.forEach(turn => {
+      if (['review', 'ready', 'requesting', 'checking'].includes(turn.proposal?.status)) {
+        turn.proposal.controller?.abort(); turn.proposal = { status: 'cancelled' };
+      }
+    });
+  }
+
   if (view !== 'brand-profile' && el.brandWorkspaceDetail?.open && !closeCanonicalBrandDetail({ restoreFocus: false, navigate: false, resume: () => setActiveView(view) })) return;
   globalThis.FunklixWorkspaceSidebarController?.close(false);
   if (state.activeView !== view && (state.activeView === "board" || view === "board") && typeof resetAdaptiveCanvasView === "function") resetAdaptiveCanvasView();

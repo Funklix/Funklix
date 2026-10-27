@@ -48,16 +48,17 @@ function fixture() {
     m._compile(fs.readFileSync(filename,'utf8'), filename); return m.exports;
   }
   r.handler = load('api/ai-brain/propose-node.js');
+  r.scopeHandler = load('api/ai-brain/content-scope.js');
   r.auth = load('api/_auth-session.js');
   r.access = load('api/_board-access.js');
   r.request = { action:'propose_content_node', board_id:BOARD, source_turn_id:'turn-1', source_answer:'Content idea: Fictional useful copy for a local test.',
     selected_node_id:null, canvas_context:{nodes:[],edges:[]}, response_language:'en',content_language:'en',
     expected_scope:{updated_at:r.board.updated_at,brand_id:BRAND,workspace_id:WORKSPACE} };
-  r.invoke = async (body=r.request, method='POST') => {
+  r.invoke = async (body=r.request, method='POST', handler=r.handler) => {
     const cookie = r.user ? 'funklix_session='+r.auth.createSessionToken(r.user) : '';
     const res = {statusCode:0,body:null,status(v){this.statusCode=v;return this;},json(v){this.body=v;return this;}};
     r.pendingRequest = {method,body,headers:{cookie}};
-    await r.handler(r.pendingRequest,res); return res;
+    await handler(r.pendingRequest,res); return res;
   };
   return r;
 }
