@@ -6552,7 +6552,7 @@ function aiBrainContentAssets(turn) {
   }).map(m => m.index);
   // Distinct headings bound each asset. Native copy fields, including Markdown
   // fields accepted by the original recognizer, stay inside their own asset.
-  const fieldHeading = /^(?:audience|zielgruppe|message|botschaft|kernbotschaft|purpose|ziel|zweck|caption|tweet|hashtags|copy|post text|post-text|beitragstext|text|headline|headline claim|überschrift|cta|call to action|handlungsaufforderung):/i;
+  const fieldHeading = /^(?:audience|zielgruppe|message|botschaft|kernbotschaft|purpose|ziel|zweck|caption|tweet|hashtags|copy|post text|post-text|beitragstext|text|headline|headline claim|überschrift|cta|call to action|handlungsaufforderung)(?::|$)/i;
   const metadataHeading = /^(?:assumptions|annahmen|rationale|begründung|strategic next steps|strategische nächste schritte|ai metadata|ki-metadaten):/i;
   const boundaries = lines.filter(m => (/^\s*#{1,6}\s/.test(m[0]) && !fieldHeading.test(plain(m[0]))) || metadataHeading.test(plain(m[0]))).map(m => m.index);
   const alternatives = lines.filter(m => /^\s*(?:\d{1,3}[.)]\s|(?:\*\*)?(?:Option|Alternative|Post|Beitrag)\s*[A-Z0-9]+\b)/i.test(m[0])).map(m => m.index);
@@ -6560,7 +6560,7 @@ function aiBrainContentAssets(turn) {
   const accepted = excerpt => {
     const turn = { answer: excerpt };
     const text = turn.answer.replace(/\r\n?/g, "\n");
-    const lines = text.split("\n").map(line => line.replace(/^\s*(?:#{1,6}\s*|[-*]\s+|\d{1,3}\.\s+)/, "").replace(/\*\*/g, "").trim());
+    const lines = text.split("\n").map(plain).map(line => fieldHeading.test(line) && !line.includes(":") ? `${line}:` : line);
     const asset = /^(?:(?:proposed |draft |vorgeschlagener? |entwurf: ?)?(?:social(?: media)? post|linkedin(?: post|[ -]beitrag)?|instagram(?: post|[ -]beitrag)?|x(?: post|[ -]beitrag)|twitter(?: post|[ -]beitrag)?|landing[- ]?page(?: copy| text|-text)?|campaign asset|kampagnenmotiv|content concept|content-konzept|beitragsentwurf|post draft|post-entwurf))(?:\s*[:—–-]|$)/i;
     const start = lines.findIndex(line => asset.test(line));
     if (start < 0) return false;

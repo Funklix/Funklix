@@ -49,7 +49,7 @@ const checkPair=answer=>{
  assert.equal(assets.length,2);
  assert.match(assets[0].text,/Instagram/);assert.match(assets[1].text,/X(?: Post|[- ]Beitrag)/);
  for(const [i,a] of assets.entries()){
-  assert.equal(a.text,answer.slice(a.start,a.end));assert.match(a.text,/\*\*CTA:\*\*/);assert.match(a.text,/\*\*Hashtags:\*\*/);
+  assert.equal(a.text,answer.slice(a.start,a.end));assert.match(a.text,/\*\*CTA:?\*\*/);assert.match(a.text,/\*\*Hashtags:?\*\*/);
   assert(!a.text.includes('Here are two'));assert(!a.text.includes('Assumptions'));assert(!a.text.includes('---'));
   assert(!a.text.includes(i===0?'🚀 Tired':'✨ Every'));
  }
@@ -64,6 +64,7 @@ for(let level=1;level<=6;level++)for(const german of [false,true]){
  checkPair(answer);checkPair(answer.replaceAll('\n','\r\n'));
  // Heading fields are part of the post, even when nested at any level.
  checkPair(answer.replace(/\*\*(Caption|Tweet|CTA|Hashtags):\*\*/g,`${'#'.repeat(level)} **$1:**`));
+ checkPair(answer.replace(/\*\*(Caption|Tweet|CTA|Hashtags):\*\*[ \t]*/g,`${'#'.repeat(level)} **$1**\n`));
 }
 checkPair(appics+'\n\n**Assumptions:** Fictional trailing AI metadata.');
 for(const platform of ['X Post','X-Beitrag','Twitter Post','Twitter-Beitrag']){
