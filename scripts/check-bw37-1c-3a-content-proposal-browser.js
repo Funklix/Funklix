@@ -8,6 +8,7 @@ async function main() {
     const f=await require('./fixtures/home-browser')(browser)({empty:true}),p=f.page;
     let calls=0,adviceCalls=0,hold=null,status=200,html=false,mode='valid',counter=0;
     await p.route('**/api/ai-brain/advice',route=>{adviceCalls++;return route.fulfill({json:{answer,assumptions:[],disclaimer:'Fictional',context:{response_language:route.request().postDataJSON().response_language,reference_resolution:'none'}}});});
+    await p.route('**/api/ai-brain/content-scope', route => route.fulfill({json:{scope_revision:'a'.repeat(64)}}));
     await p.route('**/api/ai-brain/propose-node',async route=>{
       calls++;const body=route.request().postDataJSON();
       assert.equal(body.source_answer,answer);assert.equal(body.expected_scope.updated_at,f.r.db.boards[0].updated_at);
@@ -17,7 +18,7 @@ async function main() {
       if(status!==200)return route.fulfill({status,json:{code:status===409?'proposal_context_changed':'proposal_provider_failed',error:'INTERNAL_SECRET'}});
       const node_proposal={proposal_id:'proposal-'+(++counter),source_turn_id:body.source_turn_id,node_type:'Content',title:'Creative invitation',body:'Share the story behind your work.',rationale:'A focused asset.'};
       if(mode==='bad')node_proposal.extra=true;
-      await route.fulfill({json:{action:'propose_content_node',node_proposal,context:{board_id:body.board_id,response_language:body.response_language,content_language:body.content_language}}}).catch(()=>{});
+      await route.fulfill({json:{action:'propose_content_node',node_proposal,scope_revision:'a'.repeat(64),context:{board_id:body.board_id,response_language:body.response_language,content_language:body.content_language}}}).catch(()=>{});
     });
     const boot=async()=>{await p.reload();await p.waitForFunction(()=>state.workspaceCatalog.status==='ready'&&!state.isBoardLoading&&!state.isBoardHydrating);await p.evaluate(()=>{clearAutosaveTimer();stopPresenceLite();stopBoardRefreshPolling();state.uiLanguage=language.setUiLanguage('en');setAppMode('canvas');setActiveView('ai_brain');state.isDirty=false;});};
     const ask=async()=>{await p.locator('#ai-brain-question').fill('Suggest a reusable content idea.');await p.locator('#ai-brain-form button[type=submit]').click();await p.waitForFunction(()=>state.aiBrain.status==='success');};
@@ -31,6 +32,7 @@ async function main() {
     for(const theme of ['light','dark'])for(const width of [320,375,1440]) {
       await p.setViewportSize({width,height:900});await p.evaluate(t=>document.documentElement.dataset.theme=t,theme);
       const n=calls;await p.locator('[data-ai-brain-prepare]').focus();await p.keyboard.press('Enter');
+      assert.equal(calls,n);await p.locator('[data-ai-brain-prepare-confirm]').click();
       await p.locator('[data-ai-brain-create]').waitFor();assert.equal(calls,n+1);assert.deepEqual(await snapshot(),before);
       assert.equal(await p.locator('[data-ai-brain-cancel]').evaluate(n=>n===document.activeElement),true);
       assert(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
@@ -66,14 +68,14 @@ async function main() {
     // Delayed failure from an invalidated account must not revive protected state.
     await boot();await ask();await p.evaluate(()=>state.user={...state.user});await p.evaluate(()=>renderAiBrain());assert.equal(await p.evaluate(()=>state.aiBrain.messages.length),0);assert(!(await p.locator('#ai-brain-summary').innerText()).includes(answer));
     for(const failure of [401,403,404,409,413,502,503,504]) {
-      await boot();await ask();status=failure;const n=calls;await prepare();assert.equal(calls,n+1);assert.equal(await p.locator('[data-ai-brain-create]').count(),0);assert(!(await p.locator('#ai-brain-summary').innerText()).includes('INTERNAL_SECRET'));status=200;await ready();await p.evaluate(()=>cancelAiBrainNodeProposal(state.aiBrain.messages[0].id));
+      await boot();await ask();status=failure;const n=calls;await prepare();assert.equal(calls,n+1);assert.equal(await p.locator('[data-ai-brain-create]').count(),0);assert(!(await p.locator('#ai-brain-summary').innerText()).includes('INTERNAL_SECRET'));status=200;if(failure===409){const n=calls;await prepare();assert.equal(calls,n,'stale source cannot be re-prepared');await boot();await ask();}await ready();await p.evaluate(()=>cancelAiBrainNodeProposal(state.aiBrain.messages[0].id));
     }
     await boot();await ask();html=true;await prepare();assert.equal(await p.locator('[data-ai-brain-create]').count(),0);html=false;mode='bad';await prepare();assert.equal(await p.locator('[data-ai-brain-create]').count(),0);mode='valid';
     // Existing explicit creation owner: one snapshot/node, no edges, duplicate
     // protection, undo, local persistence and partial-insertion recovery.
     await boot();await ask();await ready();
     const nodeCount=await p.evaluate(()=>state.nodes.length),historyCount=await p.evaluate(()=>state.history.length),n=calls;
-    await p.evaluate(()=>{clearAutosaveTimer();const old=scheduleAutosave;scheduleAutosave=()=>{};try{applyAiBrainNodeProposal(state.aiBrain.messages[0].id);applyAiBrainNodeProposal(state.aiBrain.messages[0].id);}finally{scheduleAutosave=old;clearAutosaveTimer();}});
+    await p.evaluate(async()=>{clearAutosaveTimer();const old=scheduleAutosave;scheduleAutosave=()=>{};try{await Promise.all([applyAiBrainNodeProposal(state.aiBrain.messages[0].id),applyAiBrainNodeProposal(state.aiBrain.messages[0].id)]);}finally{scheduleAutosave=old;clearAutosaveTimer();}});
     assert.equal(calls,n);assert.equal(await p.evaluate(()=>state.nodes.length),nodeCount+1);assert.equal(await p.evaluate(()=>state.history.length),historyCount+1);
     assert.equal(await p.evaluate(()=>state.edges.length),0);assert.equal(await p.evaluate(()=>state.nodes.at(-1).type),'Content');assert.equal(await p.evaluate(()=>state.nodes.at(-1).status),'Draft');assert(await p.evaluate(()=>state.isDirty));
     assert((await p.evaluate(()=>JSON.stringify(serializeState()))).includes('Share the story behind your work.'));
@@ -81,7 +83,7 @@ async function main() {
     await p.evaluate(()=>{clearAutosaveTimer();el.undoButton.click();clearAutosaveTimer();});assert.equal(await p.evaluate(()=>state.nodes.length),nodeCount);
     for(const partial of [false,true]) {
       await boot();await ask();await ready();
-      await p.evaluate(partial=>{const old=createNode,autosave=scheduleAutosave;createNode=options=>{if(partial)old(options);throw Error('fictional renderer failure');};scheduleAutosave=()=>{};try{applyAiBrainNodeProposal(state.aiBrain.messages[0].id);applyAiBrainNodeProposal(state.aiBrain.messages[0].id);}finally{createNode=old;scheduleAutosave=autosave;clearAutosaveTimer();}},partial);
+      await p.evaluate(async partial=>{const old=createNode,autosave=scheduleAutosave;createNode=options=>{if(partial)old(options);throw Error('fictional renderer failure');};scheduleAutosave=()=>{};try{await Promise.all([applyAiBrainNodeProposal(state.aiBrain.messages[0].id),applyAiBrainNodeProposal(state.aiBrain.messages[0].id)]);}finally{createNode=old;scheduleAutosave=autosave;clearAutosaveTimer();}},partial);
       assert.equal(await p.evaluate(()=>state.nodes.length),partial?1:0);assert.equal(await p.evaluate(()=>state.aiBrain.messages[0].proposal.status),partial?'applied':'failed');
     }
     assert.deepEqual(f.errors,[]);assert.deepEqual(f.writes,[]);await p.close();

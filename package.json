@@ -5,6 +5,7 @@
     "pg": "^8.13.1"
   },
   "scripts": {
+    "check:bw37.1c3b": "node scripts/check-bw37-1c-3b-content-eligibility.js && node scripts/check-bw37-1c-3b-content-scope.js && node scripts/check-bw37-1c-3b-content-browser.js",
     "check:bw37.1c2b": "node scripts/check-bw37-1c-2b-ai-brain-campaign-handoff.js",
     "check:bw37.1c2a": "node scripts/check-bw37-1c-2a-campaign-generation-boundary.js",
     "check:bw37.1c1": "node scripts/check-bw37-1c1-brand-profile-proposal.js",

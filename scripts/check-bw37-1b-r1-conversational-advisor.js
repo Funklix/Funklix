@@ -92,25 +92,29 @@ async function browserChecks() {
     assert.equal(await input.inputValue(),'');
     await submit('Stale Canvas');await input.fill('Current draft');await page.evaluate(()=>{state.nodes.push({id:'new',type:'Idea',title:'New context'});renderAiBrain();});await finish();
     assert.equal(await page.evaluate(()=>state.aiBrain.messages.at(-1).errorCode),'changed');assert.equal(await input.inputValue(),'Current draft');
+    // Hold the earlier intentionally dirty Canvas fixture stable for these
+    // positive source-bound actions; autosave/revision races have separate coverage.
+    await page.evaluate(()=>clearAutosaveTimer());await page.waitForFunction(()=>!state.isSaving);
     for (const answerText of ['A positioning review should start with the audience need.','Which audience do you mean?',concept]) {
       answer=answerText;await submit('Discuss the next direction');await finish();
       assert.equal(await page.locator('.is-advisor').last().locator('[data-ai-brain-prepare]').count(),answerText===concept?1:0);
     }
     // Direct handler invocation cannot prepare generic strategic advice either.
     const proposalRequests=[];
+    await page.route('**/api/ai-brain/content-scope',route=>route.fulfill({json:{scope_revision:'a'.repeat(64)}}));
     await page.route('**/api/ai-brain/propose-node',async route=>{
       const body=route.request().postDataJSON();proposalRequests.push(body);
-      return route.fulfill({json:{action:'propose_content_node',node_proposal:{proposal_id:'fixture-proposal',source_turn_id:body.source_turn_id,node_type:'Content',title:'Workshop invitation',body:'Share your first sketch with the workshop community.',rationale:'A reusable invitation'},context:{board_id:body.board_id,response_language:body.response_language,content_language:body.content_language}}});
+      return route.fulfill({json:{action:'propose_content_node',scope_revision:'a'.repeat(64),node_proposal:{proposal_id:'fixture-proposal',source_turn_id:body.source_turn_id,node_type:'Content',title:'Workshop invitation',body:'Share your first sketch with the workshop community.',rationale:'A reusable invitation'},context:{board_id:body.board_id,response_language:body.response_language,content_language:body.content_language}}});
     });
     await page.evaluate(()=>requestAiBrainNodeProposal(state.aiBrain.messages.at(-2).id));assert.equal(proposalRequests.length,0);
     // Creation may schedule the normal Canvas save; intercept it in this disposable fixture.
     await page.route('**/api/boards/*',route=>route.request().method()==='PUT'?route.fulfill({json:{id:f.r.db.boards[0].id,updated_at:new Date().toISOString()}}):route.fallback());
     const before=await page.evaluate(()=>state.nodes.length);
-    await page.locator('[data-ai-brain-prepare]').last().click();await page.waitForSelector('.ai-brain-node-preview');
+    await page.locator('[data-ai-brain-prepare]').last().click();assert.equal(proposalRequests.length,0);await page.locator('[data-ai-brain-prepare-confirm]').click();await page.waitForSelector('[data-ai-brain-create]');
     assert.equal(proposalRequests.length,1);assert.equal(await page.evaluate(()=>state.nodes.length),before);
     assert(await page.locator('[data-ai-brain-cancel]').evaluate(n=>n===document.activeElement));
     await page.locator('[data-ai-brain-cancel]').click();assert.equal(await page.evaluate(()=>state.nodes.length),before);
-    await page.locator('[data-ai-brain-prepare]').last().click();await page.waitForSelector('[data-ai-brain-create]');
+    await page.locator('[data-ai-brain-prepare]').last().click();await page.locator('[data-ai-brain-prepare-confirm]').click();await page.waitForSelector('[data-ai-brain-create]');
     await page.locator('[data-ai-brain-create]').click();await page.waitForFunction(n=>state.nodes.length===n+1,before);
     await page.evaluate(()=>{clearAutosaveTimer();setActiveView('ai_brain');});
     assert.equal(await page.evaluate(()=>state.nodes.filter(n=>n.title==='Workshop invitation').length),1);

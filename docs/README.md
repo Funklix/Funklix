@@ -37,4 +37,5 @@ Use this workflow for future Codex and human-led work:
 
 ## Implementation Records
 
+- [BW-37.1C-3B — Content Eligibility and Editable Preview](./implementations/bw37-1c-3b-content-eligibility-editable-preview.md) — exact asset selection, disclosed preparation, editable Content fields and read-only remote Create preflight.
 - [BW-37.1C-3A — Content Proposal Hardening](./implementations/bw37-1c-3a-content-proposal-hardening.md) — persisted authorization, exact browser source scope, provider privacy and bounded transport; Content-only workflow preserved.

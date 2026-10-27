@@ -89,7 +89,7 @@ module.exports = async function handler(req, res) {
     scope.assertActor(data, getSessionUser(req));
     const proposal = createProposal(provider, sourceTurnId); if (!proposal.ok) return failure(res, 502, 'proposal_response_invalid', 'Invalid provider proposal', { lifecycleStage: 'proposal_validation', authenticated: true, boardAuthorized: true, providerCalled: true, providerReturned: true, jsonParsed: true, validationClassification: proposal.classification });
     if (responseLanguageMismatch(proposal.value.rationale || '', responseLanguage) || responseLanguageMismatch(`${proposal.value.title} ${proposal.value.body}`, contentLanguage)) return failure(res, 502, 'proposal_language_mismatch', 'Proposal language mismatch', { lifecycleStage: 'language_validation', authenticated: true, boardAuthorized: true, providerCalled: true, providerReturned: true, jsonParsed: true, proposalValidated: true, validationClassification: 'response_language_mismatch' });
-    return res.status(200).json({ action: 'propose_content_node', node_proposal: proposal.value, context: { board_id: board.id, response_language: responseLanguage, content_language: contentLanguage } });
+    return res.status(200).json({ action: 'propose_content_node', node_proposal: proposal.value, scope_revision: scope.revision(data), context: { board_id: board.id, response_language: responseLanguage, content_language: contentLanguage } });
   } catch (error) {
     if (error instanceof scope.ProposalScopeError) return failure(res, error.status, error.code, 'Proposal context is unavailable or changed');
     console.error('[AI_BRAIN_PROPOSAL_FAILURE]', { action: 'propose_content_node', boardIdentity: boardId ? 'present' : 'missing', httpStatus: error?.name === 'AbortError' ? 504 : 500 });

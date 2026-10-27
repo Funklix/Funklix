@@ -2,6 +2,7 @@
 
 // Read-only Content conversion authorization. No canonical knowledge or saved
 // Canvas is retrieved here; Board edit remains independent of Brand read/edit.
+const { createHash } = require('node:crypto');
 const { pool } = require('./_boards-storage');
 const { getBoardAccess } = require('./_board-access');
 const { isBrandId } = require('./_brand-access');
@@ -89,4 +90,5 @@ async function revalidate({ data, user, db = pool }) {
   }
   if (current.fingerprint !== data.fingerprint) fail(409, 'proposal_context_changed');
 }
-module.exports = { capture, revalidate, assertActor, assertExpected, validExpected, publicScope, ProposalScopeError };
+function revision(data) { return createHash('sha256').update(data.fingerprint).digest('hex'); }
+module.exports = { revision, capture, revalidate, assertActor, assertExpected, validExpected, publicScope, ProposalScopeError };

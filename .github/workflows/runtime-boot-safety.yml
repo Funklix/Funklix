@@ -58,6 +58,10 @@ jobs:
           node --check api/ai-brain/advice.js
           node --check api/ai-brain/propose-node.js
           node --check api/_ai-brain-proposal-scope.js
+          node --check api/ai-brain/content-scope.js
+          node --check scripts/check-bw37-1c-3b-content-eligibility.js
+          node --check scripts/check-bw37-1c-3b-content-scope.js
+          node --check scripts/check-bw37-1c-3b-content-browser.js
           node --check scripts/fixtures/bw37-1c3a-proposal-runtime.js
           node --check scripts/check-bw37-1c-3a-content-proposal-security.js
           node --check scripts/check-bw37-1c-3a-content-proposal-browser.js
@@ -460,6 +464,9 @@ jobs:
             fs.appendFileSync(process.env.GITHUB_ENV, `CHROMIUM_PATH=${executablePath}\n`);
           })().catch(error => { console.error(error); process.exitCode = 1; });
           JS
+      - name: Check Content eligibility, source selection, editable preview and remote Create scope
+        timeout-minutes: 5
+        run: npm run check:bw37.1c3b
       - name: Check Content proposal security and source lifecycle (real ACL, mocked provider, Chromium)
         timeout-minutes: 5
         run: npm run check:bw37.1c3a
