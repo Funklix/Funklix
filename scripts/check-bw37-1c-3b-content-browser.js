@@ -43,6 +43,8 @@ async function main(){
   await title.fill('x'.repeat(120));assert(await create.isEnabled());
   for(const invalid of ['', ' ', 'x'.repeat(4001), 'bad\u0001body']){await body.fill(invalid);assert(await create.isDisabled());}
   await body.fill('x'.repeat(4000));assert(await create.isEnabled());
+  await title.fill('Activity');await body.fill('Draft');
+  for(const locale of ['de','en']){await p.evaluate(locale=>{state.uiLanguage=language.setUiLanguage(locale);refreshInterfaceLanguage();},locale);assert.equal(await title.inputValue(),'Activity');assert.equal(await body.inputValue(),'Draft');assert.equal(await p.locator('[data-ai-brain-excerpt]').textContent(),second);assert.equal(await title.getAttribute('data-user-content'),'true');assert.equal(await body.getAttribute('data-user-content'),'true');assert.equal(await p.locator('[data-ai-brain-excerpt]').getAttribute('data-user-content'),'true');}
   const editedTitle='<img src=x onerror=alert(1)>',editedBody='<script>window.__executed=true</script>\nA human reviewed invitation.';
   await title.fill(editedTitle);await body.fill(editedBody);assert.equal(proposalCalls,n+1);
   assert.equal(await p.locator('.ai-brain-node-preview script,.ai-brain-node-preview img').count(),0);assert.equal(await p.evaluate(()=>window.__executed),undefined);

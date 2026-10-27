@@ -6956,14 +6956,14 @@ function aiBrainContentSelectionCurrent(turn, selection) {
 function renderAiBrainContentSource(preview, turn, proposal) {
   const append = (tag, text) => { const n = document.createElement(tag); n.textContent = text; preview.appendChild(n); return n; };
   append('p', aiBrainContentCopy('suggestion'));
-  append('p', `${aiBrainContentCopy('board')}: ${proposal.source.boardName || proposal.source.boardId}`);
+  const board = append('p', `${aiBrainContentCopy('board')}: `), name = document.createElement('span'); name.dataset.userContent = 'true'; name.textContent = proposal.source.boardName || proposal.source.boardId; board.appendChild(name);
   append('p', `${aiBrainProposalText('type')}: Content`);
   if (proposal.status === 'review') {
     const assets = aiBrainContentAssets(turn);
     const label = append('label', aiBrainContentCopy('choose'));
     const select = document.createElement('select'); select.dataset.aiBrainSource = turn.id;
     const placeholder = document.createElement('option'); placeholder.value = ''; placeholder.textContent = aiBrainContentCopy('placeholder'); select.appendChild(placeholder);
-    assets.forEach((asset, index) => { const option = document.createElement('option'); option.value = String(index); option.textContent = `${index + 1}. ${asset.text.split(/\r?\n/)[0]}`; option.selected = proposal.selection?.start === asset.start; select.appendChild(option); });
+    assets.forEach((asset, index) => { const option = document.createElement('option'); option.value = String(index); option.dataset.userContent = 'true'; option.textContent = `${index + 1}. ${asset.text.split(/\r?\n/)[0]}`; option.selected = proposal.selection?.start === asset.start; select.appendChild(option); });
     label.appendChild(select);
     select.addEventListener('change', () => {
       if (!aiBrainContentSourceCurrent(turn, proposal.source)) return cancelAiBrainNodeProposal(turn.id);
@@ -6973,7 +6973,8 @@ function renderAiBrainContentSource(preview, turn, proposal) {
     });
   }
   append('strong', aiBrainContentCopy('source'));
-  const excerpt = append('pre', proposal.selection?.text || ''); excerpt.className = 'ai-brain-proposal-copy'; excerpt.dataset.aiBrainExcerpt = turn.id;
+  const copy = append('pre', proposal.selection?.text || ''); copy.dataset.userContent = "true";
+  const excerpt = copy; excerpt.className = 'ai-brain-proposal-copy'; excerpt.dataset.aiBrainExcerpt = turn.id;
 }
 function renderAiBrainContentReview(advisor, turn, proposal) {
   const preview = document.createElement('section'); preview.className = 'ai-brain-node-preview';
@@ -7162,7 +7163,7 @@ function renderAiBrainTranscript(transcript) {
       const limits = document.createElement('p'); limits.textContent = aiBrainContentCopy('fields'); preview.appendChild(limits);
       [["title", "title", AI_BRAIN_PROPOSAL_LIMITS.title], ["content", "body", AI_BRAIN_PROPOSAL_LIMITS.body]].forEach(([key, field, limit]) => {
         const label = document.createElement('label'); label.textContent = aiBrainProposalText(key);
-        const input = document.createElement(field === 'body' ? 'textarea' : 'input'); input.dataset.aiBrainEdit = field; input.value = proposal.data[field]; input.required = true;
+        const input = document.createElement(field === 'body' ? 'textarea' : 'input'); input.dataset.aiBrainEdit = field; input.dataset.userContent = 'true'; input.value = proposal.data[field]; input.required = true;
         input.setAttribute('aria-label', aiBrainProposalText(key)); input.disabled = proposal.status !== 'ready';
         input.addEventListener('input', () => {
           if (!aiBrainContentSourceCurrent(turn, proposal.source)) { setTurnProposal(turn.id, () => ({ status: 'stale', errorCode: 'proposal_context_changed' })); return renderAiBrain(); }
@@ -7173,7 +7174,7 @@ function renderAiBrainTranscript(transcript) {
         });
         label.appendChild(input); preview.appendChild(label);
       });
-      if (proposal.data.rationale) { const rationale = document.createElement('p'); rationale.textContent = `${aiBrainProposalText('rationale')}: ${proposal.data.rationale}`; preview.appendChild(rationale); }
+      if (proposal.data.rationale) { const rationale = document.createElement('p'); rationale.dataset.userContent = 'true'; rationale.textContent = `${aiBrainProposalText('rationale')}: ${proposal.data.rationale}`; preview.appendChild(rationale); }
       preview.addEventListener('keydown', e => { if (e.key === 'Escape') { e.preventDefault(); cancelAiBrainNodeProposal(turn.id); } });
       const actions = document.createElement("div"); actions.className = "ai-brain-proposal-actions";
       const cancel = document.createElement("button"); cancel.type = "button"; cancel.dataset.aiBrainCancel = turn.id; cancel.textContent = aiBrainProposalText("cancel");
