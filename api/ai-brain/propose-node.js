@@ -1,17 +1,54 @@
 'use strict';
 
 const { getSessionUser } = require('../_auth-session');
-const { getBoardAccess } = require('../_board-access');
+const scope = require('../_ai-brain-proposal-scope');
 const { isBrandId } = require('../_brand-access');
 const { LIMITS: CANVAS_LIMITS, validateCanvasContext } = require('../_ai-brain-canvas-context');
 const { createProposal } = require('../_ai-brain-node-proposal');
 const { responseLanguageMismatch } = require('./advice');
 
-const BODY_KEYS = ['action', 'board_id', 'canvas_context', 'content_language', 'response_language', 'selected_node_id', 'source_answer', 'source_turn_id'];
+const BODY_KEYS = ['action', 'board_id', 'canvas_context', 'content_language', 'expected_scope', 'response_language', 'selected_node_id', 'source_answer', 'source_turn_id'];
 function plain(value) { return !!value && typeof value === 'object' && !Array.isArray(value) && [Object.prototype, null].includes(Object.getPrototypeOf(value)); }
 function exact(value) { return plain(value) && Object.keys(value).length === BODY_KEYS.length && BODY_KEYS.every((key) => Object.prototype.hasOwnProperty.call(value, key)); }
 function text(value, max) { if (typeof value !== 'string') return ''; const result = value.trim(); return result.length <= max ? result : ''; }
-function outputText(data) { return text(data?.output_text || (data?.output || []).flatMap((item) => item?.content || []).find((item) => item?.type === 'output_text')?.text, 6000); }
+function outputText(data) {
+  if (!plain(data)) return '';
+  if (typeof data.output_text === 'string') return text(data.output_text, 6000);
+  if (!Array.isArray(data.output)) return '';
+  return text(data.output.flatMap(item => Array.isArray(item?.content) ? item.content : []).find(item => item?.type === 'output_text')?.text, 6000);
+}
+async function readProviderBody(response, signal) {
+  if (!response.body?.getReader) throw new Error('invalid_provider_body');
+  const reader = response.body.getReader(); let bytes = 0; const chunks = [];
+  const cancel = () => { void reader.cancel().catch(() => {}); };
+  signal.addEventListener('abort', cancel, { once: true });
+  try {
+    for (;;) {
+      const { done, value } = await reader.read(); if (done) break;
+      bytes += value.byteLength;
+      if (bytes > 65536) throw new Error('provider_body_limit');
+      chunks.push(Buffer.from(value));
+    }
+    return JSON.parse(outputText(JSON.parse(Buffer.concat(chunks).toString('utf8'))));
+  } finally { signal.removeEventListener('abort', cancel); cancel(); }
+}
+async function providerProposal(input) {
+  const controller = new AbortController(); let timer;
+  // Race the entire operation, including response-body reads. Abort alone does
+  // not establish a deadline for every transport implementation.
+  const deadline = new Promise((_, reject) => { timer = setTimeout(() => {
+    controller.abort(); const error = new Error('provider_timeout'); error.name = 'AbortError'; reject(error);
+  }, 25000); });
+  const request = (async () => {
+    const response = await fetch('https://api.openai.com/v1/responses', { method: 'POST', signal: controller.signal,
+      headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}`, 'Content-Type': 'application/json' }, body: JSON.stringify(input) });
+    if (!response.ok) { void response.body?.cancel?.().catch(() => {}); throw new Error('provider_http'); }
+    try { return await readProviderBody(response, controller.signal); }
+    catch (error) { error.code = 'proposal_response_invalid'; throw error; }
+  })();
+  try { return await Promise.race([request, deadline]); }
+  finally { clearTimeout(timer); controller.abort(); }
+}
 const PROPOSAL_SCHEMA = Object.freeze({ type: 'object', additionalProperties: false, required: ['node_type', 'title', 'body', 'rationale'], properties: { node_type: { type: 'string', enum: ['Content'] }, title: { type: 'string', minLength: 1, maxLength: 120 }, body: { type: 'string', minLength: 1, maxLength: 4000 }, rationale: { type: 'string', maxLength: 500 } } });
 function failure(res, status, code, error, diagnostics = {}) {
   console.warn('[AI_BRAIN_PROPOSAL_REJECTED]', { lifecycleStage: diagnostics.lifecycleStage || 'request', validationClassification: diagnostics.validationClassification || code, httpStatus: status, endpointLoaded: true, authenticated: diagnostics.authenticated === true, boardAuthorized: diagnostics.boardAuthorized === true, providerCalled: diagnostics.providerCalled === true, providerReturned: diagnostics.providerReturned === true, jsonParsed: diagnostics.jsonParsed === true, proposalValidated: diagnostics.proposalValidated === true });
@@ -27,7 +64,7 @@ function proposalMessages({ sourceAnswer, responseLanguage, contentLanguage }) {
 module.exports = async function handler(req, res) {
   if (req.method !== 'POST') return failure(res, 405, 'proposal_request_invalid', 'Method not allowed');
   if (Buffer.byteLength(JSON.stringify(req.body || {}), 'utf8') > CANVAS_LIMITS.bytes) return failure(res, 413, 'proposal_request_invalid', 'Request too large', { validationClassification: 'request_too_large' });
-  if (!exact(req.body) || req.body.action !== 'propose_content_node') return failure(res, 400, 'proposal_request_invalid', 'Invalid proposal request', { validationClassification: 'request_shape' });
+  if (!exact(req.body) || req.body.action !== 'propose_content_node' || !scope.validExpected(req.body.expected_scope)) return failure(res, 400, 'proposal_request_invalid', 'Invalid proposal request', { validationClassification: 'request_shape' });
   const user = getSessionUser(req); if (!user?.email) return failure(res, 401, 'proposal_unauthorized', 'Authentication required', { lifecycleStage: 'authentication' });
   const boardId = text(req.body.board_id, 80); const sourceTurnId = text(req.body.source_turn_id, 80);
   const sourceAnswer = text(req.body.source_answer, 12000); const responseLanguage = text(req.body.response_language, 5); const contentLanguage = text(req.body.content_language, 5);
@@ -35,23 +72,26 @@ module.exports = async function handler(req, res) {
   if (!isBrandId(boardId) || !sourceTurnId || !sourceAnswer || !['en', 'de'].includes(responseLanguage) || !['en', 'de'].includes(contentLanguage) || (req.body.selected_node_id !== null && !selectedNodeId)) return failure(res, 400, !sourceTurnId || !sourceAnswer ? 'proposal_source_invalid' : 'proposal_request_invalid', 'Invalid proposal request', { lifecycleStage: 'validation', authenticated: true, validationClassification: 'request_value' });
   const canvas = validateCanvasContext(req.body.canvas_context, selectedNodeId); if (!canvas.ok) return failure(res, canvas.status, 'proposal_canvas_invalid', 'Invalid Canvas context', { lifecycleStage: 'canvas_validation', authenticated: true, validationClassification: canvas.classification });
   try {
-    const { board, access } = await getBoardAccess(boardId, user, { columns: 'id, name, updated_at' });
-    if (!board) return failure(res, 404, 'proposal_forbidden', 'Board not found', { lifecycleStage: 'authorization', authenticated: true });
-    if (!access?.canEdit) return failure(res, 403, 'proposal_forbidden', 'Edit access required', { lifecycleStage: 'authorization', authenticated: true });
-    if (!process.env.OPENAI_API_KEY) return failure(res, 503, 'proposal_provider_failed', 'AI Brain is temporarily unavailable', { lifecycleStage: 'provider', authenticated: true, boardAuthorized: true });
-    const controller = new AbortController(); const timeout = setTimeout(() => controller.abort(), 25000); let response;
+    const data = await scope.capture({ boardId, user }); const board = data.board;
+    scope.assertExpected(data, req.body.expected_scope);
+    if (!process.env.OPENAI_API_KEY) return failure(res, 503, 'proposal_provider_failed', 'AI Brain is temporarily unavailable');
+    await scope.revalidate({ data, user: getSessionUser(req) });
+    scope.assertActor(data, getSessionUser(req));
+    let provider;
     try {
-      response = await fetch('https://api.openai.com/v1/responses', { method: 'POST', signal: controller.signal, headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}`, 'Content-Type': 'application/json' }, body: JSON.stringify({
-        model: process.env.OPENAI_AI_BRAIN_MODEL || 'gpt-4o-mini', input: proposalMessages({ sourceAnswer, responseLanguage, contentLanguage }),
-        text: { format: { type: 'json_schema', name: 'content_node_proposal', strict: true, schema: PROPOSAL_SCHEMA } }
-      }) });
-    } finally { clearTimeout(timeout); }
-    if (!response.ok) return failure(res, 502, 'proposal_provider_failed', 'Proposal provider failed', { lifecycleStage: 'provider_response', authenticated: true, boardAuthorized: true, providerCalled: true, providerReturned: true, validationClassification: `provider_http_${response.status}` });
-    let provider; try { provider = JSON.parse(outputText(await response.json())); } catch (_) { return failure(res, 502, 'proposal_response_invalid', 'Invalid provider proposal', { lifecycleStage: 'provider_parsing', authenticated: true, boardAuthorized: true, providerCalled: true, providerReturned: true, validationClassification: 'provider_json' }); }
+      provider = await providerProposal({ model: process.env.OPENAI_AI_BRAIN_MODEL || 'gpt-4o-mini', store: false,
+        input: proposalMessages({ sourceAnswer, responseLanguage, contentLanguage }),
+        text: { format: { type: 'json_schema', name: 'content_node_proposal', strict: true, schema: PROPOSAL_SCHEMA } } });
+    } catch (error) {
+      return failure(res, error?.name === 'AbortError' ? 504 : 502, error?.name !== 'AbortError' && error?.code === 'proposal_response_invalid' ? 'proposal_response_invalid' : 'proposal_provider_failed', 'Proposal provider could not respond', { providerCalled: true });
+    }
+    await scope.revalidate({ data, user: getSessionUser(req) });
+    scope.assertActor(data, getSessionUser(req));
     const proposal = createProposal(provider, sourceTurnId); if (!proposal.ok) return failure(res, 502, 'proposal_response_invalid', 'Invalid provider proposal', { lifecycleStage: 'proposal_validation', authenticated: true, boardAuthorized: true, providerCalled: true, providerReturned: true, jsonParsed: true, validationClassification: proposal.classification });
     if (responseLanguageMismatch(proposal.value.rationale || '', responseLanguage) || responseLanguageMismatch(`${proposal.value.title} ${proposal.value.body}`, contentLanguage)) return failure(res, 502, 'proposal_language_mismatch', 'Proposal language mismatch', { lifecycleStage: 'language_validation', authenticated: true, boardAuthorized: true, providerCalled: true, providerReturned: true, jsonParsed: true, proposalValidated: true, validationClassification: 'response_language_mismatch' });
     return res.status(200).json({ action: 'propose_content_node', node_proposal: proposal.value, context: { board_id: board.id, response_language: responseLanguage, content_language: contentLanguage } });
   } catch (error) {
+    if (error instanceof scope.ProposalScopeError) return failure(res, error.status, error.code, 'Proposal context is unavailable or changed');
     console.error('[AI_BRAIN_PROPOSAL_FAILURE]', { action: 'propose_content_node', boardIdentity: boardId ? 'present' : 'missing', httpStatus: error?.name === 'AbortError' ? 504 : 500 });
     return res.status(error?.name === 'AbortError' ? 504 : 500).json({ error: 'Node proposal could not be prepared', code: error?.name === 'AbortError' ? 'proposal_provider_failed' : 'proposal_generic_failed' });
   }
