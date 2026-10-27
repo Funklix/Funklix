@@ -28,7 +28,7 @@ Only then does the unchanged Canvas insertion block consume the proposal ID, tak
 
 ## Conversation lifecycle
 
-Source review and prepared preview remain inline in the retained conversation. Return to conversation, Cancel and Escape cancel the proposal/controller and restore the result action without replacing the composer draft, caret, mode or scroll anchor. Leaving AI Brain cancels open/pending review before navigation and retains the existing same-Board conversation. Account/Board identity invalidation still clears protected ephemeral state. Existing fixed composer and Jump to latest owners remain unchanged. Responsive controls use native labels/select/inputs, visible keyboard focus and existing Light/Dark theme tokens.
+Source review and prepared preview remain inline in the retained conversation. Return to conversation, Cancel and Escape cancel the proposal/controller and restore the result action without replacing the composer draft, caret, mode or scroll anchor. Leaving AI Brain cancels open/pending review before navigation and retains the existing same-Board conversation. Account/Board identity invalidation still clears protected ephemeral state. Prepared-preview focus uses `preventScroll` as well as source-review/checking focus; an extended long-conversation test caught and corrected the inherited ready-focus jump. Existing fixed composer and Jump to latest owners remain unchanged. Responsive controls use native labels/select/inputs, visible keyboard focus and existing Light/Dark theme tokens.
 
 ## Verification
 

@@ -7021,7 +7021,7 @@ async function requestAiBrainNodeProposal(turnId) {
     if (!data || !/^[a-f0-9]{64}$/.test(data.scope_revision) || data.action !== "propose_content_node" || data.context?.board_id !== boardId || data.context?.response_language !== uiLanguage || data.context?.content_language !== contentLanguage) { const failure = new Error("invalid response"); failure.code = "proposal_response_invalid"; throw failure; }
     const proposal = validateAiBrainNodeProposal(data.node_proposal, turn.id); if (!proposal || state.aiBrain.appliedProposalIds.has(proposal.proposal_id)) { const failure = new Error("invalid proposal"); failure.code = "proposal_response_invalid"; throw failure; }
     setTurnProposal(turnId, () => ({ status: "ready", data: proposal, uiLanguage, contentLanguage, boardId, accountIdentity, contextIdentity, lifecycle, source, selection, scopeRevision: data.scope_revision })); renderAiBrain();
-    el.aiBrainSummary.querySelector(`[data-ai-brain-cancel='${turnId}']`)?.focus();
+    el.aiBrainSummary.querySelector(`[data-ai-brain-cancel='${turnId}']`)?.focus({ preventScroll: true });
   } catch (error) {
     if (error?.name === "AbortError") return;
     if (state.aiBrain.messages.find(item => item.id === turnId)?.proposal?.controller !== controller) return;
