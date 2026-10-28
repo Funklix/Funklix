@@ -6519,7 +6519,13 @@ function invalidateAiBrainRequest() {
   state.aiBrain = { adviceMode: "general", status: "idle", messages: [], requestId: state.aiBrain.requestId + 1, controller: null, identity: aiBrainIdentity(), error: "", appliedProposalIds: new Set() };
 }
 
-function validateAiBrainNodeProposal(input, sourceTurnId) {
+function validateAiBrainNodeProposal(input, sourceTurnId, complete = false) {
+  if (input?.node_type === 'Social Media Posting') {
+    if (Object.keys(input).length !== 8 || typeof input.proposal_id !== 'string' || !/^[A-Za-z0-9_-]{1,80}$/.test(input.proposal_id) || input.source_turn_id !== sourceTurnId) return null;
+    const { proposal_id, source_turn_id, ...fields } = input;
+    const social = FunklixSocialProposal.validate(fields, complete);
+    return social ? { proposal_id, source_turn_id, ...social } : null;
+  }
   if (!input || typeof input !== "object" || Array.isArray(input) || ![Object.prototype, null].includes(Object.getPrototypeOf(input))) return null;
   const allowed = ["proposal_id", "source_turn_id", "node_type", "title", "body", "rationale"];
   const keys = Object.keys(input); const required = allowed.slice(0, 5);
@@ -6955,7 +6961,7 @@ function openAiBrainContentReview(turnId) {
     setTurnProposal(turnId, () => ({ status: "stale", errorCode: "proposal_context_changed" })); return renderAiBrain();
   }
   state.aiBrain.messages.forEach(item => { if (item.id !== turnId && ['review', 'ready', 'requesting'].includes(item.proposal?.status)) { item.proposal.controller?.abort(); item.proposal = { status: 'cancelled' }; } });
-  setTurnProposal(turnId, () => ({ status: 'review', source: turn.contentProposalSource, selection: assets.length === 1 ? assets[0] : null }));
+  setTurnProposal(turnId, () => ({ status: 'review', source: turn.contentProposalSource, selection: assets.length === 1 ? assets[0] : null, destination: assets.length === 1 ? FunklixSocialProposal.recommend(assets[0].text) : 'Content' }));
   renderAiBrain();
   el.aiBrainSummary.querySelector(`[data-ai-brain-cancel='${turnId}']`)?.focus({ preventScroll: true });
 }
@@ -6970,7 +6976,19 @@ function renderAiBrainContentSource(preview, turn, proposal) {
   const append = (tag, text, parent = preview) => { const n = document.createElement(tag); n.textContent = text; parent.appendChild(n); return n; };
   append('p', aiBrainContentCopy('suggestion'));
   const board = append('p', `${aiBrainContentCopy('board')}: `), name = document.createElement('span'); name.dataset.userContent = 'true'; name.textContent = proposal.source.boardName || proposal.source.boardId; board.appendChild(name);
-  board.appendChild(document.createTextNode(' · Content'));
+  board.appendChild(document.createTextNode(' · '));
+  const destinationName = append('span', proposal.destination || proposal.data?.node_type || 'Content', board); destinationName.dataset.aiBrainDestinationName = 'true';
+  if (proposal.status === 'review') {
+    const label = append('label', state.uiLanguage === 'de' ? 'Zieltyp' : 'Destination type');
+    const select = document.createElement('select'); select.dataset.aiBrainDestination = turn.id;
+    for (const value of ['Content', 'Social Media Posting']) { const option = document.createElement('option'); option.value = value; option.textContent = value; select.appendChild(option); }
+    select.value = proposal.destination || 'Content'; label.appendChild(select);
+    select.addEventListener('change', () => {
+      if (!aiBrainContentSourceCurrent(turn, proposal.source)) return cancelAiBrainNodeProposal(turn.id);
+      proposal.destination = select.value; renderAiBrain();
+      el.aiBrainSummary.querySelector('[data-ai-brain-destination]')?.focus();
+    });
+  }
   const summary = document.createElement('p'); summary.className = 'ai-brain-content-summary'; summary.dataset.userContent = 'true'; summary.setAttribute('role', 'status');
   const details = document.createElement('details');
   append('summary', aiBrainContentCopy('source'), details);
@@ -6989,7 +7007,9 @@ function renderAiBrainContentSource(preview, turn, proposal) {
       card.append(input, title, short); group.appendChild(card);
       input.addEventListener('change', () => {
         if (!aiBrainContentSourceCurrent(turn, proposal.source)) return cancelAiBrainNodeProposal(turn.id);
-        proposal.selection = asset; describe();
+        proposal.selection = asset; proposal.destination = FunklixSocialProposal.recommend(asset.text);
+        const destination = preview.querySelector('[data-ai-brain-destination]'); if (destination) destination.value = proposal.destination;
+        disclosureSocialCost(preview, proposal.destination); describe();
         preview.querySelector('[data-ai-brain-prepare-confirm]').disabled = false;
       });
     });
@@ -7011,19 +7031,27 @@ function mountAiBrainContentDialog(advisor, turn, preview) {
   dialog.addEventListener('cancel', event => { event.preventDefault(); cancelAiBrainNodeProposal(turn.id); });
   dialog.addEventListener('keydown', event => {
     if (event.key !== 'Tab') return;
-    const controls = [...dialog.querySelectorAll('input,textarea,button,summary')].filter(n => !n.disabled && n.getClientRects().length);
+    const controls = [...dialog.querySelectorAll('input,textarea,select,button,summary')].filter(n => !n.disabled && n.getClientRects().length);
     const first = controls[0], last = controls.at(-1);
     if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
     else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
   });
 }
+function disclosureSocialCost(preview, destination) {
+  const de = state.uiLanguage === 'de';
+  const prepare = preview.querySelector('[data-ai-brain-prepare-confirm]');
+  if (prepare) prepare.textContent = destination === 'Social Media Posting' ? (de ? 'Social Media Posting vorbereiten' : 'Prepare Social Media Posting') : aiBrainProposalText('prepare');
+  const cost = preview.querySelector('[data-ai-brain-cost]');
+  if (cost) cost.textContent = destination === 'Social Media Posting' ? (de ? 'Vorbereiten übernimmt beschriftete Quellfelder ohne KI-Anfrage. Fehlende Felder bleiben leer.' : 'Prepare extracts labelled source fields without an AI request. Missing fields stay empty.') : aiBrainContentCopy('cost');
+  const name = preview.querySelector('[data-ai-brain-destination-name]'); if (name) name.textContent = destination;
+}
 function renderAiBrainContentReview(advisor, turn, proposal) {
   const preview = document.createElement('section'); preview.className = 'ai-brain-node-preview';
   renderAiBrainContentSource(preview, turn, proposal);
-  const disclosure = document.createElement('p'); disclosure.textContent = aiBrainContentCopy('cost'); preview.appendChild(disclosure);
+  const disclosure = document.createElement('p'); disclosure.dataset.aiBrainCost = 'true'; preview.appendChild(disclosure); disclosureSocialCost(preview, proposal.destination);
   const actions = document.createElement('div'); actions.className = 'ai-brain-proposal-actions';
   const cancel = document.createElement('button'); cancel.type = 'button'; cancel.dataset.aiBrainCancel = turn.id; cancel.textContent = aiBrainContentCopy('back');
-  const prepare = document.createElement('button'); prepare.type = 'button'; prepare.dataset.aiBrainPrepareConfirm = turn.id; prepare.textContent = aiBrainProposalText('prepare'); prepare.disabled = !proposal.selection;
+  const prepare = document.createElement('button'); prepare.type = 'button'; prepare.dataset.aiBrainPrepareConfirm = turn.id; prepare.textContent = proposal.destination === 'Social Media Posting' ? (state.uiLanguage === 'de' ? 'Social Media Posting vorbereiten' : 'Prepare Social Media Posting') : aiBrainProposalText('prepare'); prepare.disabled = !proposal.selection;
   prepare.addEventListener('click', () => requestAiBrainNodeProposal(turn.id));
   preview.addEventListener('keydown', e => { if (e.key === 'Escape') { e.preventDefault(); cancelAiBrainNodeProposal(turn.id); } });
   actions.append(cancel, prepare); preview.appendChild(actions); mountAiBrainContentDialog(advisor, turn, preview);
@@ -7048,21 +7076,23 @@ async function requestAiBrainNodeProposal(turnId) {
   const selection = turn.proposal?.selection || (assets.length === 1 ? assets[0] : null);
   if (!aiBrainContentSelectionCurrent(turn, selection)) return openAiBrainContentReview(turnId);
   const source = turn.contentProposalSource;
+  const destination = turn.proposal?.destination || 'Content';
+  const action = destination === 'Social Media Posting' ? 'propose_social_node' : 'propose_content_node';
   const uiLanguage = state.uiLanguage === "de" ? "de" : "en"; const contentLanguage = state.campaignLanguage === "de" ? "de" : "en";
   const boardId = state.currentBoardId; const accountIdentity = state.user.email; const contextIdentity = aiBrainRequestContextIdentity(); const lifecycle = state.boardLoadGeneration;
-  const controller = new AbortController(); setTurnProposal(turnId, () => ({ status: "requesting", uiLanguage, contentLanguage, boardId, accountIdentity, contextIdentity, lifecycle, source, selection, controller })); renderAiBrain();
+  const controller = new AbortController(); setTurnProposal(turnId, () => ({ status: "requesting", uiLanguage, contentLanguage, boardId, accountIdentity, contextIdentity, lifecycle, source, selection, destination, controller })); renderAiBrain();
   el.aiBrainSummary.querySelector(`[data-ai-brain-cancel='${turnId}']`)?.focus({ preventScroll: true });
   try {
-    const response = await fetch("/api/ai-brain/propose-node", { method: "POST", headers: { "Content-Type": "application/json", "X-AI-Brain-Generation": String(state.aiBrain.requestId) }, signal: controller.signal, body: JSON.stringify({ action: "propose_content_node", board_id: boardId, source_turn_id: turn.id, source_answer: selection.text, expected_scope: source.expectedScope, selected_node_id: state.selectedPrimary || null, canvas_context: aiBrainCanvasProjection(), response_language: uiLanguage, content_language: contentLanguage }) });
+    const response = await fetch("/api/ai-brain/propose-node", { method: "POST", headers: { "Content-Type": "application/json", "X-AI-Brain-Generation": String(state.aiBrain.requestId) }, signal: controller.signal, body: JSON.stringify({ action, board_id: boardId, source_turn_id: turn.id, source_answer: selection.text, expected_scope: source.expectedScope, selected_node_id: state.selectedPrimary || null, canvas_context: aiBrainCanvasProjection(), response_language: uiLanguage, content_language: contentLanguage }) });
     const contentType = response.headers?.get?.("content-type") || ""; const isJson = /application\/json/i.test(contentType); const data = isJson ? await response.json().catch(() => null) : null; const current = state.aiBrain.messages.find((item) => item.id === turnId)?.proposal;
     if (current?.controller !== controller) return;
     if (!aiBrainContentSourceCurrent(turn, source)) return setTurnProposal(turnId, () => ({ status: "stale", errorCode: "proposal_context_changed", uiLanguage })), renderAiBrain();
     if (!canUseAiBrainProposal() || state.currentBoardId !== boardId || state.user.email !== accountIdentity || state.boardLoadGeneration !== lifecycle) return setTurnProposal(turnId, () => ({ status: "stale", errorCode: "board", uiLanguage })), renderAiBrain();
     if (aiBrainRequestContextIdentity() !== contextIdentity) return setTurnProposal(turnId, () => ({ status: "stale", errorCode: "canvas", uiLanguage })), renderAiBrain();
     if (!response.ok) { if (response.status === 409) state.aiBrain.messages.find(t => t.id === turnId).contentProposalInvalid = true; const failure = new Error("proposal failed"); failure.code = AI_BRAIN_PROPOSAL_ERROR_CODES.has(data?.code) ? data.code : ([404, 405].includes(response.status) || !isJson ? "proposal_route_unavailable" : "proposal_generic_failed"); throw failure; }
-    if (!data || !/^[a-f0-9]{64}$/.test(data.scope_revision) || data.action !== "propose_content_node" || data.context?.board_id !== boardId || data.context?.response_language !== uiLanguage || data.context?.content_language !== contentLanguage) { const failure = new Error("invalid response"); failure.code = "proposal_response_invalid"; throw failure; }
-    const proposal = validateAiBrainNodeProposal(data.node_proposal, turn.id); if (!proposal || state.aiBrain.appliedProposalIds.has(proposal.proposal_id)) { const failure = new Error("invalid proposal"); failure.code = "proposal_response_invalid"; throw failure; }
-    setTurnProposal(turnId, () => ({ status: "ready", data: proposal, uiLanguage, contentLanguage, boardId, accountIdentity, contextIdentity, lifecycle, source, selection, scopeRevision: data.scope_revision })); renderAiBrain();
+    if (!data || !/^[a-f0-9]{64}$/.test(data.scope_revision) || data.action !== action || data.context?.board_id !== boardId || data.context?.response_language !== uiLanguage || data.context?.content_language !== contentLanguage) { const failure = new Error("invalid response"); failure.code = "proposal_response_invalid"; throw failure; }
+    const proposal = validateAiBrainNodeProposal(data.node_proposal, turn.id); if (!proposal || proposal.node_type !== destination || state.aiBrain.appliedProposalIds.has(proposal.proposal_id)) { const failure = new Error("invalid proposal"); failure.code = "proposal_response_invalid"; throw failure; }
+    setTurnProposal(turnId, () => ({ status: "ready", data: proposal, uiLanguage, contentLanguage, boardId, accountIdentity, contextIdentity, lifecycle, source, selection, destination, scopeRevision: data.scope_revision })); renderAiBrain();
     el.aiBrainSummary.querySelector(`[data-ai-brain-cancel='${turnId}']`)?.focus({ preventScroll: true });
   } catch (error) {
     if (error?.name === "AbortError") return;
@@ -7197,20 +7227,22 @@ function renderAiBrainTranscript(transcript) {
     }
     if (["failed", "stale"].includes(proposal?.status)) { const status = document.createElement("div"); status.className = "ai-brain-proposal-status is-error"; status.setAttribute("role", "alert"); status.textContent = aiBrainProposalText(proposal.errorCode || "invalid", proposal.uiLanguage); advisor.appendChild(status); }
     if (["ready", "checking", "applying"].includes(proposal?.status) && canUseAiBrainProposal() && proposal.boardId === state.currentBoardId && proposal.accountIdentity === state.user?.email) {
-      const preview = document.createElement("section"); preview.className = "ai-brain-node-preview"; preview.setAttribute("aria-label", aiBrainProposalText("preview"));
-      const heading = document.createElement("h4"); heading.textContent = aiBrainProposalText("preview");
-      const type = document.createElement("span"); type.className = "ai-brain-node-type"; type.textContent = aiBrainProposalText("type"); preview.append(heading, type);
+      const preview = document.createElement("section"); preview.className = "ai-brain-node-preview"; preview.setAttribute("aria-label", proposal.data.node_type === 'Social Media Posting' ? 'Social Media Posting' : aiBrainProposalText("preview"));
+      const heading = document.createElement("h4"); heading.textContent = proposal.data.node_type === 'Social Media Posting' ? (state.uiLanguage === 'de' ? 'Social Media Posting Vorschau' : 'Social Media Posting preview') : aiBrainProposalText("preview");
+      const type = document.createElement("span"); type.className = "ai-brain-node-type"; type.textContent = proposal.data.node_type; preview.append(heading, type);
       renderAiBrainContentSource(preview, turn, proposal);
-      const limits = document.createElement('p'); limits.textContent = aiBrainContentCopy('fields'); preview.appendChild(limits);
-      [["title", "title", AI_BRAIN_PROPOSAL_LIMITS.title], ["content", "body", AI_BRAIN_PROPOSAL_LIMITS.body]].forEach(([key, field, limit]) => {
-        const label = document.createElement('label'); label.textContent = aiBrainProposalText(key);
-        const input = document.createElement(field === 'body' ? 'textarea' : 'input'); input.dataset.aiBrainEdit = field; input.dataset.userContent = 'true'; input.value = proposal.data[field]; input.required = true;
-        input.setAttribute('aria-label', aiBrainProposalText(key)); input.disabled = proposal.status !== 'ready';
+      const limits = document.createElement('p'); limits.textContent = proposal.data.node_type === 'Social Media Posting' ? (state.uiLanguage === 'de' ? 'Beschriftete Felder stammen aus der Quelle. Leere Felder fehlen; keine Werte werden erfunden. Titel, Plattform und Caption sind erforderlich. CTA und Hashtags sind optional.' : 'Labelled fields are extracted from the source. Empty fields are missing; no values are inferred. Title, platform and caption are required. CTA and hashtags are optional.') : aiBrainContentCopy('fields'); preview.appendChild(limits);
+      (proposal.data.node_type === 'Social Media Posting' ? [['title','title',120],['Platform','platform',20],['Caption','caption',4000],['CTA','preview',1000],['Hashtags','hashtags',1000]] : [["title", "title", AI_BRAIN_PROPOSAL_LIMITS.title], ["content", "body", AI_BRAIN_PROPOSAL_LIMITS.body]]).forEach(([key, field, limit]) => {
+        const label = document.createElement('label'); const fieldLabel = key === 'Platform' && state.uiLanguage === 'de' ? 'Plattform' : aiBrainProposalText(key); label.textContent = fieldLabel;
+        const input = document.createElement(field === 'platform' ? 'select' : ['body','caption','preview','hashtags'].includes(field) ? 'textarea' : 'input'); input.dataset.aiBrainEdit = field; input.dataset.userContent = 'true'; input.required = !['preview','hashtags'].includes(field);
+        if (field === 'platform') { const empty = document.createElement('option'); empty.value = ''; empty.textContent = state.uiLanguage === 'de' ? 'Plattform auswählen…' : 'Choose platform…'; input.appendChild(empty); for (const platform of FunklixSocialProposal.platforms) { const option = document.createElement('option'); option.value = platform; option.textContent = platform; input.appendChild(option); } }
+        input.value = proposal.data[field];
+        input.setAttribute('aria-label', fieldLabel); input.disabled = proposal.status !== 'ready';
         input.addEventListener('input', () => {
           if (!aiBrainContentSourceCurrent(turn, proposal.source)) { setTurnProposal(turn.id, () => ({ status: 'stale', errorCode: 'proposal_context_changed' })); return renderAiBrain(); }
           proposal.data[field] = input.value;
-          const valid = !!validateAiBrainNodeProposal(proposal.data, turn.id);
-          input.setAttribute('aria-invalid', String(!input.value.trim() || input.value.trim().length > limit));
+          const valid = !!validateAiBrainNodeProposal(proposal.data, turn.id, true);
+          input.setAttribute('aria-invalid', String((input.required && !input.value.trim()) || input.value.trim().length > limit));
           preview.querySelector('[data-ai-brain-create]').disabled = !valid;
         });
         label.appendChild(input); preview.appendChild(label);
@@ -7219,7 +7251,7 @@ function renderAiBrainTranscript(transcript) {
       preview.addEventListener('keydown', e => { if (e.key === 'Escape') { e.preventDefault(); cancelAiBrainNodeProposal(turn.id); } });
       const actions = document.createElement("div"); actions.className = "ai-brain-proposal-actions";
       const cancel = document.createElement("button"); cancel.type = "button"; cancel.dataset.aiBrainCancel = turn.id; cancel.textContent = aiBrainProposalText("cancel");
-      const create = document.createElement("button"); create.type = "button"; create.dataset.aiBrainCreate = turn.id; create.textContent = aiBrainProposalText("create"); create.disabled = proposal.status === "applying" || proposal.status === "checking" || !validateAiBrainNodeProposal(proposal.data, turn.id);
+      const create = document.createElement("button"); create.type = "button"; create.dataset.aiBrainCreate = turn.id; create.textContent = aiBrainProposalText("create"); create.disabled = proposal.status === "applying" || proposal.status === "checking" || !validateAiBrainNodeProposal(proposal.data, turn.id, true);
       actions.append(cancel, create);
       if (proposal.status === 'checking') { const status = document.createElement('p'); status.setAttribute('role', 'status'); status.textContent = aiBrainContentCopy('checking'); preview.appendChild(status); }
       preview.appendChild(actions); mountAiBrainContentDialog(advisor, turn, preview);
@@ -7428,7 +7460,8 @@ function completeAiBrainNodeCreation(nodeId, languageCode) {
     state.selectedIds.clear(); state.selectedIds.add(nodeId); state.selectedPrimary = nodeId;
     updateSelectionClasses(); fillInspector(node);
     revealAiBrainCreatedNode(nodeId);
-    setSaveStatus(aiBrainProposalText("creationAnnouncement", languageCode));
+    if (node.type === 'Social Media Posting') setSaveStatus(languageCode === 'de' ? 'Social Media Posting erstellt.' : 'Social Media Posting created.');
+    else setSaveStatus(aiBrainProposalText("creationAnnouncement", languageCode));
     (el.inputs?.title || el.inspectorPanel)?.focus?.({ preventScroll: true });
     return true;
   };
@@ -7442,7 +7475,7 @@ async function applyAiBrainNodeProposal(turnId) {
   if (!canUseAiBrainProposal()) { setTurnProposal(turnId, () => ({ ...proposal, status: "stale", errorCode: "permission" })); return renderAiBrain(); }
   if (proposal.boardId !== state.currentBoardId || proposal.accountIdentity !== state.user?.email || proposal.lifecycle !== state.boardLoadGeneration) { setTurnProposal(turnId, () => ({ ...proposal, status: "stale", errorCode: "board" })); return renderAiBrain(); }
   if (proposal.contextIdentity !== aiBrainRequestContextIdentity()) { setTurnProposal(turnId, () => ({ ...proposal, status: "stale", errorCode: "canvas" })); return renderAiBrain(); }
-  const validated = validateAiBrainNodeProposal(proposal.data, turn.id); if (!validated) { setTurnProposal(turnId, () => ({ ...proposal, status: "failed", errorCode: "invalid" })); return renderAiBrain(); }
+  const validated = validateAiBrainNodeProposal(proposal.data, turn.id, true); if (!validated) { setTurnProposal(turnId, () => ({ ...proposal, status: "failed", errorCode: "invalid" })); return renderAiBrain(); }
   if (state.aiBrain.appliedProposalIds.has(validated.proposal_id)) { setTurnProposal(turnId, () => ({ ...proposal, status: "applied" })); return renderAiBrain(); }
   if (!aiBrainContentSelectionCurrent(turn, proposal.selection) || !/^[a-f0-9]{64}$/.test(proposal.scopeRevision)) return;
   const controller = new AbortController(); proposal.controller = controller; proposal.status = 'checking'; renderAiBrain();
@@ -7455,7 +7488,7 @@ async function applyAiBrainNodeProposal(turnId) {
     if (state.aiBrain.messages.find(t => t.id === turnId)?.proposal !== proposal || proposal.status !== 'checking') return;
     if (!aiBrainContentSourceCurrent(turn, proposal.source) || !aiBrainContentSelectionCurrent(turn, proposal.selection)
       || state.activeView !== 'ai_brain' || !canUseAiBrainProposal()
-      || JSON.stringify(validateAiBrainNodeProposal(proposal.data, turn.id)) !== JSON.stringify(validated)) throw new Error('stale');
+      || JSON.stringify(validateAiBrainNodeProposal(proposal.data, turn.id, true)) !== JSON.stringify(validated)) throw new Error('stale');
   } catch {
     if (state.aiBrain.messages.find(t => t.id === turnId)?.proposal !== proposal) return;
     turn.contentProposalInvalid = true;
@@ -7465,7 +7498,7 @@ async function applyAiBrainNodeProposal(turnId) {
   const historyLength = state.history.length; const nodeIdsBefore = new Set(state.nodes.map((item) => item.id)); let node = null;
   try {
     pushHistorySnapshot();
-    node = createNode({ type: "Content", position: aiBrainNodePlacement(), initial: { title: validated.title, content: validated.body } });
+    node = createNode({ type: validated.node_type, position: aiBrainNodePlacement(), initial: validated.node_type === 'Content' ? { title: validated.title, content: validated.body } : { title: validated.title, content: validated.caption, social: validated } });
     if (!node) throw new Error("creation_rejected");
     markUnsaved();
     const createdNodeId = node.id; const proposalLanguage = proposal.uiLanguage;
@@ -12181,6 +12214,13 @@ function createNode({ type = "Idea", parentId = null, position = null, images = 
   if (initial && typeof initial === "object" && !Array.isArray(initial)) {
     if (typeof initial.title === "string") node.title = initial.title;
     if (typeof initial.content === "string") node.content = initial.content;
+    if (type === 'Social Media Posting' && initial.social) {
+      const { proposal_id, source_turn_id, ...fields } = initial.social;
+      const social = FunklixSocialProposal.validate(fields, true);
+      if (!social) return null;
+      node.channel = social.platform;
+      node.social = { platform: social.platform, caption: social.caption, preview: social.preview, hashtags: normalizeHashtagsInput(social.hashtags), scheduledAt: '' };
+    }
   }
 
   if (parent) {

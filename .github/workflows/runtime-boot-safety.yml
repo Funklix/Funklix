@@ -52,6 +52,9 @@ jobs:
           node --check knowledge-module-registry.js
           node --check knowledge-module-identity.js
           node --check knowledge-module-runtime-adapter.js
+          node --check ai-brain-social-proposal.js
+          node --check scripts/check-bw37-1c-3c1-social-handoff.js
+          node --check scripts/check-bw37-1c-3c1-social-browser.js
           node --check app.js
           node --check scripts/check-bw37-1c-2b-ai-brain-campaign-handoff.js
           node --check ai-brain-workspace-viewport.js
@@ -467,6 +470,9 @@ jobs:
       - name: Check Content eligibility, source selection, editable preview and remote Create scope
         timeout-minutes: 5
         run: npm run check:bw37.1c3b
+      - name: Check AI Brain native Social Media Posting handoff
+        timeout-minutes: 5
+        run: npm run check:bw37.1c3c1
       - name: Check Content proposal security and source lifecycle (real ACL, mocked provider, Chromium)
         timeout-minutes: 5
         run: npm run check:bw37.1c3a

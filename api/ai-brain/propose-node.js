@@ -4,6 +4,8 @@ const { getSessionUser } = require('../_auth-session');
 const scope = require('../_ai-brain-proposal-scope');
 const { isBrandId } = require('../_brand-access');
 const { LIMITS: CANVAS_LIMITS, validateCanvasContext } = require('../_ai-brain-canvas-context');
+const socialProposal = require('../../ai-brain-social-proposal');
+const crypto = require('crypto');
 const { createProposal } = require('../_ai-brain-node-proposal');
 const { responseLanguageMismatch } = require('./advice');
 
@@ -64,7 +66,7 @@ function proposalMessages({ sourceAnswer, responseLanguage, contentLanguage }) {
 module.exports = async function handler(req, res) {
   if (req.method !== 'POST') return failure(res, 405, 'proposal_request_invalid', 'Method not allowed');
   if (Buffer.byteLength(JSON.stringify(req.body || {}), 'utf8') > CANVAS_LIMITS.bytes) return failure(res, 413, 'proposal_request_invalid', 'Request too large', { validationClassification: 'request_too_large' });
-  if (!exact(req.body) || req.body.action !== 'propose_content_node' || !scope.validExpected(req.body.expected_scope)) return failure(res, 400, 'proposal_request_invalid', 'Invalid proposal request', { validationClassification: 'request_shape' });
+  if (!exact(req.body) || (req.body.action !== 'propose_content_node' && req.body.action !== 'propose_social_node') || !scope.validExpected(req.body.expected_scope)) return failure(res, 400, 'proposal_request_invalid', 'Invalid proposal request', { validationClassification: 'request_shape' });
   const user = getSessionUser(req); if (!user?.email) return failure(res, 401, 'proposal_unauthorized', 'Authentication required', { lifecycleStage: 'authentication' });
   const boardId = text(req.body.board_id, 80); const sourceTurnId = text(req.body.source_turn_id, 80);
   const sourceAnswer = text(req.body.source_answer, 12000); const responseLanguage = text(req.body.response_language, 5); const contentLanguage = text(req.body.content_language, 5);
@@ -74,6 +76,17 @@ module.exports = async function handler(req, res) {
   try {
     const data = await scope.capture({ boardId, user }); const board = data.board;
     scope.assertExpected(data, req.body.expected_scope);
+    if (req.body.action === 'propose_social_node') {
+      await scope.revalidate({ data, user: getSessionUser(req) });
+      scope.assertActor(data, getSessionUser(req));
+      const extracted = socialProposal.extract(sourceAnswer);
+      if (!extracted) return failure(res, 400, 'proposal_source_invalid', 'Social source needs manual review');
+      await scope.revalidate({ data, user: getSessionUser(req) });
+      scope.assertActor(data, getSessionUser(req));
+      return res.status(200).json({ action: 'propose_social_node', node_proposal: {
+        proposal_id: crypto.randomBytes(24).toString('base64url'), source_turn_id: sourceTurnId, ...extracted
+      }, scope_revision: scope.revision(data), context: { board_id: board.id, response_language: responseLanguage, content_language: contentLanguage } });
+    }
     if (!process.env.OPENAI_API_KEY) return failure(res, 503, 'proposal_provider_failed', 'AI Brain is temporarily unavailable');
     await scope.revalidate({ data, user: getSessionUser(req) });
     scope.assertActor(data, getSessionUser(req));

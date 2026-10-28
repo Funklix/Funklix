@@ -41,4 +41,5 @@ Use this workflow for future Codex and human-led work:
 - [BW-37.1C-3B — Content Eligibility and Editable Preview](./implementations/bw37-1c-3b-content-eligibility-editable-preview.md) — exact asset selection, disclosed preparation, editable Content fields and read-only remote Create preflight.
 - [BW-37.1C-3A — Content Proposal Hardening](./implementations/bw37-1c-3a-content-proposal-hardening.md) — persisted authorization, exact browser source scope, provider privacy and bounded transport; Content-only workflow preserved.
 
+- [BW-37.1C-3C1 — Native Social Media Posting Handoff](./implementations/bw37-1c-3c1-social-media-posting-handoff.md) — explicit Instagram/X destination recommendation, bounded source extraction, editable native fields and existing secure Create/persistence lifecycle.
 - [BW-37.1C-3B-R2: Compact Content handoff and live investigation evidence](implementations/bw37-1c-3b-r2-compact-content-handoff.md)
