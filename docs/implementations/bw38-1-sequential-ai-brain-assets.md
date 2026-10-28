@@ -89,6 +89,8 @@ context and protected-knowledge suites are run unchanged. Runtime Boot Safety ad
 the new suite and syntax checks to both existing PostgreSQL 17.6/18.4 jobs. Actual
 final CI results and commit IDs are reported in the PR, not inferred from local tests.
 
+The unchanged Content recovery suite also verifies explicit retries for provider/transport failures. Actual `proposal_unauthorized`/`proposal_forbidden` and revision denials retire the source; an HTTP error carrying a provider-failure code does not silently become an authorization grant and still requires a fresh explicit server-authorized preparation.
+
 Codex implementation review addressed native Board-exit selection reset, preserving
 prepared fields across own autosave without inference, server identity continuity
 across timestamp changes, concurrent unrelated edits during save, and insertion
