@@ -147,8 +147,11 @@ async function main(){
     ()=>state.nodes[0].content+='unrelated',()=>{state.nodes.push({...state.nodes[0],id:'unrelated'});state.edges.push([state.nodes[0].id,'unrelated']);},
     ()=>state.lastKnownUpdatedAt='2020-01-01T00:00:00Z',()=>state.brandCore.valueProposition='unrelated'
   ]) {
-    await first();const n=await p.evaluate(()=>state.nodes.length),calls=conversions;
-    await p.evaluate(mutate);await p.evaluate(()=>openAiBrainContentReview(state.aiBrain.messages.at(-1).id));
+    await first();const calls=conversions;
+    await p.evaluate(mutate);
+    // The mutation may itself add unrelated native data. Opening must add none.
+    const n=await p.evaluate(()=>state.nodes.length);
+    await p.evaluate(()=>openAiBrainContentReview(state.aiBrain.messages.at(-1).id));
     assert.equal(conversions,calls);assert.equal(await p.evaluate(()=>state.nodes.length),n);
     assert(await p.evaluate(()=>!state.aiBrain.messages.length || state.aiBrain.messages.at(-1).contentProposalInvalid));
   }
