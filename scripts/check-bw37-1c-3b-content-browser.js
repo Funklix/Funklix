@@ -42,6 +42,7 @@ async function main(){
    assert.equal(proposalCalls,paid);assert.equal(scopeCalls,reads);assert.deepEqual(await snapshot(),original);
    assert(await p.evaluate(()=>{const t=state.aiBrain.messages.at(-1);return aiBrainContentSelectionCurrent(t,t.proposal.selection);}));
    assert.equal(await p.locator('[data-ai-brain-excerpt]').textContent(),sources[index]);
+   await p.locator('[data-ai-brain-destination]').selectOption('Content');
    await p.locator('[data-ai-brain-prepare-confirm]').click();await p.locator('[data-ai-brain-create]').waitFor();
    assert.equal(proposalCalls,paid+1);assert.equal(requests.at(-1).source_answer,sources[index]);assert.deepEqual(await snapshot(),original);
    assert.equal(await p.locator('[data-ai-brain-edit=title]').inputValue(),index===0?'Instagram Post':'X Post');
@@ -130,7 +131,7 @@ async function main(){
    await p.keyboard.press('Shift+Tab');assert(await modal.evaluate(n=>n.contains(document.activeElement)));
    await p.keyboard.press('Escape');assert.equal(await modal.count(),0);assert(await p.locator('[data-ai-brain-prepare]').evaluate(n=>n===document.activeElement));
    assert.equal(proposalCalls,paid);
-   await open();await cards.first().check();await p.locator('[data-ai-brain-prepare-confirm]').click();await create.waitFor();
+   await open();await cards.first().check();await p.locator('[data-ai-brain-destination]').selectOption('Content');await p.locator('[data-ai-brain-prepare-confirm]').click();await create.waitFor();
    assert.equal(proposalCalls,paid+1);assert(await geometry());
    assert.equal(await modal.locator('details').getAttribute('open'),null);
    await p.keyboard.press('Escape');assert.equal(await create.count(),0);
