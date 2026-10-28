@@ -92,7 +92,7 @@ final CI results and commit IDs are reported in the PR, not inferred from local 
 Codex implementation review addressed native Board-exit selection reset, preserving
 prepared fields across own autosave without inference, server identity continuity
 across timestamp changes, concurrent unrelated edits during save, and insertion
-failure consumption. Automated PR review findings, if any, are reported separately.
+failure consumption. Automated Codex PR review found one P2: a pending autosave during Create preflight discarded an unchanged edited preview. The busy-save path now retains that preview and requires another explicit Create after saving; a held-request regression covers the overlap.
 
 ## Changed files
 

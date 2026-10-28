@@ -7551,9 +7551,11 @@ async function applyAiBrainNodeProposal(turnId) {
     if (state.aiBrain.messages.find(t => t.id === turnId)?.proposal !== proposal || proposal.status !== 'checking') return;
     if (expectedScopeAtCheck !== JSON.stringify(aiBrainContentExpectedScope(turn)) && aiBrainContentSourceCurrent(turn, proposal.source)) { proposal.status = 'ready'; proposal.controller = null; renderAiBrain(); return; }
     if (!aiBrainContentSourceCurrent(turn, proposal.source) || !aiBrainContentSelectionCurrent(turn, proposal.selection)
-      || state.isSaving
       || state.activeView !== 'ai_brain' || !canUseAiBrainProposal()
       || JSON.stringify(validateAiBrainNodeProposal(proposal.data, turn.id, true)) !== JSON.stringify(validated)) throw new Error('stale');
+    // A pending own save is not a source change. Keep the exact edited preview
+    // and require another explicit Create after acknowledgement/failure.
+    if (state.isSaving) { proposal.status = 'ready'; proposal.controller = null; renderAiBrain(); return; }
   } catch {
     if (state.aiBrain.messages.find(t => t.id === turnId)?.proposal !== proposal) return;
     turn.contentProposalInvalid = true;

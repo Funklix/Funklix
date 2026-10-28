@@ -120,6 +120,25 @@ async function main(){
   await p.locator('[data-ai-brain-create]').click();await p.waitForFunction(()=>state.nodes.length===2);
   assert.equal(await p.evaluate(()=>state.nodes.at(-1).social.caption),'Retained across own autosave');assert.equal(conversions,preparedCalls);
   console.log('PASS prepared preview and edits survive confirmed own autosave with fresh server checksum and no inference');
+  // Codex P2: autosave may begin while Create authorization is already pending.
+  await first();await open();await prepare();await p.locator('[data-ai-brain-edit=caption]').fill('Keep edited X during overlapping autosave');
+  let checkStarted,checkRelease,saveStarted,saveRelease;
+  const checkBegun=new Promise(r=>checkStarted=r),checkWait=new Promise(r=>checkRelease=r);
+  const saveBegun=new Promise(r=>saveStarted=r),saveWait=new Promise(r=>saveRelease=r);
+  hold={started:checkStarted,wait:checkWait};
+  const checking=p.evaluate(()=>applyAiBrainNodeProposal(state.aiBrain.messages.at(-1).id));await checkBegun;
+  saveHold={started:saveStarted,wait:saveWait};
+  const overlappingSave=p.evaluate(()=>saveBoardToServer('autosave'));await saveBegun;
+  checkRelease();await checking;
+  assert.equal(await p.evaluate(()=>state.nodes.length),1);assert.equal(await p.evaluate(()=>state.aiBrain.messages.at(-1).proposal.status),'ready');
+  assert.equal(await p.evaluate(()=>state.aiBrain.messages.at(-1).contentProposalInvalid),false);
+  assert.equal(await p.locator('[data-ai-brain-edit=caption]').inputValue(),'Keep edited X during overlapping autosave');
+  assert(await p.locator('[data-ai-brain-create]').isDisabled());
+  saveRelease();await overlappingSave;assert(!(await p.locator('[data-ai-brain-create]').isDisabled()));
+  await p.locator('[data-ai-brain-create]').click();await p.waitForFunction(()=>state.nodes.length===2);
+  assert.equal(await p.evaluate(()=>state.nodes.at(-1).social.caption),'Keep edited X during overlapping autosave');
+  console.log('PASS Codex P2: autosave overlapping successful Create preflight defers insertion, retains exact edits and requires another explicit Create');
+
   // Revalidate protected pending work after awaits, not only on entry.
   for(const boundary of ['Prepare','Create'])for(const mutation of ['account','source','canvas','revoke']) {
     await first();await open();if(boundary==='Create')await prepare();
