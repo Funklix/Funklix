@@ -32,8 +32,8 @@
     const seen = new Set();
     for (const line of lines.slice(1)) {
       const plain = line.replace(/^\s*#{1,6}\s*/, '').replace(/\*\*/g, '').trim();
-      const label = /^(Caption|Tweet|Post(?: copy)?|Bildunterschrift|Beitrag|Text|CTA|Call to action|Handlungsaufforderung|Hashtags?)\s*:\s*(.*)$/i.exec(plain);
-      const headingLabel = /^(Caption|Tweet|Post copy|Bildunterschrift|Beitrag|Text|CTA|Call to action|Handlungsaufforderung|Hashtags?)$/i.exec(plain);
+      const label = /^(Caption|Tweet|Post(?:[ -](?:copy|text))?|Copy|Bildunterschrift|Beitragstext|Beitrag|Text|CTA|Call to action|Handlungsaufforderung|Hashtags?)\s*:\s*(.*)$/i.exec(plain);
+      const headingLabel = /^(Caption|Tweet|Post copy|Post text|Post-Text|Copy|Bildunterschrift|Beitragstext|Beitrag|Text|CTA|Call to action|Handlungsaufforderung|Hashtags?)$/i.exec(plain);
       if (label || headingLabel) {
         const key = (label || headingLabel)[1].toLowerCase();
         field = /^hashtag/.test(key) ? 'hashtags' : /^(cta|call to action|handlungsaufforderung)$/.test(key) ? 'preview' : 'caption';
@@ -48,7 +48,8 @@
   }
   function recommend(source) {
     const result = extract(source);
-    return result && ['Instagram', 'X / Twitter'].includes(result.platform) ? TYPE : 'Content';
+    if (!result || /^(?:content(?:[ -](?:concept|idea|konzept|idee))|campaign (?:concept|brief)|kampagnenkonzept)\b/i.test(result.title)) return 'Content';
+    return ['Instagram', 'X / Twitter'].includes(result.platform) && (result.caption || /\b(?:post|beitrag|tweet)\b/i.test(result.title)) ? TYPE : 'Content';
   }
   return Object.freeze({ TYPE, platforms, limits, validate, extract, recommend });
 });

@@ -29,6 +29,8 @@ async function main() {
     assert.equal(social.extract(source).platform, ''); assert.equal(social.recommend(source), 'Content');
   }
   for (const platform of social.platforms) assert.equal(social.extract(platform + ' Post\nCaption: Hello').platform, platform);
+  assert.equal(social.recommend('Content concept: Instagram story\nAudience: Creative community\nMessage: Share your story\nPurpose: Encourage participation'), 'Content');
+  for (const label of ['Copy', 'Post text', 'Post-Text', 'Beitragstext']) assert.equal(social.extract('Instagram Post\n'+label+': A labelled source').caption, 'A labelled source');
   const partial = social.extract('Instagram Beitrag\nBildunterschrift: Deine Geschichte zählt.');
   assert.equal(partial.caption, 'Deine Geschichte zählt.'); assert.equal(partial.preview, ''); assert.equal(partial.hashtags, '');
   assert(social.validate(partial, true));
