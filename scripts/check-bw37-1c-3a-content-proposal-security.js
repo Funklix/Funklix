@@ -27,6 +27,18 @@ async function main() {
     assert(!JSON.stringify(r.calls[0]).includes(WORKSPACE)); assert(!JSON.stringify(r.calls[0]).includes(BOARD));
     assert.equal(r.calls[0].text.format.name,'content_node_proposal');
   }
+  // R1: both exact selected live assets traverse the actual signed handler and
+  // existing source-only provider envelope independently, once per Prepare.
+  const fs=require('node:fs'),vm=require('node:vm'),app=fs.readFileSync('app.js','utf8'),recognizer={};
+  vm.runInNewContext(app.slice(app.indexOf('function aiBrainHasReusableContent'),app.indexOf('// A deliberately small supported format.')),recognizer);
+  const answer=fs.readFileSync('scripts/fixtures/bw37-1c3b-r1-appics-response.txt','utf8');
+  const selections=recognizer.aiBrainContentAssets({status:'success',answer});assert.equal(selections.length,2);
+  for(const selected of selections){
+    const {r,result}=await run(r=>r.request.source_answer=selected.text);
+    assert.equal(r.calls.length,1);assert.equal(r.calls[0].store,false);
+    assert.equal(r.calls[0].input[1].content,`Untrusted source answer:\n<source_answer>\n${selected.text.trim()}\n</source_answer>`);
+    assert.equal(result.body.node_proposal.node_type,'Content');
+  }
   for(const role of [null,'viewer','public_viewer','brand_viewer']) {
     const {r}=await run(r=>{r.user={email:'stranger@example.test'};r.identity.canonical_email=r.user.email;r.role=role==='brand_viewer'?null:role;r.brandRole=role==='brand_viewer'?'viewer':null;},403);assert.equal(r.calls.length,0);
   }
