@@ -6969,6 +6969,11 @@ function aiBrainContentSelectionCurrent(turn, selection) {
   return !!selection && aiBrainContentAssets(turn).some(a => a.start === selection.start && a.end === selection.end && a.text === selection.text);
 }
 // Presentation uses shortened text only; source binding always retains the exact span.
+function aiBrainContentPlainPreview(text) {
+  return String(text).replace(/^\s*(?:#{1,6}\s+|[-*]\s+|\d{1,3}[.)]\s+)/gm, '')
+    .replace(/\[([^\]\n]+)\]\([^\n)]*\)/g, '$1').replace(/(\*\*|__|`)([^\n]*?)\1/g, '$2')
+    .replace(/\r?\n+/g, ' ').replace(/\s+/g, ' ').trim();
+}
 function aiBrainContentAssetTitle(asset) {
   return asset.text.split(/\r?\n/).find(line => line.trim())?.replace(/^\s*(?:#{1,6}\s*|[-*]\s+|\d{1,3}[.)]\s+)/, '').replace(/\*\*/g, '').trim() || 'Content';
 }
@@ -6989,12 +6994,11 @@ function renderAiBrainContentSource(preview, turn, proposal) {
       el.aiBrainSummary.querySelector('[data-ai-brain-destination]')?.focus();
     });
   }
-  const summary = document.createElement('p'); summary.className = 'ai-brain-content-summary'; summary.dataset.userContent = 'true'; summary.setAttribute('role', 'status');
   const details = document.createElement('details');
   append('summary', aiBrainContentCopy('source'), details);
   const copy = append('pre', proposal.selection?.text || '', details); copy.dataset.userContent = "true";
   const excerpt = copy; excerpt.className = 'ai-brain-proposal-copy'; excerpt.dataset.aiBrainExcerpt = turn.id;
-  const describe = () => { summary.textContent = proposal.selection ? proposal.selection.text.replace(/[#*]/g, '').trim().slice(0, 280) : aiBrainContentCopy('placeholder'); excerpt.textContent = proposal.selection?.text || ''; };
+  const describe = () => { excerpt.textContent = proposal.selection?.text || ''; };
   if (proposal.status === 'review') {
     const assets = aiBrainContentAssets(turn);
     const group = document.createElement('fieldset'); group.className = 'ai-brain-content-assets'; group.dataset.aiBrainSource = turn.id;
@@ -7003,7 +7007,7 @@ function renderAiBrainContentSource(preview, turn, proposal) {
       const card = document.createElement('label'); card.className = 'ai-brain-content-card';
       const input = document.createElement('input'); input.type = 'radio'; input.name = `content-asset-${turn.id}`; input.value = String(index); input.checked = proposal.selection?.start === asset.start;
       const title = document.createElement('strong'); title.dataset.userContent = 'true'; title.textContent = aiBrainContentAssetTitle(asset);
-      const short = document.createElement('span'); short.dataset.userContent = 'true'; short.textContent = asset.text.slice(asset.text.indexOf('\n') + 1).replace(/[#*]/g, '').trim().slice(0, 140);
+      const short = document.createElement('span'); short.dataset.userContent = 'true'; short.textContent = aiBrainContentPlainPreview(asset.text.slice(asset.text.indexOf('\n') + 1)).slice(0, 140);
       card.append(input, title, short); group.appendChild(card);
       input.addEventListener('change', () => {
         if (!aiBrainContentSourceCurrent(turn, proposal.source)) return cancelAiBrainNodeProposal(turn.id);
@@ -7015,7 +7019,7 @@ function renderAiBrainContentSource(preview, turn, proposal) {
     });
     preview.appendChild(group);
   }
-  describe(); preview.append(summary, details);
+  describe(); preview.appendChild(details);
 }
 // Native modal top layer contains focus and makes the fixed composer/Jump inert.
 // Keep the existing proposal and Canvas owners; only move their presentation.
@@ -7203,21 +7207,23 @@ function renderAiBrainTranscript(transcript) {
     }
     const campaignEligible = !!aiBrainCampaignBrief(turn) && aiBrainCampaignSourceCurrent(turn);
     const brandEligible = !!aiBrainValueProposition(turn) && aiBrainBrandSourceCurrent(turn) && !turn.brandUpdateStaged;
+    const responseActions = document.createElement('div'); responseActions.className = 'ai-brain-response-actions';
+    advisor.appendChild(responseActions);
     if (campaignEligible) {
       const create = document.createElement('button'); create.type = 'button'; create.className = 'ai-brain-proposal-prepare';
-      create.dataset.aiBrainCampaign = turn.id; create.textContent = state.uiLanguage === 'de' ? 'Kampagne erstellen' : 'Create Campaign'; advisor.appendChild(create);
+      create.dataset.aiBrainCampaign = turn.id; create.textContent = state.uiLanguage === 'de' ? 'Kampagne erstellen' : 'Create Campaign'; responseActions.appendChild(create);
     }
     if (brandEligible) {
       const suggest = document.createElement('button'); suggest.type = 'button'; suggest.className = 'ai-brain-proposal-prepare';
-      suggest.dataset.aiBrandProposal = turn.id; suggest.textContent = aiBrainBrandCopy('action'); advisor.appendChild(suggest);
+      suggest.dataset.aiBrandProposal = turn.id; suggest.textContent = aiBrainBrandCopy('action'); responseActions.appendChild(suggest);
     }
     const proposal = turn.proposal; const eligible = !turn.contentProposalInvalid && aiBrainHasReusableContent(turn) && canUseAiBrainProposal() && proposal?.status !== "applied";
     if (eligible && (!proposal || ["cancelled", "failed", "stale"].includes(proposal.status))) {
       const prepare = document.createElement("button"); prepare.type = "button"; prepare.className = "ai-brain-proposal-prepare"; prepare.dataset.aiBrainPrepare = turn.id;
       prepare.textContent = aiBrainContentCopy('add');
       if (campaignEligible && brandEligible) {
-        const more = document.createElement('details'), summary = document.createElement('summary'); summary.textContent = aiBrainContentCopy('more'); more.append(summary, prepare); advisor.appendChild(more);
-      } else advisor.insertBefore(prepare, advisorLabel.nextSibling);
+        const more = document.createElement('details'), summary = document.createElement('summary'); summary.textContent = aiBrainContentCopy('more'); more.append(summary, prepare); responseActions.appendChild(more);
+      } else responseActions.appendChild(prepare);
     }
     if (proposal?.status === 'review') renderAiBrainContentReview(advisor, turn, proposal);
     if (proposal?.status === "requesting") {
