@@ -71,6 +71,10 @@ async function main(){
   const nodes=await p.evaluate(()=>state.nodes);assert.deepEqual(nodes.map(n=>n.type),[social.TYPE,social.TYPE]);
   assert.deepEqual(nodes.map(n=>n.social.platform),['Instagram','X / Twitter']);assert.equal(nodes[1].social.caption,'Edited X caption');assert.notEqual(nodes[0].social.caption,nodes[1].social.caption);
   assert.deepEqual(nodes[0].social,{platform:'Instagram',caption:'Isolated Instagram caption',preview:'Instagram CTA',hashtags:['#InstagramOnly'],scheduledAt:''});
+  assert.deepEqual(nodes[1].social,{platform:'X / Twitter',caption:'Edited X caption',preview:'Sign up now and start owning your story!',hashtags:['#MyAppicsStory','#CreativeFreedom','#ContentOwnership','#CensorshipFree'],scheduledAt:''});
+  assert.deepEqual(nodes.map(n=>n.title),['Edited Instagram','X Post']);
+  assert.deepEqual(nodes.map(n=>n.content),['Isolated Instagram caption','Edited X caption']);
+  assert.equal(await p.evaluate(()=>state.edges.length),0);
   assert(nodes.every(n=>n.status==='Draft'&&n.images.length===0&&!n.planningSchedule&&!n.approvalFingerprint));
   assert.equal(await p.evaluate(()=>state.history.length),initialHistory+2);assert.equal(await p.evaluate(()=>state.activityFeed.filter(a=>a.type==='node_created').length),2);
   assert.equal(advice,1);assert.equal(await p.locator('[data-ai-brain-prepare]').count(),0);assert.equal(paid,0);assert.equal(conversions,2);
