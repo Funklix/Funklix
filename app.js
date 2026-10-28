@@ -7306,7 +7306,7 @@ function renderAiBrainTranscript(transcript) {
       preview.addEventListener('keydown', e => { if (e.key === 'Escape') { e.preventDefault(); cancelAiBrainNodeProposal(turn.id); } });
       const actions = document.createElement("div"); actions.className = "ai-brain-proposal-actions";
       const cancel = document.createElement("button"); cancel.type = "button"; cancel.dataset.aiBrainCancel = turn.id; cancel.textContent = aiBrainProposalText("cancel");
-      const create = document.createElement("button"); create.type = "button"; create.dataset.aiBrainCreate = turn.id; create.textContent = aiBrainProposalText("create"); create.disabled = state.isSaving || proposal.status === "applying" || proposal.status === "checking" || !validateAiBrainNodeProposal(proposal.data, turn.id, true);
+      const create = document.createElement("button"); create.type = "button"; create.dataset.aiBrainCreate = turn.id; create.textContent = aiBrainProposalText("create"); create.disabled = proposal.status === "applying" || state.isSaving || proposal.status === "checking" || !validateAiBrainNodeProposal(proposal.data, turn.id, true);
       actions.append(cancel, create);
       if (proposal.status === 'checking') { const status = document.createElement('p'); status.setAttribute('role', 'status'); status.textContent = aiBrainContentCopy('checking'); preview.appendChild(status); }
       preview.appendChild(actions); mountAiBrainContentDialog(advisor, turn, preview);
