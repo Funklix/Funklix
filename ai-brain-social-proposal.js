@@ -26,8 +26,12 @@
     if (typeof source !== 'string' || !source.trim() || source.length > 12000) return null;
     const lines = source.replace(/\r\n?/g, '\n').split('\n');
     const heading = (lines.find(line => line.trim()) || '').replace(/^\s*#{1,6}\s*/, '').replace(/\*\*/g, '').trim();
+    const platformHeading = heading.replace(/^\s*(?:\d{1,3}[.)]\s+|[-*]\s+)/, '')
+      .replace(/^(?:here(?:'s| is)\s+(?:an?\s+)?|hier\s+(?:ist|kommt)\s+(?:ein(?:e|en)?\s+)?(?:konkreter?\s+)?|proposed\s+|draft\s+|vorgeschlagener?\s+|entwurf:\s*)/i, '')
+      .replace(/^social(?: media)? post\s*[:—–-]\s*/i, '');
+    const explicitPlatform = /^(?:Instagram|X(?:\s*\/\s*Twitter)?|Twitter|LinkedIn|Facebook|TikTok)(?:[ -]+(?:post|beitrag|tweet|posting)\b|\s*[:—–]|\s*$)/i.test(platformHeading);
     const found = platforms.filter(p => (p === 'X / Twitter' ? /(?:^|\W)(?:X|Twitter)(?:\W|$)/i : new RegExp('\\b' + p + '\\b', 'i')).test(heading));
-    const result = { node_type: TYPE, title: heading.slice(0, limits.title) || TYPE, platform: found.length === 1 ? found[0] : '', caption: '', preview: '', hashtags: '' };
+    const result = { node_type: TYPE, title: heading.slice(0, limits.title) || TYPE, platform: explicitPlatform && found.length === 1 ? found[0] : '', caption: '', preview: '', hashtags: '' };
     let field = null;
     const seen = new Set();
     for (const line of lines.slice(1)) {

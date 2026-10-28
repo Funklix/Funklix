@@ -25,9 +25,11 @@ async function main() {
       assert.equal(r.capture, 3); assert.equal(res.body.action, 'propose_social_node'); assert.match(res.body.scope_revision, /^[a-f0-9]{64}$/);
     }
   }
-  for (const source of ['Unknown post\nCaption: Hello', 'Instagram and X post\nCaption: Hello', 'Mastodon Post\nCaption: Hello']) {
+  for (const source of ['Unknown post\nCaption: Hello', 'Instagram and X post\nCaption: Hello', 'Mastodon Post\nCaption: Hello', 'Mastodon post (similar to Instagram)\nCaption: Hello', 'Instagram-inspired Mastodon Post\nCaption: Hello']) {
     assert.equal(social.extract(source).platform, ''); assert.equal(social.recommend(source), 'Content');
   }
+  assert.equal(social.extract("Here's an Instagram post you can use:\nCaption: Hello").platform, 'Instagram');
+  assert.equal(social.extract('Hier ist ein konkreter X-Beitrag:\nText: Hallo').platform, 'X / Twitter');
   for (const platform of social.platforms) assert.equal(social.extract(platform + ' Post\nCaption: Hello').platform, platform);
   assert.equal(social.recommend('Content concept: Instagram story\nAudience: Creative community\nMessage: Share your story\nPurpose: Encourage participation'), 'Content');
   for (const label of ['Copy', 'Post text', 'Post-Text', 'Beitragstext']) assert.equal(social.extract('Instagram Post\n'+label+': A labelled source').caption, 'A labelled source');
