@@ -71,6 +71,9 @@ async function server(){
 }
 async function browser({baseline=false,requestDelayMs=0,timeoutMs=180000}={}){
   const started=Date.now(),r=fixture(),holds=new Set();
+  // Avatar is saved fixture data. A post-load Core mutation races the dirty watcher
+  // and can make the real entry guard close the dialog before generation starts.
+  if(!baseline)r.db.boards[0].brand_core_snapshot.brandDNA={userApproved:true,avatar:{userApproved:true,imageUrl:'/fixture-avatar.png'}};
   let browser,page,closing=false,expired=false,stage='launch',pendingRoutes=0,forceExit,cleanupPromise,cleanupFailed=false;
   const checkpoint=value=>{stage=value;console.log(JSON.stringify({test:'BW-36.14R1 Chromium',stage,elapsed_ms:Date.now()-started,pending_routes:pendingRoutes,held_requests:[...holds].filter(h=>h.started&&!h.released).length,pages:browser?.contexts().reduce((n,c)=>n+c.pages().length,0)||0}));};
   const heldRequest=kind=>{
@@ -193,9 +196,10 @@ async function browser({baseline=false,requestDelayMs=0,timeoutMs=180000}={}){
       const progress=updateCampaignV3CreationProgress;updateCampaignV3CreationProgress=(...args)=>{window.r1Trace.steps.push(args[1]);return progress(...args);};
       const scroll=scrollCampaignV3ActiveStepIntoView;scrollCampaignV3ActiveStepIntoView=(...args)=>{window.r1Trace.scroll++;return scroll(...args);};
       const commit=CampaignGeneratorV3.commitCampaignV3PlanToCanvas;CampaignGeneratorV3.commitCampaignV3PlanToCanvas=(...args)=>{window.r1Trace.commit++;return commit(...args);};
-      state.brandCore.brandDNA={userApproved:true,avatar:{userApproved:true,imageUrl:'/fixture-avatar.png'}};
     });
-    checkpoint('generation_and_save_failures');await structure();aiFail=true;await generate();await dialog.locator('#campaign-v3-error-retry').waitFor();assert.equal(await page.evaluate(()=>state.nodes.length),0);assert.equal(posts.length,0);
+    checkpoint('generation_and_save_failures');await structure();
+    assert.equal(await page.evaluate(()=>{detectDirtyFromSnapshot();return state.isDirty;}),false,'Saved Avatar fixture must remain clean when the dirty watcher runs before Generate');
+    aiFail=true;await generate();await dialog.locator('#campaign-v3-error-retry').waitFor();assert.equal(await page.evaluate(()=>state.nodes.length),0);assert.equal(posts.length,0);
     aiFail=false;r.options.saveFail=true;await dialog.locator('#campaign-v3-error-retry').click();
     await dialog.getByText('Campaign generated, but not saved yet.',{exact:true}).waitFor();
     assert.deepEqual(await counts(),expected);assert.equal(ai.length,2);assert.equal(posts.length,1);assert.equal(r.db.boards[0].canvas_json.nodes.length,0);assert.equal(await dialog.locator('#campaign-v3-reveal').count(),0);
