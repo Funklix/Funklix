@@ -40,6 +40,7 @@ async function main() {
   for (const [key, value] of [['title', 'a'.repeat(121)], ['caption', 'a'.repeat(4001)], ['preview', 'a'.repeat(1001)], ['hashtags', 'a'.repeat(1001)], ['platform','Mastodon'], ['title','a\u0000']]) assert.equal(social.validate({ ...partial, [key]:value }), null);
   assert.equal(social.validate({ ...partial, status: 'Approved' }), null);
   assert.equal(social.extract('Instagram Post\nCaption: One\nCaption: Two'), null);
+  assert.equal(social.extract('Instagram Post\nCaption: Hello\nHashtags: #One #Zwei (optional)\n\nAsk me for more #irrelevant recommendations.').hashtags, '#One #Zwei');
   for (const [change, status] of [
     [r => r.user = null, 401],
     [r => { r.user = { email: 'stranger@example.test' }; r.identity.canonical_email = r.user.email; }, 403],

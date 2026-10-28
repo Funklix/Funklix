@@ -42,8 +42,12 @@
       }
       if (/^\s*---+\s*$/.test(line)) continue;
       if (/^\s*#{1,6}\s/.test(line) || /^\s*\*\*[^*]+:\*\*/.test(line)) { field = null; continue; }
+      if (field === 'hashtags' && plain && !plain.startsWith('#')) { field = null; continue; }
       if (field) result[field] += '\n' + line;
     }
+    // Only literal source tags are extracted; prose must never become new tags
+    // when the native editor normalizes the later user-confirmed value.
+    result.hashtags = (result.hashtags.match(/#[\p{L}\p{N}_]+/gu) || []).join(' ');
     return validate(result);
   }
   function recommend(source) {
