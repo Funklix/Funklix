@@ -6513,6 +6513,7 @@ function invalidateAiBrainRequest() {
     campaignCreationController.close();
   }
   document.getElementById('ai-brand-proposal-dialog')?.remove();
+  el.aiBrainSummary?.querySelectorAll('dialog[open]').forEach(dialog => dialog.close());
   state.aiBrain.controller?.abort();
   state.aiBrain.messages.forEach((turn) => turn.proposal?.controller?.abort?.());
   state.aiBrain = { adviceMode: "general", status: "idle", messages: [], requestId: state.aiBrain.requestId + 1, controller: null, identity: aiBrainIdentity(), error: "", appliedProposalIds: new Set() };
@@ -6953,6 +6954,7 @@ function openAiBrainContentReview(turnId) {
   if (!aiBrainContentSourceCurrent(turn)) {
     setTurnProposal(turnId, () => ({ status: "stale", errorCode: "proposal_context_changed" })); return renderAiBrain();
   }
+  state.aiBrain.messages.forEach(item => { if (item.id !== turnId && ['review', 'ready', 'requesting'].includes(item.proposal?.status)) { item.proposal.controller?.abort(); item.proposal = { status: 'cancelled' }; } });
   setTurnProposal(turnId, () => ({ status: 'review', source: turn.contentProposalSource, selection: assets.length === 1 ? assets[0] : null }));
   renderAiBrain();
   el.aiBrainSummary.querySelector(`[data-ai-brain-cancel='${turnId}']`)?.focus({ preventScroll: true });
@@ -6960,28 +6962,59 @@ function openAiBrainContentReview(turnId) {
 function aiBrainContentSelectionCurrent(turn, selection) {
   return !!selection && aiBrainContentAssets(turn).some(a => a.start === selection.start && a.end === selection.end && a.text === selection.text);
 }
+// Presentation uses shortened text only; source binding always retains the exact span.
+function aiBrainContentAssetTitle(asset) {
+  return asset.text.split(/\r?\n/).find(line => line.trim())?.replace(/^\s*(?:#{1,6}\s*|[-*]\s+|\d{1,3}[.)]\s+)/, '').replace(/\*\*/g, '').trim() || 'Content';
+}
 function renderAiBrainContentSource(preview, turn, proposal) {
-  const append = (tag, text) => { const n = document.createElement(tag); n.textContent = text; preview.appendChild(n); return n; };
+  const append = (tag, text, parent = preview) => { const n = document.createElement(tag); n.textContent = text; parent.appendChild(n); return n; };
   append('p', aiBrainContentCopy('suggestion'));
   const board = append('p', `${aiBrainContentCopy('board')}: `), name = document.createElement('span'); name.dataset.userContent = 'true'; name.textContent = proposal.source.boardName || proposal.source.boardId; board.appendChild(name);
   append('p', `${aiBrainProposalText('type')}: Content`);
+  const summary = document.createElement('p'); summary.className = 'ai-brain-content-summary'; summary.dataset.userContent = 'true'; summary.setAttribute('role', 'status');
+  const details = document.createElement('details');
+  append('summary', aiBrainContentCopy('source'), details);
+  const excerpt = append('pre', proposal.selection?.text || '', details); excerpt.dataset.userContent = 'true'; excerpt.className = 'ai-brain-proposal-copy'; excerpt.dataset.aiBrainExcerpt = turn.id;
+  const describe = () => { summary.textContent = proposal.selection ? proposal.selection.text.replace(/[#*]/g, '').trim().slice(0, 280) : aiBrainContentCopy('placeholder'); excerpt.textContent = proposal.selection?.text || ''; };
   if (proposal.status === 'review') {
     const assets = aiBrainContentAssets(turn);
-    const label = append('label', aiBrainContentCopy('choose'));
-    const select = document.createElement('select'); select.dataset.aiBrainSource = turn.id;
-    const placeholder = document.createElement('option'); placeholder.value = ''; placeholder.textContent = aiBrainContentCopy('placeholder'); select.appendChild(placeholder);
-    assets.forEach((asset, index) => { const option = document.createElement('option'); option.value = String(index); option.dataset.userContent = 'true'; option.textContent = `${index + 1}. ${asset.text.split(/\r?\n/)[0]}`; option.selected = proposal.selection?.start === asset.start; select.appendChild(option); });
-    label.appendChild(select);
-    select.addEventListener('change', () => {
-      if (!aiBrainContentSourceCurrent(turn, proposal.source)) return cancelAiBrainNodeProposal(turn.id);
-      proposal.selection = select.value === '' ? null : assets[Number(select.value)];
-      excerpt.textContent = proposal.selection?.text || '';
-      preview.querySelector('[data-ai-brain-prepare-confirm]').disabled = !proposal.selection;
+    const group = document.createElement('fieldset'); group.className = 'ai-brain-content-assets'; group.dataset.aiBrainSource = turn.id;
+    append('legend', aiBrainContentCopy('choose'), group);
+    assets.forEach((asset, index) => {
+      const card = document.createElement('label'); card.className = 'ai-brain-content-card';
+      const input = document.createElement('input'); input.type = 'radio'; input.name = `content-asset-${turn.id}`; input.value = String(index); input.checked = proposal.selection?.start === asset.start;
+      const title = document.createElement('strong'); title.dataset.userContent = 'true'; title.textContent = aiBrainContentAssetTitle(asset);
+      const short = document.createElement('span'); short.dataset.userContent = 'true'; short.textContent = asset.text.slice(asset.text.indexOf('\n') + 1).replace(/[#*]/g, '').trim().slice(0, 140);
+      card.append(input, title, short); group.appendChild(card);
+      input.addEventListener('change', () => {
+        if (!aiBrainContentSourceCurrent(turn, proposal.source)) return cancelAiBrainNodeProposal(turn.id);
+        proposal.selection = asset; describe();
+        preview.querySelector('[data-ai-brain-prepare-confirm]').disabled = false;
+      });
     });
+    preview.appendChild(group);
   }
-  append('strong', aiBrainContentCopy('source'));
-  const copy = append('pre', proposal.selection?.text || ''); copy.dataset.userContent = "true";
-  const excerpt = copy; excerpt.className = 'ai-brain-proposal-copy'; excerpt.dataset.aiBrainExcerpt = turn.id;
+  describe(); preview.append(summary, details);
+}
+// Native modal top layer contains focus and makes the fixed composer/Jump inert.
+// Keep the existing proposal and Canvas owners; only move their presentation.
+function mountAiBrainContentDialog(advisor, turn, preview) {
+  const dialog = document.createElement('dialog'); dialog.className = 'ai-brain-content-dialog'; dialog.dataset.aiBrainDialog = turn.id;
+  dialog.setAttribute('aria-label', aiBrainContentCopy('add'));
+  const heading = document.createElement('h3'); heading.textContent = aiBrainContentCopy('add');
+  const body = document.createElement('div'); body.className = 'ai-brain-content-scroll';
+  const actions = preview.querySelector('.ai-brain-proposal-actions');
+  while (preview.firstChild) body.appendChild(preview.firstChild);
+  preview.append(heading, body); if (actions) preview.appendChild(actions);
+  dialog.appendChild(preview); advisor.appendChild(dialog);
+  dialog.addEventListener('cancel', event => { event.preventDefault(); cancelAiBrainNodeProposal(turn.id); });
+  dialog.addEventListener('keydown', event => {
+    if (event.key !== 'Tab') return;
+    const controls = [...dialog.querySelectorAll('input,textarea,button,summary')].filter(n => !n.disabled && n.getClientRects().length);
+    const first = controls[0], last = controls.at(-1);
+    if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+    else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+  });
 }
 function renderAiBrainContentReview(advisor, turn, proposal) {
   const preview = document.createElement('section'); preview.className = 'ai-brain-node-preview';
@@ -6992,7 +7025,7 @@ function renderAiBrainContentReview(advisor, turn, proposal) {
   const prepare = document.createElement('button'); prepare.type = 'button'; prepare.dataset.aiBrainPrepareConfirm = turn.id; prepare.textContent = aiBrainProposalText('prepare'); prepare.disabled = !proposal.selection;
   prepare.addEventListener('click', () => requestAiBrainNodeProposal(turn.id));
   preview.addEventListener('keydown', e => { if (e.key === 'Escape') { e.preventDefault(); cancelAiBrainNodeProposal(turn.id); } });
-  actions.append(cancel, prepare); preview.appendChild(actions); advisor.appendChild(preview);
+  actions.append(cancel, prepare); preview.appendChild(actions); mountAiBrainContentDialog(advisor, turn, preview);
 }
 function canUseAiBrainProposal() { return !!state.user?.email && !!state.currentBoardId && state.boardAccess?.canEdit === true && !state.publicBoardToken; }
 function setTurnProposal(turnId, updater) {
@@ -7153,13 +7186,13 @@ function renderAiBrainTranscript(transcript) {
       prepare.textContent = aiBrainContentCopy('add');
       if (campaignEligible && brandEligible) {
         const more = document.createElement('details'), summary = document.createElement('summary'); summary.textContent = aiBrainContentCopy('more'); more.append(summary, prepare); advisor.appendChild(more);
-      } else advisor.appendChild(prepare);
+      } else advisor.insertBefore(prepare, advisorLabel.nextSibling);
     }
     if (proposal?.status === 'review') renderAiBrainContentReview(advisor, turn, proposal);
     if (proposal?.status === "requesting") {
       const status = document.createElement("div"); status.className = "ai-brain-proposal-status"; status.setAttribute("role", "status"); status.textContent = aiBrainProposalText("preparing", proposal.uiLanguage);
       const cancel = document.createElement('button'); cancel.type = 'button'; cancel.dataset.aiBrainCancel = turn.id; cancel.textContent = aiBrainProposalText('cancel'); status.appendChild(cancel);
-      status.addEventListener('keydown', e => { if (e.key === 'Escape') { e.preventDefault(); cancelAiBrainNodeProposal(turn.id); } }); advisor.appendChild(status);
+      status.addEventListener('keydown', e => { if (e.key === 'Escape') { e.preventDefault(); cancelAiBrainNodeProposal(turn.id); } }); mountAiBrainContentDialog(advisor, turn, status);
     }
     if (["failed", "stale"].includes(proposal?.status)) { const status = document.createElement("div"); status.className = "ai-brain-proposal-status is-error"; status.setAttribute("role", "alert"); status.textContent = aiBrainProposalText(proposal.errorCode || "invalid", proposal.uiLanguage); advisor.appendChild(status); }
     if (["ready", "checking", "applying"].includes(proposal?.status) && canUseAiBrainProposal() && proposal.boardId === state.currentBoardId && proposal.accountIdentity === state.user?.email) {
@@ -7188,7 +7221,7 @@ function renderAiBrainTranscript(transcript) {
       const create = document.createElement("button"); create.type = "button"; create.dataset.aiBrainCreate = turn.id; create.textContent = aiBrainProposalText("create"); create.disabled = proposal.status === "applying" || proposal.status === "checking" || !validateAiBrainNodeProposal(proposal.data, turn.id);
       actions.append(cancel, create);
       if (proposal.status === 'checking') { const status = document.createElement('p'); status.setAttribute('role', 'status'); status.textContent = aiBrainContentCopy('checking'); preview.appendChild(status); }
-      preview.appendChild(actions); advisor.appendChild(preview);
+      preview.appendChild(actions); mountAiBrainContentDialog(advisor, turn, preview);
     }
     if (proposal?.status === "applied") { const status = document.createElement("div"); status.className = "ai-brain-proposal-status is-success"; status.setAttribute("role", "status"); status.textContent = aiBrainProposalText("created", proposal.uiLanguage); advisor.appendChild(status); }
     transcript.appendChild(advisor);
@@ -7279,6 +7312,7 @@ function renderAiBrain() {
   const canAsk = !!state.user?.email && !!state.currentBoardId && state.boardAccess?.canEdit === true;
   const adviceMode = AI_BRAIN_MODES[state.aiBrain.adviceMode] ? state.aiBrain.adviceMode : "general";
   const selected = state.selectedPrimary ? getNode(state.selectedPrimary) : null; const unsaved = !!state.isDirty;
+  el.aiBrainSummary.querySelectorAll('dialog[open]').forEach(dialog => dialog.close());
   el.aiBrainSummary.innerHTML = `<section class="ai-brain-wrap ai-brain-conversation"><header class="ai-brain-header"><div><h3>${escapeHtml(uiText("AI Brain"))}</h3><p>${escapeHtml(uiText("Read-only Brand and campaign advisor"))}</p></div><span class="ai-brain-readonly">${aiBrainProposalText("advisor")}</span></header><div id="ai-brain-context" class="ai-brain-context" role="region" tabindex="0" aria-label="${escapeHtml(uiText("Advice context"))}"><span>${escapeHtml(uiText("Board"))}: ${escapeHtml(state.currentBoardName || uiText("Current Board"))}</span><span>${escapeHtml(uiFormat(state.nodes.length === 1 ? "{count} Canvas node" : "{count} Canvas nodes", { count: state.nodes.length }))}</span>${selected ? `<span>${escapeHtml(uiText("Selected"))}: ${escapeHtml(selected.title || selected.type || uiText("Node"))}</span>` : ""}<span class="${unsaved ? "is-unsaved" : ""}">${escapeHtml(uiText(unsaved ? "Includes unsaved Canvas changes" : "Saved Canvas context"))}</span></div>${canAsk ? `<div class="ai-brain-thread"><div id="ai-brain-transcript" class="ai-brain-transcript" role="region" tabindex="0" aria-label="${escapeHtml(uiText("AI Brain conversation"))}" aria-live="polite" aria-busy="${state.aiBrain.status === "loading"}"></div><button id="ai-brain-jump-latest" type="button" class="ai-brain-jump-latest" aria-controls="ai-brain-transcript" hidden>${escapeHtml(uiText("Jump to latest"))}</button></div><form id="ai-brain-form" class="ai-brain-composer"><label for="ai-brain-question">${escapeHtml(uiText("Your strategic question"))}</label><div class="ai-brain-focus"><label for="ai-brain-mode">${escapeHtml(uiText("Conversation focus"))}</label><select id="ai-brain-mode" aria-describedby="ai-brain-mode-description ai-brain-mode-guidance" ${state.aiBrain.status === "loading" ? "disabled" : ""}>${Object.entries(AI_BRAIN_MODES).map(([value, mode]) => `<option value="${value}" ${value === adviceMode ? "selected" : ""}>${escapeHtml(uiText(mode.title))}</option>`).join("")}</select><small id="ai-brain-mode-description">${escapeHtml(uiText(AI_BRAIN_MODES[adviceMode].description))}</small><small id="ai-brain-mode-guidance">${escapeHtml(uiText("Optional. Your question leads the conversation."))}</small></div>${!state.nodes.length ? `<p class="ai-brain-empty-canvas">${escapeHtml(uiText("This Canvas is empty. Advice can use the available Brand context; campaign-specific conclusions are limited."))}</p>` : ""}<textarea id="ai-brain-question" maxlength="2000" placeholder="${escapeHtml(uiText("Ask about your Brand or campaign…"))}" required></textarea><div><small>${escapeHtml(uiText("AI advice is qualitative. No changes will be made."))}</small><button type="submit" ${state.aiBrain.status === "loading" ? "disabled" : ""}>${escapeHtml(uiText(state.aiBrain.status === "loading" ? "Thinking…" : "Ask AI Brain"))}</button></div></form>` : `<div class="ai-brain-unavailable"><h4>${escapeHtml(uiText("AI Brain advice is unavailable"))}</h4><p>${escapeHtml(uiText(!state.currentBoardId ? "Open a saved Board with edit access to use AI Brain." : "New advice is available only to authenticated editors."))}</p></div>`}</section>`;
   const headerTitle = el.aiBrainSummary.querySelector(".ai-brain-header > div"); if (headerTitle) headerTitle.prepend(createAiBrainAdvisorAvatar());
   const transcript = el.aiBrainSummary.querySelector(".ai-brain-transcript"); if (transcript) renderAiBrainTranscript(transcript);
@@ -7301,7 +7335,14 @@ function renderAiBrain() {
   el.aiBrainSummary.querySelectorAll("[data-ai-brain-create]").forEach((button) => button.addEventListener("click", () => applyAiBrainNodeProposal(button.dataset.aiBrainCreate)));
   translateInterface(el.aiBrainSummary);
   if (transcript) bindAiBrainScroll(transcript, savedScroll, revealTurnId);
-  if (composerFocus) {
+  const contentDialog = el.aiBrainSummary.querySelector('[data-ai-brain-dialog]');
+  if (contentDialog && aiBrainViewIsVisible()) {
+    contentDialog.showModal();
+    const editField = focused?.dataset?.aiBrainEdit;
+    const target = editField ? contentDialog.querySelector(`[data-ai-brain-edit="${editField}"]`) : contentDialog.querySelector('input:checked, input, textarea, button');
+    target?.focus({ preventScroll: true });
+  }
+  if (composerFocus && !contentDialog) {
     const target = el.aiBrainSummary.querySelector(`#${composerFocus.id}`);
     if (target && !target.disabled && !target.hidden) { target.focus({ preventScroll: true }); if (composerFocus.id === "ai-brain-question") target.setSelectionRange(composerFocus.start, composerFocus.end, composerFocus.direction); }
   }
@@ -19339,6 +19380,7 @@ function closeInspector({ restoreFocus = true } = {}) {
 
 function setActiveView(view) {
   if (state.activeView === 'ai_brain' && view !== 'ai_brain') {
+    el.aiBrainSummary?.querySelectorAll('dialog[open]').forEach(dialog => dialog.close());
     state.aiBrain.messages.forEach(turn => {
       if (['review', 'ready', 'requesting', 'checking'].includes(turn.proposal?.status)) {
         turn.proposal.controller?.abort(); turn.proposal = { status: 'cancelled' };
