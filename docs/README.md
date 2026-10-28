@@ -37,6 +37,8 @@ Use this workflow for future Codex and human-led work:
 
 ## Implementation Records
 
+- [BW-37.1C-3C1-R1 — Social Reliability and Response Actions](./implementations/bw37-1c-3c1-r1-reliability.md) — verified multi-block Advice loss, exact candidate replay, result-footer actions and compact source review; live incident attribution remains unverified.
+
 - [BW-37.1C-3B-R1 — Multi-asset Content Selection](./implementations/bw37-1c-3b-r1-multi-asset-selection.md) — exact live Appics replay, independent Instagram/X sources and complete copy boundaries.
 - [BW-37.1C-3B — Content Eligibility and Editable Preview](./implementations/bw37-1c-3b-content-eligibility-editable-preview.md) — exact asset selection, disclosed preparation, editable Content fields and read-only remote Create preflight.
 - [BW-37.1C-3A — Content Proposal Hardening](./implementations/bw37-1c-3a-content-proposal-hardening.md) — persisted authorization, exact browser source scope, provider privacy and bounded transport; Content-only workflow preserved.

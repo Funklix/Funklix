@@ -55,6 +55,7 @@ jobs:
           node --check ai-brain-social-proposal.js
           node --check scripts/check-bw37-1c-3c1-social-handoff.js
           node --check scripts/check-bw37-1c-3c1-social-browser.js
+          node --check scripts/check-bw37-1c-3c1-r1-reliability.js
           node --check app.js
           node --check scripts/check-bw37-1c-2b-ai-brain-campaign-handoff.js
           node --check ai-brain-workspace-viewport.js
@@ -473,6 +474,8 @@ jobs:
       - name: Check AI Brain native Social Media Posting handoff
         timeout-minutes: 5
         run: npm run check:bw37.1c3c1
+      - name: Check complete multi-block Advice and response action placement
+        run: npm run check:bw37.1c3c1r1
       - name: Check Content proposal security and source lifecycle (real ACL, mocked provider, Chromium)
         timeout-minutes: 5
         run: npm run check:bw37.1c3a

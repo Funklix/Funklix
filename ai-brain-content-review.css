@@ -85,3 +85,11 @@
 }
 .ai-brain-content-scroll > p { margin-block: 8px; }
 .ai-brain-content-card span { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; line-height: 1.45; }
+
+/* Keep result actions together below the complete response. */
+.ai-brain-response-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.ai-brain-response-actions:empty { display: none; }
+.ai-brain-response-actions > .ai-brain-proposal-prepare { margin-top: 0; }
+.ai-brain-response-actions > details { padding: 8px 0; }
+.ai-brain-response-actions summary { cursor: pointer; }
+.ai-brain-response-actions summary:focus-visible { outline: 2px solid var(--fk-color-primary-action, #7565ed); outline-offset: 2px; }

@@ -16,7 +16,11 @@ function plainObject(value) { return !!value && typeof value === 'object' && !Ar
 function clean(value, max = 4000) { return typeof value === 'string' ? value.trim().slice(0, max) : ''; }
 function sameKeys(value, allowed) { return plainObject(value) && Object.keys(value).every((key) => allowed.includes(key)); }
 function outputText(data) {
-  return clean(data?.output_text || (data?.output || []).flatMap((item) => item?.content || []).find((item) => item?.type === 'output_text')?.text, 12000);
+  // Match the Responses output_text aggregation: preserve every assistant text
+  // block in order, without adding characters or exposing reasoning/tool data.
+  return clean(data?.output_text || (data?.output || []).filter((item) => item?.type === 'message' && item?.role === 'assistant')
+    .flatMap((item) => item?.content || []).filter((item) => item?.type === 'output_text' && typeof item.text === 'string')
+    .map((item) => item.text).join(''), 12000);
 }
 
 const LANGUAGE_MARKERS = Object.freeze({
