@@ -6417,6 +6417,50 @@ function captureAiBrainContentSource() {
     catalogIdentity: catalog?.identity, catalogStatus: catalog?.status,
     catalogScope: JSON.stringify(catalog?.value) };
 }
+// Per-item consumption is ephemeral and independent of the currently open preview.
+function aiBrainContentCompleted(turn, asset) {
+  return (turn?.contentCompleted || []).some(item => item.start === asset?.start && item.end === asset?.end && item.text === asset?.text);
+}
+function aiBrainContentRemaining(turn) { return aiBrainContentAssets(turn).filter(asset => !aiBrainContentCompleted(turn, asset)); }
+function aiBrainContinuationSnapshot(canvas = serializeState(), brand = serializeBrandCoreSnapshot()) {
+  // The save owner alone advances metadata.updatedAt. Every other persisted
+  // field, including activity, counters, zoom and Brand snapshot, must match.
+  return JSON.stringify({ canvas: { ...canvas, metadata: { ...canvas.metadata, updatedAt: null } }, brand });
+}
+function recordAiBrainContentCreation(turn, proposal, node, before) {
+  const selected = proposal.selection;
+  if (!aiBrainContentCompleted(turn, selected)) {
+    turn.contentCompleted = [...(turn.contentCompleted || []), Object.freeze({ ...selected, nodeId: node.id, type: node.type, saved: false })];
+  }
+  const now = captureAiBrainContentSource();
+  const withoutContext = value => JSON.stringify({ ...value, account: null, context: null });
+  // Only a single correctly initialized native insertion/selection is allowed.
+  // A partial renderer failure consumes the item but does not grant continuation.
+  const valid = before.account === state.user && withoutContext(before.scope) === withoutContext(now)
+    && state.nodes.length === before.ids.size + 1 && state.nodes.includes(node)
+    && JSON.stringify(state.nodes.filter(n => before.ids.has(n.id))) === before.nodes
+    && JSON.stringify(state.edges) === before.edges && state.selectedPrimary === node.id
+    && state.selectedIds.size === 1 && state.selectedIds.has(node.id)
+    && /^[a-f0-9]{64}$/.test(turn.contentAuthorizationRevision || '');
+  if (!valid) { turn.contentProposalInvalid = true; return; }
+  turn.contentContinuation = { context: now.context, expectedScope: { ...now.expectedScope }, snapshot: aiBrainContinuationSnapshot() };
+}
+function aiBrainContentExpectedScope(turn) { return turn.contentContinuation?.expectedScope || turn.contentProposalSource?.expectedScope; }
+// Called only with the payload/revision acknowledged by saveBoardToServer.
+function confirmAiBrainContentSave(records, canvas, brand, previousRevision, revision) {
+  for (const record of records) {
+    const turn = state.aiBrain.messages.find(item => item.id === record.turn.id), continuation = record.continuation;
+    if (!turn || turn.contentContinuation !== continuation || turn.contentProposalInvalid) continue;
+    if (continuation.expectedScope.updated_at !== previousRevision
+      || continuation.snapshot !== aiBrainContinuationSnapshot(canvas, brand)
+      || continuation.snapshot !== aiBrainContinuationSnapshot()
+      || continuation.context !== aiBrainContentLocalContext()) { turn.contentProposalInvalid = true; continue; }
+    continuation.expectedScope = { ...continuation.expectedScope, updated_at: revision };
+    if (!aiBrainContentSourceCurrent(turn)) continue;
+    turn.contentCompleted = turn.contentCompleted.map(item => Object.freeze({ ...item, saved: true }));
+
+  }
+}
 function aiBrainContentSourceCurrent(turn, source = turn?.contentProposalSource) {
   turn = state.aiBrain.messages.find(item => item.id === turn?.id);
   if (!source || turn?.contentProposalInvalid || turn?.contentProposalSource !== source || turn.status !== 'success'
@@ -6428,10 +6472,13 @@ function aiBrainContentSourceCurrent(turn, source = turn?.contentProposalSource)
     return false;
   }
   const current = captureAiBrainContentSource();
-  const valid = source.identity === current.identity && source.context === current.context
+  const continuation = turn.contentContinuation;
+  const expectedScope = aiBrainContentExpectedScope(turn);
+  const valid = (!continuation || continuation.snapshot === aiBrainContinuationSnapshot())
+    && source.identity === current.identity && (continuation?.context || source.context) === current.context
     && source.boardId === current.boardId && source.associationBoardId === source.boardId
     && current.associationBoardId === source.boardId && source.associationGeneration === current.associationGeneration
-    && JSON.stringify(source.expectedScope) === JSON.stringify(current.expectedScope)
+    && JSON.stringify(expectedScope) === JSON.stringify(current.expectedScope)
     && typeof source.expectedScope.updated_at === 'string' && !!source.expectedScope.updated_at
     && ['brand_id', 'workspace_id'].every(key => source.expectedScope[key] === null || typeof source.expectedScope[key] === 'string')
     && source.workspaceId === current.workspaceId && source.catalogGeneration === current.catalogGeneration
@@ -6955,8 +7002,8 @@ function aiBrainContentCopy(key) {
   return (copy[state.uiLanguage] || copy.en)[key];
 }
 function openAiBrainContentReview(turnId) {
-  const turn = state.aiBrain.messages.find(t => t.id === turnId), assets = aiBrainContentAssets(turn);
-  if (!assets.length || !canUseAiBrainProposal() || ['requesting', 'checking', 'applying', 'applied'].includes(turn.proposal?.status)) return;
+  const turn = state.aiBrain.messages.find(t => t.id === turnId), assets = aiBrainContentRemaining(turn);
+  if (!assets.length || state.isSaving || !canUseAiBrainProposal() || ['requesting', 'checking', 'applying'].includes(turn.proposal?.status)) return;
   if (!aiBrainContentSourceCurrent(turn)) {
     setTurnProposal(turnId, () => ({ status: "stale", errorCode: "proposal_context_changed" })); return renderAiBrain();
   }
@@ -6966,7 +7013,7 @@ function openAiBrainContentReview(turnId) {
   el.aiBrainSummary.querySelector(`[data-ai-brain-cancel='${turnId}']`)?.focus({ preventScroll: true });
 }
 function aiBrainContentSelectionCurrent(turn, selection) {
-  return !!selection && aiBrainContentAssets(turn).some(a => a.start === selection.start && a.end === selection.end && a.text === selection.text);
+  return !!selection && !aiBrainContentCompleted(turn, selection) && aiBrainContentAssets(turn).some(a => a.start === selection.start && a.end === selection.end && a.text === selection.text);
 }
 // Presentation uses shortened text only; source binding always retains the exact span.
 function aiBrainContentPlainPreview(text) {
@@ -7005,8 +7052,8 @@ function renderAiBrainContentSource(preview, turn, proposal) {
     append('legend', aiBrainContentCopy('choose'), group);
     assets.forEach((asset, index) => {
       const card = document.createElement('label'); card.className = 'ai-brain-content-card';
-      const input = document.createElement('input'); input.type = 'radio'; input.name = `content-asset-${turn.id}`; input.value = String(index); input.checked = proposal.selection?.start === asset.start;
-      const title = document.createElement('strong'); title.dataset.userContent = 'true'; title.textContent = aiBrainContentAssetTitle(asset);
+      const input = document.createElement('input'); input.type = 'radio'; input.name = `content-asset-${turn.id}`; input.value = String(index); input.checked = proposal.selection?.start === asset.start; input.disabled = aiBrainContentCompleted(turn, asset);
+      const title = document.createElement('strong'); title.dataset.userContent = 'true'; title.textContent = aiBrainContentAssetTitle(asset) + (aiBrainContentCompleted(turn, asset) ? (state.uiLanguage === 'de' ? ' · Erstellt' : ' · Created') : '');
       const short = document.createElement('span'); short.dataset.userContent = 'true'; short.textContent = aiBrainContentPlainPreview(asset.text.slice(asset.text.indexOf('\n') + 1)).slice(0, 140);
       card.append(input, title, short); group.appendChild(card);
       input.addEventListener('change', () => {
@@ -7055,7 +7102,7 @@ function renderAiBrainContentReview(advisor, turn, proposal) {
   const disclosure = document.createElement('p'); disclosure.dataset.aiBrainCost = 'true'; preview.appendChild(disclosure); disclosureSocialCost(preview, proposal.destination);
   const actions = document.createElement('div'); actions.className = 'ai-brain-proposal-actions';
   const cancel = document.createElement('button'); cancel.type = 'button'; cancel.dataset.aiBrainCancel = turn.id; cancel.textContent = aiBrainContentCopy('back');
-  const prepare = document.createElement('button'); prepare.type = 'button'; prepare.dataset.aiBrainPrepareConfirm = turn.id; prepare.textContent = proposal.destination === 'Social Media Posting' ? (state.uiLanguage === 'de' ? 'Social Media Posting vorbereiten' : 'Prepare Social Media Posting') : aiBrainProposalText('prepare'); prepare.disabled = !proposal.selection;
+  const prepare = document.createElement('button'); prepare.type = 'button'; prepare.dataset.aiBrainPrepareConfirm = turn.id; prepare.textContent = proposal.destination === 'Social Media Posting' ? (state.uiLanguage === 'de' ? 'Social Media Posting vorbereiten' : 'Prepare Social Media Posting') : aiBrainProposalText('prepare'); prepare.disabled = state.isSaving || !proposal.selection;
   prepare.addEventListener('click', () => requestAiBrainNodeProposal(turn.id));
   preview.addEventListener('keydown', e => { if (e.key === 'Escape') { e.preventDefault(); cancelAiBrainNodeProposal(turn.id); } });
   actions.append(cancel, prepare); preview.appendChild(actions); mountAiBrainContentDialog(advisor, turn, preview);
@@ -7072,11 +7119,11 @@ function cancelAiBrainNodeProposal(turnId) {
 }
 async function requestAiBrainNodeProposal(turnId) {
   const turn = state.aiBrain.messages.find((item) => item.id === turnId && item.status === "success" && item.answer && item.referenceResolution !== "clarification");
-  if (!turn || !aiBrainHasReusableContent(turn) || !canUseAiBrainProposal() || turn.proposal?.status === "requesting" || turn.proposal?.status === "applying" || turn.proposal?.status === "checking" || turn.proposal?.status === "applied") return renderAiBrain();
+  if (!turn || state.isSaving || !aiBrainContentRemaining(turn).length || !canUseAiBrainProposal() || turn.proposal?.status === "requesting" || turn.proposal?.status === "applying" || turn.proposal?.status === "checking") return renderAiBrain();
   if (!aiBrainContentSourceCurrent(turn)) {
     setTurnProposal(turnId, () => ({ status: "stale", errorCode: "proposal_context_changed" })); return renderAiBrain();
   }
-  const assets = aiBrainContentAssets(turn);
+  const assets = aiBrainContentRemaining(turn);
   const selection = turn.proposal?.selection || (assets.length === 1 ? assets[0] : null);
   if (!aiBrainContentSelectionCurrent(turn, selection)) return openAiBrainContentReview(turnId);
   const source = turn.contentProposalSource;
@@ -7087,16 +7134,18 @@ async function requestAiBrainNodeProposal(turnId) {
   const controller = new AbortController(); setTurnProposal(turnId, () => ({ status: "requesting", uiLanguage, contentLanguage, boardId, accountIdentity, contextIdentity, lifecycle, source, selection, destination, controller })); renderAiBrain();
   el.aiBrainSummary.querySelector(`[data-ai-brain-cancel='${turnId}']`)?.focus({ preventScroll: true });
   try {
-    const response = await fetch("/api/ai-brain/propose-node", { method: "POST", headers: { "Content-Type": "application/json", "X-AI-Brain-Generation": String(state.aiBrain.requestId) }, signal: controller.signal, body: JSON.stringify({ action, board_id: boardId, source_turn_id: turn.id, source_answer: selection.text, expected_scope: source.expectedScope, selected_node_id: state.selectedPrimary || null, canvas_context: aiBrainCanvasProjection(), response_language: uiLanguage, content_language: contentLanguage }) });
+    const response = await fetch("/api/ai-brain/propose-node", { method: "POST", headers: { "Content-Type": "application/json", "X-AI-Brain-Generation": String(state.aiBrain.requestId) }, signal: controller.signal, body: JSON.stringify({ action, board_id: boardId, source_turn_id: turn.id, source_answer: selection.text, expected_scope: aiBrainContentExpectedScope(turn), ...(turn.contentAuthorizationRevision ? { continuation_revision: turn.contentAuthorizationRevision } : {}), selected_node_id: state.selectedPrimary || null, canvas_context: aiBrainCanvasProjection(), response_language: uiLanguage, content_language: contentLanguage }) });
     const contentType = response.headers?.get?.("content-type") || ""; const isJson = /application\/json/i.test(contentType); const data = isJson ? await response.json().catch(() => null) : null; const current = state.aiBrain.messages.find((item) => item.id === turnId)?.proposal;
     if (current?.controller !== controller) return;
     if (!aiBrainContentSourceCurrent(turn, source)) return setTurnProposal(turnId, () => ({ status: "stale", errorCode: "proposal_context_changed", uiLanguage })), renderAiBrain();
     if (!canUseAiBrainProposal() || state.currentBoardId !== boardId || state.user.email !== accountIdentity || state.boardLoadGeneration !== lifecycle) return setTurnProposal(turnId, () => ({ status: "stale", errorCode: "board", uiLanguage })), renderAiBrain();
     if (aiBrainRequestContextIdentity() !== contextIdentity) return setTurnProposal(turnId, () => ({ status: "stale", errorCode: "canvas", uiLanguage })), renderAiBrain();
-    if (!response.ok) { if (response.status === 409) state.aiBrain.messages.find(t => t.id === turnId).contentProposalInvalid = true; const failure = new Error("proposal failed"); failure.code = AI_BRAIN_PROPOSAL_ERROR_CODES.has(data?.code) ? data.code : ([404, 405].includes(response.status) || !isJson ? "proposal_route_unavailable" : "proposal_generic_failed"); throw failure; }
+    if (!response.ok) { if (response.status === 409 || ['proposal_unauthorized', 'proposal_forbidden'].includes(data?.code)) state.aiBrain.messages.find(t => t.id === turnId).contentProposalInvalid = true; const failure = new Error("proposal failed"); failure.code = AI_BRAIN_PROPOSAL_ERROR_CODES.has(data?.code) ? data.code : ([404, 405].includes(response.status) || !isJson ? "proposal_route_unavailable" : "proposal_generic_failed"); throw failure; }
     if (!data || !/^[a-f0-9]{64}$/.test(data.scope_revision) || data.action !== action || data.context?.board_id !== boardId || data.context?.response_language !== uiLanguage || data.context?.content_language !== contentLanguage) { const failure = new Error("invalid response"); failure.code = "proposal_response_invalid"; throw failure; }
+    if (turn.contentAuthorizationRevision && data.continuation_revision !== turn.contentAuthorizationRevision) { turn.contentProposalInvalid = true; throw Object.assign(new Error('scope changed'), { code: 'proposal_context_changed' }); }
+    if (/^[a-f0-9]{64}$/.test(data.continuation_revision || '')) state.aiBrain.messages.find(item => item.id === turnId).contentAuthorizationRevision = data.continuation_revision;
     const proposal = validateAiBrainNodeProposal(data.node_proposal, turn.id); if (!proposal || proposal.node_type !== destination || state.aiBrain.appliedProposalIds.has(proposal.proposal_id)) { const failure = new Error("invalid proposal"); failure.code = "proposal_response_invalid"; throw failure; }
-    setTurnProposal(turnId, () => ({ status: "ready", data: proposal, uiLanguage, contentLanguage, boardId, accountIdentity, contextIdentity, lifecycle, source, selection, destination, scopeRevision: data.scope_revision })); renderAiBrain();
+    setTurnProposal(turnId, () => ({ status: "ready", data: proposal, uiLanguage, contentLanguage, boardId, accountIdentity, contextIdentity, lifecycle, source, selection, destination, scopeRevision: data.scope_revision, preparedScope: { ...aiBrainContentExpectedScope(turn) } })); renderAiBrain();
     el.aiBrainSummary.querySelector(`[data-ai-brain-cancel='${turnId}']`)?.focus({ preventScroll: true });
   } catch (error) {
     if (error?.name === "AbortError") return;
@@ -7217,10 +7266,10 @@ function renderAiBrainTranscript(transcript) {
       const suggest = document.createElement('button'); suggest.type = 'button'; suggest.className = 'ai-brain-proposal-prepare';
       suggest.dataset.aiBrandProposal = turn.id; suggest.textContent = aiBrainBrandCopy('action'); responseActions.appendChild(suggest);
     }
-    const proposal = turn.proposal; const eligible = !turn.contentProposalInvalid && aiBrainHasReusableContent(turn) && canUseAiBrainProposal() && proposal?.status !== "applied";
-    if (eligible && (!proposal || ["cancelled", "failed", "stale"].includes(proposal.status))) {
+    const proposal = turn.proposal; const eligible = !turn.contentProposalInvalid && aiBrainContentRemaining(turn).length > 0 && canUseAiBrainProposal();
+    if (eligible && (!proposal || ["cancelled", "failed", "stale", "applied"].includes(proposal.status))) {
       const prepare = document.createElement("button"); prepare.type = "button"; prepare.className = "ai-brain-proposal-prepare"; prepare.dataset.aiBrainPrepare = turn.id;
-      prepare.textContent = aiBrainContentCopy('add');
+      prepare.textContent = aiBrainContentCopy('add'); prepare.disabled = state.isSaving;
       if (campaignEligible && brandEligible) {
         const more = document.createElement('details'), summary = document.createElement('summary'); summary.textContent = aiBrainContentCopy('more'); more.append(summary, prepare); responseActions.appendChild(more);
       } else responseActions.appendChild(prepare);
@@ -7257,10 +7306,16 @@ function renderAiBrainTranscript(transcript) {
       preview.addEventListener('keydown', e => { if (e.key === 'Escape') { e.preventDefault(); cancelAiBrainNodeProposal(turn.id); } });
       const actions = document.createElement("div"); actions.className = "ai-brain-proposal-actions";
       const cancel = document.createElement("button"); cancel.type = "button"; cancel.dataset.aiBrainCancel = turn.id; cancel.textContent = aiBrainProposalText("cancel");
-      const create = document.createElement("button"); create.type = "button"; create.dataset.aiBrainCreate = turn.id; create.textContent = aiBrainProposalText("create"); create.disabled = proposal.status === "applying" || proposal.status === "checking" || !validateAiBrainNodeProposal(proposal.data, turn.id, true);
+      const create = document.createElement("button"); create.type = "button"; create.dataset.aiBrainCreate = turn.id; create.textContent = aiBrainProposalText("create"); create.disabled = proposal.status === "applying" || state.isSaving || proposal.status === "checking" || !validateAiBrainNodeProposal(proposal.data, turn.id, true);
       actions.append(cancel, create);
       if (proposal.status === 'checking') { const status = document.createElement('p'); status.setAttribute('role', 'status'); status.textContent = aiBrainContentCopy('checking'); preview.appendChild(status); }
       preview.appendChild(actions); mountAiBrainContentDialog(advisor, turn, preview);
+    }
+    if (turn.contentCompleted?.length) {
+      const progress = document.createElement('p'); progress.className = 'ai-brain-proposal-status'; progress.dataset.aiBrainProgress = turn.id; progress.setAttribute('role', 'status');
+      progress.textContent = turn.contentCompleted.map(item => `${aiBrainContentAssetTitle(item)} → ${item.type} · ${state.uiLanguage === 'de' ? (item.saved ? 'Gespeichert' : 'Lokal erstellt, noch nicht gespeichert') : (item.saved ? 'Saved' : 'Created locally, not saved yet')}`).join(' · ')
+        + ` · ${aiBrainContentRemaining(turn).length} ${turn.contentProposalInvalid ? (state.uiLanguage === 'de' ? 'verbleibend · Quellkontext geändert' : 'remaining · Source context changed') : (state.uiLanguage === 'de' ? 'verfügbar' : 'available')}`;
+      advisor.appendChild(progress);
     }
     if (proposal?.status === "applied") { const status = document.createElement("div"); status.className = "ai-brain-proposal-status is-success"; status.setAttribute("role", "status"); status.textContent = aiBrainProposalText("created", proposal.uiLanguage); advisor.appendChild(status); }
     transcript.appendChild(advisor);
@@ -7476,7 +7531,7 @@ function completeAiBrainNodeCreation(nodeId, languageCode) {
 
 async function applyAiBrainNodeProposal(turnId) {
   const turn = state.aiBrain.messages.find((item) => item.id === turnId); const proposal = turn?.proposal;
-  if (!turn || turn.status !== "success" || proposal?.status !== "ready") return renderAiBrain();
+  if (!turn || state.isSaving || turn.status !== "success" || proposal?.status !== "ready") return renderAiBrain();
   if (!aiBrainContentSourceCurrent(turn, proposal.source)) { setTurnProposal(turnId, () => ({ status: "stale", errorCode: "proposal_context_changed" })); return renderAiBrain(); }
   if (!canUseAiBrainProposal()) { setTurnProposal(turnId, () => ({ ...proposal, status: "stale", errorCode: "permission" })); return renderAiBrain(); }
   if (proposal.boardId !== state.currentBoardId || proposal.accountIdentity !== state.user?.email || proposal.lifecycle !== state.boardLoadGeneration) { setTurnProposal(turnId, () => ({ ...proposal, status: "stale", errorCode: "board" })); return renderAiBrain(); }
@@ -7487,32 +7542,42 @@ async function applyAiBrainNodeProposal(turnId) {
   const controller = new AbortController(); proposal.controller = controller; proposal.status = 'checking'; renderAiBrain();
   el.aiBrainSummary.querySelector(`[data-ai-brain-cancel='${turnId}']`)?.focus({ preventScroll: true });
   try {
+    const expectedScopeAtCheck = JSON.stringify(aiBrainContentExpectedScope(turn));
     const response = await fetch('/api/ai-brain/content-scope', { method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: controller.signal,
-      body: JSON.stringify({ board_id: proposal.boardId, expected_scope: proposal.source.expectedScope, scope_revision: proposal.scopeRevision }) });
+      body: JSON.stringify({ board_id: proposal.boardId, expected_scope: aiBrainContentExpectedScope(turn), scope_revision: proposal.scopeRevision, ...(proposal.preparedScope?.updated_at !== aiBrainContentExpectedScope(turn).updated_at && turn.contentContinuation ? { prepared_updated_at: proposal.preparedScope.updated_at, continuation_revision: turn.contentAuthorizationRevision } : {}) }) });
     const data = /application\/json/i.test(response.headers?.get?.('content-type') || '') ? await response.json() : null;
-    if (!response.ok || data?.scope_revision !== proposal.scopeRevision) throw new Error('stale');
+    if (!response.ok || !/^[a-f0-9]{64}$/.test(data?.scope_revision || '')
+      || (proposal.preparedScope?.updated_at === aiBrainContentExpectedScope(turn).updated_at && data.scope_revision !== proposal.scopeRevision)) throw new Error('stale');
     if (state.aiBrain.messages.find(t => t.id === turnId)?.proposal !== proposal || proposal.status !== 'checking') return;
+    if (expectedScopeAtCheck !== JSON.stringify(aiBrainContentExpectedScope(turn)) && aiBrainContentSourceCurrent(turn, proposal.source)) { proposal.status = 'ready'; proposal.controller = null; renderAiBrain(); return; }
     if (!aiBrainContentSourceCurrent(turn, proposal.source) || !aiBrainContentSelectionCurrent(turn, proposal.selection)
       || state.activeView !== 'ai_brain' || !canUseAiBrainProposal()
       || JSON.stringify(validateAiBrainNodeProposal(proposal.data, turn.id, true)) !== JSON.stringify(validated)) throw new Error('stale');
+    // A pending own save is not a source change. Keep the exact edited preview
+    // and require another explicit Create after acknowledgement/failure.
+    if (state.isSaving) { proposal.status = 'ready'; proposal.controller = null; renderAiBrain(); return; }
   } catch {
     if (state.aiBrain.messages.find(t => t.id === turnId)?.proposal !== proposal) return;
     turn.contentProposalInvalid = true;
     setTurnProposal(turnId, () => ({ status: "stale", errorCode: "proposal_context_changed" })); return renderAiBrain();
   }
   proposal.status = "applying"; state.aiBrain.appliedProposalIds.add(validated.proposal_id); renderAiBrain();
+  const before = { account: state.user, scope: captureAiBrainContentSource(), nodes: JSON.stringify(state.nodes), edges: JSON.stringify(state.edges), ids: new Set(state.nodes.map(n => n.id)) };
   const historyLength = state.history.length; const nodeIdsBefore = new Set(state.nodes.map((item) => item.id)); let node = null;
   try {
     pushHistorySnapshot();
     node = createNode({ type: validated.node_type, position: aiBrainNodePlacement(), initial: validated.node_type === 'Content' ? { title: validated.title, content: validated.body } : { title: validated.title, content: validated.caption, social: validated } });
     if (!node) throw new Error("creation_rejected");
     markUnsaved();
+    recordAiBrainContentCreation(turn, proposal, node, before);
     const createdNodeId = node.id; const proposalLanguage = proposal.uiLanguage;
     setTurnProposal(turnId, () => ({ ...proposal, status: "applied", data: null, controller: null, createdNodeId }));
     completeAiBrainNodeCreation(createdNodeId, proposalLanguage);
   } catch (_error) {
     if (node || state.nodes.some((item) => !nodeIdsBefore.has(item.id))) {
       const createdNode = node || state.nodes.find((item) => !nodeIdsBefore.has(item.id));
+      if (createdNode) recordAiBrainContentCreation(turn, proposal, createdNode, before);
+      turn.contentProposalInvalid = true; // Unknown partial outcome: consume, never silently rebase.
       setTurnProposal(turnId, () => ({ ...proposal, status: "applied", data: null, errorCode: "createFailed", createdNodeId: createdNode?.id || null }));
       if (createdNode) completeAiBrainNodeCreation(createdNode.id, proposal.uiLanguage);
     } else {
@@ -10556,6 +10621,7 @@ async function saveBoardToServer(trigger = "manual") {
   state.latestSaveRequestId += 1;
   const saveRequestId = state.latestSaveRequestId;
   try {
+    const brainContinuations = state.aiBrain.messages.filter(turn => turn.contentContinuation && aiBrainContentSourceCurrent(turn)).map(turn => ({ turn, continuation: turn.contentContinuation }));
     const canvasStateForSave = serializeState();
     const saveTimestamp = new Date().toISOString();
     canvasStateForSave.metadata = {
@@ -10597,6 +10663,7 @@ async function saveBoardToServer(trigger = "manual") {
     if (isUpdate && state.lastKnownUpdatedAt) payload.lastKnownUpdatedAt = state.lastKnownUpdatedAt;
     state.isSaving = true;
     setSaveStatus('Saving...');
+    if (state.activeView === 'ai_brain') renderAiBrain();
 
     const response = await fetch(endpoint, {
       method,
@@ -10611,6 +10678,7 @@ async function saveBoardToServer(trigger = "manual") {
       return;
     }
     if (response.status === 409 && isUpdate) {
+      brainContinuations.forEach(({ turn }) => { turn.contentProposalInvalid = true; });
       console.warn('[Funklix Save Debug] Save conflict 409', {
         trigger,
         saveRequestId,
@@ -10645,6 +10713,7 @@ async function saveBoardToServer(trigger = "manual") {
       console.warn('[Funklix Save Guard] Ignored stale save completion');
       return;
     }
+    const brainSaveCurrent = brainContinuations.filter(({ turn }) => aiBrainContentSourceCurrent(turn));
     console.log('Saved board response id:', data?.id);
     const returnedId = data?.id || currentBoardId;
     setPassiveBoardOwnershipDiagnostics(data, isUpdate ? "save-board-update-response" : "save-board-create-response");
@@ -10668,6 +10737,7 @@ async function saveBoardToServer(trigger = "manual") {
     setSaveStatus(state.isDirty ? 'Unsaved changes' : 'Saved');
     setSharePanelState(returnedId, new Date(), data?.owner_email || state.currentBoardOwnerEmail || null, data?.owner_name || state.currentBoardOwnerName || null, data?.owner_avatar || state.currentBoardOwnerAvatar || null);
     applyBoardAccessFromServer(data?.access, "saveBoardToServer");
+    confirmAiBrainContentSave(brainSaveCurrent, canvasStateForSave, payload.brand_core_snapshot, payload.lastKnownUpdatedAt, data.updated_at);
     refreshDashboardIfVisible();
 
     if (!isUpdate && returnedId) {
@@ -10686,6 +10756,7 @@ async function saveBoardToServer(trigger = "manual") {
     return false;
   } finally {
     if (saveRequestId === state.latestSaveRequestId) state.isSaving = false;
+    if (state.activeView === 'ai_brain') renderAiBrain();
   }
 }
 
@@ -19426,6 +19497,11 @@ function closeInspector({ restoreFocus = true } = {}) {
 }
 
 function setActiveView(view) {
+  // The native Board exit resets selection. Admit that exact navigation only
+  // for an otherwise-current own insertion; arbitrary deselection stays stale.
+  const brainReturn = state.activeView === 'board' && view === 'ai_brain'
+    ? state.aiBrain.messages.filter(turn => turn.contentContinuation
+      && turn.contentCompleted?.at(-1)?.nodeId === state.selectedPrimary && aiBrainContentSourceCurrent(turn)) : [];
   if (state.activeView === 'ai_brain' && view !== 'ai_brain') {
     el.aiBrainSummary?.querySelectorAll('dialog[open]').forEach(dialog => dialog.close());
     state.aiBrain.messages.forEach(turn => {
@@ -19438,6 +19514,11 @@ function setActiveView(view) {
   if (view !== 'brand-profile' && el.brandWorkspaceDetail?.open && !closeCanonicalBrandDetail({ restoreFocus: false, navigate: false, resume: () => setActiveView(view) })) return;
   globalThis.FunklixWorkspaceSidebarController?.close(false);
   if (state.activeView !== view && (state.activeView === "board" || view === "board") && typeof resetAdaptiveCanvasView === "function") resetAdaptiveCanvasView();
+  for (const turn of brainReturn) {
+    if (turn.contentContinuation.snapshot === aiBrainContinuationSnapshot() && state.selectedPrimary === null && state.selectedIds.size === 0) {
+      turn.contentContinuation.context = aiBrainContentLocalContext();
+    } else turn.contentProposalInvalid = true;
+  }
   state.activeView = view;
   renderBrandBoardContextNotice();
   if (typeof homeFoundationController !== 'undefined') homeFoundationController?.sync();

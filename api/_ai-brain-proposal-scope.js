@@ -91,4 +91,12 @@ async function revalidate({ data, user, db = pool }) {
   if (current.fingerprint !== data.fingerprint) fail(409, 'proposal_context_changed');
 }
 function revision(data) { return createHash('sha256').update(data.fingerprint).digest('hex'); }
-module.exports = { revision, capture, revalidate, assertActor, assertExpected, validExpected, publicScope, ProposalScopeError };
+// Continuation compares the same independently authorized scope, excluding only
+// the Board timestamp acknowledged by the existing save owner. This is a
+// freshness checksum, never a credential or a replacement for capture/revalidate.
+function continuationRevision(data) {
+  const value = JSON.parse(data.fingerprint);
+  delete value.board.updated_at;
+  return createHash('sha256').update(JSON.stringify(value)).digest('hex');
+}
+module.exports = { revision, continuationRevision, capture, revalidate, assertActor, assertExpected, validExpected, publicScope, ProposalScopeError };
