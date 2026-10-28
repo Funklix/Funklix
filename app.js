@@ -7314,7 +7314,7 @@ function renderAiBrainTranscript(transcript) {
     if (turn.contentCompleted?.length) {
       const progress = document.createElement('p'); progress.className = 'ai-brain-proposal-status'; progress.dataset.aiBrainProgress = turn.id; progress.setAttribute('role', 'status');
       progress.textContent = turn.contentCompleted.map(item => `${aiBrainContentAssetTitle(item)} → ${item.type} · ${state.uiLanguage === 'de' ? (item.saved ? 'Gespeichert' : 'Lokal erstellt, noch nicht gespeichert') : (item.saved ? 'Saved' : 'Created locally, not saved yet')}`).join(' · ')
-        + ` · ${aiBrainContentRemaining(turn).length} ${state.uiLanguage === 'de' ? 'verfügbar' : 'available'}`;
+        + ` · ${aiBrainContentRemaining(turn).length} ${turn.contentProposalInvalid ? (state.uiLanguage === 'de' ? 'verbleibend · Quellkontext geändert' : 'remaining · Source context changed') : (state.uiLanguage === 'de' ? 'verfügbar' : 'available')}`;
       advisor.appendChild(progress);
     }
     if (proposal?.status === "applied") { const status = document.createElement("div"); status.className = "ai-brain-proposal-status is-success"; status.setAttribute("role", "status"); status.textContent = aiBrainProposalText("created", proposal.uiLanguage); advisor.appendChild(status); }

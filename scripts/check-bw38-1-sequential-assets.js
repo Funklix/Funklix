@@ -177,6 +177,7 @@ async function main(){
     await p.evaluate(()=>openAiBrainContentReview(state.aiBrain.messages.at(-1).id));
     assert.equal(conversions,calls);assert.equal(await p.evaluate(()=>state.nodes.length),n);
     assert(await p.evaluate(()=>!state.aiBrain.messages.length || state.aiBrain.messages.at(-1).contentProposalInvalid));
+    if(await p.evaluate(()=>state.aiBrain.messages.length))assert(!(await p.locator('[data-ai-brain-progress]').textContent()).includes(' available'));
   }
   console.log('PASS same-email account replacement, source/Board/load/Workspace/catalog/association/revision and unrelated local edit rejection');
   // Real signed server scope checks reject changes even across an acknowledged own save.
