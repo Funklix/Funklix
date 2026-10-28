@@ -11,7 +11,7 @@ const { responseLanguageMismatch } = require('./advice');
 
 const BODY_KEYS = ['action', 'board_id', 'canvas_context', 'content_language', 'expected_scope', 'response_language', 'selected_node_id', 'source_answer', 'source_turn_id'];
 function plain(value) { return !!value && typeof value === 'object' && !Array.isArray(value) && [Object.prototype, null].includes(Object.getPrototypeOf(value)); }
-function exact(value) { return plain(value) && Object.keys(value).length === BODY_KEYS.length && BODY_KEYS.every((key) => Object.prototype.hasOwnProperty.call(value, key)); }
+function exact(value) { return plain(value) && Object.keys(value).length === BODY_KEYS.length + (Object.hasOwn(value, 'continuation_revision') ? 1 : 0) && (!Object.hasOwn(value, 'continuation_revision') || (typeof value.continuation_revision === 'string' && /^[a-f0-9]{64}$/.test(value.continuation_revision))) && BODY_KEYS.every((key) => Object.prototype.hasOwnProperty.call(value, key)); }
 function text(value, max) { if (typeof value !== 'string') return ''; const result = value.trim(); return result.length <= max ? result : ''; }
 function outputText(data) {
   if (!plain(data)) return '';
@@ -76,6 +76,7 @@ module.exports = async function handler(req, res) {
   try {
     const data = await scope.capture({ boardId, user }); const board = data.board;
     scope.assertExpected(data, req.body.expected_scope);
+    if (req.body.continuation_revision && scope.continuationRevision(data) !== req.body.continuation_revision) throw new scope.ProposalScopeError(409, 'proposal_context_changed');
     if (req.body.action === 'propose_social_node') {
       await scope.revalidate({ data, user: getSessionUser(req) });
       scope.assertActor(data, getSessionUser(req));
@@ -85,7 +86,7 @@ module.exports = async function handler(req, res) {
       scope.assertActor(data, getSessionUser(req));
       return res.status(200).json({ action: 'propose_social_node', node_proposal: {
         proposal_id: crypto.randomBytes(24).toString('base64url'), source_turn_id: sourceTurnId, ...extracted
-      }, scope_revision: scope.revision(data), context: { board_id: board.id, response_language: responseLanguage, content_language: contentLanguage } });
+      }, scope_revision: scope.revision(data), continuation_revision: scope.continuationRevision(data), context: { board_id: board.id, response_language: responseLanguage, content_language: contentLanguage } });
     }
     if (!process.env.OPENAI_API_KEY) return failure(res, 503, 'proposal_provider_failed', 'AI Brain is temporarily unavailable');
     await scope.revalidate({ data, user: getSessionUser(req) });
@@ -102,7 +103,7 @@ module.exports = async function handler(req, res) {
     scope.assertActor(data, getSessionUser(req));
     const proposal = createProposal(provider, sourceTurnId); if (!proposal.ok) return failure(res, 502, 'proposal_response_invalid', 'Invalid provider proposal', { lifecycleStage: 'proposal_validation', authenticated: true, boardAuthorized: true, providerCalled: true, providerReturned: true, jsonParsed: true, validationClassification: proposal.classification });
     if (responseLanguageMismatch(proposal.value.rationale || '', responseLanguage) || responseLanguageMismatch(`${proposal.value.title} ${proposal.value.body}`, contentLanguage)) return failure(res, 502, 'proposal_language_mismatch', 'Proposal language mismatch', { lifecycleStage: 'language_validation', authenticated: true, boardAuthorized: true, providerCalled: true, providerReturned: true, jsonParsed: true, proposalValidated: true, validationClassification: 'response_language_mismatch' });
-    return res.status(200).json({ action: 'propose_content_node', node_proposal: proposal.value, scope_revision: scope.revision(data), context: { board_id: board.id, response_language: responseLanguage, content_language: contentLanguage } });
+    return res.status(200).json({ action: 'propose_content_node', node_proposal: proposal.value, scope_revision: scope.revision(data), continuation_revision: scope.continuationRevision(data), context: { board_id: board.id, response_language: responseLanguage, content_language: contentLanguage } });
   } catch (error) {
     if (error instanceof scope.ProposalScopeError) return failure(res, error.status, error.code, 'Proposal context is unavailable or changed');
     console.error('[AI_BRAIN_PROPOSAL_FAILURE]', { action: 'propose_content_node', boardIdentity: boardId ? 'present' : 'missing', httpStatus: error?.name === 'AbortError' ? 504 : 500 });
