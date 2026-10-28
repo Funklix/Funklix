@@ -6970,11 +6970,12 @@ function renderAiBrainContentSource(preview, turn, proposal) {
   const append = (tag, text, parent = preview) => { const n = document.createElement(tag); n.textContent = text; parent.appendChild(n); return n; };
   append('p', aiBrainContentCopy('suggestion'));
   const board = append('p', `${aiBrainContentCopy('board')}: `), name = document.createElement('span'); name.dataset.userContent = 'true'; name.textContent = proposal.source.boardName || proposal.source.boardId; board.appendChild(name);
-  append('p', `${aiBrainProposalText('type')}: Content`);
+  board.appendChild(document.createTextNode(' · Content'));
   const summary = document.createElement('p'); summary.className = 'ai-brain-content-summary'; summary.dataset.userContent = 'true'; summary.setAttribute('role', 'status');
   const details = document.createElement('details');
   append('summary', aiBrainContentCopy('source'), details);
-  const excerpt = append('pre', proposal.selection?.text || '', details); excerpt.dataset.userContent = 'true'; excerpt.className = 'ai-brain-proposal-copy'; excerpt.dataset.aiBrainExcerpt = turn.id;
+  const copy = append('pre', proposal.selection?.text || '', details); copy.dataset.userContent = "true";
+  const excerpt = copy; excerpt.className = 'ai-brain-proposal-copy'; excerpt.dataset.aiBrainExcerpt = turn.id;
   const describe = () => { summary.textContent = proposal.selection ? proposal.selection.text.replace(/[#*]/g, '').trim().slice(0, 280) : aiBrainContentCopy('placeholder'); excerpt.textContent = proposal.selection?.text || ''; };
   if (proposal.status === 'review') {
     const assets = aiBrainContentAssets(turn);

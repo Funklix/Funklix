@@ -45,11 +45,13 @@ async function main(){
    await p.locator('[data-ai-brain-prepare-confirm]').click();await p.locator('[data-ai-brain-create]').waitFor();
    assert.equal(proposalCalls,paid+1);assert.equal(requests.at(-1).source_answer,sources[index]);assert.deepEqual(await snapshot(),original);
    assert.equal(await p.locator('[data-ai-brain-edit=title]').inputValue(),index===0?'Instagram Post':'X Post');
-   assert.equal(await p.locator('[data-ai-brain-edit=body]').inputValue(),sources[index].trim());
+   // Existing proposal validation canonicalizes CRLF for editable Content only.
+   // The exact excerpt and outbound source above must remain byte-for-byte.
+   assert.equal(await p.locator('[data-ai-brain-edit=body]').inputValue(),sources[index].replace(/\r\n?/g,'\n').trim());
    const count=await p.evaluate(()=>state.nodes.length),history=await p.evaluate(()=>state.history.length);
    await p.evaluate(()=>Promise.all([applyAiBrainNodeProposal(state.aiBrain.messages.at(-1).id),applyAiBrainNodeProposal(state.aiBrain.messages.at(-1).id)]));
    assert.equal(await p.evaluate(()=>state.nodes.length),count+1);assert.equal(await p.evaluate(()=>state.history.length),history+1);
-   assert.equal(await p.evaluate(()=>state.nodes.at(-1).type),'Content');assert.equal(await p.evaluate(()=>state.nodes.at(-1).content),sources[index].trim());
+   assert.equal(await p.evaluate(()=>state.nodes.at(-1).type),'Content');assert.equal(await p.evaluate(()=>state.nodes.at(-1).content),sources[index].replace(/\r\n?/g,'\n').trim());
    assert.equal(proposalCalls,paid+1);assert.equal(scopeCalls,reads+1);
    await p.evaluate(()=>{clearAutosaveTimer();el.undoButton.click();clearAutosaveTimer();});assert.equal(await p.evaluate(()=>state.nodes.length),count);
   }

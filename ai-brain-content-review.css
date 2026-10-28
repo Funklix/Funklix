@@ -83,3 +83,5 @@
   .ai-brain-thread:has([data-ai-brain-prepare]) { display: grid; grid-template-rows: minmax(0, 1fr) auto; }
   .ai-brain-thread:has([data-ai-brain-prepare]) .ai-brain-jump-latest { position: static; transform: none; justify-self: center; margin-top: 4px; }
 }
+.ai-brain-content-scroll > p { margin-block: 8px; }
+.ai-brain-content-card span { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; line-height: 1.45; }
