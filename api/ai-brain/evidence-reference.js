@@ -20,6 +20,8 @@ module.exports = async function handler(req, res) {
     const data = await scope.capture({ boardId: body.board_id, user, includeCanvas: true });
     const valid = value => referenceRevision(value, body.node_id) === body.scope_revision
       && Array.isArray(value.board.canvas_json?.nodes)
+      && value.board.canvas_json.nodes.every(node => node && typeof node.id === 'string' && node.id.length > 0)
+      && new Set(value.board.canvas_json.nodes.map(node => node.id)).size === value.board.canvas_json.nodes.length
       && value.board.canvas_json.nodes.filter(node => node?.id === body.node_id).length === 1
       && value.board.canvas_json.nodes.some(node => node?.id === body.node_id && canonicalType(node.type) === 'Social Media Posting');
     if (!valid(data)) return fail(409);

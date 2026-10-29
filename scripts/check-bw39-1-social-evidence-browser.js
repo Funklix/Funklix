@@ -24,7 +24,7 @@ async function main() {
     await sql.pg.query('UPDATE board_editors SET board_id=$1,email=$2', [boardId, email]);
     await sql.pg.query('UPDATE boards SET id=$1,canvas_json=$2::jsonb,updated_at=$3', [boardId, JSON.stringify(f.r.db.boards[0].canvas_json), '2026-10-29T08:00:00.123456Z']);
     const resolver = sql.load('api/ai-brain/evidence-reference.js'), auth = sql.load('api/_auth-session.js');
-    let opens = 0, writes = 0, held = null, adviceHeld = null, denied = false;
+    let opens = 0, writes = 0, fixtureSaves = 0, saveMode = null, held = null, adviceHeld = null, denied = false;
     const requests = [];
     await p.route('**/api/ai-brain/advice', async route => {
       const body = route.request().postDataJSON(); requests.push(body);
@@ -46,6 +46,14 @@ async function main() {
     });
     await p.route('**/api/boards/*', async route => {
       if (route.request().method() === 'GET') return route.fallback();
+      if (saveMode) {
+        fixtureSaves++;
+        if (saveMode === 'conflict') return route.fulfill({ status: 409, json: { error: 'Fixture revision conflict' } });
+        const body = route.request().postDataJSON(), revision = new Date(Date.parse(REV) + fixtureSaves).toISOString();
+        f.r.db.boards[0].canvas_json = body.canvas_json; f.r.db.boards[0].updated_at = revision;
+        await sql.pg.query('UPDATE boards SET canvas_json=$1::jsonb,updated_at=$2', [JSON.stringify(body.canvas_json), revision]);
+        return route.fulfill({ json: { id: boardId, updated_at: revision } });
+      }
       writes++; return route.fulfill({ status: 500, json: { error: 'Opening must never write' } });
     });
     const boot = async () => {
@@ -152,6 +160,17 @@ async function main() {
     await p.evaluate(() => { state.user = { ...state.user }; }); releaseAdvice();
     await p.waitForFunction(() => state.aiBrain.status !== 'loading');
     assert.equal(await p.locator('.ai-brain-social-evidence').count(), 0, 'same-email account replacement suppresses pending evidence output');
+    for (const trigger of ['manual', 'autosave', 'conflict']) {
+      await boot(); await ask(); const checks = opens, calls = sql.calls.length;
+      saveMode = trigger;
+      const saving = p.evaluate(trigger => { state.isDirty = true; clearAutosaveTimer(); return saveBoardToServer(trigger === 'conflict' ? 'manual' : trigger); }, trigger);
+      if (trigger === 'conflict') { await p.locator('#board-conflict-cancel').click(); }
+      await saving; saveMode = null;
+      assert.equal(await p.locator('[data-ai-brain-evidence-open]').count(), 0, 'native save start invalidates evidence, including conflicts');
+      assert.equal(opens, checks); assert.equal(sql.calls.length, calls);
+      assert(await p.evaluate(() => state.aiBrain.messages.at(-1).socialEvidence.status === 'stale'));
+    }
+    assert.equal(fixtureSaves, 3, 'only explicit disposable fixture save tests write');
     console.log('PASS stale/revoked/deleted/account/Board/load/Workspace/association/source/save before/during awaits; modal navigation guard');
 
     for (const width of [320, 375, 1440]) for (const theme of ['light', 'dark']) for (const locale of ['en', 'de']) {

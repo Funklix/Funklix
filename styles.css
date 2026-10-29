@@ -8342,12 +8342,3 @@ body { min-width: 320px; }
 .pp-brand>.pp-logo{display:inline-flex;width:auto;height:auto;border-radius:0;background:transparent;color:inherit}.pp-brand>.pp-logo .pp-logo-fallback{display:inline;font-size:9pt}
 /* Reusable Brand logo editor and projections. */
 .brand-logo img,.brand-workspace-avatar img{object-fit:contain!important}.brand-logo-editor{display:grid;grid-template-columns:96px minmax(0,1fr);gap:16px;align-items:center;margin-bottom:16px;padding:16px;border:1px solid var(--fk-color-border);border-radius:12px}.brand-logo-preview{display:grid;place-items:center;width:96px;height:96px;overflow:hidden;border-radius:14px;background:var(--fk-color-surface-hover);font-weight:800}.brand-logo-actions{display:flex;flex-wrap:wrap;gap:8px}.brand-logo-actions :is(button,label){min-height:44px}.brand-logo-file{position:absolute;width:1px;height:1px;clip:rect(0 0 0 0)}@media(max-width:520px){.brand-logo-editor{grid-template-columns:1fr}.brand-logo-preview{width:80px;height:80px}}@media(forced-colors:active){.brand-logo-preview{border:1px solid CanvasText}}
-/* BW-39.1: compact source evidence within the existing transcript scroll owner. */
-.ai-brain-social-evidence{display:grid;gap:12px;min-width:0;max-width:100%;margin-block:12px;color:var(--fk-text)}
-.ai-brain-evidence-card{display:grid;gap:8px;min-width:0;padding:12px;border:1px solid var(--fk-border);border-radius:12px;background:var(--fk-surface-muted);overflow-wrap:anywhere}
-.ai-brain-evidence-card h5,.ai-brain-evidence-card p{margin:0}
-.ai-brain-evidence-card small,.ai-brain-social-evidence>small{display:block;color:var(--fk-text-muted);overflow-wrap:anywhere}
-.ai-brain-evidence-card blockquote{margin:6px 0;padding:8px 10px;border-inline-start:3px solid var(--fk-border);white-space:pre-wrap;overflow-wrap:anywhere}
-.ai-brain-social-evidence summary{min-height:44px;align-content:center;cursor:pointer;overflow-wrap:anywhere}
-.ai-brain-evidence-card button{min-height:44px;max-width:100%;white-space:normal;justify-self:start}
-.ai-brain-social-evidence :is(button,summary):focus-visible{outline:2px solid var(--fk-color-primary-action);outline-offset:3px}

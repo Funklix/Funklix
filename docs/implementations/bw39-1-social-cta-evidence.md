@@ -108,7 +108,8 @@ disclosure/focus, EN/DE, Light/Dark, 320/375/desktop and 200% zoom.
 The existing strategic-advisor test now expects the six actual focus options
 and explicitly checks the new entry; all five original modes keep their original
 assertions. Existing language capture remains exactly once per request.
-Both focused suites run as an additional Runtime Boot Safety step in the existing
+Evidence CSS lives in `ai-brain-social-evidence.css`, linked by `index.html`, preserving the pinned global stylesheet baseline and its unchanged regression assertion.
+Both focused suites run after the existing Chromium setup as an additional Runtime Boot Safety step in the existing
 PostgreSQL 17.6/18.4 jobs; no existing check is disabled, skipped or weakened.
 Final CI and regression execution results are recorded on the PR, rather than
 implied by workflow registration.

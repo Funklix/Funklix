@@ -28,7 +28,7 @@ function parse(data) {
     if (!keys(finding, ['title', 'explanation', 'evidence']) || !string(finding.title, 120) || !string(finding.explanation, 600)
       || !Array.isArray(finding.evidence) || !finding.evidence.length || finding.evidence.length > 2) return null;
     if (finding.evidence.some(item => !keys(item, ['nodeId', 'field', 'quote']) || !string(item.nodeId, 160)
-      || !FIELDS.includes(item.field) || !string(item.quote, 180))) return null;
+      || !string(item.field, 80) || !string(item.quote, 180))) return null;
   }
   return value;
 }
@@ -60,7 +60,7 @@ function resolve({ envelope, evidence, nodes, data }) {
     const sources = [];
     for (const item of candidate.evidence) {
       const source = indexed.fields[item.field];
-      if (item.nodeId !== id || !source || source.quote !== item.quote) break;
+      if (!FIELDS.includes(item.field) || item.nodeId !== id || !source || source.quote !== item.quote) break;
       const working = at(node, item.field), baseline = at(saved, item.field);
       // Validation trims ordinary copy; goal intentionally preserves whitespace.
       // Compare the FULL supplied value with the FULL saved value, not prefixes.

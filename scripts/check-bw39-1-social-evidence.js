@@ -61,6 +61,16 @@ async function main() {
       assert.equal(result.body.findings[0].evidence[0].excerpted, normalized.length > 180);
     }
     console.log('PASS field-specific working/saved split, normalization, full-value equality rather than prefixes, truncated copy and Unicode exact excerpts');
+    await reset(); const conflict = clone(nodes); conflict[1].social.cta = ''; conflict[1].social.preview = 'A creative afternoon'; conflict[1].social.caption = 'Register for the workshop using the form.';
+    const absent = candidate(nodes[1].id, 'social.preview', conflict[1].social.preview); absent.title = 'This post has no CTA';
+    f.answer = JSON.stringify({ answer: 'The caption includes a registration action; the preview alone is insufficient to judge the whole post.', findings: [absent] });
+    result = await request({ canvas_context: { nodes: conflict, edges: [] } }); assert.equal(result.body.findings.length, 0);
+    const supplied = JSON.parse(f.calls[0].input[1].content.split('\n').slice(1).join('\n'));
+    assert.equal(supplied.workingCanvas.nodes[1].social.caption, conflict[1].social.caption);
+    await reset();
+    const longCopy = clone(nodes); longCopy[1].social.cta = 'a'.repeat(180) + 'Later phrase';
+    f.answer = JSON.stringify({ answer: 'This excerpt is outside citable coverage.', findings: [candidate(nodes[1].id, 'social.cta', 'Later phrase')] });
+    result = await request({ canvas_context: { nodes: longCopy, edges: [] } }); assert.equal(result.body.findings.length, 0, 'no citation salvage outside exact indexed prefix');
 
     for (const mutate of [
       c => { c.evidence[0].nodeId = 'hidden'; }, c => { c.evidence[0].quote = 'forged'; },
@@ -123,6 +133,11 @@ async function main() {
       const noGoals = clone(nodes); noGoals.forEach(node => delete node.goal);
       result = await request({ canvas_context: { nodes: noGoals, edges: [] } });
       assert.equal(result.statusCode, 409); assert(!result.body.answer); assert.equal(f.calls.length, 1);
+      await reset(); await workspace(); result = await request(); finding = result.body.findings[0];
+      let captures = 0;
+      f.onQuery = async query => { if (/^BEGIN/.test(query) && ++captures === 2) { f.onQuery = null; await mutate(); } };
+      assert.notEqual((await open(finding.reference)).statusCode, 200, 'revocation/source changes between resolver captures fail closed');
+      assert.equal(f.calls.length, 1);
     }
     await reset(); result = await request(); finding = result.body.findings[0];
     assert.equal((await open(finding.reference, {}, 'funklix_session=forged.invalid')).statusCode, 401);
@@ -135,6 +150,9 @@ async function main() {
     await reset(); assert.equal((await request({ canvas_revision: null })).statusCode, 409); assert.equal(f.calls.length, 0);
     await reset(); f.answer = 'Legacy conversational advice'; result = await request({ advice_mode: 'general' });
     assert.equal(result.body.answer, f.answer); assert(!Object.hasOwn(result.body, 'findings'));
+    await reset();
+    Object.assign(f.env, { OPENAI_AI_BRAIN_MODEL: 'fictional-bounded-model', OPENAI_AI_BRAIN_CONTEXT_MODEL: 'fictional-bounded-model', OPENAI_AI_BRAIN_CONTEXT_TOKENS: '5121', OPENAI_AI_BRAIN_TOKEN_ENCODING: 'o200k_base' });
+    result = await request(); assert.equal(result.statusCode, 422); assert.equal(result.body.code, 'advice_context_too_large'); assert.equal(f.calls.length, 0, 'envelope instructions count against complete-message budget');
     console.log('PASS no-goal active identity/Workspace/ACL/association/raw microsecond/source revalidation, signed-session denial, hidden Board/canonical isolation, revoked/stale/deleted resolver, legacy text Advice');
   } finally { await f.pg.close(); }
 }
