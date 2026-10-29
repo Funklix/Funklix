@@ -74,5 +74,8 @@ Runtime Boot Safety already runs `check:bw38.1` in both PostgreSQL 17.6/18.4 job
 no workflow or check was removed. Actual final CI and review results belong to the
 PR delivery report, rather than being inferred from the test definition.
 
-Changed files: `app.js`, `scripts/check-bw38-1-sequential-assets.js`, this document.
+Changed files: `app.js`, `scripts/check-bw38-1-sequential-assets.js`,
+`scripts/check-bw28-3-1-insights-runtime-rendering.js`, this document. The older
+Insights VM fixture now initializes the real `aiBrain.messages` owner instead of
+the obsolete `turns` field; its immutability and rendering assertions are unchanged.
 No migrations, node schemas, dependencies, inference expansion, deployment or merge.

@@ -91,6 +91,7 @@ async function main(){
     assert.equal(await p.evaluate(()=>state.history.length),h+1);
     await beforeReturn();
     await p.evaluate(via=>{clearAutosaveTimer();if(via!=='ai_brain')setActiveView(via);},via);
+    if(await p.evaluate(()=>el.appShell.dataset.inspectorMode==='overlay'&&el.appShell.dataset.inspectorOpen==='true'))await p.locator('#inspector-close-btn').click();
     const brainButton=await p.evaluate(()=>el.aiBrainNavButton.id);
     await p.locator('#'+brainButton).click();
   };
