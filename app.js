@@ -7053,7 +7053,7 @@ function renderAiBrainContentSource(preview, turn, proposal) {
     assets.forEach((asset, index) => {
       const card = document.createElement('label'); card.className = 'ai-brain-content-card';
       const input = document.createElement('input'); input.type = 'radio'; input.name = `content-asset-${turn.id}`; input.value = String(index); input.checked = proposal.selection?.start === asset.start; input.disabled = aiBrainContentCompleted(turn, asset);
-      const title = document.createElement('strong'); title.dataset.userContent = 'true'; title.textContent = aiBrainContentAssetTitle(asset) + (aiBrainContentCompleted(turn, asset) ? (state.uiLanguage === 'de' ? ' · Erstellt' : ' · Created') : '');
+      const title = document.createElement('strong'); title.dataset.userContent = 'true'; title.textContent = aiBrainContentAssetTitle(asset) + (aiBrainContentCompleted(turn, asset) ? (state.uiLanguage === 'de' ? ' · Erstellt' : ' · Created') : (turn.contentCompleted?.length ? (state.uiLanguage === 'de' ? ' · Verfügbar' : ' · Available') : ''));
       const short = document.createElement('span'); short.dataset.userContent = 'true'; short.textContent = aiBrainContentPlainPreview(asset.text.slice(asset.text.indexOf('\n') + 1)).slice(0, 140);
       card.append(input, title, short); group.appendChild(card);
       input.addEventListener('change', () => {
@@ -7315,6 +7315,11 @@ function renderAiBrainTranscript(transcript) {
       const progress = document.createElement('p'); progress.className = 'ai-brain-proposal-status'; progress.dataset.aiBrainProgress = turn.id; progress.setAttribute('role', 'status');
       progress.textContent = turn.contentCompleted.map(item => `${aiBrainContentAssetTitle(item)} → ${item.type} · ${state.uiLanguage === 'de' ? (item.saved ? 'Gespeichert' : 'Lokal erstellt, noch nicht gespeichert') : (item.saved ? 'Saved' : 'Created locally, not saved yet')}`).join(' · ')
         + ` · ${aiBrainContentRemaining(turn).length} ${turn.contentProposalInvalid ? (state.uiLanguage === 'de' ? 'verbleibend · Quellkontext geändert' : 'remaining · Source context changed') : (state.uiLanguage === 'de' ? 'verfügbar' : 'available')}`;
+      if (state.isSaving && !turn.contentProposalInvalid && aiBrainContentRemaining(turn).length) {
+        progress.appendChild(document.createTextNode(state.uiLanguage === 'de'
+          ? ' · Board wird gespeichert. Danach kannst du mit „Zum Canvas hinzufügen“ fortfahren.'
+          : ' · Saving Board. Continue with Add to Canvas when saving finishes.'));
+      }
       advisor.appendChild(progress);
     }
     if (proposal?.status === "applied") { const status = document.createElement("div"); status.className = "ai-brain-proposal-status is-success"; status.setAttribute("role", "status"); status.textContent = aiBrainProposalText("created", proposal.uiLanguage); advisor.appendChild(status); }
@@ -19497,9 +19502,10 @@ function closeInspector({ restoreFocus = true } = {}) {
 }
 
 function setActiveView(view) {
-  // The native Board exit resets selection. Admit that exact navigation only
-  // for an otherwise-current own insertion; arbitrary deselection stays stale.
-  const brainReturn = state.activeView === 'board' && view === 'ai_brain'
+  // The native Board exit resets selection, including exits through Home or
+  // another view before returning to Brain. Admit only that exact reset for
+  // an otherwise-current own insertion; arbitrary deselection stays stale.
+  const brainReturn = state.activeView === 'board' && view !== 'board'
     ? state.aiBrain.messages.filter(turn => turn.contentContinuation
       && turn.contentCompleted?.at(-1)?.nodeId === state.selectedPrimary && aiBrainContentSourceCurrent(turn)) : [];
   if (state.activeView === 'ai_brain' && view !== 'ai_brain') {
