@@ -14,7 +14,7 @@ async function main(){
   Object.assign(acl.board,{id:board.id,owner_email:board.owner_email,brand_id:board.brand_id,workspace_id:board.workspace_id,updated_at:board.updated_at});
   acl.user.email=board.owner_email;acl.identity.canonical_email=board.owner_email;
   acl.workspace.id=board.workspace_id;acl.association={id:board.brand_id,workspace_id:board.workspace_id};
-  let saveStatus=200,saveHold=null,proposalHold=null,advice=0,lostSave=false;
+  let saveStatus=200,saveHold=null,saveAckHold=null,proposalHold=null,advice=0,lostSave=false;
   const initialCanvas=JSON.parse(JSON.stringify(board.canvas_json));
   const originalFetch=global.fetch;global.fetch=async()=>{paid++;throw Error('No provider call is permitted');};
 
@@ -37,7 +37,9 @@ async function main(){
    assert.equal(body.lastKnownUpdatedAt,acl.board.updated_at,'Save must use current server revision');
    board.canvas_json=body.canvas_json;board.updated_at=new Date(Date.parse(board.updated_at)+1000).toISOString();acl.board.updated_at=board.updated_at;
    if(lostSave)return route.fulfill({status:500,json:{error:'Fictional lost acknowledgement after commit'}});
-   return route.fulfill({json:{id:board.id,updated_at:board.updated_at}});
+   const acknowledgement={id:board.id,updated_at:board.updated_at};
+   if(saveAckHold){const h=saveAckHold;saveAckHold=null;h.started();await h.wait;}
+   return route.fulfill({json:acknowledgement});
   });
   const boot=async()=>{await p.reload();await p.waitForFunction(()=>state.workspaceCatalog.status==='ready'&&!state.isBoardLoading&&!state.isBoardHydrating);await p.evaluate(()=>{clearAutosaveTimer();stopPresenceLite();stopBoardRefreshPolling();state.uiLanguage=language.setUiLanguage('en');setAppMode('canvas');setActiveView('ai_brain');});};
   const ask=async()=>{await p.locator('#ai-brain-question').fill('Write posts for #MyAppicsStory');await p.locator('#ai-brain-form button[type=submit]').click();await p.waitForFunction(()=>state.aiBrain.status==='success');};
@@ -163,6 +165,25 @@ async function main(){
   await open();await p.locator('[data-ai-brain-prepare-confirm]').click();await p.waitForFunction(()=>state.aiBrain.messages.at(-1).proposal.status==='stale');
   assert.equal(await p.evaluate(()=>state.nodes.length),1);assert.equal(board.canvas_json.nodes.length,1);
   console.log('PASS pending/failed save recovery, save-conflict and lost-acknowledgement rejection without duplicate insertion');
+  // Delay the response after commit, then supersede its lifecycle through the
+  // native retirement/load owners. A later save acknowledgement must win even
+  // when the old response arrives last; an in-flight duplicate cannot dispatch.
+  await first();let ackStarted,ackRelease;
+  const ackBegun=new Promise(r=>ackStarted=r),ackWait=new Promise(r=>ackRelease=r);
+  saveAckHold={started:ackStarted,wait:ackWait};
+  const oldSave=p.evaluate(()=>saveBoardToServer('autosave'));await ackBegun;
+  const savesBeforeDuplicate=saves;
+  assert.equal(await p.evaluate(()=>saveBoardToServer('manual')),false);
+  assert.equal(saves,savesBeforeDuplicate);
+  await p.evaluate(async()=>{retireBoardForWorkspaceSwitch();await loadBoardFromUrlIfPresent();clearAutosaveTimer();stopPresenceLite();stopBoardRefreshPolling();});
+  assert.equal(await p.evaluate(()=>state.aiBrain.messages.length),0);
+  assert.equal(await p.evaluate(()=>saveBoardToServer('manual')),true);
+  const latestRevision=await p.evaluate(()=>state.lastKnownUpdatedAt);
+  ackRelease();assert.equal(await oldSave,false);
+  assert.equal(await p.evaluate(()=>state.lastKnownUpdatedAt),latestRevision);
+  assert.equal(await p.evaluate(()=>state.isDirty||state.isSaving),false);
+  assert.equal(await p.evaluate(()=>state.aiBrain.messages.length),0);
+  console.log('PASS delayed/reordered save responses: overlapping dispatch blocked, retired conversation cannot revive, obsolete acknowledgement cannot overwrite newer revision');
   // A prepared preview survives an own save, with exact edits and no new Prepare.
   await first();await open();await prepare();await p.locator('[data-ai-brain-edit=caption]').fill('Retained across own autosave');
   const preparedCalls=conversions;await p.evaluate(()=>saveBoardToServer('autosave'));

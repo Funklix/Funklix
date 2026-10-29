@@ -68,7 +68,11 @@ Inspector edits before exit. Existing signed-scope, remote mutation/revocation,
 identity, conflict/failure/lost-ack, duplicate-click, undo, insertion recovery,
 EN/DE, theme, mobile and keyboard cases remain. An additional sequential native
 Content pair uses the production handler with mocked Responses transport and
-asserts exactly two explicit `store:false` preparations.
+asserts exactly two explicit `store:false` preparations. Delayed/reordered-save
+coverage holds an acknowledgement after commit, blocks an overlapping dispatch,
+retires/reloads through native lifecycle owners, confirms a newer save, then
+releases the old response and verifies it cannot roll back the revision or revive
+the retired conversation.
 
 Runtime Boot Safety already runs `check:bw38.1` in both PostgreSQL 17.6/18.4 jobs;
 no workflow or check was removed. Actual final CI and review results belong to the
