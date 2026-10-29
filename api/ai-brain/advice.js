@@ -131,7 +131,10 @@ module.exports = async function handler(req, res) {
     const diagnostics = analyzeCanvas(nodes, edges);
     const selectedNode = selectedNodeId ? nodes.find((node) => node.id === selectedNodeId) : null;
     const evidence = prepareEvidence({ nodes, edges, selectedNode });
-    let goals = null;
+    // Analysis must acquire its active identity/Workspace/saved scope even when
+    // the legacy conversational shortcut returns clarification without inference.
+    let goals = adviceMode === 'analyze_social_ctas'
+      ? await goalContext.capture({ boardId, user, nodes, revision: req.body.canvas_revision, requireScope: true }) : null;
     const makeContext = () => ({
       board: { id: board.id, name: board.name, updatedAt: board.updated_at },
       boardBrandCore: plainObject(board.brand_core_snapshot) ? board.brand_core_snapshot : {},
@@ -144,6 +147,7 @@ module.exports = async function handler(req, res) {
     });
     const isFollowUpReference = hasConversationalReference(question);
     if (isFollowUpReference && (historyTruncated || conversation.history.length === 0)) {
+      await goalContext.revalidate({ data: goals, user: getSessionUser(req) });
       return res.status(200).json({
         answer: language === 'de'
           ? 'Ich bin nicht sicher, welche vorherige Idee du meinst. Bitte nenne oder beschreibe sie kurz.'
@@ -162,7 +166,7 @@ module.exports = async function handler(req, res) {
     const data = await learningContext.capture({ boardId, user });
     board = data.board;
     canonical = data.canonical;
-    goals = await goalContext.capture({ boardId, user, nodes, revision: req.body.canvas_revision, requireScope: adviceMode === 'analyze_social_ctas' });
+    if (!goals) goals = await goalContext.capture({ boardId, user, nodes, revision: req.body.canvas_revision });
     const prepared = learningContext.prepare({ data, env: modelEnvironment,
       query: { question, nodes, selectedNode, boardId, conversation: conversation.history },
       messages: approvedBrandLearnings => providerMessages({ context: makeContext(), conversation: conversation.history, language, question, adviceMode, approvedBrandLearnings: data.identity ? approvedBrandLearnings : undefined })

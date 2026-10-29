@@ -148,6 +148,10 @@ async function main() {
     assert(!JSON.stringify(f.calls).includes('Premium'), 'Board-only access cannot reveal canonical Brand');
     await reset(); f.user = null; result = await request(); assert.equal(result.statusCode, 401); assert.equal(f.calls.length, 0);
     await reset(); assert.equal((await request({ canvas_revision: null })).statusCode, 409); assert.equal(f.calls.length, 0);
+    await reset(); result = await request({ question: 'What about the second idea?' });
+    assert.equal(result.statusCode, 200); assert.equal(result.body.context.reference_resolution, 'clarification'); assert.equal(f.calls.length, 0);
+    await reset(); await f.pg.exec("UPDATE app_identities SET status='disabled'");
+    result = await request({ question: 'What about the second idea?' }); assert.equal(result.statusCode, 409); assert.equal(f.calls.length, 0, 'analysis clarification cannot bypass active scope authorization');
     await reset(); f.answer = 'Legacy conversational advice'; result = await request({ advice_mode: 'general' });
     assert.equal(result.body.answer, f.answer); assert(!Object.hasOwn(result.body, 'findings'));
     await reset();
