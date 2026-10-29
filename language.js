@@ -577,6 +577,8 @@
     "Find missing assumptions, evidence or campaign elements.": "Finde fehlende Annahmen, Belege oder Kampagnenelemente.",
     "Compare options against your goals, constraints and Brand context.": "Vergleiche Optionen anhand deiner Ziele, Rahmenbedingungen und Brand.",
     "AI Brain conversation": "AI-Brain-Gespräch",
+    "Analyze Social CTAs": "Social-CTAs analysieren",
+    "Review existing Social posts with source evidence and Open in Canvas.": "Bestehende Social-Posts mit Quellbelegen prüfen und im Canvas öffnen.",
     "Jump to latest": "Zur neuesten Nachricht",
     "Conversation focus": "Gesprächsfokus",
     "Optional. Your question leads the conversation.": "Optional. Deine Frage bestimmt das Gespräch.",

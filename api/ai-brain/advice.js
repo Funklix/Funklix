@@ -10,6 +10,7 @@ const learningContext = require('../_ai-brain-learning-context');
 const goalContext = require('../_ai-brain-goal-context');
 const { prepareEvidence } = require('../_ai-brain-evidence');
 const { advisorPersonality } = require('../_ai-brain-personality');
+const socialEvidence = require('../_ai-brain-social-evidence');
 
 const BODY_KEYS = ['advice_mode', 'board_id', 'canvas_context', 'canvas_revision', 'conversation_history', 'conversation_history_truncated', 'question', 'response_language', 'selected_node_id'];
 const REQUIRED_BODY_KEYS = BODY_KEYS.filter((key) => !['advice_mode', 'canvas_revision', 'conversation_history', 'conversation_history_truncated'].includes(key));
@@ -55,6 +56,7 @@ const LEARNING_POLICY = 'Knowledge precedence: system, authorization and privacy
 
 const MODE_POLICY = Object.freeze({
   general: '',
+  analyze_social_ctas: socialEvidence.POLICY,
   review_strategy: 'Assess strategic coherence, priorities and trade-offs against authorized Brand context and campaign constraints; recommend the most useful adjustment tied to an existing object/field and authorized Brand constraint. Explain why it comes before the runner-up and name a trade-off.',
   explore_ideas: 'Offer a small set of meaningfully different, context-fitting directions with concise rationale and trade-offs; concepts remain advice. Connect each supplied audience need to a verified Brand differentiator, concrete creative mechanism, sample expression and action on a suitable object/channel; avoid interchangeable slogans or invented capabilities.',
   find_gaps: 'Identify material missing assumptions, evidence or campaign elements. Distinguish directly observable absence from strategic hypothesis. Check diagnostic applicability against actual supplied node fields; missing funnel stages or trust elements are not universally required. Separate absent fields, strategic needs and unknown evidence; prioritize only applicable gaps.',
@@ -136,7 +138,7 @@ module.exports = async function handler(req, res) {
       boardBrandCoreProvenance: { revision: board.brand_core_source_revision || null, updatedAt: board.brand_core_source_updated_at || null },
       canonicalBrandCore: canonical ? { name: canonical.name, revision: Number(canonical.revision), updatedAt: canonical.updated_at, value: canonical.brand_core } : null,
       advisorPersonality: advisorPersonality({ canonical, snapshot: board.brand_core_snapshot }),
-      workingCanvas: { nodes, edges, selectedNode, ...(goals ? { goalSources: goals.sources } : {}) },
+      workingCanvas: { nodes, edges, selectedNode, ...(goals?.sources.length ? { goalSources: goals.sources } : {}) },
       diagnostics,
       evidence
     });
@@ -160,13 +162,13 @@ module.exports = async function handler(req, res) {
     const data = await learningContext.capture({ boardId, user });
     board = data.board;
     canonical = data.canonical;
-    goals = await goalContext.capture({ boardId, user, nodes, revision: req.body.canvas_revision });
+    goals = await goalContext.capture({ boardId, user, nodes, revision: req.body.canvas_revision, requireScope: adviceMode === 'analyze_social_ctas' });
     const prepared = learningContext.prepare({ data, env: modelEnvironment,
       query: { question, nodes, selectedNode, boardId, conversation: conversation.history },
       messages: approvedBrandLearnings => providerMessages({ context: makeContext(), conversation: conversation.history, language, question, adviceMode, approvedBrandLearnings: data.identity ? approvedBrandLearnings : undefined })
     });
     await learningContext.revalidate({ data, selected: prepared.selected, user });
-    await goalContext.revalidate({ data: goals, user });
+    await goalContext.revalidate({ data: goals, user: getSessionUser(req) });
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 25000);
     let response;
@@ -183,11 +185,14 @@ module.exports = async function handler(req, res) {
       });
     } finally { clearTimeout(timeout); }
     if (!response.ok) return res.status(502).json({ error: 'AI Brain could not provide advice' });
-    const answer = outputText(await response.json());
+    const providerData = await response.json();
+    const envelope = adviceMode === 'analyze_social_ctas' ? socialEvidence.parse(providerData) : null;
+    if (adviceMode === 'analyze_social_ctas' && !envelope) return res.status(502).json({ error: 'AI Brain returned an invalid analysis. Please retry.', code: 'evidence_response_invalid' });
+    const answer = envelope ? envelope.answer : outputText(providerData);
     await learningContext.revalidate({ data, selected: prepared.selected, user });
-    await goalContext.revalidate({ data: goals, user });
+    await goalContext.revalidate({ data: goals, user: getSessionUser(req) });
     if (!answer) return res.status(502).json({ error: 'AI Brain returned no advice' });
-    if (responseLanguageMismatch(answer, language)) {
+    if (responseLanguageMismatch(answer, language) || envelope?.findings.some(finding => responseLanguageMismatch(finding.title + ' ' + finding.explanation, language))) {
       return res.status(502).json({
         error: language === 'de' ? 'AI Brain hat in einer anderen Sprache geantwortet. Bitte versuche es erneut.' : 'AI Brain answered in a different language. Please retry.',
         code: 'response_language_mismatch',
@@ -196,6 +201,7 @@ module.exports = async function handler(req, res) {
     }
     return res.status(200).json({
       answer,
+      ...(envelope ? socialEvidence.resolve({ envelope, evidence, nodes, data: goals }) : {}),
       context: {
         board: board.name,
         boardBrandCore: plainObject(board.brand_core_snapshot),

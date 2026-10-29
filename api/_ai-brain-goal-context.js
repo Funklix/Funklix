@@ -7,8 +7,8 @@ const scope = require('./_ai-brain-proposal-scope');
 const { AdviceContextError } = require('./_ai-brain-learning-context');
 const changed = () => { throw new AdviceContextError('advice_context_changed', 409); };
 const canonicalType = type => type === 'Social Media Post' ? 'Social Media Posting' : type;
-async function capture({ boardId, user, nodes, revision, db = pool }) {
-  if (!nodes.some(node => node.goal)) return null;
+async function capture({ boardId, user, nodes, revision, requireScope = false, db = pool }) {
+  if (!requireScope && !nodes.some(node => node.goal)) return null;
   if (typeof revision !== 'string' || revision.length > 40 || !Number.isFinite(Date.parse(revision))) changed();
   try {
     // Reuse existing Workspace, Board, association and identity checks, without
@@ -31,7 +31,7 @@ async function capture({ boardId, user, nodes, revision, db = pool }) {
         state: persisted && canonicalType(persisted.type) === node.type && persisted.goal === node.goal ? 'saved' : 'unsaved',
         boardRevision: current };
     });
-    return { authorized, sources, nodes, revision };
+    return { authorized, sources, nodes, revision, requireScope };
   } catch (error) {
     if (error instanceof AdviceContextError) throw error;
     if (error instanceof scope.ProposalScopeError && error.status !== 503) changed();
@@ -40,7 +40,7 @@ async function capture({ boardId, user, nodes, revision, db = pool }) {
 }
 async function revalidate({ data, user, db = pool }) {
   if (!data) return;
-  const current = await capture({ boardId: data.authorized.board.id, user, nodes: data.nodes, revision: data.revision, db });
+  const current = await capture({ boardId: data.authorized.board.id, user, nodes: data.nodes, revision: data.revision, requireScope: data.requireScope, db });
   if (current.authorized.fingerprint !== data.authorized.fingerprint || JSON.stringify(current.sources) !== JSON.stringify(data.sources)) changed();
 }
 module.exports = { capture, revalidate };

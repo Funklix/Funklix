@@ -6,7 +6,7 @@ const ROOT = path.resolve(__dirname, '../..');
 const BOARD = '11111111-1111-4111-8111-111111111111', BRAND = '22222222-2222-4222-8222-222222222222';
 const OTHER = '33333333-3333-4333-8333-333333333333', IDENTITY = '44444444-4444-4444-8444-444444444444';
 const OWNER = 'owner@example.invalid', ACTOR = 'actor@example.invalid';
-async function fixture({ goals = false } = {}) {
+async function fixture({ goals = false, signedSession = false } = {}) {
   const pg = new PGlite();
   await pg.exec(`CREATE ROLE anon; CREATE ROLE authenticated;
     CREATE TABLE app_identities(id uuid PRIMARY KEY, canonical_email text, status text, revision bigint);
@@ -39,7 +39,7 @@ async function fixture({ goals = false } = {}) {
     const requireFixture = name => {
       if (!name.startsWith('.')) return local(name);
       const resolved = path.relative(ROOT, local.resolve(name));
-      if (resolved === 'api/_auth-session.js') return { getSessionUser: () => f.user };
+      if (resolved === 'api/_auth-session.js' && !signedSession) return { getSessionUser: () => f.user };
       if (resolved === 'api/_boards-storage.js' || resolved === 'api/_brands-storage.js') return { pool: db, ensureBrandsTable() { throw new Error('Runtime DDL forbidden'); } };
       return load(resolved);
     };
@@ -56,6 +56,7 @@ async function fixture({ goals = false } = {}) {
     return module.exports;
   }
   f.context = load('api/_ai-brain-learning-context.js');
+  f.load = load;
   f.handler = load('api/ai-brain/advice.js');
   f.learning = load('api/_brand-learnings.js');
   f.db = db;
@@ -83,7 +84,8 @@ async function fixture({ goals = false } = {}) {
   };
   f.invoke = async (overrides = {}) => {
     const response = { statusCode: 200, headers: {}, setHeader(k, v) { this.headers[k] = v; }, status(code) { this.statusCode = code; return this; }, json(body) { this.body = body; return this; } };
-    await f.handler({ method: 'POST', headers: {}, body: { board_id: BOARD, question: 'How could community engagement improve?', response_language: 'en', selected_node_id: null,
+    const headers = signedSession && f.user ? { cookie: 'funklix_session=' + load('api/_auth-session.js').createSessionToken(f.user) } : {};
+    await f.handler({ method: 'POST', headers, body: { board_id: BOARD, question: 'How could community engagement improve?', response_language: 'en', selected_node_id: null,
       canvas_context: { nodes: [{ id: 'idea', type: 'Idea', title: 'Community participation', audience: 'Members', channel: 'Forum' }], edges: [] }, ...overrides } }, response);
     return response;
   };

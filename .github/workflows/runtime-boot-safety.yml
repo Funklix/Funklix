@@ -240,6 +240,8 @@ jobs:
         run: node scripts/check-bw26-1-real-canvas-context-and-turn-lifecycle.js
       - name: Check BW-38.2A authorized native marketing goals (disposable SQL, mocked provider)
         run: npm run check:bw38.2a
+      - name: Check BW-39.1 evidence-linked Social CTA analysis (signed SQL and real browser)
+        run: npm run check:bw39.1
       - name: Check safe AI Brain response formatting
         run: node scripts/check-bw26-2-safe-brain-response-formatting.js
       - name: Check bounded AI Brain conversation memory
