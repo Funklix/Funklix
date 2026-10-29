@@ -13,11 +13,12 @@ async function capture({ boardId, user, nodes, revision, db = pool }) {
   try {
     // Reuse existing Workspace, Board, association and identity checks, without
     // acquiring canonical Brand read permission or enumerating Brand knowledge.
-    const authorized = await scope.capture({ boardId, user, db });
+    // The raw SQL revision and Canvas share the authorization snapshot. Browser
+    // revisions use milliseconds; PostgreSQL NOW() can include microseconds.
+    const authorized = await scope.capture({ boardId, user, db, includeCanvas: true });
     const current = scope.publicScope(authorized.board).updated_at;
     if (new Date(revision).toISOString() !== current) changed();
-    const result = await db.query('SELECT canvas_json FROM boards WHERE id=$1 AND updated_at=$2', [boardId, current]);
-    const saved = result.rows[0]?.canvas_json;
+    const saved = authorized.board.canvas_json;
     if (!saved || !Array.isArray(saved.nodes)) changed();
     const byId = new Map();
     for (const node of saved.nodes) {

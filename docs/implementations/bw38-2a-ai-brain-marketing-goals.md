@@ -46,8 +46,14 @@ contract: active identity, current Board edit access, accepted Workspace
 membership when associated, current Workspace revision/status, and matching
 Board/Brand Workspace association. Null Workspace/Brand remains supported under
 the existing legacy Board policy. This does not grant canonical Brand read.
-After authorization, it reads only the requested Board's persisted Canvas at
-the same timestamp. The stored Canvas never enters the provider request.
+Advice opts into reading only the requested Board's persisted Canvas together
+with its exact SQL timestamp in that same authorized transaction. Browser
+revisions have millisecond precision while PostgreSQL `NOW()` can have
+microseconds: do not compare the browser Date to the stored timestamp using SQL
+equality. The raw SQL revision remains in the internal scope fingerprint, so
+even a change within the same millisecond invalidates the answer. The stored
+Canvas never enters the provider request. Content proposal scope reads retain
+their existing projection and do not retrieve saved Canvas.
 
 For each supplied nonempty goal, `workingCanvas.goalSources` contains nodeId,
 canonical type, field `goal`, `state`, and boardRevision. `saved` requires exact
@@ -126,7 +132,7 @@ It covers one/multiple goals, repeated titles with distinct identities, missing
 goals, whitespace, punctuation, Unicode/EN/DE, injection-like text as inert data,
 malformed and oversized goals, swapped goals/wrong IDs/types, forged provenance,
 saved versus local context, 200/201/223 nodes, request bytes, missing/stale
-revisions, unauthorized Boards, canonical ACL isolation, approved-only Learnings,
+revisions (including PostgreSQL sub-millisecond values and changes), unauthorized Boards, canonical ACL isolation, approved-only Learnings,
 sidebar mismatch, Workspace membership/association changes and revoked access.
 It verifies exact provider context, one or zero calls, `store:false`, unchanged
 budget, response structure, and suppression after remote or local changes during
@@ -196,6 +202,7 @@ No new selection UI, traversal or summary inference is implemented in BW-38.2A.
 - `app.js`: exact native goal projection and existing Board revision on Advice.
 - `api/_ai-brain-canvas-context.js`: bounded native goal validation.
 - `api/_ai-brain-goal-context.js`: authorized persisted-goal provenance/freshness.
+- `api/_ai-brain-proposal-scope.js`: opt-in atomic saved Canvas/exact revision read for Advice.
 - `api/_ai-brain-evidence.js`: bounded source quotations and goal authority policy.
 - `api/ai-brain/advice.js`: provenance integration/revalidation; existing reply shape.
 - `scripts/check-bw38-2a-marketing-goals.js`: focused production-path regression.

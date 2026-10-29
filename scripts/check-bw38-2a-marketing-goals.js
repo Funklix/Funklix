@@ -99,6 +99,18 @@ async function main() {
     }
     console.log('PASS malformed/oversized goals, original node/payload bounds and stale/missing revisions reject before inference');
 
+    // Real PostgreSQL timestamp semantics: the client Date loses microseconds.
+    // Never compare that lossy value to the stored timestamp using SQL equality.
+    await reset();
+    await f.pg.query('UPDATE boards SET updated_at=$1', ['2026-10-29T08:00:00.123456Z']);
+    assert.equal((await request({ canvas_revision: '2026-10-29T08:00:00.123Z' })).statusCode, 200);
+    assert.equal(providerContext(f).workingCanvas.goalSources[0].state, 'saved');
+    f.calls.length = 0;
+    f.onProvider = () => f.pg.query('UPDATE boards SET updated_at=$1', ['2026-10-29T08:00:00.123457Z']);
+    const microsecondChange = await request({ canvas_revision: '2026-10-29T08:00:00.123Z' });
+    assert.equal(microsecondChange.statusCode, 409); assert.equal(f.calls.length, 1); assert(!microsecondChange.body.answer);
+    console.log('PASS sub-millisecond saved revision accepted; same-millisecond microsecond change suppresses stale output');
+
     await reset();
     for (const status of ['approved', 'proposed', 'rejected', 'archived']) await f.insert({ status, statement: 'Creator participation ' + status });
     assert.equal((await request()).statusCode, 200);
