@@ -61,7 +61,8 @@ function evidenceChecks() {
   assert.equal(indexed.selectedNeighborhood.outgoing.length, 199);
   assert.equal(validateCanvasContext({ nodes: [...large, large[0]], edges: [] }, null).status, 413);
   assert.equal(validateCanvasContext({ nodes: [nodes[0]], edges }, null).status, 409);
-  assert.equal(validateCanvasContext({ nodes: [{ ...nodes[0], goal: 'Conversion' }], edges: [] }, null).status, 400);
+  assert.equal(validateCanvasContext({ nodes: [{ ...nodes[0], goal: 'Conversion' }], edges: [] }, null).nodes[0].goal, 'Conversion');
+  assert.equal(validateCanvasContext({ nodes: [{ ...nodes[0], goal: { instruction: 'Conversion' } }], edges: [] }, null).status, 400);
   console.log('PASS BW-37.1B evidence: exact sources, repeated titles, direct cycles, CTA/trust counterevidence, label thresholds, limits and no schema expansion.');
 }
 class Element {

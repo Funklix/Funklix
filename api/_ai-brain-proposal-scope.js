@@ -1,7 +1,7 @@
 'use strict';
 
-// Read-only Content conversion authorization. No canonical knowledge or saved
-// Canvas is retrieved here; Board edit remains independent of Brand read/edit.
+// Read-only scope authorization. Advice can opt into the saved Canvas in the
+// same snapshot; Board edit remains independent of canonical Brand read/edit.
 const { createHash } = require('node:crypto');
 const { pool } = require('./_boards-storage');
 const { getBoardAccess } = require('./_board-access');
@@ -26,7 +26,7 @@ function validExpected(value) {
 function publicScope(board) {
   return { updated_at: timestamp(board.updated_at), brand_id: board.brand_id, workspace_id: board.workspace_id };
 }
-async function capture({ boardId, user, db = pool }) {
+async function capture({ boardId, user, db = pool, includeCanvas = false }) {
   const lookup = lookupRequestFromVerifiedSession({ verified: true, user });
   if (!lookup.ok) fail(401, 'proposal_unauthorized');
   let client;
@@ -38,7 +38,8 @@ async function capture({ boardId, user, db = pool }) {
       'SELECT id,canonical_email,status,revision FROM public.app_identities WHERE canonical_email=$1 ORDER BY id LIMIT 2', [lookup.canonicalEmail]
     )).rows);
     if (!identity.ok || identity.canonicalEmail !== lookup.canonicalEmail) fail(403, 'proposal_forbidden');
-    const { board, access } = await getBoardAccess(boardId, user, { client, columns: COLUMNS });
+    const columns = COLUMNS + (includeCanvas ? ', canvas_json, updated_at::text AS canvas_revision' : '');
+    const { board, access } = await getBoardAccess(boardId, user, { client, columns });
     if (!board) fail(404, 'proposal_forbidden');
     // Both explicit SQL NULLs are the existing legacy unowned policy. Missing,
     // empty or malformed owner values must never acquire that authorization.

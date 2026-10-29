@@ -1,7 +1,7 @@
 'use strict';
 const LIMITS = Object.freeze({ nodes: 200, edges: 400, bytes: 350000, id: 160, short: 1000, content: 8000 });
 const NODE_TYPES = new Set(['Idea', 'Campaign Variation', 'Content', 'Social Media Posting', 'Landing Page', 'Email Campaign', 'Visual Concept', 'Image Brief']);
-const NODE_KEYS = new Set(['id', 'type', 'title', 'content', 'status', 'funnelStage', 'audience', 'tone', 'cta', 'channel', 'social', 'landingPage']);
+const NODE_KEYS = new Set(['id', 'type', 'title', 'content', 'status', 'funnelStage', 'audience', 'tone', 'cta', 'channel', 'social', 'landingPage', 'goal']);
 const SOCIAL_KEYS = new Set(['caption', 'hashtags', 'platform', 'preview', 'cta']);
 const LANDING_KEYS = new Set(['headerClaim', 'problem', 'solution', 'trust', 'cta']);
 const EDGE_KEYS = new Set(['id', 'source', 'target', 'type']);
@@ -19,6 +19,11 @@ function validateCanvasContext(canvas, selectedNodeId) {
     if (!id || !type || !NODE_TYPES.has(type)) return failure('unsupported_canvas', 400, 'node_canonical');
     if (ids.has(id)) return failure('unsupported_canvas', 400, 'duplicate_node_id'); ids.add(id);
     const node = { id, type };
+    if (input.goal !== undefined) {
+      if (typeof input.goal !== 'string') return failure('malformed_canvas', 400, 'node_goal');
+      if (input.goal.length > LIMITS.short) return failure('canvas_too_large', 413, 'node_goal');
+      if (input.goal.trim()) node.goal = input.goal;
+    }
     for (const key of ['title', 'status', 'funnelStage', 'audience', 'tone', 'cta', 'channel']) { const value = boundedString(input[key], LIMITS.short); if (value === null) return failure('canvas_too_large', 413, 'node_string'); if (value) node[key] = value; }
     const content = boundedString(input.content, LIMITS.content); if (content === null) return failure('canvas_too_large', 413, 'node_content'); if (content) node.content = content;
     for (const [key, allowed] of [['social', SOCIAL_KEYS], ['landingPage', LANDING_KEYS]]) {
