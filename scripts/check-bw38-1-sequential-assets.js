@@ -14,7 +14,7 @@ async function main(){
   Object.assign(acl.board,{id:board.id,owner_email:board.owner_email,brand_id:board.brand_id,workspace_id:board.workspace_id,updated_at:board.updated_at});
   acl.user.email=board.owner_email;acl.identity.canonical_email=board.owner_email;
   acl.workspace.id=board.workspace_id;acl.association={id:board.brand_id,workspace_id:board.workspace_id};
-  let saveStatus=200,saveHold=null,proposalHold=null,advice=0,lostSave=false;
+  let saveStatus=200,saveHold=null,saveAckHold=null,proposalHold=null,advice=0,lostSave=false;
   const initialCanvas=JSON.parse(JSON.stringify(board.canvas_json));
   const originalFetch=global.fetch;global.fetch=async()=>{paid++;throw Error('No provider call is permitted');};
 
@@ -37,7 +37,9 @@ async function main(){
    assert.equal(body.lastKnownUpdatedAt,acl.board.updated_at,'Save must use current server revision');
    board.canvas_json=body.canvas_json;board.updated_at=new Date(Date.parse(board.updated_at)+1000).toISOString();acl.board.updated_at=board.updated_at;
    if(lostSave)return route.fulfill({status:500,json:{error:'Fictional lost acknowledgement after commit'}});
-   return route.fulfill({json:{id:board.id,updated_at:board.updated_at}});
+   const acknowledgement={id:board.id,updated_at:board.updated_at};
+   if(saveAckHold){const h=saveAckHold;saveAckHold=null;h.started();await h.wait;}
+   return route.fulfill({json:acknowledgement});
   });
   const boot=async()=>{await p.reload();await p.waitForFunction(()=>state.workspaceCatalog.status==='ready'&&!state.isBoardLoading&&!state.isBoardHydrating);await p.evaluate(()=>{clearAutosaveTimer();stopPresenceLite();stopBoardRefreshPolling();state.uiLanguage=language.setUiLanguage('en');setAppMode('canvas');setActiveView('ai_brain');});};
   const ask=async()=>{await p.locator('#ai-brain-question').fill('Write posts for #MyAppicsStory');await p.locator('#ai-brain-form button[type=submit]').click();await p.waitForFunction(()=>state.aiBrain.status==='success');};
@@ -54,7 +56,7 @@ async function main(){
   await p.locator('[data-ai-brain-edit=caption]').fill('Isolated Instagram caption');
   await p.locator('[data-ai-brain-edit=preview]').fill('Instagram CTA');
   await p.locator('[data-ai-brain-edit=hashtags]').fill('#InstagramOnly');
-  await p.evaluate(()=>Promise.all([applyAiBrainNodeProposal(state.aiBrain.messages.at(-1).id),applyAiBrainNodeProposal(state.aiBrain.messages.at(-1).id)]));
+  await p.locator('[data-ai-brain-create]').click();
   await p.waitForFunction(()=>state.selectedPrimary===state.nodes.at(-1)?.id && state.nodes.length===1);
   await p.evaluate(()=>{clearAutosaveTimer();setActiveView('ai_brain');});
   const result=await p.evaluate(()=>{const t=state.aiBrain.messages.at(-1);return {nodes:state.nodes.length,candidates:aiBrainContentAssets(t).length,status:t.proposal.status,sourceCurrent:aiBrainContentSourceCurrent(t),actions:document.querySelectorAll('[data-ai-brain-prepare]').length};});
@@ -64,7 +66,7 @@ async function main(){
   await open();assert(await p.locator('[data-ai-brain-source] input[value="0"]').isDisabled());
   await choose(1);const exact=await p.locator('[data-ai-brain-excerpt]').textContent();await prepare();
   await p.locator('[data-ai-brain-edit=caption]').fill('Edited X caption');
-  await p.evaluate(()=>Promise.all([applyAiBrainNodeProposal(state.aiBrain.messages.at(-1).id),applyAiBrainNodeProposal(state.aiBrain.messages.at(-1).id)]));
+  await p.locator('[data-ai-brain-create]').click();
   await p.waitForFunction(()=>state.nodes.length===2&&state.selectedPrimary===state.nodes.at(-1).id);
   await p.evaluate(()=>{clearAutosaveTimer();setActiveView('ai_brain');});
   assert.equal(requests.at(-1).source_answer,exact);assert.match(requests.at(-1).continuation_revision,/^[a-f0-9]{64}$/);
@@ -83,13 +85,17 @@ async function main(){
   assert.equal(await p.evaluate(()=>state.aiBrain.messages.length),0);
   console.log('PASS uninterrupted Instagram → Create → Brain → X → Create → Save → Reload; two isolated native Social Drafts, zero inference');
   const fresh=async()=>{board.canvas_json=JSON.parse(JSON.stringify(initialCanvas));acl.membership={role:'member',status:'accepted'};acl.identity.revision='1';acl.identity.id='44444444-4444-4444-8444-444444444444';acl.workspace.revision='1';saveStatus=200;lostSave=false;await boot();await ask();};
-  const create=async index=>{
+  const create=async (index,{via='ai_brain',beforeReturn=async()=>{}}={})=>{
     await open();await choose(index);await prepare();
     const n=await p.evaluate(()=>state.nodes.length),h=await p.evaluate(()=>state.history.length);
     await p.evaluate(()=>Promise.all([applyAiBrainNodeProposal(state.aiBrain.messages.at(-1).id),applyAiBrainNodeProposal(state.aiBrain.messages.at(-1).id)]));
     await p.waitForFunction(n=>state.nodes.length===n+1&&state.activeView==='board'&&state.selectedPrimary===state.nodes.at(-1).id,n);
     assert.equal(await p.evaluate(()=>state.history.length),h+1);
-    await p.evaluate(()=>{clearAutosaveTimer();setActiveView('ai_brain');});
+    await beforeReturn();
+    await p.evaluate(via=>{clearAutosaveTimer();if(via!=='ai_brain')setActiveView(via);},via);
+    if(await p.evaluate(()=>el.appShell.dataset.inspectorMode==='overlay'&&el.appShell.dataset.inspectorOpen==='true'))await p.locator('#inspector-close-btn').click();
+    const brainButton=await p.evaluate(()=>el.aiBrainNavButton.id);
+    await p.locator('#'+brainButton).click();
   };
   const first=async()=>{await fresh();await create(0);assert(await p.evaluate(()=>aiBrainContentSourceCurrent(state.aiBrain.messages.at(-1))));};
   // Both automatic and manual acknowledgements carry only the submitted snapshot.
@@ -103,6 +109,48 @@ async function main(){
     await create(1);assert.equal(await p.evaluate(()=>state.nodes.length),2);
   }
   console.log('PASS continuation before/after manual save and autosave; immutable original source; per-item local/saved completion');
+  // R1: native Board exits through another view own the same selection reset
+  // as a direct Brain return. Cover local, in-flight and acknowledged saves on
+  // a populated saved Board, without rebinding the successful answer.
+  const originalCounter=initialCanvas.nodeCounter;
+  initialCanvas.nodes=[{...nodes[0],id:'existing-content',type:'Content',title:'Existing content',content:'Keep existing content',position:{x:200,y:200}}];
+  initialCanvas.nodeCounter=10;
+  for(const via of ['home','list','insights','content_workspace'])for(const timing of ['local','pending','saved']) {
+    await fresh();
+    const original=await p.evaluate(()=>state.aiBrain.messages.at(-1).contentProposalSource);
+    let pending,release,begun;
+    await create(0,{via,beforeReturn:async()=>{
+      if(timing==='saved')assert.equal(await p.evaluate(()=>saveBoardToServer('autosave')),true);
+      if(timing==='pending') {
+        let started;begun=new Promise(r=>started=r);const wait=new Promise(r=>release=r);
+        saveHold={started,wait};pending=p.evaluate(()=>saveBoardToServer('autosave'));await begun;
+      }
+    }});
+    assert.equal(await p.evaluate(()=>aiBrainContentSourceCurrent(state.aiBrain.messages.at(-1))),true,via+' '+timing);
+    assert.deepEqual(await p.evaluate(()=>state.aiBrain.messages.at(-1).contentProposalSource),original);
+    assert.equal(await p.locator('[data-ai-brain-prepare]').count(),1);
+    if(pending){assert(await p.locator('[data-ai-brain-prepare]').isDisabled());assert.match(await p.locator('[data-ai-brain-progress]').textContent(),/Saving Board/);release();assert.equal(await pending,true);}
+    await create(1,{via});
+    assert.deepEqual(await p.evaluate(()=>state.nodes.map(n=>n.type)),['Content',social.TYPE,social.TYPE]);
+    assert.equal(await p.evaluate(()=>state.nodes[0].content),'Keep existing content');
+    assert.equal(await p.evaluate(()=>saveBoardToServer('manual')),true);
+    await boot();assert.deepEqual(await p.evaluate(()=>state.nodes.slice(1).map(n=>[n.type,n.status,n.social.platform])),[[social.TYPE,'Draft','Instagram'],[social.TYPE,'Draft','X / Twitter']]);
+  }
+  initialCanvas.nodes=[];initialCanvas.nodeCounter=originalCounter;
+  // A user-owned deselection or Inspector edit must not borrow the exit grant.
+  for(const mutation of ['selection','inspector']) {
+    await fresh();
+    await create(0,{via:'home',beforeReturn:async()=>{
+      await p.evaluate(mutation=>{
+        const node=state.nodes[0];
+        if(mutation==='selection'){state.selectedIds.clear();state.selectedPrimary=null;}
+        else {node.social.caption+=' unrelated Inspector edit';markUnsaved();}
+        clearAutosaveTimer();
+      },mutation);
+    }});
+    assert.equal(await p.evaluate(()=>aiBrainContentSourceCurrent(state.aiBrain.messages.at(-1))),false);
+  }
+  console.log('PASS R1 populated Board → Home/List/Insights/Content → Brain, local/pending/confirmed save, independent Social Drafts save/reload; arbitrary selection/Inspector edits rejected');
   // Pending and failed save cannot claim persistence or issue an overlapping Create.
   await first();let start,release;const begun=new Promise(r=>start=r),wait=new Promise(r=>release=r);saveHold={started:start,wait};
   const pending=p.evaluate(()=>saveBoardToServer('autosave'));await begun;
@@ -117,6 +165,25 @@ async function main(){
   await open();await p.locator('[data-ai-brain-prepare-confirm]').click();await p.waitForFunction(()=>state.aiBrain.messages.at(-1).proposal.status==='stale');
   assert.equal(await p.evaluate(()=>state.nodes.length),1);assert.equal(board.canvas_json.nodes.length,1);
   console.log('PASS pending/failed save recovery, save-conflict and lost-acknowledgement rejection without duplicate insertion');
+  // Delay the response after commit, then supersede its lifecycle through the
+  // native retirement/load owners. A later save acknowledgement must win even
+  // when the old response arrives last; an in-flight duplicate cannot dispatch.
+  await first();let ackStarted,ackRelease;
+  const ackBegun=new Promise(r=>ackStarted=r),ackWait=new Promise(r=>ackRelease=r);
+  saveAckHold={started:ackStarted,wait:ackWait};
+  const oldSave=p.evaluate(()=>saveBoardToServer('autosave'));await ackBegun;
+  const savesBeforeDuplicate=saves;
+  assert.equal(await p.evaluate(()=>saveBoardToServer('manual')),false);
+  assert.equal(saves,savesBeforeDuplicate);
+  await p.evaluate(async()=>{retireBoardForWorkspaceSwitch();await loadBoardFromUrlIfPresent();clearAutosaveTimer();stopPresenceLite();stopBoardRefreshPolling();});
+  assert.equal(await p.evaluate(()=>state.aiBrain.messages.length),0);
+  assert.equal(await p.evaluate(()=>saveBoardToServer('manual')),true);
+  const latestRevision=await p.evaluate(()=>state.lastKnownUpdatedAt);
+  ackRelease();assert.equal(await oldSave,false);
+  assert.equal(await p.evaluate(()=>state.lastKnownUpdatedAt),latestRevision);
+  assert.equal(await p.evaluate(()=>state.isDirty||state.isSaving),false);
+  assert.equal(await p.evaluate(()=>state.aiBrain.messages.length),0);
+  console.log('PASS delayed/reordered save responses: overlapping dispatch blocked, retired conversation cannot revive, obsolete acknowledgement cannot overwrite newer revision');
   // A prepared preview survives an own save, with exact edits and no new Prepare.
   await first();await open();await prepare();await p.locator('[data-ai-brain-edit=caption]').fill('Retained across own autosave');
   const preparedCalls=conversions;await p.evaluate(()=>saveBoardToServer('autosave'));
@@ -213,6 +280,26 @@ async function main(){
     assert.equal(await p.locator('#ai-brain-question').inputValue(),'Keep this composer draft');
     await create(1);
   }
+  // The same navigation allowance applies to existing Content creation. Use
+  // the production proposal handler with only provider transport mocked.
+  await fresh();let contentCalls=0;
+  process.env.OPENAI_API_KEY='fictional-r1-provider';
+  global.fetch=async(url,options)=>{
+    assert.equal(url,'https://api.openai.com/v1/responses');
+    const request=JSON.parse(options.body);assert.equal(request.store,false);contentCalls++;
+    return new Response(JSON.stringify({output_text:JSON.stringify({node_type:'Content',title:'Independent content '+contentCalls,body:'Fictional selected content asset '+contentCalls,rationale:''})}),{headers:{'Content-Type':'application/json'}});
+  };
+  for(const index of [0,1]) {
+    await open();await choose(index);await p.locator('[data-ai-brain-destination]').selectOption('Content');await prepare();
+    await p.locator('[data-ai-brain-create]').click();
+    await p.waitForFunction(n=>state.nodes.length===n&&state.selectedPrimary===state.nodes.at(-1).id,index+1);
+    await p.evaluate(()=>{clearAutosaveTimer();el.homeNavButton.click();el.aiBrainNavButton.click();});
+    assert.equal(await p.evaluate(()=>aiBrainContentSourceCurrent(state.aiBrain.messages.at(-1))),true);
+    assert.equal(await p.evaluate(()=>saveBoardToServer('manual')),true);
+  }
+  assert.equal(contentCalls,2);await boot();
+  assert.deepEqual(await p.evaluate(()=>state.nodes.map(n=>[n.type,n.content])),[['Content','Fictional selected content asset 1'],['Content','Fictional selected content asset 2']]);
+  console.log('PASS existing sequential Content → Home → Brain with signed scope and store:false mocked provider; exactly two explicit preparations');
   assert.equal(paid,0);assert(advice>0&&saves>0);global.fetch=originalFetch;
   assert.deepEqual(f.errors,[]);await p.close();
   console.log('PASS EN/DE, Light/Dark, 320/375/desktop, modal keyboard/Escape/focus/composer; real signed server scope, zero inference');
