@@ -6364,7 +6364,7 @@ function aiBrainIdentity() {
   return `${state.user?.email || "anonymous"}|${state.currentBoardId || ""}|${state.boardLoadGeneration}`;
 }
 
-const AI_BRAIN_MODES = Object.freeze({"general": {"title": "General conversation", "description": "Ask any strategic question about this Brand or campaign."}, "review_strategy": {"title": "Review Strategy", "description": "Review alignment, priorities and trade-offs in the current strategy."}, "explore_ideas": {"title": "Explore Ideas", "description": "Explore distinct ideas that fit your Brand and campaign."}, "find_gaps": {"title": "Find Gaps", "description": "Find missing assumptions, evidence or campaign elements."}, "evaluate_options": {"title": "Evaluate Options", "description": "Compare options against your goals, constraints and Brand context."}});
+const AI_BRAIN_MODES = Object.freeze({"analyze_social_ctas": {"title": "Analyze Social CTAs", "description": "Review existing Social posts with source evidence and Open in Canvas."}, "general": {"title": "General conversation", "description": "Ask any strategic question about this Brand or campaign."}, "review_strategy": {"title": "Review Strategy", "description": "Review alignment, priorities and trade-offs in the current strategy."}, "explore_ideas": {"title": "Explore Ideas", "description": "Explore distinct ideas that fit your Brand and campaign."}, "find_gaps": {"title": "Find Gaps", "description": "Find missing assumptions, evidence or campaign elements."}, "evaluate_options": {"title": "Evaluate Options", "description": "Compare options against your goals, constraints and Brand context."}});
 const AI_BRAIN_TEXT = Object.freeze({
   en: { you: "You", assumptions: "Assumptions", pending: "Pending…", failed: "Failed", retry: "Retry", current: "Retry uses the current Canvas context.", responseLanguage: "Response language: English", response_language_mismatch: "AI Brain answered in a different language. Please retry.", malformed_canvas: "The Canvas context is malformed.", unsupported_canvas: "This Canvas structure is not supported.", canvas_too_large: "The Canvas exceeds the supported size.", invalid_selected_node: "The selected node is no longer available.", stale_canvas: "The Canvas context is stale. Retry with the current Canvas.", generic: "AI Brain could not answer right now.", changed: "The Board, account, access, selection, or Canvas changed. Retry with the current context." },
   de: { you: "Du", assumptions: "Annahmen", pending: "Ausstehend…", failed: "Fehlgeschlagen", retry: "Erneut versuchen", current: "Beim erneuten Versuch wird der aktuelle Canvas-Kontext verwendet.", responseLanguage: "Antwortsprache: Deutsch", response_language_mismatch: "AI Brain hat in einer anderen Sprache geantwortet. Bitte versuche es erneut.", malformed_canvas: "Der Canvas-Kontext ist fehlerhaft.", unsupported_canvas: "Diese Canvas-Struktur wird nicht unterstützt.", canvas_too_large: "Der Canvas überschreitet die unterstützte Größe.", invalid_selected_node: "Der ausgewählte Knoten ist nicht mehr verfügbar.", stale_canvas: "Der Canvas-Kontext ist veraltet. Versuche es mit dem aktuellen Canvas erneut.", generic: "AI Brain kann gerade nicht antworten.", changed: "Board, Konto, Zugriff, Auswahl oder Canvas haben sich geändert. Versuche es mit dem aktuellen Kontext erneut." }
@@ -6379,8 +6379,8 @@ function aiBrainProposalText(key, languageCode = state.uiLanguage) { return (AI_
 function aiBrainText(key) { return (AI_BRAIN_TEXT[state.uiLanguage] || AI_BRAIN_TEXT.en)[key] || key; }
 function aiBrainTurnText(turn, key) { return (AI_BRAIN_TEXT[turn?.responseLanguage] || AI_BRAIN_TEXT[state.uiLanguage] || AI_BRAIN_TEXT.en)[key] || key; }
 const AI_BRAIN_LEARNING_TEXT = Object.freeze({
-  en: { title: "Approved Brand Learnings supplied as context", explanation: "These Learnings were supplied to the AI Brain. They were not necessarily used in every sentence.", partial: "Some relevant Learnings did not fit within the model’s context capacity.", advice_context_changed: "Context or access changed. Retry with current context.", advice_context_too_large: "This context exceeds the model’s capacity. Reduce the Canvas or start a new conversation.", model_context_unconfigured: "The model’s context configuration needs administrator review.", learning_context_unavailable: "Brand Learning context is temporarily unavailable. Please retry." },
-  de: { title: "Freigegebene Brand Learnings als Kontext bereitgestellt", explanation: "Diese Learnings wurden dem AI Brain bereitgestellt. Sie wurden nicht unbedingt in jedem Satz verwendet.", partial: "Einige relevante Learnings passten nicht in das Kontextfenster des Modells.", advice_context_changed: "Kontext oder Zugriff hat sich geändert. Versuche es mit aktuellem Kontext erneut.", advice_context_too_large: "Dieser Kontext überschreitet die Modellkapazität. Reduziere den Canvas oder starte eine neue Unterhaltung.", model_context_unconfigured: "Die Kontextkonfiguration des Modells muss administrativ geprüft werden.", learning_context_unavailable: "Der Brand-Learning-Kontext ist gerade nicht verfügbar. Bitte versuche es erneut." }
+  en: { evidence_response_invalid: "AI Brain returned an incomplete or invalid analysis. Retry with current context.", title: "Approved Brand Learnings supplied as context", explanation: "These Learnings were supplied to the AI Brain. They were not necessarily used in every sentence.", partial: "Some relevant Learnings did not fit within the model’s context capacity.", advice_context_changed: "Context or access changed. Retry with current context.", advice_context_too_large: "This context exceeds the model’s capacity. Reduce the Canvas or start a new conversation.", model_context_unconfigured: "The model’s context configuration needs administrator review.", learning_context_unavailable: "Brand Learning context is temporarily unavailable. Please retry." },
+  de: { evidence_response_invalid: "AI Brain hat eine unvollständige oder ungültige Analyse geliefert. Versuche es mit aktuellem Kontext erneut.", title: "Freigegebene Brand Learnings als Kontext bereitgestellt", explanation: "Diese Learnings wurden dem AI Brain bereitgestellt. Sie wurden nicht unbedingt in jedem Satz verwendet.", partial: "Einige relevante Learnings passten nicht in das Kontextfenster des Modells.", advice_context_changed: "Kontext oder Zugriff hat sich geändert. Versuche es mit aktuellem Kontext erneut.", advice_context_too_large: "Dieser Kontext überschreitet die Modellkapazität. Reduziere den Canvas oder starte eine neue Unterhaltung.", model_context_unconfigured: "Die Kontextkonfiguration des Modells muss administrativ geprüft werden.", learning_context_unavailable: "Der Brand-Learning-Kontext ist gerade nicht verfügbar. Bitte versuche es erneut." }
 });
 function aiBrainLearningText(turn, key) { return (AI_BRAIN_LEARNING_TEXT[turn?.responseLanguage] || AI_BRAIN_LEARNING_TEXT.en)[key]; }
 function renderAiBrainLearningContext(advisor, turn) {
@@ -7245,6 +7245,7 @@ function renderAiBrainTranscript(transcript) {
     const formatted = document.createElement("div"); formatted.className = "ai-brain-formatted-answer"; renderAiBrainFormattedAnswer(formatted, turn.answer);
     advisor.append(createAiBrainAdvisorAvatar(turn.advisorIdentity), advisorLabel, formatted);
     renderAiBrainLearningContext(advisor, turn);
+    if (turn.socialEvidence) renderAiBrainSocialEvidence(advisor, turn);
     if (turn.responseLanguage) { const disclosure = document.createElement("small"); disclosure.className = "ai-brain-response-language"; disclosure.textContent = AI_BRAIN_TEXT[turn.responseLanguage]?.responseLanguage || AI_BRAIN_TEXT.en.responseLanguage; advisor.appendChild(disclosure); }
     if (Array.isArray(turn.assumptions) && turn.assumptions.length) {
       const section = document.createElement("section"); section.className = "ai-brain-assumptions";
@@ -7402,6 +7403,7 @@ function renderAiBrain() {
   if (!sameIdentity) el.aiBrainSummary.aiBrainScroll = null;
   const openLearnings = sameIdentity ? Array.from(el.aiBrainSummary.querySelectorAll(".ai-brain-learning-context[open]"), (node) => node.closest("[data-turn-id]")?.dataset.turnId) : [];
   const focused = document.activeElement;
+  const evidenceFocus = sameIdentity && el.aiBrainSummary.contains(focused) ? focused?.dataset?.aiBrainEvidenceFocus : null;
   const composerFocus = sameIdentity && focused?.id && ["ai-brain-question", "ai-brain-mode", "ai-brain-transcript", "ai-brain-jump-latest", "ai-brain-context"].includes(focused.id) && el.aiBrainSummary.contains(focused)
     ? { id: focused.id, start: focused.selectionStart, end: focused.selectionEnd, direction: focused.selectionDirection } : null;
   const previousComposer = sameIdentity ? el.aiBrainSummary.querySelector("#ai-brain-question") : null;
@@ -7435,6 +7437,7 @@ function renderAiBrain() {
   el.aiBrainSummary.querySelectorAll("[data-ai-brain-cancel]").forEach((button) => button.addEventListener("click", () => cancelAiBrainNodeProposal(button.dataset.aiBrainCancel)));
   el.aiBrainSummary.querySelectorAll("[data-ai-brain-create]").forEach((button) => button.addEventListener("click", () => applyAiBrainNodeProposal(button.dataset.aiBrainCreate)));
   translateInterface(el.aiBrainSummary);
+  if (evidenceFocus) Array.from(el.aiBrainSummary.querySelectorAll('[data-ai-brain-evidence-focus]')).find(node => node.dataset.aiBrainEvidenceFocus === evidenceFocus)?.focus({ preventScroll: true });
   if (transcript) bindAiBrainScroll(transcript, savedScroll, revealTurnId);
   const contentDialog = el.aiBrainSummary.querySelector('[data-ai-brain-dialog]');
   if (contentDialog && aiBrainViewIsVisible()) {
@@ -7448,6 +7451,146 @@ function renderAiBrain() {
     if (target && !target.disabled && !target.hidden) { target.focus({ preventScroll: true }); if (composerFocus.id === "ai-brain-question") target.setSelectionRange(composerFocus.start, composerFocus.end, composerFocus.direction); }
   }
 }
+// Evidence references are ephemeral and strict across saves, scope and source
+// changes. Selection is excluded so normal Canvas opening/return remains valid.
+function captureAiBrainEvidenceOrigin() {
+  return { account: state.user, snapshot: JSON.stringify([state.user, state.currentBoardId, state.boardLoadGeneration,
+    state.lastKnownUpdatedAt, state.workspaceCatalog, state.boardBrandAssociation, state.nodes, state.edges]) };
+}
+function aiBrainEvidenceOriginCurrent(origin) {
+  return origin?.account === state.user && !!state.user?.email && state.boardAccess?.canEdit === true
+    && !state.isBoardLoading && !state.isBoardHydrating && !state.isSaving
+    && origin.snapshot === captureAiBrainEvidenceOrigin().snapshot;
+}
+function validateAiBrainSocialEvidence(data, origin) {
+  const context = data.evidenceContext;
+  if (!Array.isArray(data.findings) || data.findings.length > 3 || !context
+    || context.boardId !== state.currentBoardId || context.boardRevision !== state.lastKnownUpdatedAt
+    || ![context.suppliedSocial, context.indexedSocial].every(n => Number.isInteger(n) && n >= 0 && n <= 200)
+    || context.indexedSocial > context.suppliedSocial
+    || !Number.isInteger(context.omittedFindings) || context.omittedFindings < 0 || context.omittedFindings > 3) return null;
+  const text = (value, max) => typeof value === 'string' && value.length <= max;
+  const fields = ['cta', 'social.cta', 'social.caption', 'social.preview', 'content', 'goal'];
+  const findings = data.findings.filter(finding => finding && /^social-[1-3]$/.test(finding.id) && finding.type === 'Social Media Posting' && finding.kind === 'interpretation' && finding.sourceCheck === 'matched'
+    && text(finding.nodeId, 160) && !!finding.nodeId && text(finding.nodeTitle, 1000)
+    && text(finding.observation, 120) && !!finding.observation && text(finding.interpretation, 600) && !!finding.interpretation
+    && finding.reference?.nodeId === finding.nodeId && /^[a-f0-9]{64}$/.test(finding.reference?.scopeRevision || '')
+    && Array.isArray(finding.evidence) && finding.evidence.length >= 1 && finding.evidence.length <= 2
+    && finding.evidence[0].field !== 'goal' && (finding.evidence.length === 1 || finding.evidence[1].field === 'goal')
+    && finding.evidence.every(source => source && fields.includes(source.field) && text(source.quote, 180) && !!source.quote
+      && typeof source.excerpted === 'boolean' && (source.field === 'goal' ? ['saved', 'unsaved'] : ['saved', 'working']).includes(source.state)));
+  return { origin, findings, context, expanded: false, status: '' };
+}
+function aiBrainEvidenceCopy(en, de) { return state.uiLanguage === 'de' ? de : en; }
+function renderAiBrainSocialEvidence(advisor, turn) {
+  const value = turn.socialEvidence;
+  if (!aiBrainEvidenceOriginCurrent(value.origin)) { value.findings = []; value.origin = null; value.status = 'stale'; }
+  const section = document.createElement('section'); section.className = 'ai-brain-social-evidence';
+  const text = (tag, content, parent = section) => { const node = document.createElement(tag); node.textContent = content; parent.appendChild(node); return node; };
+  if (value.status === 'stale') {
+    text('p', aiBrainEvidenceCopy('Evidence context changed. Ask again with current context.', 'Der Belegkontext hat sich geändert. Frage mit aktuellem Kontext erneut.'));
+    advisor.appendChild(section); return;
+  }
+  if (value.context.omittedFindings) text('p', aiBrainEvidenceCopy('Some proposed findings could not be supported by reliable source evidence.', 'Einige vorgeschlagene Hinweise ließen sich nicht durch verlässliche Quellbelege stützen.'));
+  if (!value.findings.length) { if (value.context.omittedFindings) advisor.appendChild(section); return; }
+  text('small', aiBrainEvidenceCopy(
+    `Citable Social coverage: ${value.context.indexedSocial} of ${value.context.suppliedSocial} supplied posts. Copy may be excerpted; omitted evidence does not prove absence.`,
+    `Zitierbare Social-Abdeckung: ${value.context.indexedSocial} von ${value.context.suppliedSocial} übermittelten Posts. Texte können gekürzt sein; fehlende Belege beweisen keine Abwesenheit.`));
+  const labels = { cta: ['CTA', 'CTA'], 'social.cta': ['Social CTA', 'Social-CTA'], 'social.caption': ['Caption', 'Bildunterschrift'],
+    'social.preview': ['Preview / CTA', 'Vorschau / CTA'], content: ['Content', 'Inhalt'], goal: ['Native marketing goal', 'Natives Marketingziel'] };
+  const card = finding => {
+    const article = document.createElement('article'); article.className = 'ai-brain-evidence-card';
+    text('h5', finding.nodeTitle || finding.type, article).dataset.userContent = 'true';
+    text('small', `${finding.type} · ${finding.nodeId}`, article);
+    text('strong', aiBrainEvidenceCopy('AI interpretation', 'KI-Interpretation'), article);
+    text('p', finding.observation, article).dataset.userContent = 'true';
+    text('p', finding.interpretation, article).dataset.userContent = 'true';
+    for (const source of finding.evidence) {
+      let parent = article;
+      if (source.field === 'goal') {
+        parent = document.createElement('details'); parent.open = !!value.goalOpen?.[finding.id];
+        parent.addEventListener('toggle', () => { value.goalOpen = { ...value.goalOpen, [finding.id]: parent.open }; });
+        text('summary', aiBrainEvidenceCopy(...labels.goal), parent).dataset.aiBrainEvidenceFocus = `${turn.id}:${finding.id}:goal`;
+        article.appendChild(parent);
+      }
+      text('small', `${aiBrainEvidenceCopy(...labels[source.field])} · ${source.field} · ${aiBrainEvidenceCopy('Source checked', 'Quelltext abgeglichen')}`, parent);
+      const quote = text('blockquote', source.quote, parent); quote.dataset.userContent = 'true';
+      text('small', source.state === 'saved' ? aiBrainEvidenceCopy('Saved field', 'Gespeichertes Feld')
+        : source.state === 'unsaved' ? aiBrainEvidenceCopy('Unsaved goal', 'Ungespeichertes Ziel')
+        : aiBrainEvidenceCopy('Working context — may include unsaved edits', 'Arbeitskontext — kann ungespeicherte Änderungen enthalten'), parent);
+      if (source.excerpted) text('small', aiBrainEvidenceCopy('Exact excerpt; full copy is longer.', 'Exakter Auszug; der vollständige Text ist länger.'), parent);
+    }
+    const button = text('button', aiBrainEvidenceCopy('Open in Canvas', 'Im Canvas öffnen'), article);
+    button.type = 'button'; button.dataset.aiBrainEvidenceOpen = finding.nodeId;
+    button.dataset.aiBrainEvidenceFocus = `${turn.id}:${finding.id}:open`;
+    const status = text('small', '', article); status.setAttribute('role', 'status');
+    button.addEventListener('click', () => openAiBrainEvidenceReference(turn, finding, button, status));
+    return article;
+  };
+  section.appendChild(card(value.findings[0]));
+  if (value.findings.length > 1) {
+    const more = document.createElement('details'); more.open = value.expanded;
+    text('summary', aiBrainEvidenceCopy(`More findings (${value.findings.length - 1})`, `Weitere Hinweise (${value.findings.length - 1})`), more).dataset.aiBrainEvidenceFocus = `${turn.id}:more`;
+    more.addEventListener('toggle', () => { value.expanded = more.open; });
+    value.findings.slice(1).forEach(finding => more.appendChild(card(finding))); section.appendChild(more);
+  }
+  advisor.appendChild(section);
+}
+async function openAiBrainEvidenceReference(turn, finding, button, status) {
+  const value = turn.socialEvidence;
+  const current = () => state.aiBrain.messages.includes(turn) && turn.status === 'success' && turn.socialEvidence === value
+    && value.findings.includes(finding) && aiBrainEvidenceOriginCurrent(value.origin)
+    && state.nodes.some(node => node.id === finding.nodeId && ['Social Media Post', 'Social Media Posting'].includes(node.type));
+  const failed = (reason = false) => {
+    const stale = reason === true;
+    status.textContent = stale ? aiBrainEvidenceCopy('Reference unavailable or changed. Ask again with current context.', 'Verweis nicht verfügbar oder geändert. Frage mit aktuellem Kontext erneut.')
+      : reason === 'blocked' ? aiBrainEvidenceCopy('Canvas could not be opened. Close any open detail or dialog and try again.', 'Der Canvas konnte nicht geöffnet werden. Schließe offene Details oder Dialoge und versuche es erneut.')
+      : aiBrainEvidenceCopy('Could not check this reference. Try opening it again.', 'Der Verweis konnte nicht geprüft werden. Versuche ihn erneut zu öffnen.');
+    if (stale) {
+      value.findings = []; value.origin = null; value.status = 'stale';
+      if (state.aiBrain.messages.includes(turn)) renderAiBrain();
+    }
+  };
+  if (button.disabled) return;
+  if (!current()) { failed(true); return; }
+  button.disabled = true;
+  status.textContent = aiBrainEvidenceCopy('Checking reference…', 'Verweis wird geprüft…');
+  try {
+    const response = await fetch('/api/ai-brain/evidence-reference', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ board_id: state.currentBoardId, node_id: finding.nodeId, scope_revision: finding.reference.scopeRevision }) });
+    if (!current()) throw new Error('changed');
+    const data = await response.json();
+    if (!current() || (response.status !== 503 && !response.ok) || (response.ok && (data.nodeId !== finding.nodeId || data.scopeRevision !== finding.reference.scopeRevision))) throw new Error('changed');
+    if (!response.ok) throw new Error('service');
+    if (document.querySelector('dialog[open]') || el.brandWorkspaceDetail?.open) throw new Error('blocked');
+    if (!Array.from(el.zoomLayer.querySelectorAll('[data-id]')).some(element => element.dataset.id === finding.nodeId)) throw new Error('unavailable');
+    setActiveView('board');
+    if (!current() || state.activeView !== 'board') throw new Error('blocked');
+    await new Promise(resolve => requestAnimationFrame(resolve));
+    if (!current() || state.activeView !== 'board') throw new Error('changed');
+    // Already in Board view: the existing helper selects synchronously through
+    // selectedIds/updateSelectionClasses/fillInspector, without deferred focus.
+    if (!focusNodeInCanvas(finding.nodeId, { behavior: 'auto', select: true, pulse: false })) throw new Error('unavailable');
+    await new Promise(resolve => requestAnimationFrame(resolve));
+    if (!current() || state.activeView !== 'board' || state.selectedPrimary !== finding.nodeId) throw new Error('changed');
+    if (!revealAiBrainEvidenceNode(finding.nodeId)) throw new Error('unavailable');
+    (el.inputs?.title || el.inspectorPanel)?.focus?.({ preventScroll: true });
+    status.textContent = '';
+  } catch (error) { failed(error.message === 'changed' || error.message === 'unavailable' ? true : error.message === 'blocked' ? 'blocked' : false); }
+  finally { button.disabled = false; }
+}
+function revealAiBrainEvidenceNode(nodeId) {
+  const element = Array.from(el.zoomLayer.querySelectorAll('[data-id]')).find(node => node.dataset.id === nodeId);
+  if (!element || !el.canvas) return false;
+  const canvas = el.canvas.getBoundingClientRect(), node = element.getBoundingClientRect();
+  const inspector = el.inspectorPanel?.classList.contains('hidden') ? null : el.inspectorPanel?.getBoundingClientRect();
+  const right = inspector && inspector.left > canvas.left ? Math.min(canvas.right, inspector.left) : canvas.right;
+  const dx = node.left < canvas.left + 16 ? node.left - canvas.left - 16 : node.right > right - 16 ? node.right - right + 16 : 0;
+  const dy = node.top < canvas.top + 16 ? node.top - canvas.top - 16 : node.bottom > canvas.bottom - 16 ? node.bottom - canvas.bottom + 16 : 0;
+  el.canvas.scrollTo({ left: Math.max(0, el.canvas.scrollLeft + dx), top: Math.max(0, el.canvas.scrollTop + dy), behavior: 'auto' });
+  return true;
+}
+
 async function requestAiBrainAdvice(event, retryTurnId = null) {
   event?.preventDefault();
   if (state.aiBrain.status === "loading" || !state.user?.email || !state.currentBoardId || state.boardAccess?.canEdit !== true) return renderAiBrain();
@@ -7455,6 +7598,7 @@ async function requestAiBrainAdvice(event, retryTurnId = null) {
   if (retryTurnId && !existing) return;
   const input = el.aiBrainSummary.querySelector("#ai-brain-question"); const question = existing?.question || input?.value.trim(); if (!question) return;
   const adviceMode = existing ? existing.adviceMode || "general" : state.aiBrain.adviceMode || "general";
+  const evidenceOrigin = adviceMode === "analyze_social_ctas" ? captureAiBrainEvidenceOrigin() : null;
   const brandProposalSource = captureAiBrainBrandSource();
   const contentProposalSource = captureAiBrainContentSource();
   const responseLanguage = state.uiLanguage === "de" ? "de" : "en"; const controller = new AbortController(); const requestId = state.aiBrain.requestId + 1; const advisorIdentity = captureAiBrainAdvisorIdentity(requestId); const identity = aiBrainIdentity(); const contextIdentity = aiBrainRequestContextIdentity(); const selectedNodeId = state.selectedPrimary || null; const canvas = aiBrainCanvasProjection(); const conversationHistory = aiBrainConversationHistory(existing?.id || null);
@@ -7466,15 +7610,17 @@ async function requestAiBrainAdvice(event, retryTurnId = null) {
   if (event?.type === "submit") input?.focus({ preventScroll: true });
   renderAiBrain({ revealTurnId: turn.id });
   try {
-    const response = await fetch("/api/ai-brain/advice", { method: "POST", headers: { "Content-Type": "application/json", "X-AI-Brain-Generation": String(requestId) }, signal: controller.signal, body: JSON.stringify({ board_id: state.currentBoardId, question, advice_mode: adviceMode, selected_node_id: selectedNodeId, canvas_context: canvas, ...(canvas.nodes.some(node => Object.hasOwn(node, "goal")) ? { canvas_revision: state.lastKnownUpdatedAt || null } : {}), response_language: responseLanguage, conversation_history: conversationHistory.exchanges, conversation_history_truncated: conversationHistory.truncated }) });
+    const response = await fetch("/api/ai-brain/advice", { method: "POST", headers: { "Content-Type": "application/json", "X-AI-Brain-Generation": String(requestId) }, signal: controller.signal, body: JSON.stringify({ board_id: state.currentBoardId, question, advice_mode: adviceMode, selected_node_id: selectedNodeId, canvas_context: canvas, ...(adviceMode === "analyze_social_ctas" || canvas.nodes.some(node => Object.hasOwn(node, "goal")) ? { canvas_revision: state.lastKnownUpdatedAt || null } : {}), response_language: responseLanguage, conversation_history: conversationHistory.exchanges, conversation_history_truncated: conversationHistory.truncated }) });
+    if (evidenceOrigin && !aiBrainEvidenceOriginCurrent(evidenceOrigin)) throw Object.assign(new Error("changed"), { code: "changed" });
     const data = await response.json().catch(() => ({}));
+    if (evidenceOrigin && !aiBrainEvidenceOriginCurrent(evidenceOrigin)) throw Object.assign(new Error("changed"), { code: "changed" });
     if (state.aiBrain.requestId !== requestId || state.aiBrain.identity !== identity || aiBrainIdentity() !== identity) return;
     if (aiBrainRequestContextIdentity() !== contextIdentity) { state.aiBrain = { ...state.aiBrain, status: "error", controller: null, messages: state.aiBrain.messages.map((item) => item.id === turn.id ? { ...item, status: "failed", errorCode: "changed" } : item) }; return renderAiBrain(); }
     if (!response.ok) { const error = new Error(data.error || "AI Brain failed"); error.code = data.code || "generic"; throw error; }
     if (data.context?.response_language !== responseLanguage) { const error = new Error("AI Brain response language identity mismatch"); error.code = "response_language_mismatch"; throw error; }
     const scope = [`Board Brand Core`, data.context?.canonicalBrandCore ? "Canonical Brand Core" : null, `${data.context?.canvasNodes || 0} Canvas nodes`].filter(Boolean).join(" · ");
     const assumptions = Array.isArray(data.assumptions) ? data.assumptions.filter((value) => typeof value === "string").slice(0, 20) : [];
-    state.aiBrain = { ...state.aiBrain, status: "success", controller: null, messages: state.aiBrain.messages.map((item) => item.id === turn.id ? { ...item, status: "success", answer: data.answer, responseLanguage, assumptions, brandProposalSource: { ...brandProposalSource, answer: data.answer, question }, contentProposalInvalid: false, contentProposalSource: { ...contentProposalSource, turnId: turn.id, answer: data.answer, question }, brandProposalInvalid: false, brandUpdateStaged: false, approvedLearnings: data.context?.approved_learnings || null, referenceResolution: data.context?.reference_resolution || "none", proposal: null, meta: `${scope}. ${data.disclaimer}` } : item) };
+    state.aiBrain = { ...state.aiBrain, status: "success", controller: null, messages: state.aiBrain.messages.map((item) => item.id === turn.id ? { ...item, status: "success", answer: data.answer, responseLanguage, assumptions, ...(evidenceOrigin ? { socialEvidence: validateAiBrainSocialEvidence(data, evidenceOrigin) } : {}), brandProposalSource: { ...brandProposalSource, answer: data.answer, question }, contentProposalInvalid: false, contentProposalSource: { ...contentProposalSource, turnId: turn.id, answer: data.answer, question }, brandProposalInvalid: false, brandUpdateStaged: false, approvedLearnings: data.context?.approved_learnings || null, referenceResolution: data.context?.reference_resolution || "none", proposal: null, meta: `${scope}. ${data.disclaimer}` } : item) };
   } catch (error) {
     if (state.aiBrain.requestId !== requestId || state.aiBrain.identity !== identity || aiBrainIdentity() !== identity) return;
     state.aiBrain = { ...state.aiBrain, status: "error", controller: null, messages: state.aiBrain.messages.map((item) => item.id === turn.id ? { ...item, status: "failed", errorCode: error.code || "generic" } : item) };
@@ -12149,7 +12295,7 @@ function pulseActivityFocusedNode(nodeId) {
 
 function focusNodeInCanvas(nodeId, { behavior = "smooth", select = true, pulse = true } = {}) {
   const node = getNode(nodeId);
-  const nodeEl = node ? el.zoomLayer.querySelector(`[data-id='${nodeId}']`) : null;
+  const nodeEl = node ? Array.from(el.zoomLayer.querySelectorAll("[data-id]")).find(element => element.dataset.id === nodeId) : null;
   if (!node || !nodeEl || !el.canvas) return false;
 
   const runFocus = () => {

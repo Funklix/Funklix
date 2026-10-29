@@ -474,6 +474,8 @@ jobs:
             fs.appendFileSync(process.env.GITHUB_ENV, `CHROMIUM_PATH=${executablePath}\n`);
           })().catch(error => { console.error(error); process.exitCode = 1; });
           JS
+      - name: Check BW-39.1 evidence-linked Social CTA analysis (signed SQL and real browser)
+        run: npm run check:bw39.1
       - name: Check Content eligibility, source selection, editable preview and remote Create scope
         timeout-minutes: 5
         run: npm run check:bw37.1c3b
