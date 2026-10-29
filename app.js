@@ -7500,10 +7500,11 @@ function renderAiBrainSocialEvidence(advisor, turn) {
     'social.preview': ['Preview / CTA', 'Vorschau / CTA'], content: ['Content', 'Inhalt'], goal: ['Native marketing goal', 'Natives Marketingziel'] };
   const card = finding => {
     const article = document.createElement('article'); article.className = 'ai-brain-evidence-card';
-    text('h5', finding.nodeTitle || finding.type, article);
+    text('h5', finding.nodeTitle || finding.type, article).dataset.userContent = 'true';
     text('small', `${finding.type} · ${finding.nodeId}`, article);
     text('strong', aiBrainEvidenceCopy('AI interpretation', 'KI-Interpretation'), article);
-    text('p', finding.observation, article); text('p', finding.interpretation, article);
+    text('p', finding.observation, article).dataset.userContent = 'true';
+    text('p', finding.interpretation, article).dataset.userContent = 'true';
     for (const source of finding.evidence) {
       let parent = article;
       if (source.field === 'goal') {

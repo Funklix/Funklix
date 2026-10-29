@@ -11,7 +11,7 @@ async function main() {
     const f = await require('./fixtures/home-browser')(browser)({ empty: true, prepare(r) {
       r.db.boards[0].updated_at = REV;
       r.db.boards[0].canvas_json.nodes = ['first', 'exact-target', 'third'].map((id, i) => ({
-        id, type: 'Social Media Posting', title: 'Repeated workshop title', content: 'Explore a new way of making together.',
+        id, type: 'Social Media Posting', title: 'Content', content: 'Explore a new way of making together.',
         goal: 'Increase workshop registrations', status: 'Draft', position: { x: 180 + i * 600, y: 240 },
         images: [], tags: [], postits: [], variants: [], reactions: {},
         social: { platform: 'LinkedIn', caption: 'Explore a new way of making together.', preview: 'Discover more 🚀', cta: 'Discover more 🚀', hashtags: [] }
@@ -178,6 +178,7 @@ async function main() {
       await boot(); await p.evaluate(({ theme, locale }) => { window.FunklixTheme.setPreference(theme); state.uiLanguage = language.setUiLanguage(locale); renderAiBrain(); }, { theme, locale });
       await ask();
       const card = p.locator('.ai-brain-evidence-card').first();
+      assert.equal(await card.locator('h5').textContent(), 'Content', 'actual repeated node title must not be translated as interface vocabulary');
       assert((await card.textContent()).includes(locale === 'de' ? 'Quelltext abgeglichen' : 'Source checked'));
       assert(await card.evaluate(node => node.scrollWidth <= node.clientWidth + 1));
       assert(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
