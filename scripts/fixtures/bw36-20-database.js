@@ -6,7 +6,7 @@ const ROOT = path.resolve(__dirname, '../..');
 const BOARD = '11111111-1111-4111-8111-111111111111', BRAND = '22222222-2222-4222-8222-222222222222';
 const OTHER = '33333333-3333-4333-8333-333333333333', IDENTITY = '44444444-4444-4444-8444-444444444444';
 const OWNER = 'owner@example.invalid', ACTOR = 'actor@example.invalid';
-async function fixture() {
+async function fixture({ goals = false } = {}) {
   const pg = new PGlite();
   await pg.exec(`CREATE ROLE anon; CREATE ROLE authenticated;
     CREATE TABLE app_identities(id uuid PRIMARY KEY, canonical_email text, status text, revision bigint);
@@ -44,7 +44,7 @@ async function fixture() {
       return load(resolved);
     };
     vm.runInNewContext(fs.readFileSync(filename, 'utf8'), { module, exports: module.exports, require: requireFixture,
-      Buffer, console, AbortController, setTimeout, clearTimeout, process: { env: f.env },
+      Buffer, Date, console, AbortController, setTimeout, clearTimeout, process: { env: f.env },
       fetch: async (url, options) => {
         assertProviderRequest(url, options);
         if (f.active) throw new Error('Locks held during inference');
@@ -62,8 +62,8 @@ async function fixture() {
   f.reset = async () => {
     await pg.exec('DELETE FROM board_editors; DELETE FROM boards; DELETE FROM brands; DELETE FROM workspace_memberships; DELETE FROM workspaces; DELETE FROM app_identities');
     await pg.query('INSERT INTO app_identities VALUES ($1,$2,$3,1)', [IDENTITY, ACTOR, 'active']);
-    for (const id of [BRAND, OTHER]) await pg.query('INSERT INTO brands VALUES ($1,$2,$3,1,$4::jsonb,now())', [id, OWNER, 'Canonical brand', JSON.stringify({ positioning: 'Premium' })]);
-    await pg.query('INSERT INTO boards VALUES ($1,$2,$3,$4,$5,$6::jsonb,1,now(),now())', [BOARD, 'Campaign', 'owner-id', OWNER, BRAND, JSON.stringify({ campaign: 'Introductory offer' })]);
+    for (const id of [BRAND, OTHER]) await pg.query('INSERT INTO brands(id,owner_email,name,revision,brand_core,updated_at) VALUES ($1,$2,$3,1,$4::jsonb,now())', [id, OWNER, 'Canonical brand', JSON.stringify({ positioning: 'Premium' })]);
+    await pg.query('INSERT INTO boards(id,name,owner_id,owner_email,brand_id,brand_core_snapshot,brand_core_source_revision,brand_core_source_updated_at,updated_at) VALUES ($1,$2,$3,$4,$5,$6::jsonb,1,now(),now())', [BOARD, 'Campaign', 'owner-id', OWNER, BRAND, JSON.stringify({ campaign: 'Introductory offer' })]);
     await pg.query('INSERT INTO board_editors VALUES ($1,$2,$3)', [BOARD, ACTOR, 'editor']);
     await pg.query('INSERT INTO brand_members(brand_id,email,role) VALUES ($1,$2,$3)', [BRAND, ACTOR, 'viewer']);
     f.user = { email: ACTOR }; f.onProvider = null; f.onQuery = null; f.onRows = null; f.calls.length = 0; f.queries.length = 0;
@@ -88,6 +88,9 @@ async function fixture() {
     return response;
   };
   await f.reset();
+  if (goals) await pg.exec(`ALTER TABLE boards ADD COLUMN canvas_json jsonb, ADD COLUMN workspace_id uuid;
+    ALTER TABLE brands ADD COLUMN workspace_id uuid;
+    ALTER TABLE workspaces ADD COLUMN revision bigint DEFAULT 1;`);
   return f;
 }
 module.exports = { fixture };

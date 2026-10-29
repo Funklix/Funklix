@@ -6530,6 +6530,8 @@ function aiBrainCanvasProjection() {
   const nodes = state.nodes.map((node) => {
     const type = node.type === "Social Media Post" ? "Social Media Posting" : string(node.type, 80);
     const projected = { id: string(node.id, 160), type };
+    // Goals must remain exact or fail server validation, never silently truncate.
+    if (node.goal !== undefined && node.goal !== "") projected.goal = node.goal;
     for (const [key, max] of Object.entries({ title: 1000, content: 8000, status: 1000, funnelStage: 1000, audience: 1000, tone: 1000, cta: 1000, channel: 1000 })) if (typeof node[key] === "string" && node[key]) projected[key] = string(node[key], max);
     if (node.social && typeof node.social === "object") projected.social = nested(node.social, ["caption", "hashtags", "platform", "preview", "cta"]);
     if (node.landingPage && typeof node.landingPage === "object") projected.landingPage = nested(node.landingPage, ["headerClaim", "problem", "solution", "trust", "cta"]);
@@ -7464,7 +7466,7 @@ async function requestAiBrainAdvice(event, retryTurnId = null) {
   if (event?.type === "submit") input?.focus({ preventScroll: true });
   renderAiBrain({ revealTurnId: turn.id });
   try {
-    const response = await fetch("/api/ai-brain/advice", { method: "POST", headers: { "Content-Type": "application/json", "X-AI-Brain-Generation": String(requestId) }, signal: controller.signal, body: JSON.stringify({ board_id: state.currentBoardId, question, advice_mode: adviceMode, selected_node_id: selectedNodeId, canvas_context: canvas, response_language: responseLanguage, conversation_history: conversationHistory.exchanges, conversation_history_truncated: conversationHistory.truncated }) });
+    const response = await fetch("/api/ai-brain/advice", { method: "POST", headers: { "Content-Type": "application/json", "X-AI-Brain-Generation": String(requestId) }, signal: controller.signal, body: JSON.stringify({ board_id: state.currentBoardId, question, advice_mode: adviceMode, selected_node_id: selectedNodeId, canvas_context: canvas, ...(canvas.nodes.some(node => Object.hasOwn(node, "goal")) ? { canvas_revision: state.lastKnownUpdatedAt || null } : {}), response_language: responseLanguage, conversation_history: conversationHistory.exchanges, conversation_history_truncated: conversationHistory.truncated }) });
     const data = await response.json().catch(() => ({}));
     if (state.aiBrain.requestId !== requestId || state.aiBrain.identity !== identity || aiBrainIdentity() !== identity) return;
     if (aiBrainRequestContextIdentity() !== contextIdentity) { state.aiBrain = { ...state.aiBrain, status: "error", controller: null, messages: state.aiBrain.messages.map((item) => item.id === turn.id ? { ...item, status: "failed", errorCode: "changed" } : item) }; return renderAiBrain(); }

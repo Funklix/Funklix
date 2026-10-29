@@ -7,11 +7,12 @@ const { analyzeCanvas } = require('../_ai-brain-diagnostics');
 const { LIMITS, validateCanvasContext } = require('../_ai-brain-canvas-context');
 const { hasConversationalReference, validateConversationHistory } = require('../_ai-brain-conversation');
 const learningContext = require('../_ai-brain-learning-context');
+const goalContext = require('../_ai-brain-goal-context');
 const { prepareEvidence } = require('../_ai-brain-evidence');
 const { advisorPersonality } = require('../_ai-brain-personality');
 
-const BODY_KEYS = ['advice_mode', 'board_id', 'canvas_context', 'conversation_history', 'conversation_history_truncated', 'question', 'response_language', 'selected_node_id'];
-const REQUIRED_BODY_KEYS = BODY_KEYS.filter((key) => !['advice_mode', 'conversation_history', 'conversation_history_truncated'].includes(key));
+const BODY_KEYS = ['advice_mode', 'board_id', 'canvas_context', 'canvas_revision', 'conversation_history', 'conversation_history_truncated', 'question', 'response_language', 'selected_node_id'];
+const REQUIRED_BODY_KEYS = BODY_KEYS.filter((key) => !['advice_mode', 'canvas_revision', 'conversation_history', 'conversation_history_truncated'].includes(key));
 function plainObject(value) { return !!value && typeof value === 'object' && !Array.isArray(value); }
 function clean(value, max = 4000) { return typeof value === 'string' ? value.trim().slice(0, max) : ''; }
 function sameKeys(value, allowed) { return plainObject(value) && Object.keys(value).every((key) => allowed.includes(key)); }
@@ -128,13 +129,14 @@ module.exports = async function handler(req, res) {
     const diagnostics = analyzeCanvas(nodes, edges);
     const selectedNode = selectedNodeId ? nodes.find((node) => node.id === selectedNodeId) : null;
     const evidence = prepareEvidence({ nodes, edges, selectedNode });
+    let goals = null;
     const makeContext = () => ({
       board: { id: board.id, name: board.name, updatedAt: board.updated_at },
       boardBrandCore: plainObject(board.brand_core_snapshot) ? board.brand_core_snapshot : {},
       boardBrandCoreProvenance: { revision: board.brand_core_source_revision || null, updatedAt: board.brand_core_source_updated_at || null },
       canonicalBrandCore: canonical ? { name: canonical.name, revision: Number(canonical.revision), updatedAt: canonical.updated_at, value: canonical.brand_core } : null,
       advisorPersonality: advisorPersonality({ canonical, snapshot: board.brand_core_snapshot }),
-      workingCanvas: { nodes, edges, selectedNode },
+      workingCanvas: { nodes, edges, selectedNode, ...(goals ? { goalSources: goals.sources } : {}) },
       diagnostics,
       evidence
     });
@@ -158,11 +160,13 @@ module.exports = async function handler(req, res) {
     const data = await learningContext.capture({ boardId, user });
     board = data.board;
     canonical = data.canonical;
+    goals = await goalContext.capture({ boardId, user, nodes, revision: req.body.canvas_revision });
     const prepared = learningContext.prepare({ data, env: modelEnvironment,
       query: { question, nodes, selectedNode, boardId, conversation: conversation.history },
       messages: approvedBrandLearnings => providerMessages({ context: makeContext(), conversation: conversation.history, language, question, adviceMode, approvedBrandLearnings: data.identity ? approvedBrandLearnings : undefined })
     });
     await learningContext.revalidate({ data, selected: prepared.selected, user });
+    await goalContext.revalidate({ data: goals, user });
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 25000);
     let response;
@@ -181,6 +185,7 @@ module.exports = async function handler(req, res) {
     if (!response.ok) return res.status(502).json({ error: 'AI Brain could not provide advice' });
     const answer = outputText(await response.json());
     await learningContext.revalidate({ data, selected: prepared.selected, user });
+    await goalContext.revalidate({ data: goals, user });
     if (!answer) return res.status(502).json({ error: 'AI Brain returned no advice' });
     if (responseLanguageMismatch(answer, language)) {
       return res.status(502).json({
