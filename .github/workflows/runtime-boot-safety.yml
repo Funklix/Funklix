@@ -475,7 +475,18 @@ jobs:
           })().catch(error => { console.error(error); process.exitCode = 1; });
           JS
       - name: Check BW-39.1 evidence-linked Social CTA analysis (signed SQL and real browser)
-        run: npm run check:bw39.1
+        id: evidence_acceptance
+        shell: bash
+        run: |
+          mkdir -p work
+          npm run check:bw39.1 2>&1 | tee work/bw39-evidence-acceptance.log
+      - name: Preserve fictional evidence acceptance failure diagnostics
+        if: failure() && steps.evidence_acceptance.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: bw39-evidence-acceptance-postgres-${{ matrix.postgres }}
+          path: work/bw39-evidence-acceptance.log
+          retention-days: 7
       - name: Check BW-39.1-R1 review failure diagnostics and friendly entry
         run: npm run check:bw39.1r1
       - name: Check BW-39.1-R2 provider failure boundaries and redacted stages
