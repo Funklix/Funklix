@@ -63,7 +63,7 @@ async function main() {
       assert(!r.body.answer && !r.body.findings); assert.equal(warnings.length, count + 1);
       const [tag, diagnostic] = warnings.at(-1); assert.equal(tag, '[AI_BRAIN_EVIDENCE_REJECTED]');
       assert.equal(diagnostic.reason, reason); assert.equal(diagnostic.reservedOutputTokens, 4096);
-      assert.deepEqual(Object.keys(diagnostic).sort(), ['reason', 'providerStatus', 'incompleteReason', 'outputTokens', 'outputCharacters', 'reservedOutputTokens'].sort());
+      assert.deepEqual(Object.keys(diagnostic).sort(), ['reason', 'providerStatus', 'incompleteReason', 'outputTokens', 'outputCharacters', 'reservedOutputTokens', 'stage', 'providerCompleted', 'hasText', 'outputBlockCount', 'outputBlockTypes', 'contentBlockCount', 'contentBlockTypes', 'validationCategory', 'findingCount'].sort());
       if (provider.usage) assert.equal(diagnostic.outputTokens, provider.usage.output_tokens);
       if (typeof provider.output_text === 'string') assert.equal(diagnostic.outputCharacters, provider.output_text.length);
     }
