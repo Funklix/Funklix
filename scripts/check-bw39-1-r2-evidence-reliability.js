@@ -55,6 +55,8 @@ const { fixture } = require('./fixtures/bw36-20-database');
    assert.equal(r.statusCode,status);assert.equal(f.calls.length,1);assert.equal(warnings.at(-1)[1].reason,reason);assert.equal(warnings.at(-1)[1].stage,stage);
   }
   const inspector=f.load('api/_ai-brain-social-evidence.js');
+  const malformed=inspector.inspect({output:{},output_text:'PRIVATE_AGGREGATE'});
+  assert.equal(malformed.reason,'envelope');assert.equal(malformed.diagnostic.hasText,true);
   const d=inspector.inspect({...envelope,output:[{type:'PRIVATE_TYPE',content:[{type:'PRIVATE_CONTENT_TYPE'}]},block('{broken')]}).diagnostic;
   assert.equal(d.outputBlockCount,2);assert.equal(d.contentBlockCount,2);assert.deepEqual(Array.from(d.outputBlockTypes),['message','other']);assert.deepEqual(Array.from(d.contentBlockTypes),['other','output_text']);assert.equal(d.hasText,true);assert.equal(d.validationCategory,'json_syntax');
   const schemas=[['envelope_keys',v=>v.extra=true],['answer',v=>v.answer=''],['findings',v=>v.findings={}],['finding',v=>v.findings[0].evidence=[]],['citation',v=>v.findings[0].evidence[0].extra=true]];

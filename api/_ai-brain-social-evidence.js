@@ -22,7 +22,9 @@ function inspect(data) {
     // Responses uses status/incomplete_details; never infer completion from usage.
     outputTokens: Number.isSafeInteger(data?.usage?.output_tokens) && data.usage.output_tokens >= 0 ? data.usage.output_tokens : null,
     outputCharacters: raw.length,
-    hasText: !!raw.trim(),
+    // Presence is observable even when a malformed envelope prevents extraction.
+    hasText: (typeof data?.output_text === 'string' && !!data.output_text.trim())
+      || parts.some(part => part?.type === 'output_text' && typeof part.text === 'string' && !!part.text.trim()),
     outputBlockCount: output.length,
     outputBlockTypes: types(output, ['message', 'reasoning', 'function_call']),
     contentBlockCount: parts.length,
