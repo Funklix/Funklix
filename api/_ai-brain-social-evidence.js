@@ -11,27 +11,40 @@ const object = value => value && typeof value === 'object' && !Array.isArray(val
 const keys = (value, names) => object(value) && Object.keys(value).length === names.length && names.every(key => Object.hasOwn(value, key));
 const string = (value, max) => typeof value === 'string' && value.trim().length > 0 && value.length <= max;
 const POLICY = 'This turn explicitly analyzes CTA clarity on existing Social Media Posting nodes. Return only one JSON object with exactly answer (natural conversational text, nonempty, <=12000 characters) and findings (array, max 3). Each finding has exactly title (concise observation <=120 characters), explanation (AI strategic interpretation <=600 characters), evidence (1 or 2 objects with exactly nodeId, field, quote). First evidence must be positive copy from cta/social.cta/social.caption/social.preview/content; optional second evidence is a relevant goal on the same node. Copy each quote exactly from evidence.nodes[id].fields[field].quote, including the full bounded prefix. Never invent or supply metadata, URLs, provenance or scores. Only use indexed Social Media Posting nodes; the server separately checks persisted identity. Check all supplied CTA fields and caption/content for counterevidence. Do not infer missing CTA from empty fields, preview presence or diagnostics. Do not return absence/count/performance claims as findings. CTA clarity is interpretation, not a verified fact. Missing goals remain unknown. If reliable positive evidence is insufficient, explain the limitation conversationally in answer and return findings: []. Coverage is partial; omitted/truncated copy never proves absence. No code fences, repair request or extra action.';
-function parse(data) {
-  if (!object(data) || (data.output !== undefined && !Array.isArray(data.output))) return null;
-  if ((data.output || []).some(item => !object(item) || (item.content !== undefined && (!Array.isArray(item.content) || item.content.some(part => !object(part)))))) return null;
-  if (!object(data) || (data.status && data.status !== 'completed') || data.incomplete_details
-    || (data.output || []).some(item => (item.status && item.status !== 'completed') || (item.content || []).some(part => part.type === 'refusal'))) return null;
-  const raw = typeof data.output_text === 'string' ? data.output_text : (data.output || [])
+// Keep the existing acceptance contract. Failure categories contain no source copy.
+function inspect(data) {
+  const result = (reason, raw = '', envelope = null) => ({ reason, envelope, diagnostic: {
+    providerStatus: ['completed', 'incomplete', 'failed', 'cancelled', 'queued', 'in_progress'].includes(data?.status) ? data.status : 'unknown',
+    incompleteReason: ['max_output_tokens', 'content_filter'].includes(data?.incomplete_details?.reason) ? data.incomplete_details.reason : data?.incomplete_details ? 'unknown' : null,
+    // Responses uses status/incomplete_details; never infer completion from usage.
+    outputTokens: Number.isSafeInteger(data?.usage?.output_tokens) && data.usage.output_tokens >= 0 ? data.usage.output_tokens : null,
+    outputCharacters: raw.length
+  } });
+  if (!object(data) || (data.output !== undefined && !Array.isArray(data.output))) return result('envelope');
+  if ((data.output || []).some(item => !object(item) || (item.content !== undefined && (!Array.isArray(item.content) || item.content.some(part => !object(part)))))) return result('envelope');
+  // An empty convenience aggregate must not hide populated assistant blocks.
+  // Nonempty aggregates remain authoritative; malformed text is never repaired.
+  const raw = typeof data.output_text === 'string' && data.output_text.length ? data.output_text : (data.output || [])
     .filter(item => item?.type === 'message' && item.role === 'assistant')
     .flatMap(item => item.content || []).filter(part => part.type === 'output_text' && typeof part.text === 'string').map(part => part.text).join('');
-  // Parse the complete response. Never clip JSON, salvage partial objects or
-  // display the envelope when malformed. This fits the unchanged output budget.
-  if (!raw || raw.length > 24000) return null;
-  let value; try { value = JSON.parse(raw); } catch { return null; }
-  if (!keys(value, ['answer', 'findings']) || !string(value.answer, 12000) || !Array.isArray(value.findings) || value.findings.length > 3) return null;
+  if ((data.status && data.status !== 'completed') || data.incomplete_details
+    || (data.output || []).some(item => item.status && item.status !== 'completed')) return result('incomplete', raw);
+  if ((data.output || []).some(item => (item.content || []).some(part => part.type === 'refusal'))) return result('refusal', raw);
+  // Parse every text block without clipping, salvaging or repairing partial JSON.
+  if (!raw.trim()) return result('empty', raw);
+  if (raw.length > 24000) return result('size', raw);
+  let value; try { value = JSON.parse(raw); } catch { return result('json', raw); }
+  if (!keys(value, ['answer', 'findings']) || !string(value.answer, 12000) || !Array.isArray(value.findings) || value.findings.length > 3) return result('schema', raw);
   for (const finding of value.findings) {
     if (!keys(finding, ['title', 'explanation', 'evidence']) || !string(finding.title, 120) || !string(finding.explanation, 600)
-      || !Array.isArray(finding.evidence) || !finding.evidence.length || finding.evidence.length > 2) return null;
+      || !Array.isArray(finding.evidence) || !finding.evidence.length || finding.evidence.length > 2) return result('schema', raw);
     if (finding.evidence.some(item => !keys(item, ['nodeId', 'field', 'quote']) || !string(item.nodeId, 160)
-      || !string(item.field, 80) || !string(item.quote, 180))) return null;
+      || !string(item.field, 80) || !string(item.quote, 180))) return result('schema', raw);
   }
-  return value;
+  return result(null, raw, value);
 }
+function parse(data) { return inspect(data).envelope; }
+
 function savedNodes(data) {
   const nodes = data.authorized.board.canvas_json.nodes;
   return new Map(nodes.map(node => [node.id, node]));
@@ -80,4 +93,4 @@ function resolve({ envelope, evidence, nodes, data }) {
     suppliedSocial: social.length, indexedSocial: evidence.nodes.filter(node => node.type === 'Social Media Posting'
       && canonicalType(persisted.get(node.id)?.type) === node.type && FIELDS.some(field => field !== 'goal' && node.fields[field])).length } };
 }
-module.exports = { POLICY, parse, resolve, canonicalType, referenceRevision };
+module.exports = { POLICY, parse, inspect, resolve, canonicalType, referenceRevision };

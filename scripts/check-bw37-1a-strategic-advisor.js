@@ -117,7 +117,7 @@ async function browserChecks() {
     await page.evaluate(() => renderAiBrain());
     const select = page.locator('#ai-brain-mode'), question = page.locator('#ai-brain-question');
     assert.equal(await select.inputValue(), 'general'); assert.equal(await select.locator('option').count(), 6);
-    assert.equal(await select.locator('option[value="analyze_social_ctas"]').textContent(), 'Analyze Social CTAs', 'explicit evidence analysis entry is separate from ordinary Advice modes');
+    assert.equal(await select.locator('option[value="analyze_social_ctas"]').textContent(), 'Review social posts', 'explicit evidence analysis entry is separate from ordinary Advice modes');
     assert.equal(await select.getAttribute('aria-describedby'), 'ai-brain-mode-description ai-brain-mode-guidance');
     await question.fill('Draft <img src=x onerror=alert(1)>');
     await page.evaluate(() => { window.originalComposer = document.querySelector('#ai-brain-question'); window.domain = JSON.stringify([state.nodes, state.edges, state.brandCore, state.selectedPrimary]); });
