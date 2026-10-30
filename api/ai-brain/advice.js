@@ -189,12 +189,17 @@ module.exports = async function handler(req, res) {
       });
     } finally { clearTimeout(timeout); }
     if (!response.ok) return res.status(502).json({ error: 'AI Brain could not provide advice' });
-    const providerData = await response.json();
-    const envelope = adviceMode === 'analyze_social_ctas' ? socialEvidence.parse(providerData) : null;
-    if (adviceMode === 'analyze_social_ctas' && !envelope) return res.status(502).json({ error: 'AI Brain returned an invalid analysis. Please retry.', code: 'evidence_response_invalid' });
-    const answer = envelope ? envelope.answer : outputText(providerData);
+    // A malformed transport envelope is distinct from malformed model JSON.
+    const providerData = adviceMode === 'analyze_social_ctas' ? await response.json().catch(() => null) : await response.json();
+    const analysis = adviceMode === 'analyze_social_ctas' ? socialEvidence.inspect(providerData) : null;
+    const envelope = analysis?.envelope;
     await learningContext.revalidate({ data, selected: prepared.selected, user });
     await goalContext.revalidate({ data: goals, user: getSessionUser(req) });
+    if (analysis && !envelope) {
+      console.warn('[AI_BRAIN_EVIDENCE_REJECTED]', { reason: analysis.reason, ...analysis.diagnostic, reservedOutputTokens: prepared.constraints.outputTokens });
+      return res.status(502).json({ error: 'The social post review could not be verified. No evidence cards were produced.', code: 'evidence_response_invalid', reason: analysis.reason });
+    }
+    const answer = envelope ? envelope.answer : outputText(providerData);
     if (!answer) return res.status(502).json({ error: 'AI Brain returned no advice' });
     if (responseLanguageMismatch(answer, language) || envelope?.findings.some(finding => responseLanguageMismatch(finding.title + ' ' + finding.explanation, language))) {
       return res.status(502).json({
