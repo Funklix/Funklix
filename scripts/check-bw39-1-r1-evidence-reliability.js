@@ -65,6 +65,7 @@ async function main() {
       assert.equal(diagnostic.reason, reason); assert.equal(diagnostic.reservedOutputTokens, 4096);
       assert.deepEqual(Object.keys(diagnostic).sort(), ['reason', 'providerStatus', 'incompleteReason', 'outputTokens', 'outputCharacters', 'reservedOutputTokens'].sort());
       if (provider.usage) assert.equal(diagnostic.outputTokens, provider.usage.output_tokens);
+      if (typeof provider.output_text === 'string') assert.equal(diagnostic.outputCharacters, provider.output_text.length);
     }
     assert(!JSON.stringify(warnings).includes('PRIVATE_BRAND_CANVAS_COPY')); assert(!JSON.stringify(warnings).includes(f.BOARD));
     assert(!JSON.stringify(warnings).includes(nodes[0].social.cta));

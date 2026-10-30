@@ -22,14 +22,14 @@ function inspect(data) {
   } });
   if (!object(data) || (data.output !== undefined && !Array.isArray(data.output))) return result('envelope');
   if ((data.output || []).some(item => !object(item) || (item.content !== undefined && (!Array.isArray(item.content) || item.content.some(part => !object(part)))))) return result('envelope');
-  if ((data.status && data.status !== 'completed') || data.incomplete_details
-    || (data.output || []).some(item => item.status && item.status !== 'completed')) return result('incomplete');
-  if ((data.output || []).some(item => (item.content || []).some(part => part.type === 'refusal'))) return result('refusal');
   // An empty convenience aggregate must not hide populated assistant blocks.
   // Nonempty aggregates remain authoritative; malformed text is never repaired.
   const raw = typeof data.output_text === 'string' && data.output_text.length ? data.output_text : (data.output || [])
     .filter(item => item?.type === 'message' && item.role === 'assistant')
     .flatMap(item => item.content || []).filter(part => part.type === 'output_text' && typeof part.text === 'string').map(part => part.text).join('');
+  if ((data.status && data.status !== 'completed') || data.incomplete_details
+    || (data.output || []).some(item => item.status && item.status !== 'completed')) return result('incomplete', raw);
+  if ((data.output || []).some(item => (item.content || []).some(part => part.type === 'refusal'))) return result('refusal', raw);
   // Parse every text block without clipping, salvaging or repairing partial JSON.
   if (!raw.trim()) return result('empty', raw);
   if (raw.length > 24000) return result('size', raw);
