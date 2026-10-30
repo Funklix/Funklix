@@ -50,6 +50,7 @@ async function fixture({ goals = false, signedSession = false } = {}) {
         if (f.active) throw new Error('Locks held during inference');
         f.calls.push(JSON.parse(options.body));
         if (f.onProvider) await f.onProvider();
+        if (f.transportResponse) return f.transportResponse;
         return { ok: true, json: async () => f.providerResponse || ({ output_text: f.answer }) };
       }
     }, { filename });
@@ -69,7 +70,7 @@ async function fixture({ goals = false, signedSession = false } = {}) {
     await pg.query('INSERT INTO brand_members(brand_id,email,role) VALUES ($1,$2,$3)', [BRAND, ACTOR, 'viewer']);
     f.user = { email: ACTOR }; f.onProvider = null; f.onQuery = null; f.onRows = null; f.calls.length = 0; f.queries.length = 0;
     for (const key of Object.keys(f.env)) if (key !== 'OPENAI_API_KEY') delete f.env[key];
-    f.answer = 'Advice'; f.providerResponse = null;
+    f.answer = 'Advice'; f.providerResponse = null; f.transportResponse = null;
   };
   f.insert = async ({ statement = 'Community engagement improves with a clear invitation.', status = 'approved', brand = BRAND, sourceBoard = null, sourceNode = null } = {}) => {
     const id = require('node:crypto').randomUUID();

@@ -48,6 +48,7 @@ async function main() {
       await p.locator('[data-ai-brain-retry]').focus(); assert.equal(requests, before + 1);
     }
     for (const locale of ['en', 'de']) for (const [payload, code, copy] of [
+      [{ status: 'completed', error: { code: 'server_error', message: 'PRIVATE_COPY' }, output_text: JSON.stringify({ answer: 'PRIVATE_COPY', findings: [] }) }, 'evidence_response_provider', ['AI service could not complete', 'KI-Dienst konnte die Prüfung nicht abschließen']],
       [{ output_text: '{broken' }, 'evidence_response_format', ['unusable format', 'unbrauchbaren Format']],
       [{ output_text: JSON.stringify({ answer: 'PRIVATE_COPY', findings: [], extra: true }) }, 'evidence_response_format', ['unusable format', 'unbrauchbaren Format']],
       [{ output: [] }, 'evidence_response_empty', ['returned no review', 'keine Prüfung']],

@@ -13,12 +13,24 @@ const string = (value, max) => typeof value === 'string' && value.trim().length 
 const POLICY = 'This turn explicitly analyzes CTA clarity on existing Social Media Posting nodes. Return only one JSON object with exactly answer (natural conversational text, nonempty, <=12000 characters) and findings (array, max 3). Each finding has exactly title (concise observation <=120 characters), explanation (AI strategic interpretation <=600 characters), evidence (1 or 2 objects with exactly nodeId, field, quote). First evidence must be positive copy from cta/social.cta/social.caption/social.preview/content; optional second evidence is a relevant goal on the same node. Copy each quote exactly from evidence.nodes[id].fields[field].quote, including the full bounded prefix. Never invent or supply metadata, URLs, provenance or scores. Only use indexed Social Media Posting nodes; the server separately checks persisted identity. Check all supplied CTA fields and caption/content for counterevidence. Do not infer missing CTA from empty fields, preview presence or diagnostics. Do not return absence/count/performance claims as findings. CTA clarity is interpretation, not a verified fact. Missing goals remain unknown. If reliable positive evidence is insufficient, explain the limitation conversationally in answer and return findings: []. Coverage is partial; omitted/truncated copy never proves absence. No code fences, repair request or extra action.';
 // Keep the existing acceptance contract. Failure categories contain no source copy.
 function inspect(data) {
-  const result = (reason, raw = '', envelope = null) => ({ reason, envelope, diagnostic: {
+  const output = Array.isArray(data?.output) ? data.output : [];
+  const parts = output.flatMap(item => Array.isArray(item?.content) ? item.content : []);
+  const types = (items, allowed) => [...new Set(items.map(item => allowed.includes(item?.type) ? item.type : 'other'))].sort();
+  const result = (reason, raw = '', envelope = null, validationCategory = null) => ({ reason, envelope, diagnostic: {
     providerStatus: ['completed', 'incomplete', 'failed', 'cancelled', 'queued', 'in_progress'].includes(data?.status) ? data.status : 'unknown',
     incompleteReason: ['max_output_tokens', 'content_filter'].includes(data?.incomplete_details?.reason) ? data.incomplete_details.reason : data?.incomplete_details ? 'unknown' : null,
     // Responses uses status/incomplete_details; never infer completion from usage.
     outputTokens: Number.isSafeInteger(data?.usage?.output_tokens) && data.usage.output_tokens >= 0 ? data.usage.output_tokens : null,
-    outputCharacters: raw.length
+    outputCharacters: raw.length,
+    // Presence is observable even when a malformed envelope prevents extraction.
+    hasText: (typeof data?.output_text === 'string' && !!data.output_text.trim())
+      || parts.some(part => part?.type === 'output_text' && typeof part.text === 'string' && !!part.text.trim()),
+    outputBlockCount: output.length,
+    outputBlockTypes: types(output, ['message', 'reasoning', 'function_call']),
+    contentBlockCount: parts.length,
+    contentBlockTypes: types(parts, ['output_text', 'refusal']),
+    validationCategory,
+    findingCount: envelope ? envelope.findings.length : null
   } });
   if (!object(data) || (data.output !== undefined && !Array.isArray(data.output))) return result('envelope');
   if ((data.output || []).some(item => !object(item) || (item.content !== undefined && (!Array.isArray(item.content) || item.content.some(part => !object(part)))))) return result('envelope');
@@ -27,19 +39,23 @@ function inspect(data) {
   const raw = typeof data.output_text === 'string' && data.output_text.length ? data.output_text : (data.output || [])
     .filter(item => item?.type === 'message' && item.role === 'assistant')
     .flatMap(item => item.content || []).filter(part => part.type === 'output_text' && typeof part.text === 'string').map(part => part.text).join('');
+  // Never release otherwise valid text carried by a failed provider response.
+  if (data.error != null || data.status === 'failed') return result('provider_error', raw);
   if ((data.status && data.status !== 'completed') || data.incomplete_details
     || (data.output || []).some(item => item.status && item.status !== 'completed')) return result('incomplete', raw);
   if ((data.output || []).some(item => (item.content || []).some(part => part.type === 'refusal'))) return result('refusal', raw);
   // Parse every text block without clipping, salvaging or repairing partial JSON.
   if (!raw.trim()) return result('empty', raw);
   if (raw.length > 24000) return result('size', raw);
-  let value; try { value = JSON.parse(raw); } catch { return result('json', raw); }
-  if (!keys(value, ['answer', 'findings']) || !string(value.answer, 12000) || !Array.isArray(value.findings) || value.findings.length > 3) return result('schema', raw);
+  let value; try { value = JSON.parse(raw); } catch { return result('json', raw, null, 'json_syntax'); }
+  if (!keys(value, ['answer', 'findings'])) return result('schema', raw, null, 'envelope_keys');
+  if (!string(value.answer, 12000)) return result('schema', raw, null, 'answer');
+  if (!Array.isArray(value.findings) || value.findings.length > 3) return result('schema', raw, null, 'findings');
   for (const finding of value.findings) {
     if (!keys(finding, ['title', 'explanation', 'evidence']) || !string(finding.title, 120) || !string(finding.explanation, 600)
-      || !Array.isArray(finding.evidence) || !finding.evidence.length || finding.evidence.length > 2) return result('schema', raw);
+      || !Array.isArray(finding.evidence) || !finding.evidence.length || finding.evidence.length > 2) return result('schema', raw, null, 'finding');
     if (finding.evidence.some(item => !keys(item, ['nodeId', 'field', 'quote']) || !string(item.nodeId, 160)
-      || !string(item.field, 80) || !string(item.quote, 180))) return result('schema', raw);
+      || !string(item.field, 80) || !string(item.quote, 180))) return result('schema', raw, null, 'citation');
   }
   return result(null, raw, value);
 }
