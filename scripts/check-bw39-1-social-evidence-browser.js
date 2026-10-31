@@ -90,6 +90,18 @@ async function main() {
     await p.evaluate(() => renderAiBrain());
     assert.equal(await p.locator('.ai-brain-evidence-card:visible').count(), 3);
     assert(await p.locator('.ai-brain-evidence-card').first().locator('details').evaluate(node => node.open));
+    // Force rerender in the same task, before the native toggle event can run.
+    for (const open of [false, true]) {
+      await p.evaluate(open => {
+        document.querySelector('.ai-brain-evidence-card details').open = open;
+        document.querySelector('[data-ai-brain-evidence-more]').open = open;
+        renderAiBrain();
+      }, open);
+      assert.equal(await p.locator('.ai-brain-evidence-card').first().locator('details').evaluate(node => node.open), open);
+      assert.equal(await p.locator('[data-ai-brain-evidence-more]').evaluate(node => node.open), open);
+      await p.evaluate(() => new Promise(resolve => requestAnimationFrame(() => { renderAiBrain(); resolve(); })));
+      assert.equal(await p.locator('.ai-brain-evidence-card').first().locator('details').evaluate(node => node.open), open, 'detached toggle cannot overwrite current state');
+    }
     await more.focus(); await p.evaluate(() => renderAiBrain());
     assert(await more.evaluate(node => node === document.activeElement), 'evidence disclosure focus survives rerender');
     const before = await stable(), calls = sql.calls.length;

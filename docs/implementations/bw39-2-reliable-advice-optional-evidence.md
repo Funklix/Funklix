@@ -93,6 +93,12 @@ omission address the first two; regressions assert no invalid metadata leaks
 or answer release after revocation/revision changes. No external review approval
 is claimed.
 
+Hosted acceptance exposed a native disclosure toggle race: rerender could replace
+the disclosure before its queued toggle event persisted the open state. Capture
+live disclosure state before DOM replacement and ignore detached toggle events.
+A synchronous open/close plus rerender regression retains all existing assertions
+and verifies delayed old events cannot overwrite the current state.
+
 ## Validation
 
 `check:bw39.2` runs production Advice with signed sessions, disposable fictional
