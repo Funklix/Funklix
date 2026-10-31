@@ -7467,6 +7467,7 @@ function validateAiBrainSocialEvidence(data, origin) {
   if (!Array.isArray(data.findings) || data.findings.length > 3 || !context
     || context.boardId !== state.currentBoardId || context.boardRevision !== state.lastKnownUpdatedAt
     || ![context.suppliedSocial, context.indexedSocial].every(n => Number.isInteger(n) && n >= 0 && n <= 200)
+    || (context.evidenceUnavailable !== undefined && typeof context.evidenceUnavailable !== 'boolean')
     || context.indexedSocial > context.suppliedSocial
     || !Number.isInteger(context.omittedFindings) || context.omittedFindings < 0 || context.omittedFindings > 3) return null;
   const text = (value, max) => typeof value === 'string' && value.length <= max;
@@ -7491,8 +7492,12 @@ function renderAiBrainSocialEvidence(advisor, turn) {
     text('p', aiBrainEvidenceCopy('Evidence context changed. Ask again with current context.', 'Der Belegkontext hat sich geändert. Frage mit aktuellem Kontext erneut.'));
     advisor.appendChild(section); return;
   }
+  if (value.context.evidenceUnavailable) text('p', aiBrainEvidenceCopy('The advice is available, but supporting evidence cards could not be verified.', 'Die Einschätzung ist verfügbar, aber unterstützende Belegkarten konnten nicht verifiziert werden.'));
   if (value.context.omittedFindings) text('p', aiBrainEvidenceCopy('Some proposed findings could not be supported by reliable source evidence.', 'Einige vorgeschlagene Hinweise ließen sich nicht durch verlässliche Quellbelege stützen.'));
-  if (!value.findings.length) { if (value.context.omittedFindings) advisor.appendChild(section); return; }
+  if (!value.findings.length) {
+    if (!value.context.evidenceUnavailable && !value.context.omittedFindings) text('p', aiBrainEvidenceCopy('No verified evidence cards accompany this advice.', 'Zu dieser Einschätzung liegen keine verifizierten Belegkarten vor.'));
+    advisor.appendChild(section); return;
+  }
   text('small', aiBrainEvidenceCopy(
     `Citable Social coverage: ${value.context.indexedSocial} of ${value.context.suppliedSocial} supplied posts. Copy may be excerpted; omitted evidence does not prove absence.`,
     `Zitierbare Social-Abdeckung: ${value.context.indexedSocial} von ${value.context.suppliedSocial} übermittelten Posts. Texte können gekürzt sein; fehlende Belege beweisen keine Abwesenheit.`));

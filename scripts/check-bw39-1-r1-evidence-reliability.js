@@ -45,11 +45,16 @@ async function main() {
       }
     }
     console.log('PASS exact Appics-style question on 52 fictional saved Social nodes; single/multiple findings, missing CTA field with positive caption, missing goal, ambiguous copy, split blocks/messages and aggregate precedence');
+    for (const findings of [[finding(0), finding(1), finding(2), finding(3)], [{ ...finding(0), evidence: [] }]]) {
+      const r = await request({ status: 'completed', output_text: JSON.stringify(review(findings)) });
+      assert.equal(r.statusCode, 200); assert.equal(r.body.answer, review(findings).answer);
+      assert.equal(r.body.findings.length, 0); assert.equal(r.body.evidenceContext.evidenceUnavailable, true);
+    }
     const errors = [
       ['json', { status: 'completed', output_text: '{"answer":"PRIVATE_BRAND_CANVAS_COPY' }],
       ['json', { status: 'completed', output_text: '{broken', output: [message(JSON.stringify(review([finding(0)])))] }],
-      ['schema', { status: 'completed', output_text: JSON.stringify(review([finding(0), finding(1), finding(2), finding(3)])) }],
-      ['schema', { status: 'completed', output_text: JSON.stringify(review([{ ...finding(0), evidence: [] }])) }],
+      ['schema', { status: 'completed', output_text: JSON.stringify({ ...review([]), extra: true }) }],
+      ['schema', { status: 'completed', output_text: JSON.stringify({ answer: '', findings: [finding(0)] }) }],
       ['incomplete', { status: 'incomplete', incomplete_details: { reason: 'max_output_tokens' }, usage: { output_tokens: 4096 }, output_text: JSON.stringify(review([finding(0)])) }],
       ['incomplete', { status: 'incomplete', incomplete_details: { reason: 'content_filter' }, usage: { output_tokens: 70 } }],
       ['refusal', { status: 'completed', output: [{ ...message(), content: [{ type: 'refusal', refusal: 'PRIVATE_BRAND_CANVAS_COPY' }] }] }],

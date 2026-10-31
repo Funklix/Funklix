@@ -489,6 +489,8 @@ jobs:
           retention-days: 7
       - name: Check BW-39.1-R1 review failure diagnostics and friendly entry
         run: npm run check:bw39.1r1
+      - name: Check BW-39.2 independently valid Advice with optional verified evidence
+        run: npm run check:bw39.2
       - name: Check BW-39.1-R2 provider failure boundaries and redacted stages
         run: npm run check:bw39.1r2
       - name: Check Content eligibility, source selection, editable preview and remote Create scope

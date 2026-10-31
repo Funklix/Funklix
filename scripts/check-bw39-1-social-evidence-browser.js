@@ -26,6 +26,7 @@ async function main() {
     const resolver = sql.load('api/ai-brain/evidence-reference.js'), auth = sql.load('api/_auth-session.js');
     let opens = 0, writes = 0, fixtureSaves = 0, saveMode = null, held = null, adviceHeld = null, denied = false;
     const requests = [];
+    let optionalMetadata = 'valid';
     await p.route('**/api/ai-brain/advice', async route => {
       const body = route.request().postDataJSON(); requests.push(body);
       const de = body.response_language === 'de';
@@ -33,6 +34,10 @@ async function main() {
         findings: ['exact-target', 'first', 'third'].map(id => ({ title: de ? 'Die Einladung bleibt allgemein' : 'The invitation is broad',
           explanation: de ? 'Die Formulierung lässt das Ziel der Einladung im Verhältnis zum Anmeldeziel offen.' : 'The wording leaves the destination ambiguous relative to the registration goal.',
           evidence: [{ nodeId: id, field: 'social.preview', quote: 'Discover more 🚀' }, { nodeId: id, field: 'goal', quote: 'Increase workshop registrations' }] })) });
+      if (optionalMetadata !== 'valid') {
+        const value = JSON.parse(sql.answer); value.findings = optionalMetadata === 'empty' ? [] : 'PRIVATE_INVALID_METADATA';
+        sql.answer = JSON.stringify(value);
+      }
       const result = await sql.invoke(body);
       if (adviceHeld) { const hold = adviceHeld; adviceHeld = null; hold.started(); await hold.wait; }
       return route.fulfill({ status: result.statusCode, json: result.body });
@@ -66,7 +71,8 @@ async function main() {
       await p.locator('#ai-brain-form [type=submit]').click();
       await p.waitForFunction(() => state.aiBrain.status !== 'loading');
       assert.equal(await p.evaluate(() => state.aiBrain.status), 'success');
-      await p.locator('[data-ai-brain-evidence-open="exact-target"]').waitFor();
+      if (optionalMetadata === 'valid') await p.locator('[data-ai-brain-evidence-open="exact-target"]').waitFor();
+      else await p.locator('.ai-brain-social-evidence').waitFor();
     };
     const stable = () => p.evaluate(() => JSON.stringify({ nodes: state.nodes, edges: state.edges, history: state.history, dirty: state.isDirty, zoom: state.zoom }));
     await boot(); await ask();
@@ -189,6 +195,24 @@ async function main() {
       await button.focus(); await p.keyboard.press('Enter');
       await p.waitForFunction(() => state.activeView === 'board' && state.selectedPrimary === 'exact-target');
       assert.equal(await p.evaluate(() => el.inputs.preview.value), 'Discover more 🚀');
+      for (const metadata of ['empty', 'invalid']) {
+        optionalMetadata = metadata;
+        await boot(); await p.evaluate(({ theme, locale }) => { window.FunklixTheme.setPreference(theme); state.uiLanguage = language.setUiLanguage(locale); renderAiBrain(); }, { theme, locale });
+        const count = sql.calls.length, writesBefore = writes;
+        await ask();
+        assert.equal(sql.calls.length, count + 1); assert.equal(writes, writesBefore);
+        assert.equal(await p.locator('.ai-brain-evidence-card,[data-ai-brain-evidence-open]').count(), 0);
+        assert.equal(await p.evaluate(() => state.aiBrain.messages.at(-1).answer), locale === 'de' ? 'Ich würde das Ziel der Einladung konkreter benennen.' : 'I would name the destination more specifically.');
+        const feedback = await p.locator('.ai-brain-social-evidence').textContent();
+        assert(feedback.includes(locale === 'de' ? (metadata === 'empty' ? 'keine verifizierten Belegkarten' : 'konnten nicht verifiziert') : (metadata === 'empty' ? 'No verified evidence cards' : 'could not be verified')));
+        assert(!feedback.includes('PRIVATE_INVALID_METADATA'));
+        await p.locator('#ai-brain-question').focus(); await p.keyboard.type('Keep my question');
+        await p.evaluate(() => renderAiBrain());
+        assert.equal(await p.locator('#ai-brain-question').inputValue(), 'Keep my question');
+        assert(await p.locator('#ai-brain-question').evaluate(node => node === document.activeElement));
+        assert(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
+      }
+      optionalMetadata = 'valid';
     }
     await p.setViewportSize({ width: 1440, height: 1100 }); await boot(); await ask();
     await p.evaluate(() => { document.documentElement.style.zoom = '2'; });

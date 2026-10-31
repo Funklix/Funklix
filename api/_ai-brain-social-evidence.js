@@ -10,13 +10,36 @@ const canonicalType = type => type === 'Social Media Post' ? 'Social Media Posti
 const object = value => value && typeof value === 'object' && !Array.isArray(value);
 const keys = (value, names) => object(value) && Object.keys(value).length === names.length && names.every(key => Object.hasOwn(value, key));
 const string = (value, max) => typeof value === 'string' && value.trim().length > 0 && value.length <= max;
-const POLICY = 'This turn explicitly analyzes CTA clarity on existing Social Media Posting nodes. Return only one JSON object with exactly answer (natural conversational text, nonempty, <=12000 characters) and findings (array, max 3). Each finding has exactly title (concise observation <=120 characters), explanation (AI strategic interpretation <=600 characters), evidence (1 or 2 objects with exactly nodeId, field, quote). First evidence must be positive copy from cta/social.cta/social.caption/social.preview/content; optional second evidence is a relevant goal on the same node. Copy each quote exactly from evidence.nodes[id].fields[field].quote, including the full bounded prefix. Never invent or supply metadata, URLs, provenance or scores. Only use indexed Social Media Posting nodes; the server separately checks persisted identity. Check all supplied CTA fields and caption/content for counterevidence. Do not infer missing CTA from empty fields, preview presence or diagnostics. Do not return absence/count/performance claims as findings. CTA clarity is interpretation, not a verified fact. Missing goals remain unknown. If reliable positive evidence is insufficient, explain the limitation conversationally in answer and return findings: []. Coverage is partial; omitted/truncated copy never proves absence. No code fences, repair request or extra action.';
-// Keep the existing acceptance contract. Failure categories contain no source copy.
+const POLICY = 'This turn explicitly analyzes CTA clarity on existing Social Media Posting nodes. Return only one JSON object with exactly answer (natural conversational text, nonempty, <=12000 characters) and findings (array, max 3). Each finding has exactly title (concise observation <=120 characters), explanation (AI strategic interpretation <=600 characters), evidence (1 or 2 objects with exactly nodeId, field, quote). First evidence must be positive copy from cta/social.cta/social.caption/social.preview/content; optional second evidence is a relevant goal on the same node. Copy each quote exactly from evidence.nodes[id].fields[field].quote, including the full bounded prefix. Never invent or supply metadata, URLs, provenance or scores. Only use indexed Social Media Posting nodes; the server separately checks persisted identity. Check all supplied CTA fields and caption/content for counterevidence. Do not infer missing CTA from empty fields, preview presence or diagnostics. Do not return absence/count/performance claims as findings. CTA clarity is interpretation, not a verified fact. Missing goals remain unknown. If reliable positive evidence is insufficient, explain the limitation conversationally in answer and return findings: []. The answer must stand alone without cards and must not claim that references have been verified. Coverage is partial; omitted/truncated copy never proves absence. No code fences, repair request or extra action.';
+// JSON.parse alone silently accepts duplicate keys. Once syntax is valid, scan
+// JSON tokens (never source substrings) to reject ambiguous object members,
+// including escaped aliases such as answer / \u0061nswer.
+function duplicateKeys(raw) {
+  const tokens = raw.match(/"(?:\\[\s\S]|[^"\\])*"|[{}\[\]:,]/g) || [];
+  const stack = [];
+  for (let i = 0; i < tokens.length; i++) {
+    const token = tokens[i];
+    if (token === '{') stack.push(new Set());
+    else if (token === '[') stack.push(null);
+    else if (token === '}' || token === ']') stack.pop();
+    else if (token.startsWith('"') && tokens[i + 1] === ':') {
+      const key = JSON.parse(token), members = stack.at(-1);
+      if (members.has(key)) return true;
+      members.add(key);
+    }
+  }
+  return false;
+}
+function readableAnswer(value) {
+  return string(value, 12000) && !/^[\s]*[\[{]|```|[\u0000-\u0008\u000b\u000c\u000e-\u001f]/u.test(value);
+}
+// Failure categories contain no source copy. Optional evidence never owns answer
+// validity; recovery requires a complete, unambiguous JSON object first.
 function inspect(data) {
   const output = Array.isArray(data?.output) ? data.output : [];
   const parts = output.flatMap(item => Array.isArray(item?.content) ? item.content : []);
   const types = (items, allowed) => [...new Set(items.map(item => allowed.includes(item?.type) ? item.type : 'other'))].sort();
-  const result = (reason, raw = '', envelope = null, validationCategory = null) => ({ reason, envelope, diagnostic: {
+  const result = (reason, raw = '', envelope = null, validationCategory = null) => ({ reason, envelope, optionalEvidenceInvalid: !!envelope && validationCategory !== null, diagnostic: {
     providerStatus: ['completed', 'incomplete', 'failed', 'cancelled', 'queued', 'in_progress'].includes(data?.status) ? data.status : 'unknown',
     incompleteReason: ['max_output_tokens', 'content_filter'].includes(data?.incomplete_details?.reason) ? data.incomplete_details.reason : data?.incomplete_details ? 'unknown' : null,
     // Responses uses status/incomplete_details; never infer completion from usage.
@@ -48,14 +71,16 @@ function inspect(data) {
   if (!raw.trim()) return result('empty', raw);
   if (raw.length > 24000) return result('size', raw);
   let value; try { value = JSON.parse(raw); } catch { return result('json', raw, null, 'json_syntax'); }
-  if (!keys(value, ['answer', 'findings'])) return result('schema', raw, null, 'envelope_keys');
-  if (!string(value.answer, 12000)) return result('schema', raw, null, 'answer');
-  if (!Array.isArray(value.findings) || value.findings.length > 3) return result('schema', raw, null, 'findings');
+  if (duplicateKeys(raw)) return result('schema', raw, null, 'duplicate_keys');
+  if (!object(value) || !Object.hasOwn(value, 'answer') || Object.keys(value).some(key => !['answer', 'findings'].includes(key))) return result('schema', raw, null, 'envelope_keys');
+  if (!readableAnswer(value.answer)) return result('schema', raw, null, 'answer');
+  const answerOnly = category => result(null, raw, { answer: value.answer, findings: [] }, category);
+  if (!Array.isArray(value.findings) || value.findings.length > 3) return answerOnly('findings');
   for (const finding of value.findings) {
     if (!keys(finding, ['title', 'explanation', 'evidence']) || !string(finding.title, 120) || !string(finding.explanation, 600)
-      || !Array.isArray(finding.evidence) || !finding.evidence.length || finding.evidence.length > 2) return result('schema', raw, null, 'finding');
+      || !Array.isArray(finding.evidence) || !finding.evidence.length || finding.evidence.length > 2) return answerOnly('finding');
     if (finding.evidence.some(item => !keys(item, ['nodeId', 'field', 'quote']) || !string(item.nodeId, 160)
-      || !string(item.field, 80) || !string(item.quote, 180))) return result('schema', raw, null, 'citation');
+      || !string(item.field, 80) || !string(item.quote, 180))) return answerOnly('citation');
   }
   return result(null, raw, value);
 }
@@ -75,10 +100,11 @@ function referenceRevision(authorized, nodeId) {
     fields: Object.fromEntries(FIELDS.map(field => [field, at(node, field) ?? null])) } : null;
   return createHash('sha256').update(JSON.stringify(value)).digest('hex');
 }
-function resolve({ envelope, evidence, nodes, data }) {
+function resolve({ envelope, evidence, nodes, data, acceptFinding = () => true }) {
   const persisted = savedNodes(data);
   const findings = [];
   for (const candidate of envelope.findings) {
+    if (!acceptFinding(candidate)) continue;
     // Conservative MVP guard for obvious absence/quantification/measurement
     // claims. This is not semantic verification of the remaining interpretation.
     if (/[0-9%]|\b(missing|lack|lacks|without|no cta|fehlt|fehlen|keine|ohne|performance|conversion rate|click-through|klickrate|roi)\b/iu.test(candidate.title + ' ' + candidate.explanation)) continue;
