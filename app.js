@@ -7401,6 +7401,18 @@ function renderAiBrain() {
   el.aiBrainSummary.aiBrainScrollObserver?.disconnect();
   el.aiBrainSummary.aiBrainViewportCleanup?.();
   if (!sameIdentity) el.aiBrainSummary.aiBrainScroll = null;
+  // Native toggle events are queued. Capture the live disclosure state before
+  // replacing its DOM, even when rerender precedes that event's dispatch.
+  if (sameIdentity) el.aiBrainSummary.querySelectorAll('.ai-brain-social-evidence').forEach(section => {
+    const turn = state.aiBrain.messages.find(item => item.id === section.closest('[data-turn-id]')?.dataset.turnId);
+    const value = turn?.socialEvidence;
+    if (!value || !aiBrainEvidenceOriginCurrent(value.origin)) return;
+    const more = section.querySelector('[data-ai-brain-evidence-more]');
+    if (more) value.expanded = more.open;
+    section.querySelectorAll('[data-ai-brain-evidence-goal]').forEach(details => {
+      value.goalOpen = { ...value.goalOpen, [details.dataset.aiBrainEvidenceGoal]: details.open };
+    });
+  });
   const openLearnings = sameIdentity ? Array.from(el.aiBrainSummary.querySelectorAll(".ai-brain-learning-context[open]"), (node) => node.closest("[data-turn-id]")?.dataset.turnId) : [];
   const focused = document.activeElement;
   const evidenceFocus = sameIdentity && el.aiBrainSummary.contains(focused) ? focused?.dataset?.aiBrainEvidenceFocus : null;
@@ -7467,6 +7479,7 @@ function validateAiBrainSocialEvidence(data, origin) {
   if (!Array.isArray(data.findings) || data.findings.length > 3 || !context
     || context.boardId !== state.currentBoardId || context.boardRevision !== state.lastKnownUpdatedAt
     || ![context.suppliedSocial, context.indexedSocial].every(n => Number.isInteger(n) && n >= 0 && n <= 200)
+    || (context.evidenceUnavailable !== undefined && typeof context.evidenceUnavailable !== 'boolean')
     || context.indexedSocial > context.suppliedSocial
     || !Number.isInteger(context.omittedFindings) || context.omittedFindings < 0 || context.omittedFindings > 3) return null;
   const text = (value, max) => typeof value === 'string' && value.length <= max;
@@ -7491,8 +7504,12 @@ function renderAiBrainSocialEvidence(advisor, turn) {
     text('p', aiBrainEvidenceCopy('Evidence context changed. Ask again with current context.', 'Der Belegkontext hat sich geändert. Frage mit aktuellem Kontext erneut.'));
     advisor.appendChild(section); return;
   }
+  if (value.context.evidenceUnavailable) text('p', aiBrainEvidenceCopy('The advice is available, but supporting evidence cards could not be verified.', 'Die Einschätzung ist verfügbar, aber unterstützende Belegkarten konnten nicht verifiziert werden.'));
   if (value.context.omittedFindings) text('p', aiBrainEvidenceCopy('Some proposed findings could not be supported by reliable source evidence.', 'Einige vorgeschlagene Hinweise ließen sich nicht durch verlässliche Quellbelege stützen.'));
-  if (!value.findings.length) { if (value.context.omittedFindings) advisor.appendChild(section); return; }
+  if (!value.findings.length) {
+    if (!value.context.evidenceUnavailable && !value.context.omittedFindings) text('p', aiBrainEvidenceCopy('No verified evidence cards accompany this advice.', 'Zu dieser Einschätzung liegen keine verifizierten Belegkarten vor.'));
+    advisor.appendChild(section); return;
+  }
   text('small', aiBrainEvidenceCopy(
     `Citable Social coverage: ${value.context.indexedSocial} of ${value.context.suppliedSocial} supplied posts. Copy may be excerpted; omitted evidence does not prove absence.`,
     `Zitierbare Social-Abdeckung: ${value.context.indexedSocial} von ${value.context.suppliedSocial} übermittelten Posts. Texte können gekürzt sein; fehlende Belege beweisen keine Abwesenheit.`));
@@ -7509,7 +7526,8 @@ function renderAiBrainSocialEvidence(advisor, turn) {
       let parent = article;
       if (source.field === 'goal') {
         parent = document.createElement('details'); parent.open = !!value.goalOpen?.[finding.id];
-        parent.addEventListener('toggle', () => { value.goalOpen = { ...value.goalOpen, [finding.id]: parent.open }; });
+        parent.dataset.aiBrainEvidenceGoal = finding.id;
+        parent.addEventListener('toggle', () => { if (!parent.isConnected) return; value.goalOpen = { ...value.goalOpen, [finding.id]: parent.open }; });
         text('summary', aiBrainEvidenceCopy(...labels.goal), parent).dataset.aiBrainEvidenceFocus = `${turn.id}:${finding.id}:goal`;
         article.appendChild(parent);
       }
@@ -7529,9 +7547,9 @@ function renderAiBrainSocialEvidence(advisor, turn) {
   };
   section.appendChild(card(value.findings[0]));
   if (value.findings.length > 1) {
-    const more = document.createElement('details'); more.open = value.expanded;
+    const more = document.createElement('details'); more.open = value.expanded; more.dataset.aiBrainEvidenceMore = 'true';
     text('summary', aiBrainEvidenceCopy(`More findings (${value.findings.length - 1})`, `Weitere Hinweise (${value.findings.length - 1})`), more).dataset.aiBrainEvidenceFocus = `${turn.id}:more`;
-    more.addEventListener('toggle', () => { value.expanded = more.open; });
+    more.addEventListener('toggle', () => { if (!more.isConnected) return; value.expanded = more.open; });
     value.findings.slice(1).forEach(finding => more.appendChild(card(finding))); section.appendChild(more);
   }
   advisor.appendChild(section);

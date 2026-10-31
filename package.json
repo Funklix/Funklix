@@ -5,6 +5,7 @@
     "pg": "^8.13.1"
   },
   "scripts": {
+    "check:bw39.2": "node scripts/check-bw39-2-optional-evidence.js",
     "check:bw39.1r2": "node scripts/check-bw39-1-r2-evidence-reliability.js",
     "check:bw39.1r1": "node scripts/check-bw39-1-r1-evidence-reliability.js && node scripts/check-bw39-1-r1-evidence-entry-browser.js",
     "check:bw39.1": "node scripts/check-bw39-1-social-evidence.js && node scripts/check-bw39-1-social-evidence-browser.js",

@@ -17,7 +17,7 @@ const { fixture } = require('./fixtures/bw36-20-database');
  ['empty aggregate fallback retained',{...envelope,output_text:''},200,1],
  ['multiple text blocks',{...envelope,output:[block(raw.slice(0,60)),block(raw.slice(60))]},200,1],
  ['truncated JSON',{...envelope,output:[block(raw.slice(0,-5))]},502],
- ['missing findings',changed(v=>delete v.findings),502],
+ ['missing findings',changed(v=>delete v.findings),200,0],
  ['schema mismatch',changed(v=>v.extra=true),502],
  ['forged node',changed(v=>v.findings[0].evidence.forEach(e=>e.nodeId='unsupported')),200,0],
  ['outside evidence quote',changed(v=>v.findings[0].evidence[0].quote='Not supplied'),200,0],
@@ -36,7 +36,8 @@ const { fixture } = require('./fixtures/bw36-20-database');
    const warnCount=warnings.length, infoCount=infos.length;
    const result=await f.invoke({advice_mode:'analyze_social_ctas',question:'Which social posts have unclear calls to action?',canvas_revision:'2026-10-29T08:00:00.123Z',canvas_context:{nodes,edges:[]}});
    assert.equal(result.statusCode,status,name);
-   if(count!==undefined) assert.equal(result.body.findings.length,count,name);
+   if(count!==undefined) { assert.equal(result.body.findings.length,count,name); assert.equal(result.body.answer,value.answer,name); }
+   if(name==='missing findings') assert.equal(result.body.evidenceContext.evidenceUnavailable,true);
    assert.equal(f.calls.length,1); assert.equal(f.calls[0].model,'gpt-4o-mini'); assert.equal(f.calls[0].store,false);assert.equal(f.calls[0].max_output_tokens,4096);
    assert(f.queries.slice(start).every(q=>/^(SELECT|BEGIN|SET LOCAL|COMMIT|ROLLBACK)/.test(q.sql)));
    if(status===502){assert.equal(warnings.length,warnCount+1);assert.equal(infos.length,infoCount);assert(!result.body.findings);}

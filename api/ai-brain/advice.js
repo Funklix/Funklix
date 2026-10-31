@@ -214,17 +214,19 @@ module.exports = async function handler(req, res) {
     }
     const answer = envelope ? envelope.answer : outputText(providerData);
     if (!answer) return res.status(502).json({ error: 'AI Brain returned no advice' });
-    if (responseLanguageMismatch(answer, language) || envelope?.findings.some(finding => responseLanguageMismatch(finding.title + ' ' + finding.explanation, language))) {
+    if (responseLanguageMismatch(answer, language)) {
       return res.status(502).json({
         error: language === 'de' ? 'AI Brain hat in einer anderen Sprache geantwortet. Bitte versuche es erneut.' : 'AI Brain answered in a different language. Please retry.',
         code: 'response_language_mismatch',
         context: { response_language: language }
       });
     }
-    const resolved = envelope ? socialEvidence.resolve({ envelope, evidence, nodes, data: goals }) : null;
+    const resolved = envelope ? socialEvidence.resolve({ envelope, evidence, nodes, data: goals,
+      acceptFinding: finding => !responseLanguageMismatch(finding.title + ' ' + finding.explanation, language) }) : null;
+    if (resolved && analysis.optionalEvidenceInvalid) resolved.evidenceContext.evidenceUnavailable = true;
     if (resolved) console.info('[AI_BRAIN_EVIDENCE_VALIDATED]', { stage: 'source_validation',
       findingCount: envelope.findings.length, verifiedFindingCount: resolved.findings.length,
-      omittedFindingCount: resolved.evidenceContext.omittedFindings });
+      omittedFindingCount: resolved.evidenceContext.omittedFindings, optionalEvidenceInvalid: analysis.optionalEvidenceInvalid });
     return res.status(200).json({
       answer,
       ...(resolved || {}),
