@@ -53,25 +53,34 @@ const REV = '2026-10-29T08:00:00.123Z';
       await p.locator('[data-ai-brain-node-open="node-27"]').waitFor();
     }
     const stable = () => p.evaluate(() => JSON.stringify({ nodes: state.nodes, edges: state.edges, history: state.history, dirty: state.isDirty }));
+    const themeSurfaces = new Set();
     for (const width of [1440, 375]) for (const theme of ['light', 'dark']) for (const language of ['en', 'de']) {
       await boot(); await p.setViewportSize({ width, height: 1000 });
       await p.evaluate(({ theme, language }) => { document.documentElement.dataset.theme = theme; state.uiLanguage = language; renderAiBrain(); }, { theme, language });
       await ask();
       assert.equal(await p.locator('.ai-brain-node-reference').count(), 2, 'Repeated reference deduplicated in section');
       assert.equal(await p.locator('.ai-brain-formatted-answer > p').count(), 2);
+      const surface = await p.locator('.ai-brain-node-reference').first().evaluate(n => getComputedStyle(n).backgroundColor);
+      assert.notEqual(surface, 'rgba(0, 0, 0, 0)', 'Reference stylesheet is loaded'); themeSurfaces.add(surface);
+      assert((await p.locator('.ai-brain-node-reference').nth(1).textContent()).includes('Make together'), 'Native Landing Page preview');
       assert((await p.locator('.ai-brain-node-reference').first().textContent()).includes('Workshop invitation'));
       assert((await p.locator('.ai-brain-node-reference').first().textContent()).includes('fictional community'));
       assert((await p.locator('.ai-brain-node-reference').first().textContent()).includes(language === 'de' ? 'Im Canvas öffnen' : 'Open in Canvas'));
       assert(await p.locator('.ai-brain-node-reference').first().evaluate(n => n.scrollWidth <= n.clientWidth + 1));
       const before = await stable(), inference = sql.calls.length, read = opens;
       const button = p.locator('[data-ai-brain-node-open="7b910c24-8bda-42fb-b4a8-497f12c62c39"]');
-      await button.focus(); await p.keyboard.press('Enter');
+      await button.focus(); await p.keyboard.press(language === 'de' ? 'Space' : 'Enter');
       await p.waitForFunction(() => state.activeView === 'board' && state.selectedPrimary === '7b910c24-8bda-42fb-b4a8-497f12c62c39');
       assert.equal(await p.evaluate(() => state.selectedIds.size), 1);
       assert.equal(await p.evaluate(() => el.inputs.title.value), 'Workshop invitation');
       assert(await p.evaluate(() => !el.inspectorPanel.classList.contains('hidden')));
       assert.equal(await stable(), before); assert.equal(sql.calls.length, inference); assert.equal(opens, read + 1);
     }
+    assert.equal(themeSurfaces.size, 2, 'Distinct native Light/Dark Canvas surfaces');
+    await boot(); await ask();
+    await p.evaluate(() => { state.aiBrain.messages.at(-1).answer = '## First\nNode #1.\n\nNode #1 again.\n\n- Node #2.\n- Node #2 again.\n\n## Second\nNode #1.'; renderAiBrain(); });
+    assert.equal(await p.locator('.ai-brain-node-reference').count(), 3, 'Deduplicate paragraphs/lists within a section; allow reference after a new heading');
+    assert.equal(await p.locator('.ai-brain-formatted-answer li').count(), 2, 'Advice list stays readable');
     for (const mutation of ['delete', 'board', 'workspace', 'permission']) {
       await boot(); await ask(); const before = opens;
       await p.evaluate(mutation => {
