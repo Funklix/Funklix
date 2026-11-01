@@ -51,4 +51,4 @@ function validateCanvasContext(canvas, selectedNodeId) {
   if (selectedNodeId !== null && (!boundedString(selectedNodeId, LIMITS.id, true) || !ids.has(selectedNodeId))) return failure('invalid_selected_node', 409, 'selected_node');
   return { ok: true, nodes, edges };
 }
-module.exports = { LIMITS, validateCanvasContext };
+module.exports = { LIMITS, NODE_TYPES, validateCanvasContext };

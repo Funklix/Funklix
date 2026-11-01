@@ -139,10 +139,11 @@ test('current Brand, Board, shares, tokens and membership policies are not cut o
   assert.ok(altered.every((statement) => /ADD COLUMN workspace_id UUID NULL/i.test(statement)));
   assert.doesNotMatch(sql, /brand_members|board_editors|public_view_token|CREATE POLICY[^;]+public\.(?:brands|boards)/i);
 });
-test('UI, BW-36.4 sidebar, compact bar and Canvas toolbar baselines are unchanged', () => {
+// BW-40 adds only scoped AI Brain reference styles to the stylesheet baseline.
+test('UI, BW-36.4 sidebar, compact bar and Canvas toolbar baselines include audited BW-40 styles', () => {
   const expected = {
     'brand-sidebar.js': '42cd9ca38505a7e4755b888c494c73440a457e57bcc495059f9746bba02d1efb',
-    'styles.css': 'b70d22f3dbca76c365037c6b6b07243c100317e1873339a53f091c3ad29f5582',
+    'styles.css': 'd864066ed0953350e5bf01d3145c644bb73f1a2e9bd1e91a5c4390613185e8a7',
     'scripts/check-bw36-4-simplified-brand-sidebar.js': '5617fb7227f1a5f2ce9efe4ecda660c6b2c89a822ec70585c8fd5088a6003e4b',
     'scripts/check-bw36-2-compact-non-canvas-context-bar.js': '326a63061ce9381c4d3554c9d8f8d1fe20a04407514b8a05d793ee386948a034',
     'scripts/check-bw36-1r1-canvas-toolbar-visibility-and-funnel-footer.js': '230385a667a2b548d096848af5c24943d0e0047cde61faef47b6c69c5d42812e'

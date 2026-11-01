@@ -7243,6 +7243,7 @@ function renderAiBrainTranscript(transcript) {
     const advisor = document.createElement("article"); advisor.className = "ai-brain-message is-advisor"; advisor.dataset.turnId = turn.id;
     const advisorLabel = document.createElement("strong"); advisorLabel.className = "ai-brain-speaker"; advisorLabel.textContent = uiText("AI Brain");
     const formatted = document.createElement("div"); formatted.className = "ai-brain-formatted-answer"; renderAiBrainFormattedAnswer(formatted, turn.answer);
+    renderAiBrainNodeReferences(formatted, turn);
     advisor.append(createAiBrainAdvisorAvatar(turn.advisorIdentity), advisorLabel, formatted);
     renderAiBrainLearningContext(advisor, turn);
     if (turn.socialEvidence) renderAiBrainSocialEvidence(advisor, turn);
@@ -7463,6 +7464,83 @@ function renderAiBrain() {
     if (target && !target.disabled && !target.hidden) { target.focus({ preventScroll: true }); if (composerFocus.id === "ai-brain-question") target.setSelectionRange(composerFocus.start, composerFocus.end, composerFocus.direction); }
   }
 }
+// Ordinary Advice references use actual local Canvas presentation data. Keep the
+// original formatted answer untouched; references are appended near mentions.
+function validateAiBrainNodeReferences(references, origin) {
+  if (!Array.isArray(references) || references.length > 200) return null;
+  const ids = new Set();
+  const items = references.filter(ref => {
+    if (!ref || !/^Node #[1-9]\d*$/.test(ref.label) || typeof ref.nodeId !== 'string'
+      || !/^[a-f0-9]{64}$/.test(ref.scopeRevision || '') || ids.has(ref.nodeId)) return false;
+    const node = aiBrainCanvasProjection().nodes[Number(ref.label.slice(6)) - 1];
+    if (!node || node.id !== ref.nodeId) return false;
+    ids.add(ref.nodeId); return true;
+  });
+  return { origin, items, unavailable: false };
+}
+function renderAiBrainNodeReferences(formatted, turn) {
+  const value = turn.nodeReferences;
+  if (!value?.items.length) return;
+  if (!aiBrainEvidenceOriginCurrent(value.origin)) value.unavailable = true;
+  const seen = new Set();
+  // A heading starts a new answer section; list items remain close to mentions.
+  for (const block of Array.from(formatted.children)) {
+    if (/^H[1-6]$/.test(block.tagName)) seen.clear();
+    const targets = block.matches('ul,ol') ? Array.from(block.children) : [block];
+    for (const target of targets) {
+      const mentions = new Set(Array.from(target.textContent.matchAll(/(?<![\p{L}\p{N}_])Node #[1-9]\d*(?![\p{L}\p{N}_-]|\.\d)/gu), match => match[0]));
+      const refs = value.items.filter(ref => mentions.has(ref.label) && !seen.has(ref.nodeId));
+      if (!refs.length) continue;
+      const group = document.createElement('span'); group.className = 'ai-brain-node-references';
+      for (const ref of refs) {
+        seen.add(ref.nodeId);
+        const node = getNode(ref.nodeId);
+        const button = document.createElement('button'); button.type = 'button'; button.className = 'ai-brain-node-reference'; button.dataset.aiBrainNodeOpen = ref.nodeId;
+        button.dataset.aiBrainEvidenceFocus = `${turn.id}:${ref.label}:node`;
+        const append = (tag, text) => { const part = document.createElement(tag); part.textContent = text; part.dataset.userContent = 'true'; button.appendChild(part); };
+        if (node && !value.unavailable) {
+          append('small', `${ref.label} · ${uiText(node.type)}`);
+          append('strong', String(node.title || node.type).slice(0, 160));
+          append('span', String(node.social?.caption || node.content || node.landingPage?.headerClaim || node.goal || '').replace(/\s+/g, ' ').slice(0, 140));
+          append('small', aiBrainEvidenceCopy('Open in Canvas ↗', 'Im Canvas öffnen ↗'));
+        } else { button.disabled = true; append('span', aiBrainEvidenceCopy('Reference unavailable. Ask again with current Canvas.', 'Verweis nicht verfügbar. Frage mit aktuellem Canvas erneut.')); }
+        const status = document.createElement('span'); status.setAttribute('role', 'status');
+        button.addEventListener('click', () => openAiBrainNodeReference(turn, ref, button, status));
+        group.append(button, status);
+      }
+      target.appendChild(group);
+    }
+  }
+}
+async function openAiBrainNodeReference(turn, ref, button, status) {
+  const value = turn.nodeReferences;
+  const current = () => state.aiBrain.messages.includes(turn) && turn.status === 'success'
+    && turn.nodeReferences === value && !value.unavailable && value.items.includes(ref)
+    && aiBrainEvidenceOriginCurrent(value.origin) && state.nodes.filter(node => node.id === ref.nodeId).length === 1;
+  if (button.disabled) return;
+  const unavailable = () => { value.unavailable = true; button.disabled = true; status.textContent = aiBrainEvidenceCopy('Reference unavailable. Ask again with current Canvas.', 'Verweis nicht verfügbar. Frage mit aktuellem Canvas erneut.'); };
+  if (!current()) return unavailable();
+  button.disabled = true; status.textContent = aiBrainEvidenceCopy('Checking reference…', 'Verweis wird geprüft…');
+  try {
+    const response = await fetch('/api/ai-brain/node-reference', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ board_id: state.currentBoardId, node_id: ref.nodeId, scope_revision: ref.scopeRevision }) });
+    const data = await response.json();
+    if (!current() || (response.status !== 503 && !response.ok)) return unavailable();
+    if (!response.ok) throw new Error('service');
+    if (data.nodeId !== ref.nodeId || data.scopeRevision !== ref.scopeRevision) return unavailable();
+    if (document.querySelector('dialog[open]') || el.brandWorkspaceDetail?.open) throw new Error('blocked');
+    if (!Array.from(el.zoomLayer.querySelectorAll('[data-id]')).some(element => element.dataset.id === ref.nodeId)) return unavailable();
+    setActiveView('board');
+    await new Promise(resolve => requestAnimationFrame(resolve));
+    if (!current() || state.activeView !== 'board') return unavailable();
+    if (!focusNodeInCanvas(ref.nodeId, { behavior: 'auto', select: true, pulse: false })) return unavailable();
+    await new Promise(resolve => requestAnimationFrame(resolve));
+    if (!current() || state.activeView !== 'board' || state.selectedPrimary !== ref.nodeId || !revealAiBrainEvidenceNode(ref.nodeId)) return unavailable();
+    (el.inputs?.title || el.inspectorPanel)?.focus?.({ preventScroll: true }); status.textContent = '';
+  } catch { if (!current()) return unavailable(); status.textContent = aiBrainEvidenceCopy('Could not open this reference. Try again.', 'Der Verweis konnte nicht geöffnet werden. Versuche es erneut.'); }
+  finally { button.disabled = value.unavailable; }
+}
+
 // Evidence references are ephemeral and strict across saves, scope and source
 // changes. Selection is excluded so normal Canvas opening/return remains valid.
 function captureAiBrainEvidenceOrigin() {
@@ -7616,6 +7694,7 @@ async function requestAiBrainAdvice(event, retryTurnId = null) {
   if (retryTurnId && !existing) return;
   const input = el.aiBrainSummary.querySelector("#ai-brain-question"); const question = existing?.question || input?.value.trim(); if (!question) return;
   const adviceMode = existing ? existing.adviceMode || "general" : state.aiBrain.adviceMode || "general";
+  const referenceOrigin = captureAiBrainEvidenceOrigin();
   const evidenceOrigin = adviceMode === "analyze_social_ctas" ? captureAiBrainEvidenceOrigin() : null;
   const brandProposalSource = captureAiBrainBrandSource();
   const contentProposalSource = captureAiBrainContentSource();
@@ -7628,7 +7707,7 @@ async function requestAiBrainAdvice(event, retryTurnId = null) {
   if (event?.type === "submit") input?.focus({ preventScroll: true });
   renderAiBrain({ revealTurnId: turn.id });
   try {
-    const response = await fetch("/api/ai-brain/advice", { method: "POST", headers: { "Content-Type": "application/json", "X-AI-Brain-Generation": String(requestId) }, signal: controller.signal, body: JSON.stringify({ board_id: state.currentBoardId, question, advice_mode: adviceMode, selected_node_id: selectedNodeId, canvas_context: canvas, ...(adviceMode === "analyze_social_ctas" || canvas.nodes.some(node => Object.hasOwn(node, "goal")) ? { canvas_revision: state.lastKnownUpdatedAt || null } : {}), response_language: responseLanguage, conversation_history: conversationHistory.exchanges, conversation_history_truncated: conversationHistory.truncated }) });
+    const response = await fetch("/api/ai-brain/advice", { method: "POST", headers: { "Content-Type": "application/json", "X-AI-Brain-Generation": String(requestId) }, signal: controller.signal, body: JSON.stringify({ board_id: state.currentBoardId, question, advice_mode: adviceMode, selected_node_id: selectedNodeId, canvas_context: canvas, canvas_revision: state.lastKnownUpdatedAt || null, response_language: responseLanguage, conversation_history: conversationHistory.exchanges, conversation_history_truncated: conversationHistory.truncated }) });
     if (evidenceOrigin && !aiBrainEvidenceOriginCurrent(evidenceOrigin)) throw Object.assign(new Error("changed"), { code: "changed" });
     const data = await response.json().catch(() => ({}));
     if (evidenceOrigin && !aiBrainEvidenceOriginCurrent(evidenceOrigin)) throw Object.assign(new Error("changed"), { code: "changed" });
@@ -7640,7 +7719,7 @@ async function requestAiBrainAdvice(event, retryTurnId = null) {
     if (data.context?.response_language !== responseLanguage) { const error = new Error("AI Brain response language identity mismatch"); error.code = "response_language_mismatch"; throw error; }
     const scope = [`Board Brand Core`, data.context?.canonicalBrandCore ? "Canonical Brand Core" : null, `${data.context?.canvasNodes || 0} Canvas nodes`].filter(Boolean).join(" · ");
     const assumptions = Array.isArray(data.assumptions) ? data.assumptions.filter((value) => typeof value === "string").slice(0, 20) : [];
-    state.aiBrain = { ...state.aiBrain, status: "success", controller: null, messages: state.aiBrain.messages.map((item) => item.id === turn.id ? { ...item, status: "success", answer: data.answer, responseLanguage, assumptions, ...(evidenceOrigin ? { socialEvidence: validateAiBrainSocialEvidence(data, evidenceOrigin) } : {}), brandProposalSource: { ...brandProposalSource, answer: data.answer, question }, contentProposalInvalid: false, contentProposalSource: { ...contentProposalSource, turnId: turn.id, answer: data.answer, question }, brandProposalInvalid: false, brandUpdateStaged: false, approvedLearnings: data.context?.approved_learnings || null, referenceResolution: data.context?.reference_resolution || "none", proposal: null, meta: `${scope}. ${data.disclaimer}` } : item) };
+    state.aiBrain = { ...state.aiBrain, status: "success", controller: null, messages: state.aiBrain.messages.map((item) => item.id === turn.id ? { ...item, status: "success", answer: data.answer, responseLanguage, assumptions, nodeReferences: validateAiBrainNodeReferences(data.nodeReferences, referenceOrigin), ...(evidenceOrigin ? { socialEvidence: validateAiBrainSocialEvidence(data, evidenceOrigin) } : {}), brandProposalSource: { ...brandProposalSource, answer: data.answer, question }, contentProposalInvalid: false, contentProposalSource: { ...contentProposalSource, turnId: turn.id, answer: data.answer, question }, brandProposalInvalid: false, brandUpdateStaged: false, approvedLearnings: data.context?.approved_learnings || null, referenceResolution: data.context?.reference_resolution || "none", proposal: null, meta: `${scope}. ${data.disclaimer}` } : item) };
   } catch (error) {
     if (state.aiBrain.requestId !== requestId || state.aiBrain.identity !== identity || aiBrainIdentity() !== identity) return;
     state.aiBrain = { ...state.aiBrain, status: "error", controller: null, messages: state.aiBrain.messages.map((item) => item.id === turn.id ? { ...item, status: "failed", errorCode: error.code || "generic" } : item) };

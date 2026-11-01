@@ -98,7 +98,7 @@ async function clientChecks() {
     let release; const requests = [];
     const sandbox = { state, AbortController, el: { aiBrainSummary: { querySelector: selector => selector === '#ai-brain-question' ? { value: 'A specific question' } : null } }, renderAiBrain() {}, captureAiBrainAdvisorIdentity: () => ({}), aiBrainViewIsVisible: () => false,
       fetch: async (url, options) => { assert.equal(url, '/api/ai-brain/advice'); requests.push(JSON.parse(options.body)); await new Promise(resolve => release = resolve); return { ok: true, json: async () => ({ answer: 'Stale', context: { response_language: 'en' } }) }; } };
-    vm.runInNewContext(app.slice(app.indexOf('function aiBrainIdentity()'), app.indexOf('const AI_BRAIN_MODES')) + app.slice(app.indexOf('function aiBrainRequestContextIdentity()'), app.indexOf('function validateAiBrainNodeProposal')) + app.slice(app.indexOf('async function requestAiBrainAdvice('), app.indexOf('function aiBrainNodePlacement()')), sandbox);
+    vm.runInNewContext(app.slice(app.indexOf('function aiBrainIdentity()'), app.indexOf('const AI_BRAIN_MODES')) + app.slice(app.indexOf('function aiBrainRequestContextIdentity()'), app.indexOf('function validateAiBrainNodeProposal')) + app.slice(app.indexOf('function validateAiBrainNodeReferences('), app.indexOf('function validateAiBrainSocialEvidence(')) + app.slice(app.indexOf('async function requestAiBrainAdvice('), app.indexOf('function aiBrainNodePlacement()')), sandbox);
     const pending = sandbox.requestAiBrainAdvice(); edit(state); release(); await pending;
     assert.equal(state.aiBrain.messages.at(-1).errorCode, 'changed'); assert(!state.aiBrain.messages.at(-1).answer);
     // Retry must capture the new supplied projection, with no duplicate turn.
