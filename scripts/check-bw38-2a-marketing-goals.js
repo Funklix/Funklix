@@ -43,7 +43,7 @@ async function main() {
       assert(!JSON.stringify(f.calls).includes('OTHER BRAND SECRET'));
       assert(!JSON.stringify(f.calls).includes('OMITTED GOAL SECRET'));
       assert(!JSON.stringify(f.calls).includes('COMMENT SECRET'));
-      assert.deepEqual(Object.keys(result.body).sort(), ['answer', 'context', 'disclaimer']);
+      assert.deepEqual(Object.keys(result.body).sort(), ['answer', 'context', 'disclaimer', 'nodeReferences']);
       assert.equal(result.body.context.advice_mode, 'general');
       assert(f.context.tokens(f.calls[0].input, f.context.modelConstraints()) + 5120 <= 128000);
     }
@@ -171,7 +171,7 @@ async function main() {
         return { ok: response.statusCode === 200, json: async () => response.body };
       }
     };
-    vm.runInNewContext(app.slice(app.indexOf('function aiBrainIdentity()'), app.indexOf('const AI_BRAIN_MODES')) + app.slice(app.indexOf('function aiBrainRequestContextIdentity()'), app.indexOf('function validateAiBrainNodeProposal')) + app.slice(app.indexOf('async function requestAiBrainAdvice('), app.indexOf('function aiBrainNodePlacement()')), sandbox);
+    vm.runInNewContext(app.slice(app.indexOf('function aiBrainIdentity()'), app.indexOf('const AI_BRAIN_MODES')) + app.slice(app.indexOf('function aiBrainRequestContextIdentity()'), app.indexOf('function validateAiBrainNodeProposal')) + app.slice(app.indexOf('function validateAiBrainNodeReferences('), app.indexOf('function validateAiBrainSocialEvidence(')) + app.slice(app.indexOf('async function requestAiBrainAdvice('), app.indexOf('function aiBrainNodePlacement()')), sandbox);
     const pending = sandbox.requestAiBrainAdvice();
     while (!release) await new Promise(resolve => setTimeout(resolve, 5));
     assert.equal(submitted[0].canvas_revision, REVISION);
