@@ -18,7 +18,7 @@ Every click posts to the new read-only `/api/ai-brain/node-reference` endpoint. 
 
 ## UI and navigation
 
-Compact keyboard-accessible buttons appear beside the relevant formatted paragraph/list item. They show node type, title, up to 140 characters of current actual Canvas preview and an Open in Canvas affordance. Canvas surface/text/border/focus tokens support Light/Dark; text wraps on mobile. User content uses DOM text only. References are deduplicated across a heading-delimited answer section; a new heading permits a fresh nearby reference. Original answer formatting and text remain readable.
+Compact keyboard-accessible buttons appear beside the relevant formatted paragraph/list item. They show node type, title, up to 140 characters from the existing `getNodeListPreview` Canvas preview helper and an Open in Canvas affordance. Canvas surface/text/border/focus tokens support Light/Dark; text wraps on mobile. User content uses DOM text only. References are deduplicated across a heading-delimited answer section; a new heading permits a fresh nearby reference. Original answer formatting and text remain readable.
 
 Navigation uses `setActiveView('board')`, the existing `focusNodeInCanvas` selection/Inspector owner, and the existing visibility helper. The Inspector receives focus. References never infer, create, edit, save or mutate Canvas content/history. Campaign Creator, Content handoffs, Brand Learnings, legacy DOM IDs and BW-39 Evidence behavior are unchanged.
 
@@ -28,10 +28,9 @@ Navigation uses `setActiveView('board')`, the existing `focusNodeInCanvas` selec
 - `api/ai-brain/node-reference.js`: authenticated read-only click resolver.
 - `api/ai-brain/advice.js`: ordinary Advice context and resolved references.
 - `api/_ai-brain-canvas-context.js`: export the existing supported-type set for the resolver.
-- `app.js`, `styles.css`: compact actual-node presentation, freshness state and native navigation.
+- `app.js`, `ai-brain-node-references.css`, `index.html`: compact actual-node presentation, freshness state and native navigation.
 - `scripts/check-bw40-node-references*.js`: signed-session SQL/Chromium integration fixtures.
 - Existing BW-38.2A/BW-37.1B harnesses: include reference lifecycle helpers and the additive response field.
-- Existing BW-36.6 baseline: explicitly audit/pin the scoped reference stylesheet addition.
 - `package.json`, `.github/workflows/runtime-boot-safety.yml`: focused check and both PostgreSQL CI jobs.
 
 ## Validation

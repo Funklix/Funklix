@@ -7501,7 +7501,7 @@ function renderAiBrainNodeReferences(formatted, turn) {
         if (node && !value.unavailable) {
           append('small', `${ref.label} · ${uiText(node.type)}`);
           append('strong', String(node.title || node.type).slice(0, 160));
-          append('span', String(node.social?.caption || node.content || node.landingPage?.headerClaim || node.goal || '').replace(/\s+/g, ' ').slice(0, 140));
+          append('span', getNodeListPreview(node).slice(0, 140));
           append('small', aiBrainEvidenceCopy('Open in Canvas ↗', 'Im Canvas öffnen ↗'));
         } else { button.disabled = true; append('span', aiBrainEvidenceCopy('Reference unavailable. Ask again with current Canvas.', 'Verweis nicht verfügbar. Frage mit aktuellem Canvas erneut.')); }
         const status = document.createElement('span'); status.setAttribute('role', 'status');
