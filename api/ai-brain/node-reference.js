@@ -5,6 +5,7 @@ const { isBrandId } = require('../_brand-access');
 const scope = require('../_ai-brain-proposal-scope');
 const { NODE_TYPES } = require('../_ai-brain-canvas-context');
 const { canonicalType } = require('../_ai-brain-social-evidence');
+const { referenceRevision } = require('../_ai-brain-node-references');
 module.exports = async function handler(req, res) {
   res.setHeader?.('Cache-Control', 'private, no-store');
   const fail = status => res.status(status).json({ code: 'node_reference_unavailable' });
@@ -18,7 +19,7 @@ module.exports = async function handler(req, res) {
   try {
     const valid = data => {
       const nodes = data.board.canvas_json?.nodes;
-      return scope.revision(data) === body.scope_revision && Array.isArray(nodes)
+      return referenceRevision(data, body.node_id) === body.scope_revision && Array.isArray(nodes)
         && nodes.every(node => node && typeof node.id === 'string' && node.id.length > 0)
         && new Set(nodes.map(node => node.id)).size === nodes.length
         && nodes.filter(node => node.id === body.node_id && NODE_TYPES.has(canonicalType(node.type))).length === 1;

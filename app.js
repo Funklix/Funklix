@@ -7488,7 +7488,7 @@ function renderAiBrainNodeReferences(formatted, turn) {
     if (/^H[1-6]$/.test(block.tagName)) seen.clear();
     const targets = block.matches('ul,ol') ? Array.from(block.children) : [block];
     for (const target of targets) {
-      const mentions = new Set(Array.from(target.textContent.matchAll(/(?<![\p{L}\p{N}_])Node #[1-9]\d*(?![\p{L}\p{N}_-]|\.\d)/gu), match => match[0]));
+      const mentions = new Set(Array.from(target.textContent.matchAll(/(?<![\p{L}\p{N}_])Node #[1-9]\d*(?![\p{L}\p{N}_-]|[.,/–—]\d)/gu), match => match[0]));
       const refs = value.items.filter(ref => mentions.has(ref.label) && !seen.has(ref.nodeId));
       if (!refs.length) continue;
       const group = document.createElement('span'); group.className = 'ai-brain-node-references';

@@ -30,7 +30,7 @@ const nodes = [
       ['Clarify Node #1, then align Node #2 with Node #3.', nodes.map(n => n.id)],
       ['Node #1 and Node #1 need a clearer invitation.', [nodes[0].id]],
       ['27 registrations, #1, Node 1 and Workshop invitation are ambiguous.', []],
-      ['Node #27, Node #999, Node #01, Node #1.5, Node #2fake and node-27.', []],
+      ['Node #27, Node #999, Node #01, Node #1.5, Node #1/2, Node #2,7, Node #1–3, Node #2fake and node-27.', []],
       ['Ich würde Node #2 mit dem Ziel der Kampagne verbinden.', [nodes[1].id]]
     ]) {
       const before = f.calls.length;
@@ -47,6 +47,7 @@ const nodes = [
     assert.equal((await open(ref)).statusCode, 200);
     assert.equal((await open(ref, {}, null)).statusCode, 401);
     assert.equal((await open(ref, { node_id: 'node-999' })).statusCode, 409);
+    assert.equal((await open(ref, { node_id: nodes[1].id })).statusCode, 409, 'A valid digest cannot be substituted onto another existing node');
     assert.equal((await open(ref, { board_id: f.OTHER })).statusCode, 409);
     assert.equal((await open(ref, { scope_revision: 'a'.repeat(64) })).statusCode, 409);
     assert.equal(f.calls.length, calls);

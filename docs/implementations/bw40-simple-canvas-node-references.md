@@ -10,7 +10,7 @@ Ordinary Advice now supplies `workingCanvas.nodeReferences`, a small application
 
 ## Resolution, scope and freshness
 
-The server recognizes only the explicit, case-sensitive `Node #N` format with bounded token boundaries. Bare numbers, `#N`, title matches, numeric ID suffixes, decimal metrics, nonexistent labels and unsupported IDs are ignored. The original Advice text is preserved. Returned references contain only application-resolved label, exact ID and a freshness digest. The digest is not a credential.
+The server recognizes only the explicit, case-sensitive `Node #N` format with bounded token boundaries. Bare numbers, `#N`, title matches, numeric ID suffixes, decimal/fraction/range metrics, nonexistent labels and unsupported IDs are ignored. The original Advice text is preserved. Returned references contain only application-resolved label, exact ID and a freshness digest bound to that exact destination. The digest is not a credential.
 
 The browser supplies the known saved Canvas revision for ordinary Advice. The existing goal-context/proposal-scope readers capture and revalidate the saved Canvas, Board revision (including PostgreSQL microseconds), verified actor, active identity, Board edit permission, Workspace membership/lifecycle and Brand association around inference. Existing legacy requests without a revision can still receive ordinary Advice but do not acquire references. Existing native-goal requests retain their strict revision requirement.
 
