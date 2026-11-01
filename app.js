@@ -6398,6 +6398,12 @@ function renderAiBrainSuggestions() {
     const chip = document.createElement('button');
     chip.type = 'button'; chip.className = 'ai-brain-suggestion';
     chip.textContent = uiText(prompt);
+    chip.addEventListener('focus', () => {
+      if (group.scrollWidth <= group.clientWidth) return;
+      const item = chip.getBoundingClientRect(), bounds = group.getBoundingClientRect();
+      if (item.left < bounds.left) group.scrollLeft -= bounds.left - item.left;
+      else if (item.right > bounds.right) group.scrollLeft += item.right - bounds.right;
+    });
     chip.addEventListener('click', () => {
       const input = el.aiBrainSummary.querySelector('#ai-brain-question');
       if (input) { input.value = chip.textContent; input.focus(); }

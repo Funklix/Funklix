@@ -12,3 +12,12 @@
 #ai-brain-view .ai-brain-composer .ai-brain-suggestion:hover { color: var(--fk-color-text-primary); border-color: var(--fk-color-focus-ring); }
 #ai-brain-view .ai-brain-composer .ai-brain-suggestion:focus-visible { outline: 2px solid var(--fk-color-focus-ring); outline-offset: 2px; }
 .ai-brain-reference-reset { color: var(--fk-color-text-secondary); overflow-wrap: anywhere; }
+/* Keep all shortcuts reachable without displacing Ask when the keyboard opens. */
+#ai-brain-view.ai-brain-compact-viewport .ai-brain-composer > .ai-brain-suggestions { flex-wrap: nowrap; overflow-x: auto; }
+#ai-brain-view.ai-brain-compact-viewport .ai-brain-composer .ai-brain-suggestion { flex: 0 0 auto; white-space: nowrap; min-height: 28px; padding-block: 4px; }
+#ai-brain-view.ai-brain-compact-viewport .ai-brain-suggestion:focus-visible { outline-offset: -2px; }
+@media (max-height: 640px) {
+  #ai-brain-view .ai-brain-composer > .ai-brain-suggestions { flex-wrap: nowrap; overflow-x: auto; }
+  #ai-brain-view .ai-brain-composer .ai-brain-suggestion { flex: 0 0 auto; white-space: nowrap; min-height: 28px; padding-block: 4px; }
+  #ai-brain-view .ai-brain-composer .ai-brain-suggestion:focus-visible { outline-offset: -2px; }
+}

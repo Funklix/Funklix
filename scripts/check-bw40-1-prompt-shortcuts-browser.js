@@ -46,6 +46,20 @@ const expected = {
     }
     assert.equal(surfaces.size, 2, 'Native Light/Dark surfaces');
     await p.evaluate(() => { document.documentElement.style.zoom = 1; });
+    // The mobile keyboard reduces usable height. Keep every shortcut reachable
+    // in one horizontal row and leave the existing Ask button above controls.
+    await p.setViewportSize({ width: 375, height: 520 });
+    await p.evaluate(() => renderAiBrain());
+    for (let i = 0; i < 3; i++) {
+      const chip = p.locator('.ai-brain-suggestion').nth(i);
+      await chip.focus();
+      assert(await chip.evaluate(node => { const r = node.getBoundingClientRect(), group = node.parentElement.getBoundingClientRect(); return r.left >= group.left - 1 && r.right <= group.right + 1; }), 'Keyboard focus reveals each horizontal shortcut');
+      await p.keyboard.press('Enter');
+      assert.equal(await p.locator('#ai-brain-question').inputValue(), await chip.textContent());
+    }
+    assert.equal(requests.length, 0);
+    await p.setViewportSize({ width: 375, height: 1000 });
+    await p.evaluate(() => renderAiBrain());
     await p.locator('#ai-brain-mode').selectOption('general');
     await p.locator('.ai-brain-suggestion').first().click();
     const edited = (await p.locator('#ai-brain-question').inputValue()) + ' Please explain.';

@@ -12,7 +12,7 @@ Conservative limitation: adding, deleting, reordering, or changing the type of a
 
 ## Exact user-visible suggestions
 
-Chips insert only the visible localized text, focus the existing editable question input, and never submit. Focus changes update chips without touching the question. Native buttons support keyboard use. Existing surface, text and focus tokens provide Light/Dark styling; wrapping supports mobile and 200% zoom without animation or dependencies.
+Chips insert only the visible localized text, focus the existing editable question input, and never submit. Focus changes update chips without touching the question. Native buttons support keyboard use. Existing surface, text and focus tokens provide Light/Dark styling; wrapping supports mobile and 200% zoom without animation or dependencies. With a mobile keyboard or short viewport, a single horizontally scrollable chip row keeps all shortcuts reachable by touch/keyboard without displacing Ask.
 
 | Existing focus | English | German |
 | --- | --- | --- |
@@ -38,6 +38,7 @@ Chips insert only the visible localized text, focus the existing editable questi
 ## Validation
 
 - `npm run check:bw40.1`: production Advice/resolver through disposable SQL with mocked provider and signed sessions; exact-node navigation; follow-up history; A/B/C deletion, reordering and unknown-mapping invalidation before dispatch; original B identity unchanged; all six focus modes and exact EN/DE suggestions; insert/edit without submit; manual draft preservation; keyboard; Light/Dark; mobile/desktop; 200% zoom; reduced motion.
+- `npm run check:bw37.1ar1`: existing conversation scroll, composer/focus preservation and mobile keyboard/visual viewport regressions.
 - `npm run check:bw39.2`: independent conversational Advice with optional evidence.
 - `npm run check:bw37.1b`: strategic Advice, formatting, request freshness/retry, modes and authorization.
 - `node scripts/check-bw38-2a-marketing-goals.js`: goal projection, scope and stale-response checks.
