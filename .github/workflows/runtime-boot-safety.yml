@@ -490,7 +490,7 @@ jobs:
       - name: Check BW-39.1-R1 review failure diagnostics and friendly entry
         run: npm run check:bw39.1r1
       - name: Check BW-40 simple Canvas node references (signed sessions, SQL, Chromium)
-        run: npm run check:bw40
+        run: npm run check:bw40.1
       - name: Check BW-39.2 independently valid Advice with optional verified evidence
         run: npm run check:bw39.2
       - name: Check BW-39.1-R2 provider failure boundaries and redacted stages

@@ -10,7 +10,7 @@ const REV = '2026-10-29T08:00:00.123Z';
   try {
     const f = await require('./fixtures/home-browser')(browser)({ empty: true, prepare(r) {
       r.db.boards[0].updated_at = REV;
-      r.db.boards[0].canvas_json.nodes = ['node-27', '7b910c24-8bda-42fb-b4a8-497f12c62c39'].map((id, i) => ({
+      r.db.boards[0].canvas_json.nodes = ['node-27', '7b910c24-8bda-42fb-b4a8-497f12c62c39', 'node-C'].map((id, i) => ({
         id, type: i ? 'Landing Page' : 'Content', title: 'Workshop invitation', content: 'Join our fictional community workshop.',
         status: 'Draft', position: { x: 180 + i * 600, y: 240 }, images: [], tags: [], postits: [], variants: [], reactions: {},
         social: { platform: '', caption: '', hashtags: [] }, landingPage: { headerClaim: 'Make together', cta: '', trust: '' }
@@ -56,7 +56,7 @@ const REV = '2026-10-29T08:00:00.123Z';
     const themeSurfaces = new Set();
     for (const width of [1440, 375]) for (const theme of ['light', 'dark']) for (const language of ['en', 'de']) {
       await boot(); await p.setViewportSize({ width, height: 1000 });
-      await p.evaluate(({ theme, language }) => { document.documentElement.dataset.theme = theme; state.uiLanguage = language; renderAiBrain(); }, { theme, language });
+      await p.evaluate(({ theme, language }) => { document.documentElement.dataset.theme = theme; state.uiLanguage = window.FunklixLanguage.setUiLanguage(language); renderAiBrain(); }, { theme, language });
       await ask();
       assert.equal(await p.locator('.ai-brain-node-reference').count(), 2, 'Repeated reference deduplicated in section');
       assert.equal(await p.locator('.ai-brain-formatted-answer > p').count(), 2);
@@ -81,6 +81,34 @@ const REV = '2026-10-29T08:00:00.123Z';
     await p.evaluate(() => { state.aiBrain.messages.at(-1).answer = '## First\nNode #1.\n\nNode #1 again.\n\n- Node #2.\n- Node #2 again.\n\n## Second\nNode #1.'; renderAiBrain(); });
     assert.equal(await p.locator('.ai-brain-node-reference').count(), 3, 'Deduplicate paragraphs/lists within a section; allow reference after a new heading');
     assert.equal(await p.locator('.ai-brain-formatted-answer li').count(), 2, 'Advice list stays readable');
+    // A/B/C: the old Node #2 is B; deleting A or reordering must never
+    // send its text back alongside a new positional mapping where #2 is C.
+    for (const mutation of ['delete-A', 'reorder', 'unknown-mapping']) {
+      await boot(); await ask();
+      await p.evaluate(() => { setActiveView('ai_brain'); });
+      const before = sql.calls.length;
+      await p.locator('#ai-brain-question').fill('Tell me more about Node #2.');
+      await p.locator('#ai-brain-form [type=submit]').click();
+      await p.waitForFunction(() => state.aiBrain.status === 'success');
+      assert.equal(sql.calls.length, before + 1);
+      const input = sql.calls.at(-1).input;
+      assert(input.some(message => message.role === 'assistant' && message.content.includes('Node #2')), 'Unchanged mapping retains follow-up history');
+      await p.evaluate(mutation => {
+        window.originalReference = state.aiBrain.messages[0].nodeReferences.items.find(ref => ref.label === 'Node #2');
+        if (mutation === 'delete-A') state.nodes = state.nodes.slice(1);
+        if (mutation === 'reorder') state.nodes = [state.nodes[0], state.nodes[2], state.nodes[1]];
+        if (mutation === 'unknown-mapping') delete state.aiBrain.referenceMapping;
+      }, mutation);
+      const calls = sql.calls.length;
+      // Submit directly before any rerender: the dispatch guard must also reset.
+      await p.evaluate(() => { el.aiBrainSummary.querySelector('#ai-brain-question').value = 'Explain Node #2 again'; return requestAiBrainAdvice(); });
+      assert.equal(sql.calls.length, calls, 'Ambiguous follow-up never reaches inference');
+      assert.equal(await p.evaluate(() => state.aiBrain.messages.length), 0);
+      assert.equal(await p.locator('.ai-brain-node-reference').count(), 0);
+      assert.equal(await p.locator('#ai-brain-question').inputValue(), '');
+      assert.equal(await p.evaluate(() => window.originalReference.nodeId), '7b910c24-8bda-42fb-b4a8-497f12c62c39', 'Original reference identity is never rewritten to C');
+      await p.locator('.ai-brain-reference-reset').waitFor();
+    }
     for (const mutation of ['delete', 'board', 'workspace', 'permission']) {
       await boot(); await ask(); const before = opens;
       await p.evaluate(mutation => {

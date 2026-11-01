@@ -5,6 +5,7 @@
     "pg": "^8.13.1"
   },
   "scripts": {
+    "check:bw40.1": "npm run check:bw40 && node scripts/check-bw40-1-prompt-shortcuts-browser.js",
     "check:bw40": "node scripts/check-bw40-node-references.js && node scripts/check-bw40-node-references-browser.js",
     "check:bw39.2": "node scripts/check-bw39-2-optional-evidence.js",
     "check:bw39.1r2": "node scripts/check-bw39-1-r2-evidence-reliability.js",
