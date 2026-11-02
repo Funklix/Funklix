@@ -71,7 +71,7 @@ class Element {
   querySelector(selector) { return this.querySelectorAll(selector)[0] || null; }
   closest(selector) { return this.matches(selector) ? this : this.parentElement?.closest(selector); }
 }
-function documentFixture() { const doc = { createElement: tag => new Element(tag, doc) }; doc.body = doc.createElement('body'); doc.activeElement = doc.createElement('button'); doc.querySelector = selector => doc.body.querySelector(selector); return doc; }
+function documentFixture() { const doc = { createElement: tag => new Element(tag, doc), createElementNS: (_namespace, tag) => new Element(tag, doc) }; doc.body = doc.createElement('body'); doc.activeElement = doc.createElement('button'); doc.querySelector = selector => doc.body.querySelector(selector); return doc; }
 function loadBoundary(file, overrides, env = {}) {
   const location = path.resolve(__dirname, '..', file), requireFile = createRequire(location), module = { exports: {} };
   const localRequire = name => { if (Object.hasOwn(overrides, name)) return overrides[name]; if (name === 'pg') throw new Error('Real database forbidden'); return requireFile(name); };
