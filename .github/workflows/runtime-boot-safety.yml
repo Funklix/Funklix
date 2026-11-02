@@ -474,6 +474,15 @@ jobs:
             fs.appendFileSync(process.env.GITHUB_ENV, `CHROMIUM_PATH=${executablePath}\n`);
           })().catch(error => { console.error(error); process.exitCode = 1; });
           JS
+      - name: Check BW-42 Brand Profile visuals and preserved workflows
+        run: npm run check:bw42
+      - name: Upload BW-42 browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bw42-browser-postgres-${{ matrix.postgres }}
+          path: work/bw42/
+          if-no-files-found: ignore
       - name: Check BW-41 AI Brain visual states and responsive accessibility
         run: npm run check:bw41
       - name: Preserve BW-41 actual application screenshots
