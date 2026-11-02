@@ -18,7 +18,7 @@ Chips insert only the visible localized text, focus the existing editable questi
 | --- | --- | --- |
 | Review social posts | Improve my calls to action | Meine Handlungsaufforderungen verbessern |
 | Review social posts | Review my social posts | Meine Social-Posts prüfen |
-| Review social posts | Find weak social messaging | Schwache Social-Botschaften finden |
+| Review social posts | Make the next step clearer | Den nächsten Schritt klarer machen |
 | General conversation | What should I improve? | Was kann ich verbessern? |
 | General conversation | Help me clarify my goal | Hilf mir, mein Ziel zu klären |
 | General conversation | What should I focus on? | Worauf sollte ich mich konzentrieren? |

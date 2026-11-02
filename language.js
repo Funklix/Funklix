@@ -569,7 +569,7 @@
     "Suggested questions": "Frageideen",
     "Improve my calls to action": "Meine Handlungsaufforderungen verbessern",
     "Review my social posts": "Meine Social-Posts prüfen",
-    "Find weak social messaging": "Schwache Social-Botschaften finden",
+    "Make the next step clearer": "Den nächsten Schritt klarer machen",
     "What should I improve?": "Was kann ich verbessern?",
     "Help me clarify my goal": "Hilf mir, mein Ziel zu klären",
     "What should I focus on?": "Worauf sollte ich mich konzentrieren?",

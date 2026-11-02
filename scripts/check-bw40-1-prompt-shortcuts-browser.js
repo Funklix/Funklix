@@ -2,7 +2,7 @@
 const assert = require('node:assert/strict');
 const { chromium } = require('playwright-core');
 const expected = {
-  analyze_social_ctas: [['Improve my calls to action', 'Review my social posts', 'Find weak social messaging'], ['Meine Handlungsaufforderungen verbessern', 'Meine Social-Posts prüfen', 'Schwache Social-Botschaften finden']],
+  analyze_social_ctas: [['Improve my calls to action', 'Review my social posts', 'Make the next step clearer'], ['Meine Handlungsaufforderungen verbessern', 'Meine Social-Posts prüfen', 'Den nächsten Schritt klarer machen']],
   general: [['What should I improve?', 'Help me clarify my goal', 'What should I focus on?'], ['Was kann ich verbessern?', 'Hilf mir, mein Ziel zu klären', 'Worauf sollte ich mich konzentrieren?']],
   review_strategy: [['Check campaign alignment', 'Review my campaign priorities', 'What should I improve first?'], ['Die Ausrichtung meiner Kampagne prüfen', 'Meine Kampagnenprioritäten prüfen', 'Was sollte ich zuerst verbessern?']],
   explore_ideas: [['Give me 3 campaign ideas', 'Find a fresh angle', 'Suggest a creative hook'], ['Gib mir 3 Kampagnenideen', 'Eine neue Perspektive finden', 'Einen kreativen Aufhänger vorschlagen']],

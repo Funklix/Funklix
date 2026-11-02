@@ -6383,7 +6383,7 @@ function invalidateAiBrainReferenceHistory() {
 const AI_BRAIN_MODES = Object.freeze({"analyze_social_ctas": {"title": "Review social posts", "description": "Find improvement opportunities and see supporting Canvas nodes."}, "general": {"title": "General conversation", "description": "Ask any strategic question about this Brand or campaign."}, "review_strategy": {"title": "Review Strategy", "description": "Review alignment, priorities and trade-offs in the current strategy."}, "explore_ideas": {"title": "Explore Ideas", "description": "Explore distinct ideas that fit your Brand and campaign."}, "find_gaps": {"title": "Find Gaps", "description": "Find missing assumptions, evidence or campaign elements."}, "evaluate_options": {"title": "Evaluate Options", "description": "Compare options against your goals, constraints and Brand context."}});
 // Plain user-visible questions only; mode capabilities remain server-owned.
 const AI_BRAIN_SUGGESTIONS = Object.freeze({
-  analyze_social_ctas: ["Improve my calls to action", "Review my social posts", "Find weak social messaging"],
+  analyze_social_ctas: ["Improve my calls to action", "Review my social posts", "Make the next step clearer"],
   general: ["What should I improve?", "Help me clarify my goal", "What should I focus on?"],
   review_strategy: ["Check campaign alignment", "Review my campaign priorities", "What should I improve first?"],
   explore_ideas: ["Give me 3 campaign ideas", "Find a fresh angle", "Suggest a creative hook"],
