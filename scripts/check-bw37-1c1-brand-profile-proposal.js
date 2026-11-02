@@ -288,6 +288,38 @@ async function browserChecks() {
     assert.equal(await p.evaluate(()=>state.activeView),'brand-profile');assert(await p.evaluate(()=>brandProfileController.contentDirty()));
     assert.equal(await p.evaluate(()=>brandProfileController.state.core.valueProposition),'An edited proposal for independent makers.');
     assert.equal(f.writes.length,0);assert.equal(JSON.stringify(f.r.db.brands),before);assert.equal(calls,1);
+    // BW-42-R1: exercise the actual staged return state against the full CSS cascade.
+    for (const theme of ['light','dark']) for (const language of ['en','de']) for (const width of [1440,768,375,320]) {
+      await p.setViewportSize({width,height:940});
+      await p.evaluate(({theme,language})=>{
+        window.FunklixTheme.setPreference(theme);state.uiLanguage=window.FunklixLanguage.setUiLanguage(language);
+        translateInterface();brandProfileController.render();
+        document.querySelector('[data-ai-brand-return]').textContent=aiBrainBrandCopy('back');
+      },{theme,language});
+      const label=`${theme}/${language}/${width}`;
+      const header=p.locator('#brand-workspace-detail > .brand-workspace-detail-header'),identity=p.locator('.guided-brand-profile .profile-header');
+      assert.equal(await header.evaluate(n=>getComputedStyle(n).position),'relative',`Return header occupies flow: ${label}`);
+      assert.equal(await header.evaluate(n=>getComputedStyle(n).top),'0px',`Return header clears positioned inset: ${label}`);
+      const h=await header.boundingBox(),i=await identity.boundingBox();
+      assert(h.y+h.height<=i.y,`Return row stays above identity: ${label}`);
+      assert(await p.locator('#brand-workspace-detail').evaluate(n=>n.scrollWidth<=n.clientWidth+1),`Profile does not overflow: ${label}`);
+      for (const selector of ['[data-ai-brand-return]','#brand-workspace-detail-close']) {
+        const control=p.locator(selector);await control.scrollIntoViewIfNeeded();
+        assert(await control.evaluate(n=>{const r=n.getBoundingClientRect();return n.contains(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2));}),`Control unobstructed: ${selector}/${label}`);
+      }
+      await p.locator('[data-ai-brand-return]').focus();await p.keyboard.press('Tab');
+      assert(await p.locator('#brand-workspace-detail-close').evaluate(n=>document.activeElement===n&&getComputedStyle(n).outlineStyle!=='none'),'Close follows Return with visible keyboard focus: '+label);
+      await p.keyboard.press('Shift+Tab');
+      assert(await p.locator('[data-ai-brand-return]').evaluate(n=>document.activeElement===n&&getComputedStyle(n).outlineStyle!=='none'),'Return has visible keyboard focus: '+label);
+      if(process.env.BW42_R1_VISUALS){fs.mkdirSync('work/bw42-r1',{recursive:true});await p.screenshot({path:`work/bw42-r1/return-${theme}-${language}-${width}.png`});}
+    }
+    console.log('PASS BW-42-R1 staged header: 16 theme/language/viewport cases, in-flow row, identity separation, unobstructed controls, keyboard focus');
+    await p.setViewportSize({width:1440,height:1100});
+    await p.evaluate(()=>{state.uiLanguage=window.FunklixLanguage.setUiLanguage('en');window.FunklixTheme.setPreference('light');translateInterface();brandProfileController.render();});
+    // Close retains the existing dirty-draft guard and Keep editing returns to Profile.
+    await p.locator('#brand-workspace-detail-close').focus();await p.keyboard.press('Enter');
+    await p.waitForSelector('#brand-leave-dialog');await p.locator('[data-keep-editing]').click();
+    assert.equal(await p.evaluate(()=>state.activeView),'brand-profile');
     assert(await p.evaluate(()=>brandProfileController.reload()));
     assert(await p.evaluate(()=>brandProfileController.contentDirty()));
     assert.equal(await p.evaluate(()=>state.aiBrain.messages.at(-1).brandProposalInvalid),false,'An unchanged canonical reload must preserve the staged comparison');

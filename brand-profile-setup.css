@@ -157,6 +157,6 @@ html[data-theme=dark] .guided-brand-profile .profile-header{background:radial-gr
 @media(forced-colors:active){.guided-brand-profile nav button:focus-visible{outline-color:Highlight}}
 
 /* AI Brain proposals add an existing return action beside the legacy title. */
-.brand-workspace-detail.profile-guided-mode:has([data-ai-brand-return])>.brand-workspace-detail-header{position:relative;inset:auto;align-items:center;margin-bottom:16px}
+.brand-workspace-detail.profile-guided-mode:has(.guided-brand-profile:not(.hidden) .profile-header):has([data-ai-brand-return])>.brand-workspace-detail-header{position:relative;inset:auto;align-items:center;margin-bottom:16px}
 .brand-workspace-detail.profile-guided-mode:has([data-ai-brand-return]) .profile-header{padding:24px}
 @media(max-width:600px){.brand-workspace-detail.profile-guided-mode:has([data-ai-brand-return])>.brand-workspace-detail-header{gap:12px;flex-wrap:wrap}.brand-workspace-detail.profile-guided-mode:has([data-ai-brand-return]) .profile-header{padding:16px}}
