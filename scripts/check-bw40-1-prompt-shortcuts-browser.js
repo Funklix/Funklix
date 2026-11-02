@@ -53,7 +53,12 @@ const expected = {
     for (let i = 0; i < 3; i++) {
       const chip = p.locator('.ai-brain-suggestion').nth(i);
       await chip.focus();
-      assert(await chip.evaluate(node => { const r = node.getBoundingClientRect(), group = node.parentElement.getBoundingClientRect(); return r.left >= group.left - 1 && r.right <= group.right + 1; }), 'Keyboard focus reveals each horizontal shortcut');
+      await p.waitForFunction(index => {
+        const node = document.querySelectorAll('.ai-brain-suggestion')[index];
+        if (document.activeElement !== node) return false;
+        const r = node.getBoundingClientRect(), group = node.parentElement.getBoundingClientRect();
+        return r.left >= group.left - 1 && r.right <= group.right + 1;
+      }, i);
       await p.keyboard.press('Enter');
       assert.equal(await p.locator('#ai-brain-question').inputValue(), await chip.textContent());
     }
