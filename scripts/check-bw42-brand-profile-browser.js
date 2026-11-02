@@ -78,6 +78,19 @@ const {png} = require('./fixtures/bw36-13r5-local-runtime');
     await p.locator('#campaign-snapshot-open-profile').click(); await p.waitForFunction(()=>brandProfileController && canonicalBrandDetail.status==='ready');
     await key('Advanced options').click(); await p.getByRole('button',{name:'Back to Brand Profile',exact:true}).waitFor({state:'visible'});
     await p.getByRole('button',{name:'Back to Brand Profile',exact:true}).click();
+    // Reopening an already mounted Profile retains the legacy title and description while loading.
+    await p.locator('#brand-workspace-detail-close').click();
+    const brandId=f.r.db.brands[0].id; let release;
+    const gate=new Promise(resolve=>{release=resolve;});
+    await p.route('**/api/brands/'+brandId,async route=>{await gate;await route.fallback();});
+    await p.evaluate(()=>{canonicalBrandReader.retire();void openRegularBrandProfile();});
+    try {
+      await p.waitForFunction(()=>canonicalBrandDetail.status==='loading');
+      assert(await p.locator('#brand-workspace-detail-title').evaluate(n=>n.getBoundingClientRect().width>10&&getComputedStyle(n).clipPath==='none'),'Loading title remains visible');
+      assert(await p.locator('#brand-workspace-detail-context').evaluate(n=>n.getBoundingClientRect().height>1),'Loading description remains visible');
+      assert(await p.locator('#brand-workspace-detail-close').isVisible());
+    } finally {release();}
+    await p.waitForFunction(()=>brandProfileController&&canonicalBrandDetail.status==='ready');
     assert.deepEqual(f.errors,[]);
     console.log(`PASS BW-42 actual app: ${states.length} theme/language/sidebar/viewport cases; 11 sections; field retention; save/reload; snapshot; advanced; keyboard; reduced motion; 200% equivalent reflow. Screenshots: work/bw42/screenshots.`);
   } finally {await browser.close();}
