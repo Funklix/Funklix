@@ -110,7 +110,7 @@
 .guided-brand-profile nav button[data-readiness]{border-color:var(--profile-border);background:var(--fk-color-surface-card)}
 .guided-brand-profile nav button[data-status-icon]::after{margin-inline-start:auto;font-weight:600;color:var(--fk-color-text-secondary)}
 .guided-brand-profile nav button[data-readiness=complete]::after{color:var(--profile-accent)}
-.guided-brand-profile nav button[aria-current=step]{color:var(--fk-color-button-primary-text,#fff);background:linear-gradient(125deg,color-mix(in srgb,var(--fk-color-primary-action) 96%,var(--fk-color-surface-card)),var(--fk-color-primary-action));border-color:var(--fk-color-primary-action);outline:2px solid var(--fk-color-focus-ring);outline-offset:2px;text-decoration:none;box-shadow:var(--profile-shadow)}
+.guided-brand-profile nav button[aria-current=step]{color:var(--fk-color-button-primary-text,#fff);background:linear-gradient(125deg,color-mix(in srgb,var(--fk-color-primary-action) 96%,#fff),var(--fk-color-primary-action));border-color:var(--fk-color-primary-action);outline:2px solid var(--fk-color-focus-ring);outline-offset:2px;text-decoration:none;box-shadow:var(--profile-shadow)}
 .guided-brand-profile nav button[aria-current=step]::after{color:inherit}
 .profile-icon{width:23px;height:23px;flex:0 0 23px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
 .guided-brand-profile .profile-section{gap:18px;padding:10px 16px 0}

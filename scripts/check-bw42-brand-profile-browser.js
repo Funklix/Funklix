@@ -97,6 +97,22 @@ const ROOT = path.resolve(__dirname, '..');
       assert.equal(await key('Brand Assets').getAttribute('aria-current'), 'step');
     }
     assert.equal(surfaces.size, 2, 'Light/Dark use distinct theme-native surfaces');
+    // Check the actual computed gradient stops against the rendered text colors.
+    for (const theme of ['light','dark']) {
+      await page.evaluate(theme=>document.documentElement.dataset.theme=theme,theme);
+      await key('Overview').click();
+      const contrast = await page.locator('.guided-brand-profile').evaluate(root => {
+        const ctx=document.createElement('canvas').getContext('2d');
+        const luminance=color=>{ctx.clearRect(0,0,1,1);ctx.fillStyle=color;ctx.fillRect(0,0,1,1);const rgb=[...ctx.getImageData(0,0,1,1).data].slice(0,3).map(n=>n/255).map(n=>n<=.04045?n/12.92:((n+.055)/1.055)**2.4);return rgb[0]*.2126+rgb[1]*.7152+rgb[2]*.0722;};
+        return ['nav button[aria-current=step]','[data-profile-key="Confirm and save Brand Profile"]'].map(selector=>{
+          const style=getComputedStyle(root.querySelector(selector)),foreground=luminance(style.color);
+          const stops=style.backgroundImage.match(/(?:rgba?|color)\([^)]*\)/g)||[];
+          return {selector,ratios:stops.map(color=>{const background=luminance(color);return (Math.max(foreground,background)+.05)/(Math.min(foreground,background)+.05);})};
+        });
+      });
+      for(const {selector,ratios} of contrast) assert(ratios.length===2&&ratios.every(r=>r>=4.5),`Text contrast ${theme}/${selector}: ${ratios}`);
+    }
+
     for(const width of [1440,768,320]) {
       await page.setViewportSize({width,height:1000});
       await page.evaluate(() => { document.documentElement.dataset.theme='light';setSidebarCollapsed(false);state.uiLanguage='de';brandProfileController.render(); });
