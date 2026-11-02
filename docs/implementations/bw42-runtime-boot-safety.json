@@ -1,0 +1,2806 @@
+{
+  "base": "2a697c9f9d1a0e36a3969bf38c5d2e4a56675b40",
+  "implementation_revision": "2f01a0d16b9b299bf34ebb19deea4b41ff8df495",
+  "strategy": "Complete local workflow command runs plus targeted reruns after the corrected regressions and the added PostgreSQL upload check; no test assertions removed and no failed step skipped.",
+  "local_setup_adaptations": [
+    "Existing installed dependencies verified with explicit require checks instead of npm installation.",
+    "System Chromium /usr/bin/chromium explicitly launched and smoke checked instead of downloading another browser.",
+    "Disposable localhost PostgreSQL ports substituted for the workflow service port.",
+    "PostgreSQL 17.6 official Debian image; PostgreSQL 18.4 official Alpine image to fit environment disk capacity.",
+    "GitHub artifact-upload actions are hosted workflow behavior, not local command steps."
+  ],
+  "postgres_17_6": {
+    "result": "PASS after four corrected step reruns",
+    "original_workflow_command_steps": 223,
+    "steps": [
+      {
+        "index": 0,
+        "name": "Install project dependencies",
+        "exit_code": 0,
+        "seconds": 0.52
+      },
+      {
+        "index": 1,
+        "name": "Check strict PostgreSQL TLS configuration",
+        "exit_code": 0,
+        "seconds": 0.32
+      },
+      {
+        "index": 2,
+        "name": "Prepare non-bootstrap postgres test operator",
+        "exit_code": 0,
+        "seconds": 0.11
+      },
+      {
+        "index": 3,
+        "name": "Check runtime script syntax",
+        "exit_code": 0,
+        "seconds": 2.62
+      },
+      {
+        "index": 4,
+        "name": "Check browser script integrity",
+        "exit_code": 0,
+        "seconds": 0.21
+      },
+      {
+        "index": 5,
+        "name": "Check BW-35.1 canonical posting schedule persistence",
+        "exit_code": 0,
+        "seconds": 0.21
+      },
+      {
+        "index": 6,
+        "name": "Check BW-35.2 manual Posting Plan workspace",
+        "exit_code": 0,
+        "seconds": 0.26
+      },
+      {
+        "index": 7,
+        "name": "Check BW-35.2R1 integrated Posting Plan",
+        "exit_code": 0,
+        "seconds": 0.26
+      },
+      {
+        "index": 8,
+        "name": "Check BW-35.2R2 unified Content Calendar",
+        "exit_code": 0,
+        "seconds": 0.27
+      },
+      {
+        "index": 9,
+        "name": "Check BW-35.2R3 direct Content Calendar",
+        "exit_code": 0,
+        "seconds": 0.21
+      },
+      {
+        "index": 10,
+        "name": "Check BW-35.2R4 scheduling interactions",
+        "exit_code": 0,
+        "seconds": 0.21
+      },
+      {
+        "index": 11,
+        "name": "Check BW-35.2R5 fluid and reliable scheduling",
+        "exit_code": 0,
+        "seconds": 0.22
+      },
+      {
+        "index": 12,
+        "name": "Check BW-35.2R7 emergency stability containment",
+        "exit_code": 0,
+        "seconds": 0.21
+      },
+      {
+        "index": 13,
+        "name": "Check BW-35.2R8 simplified Content Calendar architecture",
+        "exit_code": 0,
+        "seconds": 0.26
+      },
+      {
+        "index": 14,
+        "name": "Check BW-35.2R9 Content Calendar visual system",
+        "exit_code": 0,
+        "seconds": 0.22
+      },
+      {
+        "index": 15,
+        "name": "Check BW-35.3 deterministic automatic planning",
+        "exit_code": 0,
+        "seconds": 0.22
+      },
+      {
+        "index": 16,
+        "name": "Check BW-35.3R1 Auto-plan studio and primary action",
+        "exit_code": 0,
+        "seconds": 0.21
+      },
+      {
+        "index": 17,
+        "name": "Check BW-35.3R2 Auto-plan apply and session persistence",
+        "exit_code": 0,
+        "seconds": 0.21
+      },
+      {
+        "index": 18,
+        "name": "Check BW-35.3R3 Auto-plan freshness and safe rebasing",
+        "exit_code": 0,
+        "seconds": 0.22
+      },
+      {
+        "index": 19,
+        "name": "Check BW-35.3R4 Auto-plan batch runtime",
+        "exit_code": 0,
+        "seconds": 0.72
+      },
+      {
+        "index": 20,
+        "name": "Check BW-35.3R5 Auto-plan production evidence",
+        "exit_code": 0,
+        "seconds": 0.21
+      },
+      {
+        "index": 21,
+        "name": "Check BW-35.4 safe Posting Plan CSV export",
+        "exit_code": 0,
+        "seconds": 0.21
+      },
+      {
+        "index": 22,
+        "name": "Check BW-35.4R1 visual Posting Plan PDF export",
+        "exit_code": 0,
+        "seconds": 0.22
+      },
+      {
+        "index": 23,
+        "name": "Check BW-35.4R2 export naming and Tendra One branding",
+        "exit_code": 0,
+        "seconds": 0.21
+      },
+      {
+        "index": 24,
+        "name": "Check read-only Canonical Brand catalog",
+        "exit_code": 0,
+        "seconds": 0.06
+      },
+      {
+        "index": 25,
+        "name": "Check ephemeral Canonical Brand selection",
+        "exit_code": 0,
+        "seconds": 0.06
+      },
+      {
+        "index": 26,
+        "name": "Check Canonical Brand creation",
+        "exit_code": 0,
+        "seconds": 0.06
+      },
+      {
+        "index": 27,
+        "name": "Check durable Workspace Brand selection",
+        "exit_code": 0,
+        "seconds": 0.06
+      },
+      {
+        "index": 28,
+        "name": "Check explicit Board Brand association",
+        "exit_code": 0,
+        "seconds": 0.06
+      },
+      {
+        "index": 29,
+        "name": "Check per-Board Brand association isolation",
+        "exit_code": 0,
+        "seconds": 0.06
+      },
+      {
+        "index": 30,
+        "name": "Check Board Brand catalog resolution states",
+        "exit_code": 0,
+        "seconds": 0.06
+      },
+      {
+        "index": 31,
+        "name": "Check read-only Canonical Brand Workspace detail",
+        "exit_code": 0,
+        "seconds": 0.11
+      },
+      {
+        "index": 32,
+        "name": "Check explicit Canonical Brand editing",
+        "exit_code": 0,
+        "seconds": 0.16
+      },
+      {
+        "index": 33,
+        "name": "Check read-only Brand Core comparison",
+        "exit_code": 0,
+        "seconds": 0.06
+      },
+      {
+        "index": 34,
+        "name": "Check Brand Core comparison lifecycle",
+        "exit_code": 0,
+        "seconds": 0.21
+      },
+      {
+        "index": 35,
+        "name": "Check explicit Canonical Brand Core initialization",
+        "exit_code": 0,
+        "seconds": 0.06
+      },
+      {
+        "index": 36,
+        "name": "Check Brand-scoped Board library",
+        "exit_code": 0,
+        "seconds": 0.06
+      },
+      {
+        "index": 37,
+        "name": "Check explicit Board creation from Canonical Brand",
+        "exit_code": 0,
+        "seconds": 0.06
+      },
+      {
+        "index": 38,
+        "name": "Check Canonical Brand snapshot provenance",
+        "exit_code": 0,
+        "seconds": 0.06
+      },
+      {
+        "index": 39,
+        "name": "Check controlled Canonical-to-Board refresh",
+        "exit_code": 0,
+        "seconds": 0.06
+      },
+      {
+        "index": 40,
+        "name": "Check Canonical Brand foundation",
+        "exit_code": 0,
+        "seconds": 0.21
+      },
+      {
+        "index": 41,
+        "name": "Check sanitized read-only database inspector",
+        "exit_code": 0,
+        "seconds": 0.16
+      },
+      {
+        "index": 42,
+        "name": "Check timing-safe session signature verification",
+        "exit_code": 0,
+        "seconds": 0.06
+      },
+      {
+        "index": 43,
+        "name": "Check Board access roles and sensitive-data boundaries",
+        "exit_code": 0,
+        "seconds": 0.06
+      },
+      {
+        "index": 44,
+        "name": "Check Board permissions popover lifecycle",
+        "exit_code": 0,
+        "seconds": 0.06
+      },
+      {
+        "index": 45,
+        "name": "Check private Boards and revocable public view links",
+        "exit_code": 0,
+        "seconds": 0.06
+      },
+      {
+        "index": 46,
+        "name": "Check Canonical Brand team roles",
+        "exit_code": 0,
+        "seconds": 0.06
+      },
+      {
+        "index": 47,
+        "name": "Check inline Brand member role management",
+        "exit_code": 0,
+        "seconds": 0.06
+      },
+      {
+        "index": 48,
+        "name": "Check Workspace Brand deletion and selector theme",
+        "exit_code": 0,
+        "seconds": 0.21
+      },
+      {
+        "index": 49,
+        "name": "Check independent interface and campaign languages",
+        "exit_code": 0,
+        "seconds": 0.06
+      },
+      {
+        "index": 50,
+        "name": "Check Campaign Canvas Inspector language coverage",
+        "exit_code": 0,
+        "seconds": 0.06
+      },
+      {
+        "index": 51,
+        "name": "Check Language and Region Settings",
+        "exit_code": 0,
+        "seconds": 0.11
+      },
+      {
+        "index": 52,
+        "name": "Check honest AI Insights baseline",
+        "exit_code": 0,
+        "seconds": 0.06
+      },
+      {
+        "index": 53,
+        "name": "Check read-only AI Brain advisor",
+        "exit_code": 0,
+        "seconds": 0.06
+      },
+      {
+        "index": 54,
+        "name": "Check AI Brain Board authorization with real access helpers (mocked OpenAI)",
+        "exit_code": 0,
+        "seconds": 4.6
+      },
+      {
+        "index": 55,
+        "name": "Check real Canvas context and turn lifecycle",
+        "exit_code": 0,
+        "seconds": 0.67
+      },
+      {
+        "index": 56,
+        "name": "Check BW-38.2A authorized native marketing goals (disposable SQL, mocked provider)",
+        "exit_code": 0,
+        "seconds": 5.13
+      },
+      {
+        "index": 57,
+        "name": "Check safe AI Brain response formatting",
+        "exit_code": 0,
+        "seconds": 0.07
+      },
+      {
+        "index": 58,
+        "name": "Check bounded AI Brain conversation memory",
+        "exit_code": 0,
+        "seconds": 0.77
+      },
+      {
+        "index": 59,
+        "name": "Check AI Brain follow-up reference resolution",
+        "exit_code": 0,
+        "seconds": 0.72
+      },
+      {
+        "index": 60,
+        "name": "Check AI Brain response-language adherence",
+        "exit_code": 0,
+        "seconds": 0.72
+      },
+      {
+        "index": 61,
+        "name": "Check controlled AI Brain Content-node creation",
+        "exit_code": 0,
+        "seconds": 0.06
+      },
+      {
+        "index": 62,
+        "name": "Check AI Brain Content-node proposal production boundary",
+        "exit_code": 0,
+        "seconds": 0.11
+      },
+      {
+        "index": 63,
+        "name": "Check AI Brain post-creation Canvas transition",
+        "exit_code": 0,
+        "seconds": 0.06
+      },
+      {
+        "index": 64,
+        "name": "Check bounded large Brand Core website imports",
+        "exit_code": 0,
+        "seconds": 0.32
+      },
+      {
+        "index": 65,
+        "name": "Check BW-27 design system and Dark Mode",
+        "exit_code": 0,
+        "seconds": 0.06
+      },
+      {
+        "index": 66,
+        "name": "Check BW-27.1 Dark Mode surface contrast",
+        "exit_code": 0,
+        "seconds": 0.06
+      },
+      {
+        "index": 67,
+        "name": "Check BW-27.2 premium Dark Mode visual system",
+        "exit_code": 0,
+        "seconds": 0.06
+      },
+      {
+        "index": 68,
+        "name": "Check BW-27.3 final Dark Mode visual polish",
+        "exit_code": 0,
+        "seconds": 0.06
+      },
+      {
+        "index": 69,
+        "name": "Check BW-27.4 Canvas component polish",
+        "exit_code": 0,
+        "seconds": 0.06
+      },
+      {
+        "index": 70,
+        "name": "Check BW-27.5 Landing Page node Dark Mode readability",
+        "exit_code": 0,
+        "seconds": 0.11
+      },
+      {
+        "index": 71,
+        "name": "Check BW-27.6 Campaign Canvas Dark Mode controls",
+        "exit_code": 0,
+        "seconds": 0.21
+      },
+      {
+        "index": 72,
+        "name": "Check BW-27.7 responsive shell stability",
+        "exit_code": 0,
+        "seconds": 0.22
+      },
+      {
+        "index": 73,
+        "name": "Check BW-28 trustworthy Canvas Intelligence",
+        "exit_code": 0,
+        "seconds": 0.26
+      },
+      {
+        "index": 74,
+        "name": "Check BW-28.1 Insights UX and AI Brain handoff",
+        "exit_code": 0,
+        "seconds": 0.27
+      },
+      {
+        "index": 75,
+        "name": "Check BW-28.3 premium Insights and Brand Avatar",
+        "exit_code": 0,
+        "seconds": 0.06
+      },
+      {
+        "index": 76,
+        "name": "Check BW-28.3.1 Insights runtime rendering",
+        "exit_code": 0,
+        "seconds": 0.16
+      },
+      {
+        "index": 77,
+        "name": "Check BW-29 assumption-based Funnel Simulator",
+        "exit_code": 0,
+        "seconds": 0.06
+      },
+      {
+        "index": 78,
+        "name": "Check BW-29.1 Simulator UX and Dark Mode",
+        "exit_code": 0,
+        "seconds": 0.06
+      },
+      {
+        "index": 79,
+        "name": "Check BW-29.3 Persona Journey Simulator",
+        "exit_code": 0,
+        "seconds": 0.22
+      },
+      {
+        "index": 80,
+        "name": "Check BW-29.3.2 execution and compact Simulator UX",
+        "exit_code": 0,
+        "seconds": 0.21
+      },
+      {
+        "index": 81,
+        "name": "Check BW-29.3.3 reliable Persona simulation",
+        "exit_code": 0,
+        "seconds": 0.21
+      },
+      {
+        "index": 82,
+        "name": "Check BW-29.3.4 simple Persona execution path",
+        "exit_code": 0,
+        "seconds": 0.22
+      },
+      {
+        "index": 83,
+        "name": "Check BW-29.3.5 live Persona request parity",
+        "exit_code": 0,
+        "seconds": 0.22
+      },
+      {
+        "index": 84,
+        "name": "Check BW-29.4.1 production boundary diagnostics",
+        "exit_code": 0,
+        "seconds": 0.16
+      },
+      {
+        "index": 85,
+        "name": "Check BW-29.4.2 Canvas-context boundary",
+        "exit_code": 0,
+        "seconds": 0.21
+      },
+      {
+        "index": 86,
+        "name": "Check BW-30.1 App Shell and Inspector layout",
+        "exit_code": 0,
+        "seconds": 0.16
+      },
+      {
+        "index": 87,
+        "name": "Check BW-31.1 read-only Content Workspace library",
+        "exit_code": 0,
+        "seconds": 0.22
+      },
+      {
+        "index": 88,
+        "name": "Check BW-31.2 human Content Workspace review workflow",
+        "exit_code": 0,
+        "seconds": 0.21
+      },
+      {
+        "index": 89,
+        "name": "Check BW-31.4 operational internal Content Calendar",
+        "exit_code": 0,
+        "seconds": 0.27
+      },
+      {
+        "index": 90,
+        "name": "Check BW-31.5.1 Content Workspace functional recovery",
+        "exit_code": 0,
+        "seconds": 0.22
+      },
+      {
+        "index": 91,
+        "name": "Check BW-31.5.2 simplified Content Workspace operations",
+        "exit_code": 0,
+        "seconds": 0.22
+      },
+      {
+        "index": 92,
+        "name": "Check BW-32.1 Social Connector foundation",
+        "exit_code": 0,
+        "seconds": 0.21
+      },
+      {
+        "index": 93,
+        "name": "Check BW-32.2 LinkedIn account connection",
+        "exit_code": 0,
+        "seconds": 0.21
+      },
+      {
+        "index": 94,
+        "name": "Check BW-32.2.1 LinkedIn callback recovery",
+        "exit_code": 0,
+        "seconds": 0.22
+      },
+      {
+        "index": 95,
+        "name": "Check BW-32.2.2 LinkedIn persistence reconciliation",
+        "exit_code": 0,
+        "seconds": 0.21
+      },
+      {
+        "index": 96,
+        "name": "Check BW-32.2.3 LinkedIn connection state",
+        "exit_code": 0,
+        "seconds": 0.21
+      },
+      {
+        "index": 97,
+        "name": "Check BW-32.2.5 truthful LinkedIn Settings controls",
+        "exit_code": 0,
+        "seconds": 0.22
+      },
+      {
+        "index": 98,
+        "name": "Check BW-32.2.6 Social Connector schema recovery",
+        "exit_code": 0,
+        "seconds": 0.21
+      },
+      {
+        "index": 99,
+        "name": "Check BW-32.2.9 OAuth phase migration recovery",
+        "exit_code": 0,
+        "seconds": 0.16
+      },
+      {
+        "index": 100,
+        "name": "Check BW-32.2.10 Social Settings response contract",
+        "exit_code": 0,
+        "seconds": 0.21
+      },
+      {
+        "index": 101,
+        "name": "Check BW-32.2.11 Social Settings read availability",
+        "exit_code": 0,
+        "seconds": 0.21
+      },
+      {
+        "index": 102,
+        "name": "Check BW-32.2.12 direct Social Settings read",
+        "exit_code": 0,
+        "seconds": 0.21
+      },
+      {
+        "index": 103,
+        "name": "Check BW-32.3.1 guarded LinkedIn text Publish Now",
+        "exit_code": 0,
+        "seconds": 0.21
+      },
+      {
+        "index": 104,
+        "name": "Check BW-32.3.2 stale approval recovery",
+        "exit_code": 0,
+        "seconds": 0.21
+      },
+      {
+        "index": 105,
+        "name": "Check BW-32.3.3 canonical content reapproval",
+        "exit_code": 0,
+        "seconds": 0.21
+      },
+      {
+        "index": 106,
+        "name": "Check BW-32.3.5 approval fingerprint diagnostics",
+        "exit_code": 0,
+        "seconds": 0.21
+      },
+      {
+        "index": 107,
+        "name": "Check BW-32.3.6 authoritative v2 approval",
+        "exit_code": 0,
+        "seconds": 0.21
+      },
+      {
+        "index": 108,
+        "name": "Check BW-32.3.7 server-authoritative approval action",
+        "exit_code": 0,
+        "seconds": 0.21
+      },
+      {
+        "index": 109,
+        "name": "Check BW-32.3.8 accepted LinkedIn publication finalization",
+        "exit_code": 0,
+        "seconds": 0.22
+      },
+      {
+        "index": 110,
+        "name": "Check BW-32.3.9 authoritative social response boundary",
+        "exit_code": 0,
+        "seconds": 0.17
+      },
+      {
+        "index": 111,
+        "name": "Check BW-34.1 Facebook Page publishing",
+        "exit_code": 0,
+        "seconds": 0.21
+      },
+      {
+        "index": 112,
+        "name": "Check BW-34.1R1 Facebook callback repair",
+        "exit_code": 0,
+        "seconds": 0.21
+      },
+      {
+        "index": 113,
+        "name": "Check BW-34.1.1 Facebook content publishing surface",
+        "exit_code": 0,
+        "seconds": 0.21
+      },
+      {
+        "index": 114,
+        "name": "Check BW-34.1.2 Facebook Page destination selection",
+        "exit_code": 0,
+        "seconds": 0.22
+      },
+      {
+        "index": 115,
+        "name": "Check BW-34.1.3 Facebook publishing readiness",
+        "exit_code": 0,
+        "seconds": 0.22
+      },
+      {
+        "index": 116,
+        "name": "Check BW-34.1.9 Facebook publication finalization",
+        "exit_code": 0,
+        "seconds": 0.21
+      },
+      {
+        "index": 117,
+        "name": "Check BW-34.2A Facebook engagement",
+        "exit_code": 0,
+        "seconds": 0.17
+      },
+      {
+        "index": 118,
+        "name": "Check BW-34.2AR1 social adapter compatibility",
+        "exit_code": 0,
+        "seconds": 0.16
+      },
+      {
+        "index": 119,
+        "name": "Check BW-34.2AR2 Facebook engagement repair",
+        "exit_code": 0,
+        "seconds": 0.21
+      },
+      {
+        "index": 120,
+        "name": "Check BW-34.2AR3 Facebook engagement authentication",
+        "exit_code": 0,
+        "seconds": 0.21
+      },
+      {
+        "index": 121,
+        "name": "Check BW-34.2AR4 Facebook engagement partial availability",
+        "exit_code": 0,
+        "seconds": 0.16
+      },
+      {
+        "index": 122,
+        "name": "Check BW-33.2R1 corrected Tendra One brand foundation",
+        "exit_code": 0,
+        "seconds": 0.22
+      },
+      {
+        "index": 123,
+        "name": "Check BW-33.3R1 post-hydration Canvas density",
+        "exit_code": 0,
+        "seconds": 0.21
+      },
+      {
+        "index": 124,
+        "name": "Check BW-33.4A1 Canvas indicator Inspector routing",
+        "exit_code": 0,
+        "seconds": 0.21
+      },
+      {
+        "index": 125,
+        "name": "Check BW-33.4B1R1 authoritative open-comment counter",
+        "exit_code": 0,
+        "seconds": 0.22
+      },
+      {
+        "index": 126,
+        "name": "Check BW-33.4B3 Post-it UX and localization",
+        "exit_code": 0,
+        "seconds": 0.21
+      },
+      {
+        "index": 127,
+        "name": "Check BW-33.4B3.1 resolved Post-its and Dark Mode controls",
+        "exit_code": 0,
+        "seconds": 0.21
+      },
+      {
+        "index": 128,
+        "name": "Check BW-33.4B4 accessible Post-it emoji picker",
+        "exit_code": 0,
+        "seconds": 0.21
+      },
+      {
+        "index": 129,
+        "name": "Check BW-33.4B4.1 stable Post-it emoji picker lifecycle",
+        "exit_code": 0,
+        "seconds": 0.22
+      },
+      {
+        "index": 130,
+        "name": "Check BW-33.4B4.2 timed Post-it emoji picker lifecycle",
+        "exit_code": 0,
+        "seconds": 0.21
+      },
+      {
+        "index": 131,
+        "name": "Check BW-33.5 Supabase RLS hardening contract",
+        "exit_code": 0,
+        "seconds": 0.21
+      },
+      {
+        "index": 132,
+        "name": "Check BW-33.5.1 publishing destinations RLS delta",
+        "exit_code": 0,
+        "seconds": 0.16
+      },
+      {
+        "index": 133,
+        "name": "Check BW-36.1R1 Canvas toolbar isolation and Funnel footer",
+        "exit_code": 0,
+        "seconds": 0.22
+      },
+      {
+        "index": 134,
+        "name": "Check BW-36.2 isolated compact non-Canvas context bar",
+        "exit_code": 0,
+        "seconds": 0.21
+      },
+      {
+        "index": 135,
+        "name": "Check BW-36.23A R3 restricted runtime on real PostgreSQL",
+        "exit_code": 0,
+        "seconds": 2.86
+      },
+      {
+        "index": 136,
+        "name": "Check completed pre-805 protection upgrade and full verifier chain",
+        "exit_code": 0,
+        "seconds": 4.54
+      },
+      {
+        "index": 137,
+        "name": "Check strict runtime graph without administrative memberships",
+        "exit_code": 0,
+        "seconds": 2.52
+      },
+      {
+        "index": 138,
+        "name": "Check BW-36.4 simplified Brand sidebar",
+        "exit_code": 0,
+        "seconds": 0.21
+      },
+      {
+        "index": 139,
+        "name": "Check BW-36.6 Workspace schema foundation",
+        "exit_code": 0,
+        "seconds": 0.21
+      },
+      {
+        "index": 140,
+        "name": "Check BW-36.7 Workspace backfill preflight",
+        "exit_code": 0,
+        "seconds": 0.22
+      },
+      {
+        "index": 141,
+        "name": "Check BW-36.7R1 Workspace identity diagnostic",
+        "exit_code": 0,
+        "seconds": 0.21
+      },
+      {
+        "index": 142,
+        "name": "Check BW-36.7R2 application identity bridge",
+        "exit_code": 0,
+        "seconds": 0.22
+      },
+      {
+        "index": 143,
+        "name": "Check BW-36.7R3 corrected Workspace backfill preflight",
+        "exit_code": 0,
+        "seconds": 0.22
+      },
+      {
+        "index": 144,
+        "name": "Check BW-36.8 transactional Workspace backfill",
+        "exit_code": 0,
+        "seconds": 0.16
+      },
+      {
+        "index": 145,
+        "name": "Check BW-36.9 authorized Workspace read boundary",
+        "exit_code": 0,
+        "seconds": 0.22
+      },
+      {
+        "index": 146,
+        "name": "Check BW-36.9R1 Workspace identity resolution repair",
+        "exit_code": 0,
+        "seconds": 0.21
+      },
+      {
+        "index": 147,
+        "name": "Check BW-36.10 Workspace selector and sidebar hierarchy",
+        "exit_code": 0,
+        "seconds": 0.21
+      },
+      {
+        "index": 148,
+        "name": "Check BW-36.10R1 Workspace selector popover layout",
+        "exit_code": 0,
+        "seconds": 0.21
+      },
+      {
+        "index": 149,
+        "name": "Check BW-36.11 safe Workspace renaming",
+        "exit_code": 0,
+        "seconds": 0.22
+      },
+      {
+        "index": 150,
+        "name": "Check BW-36.11R1 sidebar context interaction",
+        "exit_code": 0,
+        "seconds": 0.21
+      },
+      {
+        "index": 151,
+        "name": "Check BW-36.13R1 Workspace stability containment",
+        "exit_code": 0,
+        "seconds": 0.22
+      },
+      {
+        "index": 152,
+        "name": "Check BW-36.13R2 safe first Workspace creation",
+        "exit_code": 0,
+        "seconds": 0.22
+      },
+      {
+        "index": 153,
+        "name": "Check BW-36.13R3 authoritative project creation",
+        "exit_code": 0,
+        "seconds": 0.22
+      },
+      {
+        "index": 154,
+        "name": "Check BW-36.13R3R1 Workspace catalog and project launch repair",
+        "exit_code": 0,
+        "seconds": 0.21
+      },
+      {
+        "index": 155,
+        "name": "Guided Brand Profile setup regression",
+        "exit_code": 0,
+        "seconds": 0.26,
+        "initial_exit_code": 1,
+        "corrected_and_rerun": true,
+        "correction": "Added SVG and CSS property APIs to the lightweight DOM fixture; original assertions retained."
+      },
+      {
+        "index": 156,
+        "name": "Install focused browser fixture",
+        "exit_code": 0,
+        "seconds": 1.18
+      },
+      {
+        "index": 157,
+        "name": "Check BW-41 AI Brain visual states and responsive accessibility",
+        "exit_code": 0,
+        "seconds": 7.4
+      },
+      {
+        "index": 158,
+        "name": "Check BW-39.1 evidence-linked Social CTA analysis (signed SQL and real browser)",
+        "exit_code": 0,
+        "seconds": 60.66
+      },
+      {
+        "index": 159,
+        "name": "Check BW-39.1-R1 review failure diagnostics and friendly entry",
+        "exit_code": 0,
+        "seconds": 32.11
+      },
+      {
+        "index": 160,
+        "name": "Check BW-40.1 stable references and prompt shortcuts (signed sessions, SQL, Chromium)",
+        "exit_code": 0,
+        "seconds": 47.58
+      },
+      {
+        "index": 161,
+        "name": "Check BW-39.2 independently valid Advice with optional verified evidence",
+        "exit_code": 0,
+        "seconds": 5.72
+      },
+      {
+        "index": 162,
+        "name": "Check BW-39.1-R2 provider failure boundaries and redacted stages",
+        "exit_code": 0,
+        "seconds": 4.19
+      },
+      {
+        "index": 163,
+        "name": "Check Content eligibility, source selection, editable preview and remote Create scope",
+        "exit_code": 0,
+        "seconds": 38.49
+      },
+      {
+        "index": 164,
+        "name": "Check BW-38.1 sequential AI Brain assets",
+        "exit_code": 0,
+        "seconds": 89.69
+      },
+      {
+        "index": 165,
+        "name": "Check AI Brain native Social Media Posting handoff",
+        "exit_code": 0,
+        "seconds": 29.29
+      },
+      {
+        "index": 166,
+        "name": "Check complete multi-block Advice and response action placement",
+        "exit_code": 0,
+        "seconds": 8.93
+      },
+      {
+        "index": 167,
+        "name": "Check Content proposal security and source lifecycle (real ACL, mocked provider, Chromium)",
+        "exit_code": 0,
+        "seconds": 75.83
+      },
+      {
+        "index": 168,
+        "name": "Check BW-37.1A-R1 workspace and scroll lifecycle (Chromium)",
+        "exit_code": 0,
+        "seconds": 6.99
+      },
+      {
+        "index": 169,
+        "name": "Check BW-37.1B-R1 conversational advisor (disposable SQL, mocked provider, Chromium)",
+        "exit_code": 0,
+        "seconds": 14.85
+      },
+      {
+        "index": 170,
+        "name": "Check BW-37.1C-1 Brand Profile draft proposal (owner controllers, mocked provider, Chromium)",
+        "exit_code": 0,
+        "seconds": 29.69,
+        "initial_exit_code": 1,
+        "corrected_and_rerun": true,
+        "correction": "Preserved the conditional AI Brain return control outside the visually hidden legacy title."
+      },
+      {
+        "index": 171,
+        "name": "Check BW-37.1B Strategic Answer Quality (disposable SQL, mocked provider)",
+        "exit_code": 0,
+        "seconds": 4.23
+      },
+      {
+        "index": 172,
+        "name": "Check BW-37.1A Strategic Advisor (mocked provider)",
+        "exit_code": 0,
+        "seconds": 14.79
+      },
+      {
+        "index": 173,
+        "name": "Check approved Brand Learnings in Advice (disposable PostgreSQL, mocked OpenAI)",
+        "exit_code": 0,
+        "seconds": 15.48
+      },
+      {
+        "index": 174,
+        "name": "Check BW-36.21A Home foundation (Chromium)",
+        "exit_code": 0,
+        "seconds": 60.55
+      },
+      {
+        "index": 175,
+        "name": "Check BW-36.21B1 Home Intelligence (Chromium, provider-free)",
+        "exit_code": 0,
+        "seconds": 51.85
+      },
+      {
+        "index": 176,
+        "name": "Check BW-36.21B2 Home Campaign Insights and AI Brain (Chromium, provider-free)",
+        "exit_code": 0,
+        "seconds": 138.7
+      },
+      {
+        "index": 177,
+        "name": "Check BW-36.22A compact Home and continuation (Chromium, provider-free)",
+        "exit_code": 0,
+        "seconds": 74.85
+      },
+      {
+        "index": 178,
+        "name": "Check BW-36.22B1 Living Workspace foundation (Chromium, provider-free)",
+        "exit_code": 0,
+        "seconds": 63.46
+      },
+      {
+        "index": 179,
+        "name": "Check BW-36.22B1R1 current continuation name (Chromium, provider-free)",
+        "exit_code": 0,
+        "seconds": 14.49
+      },
+      {
+        "index": 180,
+        "name": "Check BW-36.22B2 real Brand Avatar and contextual personality",
+        "exit_code": 0,
+        "seconds": 52.35
+      },
+      {
+        "index": 181,
+        "name": "Check BW-36.22B3 Living Signals and contextual onboarding",
+        "exit_code": 0,
+        "seconds": 35.78
+      },
+      {
+        "index": 182,
+        "name": "Check BW-36.22B4 Living Workspace motion and visual states",
+        "exit_code": 0,
+        "seconds": 59.25
+      },
+      {
+        "index": 183,
+        "name": "Check BW-36.22B2R1 canonical conflict reload recovery",
+        "exit_code": 0,
+        "seconds": 11.2
+      },
+      {
+        "index": 184,
+        "name": "Check BW-36.21A-R2.1 safe Workspace switching (Chromium)",
+        "exit_code": 0,
+        "seconds": 270.25
+      },
+      {
+        "index": 185,
+        "name": "Check BW-36.20R1 provider storage and revalidation errors (mocked OpenAI)",
+        "exit_code": 0,
+        "seconds": 14.29
+      },
+      {
+        "index": 186,
+        "name": "Check Brand Profile entry and Workspace actions in Chromium",
+        "exit_code": 0,
+        "seconds": 31.09
+      },
+      {
+        "index": 187,
+        "name": "Check BW-36.13R5 Brand lifecycle stability",
+        "exit_code": 0,
+        "seconds": 27.04
+      },
+      {
+        "index": 188,
+        "name": "Check Brand workspace regression recovery",
+        "exit_code": 0,
+        "seconds": 13.85
+      },
+      {
+        "index": 189,
+        "name": "Check durable Brand logos and readiness",
+        "exit_code": 0,
+        "seconds": 9.5,
+        "initial_exit_code": 1,
+        "corrected_and_rerun": true,
+        "correction": "Preserved the original solid current-section outline for pointer and keyboard selection."
+      },
+      {
+        "index": 190,
+        "name": "Check production Brand logo persistence",
+        "exit_code": 0,
+        "seconds": 13.69,
+        "initial_exit_code": 1,
+        "corrected_and_rerun": true,
+        "correction": "Preserved the original solid current-section outline for pointer and keyboard selection."
+      },
+      {
+        "index": 191,
+        "name": "Check Brand Profile decisions and deletion UX",
+        "exit_code": 0,
+        "seconds": 34.21
+      },
+      {
+        "index": 192,
+        "name": "Check BW-36.12 Brand logo acquisition and projection",
+        "exit_code": 0,
+        "seconds": 0.74
+      },
+      {
+        "index": 193,
+        "name": "Check stable campaign creation and direct handoff in Chromium",
+        "exit_code": 0,
+        "seconds": 19.0
+      },
+      {
+        "index": 194,
+        "name": "Check complete Campaign V3 generation in Chromium",
+        "exit_code": 0,
+        "seconds": 83.89
+      },
+      {
+        "index": 195,
+        "name": "Check AI Brain Campaign Creator handoff (mocked provider, Chromium)",
+        "exit_code": 0,
+        "seconds": 82.1
+      },
+      {
+        "index": 196,
+        "name": "Check Campaign Creator generation boundary (disposable SQL, mocked provider)",
+        "exit_code": 0,
+        "seconds": 8.34
+      },
+      {
+        "index": 197,
+        "name": "Check BW-36.15 guided campaign responsibilities",
+        "exit_code": 0,
+        "seconds": 82.74
+      },
+      {
+        "index": 198,
+        "name": "Check BW-36.15R1 responsibility workspace continuity",
+        "exit_code": 0,
+        "seconds": 38.6
+      },
+      {
+        "index": 199,
+        "name": "Check BW-36.16 adaptive Canvas view hierarchy in Chromium",
+        "exit_code": 0,
+        "seconds": 24.1
+      },
+      {
+        "index": 200,
+        "name": "Check BW-36.16R1 toolbar and global view cycle in Chromium",
+        "exit_code": 0,
+        "seconds": 44.4
+      },
+      {
+        "index": 201,
+        "name": "Check BW-36.17 governed Brand Learnings in Chromium",
+        "exit_code": 0,
+        "seconds": 40.79
+      },
+      {
+        "index": 202,
+        "name": "Check BW-36.17R1 Learning provenance schema in disposable PostgreSQL",
+        "exit_code": 0,
+        "seconds": 22.5
+      },
+      {
+        "index": 203,
+        "name": "Check BW-36.17R2 provenance recovery in disposable PostgreSQL",
+        "exit_code": 0,
+        "seconds": 83.4
+      },
+      {
+        "index": 204,
+        "name": "Check BW-36.18 governed Learning source capture",
+        "exit_code": 0,
+        "seconds": 23.36
+      },
+      {
+        "index": 205,
+        "name": "Check BW-36.19 AI Learning Advisor (mocked OpenAI)",
+        "exit_code": 0,
+        "seconds": 54.07
+      },
+      {
+        "index": 206,
+        "name": "Check BW-36.19R1 existing saved Board compatibility (mocked OpenAI)",
+        "exit_code": 0,
+        "seconds": 36.84
+      },
+      {
+        "index": 207,
+        "name": "Check BW-36.19R2 adaptive Advisor context and streaming recovery (mocked OpenAI)",
+        "exit_code": 0,
+        "seconds": 44.26
+      },
+      {
+        "index": 208,
+        "name": "Check BW-36.19R4 output reliability (mocked OpenAI)",
+        "exit_code": 0,
+        "seconds": 35.03
+      },
+      {
+        "index": 209,
+        "name": "Check BW-36.19R5 simplified generation and persisted human approval (mocked OpenAI)",
+        "exit_code": 0,
+        "seconds": 53.14
+      },
+      {
+        "index": 210,
+        "name": "Check BW-36.19R6 Learning review and atomic batch adoption (mocked OpenAI)",
+        "exit_code": 0,
+        "seconds": 31.3
+      },
+      {
+        "index": 211,
+        "name": "Check BW-36.19R7 Advisor visual states and accessibility in Chromium (provider-free)",
+        "exit_code": 0,
+        "seconds": 21.1
+      },
+      {
+        "index": 212,
+        "name": "Check BW-36.19R8 Canvas Learn entry in Chromium (provider-free)",
+        "exit_code": 0,
+        "seconds": 13.44
+      },
+      {
+        "index": 213,
+        "name": "Check dynamic AI Insights translations",
+        "exit_code": 0,
+        "seconds": 0.15
+      },
+      {
+        "index": 214,
+        "name": "Check scoped German interface localization",
+        "exit_code": 0,
+        "seconds": 0.34
+      },
+      {
+        "index": 215,
+        "name": "Check BW-36.21A-R2.2 multiple Workspaces and direct Brand navigation",
+        "exit_code": 0,
+        "seconds": 72.06
+      },
+      {
+        "index": 216,
+        "name": "Check BW-36.21A-R2.3 Brand and Board context consistency",
+        "exit_code": 0,
+        "seconds": 74.85
+      },
+      {
+        "index": 217,
+        "name": "Check Knowledge Module browser globals",
+        "exit_code": 0,
+        "seconds": 0.06
+      },
+      {
+        "index": 218,
+        "name": "Check BW-36.23A protected Brand write contract and controllers",
+        "exit_code": 0,
+        "seconds": 0.27
+      },
+      {
+        "index": 219,
+        "name": "Check BW-36.23A real PostgreSQL roles transactions and concurrency",
+        "exit_code": 0,
+        "seconds": 1.57
+      },
+      {
+        "index": 220,
+        "name": "Check BW-36.23A protected Brand editing in Chromium",
+        "exit_code": 0,
+        "seconds": 2.26
+      },
+      {
+        "index": 221,
+        "name": "Check BW-36.23A initialization and logo response-loss recovery",
+        "exit_code": 0,
+        "seconds": 0.48
+      },
+      {
+        "index": 222,
+        "name": "Check temporary write maintenance gate (provider-free)",
+        "exit_code": 0,
+        "seconds": 0.32
+      }
+    ],
+    "new_bw42_registered_command_step": "PASS: browser and independent upload suites executed separately; covers the 224th current workflow command step."
+  },
+  "postgres_18_4": {
+    "result": "PASS",
+    "current_workflow_command_steps": 224,
+    "steps": [
+      {
+        "index": 0,
+        "name": "Install project dependencies",
+        "exit_code": 0,
+        "seconds": 1.13
+      },
+      {
+        "index": 1,
+        "name": "Check strict PostgreSQL TLS configuration",
+        "exit_code": 0,
+        "seconds": 0.5
+      },
+      {
+        "index": 2,
+        "name": "Prepare non-bootstrap postgres test operator",
+        "exit_code": 0,
+        "seconds": 0.17
+      },
+      {
+        "index": 3,
+        "name": "Check runtime script syntax",
+        "exit_code": 0,
+        "seconds": 5.53
+      },
+      {
+        "index": 4,
+        "name": "Check browser script integrity",
+        "exit_code": 0,
+        "seconds": 0.71
+      },
+      {
+        "index": 5,
+        "name": "Check BW-35.1 canonical posting schedule persistence",
+        "exit_code": 0,
+        "seconds": 0.75
+      },
+      {
+        "index": 6,
+        "name": "Check BW-35.2 manual Posting Plan workspace",
+        "exit_code": 0,
+        "seconds": 0.54
+      },
+      {
+        "index": 7,
+        "name": "Check BW-35.2R1 integrated Posting Plan",
+        "exit_code": 0,
+        "seconds": 1.11
+      },
+      {
+        "index": 8,
+        "name": "Check BW-35.2R2 unified Content Calendar",
+        "exit_code": 0,
+        "seconds": 0.75
+      },
+      {
+        "index": 9,
+        "name": "Check BW-35.2R3 direct Content Calendar",
+        "exit_code": 0,
+        "seconds": 0.8
+      },
+      {
+        "index": 10,
+        "name": "Check BW-35.2R4 scheduling interactions",
+        "exit_code": 0,
+        "seconds": 0.64
+      },
+      {
+        "index": 11,
+        "name": "Check BW-35.2R5 fluid and reliable scheduling",
+        "exit_code": 0,
+        "seconds": 0.4
+      },
+      {
+        "index": 12,
+        "name": "Check BW-35.2R7 emergency stability containment",
+        "exit_code": 0,
+        "seconds": 0.32
+      },
+      {
+        "index": 13,
+        "name": "Check BW-35.2R8 simplified Content Calendar architecture",
+        "exit_code": 0,
+        "seconds": 0.68
+      },
+      {
+        "index": 14,
+        "name": "Check BW-35.2R9 Content Calendar visual system",
+        "exit_code": 0,
+        "seconds": 0.5
+      },
+      {
+        "index": 15,
+        "name": "Check BW-35.3 deterministic automatic planning",
+        "exit_code": 0,
+        "seconds": 0.5
+      },
+      {
+        "index": 16,
+        "name": "Check BW-35.3R1 Auto-plan studio and primary action",
+        "exit_code": 0,
+        "seconds": 0.5
+      },
+      {
+        "index": 17,
+        "name": "Check BW-35.3R2 Auto-plan apply and session persistence",
+        "exit_code": 0,
+        "seconds": 0.49
+      },
+      {
+        "index": 18,
+        "name": "Check BW-35.3R3 Auto-plan freshness and safe rebasing",
+        "exit_code": 0,
+        "seconds": 0.6
+      },
+      {
+        "index": 19,
+        "name": "Check BW-35.3R4 Auto-plan batch runtime",
+        "exit_code": 0,
+        "seconds": 1.9
+      },
+      {
+        "index": 20,
+        "name": "Check BW-35.3R5 Auto-plan production evidence",
+        "exit_code": 0,
+        "seconds": 0.55
+      },
+      {
+        "index": 21,
+        "name": "Check BW-35.4 safe Posting Plan CSV export",
+        "exit_code": 0,
+        "seconds": 0.47
+      },
+      {
+        "index": 22,
+        "name": "Check BW-35.4R1 visual Posting Plan PDF export",
+        "exit_code": 0,
+        "seconds": 0.6
+      },
+      {
+        "index": 23,
+        "name": "Check BW-35.4R2 export naming and Tendra One branding",
+        "exit_code": 0,
+        "seconds": 0.79
+      },
+      {
+        "index": 24,
+        "name": "Check read-only Canonical Brand catalog",
+        "exit_code": 0,
+        "seconds": 0.19
+      },
+      {
+        "index": 25,
+        "name": "Check ephemeral Canonical Brand selection",
+        "exit_code": 0,
+        "seconds": 0.19
+      },
+      {
+        "index": 26,
+        "name": "Check Canonical Brand creation",
+        "exit_code": 0,
+        "seconds": 0.15
+      },
+      {
+        "index": 27,
+        "name": "Check durable Workspace Brand selection",
+        "exit_code": 0,
+        "seconds": 0.12
+      },
+      {
+        "index": 28,
+        "name": "Check explicit Board Brand association",
+        "exit_code": 0,
+        "seconds": 0.13
+      },
+      {
+        "index": 29,
+        "name": "Check per-Board Brand association isolation",
+        "exit_code": 0,
+        "seconds": 0.15
+      },
+      {
+        "index": 30,
+        "name": "Check Board Brand catalog resolution states",
+        "exit_code": 0,
+        "seconds": 0.15
+      },
+      {
+        "index": 31,
+        "name": "Check read-only Canonical Brand Workspace detail",
+        "exit_code": 0,
+        "seconds": 0.3
+      },
+      {
+        "index": 32,
+        "name": "Check explicit Canonical Brand editing",
+        "exit_code": 0,
+        "seconds": 0.55
+      },
+      {
+        "index": 33,
+        "name": "Check read-only Brand Core comparison",
+        "exit_code": 0,
+        "seconds": 0.15
+      },
+      {
+        "index": 34,
+        "name": "Check Brand Core comparison lifecycle",
+        "exit_code": 0,
+        "seconds": 0.3
+      },
+      {
+        "index": 35,
+        "name": "Check explicit Canonical Brand Core initialization",
+        "exit_code": 0,
+        "seconds": 0.15
+      },
+      {
+        "index": 36,
+        "name": "Check Brand-scoped Board library",
+        "exit_code": 0,
+        "seconds": 0.2
+      },
+      {
+        "index": 37,
+        "name": "Check explicit Board creation from Canonical Brand",
+        "exit_code": 0,
+        "seconds": 0.18
+      },
+      {
+        "index": 38,
+        "name": "Check Canonical Brand snapshot provenance",
+        "exit_code": 0,
+        "seconds": 0.12
+      },
+      {
+        "index": 39,
+        "name": "Check controlled Canonical-to-Board refresh",
+        "exit_code": 0,
+        "seconds": 0.14
+      },
+      {
+        "index": 40,
+        "name": "Check Canonical Brand foundation",
+        "exit_code": 0,
+        "seconds": 0.48
+      },
+      {
+        "index": 41,
+        "name": "Check sanitized read-only database inspector",
+        "exit_code": 0,
+        "seconds": 0.35
+      },
+      {
+        "index": 42,
+        "name": "Check timing-safe session signature verification",
+        "exit_code": 0,
+        "seconds": 0.24
+      },
+      {
+        "index": 43,
+        "name": "Check Board access roles and sensitive-data boundaries",
+        "exit_code": 0,
+        "seconds": 0.21
+      },
+      {
+        "index": 44,
+        "name": "Check Board permissions popover lifecycle",
+        "exit_code": 0,
+        "seconds": 0.2
+      },
+      {
+        "index": 45,
+        "name": "Check private Boards and revocable public view links",
+        "exit_code": 0,
+        "seconds": 0.29
+      },
+      {
+        "index": 46,
+        "name": "Check Canonical Brand team roles",
+        "exit_code": 0,
+        "seconds": 0.14
+      },
+      {
+        "index": 47,
+        "name": "Check inline Brand member role management",
+        "exit_code": 0,
+        "seconds": 0.17
+      },
+      {
+        "index": 48,
+        "name": "Check Workspace Brand deletion and selector theme",
+        "exit_code": 0,
+        "seconds": 0.54
+      },
+      {
+        "index": 49,
+        "name": "Check independent interface and campaign languages",
+        "exit_code": 0,
+        "seconds": 0.11
+      },
+      {
+        "index": 50,
+        "name": "Check Campaign Canvas Inspector language coverage",
+        "exit_code": 0,
+        "seconds": 0.12
+      },
+      {
+        "index": 51,
+        "name": "Check Language and Region Settings",
+        "exit_code": 0,
+        "seconds": 0.22
+      },
+      {
+        "index": 52,
+        "name": "Check honest AI Insights baseline",
+        "exit_code": 0,
+        "seconds": 0.29
+      },
+      {
+        "index": 53,
+        "name": "Check read-only AI Brain advisor",
+        "exit_code": 0,
+        "seconds": 0.31
+      },
+      {
+        "index": 54,
+        "name": "Check AI Brain Board authorization with real access helpers (mocked OpenAI)",
+        "exit_code": 0,
+        "seconds": 25.13
+      },
+      {
+        "index": 55,
+        "name": "Check real Canvas context and turn lifecycle",
+        "exit_code": 0,
+        "seconds": 2.05
+      },
+      {
+        "index": 56,
+        "name": "Check BW-38.2A authorized native marketing goals (disposable SQL, mocked provider)",
+        "exit_code": 0,
+        "seconds": 15.8
+      },
+      {
+        "index": 57,
+        "name": "Check safe AI Brain response formatting",
+        "exit_code": 0,
+        "seconds": 0.25
+      },
+      {
+        "index": 58,
+        "name": "Check bounded AI Brain conversation memory",
+        "exit_code": 0,
+        "seconds": 2.96
+      },
+      {
+        "index": 59,
+        "name": "Check AI Brain follow-up reference resolution",
+        "exit_code": 0,
+        "seconds": 2.5
+      },
+      {
+        "index": 60,
+        "name": "Check AI Brain response-language adherence",
+        "exit_code": 0,
+        "seconds": 1.65
+      },
+      {
+        "index": 61,
+        "name": "Check controlled AI Brain Content-node creation",
+        "exit_code": 0,
+        "seconds": 0.14
+      },
+      {
+        "index": 62,
+        "name": "Check AI Brain Content-node proposal production boundary",
+        "exit_code": 0,
+        "seconds": 0.31
+      },
+      {
+        "index": 63,
+        "name": "Check AI Brain post-creation Canvas transition",
+        "exit_code": 0,
+        "seconds": 0.21
+      },
+      {
+        "index": 64,
+        "name": "Check bounded large Brand Core website imports",
+        "exit_code": 0,
+        "seconds": 1.29
+      },
+      {
+        "index": 65,
+        "name": "Check BW-27 design system and Dark Mode",
+        "exit_code": 0,
+        "seconds": 0.26
+      },
+      {
+        "index": 66,
+        "name": "Check BW-27.1 Dark Mode surface contrast",
+        "exit_code": 0,
+        "seconds": 0.24
+      },
+      {
+        "index": 67,
+        "name": "Check BW-27.2 premium Dark Mode visual system",
+        "exit_code": 0,
+        "seconds": 0.19
+      },
+      {
+        "index": 68,
+        "name": "Check BW-27.3 final Dark Mode visual polish",
+        "exit_code": 0,
+        "seconds": 0.2
+      },
+      {
+        "index": 69,
+        "name": "Check BW-27.4 Canvas component polish",
+        "exit_code": 0,
+        "seconds": 0.15
+      },
+      {
+        "index": 70,
+        "name": "Check BW-27.5 Landing Page node Dark Mode readability",
+        "exit_code": 0,
+        "seconds": 0.15
+      },
+      {
+        "index": 71,
+        "name": "Check BW-27.6 Campaign Canvas Dark Mode controls",
+        "exit_code": 0,
+        "seconds": 0.4
+      },
+      {
+        "index": 72,
+        "name": "Check BW-27.7 responsive shell stability",
+        "exit_code": 0,
+        "seconds": 1.11
+      },
+      {
+        "index": 73,
+        "name": "Check BW-28 trustworthy Canvas Intelligence",
+        "exit_code": 0,
+        "seconds": 0.9
+      },
+      {
+        "index": 74,
+        "name": "Check BW-28.1 Insights UX and AI Brain handoff",
+        "exit_code": 0,
+        "seconds": 0.74
+      },
+      {
+        "index": 75,
+        "name": "Check BW-28.3 premium Insights and Brand Avatar",
+        "exit_code": 0,
+        "seconds": 0.24
+      },
+      {
+        "index": 76,
+        "name": "Check BW-28.3.1 Insights runtime rendering",
+        "exit_code": 0,
+        "seconds": 0.5
+      },
+      {
+        "index": 77,
+        "name": "Check BW-29 assumption-based Funnel Simulator",
+        "exit_code": 0,
+        "seconds": 0.35
+      },
+      {
+        "index": 78,
+        "name": "Check BW-29.1 Simulator UX and Dark Mode",
+        "exit_code": 0,
+        "seconds": 0.35
+      },
+      {
+        "index": 79,
+        "name": "Check BW-29.3 Persona Journey Simulator",
+        "exit_code": 0,
+        "seconds": 1.3
+      },
+      {
+        "index": 80,
+        "name": "Check BW-29.3.2 execution and compact Simulator UX",
+        "exit_code": 0,
+        "seconds": 0.7
+      },
+      {
+        "index": 81,
+        "name": "Check BW-29.3.3 reliable Persona simulation",
+        "exit_code": 0,
+        "seconds": 0.69
+      },
+      {
+        "index": 82,
+        "name": "Check BW-29.3.4 simple Persona execution path",
+        "exit_code": 0,
+        "seconds": 1.01
+      },
+      {
+        "index": 83,
+        "name": "Check BW-29.3.5 live Persona request parity",
+        "exit_code": 0,
+        "seconds": 0.85
+      },
+      {
+        "index": 84,
+        "name": "Check BW-29.4.1 production boundary diagnostics",
+        "exit_code": 0,
+        "seconds": 0.8
+      },
+      {
+        "index": 85,
+        "name": "Check BW-29.4.2 Canvas-context boundary",
+        "exit_code": 0,
+        "seconds": 0.95
+      },
+      {
+        "index": 86,
+        "name": "Check BW-30.1 App Shell and Inspector layout",
+        "exit_code": 0,
+        "seconds": 0.85
+      },
+      {
+        "index": 87,
+        "name": "Check BW-31.1 read-only Content Workspace library",
+        "exit_code": 0,
+        "seconds": 0.69
+      },
+      {
+        "index": 88,
+        "name": "Check BW-31.2 human Content Workspace review workflow",
+        "exit_code": 0,
+        "seconds": 0.75
+      },
+      {
+        "index": 89,
+        "name": "Check BW-31.4 operational internal Content Calendar",
+        "exit_code": 0,
+        "seconds": 0.75
+      },
+      {
+        "index": 90,
+        "name": "Check BW-31.5.1 Content Workspace functional recovery",
+        "exit_code": 0,
+        "seconds": 0.84
+      },
+      {
+        "index": 91,
+        "name": "Check BW-31.5.2 simplified Content Workspace operations",
+        "exit_code": 0,
+        "seconds": 0.8
+      },
+      {
+        "index": 92,
+        "name": "Check BW-32.1 Social Connector foundation",
+        "exit_code": 0,
+        "seconds": 0.5
+      },
+      {
+        "index": 93,
+        "name": "Check BW-32.2 LinkedIn account connection",
+        "exit_code": 0,
+        "seconds": 0.77
+      },
+      {
+        "index": 94,
+        "name": "Check BW-32.2.1 LinkedIn callback recovery",
+        "exit_code": 0,
+        "seconds": 0.42
+      },
+      {
+        "index": 95,
+        "name": "Check BW-32.2.2 LinkedIn persistence reconciliation",
+        "exit_code": 0,
+        "seconds": 0.6
+      },
+      {
+        "index": 96,
+        "name": "Check BW-32.2.3 LinkedIn connection state",
+        "exit_code": 0,
+        "seconds": 0.59
+      },
+      {
+        "index": 97,
+        "name": "Check BW-32.2.5 truthful LinkedIn Settings controls",
+        "exit_code": 0,
+        "seconds": 0.6
+      },
+      {
+        "index": 98,
+        "name": "Check BW-32.2.6 Social Connector schema recovery",
+        "exit_code": 0,
+        "seconds": 0.34
+      },
+      {
+        "index": 99,
+        "name": "Check BW-32.2.9 OAuth phase migration recovery",
+        "exit_code": 0,
+        "seconds": 0.55
+      },
+      {
+        "index": 100,
+        "name": "Check BW-32.2.10 Social Settings response contract",
+        "exit_code": 0,
+        "seconds": 0.71
+      },
+      {
+        "index": 101,
+        "name": "Check BW-32.2.11 Social Settings read availability",
+        "exit_code": 0,
+        "seconds": 0.4
+      },
+      {
+        "index": 102,
+        "name": "Check BW-32.2.12 direct Social Settings read",
+        "exit_code": 0,
+        "seconds": 0.34
+      },
+      {
+        "index": 103,
+        "name": "Check BW-32.3.1 guarded LinkedIn text Publish Now",
+        "exit_code": 0,
+        "seconds": 0.27
+      },
+      {
+        "index": 104,
+        "name": "Check BW-32.3.2 stale approval recovery",
+        "exit_code": 0,
+        "seconds": 0.88
+      },
+      {
+        "index": 105,
+        "name": "Check BW-32.3.3 canonical content reapproval",
+        "exit_code": 0,
+        "seconds": 0.65
+      },
+      {
+        "index": 106,
+        "name": "Check BW-32.3.5 approval fingerprint diagnostics",
+        "exit_code": 0,
+        "seconds": 0.44
+      },
+      {
+        "index": 107,
+        "name": "Check BW-32.3.6 authoritative v2 approval",
+        "exit_code": 0,
+        "seconds": 0.42
+      },
+      {
+        "index": 108,
+        "name": "Check BW-32.3.7 server-authoritative approval action",
+        "exit_code": 0,
+        "seconds": 0.65
+      },
+      {
+        "index": 109,
+        "name": "Check BW-32.3.8 accepted LinkedIn publication finalization",
+        "exit_code": 0,
+        "seconds": 0.4
+      },
+      {
+        "index": 110,
+        "name": "Check BW-32.3.9 authoritative social response boundary",
+        "exit_code": 0,
+        "seconds": 0.45
+      },
+      {
+        "index": 111,
+        "name": "Check BW-34.1 Facebook Page publishing",
+        "exit_code": 0,
+        "seconds": 0.44
+      },
+      {
+        "index": 112,
+        "name": "Check BW-34.1R1 Facebook callback repair",
+        "exit_code": 0,
+        "seconds": 0.27
+      },
+      {
+        "index": 113,
+        "name": "Check BW-34.1.1 Facebook content publishing surface",
+        "exit_code": 0,
+        "seconds": 0.38
+      },
+      {
+        "index": 114,
+        "name": "Check BW-34.1.2 Facebook Page destination selection",
+        "exit_code": 0,
+        "seconds": 0.32
+      },
+      {
+        "index": 115,
+        "name": "Check BW-34.1.3 Facebook publishing readiness",
+        "exit_code": 0,
+        "seconds": 0.33
+      },
+      {
+        "index": 116,
+        "name": "Check BW-34.1.9 Facebook publication finalization",
+        "exit_code": 0,
+        "seconds": 0.27
+      },
+      {
+        "index": 117,
+        "name": "Check BW-34.2A Facebook engagement",
+        "exit_code": 0,
+        "seconds": 0.29
+      },
+      {
+        "index": 118,
+        "name": "Check BW-34.2AR1 social adapter compatibility",
+        "exit_code": 0,
+        "seconds": 0.27
+      },
+      {
+        "index": 119,
+        "name": "Check BW-34.2AR2 Facebook engagement repair",
+        "exit_code": 0,
+        "seconds": 0.33
+      },
+      {
+        "index": 120,
+        "name": "Check BW-34.2AR3 Facebook engagement authentication",
+        "exit_code": 0,
+        "seconds": 0.27
+      },
+      {
+        "index": 121,
+        "name": "Check BW-34.2AR4 Facebook engagement partial availability",
+        "exit_code": 0,
+        "seconds": 0.22
+      },
+      {
+        "index": 122,
+        "name": "Check BW-33.2R1 corrected Tendra One brand foundation",
+        "exit_code": 0,
+        "seconds": 0.37
+      },
+      {
+        "index": 123,
+        "name": "Check BW-33.3R1 post-hydration Canvas density",
+        "exit_code": 0,
+        "seconds": 0.29
+      },
+      {
+        "index": 124,
+        "name": "Check BW-33.4A1 Canvas indicator Inspector routing",
+        "exit_code": 0,
+        "seconds": 0.5
+      },
+      {
+        "index": 125,
+        "name": "Check BW-33.4B1R1 authoritative open-comment counter",
+        "exit_code": 0,
+        "seconds": 0.9
+      },
+      {
+        "index": 126,
+        "name": "Check BW-33.4B3 Post-it UX and localization",
+        "exit_code": 0,
+        "seconds": 0.4
+      },
+      {
+        "index": 127,
+        "name": "Check BW-33.4B3.1 resolved Post-its and Dark Mode controls",
+        "exit_code": 0,
+        "seconds": 0.35
+      },
+      {
+        "index": 128,
+        "name": "Check BW-33.4B4 accessible Post-it emoji picker",
+        "exit_code": 0,
+        "seconds": 0.37
+      },
+      {
+        "index": 129,
+        "name": "Check BW-33.4B4.1 stable Post-it emoji picker lifecycle",
+        "exit_code": 0,
+        "seconds": 0.69
+      },
+      {
+        "index": 130,
+        "name": "Check BW-33.4B4.2 timed Post-it emoji picker lifecycle",
+        "exit_code": 0,
+        "seconds": 0.61
+      },
+      {
+        "index": 131,
+        "name": "Check BW-33.5 Supabase RLS hardening contract",
+        "exit_code": 0,
+        "seconds": 0.54
+      },
+      {
+        "index": 132,
+        "name": "Check BW-33.5.1 publishing destinations RLS delta",
+        "exit_code": 0,
+        "seconds": 0.45
+      },
+      {
+        "index": 133,
+        "name": "Check BW-36.1R1 Canvas toolbar isolation and Funnel footer",
+        "exit_code": 0,
+        "seconds": 0.51
+      },
+      {
+        "index": 134,
+        "name": "Check BW-36.2 isolated compact non-Canvas context bar",
+        "exit_code": 0,
+        "seconds": 0.8
+      },
+      {
+        "index": 135,
+        "name": "Check BW-36.23A R3 restricted runtime on real PostgreSQL",
+        "exit_code": 0,
+        "seconds": 9.6
+      },
+      {
+        "index": 136,
+        "name": "Check completed pre-805 protection upgrade and full verifier chain",
+        "exit_code": 0,
+        "seconds": 19.01
+      },
+      {
+        "index": 137,
+        "name": "Check strict runtime graph without administrative memberships",
+        "exit_code": 0,
+        "seconds": 10.99
+      },
+      {
+        "index": 138,
+        "name": "Check BW-36.4 simplified Brand sidebar",
+        "exit_code": 0,
+        "seconds": 0.65
+      },
+      {
+        "index": 139,
+        "name": "Check BW-36.6 Workspace schema foundation",
+        "exit_code": 0,
+        "seconds": 0.9
+      },
+      {
+        "index": 140,
+        "name": "Check BW-36.7 Workspace backfill preflight",
+        "exit_code": 0,
+        "seconds": 0.81
+      },
+      {
+        "index": 141,
+        "name": "Check BW-36.7R1 Workspace identity diagnostic",
+        "exit_code": 0,
+        "seconds": 0.7
+      },
+      {
+        "index": 142,
+        "name": "Check BW-36.7R2 application identity bridge",
+        "exit_code": 0,
+        "seconds": 0.86
+      },
+      {
+        "index": 143,
+        "name": "Check BW-36.7R3 corrected Workspace backfill preflight",
+        "exit_code": 0,
+        "seconds": 0.84
+      },
+      {
+        "index": 144,
+        "name": "Check BW-36.8 transactional Workspace backfill",
+        "exit_code": 0,
+        "seconds": 0.86
+      },
+      {
+        "index": 145,
+        "name": "Check BW-36.9 authorized Workspace read boundary",
+        "exit_code": 0,
+        "seconds": 1.1
+      },
+      {
+        "index": 146,
+        "name": "Check BW-36.9R1 Workspace identity resolution repair",
+        "exit_code": 0,
+        "seconds": 0.71
+      },
+      {
+        "index": 147,
+        "name": "Check BW-36.10 Workspace selector and sidebar hierarchy",
+        "exit_code": 0,
+        "seconds": 1.15
+      },
+      {
+        "index": 148,
+        "name": "Check BW-36.10R1 Workspace selector popover layout",
+        "exit_code": 0,
+        "seconds": 0.75
+      },
+      {
+        "index": 149,
+        "name": "Check BW-36.11 safe Workspace renaming",
+        "exit_code": 0,
+        "seconds": 1.1
+      },
+      {
+        "index": 150,
+        "name": "Check BW-36.11R1 sidebar context interaction",
+        "exit_code": 0,
+        "seconds": 0.99
+      },
+      {
+        "index": 151,
+        "name": "Check BW-36.13R1 Workspace stability containment",
+        "exit_code": 0,
+        "seconds": 0.99
+      },
+      {
+        "index": 152,
+        "name": "Check BW-36.13R2 safe first Workspace creation",
+        "exit_code": 0,
+        "seconds": 1.2
+      },
+      {
+        "index": 153,
+        "name": "Check BW-36.13R3 authoritative project creation",
+        "exit_code": 0,
+        "seconds": 1.0
+      },
+      {
+        "index": 154,
+        "name": "Check BW-36.13R3R1 Workspace catalog and project launch repair",
+        "exit_code": 0,
+        "seconds": 0.9
+      },
+      {
+        "index": 155,
+        "name": "Guided Brand Profile setup regression",
+        "exit_code": 0,
+        "seconds": 1.6
+      },
+      {
+        "index": 156,
+        "name": "Install focused browser fixture",
+        "exit_code": 0,
+        "seconds": 2.84
+      },
+      {
+        "index": 157,
+        "name": "Check BW-42 Brand Profile visuals and independent logo upload investigation",
+        "exit_code": 0,
+        "seconds": 58.1
+      },
+      {
+        "index": 158,
+        "name": "Check BW-41 AI Brain visual states and responsive accessibility",
+        "exit_code": 0,
+        "seconds": 16.86
+      },
+      {
+        "index": 159,
+        "name": "Check BW-39.1 evidence-linked Social CTA analysis (signed SQL and real browser)",
+        "exit_code": 0,
+        "seconds": 131.76
+      },
+      {
+        "index": 160,
+        "name": "Check BW-39.1-R1 review failure diagnostics and friendly entry",
+        "exit_code": 0,
+        "seconds": 60.34
+      },
+      {
+        "index": 161,
+        "name": "Check BW-40.1 stable references and prompt shortcuts (signed sessions, SQL, Chromium)",
+        "exit_code": 0,
+        "seconds": 89.31
+      },
+      {
+        "index": 162,
+        "name": "Check BW-39.2 independently valid Advice with optional verified evidence",
+        "exit_code": 0,
+        "seconds": 7.05
+      },
+      {
+        "index": 163,
+        "name": "Check BW-39.1-R2 provider failure boundaries and redacted stages",
+        "exit_code": 0,
+        "seconds": 6.2
+      },
+      {
+        "index": 164,
+        "name": "Check Content eligibility, source selection, editable preview and remote Create scope",
+        "exit_code": 0,
+        "seconds": 61.49
+      },
+      {
+        "index": 165,
+        "name": "Check BW-38.1 sequential AI Brain assets",
+        "exit_code": 0,
+        "seconds": 177.8
+      },
+      {
+        "index": 166,
+        "name": "Check AI Brain native Social Media Posting handoff",
+        "exit_code": 0,
+        "seconds": 65.22
+      },
+      {
+        "index": 167,
+        "name": "Check complete multi-block Advice and response action placement",
+        "exit_code": 0,
+        "seconds": 23.49
+      },
+      {
+        "index": 168,
+        "name": "Check Content proposal security and source lifecycle (real ACL, mocked provider, Chromium)",
+        "exit_code": 0,
+        "seconds": 124.9
+      },
+      {
+        "index": 169,
+        "name": "Check BW-37.1A-R1 workspace and scroll lifecycle (Chromium)",
+        "exit_code": 0,
+        "seconds": 9.6
+      },
+      {
+        "index": 170,
+        "name": "Check BW-37.1B-R1 conversational advisor (disposable SQL, mocked provider, Chromium)",
+        "exit_code": 0,
+        "seconds": 12.56
+      },
+      {
+        "index": 171,
+        "name": "Check BW-37.1C-1 Brand Profile draft proposal (owner controllers, mocked provider, Chromium)",
+        "exit_code": 0,
+        "seconds": 26.64
+      },
+      {
+        "index": 172,
+        "name": "Check BW-37.1B Strategic Answer Quality (disposable SQL, mocked provider)",
+        "exit_code": 0,
+        "seconds": 5.93
+      },
+      {
+        "index": 173,
+        "name": "Check BW-37.1A Strategic Advisor (mocked provider)",
+        "exit_code": 0,
+        "seconds": 16.09
+      },
+      {
+        "index": 174,
+        "name": "Check approved Brand Learnings in Advice (disposable PostgreSQL, mocked OpenAI)",
+        "exit_code": 0,
+        "seconds": 26.86
+      },
+      {
+        "index": 175,
+        "name": "Check BW-36.21A Home foundation (Chromium)",
+        "exit_code": 0,
+        "seconds": 57.4
+      },
+      {
+        "index": 176,
+        "name": "Check BW-36.21B1 Home Intelligence (Chromium, provider-free)",
+        "exit_code": 0,
+        "seconds": 66.2
+      },
+      {
+        "index": 177,
+        "name": "Check BW-36.21B2 Home Campaign Insights and AI Brain (Chromium, provider-free)",
+        "exit_code": 0,
+        "seconds": 128.63
+      },
+      {
+        "index": 178,
+        "name": "Check BW-36.22A compact Home and continuation (Chromium, provider-free)",
+        "exit_code": 0,
+        "seconds": 77.39
+      },
+      {
+        "index": 179,
+        "name": "Check BW-36.22B1 Living Workspace foundation (Chromium, provider-free)",
+        "exit_code": 0,
+        "seconds": 54.59
+      },
+      {
+        "index": 180,
+        "name": "Check BW-36.22B1R1 current continuation name (Chromium, provider-free)",
+        "exit_code": 0,
+        "seconds": 12.14
+      },
+      {
+        "index": 181,
+        "name": "Check BW-36.22B2 real Brand Avatar and contextual personality",
+        "exit_code": 0,
+        "seconds": 43.55
+      },
+      {
+        "index": 182,
+        "name": "Check BW-36.22B3 Living Signals and contextual onboarding",
+        "exit_code": 0,
+        "seconds": 31.29
+      },
+      {
+        "index": 183,
+        "name": "Check BW-36.22B4 Living Workspace motion and visual states",
+        "exit_code": 0,
+        "seconds": 57.95
+      },
+      {
+        "index": 184,
+        "name": "Check BW-36.22B2R1 canonical conflict reload recovery",
+        "exit_code": 0,
+        "seconds": 8.21
+      },
+      {
+        "index": 185,
+        "name": "Check BW-36.21A-R2.1 safe Workspace switching (Chromium)",
+        "exit_code": 0,
+        "seconds": 273.2
+      },
+      {
+        "index": 186,
+        "name": "Check BW-36.20R1 provider storage and revalidation errors (mocked OpenAI)",
+        "exit_code": 0,
+        "seconds": 9.44
+      },
+      {
+        "index": 187,
+        "name": "Check Brand Profile entry and Workspace actions in Chromium",
+        "exit_code": 0,
+        "seconds": 30.59
+      },
+      {
+        "index": 188,
+        "name": "Check BW-36.13R5 Brand lifecycle stability",
+        "exit_code": 0,
+        "seconds": 33.32
+      },
+      {
+        "index": 189,
+        "name": "Check Brand workspace regression recovery",
+        "exit_code": 0,
+        "seconds": 6.69
+      },
+      {
+        "index": 190,
+        "name": "Check durable Brand logos and readiness",
+        "exit_code": 0,
+        "seconds": 5.35
+      },
+      {
+        "index": 191,
+        "name": "Check production Brand logo persistence",
+        "exit_code": 0,
+        "seconds": 5.74
+      },
+      {
+        "index": 192,
+        "name": "Check Brand Profile decisions and deletion UX",
+        "exit_code": 0,
+        "seconds": 11.32
+      },
+      {
+        "index": 193,
+        "name": "Check BW-36.12 Brand logo acquisition and projection",
+        "exit_code": 0,
+        "seconds": 0.22
+      },
+      {
+        "index": 194,
+        "name": "Check stable campaign creation and direct handoff in Chromium",
+        "exit_code": 0,
+        "seconds": 8.97
+      },
+      {
+        "index": 195,
+        "name": "Check complete Campaign V3 generation in Chromium",
+        "exit_code": 0,
+        "seconds": 66.39
+      },
+      {
+        "index": 196,
+        "name": "Check AI Brain Campaign Creator handoff (mocked provider, Chromium)",
+        "exit_code": 0,
+        "seconds": 55.48
+      },
+      {
+        "index": 197,
+        "name": "Check Campaign Creator generation boundary (disposable SQL, mocked provider)",
+        "exit_code": 0,
+        "seconds": 1.93
+      },
+      {
+        "index": 198,
+        "name": "Check BW-36.15 guided campaign responsibilities",
+        "exit_code": 0,
+        "seconds": 41.16
+      },
+      {
+        "index": 199,
+        "name": "Check BW-36.15R1 responsibility workspace continuity",
+        "exit_code": 0,
+        "seconds": 17.77
+      },
+      {
+        "index": 200,
+        "name": "Check BW-36.16 adaptive Canvas view hierarchy in Chromium",
+        "exit_code": 0,
+        "seconds": 9.74
+      },
+      {
+        "index": 201,
+        "name": "Check BW-36.16R1 toolbar and global view cycle in Chromium",
+        "exit_code": 0,
+        "seconds": 17.6
+      },
+      {
+        "index": 202,
+        "name": "Check BW-36.17 governed Brand Learnings in Chromium",
+        "exit_code": 0,
+        "seconds": 24.64
+      },
+      {
+        "index": 203,
+        "name": "Check BW-36.17R1 Learning provenance schema in disposable PostgreSQL",
+        "exit_code": 0,
+        "seconds": 16.97
+      },
+      {
+        "index": 204,
+        "name": "Check BW-36.17R2 provenance recovery in disposable PostgreSQL",
+        "exit_code": 0,
+        "seconds": 36.38
+      },
+      {
+        "index": 205,
+        "name": "Check BW-36.18 governed Learning source capture",
+        "exit_code": 0,
+        "seconds": 10.27
+      },
+      {
+        "index": 206,
+        "name": "Check BW-36.19 AI Learning Advisor (mocked OpenAI)",
+        "exit_code": 0,
+        "seconds": 27.47
+      },
+      {
+        "index": 207,
+        "name": "Check BW-36.19R1 existing saved Board compatibility (mocked OpenAI)",
+        "exit_code": 0,
+        "seconds": 26.8
+      },
+      {
+        "index": 208,
+        "name": "Check BW-36.19R2 adaptive Advisor context and streaming recovery (mocked OpenAI)",
+        "exit_code": 0,
+        "seconds": 28.79
+      },
+      {
+        "index": 209,
+        "name": "Check BW-36.19R4 output reliability (mocked OpenAI)",
+        "exit_code": 0,
+        "seconds": 25.17
+      },
+      {
+        "index": 210,
+        "name": "Check BW-36.19R5 simplified generation and persisted human approval (mocked OpenAI)",
+        "exit_code": 0,
+        "seconds": 20.49
+      },
+      {
+        "index": 211,
+        "name": "Check BW-36.19R6 Learning review and atomic batch adoption (mocked OpenAI)",
+        "exit_code": 0,
+        "seconds": 20.04
+      },
+      {
+        "index": 212,
+        "name": "Check BW-36.19R7 Advisor visual states and accessibility in Chromium (provider-free)",
+        "exit_code": 0,
+        "seconds": 14.16
+      },
+      {
+        "index": 213,
+        "name": "Check BW-36.19R8 Canvas Learn entry in Chromium (provider-free)",
+        "exit_code": 0,
+        "seconds": 9.73
+      },
+      {
+        "index": 214,
+        "name": "Check dynamic AI Insights translations",
+        "exit_code": 0,
+        "seconds": 0.06
+      },
+      {
+        "index": 215,
+        "name": "Check scoped German interface localization",
+        "exit_code": 0,
+        "seconds": 0.21
+      },
+      {
+        "index": 216,
+        "name": "Check BW-36.21A-R2.2 multiple Workspaces and direct Brand navigation",
+        "exit_code": 0,
+        "seconds": 35.13
+      },
+      {
+        "index": 217,
+        "name": "Check BW-36.21A-R2.3 Brand and Board context consistency",
+        "exit_code": 0,
+        "seconds": 51.63
+      },
+      {
+        "index": 218,
+        "name": "Check Knowledge Module browser globals",
+        "exit_code": 0,
+        "seconds": 0.12
+      },
+      {
+        "index": 219,
+        "name": "Check BW-36.23A protected Brand write contract and controllers",
+        "exit_code": 0,
+        "seconds": 0.22
+      },
+      {
+        "index": 220,
+        "name": "Check BW-36.23A real PostgreSQL roles transactions and concurrency",
+        "exit_code": 0,
+        "seconds": 1.42
+      },
+      {
+        "index": 221,
+        "name": "Check BW-36.23A protected Brand editing in Chromium",
+        "exit_code": 0,
+        "seconds": 1.37
+      },
+      {
+        "index": 222,
+        "name": "Check BW-36.23A initialization and logo response-loss recovery",
+        "exit_code": 0,
+        "seconds": 0.31
+      },
+      {
+        "index": 223,
+        "name": "Check temporary write maintenance gate (provider-free)",
+        "exit_code": 0,
+        "seconds": 0.32
+      }
+    ]
+  },
+  "real_postgres_complete_upload_variants": [
+    {
+      "postgres": "17.6",
+      "variant": "normal",
+      "result": "PASS",
+      "groups": 55,
+      "mocked_boundary": "Private Storage HTTP only; actual production controller, API/auth, SQL grants/RLS/migrations, lifecycle, storage adapter and image delivery/readback"
+    },
+    {
+      "postgres": "17.6",
+      "variant": "legacy upgrade",
+      "result": "PASS",
+      "groups": 64,
+      "mocked_boundary": "Private Storage HTTP only; actual production controller, API/auth, SQL grants/RLS/migrations, lifecycle, storage adapter and image delivery/readback"
+    },
+    {
+      "postgres": "17.6",
+      "variant": "strict role graph",
+      "result": "PASS",
+      "groups": 53,
+      "mocked_boundary": "Private Storage HTTP only; actual production controller, API/auth, SQL grants/RLS/migrations, lifecycle, storage adapter and image delivery/readback"
+    },
+    {
+      "postgres": "18.4",
+      "variant": "normal",
+      "result": "PASS",
+      "groups": 55,
+      "mocked_boundary": "Private Storage HTTP only; actual production controller, API/auth, SQL grants/RLS/migrations, lifecycle, storage adapter and image delivery/readback"
+    },
+    {
+      "postgres": "18.4",
+      "variant": "legacy upgrade",
+      "result": "PASS",
+      "groups": 64,
+      "mocked_boundary": "Private Storage HTTP only; actual production controller, API/auth, SQL grants/RLS/migrations, lifecycle, storage adapter and image delivery/readback"
+    },
+    {
+      "postgres": "18.4",
+      "variant": "strict role graph",
+      "result": "PASS",
+      "groups": 53,
+      "mocked_boundary": "Private Storage HTTP only; actual production controller, API/auth, SQL grants/RLS/migrations, lifecycle, storage adapter and image delivery/readback"
+    }
+  ],
+  "browser": {
+    "result": "PASS",
+    "matrix_cases": 40,
+    "viewports": [
+      1672,
+      1366,
+      768,
+      375,
+      320
+    ],
+    "themes": [
+      "light",
+      "dark"
+    ],
+    "languages": [
+      "en",
+      "de"
+    ],
+    "sidebar": [
+      "expanded",
+      "collapsed"
+    ],
+    "zoom": "720x450 CSS viewport equivalent to 1440x900 at 200%; native browser zoom not tested",
+    "checks": [
+      "all 11 sections via keyboard",
+      "field retention",
+      "save/reload",
+      "campaign snapshot",
+      "advanced/back",
+      "Close and management controls unobstructed",
+      "active and primary action focus",
+      "reduced motion",
+      "no horizontal overflow",
+      "legacy title/description visible during delayed Profile reopening"
+    ]
+  },
+  "upload_incident": {
+    "new_production_defect_demonstrated": false,
+    "production_upload_code_changed": false,
+    "historical_incident_resolved_claim": false,
+    "result": "Injected metadata failure reproduces exact generic error, retains file/preview and retries safely. Complete real restricted PostgreSQL flow passes; original live cause remains unknown."
+  },
+  "diagnostic_probe_note": "A preliminary Core-only SQL fixture lacked the application runtime Workspace-read permissions. The full upload check was moved to the existing complete runtime migration fixture, without broadening any fixture or production permissions. This was not a demonstrated production defect."
+}

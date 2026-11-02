@@ -84,6 +84,35 @@ let groups=0;async function check(name,fn){await fn();console.log('PASS '+name);
    const before=(await db.query('SELECT * FROM brands WHERE id=$1',[B])).rows[0];const command=require('../brand-write-contract').command(before,{name:'Governed Brand'},W,'profile_edit');
    const write=require('../api/_brand-knowledge-write');const first=await write.write({db,user,brandId:B,input:command});const again=await write.write({db,user,brandId:B,input:command});assert.equal(again.replay,true);assert.equal(first.event_id,again.event_id);assert.equal((await root.query('SELECT count(*)::int n FROM brand_knowledge_history WHERE brand_id=$1',[B])).rows[0].n,2);
   });
+    await check('BW-42 full logo controller/preview/upload/read/reload uses real restricted PostgreSQL and mocked private storage HTTP',async()=>{
+      const row=async()=>(await root.query('SELECT to_jsonb(b) value FROM brands b WHERE id=$1',[B])).rows[0].value;
+      const count=async()=>(await root.query('SELECT count(*)::int n FROM brand_knowledge_history WHERE brand_id=$1',[B])).rows[0].n;
+      const storage=require('../api/_brand-logo-storage'),original={upload:storage.upload,read:storage.read};
+      const objects=new Map(),{png}=require('./fixtures/bw36-13r5-local-runtime');
+      const storageDependencies={env:{SUPABASE_URL:'https://storage.example.test',SUPABASE_SERVICE_ROLE_KEY:'fictional-fixture-key'},fetchImpl:async(url,init)=>{
+        const key=new URL(url).pathname.split('/brand-logos/')[1];assert(key,'Private bucket path');
+        if(init.method==='POST'){assert.equal(init.headers['x-upsert'],'false');objects.set(key,Buffer.from(init.body));return {ok:true,status:200};}
+        assert.equal(init.method,'GET');const bytes=objects.get(key);assert(bytes);return {ok:true,status:200,headers:{get:()=>String(bytes.length)},arrayBuffer:async()=>bytes};
+      }};
+      storage.upload=input=>original.upload({...input,...storageDependencies});storage.read=key=>original.read(key,storageDependencies);
+      try{
+        const handlers={logo:require('../api/brands/[id]/logo'),preview:require('../api/brands/[id]/write-preview'),brand:require('../api/brands/[id]')};
+        const {createSessionToken}=require('../api/_auth-session');
+        const transport=async(url,init={})=>{
+          const parsed=new URL(url,'http://localhost'),kind=parsed.pathname.endsWith('/write-preview')?'preview':parsed.pathname.endsWith('/logo')?'logo':'brand';
+          const req={method:init.method||'GET',query:{id:B,...Object.fromEntries(parsed.searchParams)},body:init.body&&JSON.parse(init.body),headers:{...Object.fromEntries(Object.entries(init.headers||{}).map(([k,v])=>[k.toLowerCase(),v])),cookie:'funklix_session='+createSessionToken({email})}};
+          const res={statusCode:200,setHeader(){},status(code){this.statusCode=code;return this;},json(value){this.body=value;return this;},send(value){this.body=value;return this;}};
+          await handlers[kind](req,res);return {status:res.statusCode,ok:res.statusCode===200,json:async()=>res.body};
+        };
+        const before=await row(),n=await count(),initial=await (await transport('/api/brands/'+B)).json();
+        const context={account:{},generation:1,brandId:B,workspaceId:W,authorized:true};
+        const session=require('../brand-profile-setup').createSession({brand:initial,getContext:()=>context,fetchImpl:transport,requestId:randomUUID,validateBrand:(v,id)=>v?.id===id&&Number.isSafeInteger(v.revision),confirmReview:async()=>true,onSave(){},onLogo(){}});
+        assert(await session.chooseFile({name:'fictional-logo.png',type:'image/png',size:png.length},async()=>png.toString('base64')));
+        assert(await session.upload(),session.state.message);assert.equal(objects.size,1);assert.equal(session.state.file,null);
+        const saved=await row();assert.equal(saved.logo_revision,before.logo_revision+1);assert.deepEqual(saved.brand_core,before.brand_core);assert.equal(saved.revision,before.revision);assert.equal(await count(),n+1);
+        assert.equal(session.state.brand.logo_revision,saved.logo_revision);assert.deepEqual(objects.get(saved.logo_object_path),png);
+      }finally{Object.assign(storage,original);}
+    });
   await check('actual Learning governance authorizes with definer row lock and immutable events',async()=>{
    const learning=require('../api/_brand-learnings');const proposed=await learning.operate({db,user,brandId:B,input:learning.inputRequest({statement:'A bounded runtime observation',expected_brand_revision:String((await db.query('SELECT revision FROM brands WHERE id=$1',[B])).rows[0].revision)},true)});
    assert.equal(proposed.learning.status,'proposed');

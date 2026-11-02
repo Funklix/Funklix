@@ -78,3 +78,85 @@
 .ai-brand-proposal p { white-space: pre-wrap; }
 .ai-brand-proposal button { min-height: 44px; white-space: normal; }
 .ai-brand-proposal :focus-visible { outline: 2px solid var(--fk-color-focus-ring); outline-offset: 2px; }
+
+/* BW-42: presentation only; the existing dialog and section controller own behavior. */
+.brand-workspace-detail.profile-page-mode[open]:has(.guided-brand-profile:not(.hidden) .profile-header){max-width:none;width:100%;margin:0;padding:clamp(16px,2vw,28px);border:0;border-radius:0;background:var(--fk-color-surface-elevated)}
+.brand-workspace-detail.profile-guided-mode:has(.guided-brand-profile:not(.hidden) .profile-header){
+  --profile-accent:var(--fk-color-primary-action,#7028ef);
+  --profile-border:color-mix(in srgb,var(--profile-accent) 19%,var(--fk-color-border-default));
+  --profile-soft:color-mix(in srgb,var(--profile-accent) 6%,var(--fk-color-surface-elevated));
+  position:relative;width:min(1440px,calc(100vw - 40px));max-height:calc(100dvh - 40px);padding:24px;
+}
+/* Keep the original dialog label and description available to assistive technology. */
+.brand-workspace-detail.profile-guided-mode:has(.guided-brand-profile:not(.hidden) .profile-header)>.brand-workspace-detail-header .brand-switcher-eyebrow,
+.brand-workspace-detail.profile-guided-mode:has(.guided-brand-profile:not(.hidden) .profile-header)>.brand-workspace-detail-header h2,
+.brand-workspace-detail.profile-guided-mode:has(.guided-brand-profile:not(.hidden) .profile-header)>#brand-workspace-detail-context{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+.brand-workspace-detail.profile-guided-mode:has(.guided-brand-profile:not(.hidden) .profile-header)>.brand-workspace-detail-header{position:absolute;inset:44px 44px auto auto;z-index:1}
+.brand-workspace-detail.profile-guided-mode:has(.guided-brand-profile:not(.hidden) .profile-header)>#brand-workspace-detail-status:empty{display:none}
+.brand-workspace-detail.profile-guided-mode #brand-workspace-detail-close{padding:12px 20px;border:1px solid var(--profile-border);border-radius:16px;background:var(--fk-color-surface-elevated);box-shadow:0 4px 12px color-mix(in srgb,var(--profile-accent) 8%,transparent)}
+.guided-brand-profile{gap:24px;line-height:1.5}
+.guided-brand-profile .profile-header{position:relative;display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:24px;align-items:center;padding:24px 130px 24px 24px;border:1px solid var(--profile-border);border-radius:22px;background:radial-gradient(ellipse at 75% 110%,color-mix(in srgb,var(--profile-accent) 13%,transparent),transparent 65%),var(--profile-soft)}
+.guided-brand-profile .profile-header .profile-logo{width:104px;height:104px;flex-basis:104px;border-radius:20px;background:var(--fk-color-surface-input);box-shadow:0 4px 12px color-mix(in srgb,var(--profile-accent) 8%,transparent)}
+.guided-brand-profile .profile-header h3{color:var(--fk-color-heading);font-size:clamp(22px,2vw,30px);line-height:1.2;letter-spacing:-.025em;margin-bottom:10px}
+.guided-brand-profile .profile-header p{color:var(--fk-color-text-secondary,var(--fk-color-muted));margin:4px 0;font-size:.95rem}
+.guided-brand-profile .profile-header .profile-website{color:var(--profile-accent);font-weight:600}
+.guided-brand-profile .profile-completion{display:flex;align-items:center;gap:12px;padding:12px 18px;background:var(--fk-color-surface-elevated);border:1px solid var(--profile-border);border-radius:18px;color:var(--fk-color-text-primary);font-weight:650;white-space:nowrap}
+.profile-completion-ring{display:block;order:-1;flex:0 0 40px;width:40px;height:40px;border-radius:50%;background:conic-gradient(var(--profile-accent) var(--profile-progress),color-mix(in srgb,var(--profile-accent) 18%,var(--fk-color-surface-elevated)) 0);position:relative}
+.profile-completion-ring::after{content:'';position:absolute;inset:5px;border-radius:50%;background:var(--fk-color-surface-elevated)}
+.guided-brand-profile nav{gap:10px}
+.guided-brand-profile nav button{display:flex;align-items:center;justify-content:center;gap:8px;flex:1 1 auto;padding:12px 18px;font-weight:600;font-size:.95rem;min-height:50px;border:1px solid var(--profile-border);border-radius:16px;background:var(--fk-color-surface-elevated);box-shadow:0 3px 8px color-mix(in srgb,var(--profile-accent) 4%,transparent)}
+.guided-brand-profile nav button[data-readiness]{background:var(--fk-color-surface-elevated);border-color:var(--profile-border)}
+.guided-brand-profile nav button[data-status-icon]::after{margin-inline-start:6px;color:var(--fk-color-text-secondary,var(--fk-color-muted))}
+.guided-brand-profile nav button[data-readiness=complete]::after{color:var(--fk-color-success,#23854b)}
+.guided-brand-profile nav button[aria-current=step]{background:linear-gradient(135deg,var(--profile-accent),color-mix(in srgb,var(--profile-accent) 90%,var(--fk-color-text-primary)));color:var(--fk-color-button-primary-text,#fff);border-color:var(--profile-accent);outline:1px solid var(--profile-accent);outline-offset:0;text-decoration:none;box-shadow:0 4px 12px color-mix(in srgb,var(--profile-accent) 20%,transparent)}
+.guided-brand-profile nav button[aria-current=step]::after{color:inherit}
+.guided-brand-profile button{border-radius:14px;border-color:var(--profile-border);padding:11px 18px;background:var(--fk-color-surface-elevated)}
+.guided-brand-profile button:hover:not(:disabled){background:var(--profile-soft)}
+.guided-brand-profile button.fk-btn-primary{background:var(--profile-accent);box-shadow:0 4px 12px color-mix(in srgb,var(--profile-accent) 16%,transparent)}
+.guided-brand-profile button.fk-btn-primary:hover:not(:disabled){background:color-mix(in srgb,var(--profile-accent) 90%,var(--fk-color-text-primary))}
+.guided-brand-profile .profile-section{gap:18px;padding:12px 4px 0;grid-template-columns:repeat(2,minmax(0,1fr));align-items:start}
+.guided-brand-profile .profile-section> :not(.profile-field){grid-column:1/-1}
+.guided-brand-profile .profile-section>h3{font-size:clamp(24px,2vw,30px);line-height:1.25;letter-spacing:-.025em;color:var(--fk-color-heading);margin:0 0 10px}
+.guided-brand-profile .profile-section>h4{margin:8px 0 0;color:var(--fk-color-heading)}
+.guided-brand-profile .profile-section>.profile-field:has(input){grid-column:1/-1}
+.guided-brand-profile label{gap:8px;font-weight:600;color:var(--fk-color-heading)}
+.guided-brand-profile input,.guided-brand-profile textarea{padding:12px 14px;line-height:1.5;font-weight:400;border-color:var(--profile-border);border-radius:14px;background:var(--fk-color-surface-input)}
+.guided-brand-profile textarea{min-height:132px}
+.guided-brand-profile input[type=file]{padding:16px;border-style:dashed;background:var(--profile-soft)}
+.guided-brand-profile input[type=file]::file-selector-button{font:inherit;border:1px solid var(--profile-border);border-radius:10px;padding:8px 12px;margin-inline-end:12px;background:var(--fk-color-surface-elevated);color:var(--fk-color-text-primary)}
+.guided-brand-profile .profile-identity-cards{gap:24px;grid-template-columns:repeat(2,minmax(0,1fr))}
+.guided-brand-profile .profile-identity-cards>section{grid-template-columns:auto minmax(0,1fr);align-items:center;align-content:center;gap:18px 24px;padding:24px;border:1px solid var(--profile-border);border-radius:22px;background:radial-gradient(ellipse at 110% 110%,color-mix(in srgb,var(--profile-accent) 9%,transparent),transparent 65%),var(--fk-color-surface-elevated)}
+.guided-brand-profile .profile-identity-cards h4{grid-column:1/-1;font-size:1.2rem;color:var(--fk-color-heading);margin:0}
+.guided-brand-profile .profile-official-logo,.guided-brand-profile .profile-overview-avatar{width:132px;height:132px;border-radius:20px;grid-column:1;grid-row:2;object-fit:contain}
+.guided-brand-profile .profile-identity-cards button{grid-column:2;grid-row:2;align-self:center}
+.guided-brand-profile .profile-identity-cards p{grid-column:1;grid-row:2;color:var(--fk-color-text-secondary,var(--fk-color-muted))}
+.guided-brand-profile .profile-persona,.guided-brand-profile .profile-proposal{border-color:var(--profile-border);padding:20px;border-radius:18px;background:var(--profile-soft)}
+.guided-brand-profile .profile-actions{justify-content:flex-end;gap:12px;padding-top:8px}
+.guided-brand-profile .profile-actions button{min-height:48px}
+.guided-brand-profile [role=status]{color:var(--fk-color-text-secondary,var(--fk-color-muted))}
+.guided-brand-profile :is(button,input,textarea,summary):focus-visible{outline:3px solid var(--fk-color-focus-ring);outline-offset:3px}
+html[data-theme=dark] .guided-brand-profile .profile-header{background:radial-gradient(ellipse at 80% 100%,color-mix(in srgb,var(--profile-accent) 12%,transparent),transparent 65%),var(--profile-soft)}
+
+@media(max-width:1200px){.guided-brand-profile .profile-header{gap:16px}.guided-brand-profile .profile-completion{padding:10px;white-space:normal}.guided-brand-profile .profile-header .profile-logo{width:80px;height:80px}.guided-brand-profile .profile-identity-cards>section{gap:16px}.guided-brand-profile .profile-official-logo,.guided-brand-profile .profile-overview-avatar{width:104px;height:104px}}
+@media(max-width:1024px){.guided-brand-profile .profile-header{grid-template-columns:auto minmax(0,1fr)}.guided-brand-profile .profile-completion{grid-column:1/-1;justify-self:start}.guided-brand-profile nav button{flex:1 1 28%}.guided-brand-profile .profile-identity-cards{grid-template-columns:1fr}.guided-brand-profile .profile-section{grid-template-columns:1fr}.guided-brand-profile .profile-section>.profile-field{grid-column:1}}
+@media(max-width:600px){.brand-workspace-detail.profile-guided-mode:has(.guided-brand-profile:not(.hidden) .profile-header){padding:12px;width:calc(100vw - 16px);max-height:calc(100dvh - 16px)}.brand-workspace-detail.profile-page-mode[open]:has(.guided-brand-profile:not(.hidden) .profile-header){width:100%;max-height:none}.brand-workspace-detail.profile-guided-mode:has(.guided-brand-profile:not(.hidden) .profile-header)>.brand-workspace-detail-header{inset:24px 24px auto auto}.brand-workspace-detail.profile-guided-mode #brand-workspace-detail-close{padding:8px 12px;min-height:44px}.guided-brand-profile{gap:18px}.guided-brand-profile .profile-header{padding:72px 16px 16px;gap:14px;border-radius:18px}.guided-brand-profile .profile-header .profile-logo{width:56px;height:56px}.guided-brand-profile .profile-header h3{font-size:22px}.guided-brand-profile .profile-header p{font-size:.875rem}.guided-brand-profile nav{gap:8px}.guided-brand-profile nav button{flex:1 1 42%;padding:10px;font-size:.875rem}.guided-brand-profile .profile-identity-cards>section{padding:18px;gap:14px}.guided-brand-profile .profile-official-logo,.guided-brand-profile .profile-overview-avatar{width:88px;height:88px}.guided-brand-profile .profile-actions button{flex:1 1 100%}}
+@media(max-width:375px){.guided-brand-profile .profile-identity-cards>section{grid-template-columns:1fr}.guided-brand-profile .profile-identity-cards button{grid-column:1;grid-row:3}.guided-brand-profile .profile-header{grid-template-columns:1fr}.guided-brand-profile .profile-completion{grid-column:1}}
+@media(prefers-reduced-motion:reduce){.brand-workspace-detail.profile-guided-mode:has(.guided-brand-profile:not(.hidden) .profile-header),.guided-brand-profile *{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
+@media(forced-colors:active){.guided-brand-profile nav button[data-readiness],.guided-brand-profile nav button[aria-current=step],.guided-brand-profile .profile-header,.guided-brand-profile .profile-identity-cards>section{background:Canvas;color:CanvasText;border-color:CanvasText}.guided-brand-profile nav button[aria-current=step]{outline:2px solid Highlight}.profile-completion-ring{display:none}.guided-brand-profile :focus-visible{outline-color:Highlight}}
+.guided-brand-profile .profile-section-icon{width:22px;height:22px;flex:0 0 22px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;vertical-align:middle}
+.guided-brand-profile .profile-identity-cards h4{display:flex;align-items:center;gap:12px}
+.guided-brand-profile .profile-identity-cards h4 .profile-section-icon{color:var(--profile-accent)}
+
+.guided-brand-profile nav button[aria-current=step]:hover:not(:disabled){background:var(--profile-accent);color:var(--fk-color-button-primary-text,#fff)}
+@media(max-width:375px){.guided-brand-profile nav button{flex-basis:100%;justify-content:flex-start}.guided-brand-profile nav button[data-status-icon]::after{margin-inline-start:auto}}
+/* Leave room for the existing floating application navigation when scrolling to actions. */
+@media(max-width:768px){.brand-workspace-detail.profile-page-mode[open]:has(.guided-brand-profile:not(.hidden) .profile-header){padding-bottom:calc(144px + env(safe-area-inset-bottom,0px))}}
+.guided-brand-profile nav button{overflow-wrap:normal;word-break:normal}
+.guided-brand-profile .profile-section>button{justify-self:start}
+.guided-brand-profile nav button:focus-visible{outline:3px solid var(--fk-color-focus-ring);outline-offset:3px}
+@media(forced-colors:active){.guided-brand-profile nav button:focus-visible{outline-color:Highlight}}
+
+/* AI Brain proposals add an existing return action beside the legacy title. */
+.brand-workspace-detail.profile-guided-mode:has([data-ai-brand-return])>.brand-workspace-detail-header{position:relative;inset:auto;align-items:center;margin-bottom:16px}
+.brand-workspace-detail.profile-guided-mode:has([data-ai-brand-return]) .profile-header{padding:24px}
+@media(max-width:600px){.brand-workspace-detail.profile-guided-mode:has([data-ai-brand-return])>.brand-workspace-detail-header{gap:12px;flex-wrap:wrap}.brand-workspace-detail.profile-guided-mode:has([data-ai-brand-return]) .profile-header{padding:16px}}
