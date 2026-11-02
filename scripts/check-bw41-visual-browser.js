@@ -33,6 +33,10 @@ const { chromium } = require('playwright-core');
       await submit.focus();
       assert(await submit.evaluate(n => { const r = n.getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight + 1 && r.left >= 0 && r.right <= innerWidth + 1; }), `Ask reachable ${width}/${zoom}`);
       assert(await submit.evaluate(n => getComputedStyle(n).outlineStyle !== 'none'), 'Visible keyboard focus');
+      assert(await submit.evaluate(n => {
+        const r = n.getBoundingClientRect();
+        return [[r.left + 5, r.top + 5], [r.right - 5, r.bottom - 5]].every(([x, y]) => n.contains(document.elementFromPoint(x, y)));
+      }), `Ask clear of floating navigation ${width}/${zoom}`);
       const input = p.locator('#ai-brain-question');
       await input.fill('My editable draft');
       await p.evaluate(() => renderAiBrain());
@@ -41,7 +45,11 @@ const { chromium } = require('playwright-core');
       assert(await p.locator('.ai-brain-empty').evaluate(n => n.getBoundingClientRect().top >= n.parentElement.getBoundingClientRect().top - 1), `Welcome starts inside scrollport ${width}/${zoom}`);
       assert.equal(await p.locator('.ai-brain-empty').evaluate(n => getComputedStyle(n).animationName), 'none');
       surfaces.add(await p.locator('.ai-brain-composer').evaluate(n => getComputedStyle(n).backgroundColor));
-      if (zoom === 1 && [1440, 375].includes(width)) await p.screenshot({ path: `work/bw41/${theme}-${width}.png` });
+      if (zoom === 1 && [1440, 375].includes(width)) {
+        await input.fill('');
+        await input.evaluate(n => n.blur());
+        await p.screenshot({ path: `work/bw41/${theme}-${width}.png` });
+      }
     }
     assert.equal(surfaces.size, 2, 'Theme-native surfaces');
     await p.setViewportSize({ width: 1440, height: 900 });

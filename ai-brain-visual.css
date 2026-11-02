@@ -70,9 +70,10 @@
   #ai-brain-view .ai-brain-context span { padding-inline: 8px; font-size: .7rem; }
   #ai-brain-view .ai-brain-transcript { padding: 12px 10px 48px; border-radius: 18px; }
   #ai-brain-view .ai-brain-transcript:has(> .ai-brain-empty) { padding: 10px; }
-  #ai-brain-view .ai-brain-empty { padding: 10px 0; }
-  #ai-brain-view .ai-brain-empty .ai-brain-advisor-avatar { width: 48px; height: 48px; border-radius: 14px; margin-bottom: 8px; }
-  #ai-brain-view .ai-brain-empty p { font-size: .78rem; }
+  #ai-brain-view .ai-brain-empty { padding: 6px 0; }
+  #ai-brain-view .ai-brain-empty .ai-brain-advisor-avatar { width: 40px; height: 40px; border-radius: 14px; margin-bottom: 6px; }
+  #ai-brain-view .ai-brain-empty h4 { font-size: 1.1rem; margin-bottom: 8px; }
+  #ai-brain-view .ai-brain-empty p { font-size: .75rem; line-height: 1.4; }
   #ai-brain-view .ai-brain-empty::before, #ai-brain-view .ai-brain-empty::after { display: none; }
   #ai-brain-view .ai-brain-composer { padding: 10px; gap: 7px; border-radius: 18px; }
   #ai-brain-view .ai-brain-composer label { font-size: .78rem; }
@@ -81,6 +82,8 @@
   #ai-brain-view .ai-brain-composer textarea { min-height: 62px; font-size: 16px; }
   #ai-brain-view .ai-brain-composer .ai-brain-suggestion { padding: 6px 10px; font-size: .75rem; }
   #ai-brain-view .ai-brain-composer > div:last-child small { font-size: .7rem; }
+  /* Leave the existing floating Workspace/Brand navigation clear of Ask. */
+  #ai-brain-view .ai-brain-composer > div:last-child { padding-inline-end: 44px; }
   #ai-brain-view .ai-brain-composer button[type="submit"] { padding: 9px 12px; font-size: .8rem; }
   #ai-brain-view .ai-brain-message.is-advisor { padding: 10px; }
 }

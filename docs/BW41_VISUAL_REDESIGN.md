@@ -41,6 +41,6 @@ Actual Chromium screenshots are generated in `work/bw41/` and uploaded by CI as 
 
 ## Review and limits
 
-Self-review found no changes to functionality, global styles, authentication, authorization, database, Canvas state, rendering, inference settings or navigation. An initial mobile welcome alignment issue was corrected to use safe centering so overflow starts within the scrollport. Existing narrow/keyboard viewports can scroll welcome content or shortcut chips in their established regions; controls remain accessible.
+Self-review found no changes to functionality, global styles, authentication, authorization, database, Canvas state, rendering, inference settings or navigation. Mobile review corrected welcome alignment with safe centering and tighter spacing, and reserved footer space beside the unchanged floating Workspace/Brand controls. Browser acceptance also checks Ask is not occluded by other elements. Existing narrow/keyboard viewports can scroll welcome content or shortcut chips in their established regions; controls remain accessible.
 
 No external human review is claimed. Automated emulation does not replace physical-device, native browser zoom or screen-reader testing. Simultaneous 200% zoom on an already 320px mobile viewport is not a new acceptance claim; the inherited shell has a 320 CSS pixel minimum width, which this scoped change does not alter. Do not merge or deploy manually.
