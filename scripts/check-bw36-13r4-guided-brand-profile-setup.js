@@ -39,6 +39,7 @@ function makeSession(overrides = {}) {
 class Element {
   constructor(tag, doc) {
     this.tagName = tag; this.ownerDocument = doc; this.children = []; this.attributes = {}; this.dataset = {}; this.listeners = {}; this.hidden = false; this.disabled = false; this.value = ''; this.isConnected = true;
+    const properties = new Map(); this.style = { setProperty: (key, value) => properties.set(key, String(value)), getPropertyValue: key => properties.get(key) || '' };
     const classes = new Set(); this.classList = { add: (...items) => items.forEach(item => classes.add(item)), remove: item => classes.delete(item), toggle: (item, yes) => { if (yes) classes.add(item); else classes.delete(item); }, contains: item => classes.has(item) };
   }
   append(...nodes) { nodes.forEach(n => { n.parentElement = this; this.children.push(n); }); }
@@ -71,7 +72,7 @@ class Element {
   querySelector(selector) { return this.querySelectorAll(selector)[0] || null; }
   closest(selector) { return this.matches(selector) ? this : this.parentElement?.closest(selector); }
 }
-function documentFixture() { const doc = { createElement: tag => new Element(tag, doc) }; doc.body = doc.createElement('body'); doc.activeElement = doc.createElement('button'); doc.querySelector = selector => doc.body.querySelector(selector); return doc; }
+function documentFixture() { const doc = { createElement: tag => new Element(tag, doc), createElementNS: (namespace, tag) => { const element = new Element(tag, doc); element.namespaceURI = namespace; return element; } }; doc.body = doc.createElement('body'); doc.activeElement = doc.createElement('button'); doc.querySelector = selector => doc.body.querySelector(selector); return doc; }
 function loadBoundary(file, overrides, env = {}) {
   const location = path.resolve(__dirname, '..', file), requireFile = createRequire(location), module = { exports: {} };
   const localRequire = name => { if (Object.hasOwn(overrides, name)) return overrides[name]; if (name === 'pg') throw new Error('Real database forbidden'); return requireFile(name); };

@@ -599,11 +599,30 @@
     function node(tag, text, parent) { const n = doc.createElement(tag); if (text) n.textContent = text; if (parent) parent.append(n); return n; }
     function button(key, parent, action, id = key) {
       const b = node('button', t(key), parent); b.type = 'button'; b.dataset.profileKey = id;
-      if (key === 'Save Brand Profile and continue' || (key === 'Confirm and save Brand Profile' && SECTIONS[s.section] !== 'Review')) b.className = 'fk-btn fk-btn-primary';
+      if (key === 'Save Brand Profile and continue' || key === 'Confirm and save Brand Profile') b.className = 'fk-btn fk-btn-primary';
       b.disabled = !!s.pending || !!s.returning; b.addEventListener('click', action); return b;
     }
+    // Decorative section marks; text, status descriptions and button contracts stay authoritative.
+    function sectionIcon(index, parent) {
+      const paths = [
+        'M3 10 12 3l9 7M5 9v12h5v-7h4v7h5V9',
+        'M9 3c12 6-6 12 6 18M15 3C3 9 21 15 9 21M8 7h8M8 17h8',
+        'M16 21v-3a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v3M9 10a4 4 0 1 0 0-8 4 4 0 0 0 0 8M17 3a4 4 0 0 1 0 8M22 21v-3a4 4 0 0 0-3-4',
+        'M21 11a8 8 0 0 1-8 8H7l-5 3 2-6a8 8 0 1 1 17-5ZM8 9h8M8 13h5',
+        'M12 3 3 7l2 9 7 5 7-5 2-9-9-4ZM8 12l3 3 5-6',
+        'M3 3h18v18H3ZM3 16l5-5 4 4 3-3 6 6M15 7h1',
+        'M4 21v-3a8 8 0 0 1 16 0v3M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8',
+        'M8 6h13M8 12h13M8 18h13M3 6h1M3 12h1M3 18h1',
+        'M3 21v-3a5 5 0 0 1 10 0v3M8 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8M16 12h5v8h-5ZM17 12V9a2 2 0 0 1 4 0v3',
+        'M20 7a9 9 0 0 0-15-1L2 9M2 3v6h6M4 17a9 9 0 0 0 15 1l3-3M22 21v-6h-6',
+        'M8 4H4v17h16V4h-4M8 2h8v5H8ZM8 12h8M8 16h6'
+      ];
+      const svg = doc.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svg.setAttribute('viewBox', '0 0 24 24'); svg.setAttribute('aria-hidden', 'true'); svg.setAttribute('focusable', 'false'); svg.classList.add('profile-section-icon');
+      const path = doc.createElementNS('http://www.w3.org/2000/svg', 'path'); path.setAttribute('d', paths[index]); svg.append(path); parent.prepend(svg);
+    }
     function textField(label, value, parent, update, multiline = false, id = label) {
-      const wrap = node('label', '', parent); node('span', t(label), wrap);
+      const wrap = node('label', '', parent); wrap.className = 'profile-field'; node('span', t(label), wrap);
       const input = node(multiline ? 'textarea' : 'input', '', wrap); input.value = value || ''; input.dataset.profileKey = id;
       if (multiline) input.rows = 4;
       input.disabled = s.readOnly || !!s.pending || !!s.returning;
@@ -699,13 +718,17 @@
       container.replaceChildren(); container.classList.add('guided-brand-profile'); container.setAttribute('aria-busy', String(!!s.pending));
       const header = node('section', '', container); header.className = 'profile-header';
       const mark = node('div', '', header); mark.className = 'profile-logo'; root.FunklixBrandLogo.render(mark, s.brand, { label: t('Brand logo') });
-      const identity = node('div', '', header); node('h3', s.brand.name, identity);
-      node('p', s.brand.brand_core?.brandAssets?.domain || s.brand.brand_core?.website || t('No website yet'), identity);
+      const identity = node('div', '', header); identity.className = 'profile-identity'; node('h3', `${t('Brand Profile')} – ${s.brand.name}`, identity);
+      const domain = s.brand.brand_core?.brandAssets?.domain || s.brand.brand_core?.website;
+      const site = node('p', domain || t('No website yet'), identity); site.className = 'profile-website';
+      node('p', t('These details help shape your future campaigns.'), identity);
       const states = readiness(s.brand);
-      node('p', `${states.filter(r => r.status === 'complete').length}/7 ${t('Complete')}`, identity);
+      const complete = states.filter(r => r.status === 'complete').length;
+      const completion = node('p', `${complete}/7 ${t('Complete')}`, header); completion.className = 'profile-completion';
+      const ring = node('span', '', completion); ring.className = 'profile-completion-ring'; ring.setAttribute('aria-hidden', 'true'); ring.style.setProperty('--profile-progress', `${complete / 7 * 100}%`);
       if (s.readOnly) node('p', t('Your access is read-only'), container);
       const nav = node('nav', '', container); nav.setAttribute('aria-label', t('Brand Profile sections'));
-      SECTIONS.forEach((key, index) => { const r = states.find(item => item.section === key) || { status: 'neutral', label: STATUS.neutral }; const b = button(key, nav, () => { s.section = index; render(); container.querySelector('h3[data-section-title]')?.focus(); }); if (key === 'Brand Learnings') { b.textContent = 'Learnings'; b.setAttribute('aria-label', 'Learnings'); } b.dataset.readiness = r.status; b.title = `${t(key)}: ${t(r.label)}`; b.setAttribute('aria-label', t(key)); const status = node('span', t(r.label), nav); status.id = `brand-section-status-${index}`; status.hidden = true; b.setAttribute('aria-describedby', status.id); b.dataset.statusIcon = { complete: '✓', partial: '◐', empty: '○', neutral: '–' }[r.status]; b.setAttribute('aria-current', s.section === index ? 'step' : 'false'); });
+      SECTIONS.forEach((key, index) => { const r = states.find(item => item.section === key) || { status: 'neutral', label: STATUS.neutral }; const b = button(key, nav, () => { s.section = index; render(); container.querySelector('h3[data-section-title]')?.focus(); }); if (key === 'Brand Learnings') { b.textContent = 'Learnings'; b.setAttribute('aria-label', 'Learnings'); } sectionIcon(index, b); b.dataset.readiness = r.status; b.title = `${t(key)}: ${t(r.label)}`; b.setAttribute('aria-label', t(key)); const status = node('span', t(r.label), nav); status.id = `brand-section-status-${index}`; status.hidden = true; b.setAttribute('aria-describedby', status.id); b.dataset.statusIcon = { complete: '✓', partial: '◐', empty: '○', neutral: '–' }[r.status]; b.setAttribute('aria-current', s.section === index ? 'step' : 'false'); });
       const section = node('section', '', container); section.className = 'profile-section';
       const title = node('h3', SECTIONS[s.section] === 'Brand Learnings' ? 'Learnings' : t(SECTIONS[s.section]), section); title.tabIndex = -1; title.dataset.sectionTitle = 'true';
       if (SECTIONS[s.section] === 'Brand Learnings') {
@@ -714,10 +737,10 @@
         else node('p', t('Learnings are temporarily unavailable.'), library);
       } else if (s.section === 0) {
         const cards = node('div', '', section); cards.className = 'profile-identity-cards';
-        const logoCard = node('section', '', cards); node('h4', t('Brand Logo'), logoCard);
+        const logoCard = node('section', '', cards); sectionIcon(5, node('h4', t('Brand Logo'), logoCard));
         const official = node('div', '', logoCard); official.className = 'profile-official-logo'; root.FunklixBrandLogo.render(official, s.brand);
         button(s.brand.logo_url ? 'Change logo' : 'Add logo', logoCard, () => { s.section = 5; render(); });
-        const avatarCard = node('section', '', cards); node('h4', t('Brand Avatar'), avatarCard);
+        const avatarCard = node('section', '', cards); sectionIcon(6, node('h4', t('Brand Avatar'), avatarCard));
         const avatar = acceptedAvatar(s.brand);
         if (avatar) { const img = node('img', '', avatarCard); img.className = 'profile-overview-avatar'; img.alt = t('Brand Avatar'); img.src = avatar.imageUrl; img.addEventListener('error', () => { img.remove(); node('p', t('Brand Avatar unavailable. Retry safely.'), avatarCard); }, { once: true }); }
         else node('p', t('No Brand Avatar yet.'), avatarCard);
