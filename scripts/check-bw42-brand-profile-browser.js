@@ -32,6 +32,7 @@ const {png} = require('./fixtures/bw36-13r5-local-runtime');
       }
       assert(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),`Document overflow ${width}`);
       const close=p.locator('#brand-workspace-detail-close'); await close.scrollIntoViewIfNeeded();
+      assert.equal(await p.locator('#brand-workspace-detail > .brand-workspace-detail-header').evaluate(n=>getComputedStyle(n).position),'absolute','Ordinary Profile retains its positioned Close header');
       assert(await close.evaluate(n=>{const r=n.getBoundingClientRect();return n.contains(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2));}),'Close is unobstructed');
       if(width>=1366) assert(await p.locator('#brand-workspace-detail').evaluate(n=>n.clientWidth>innerWidth-350),'Desktop uses available workspace');
       await key('Brand Assets').click(); assert(await key('brandAssets-typography').isVisible());
