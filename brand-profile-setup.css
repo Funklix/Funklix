@@ -108,7 +108,7 @@
 .guided-brand-profile nav button[data-readiness]{background:var(--fk-color-surface-elevated);border-color:var(--profile-border)}
 .guided-brand-profile nav button[data-status-icon]::after{margin-inline-start:6px;color:var(--fk-color-text-secondary,var(--fk-color-muted))}
 .guided-brand-profile nav button[data-readiness=complete]::after{color:var(--fk-color-success,#23854b)}
-.guided-brand-profile nav button[aria-current=step]{background:linear-gradient(135deg,var(--profile-accent),color-mix(in srgb,var(--profile-accent) 90%,var(--fk-color-text-primary)));color:var(--fk-color-button-primary-text,#fff);border-color:var(--profile-accent);outline:none;text-decoration:none;box-shadow:0 4px 12px color-mix(in srgb,var(--profile-accent) 20%,transparent)}
+.guided-brand-profile nav button[aria-current=step]{background:linear-gradient(135deg,var(--profile-accent),color-mix(in srgb,var(--profile-accent) 90%,var(--fk-color-text-primary)));color:var(--fk-color-button-primary-text,#fff);border-color:var(--profile-accent);outline:1px solid var(--profile-accent);outline-offset:0;text-decoration:none;box-shadow:0 4px 12px color-mix(in srgb,var(--profile-accent) 20%,transparent)}
 .guided-brand-profile nav button[aria-current=step]::after{color:inherit}
 .guided-brand-profile button{border-radius:14px;border-color:var(--profile-border);padding:11px 18px;background:var(--fk-color-surface-elevated)}
 .guided-brand-profile button:hover:not(:disabled){background:var(--profile-soft)}
