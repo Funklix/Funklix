@@ -77,7 +77,13 @@ function runtime(options = {}) {
     assert(url.startsWith('https://fixture.supabase.co/storage/v1/object/brand-logos'), 'Only the local storage adapter may be reached');
     storageRequests.push(init.method); events.push(`storage_${init.method}`);
     const key = url.split('/brand-logos/')[1];
-    if (init.method === 'POST') { if (db.failStorageUpload) return { ok: false, status: 503 }; objects.set(key, Buffer.from(init.body)); return { ok: true }; }
+    if (init.method === 'POST') {
+      if (db.failStorageUpload) return { ok: false, status: 503 };
+      // Supabase REST wraps a duplicate's semantic 409 in HTTP 400. With
+      // x-upsert:false a retained immutable object must never be overwritten.
+      if (objects.has(key)) return new Response(JSON.stringify({statusCode:'409',error:'Duplicate',code:'KeyAlreadyExists',message:'The resource already exists'}), {status:400});
+      objects.set(key, Buffer.from(init.body)); return { ok: true };
+    }
     if (init.method === 'DELETE') { if (db.failStorageDelete) return { ok: false, status: 503 }; assert(!state().brands.some(b => b.logo_object_path === key), 'Never delete a referenced object'); objects.delete(key); return { ok: true }; }
     const image = objects.get(key); return { ok: !!image, headers: { get: () => String(image?.length || 0) }, arrayBuffer: async () => image };
   }

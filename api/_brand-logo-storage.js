@@ -13,7 +13,19 @@ function storageConfiguration(env=process.env){
 }
 function objectKey(brandId,revision,mimeType,mutationId){const ext=MIME_EXTENSIONS[mimeType];if(!/^[0-9a-f-]{36}$/i.test(brandId||'')||!Number.isSafeInteger(revision)||revision<1||!ext)throw new BrandLogoStorageError('STORAGE_INPUT_INVALID');if(mutationId&&!/^[0-9a-f-]{36}$/i.test(mutationId))throw new BrandLogoStorageError('STORAGE_INPUT_INVALID');return `${brandId.toLowerCase()}/${revision}${mutationId?'-'+mutationId:''}.${ext}`;}
 function endpoint(config,key=''){return `${config.origin}/storage/v1/object/${BUCKET}${key?`/${key}`:''}`;}
-async function request(method,key,{buffer,mimeType,fetchImpl=fetch,env=process.env}={}){const config=storageConfiguration(env);const response=await fetchImpl(endpoint(config,key),{method,redirect:'error',signal:AbortSignal.timeout(5000),headers:{Authorization:`Bearer ${config.serviceKey}`,apikey:config.serviceKey,...(mimeType?{'Content-Type':mimeType}:{}),...(method==='POST'?{'x-upsert':'false'}:{})},...(buffer?{body:buffer}:{})}).catch(()=>{throw new BrandLogoStorageError('STORAGE_UNAVAILABLE');});if(!response.ok)throw new BrandLogoStorageError(response.status===409?'STORAGE_CONFLICT':'STORAGE_UNAVAILABLE');return response;}
+async function isDuplicateResponse(response){
+  // Supabase REST returns HTTP 400 for rendered storage errors, including
+  // semantic 409 duplicates. Read only a small error envelope, never log it.
+  const reader=response.body?.getReader?.();
+  if(!reader)return false;
+  let size=0;const chunks=[];
+  try{
+    while(true){const {done,value}=await reader.read();if(done)break;size+=value.byteLength;if(size>4096)return false;chunks.push(Buffer.from(value));}
+    const error=JSON.parse(Buffer.concat(chunks).toString('utf8'));
+    return String(error?.statusCode)==='409' && (['KeyAlreadyExists','ResourceAlreadyExists'].includes(error.code) || (!error.code && error.error==='Duplicate'));
+  }catch{return false;}finally{await reader.cancel().catch(()=>{});}
+}
+async function request(method,key,{buffer,mimeType,fetchImpl=fetch,env=process.env}={}){const config=storageConfiguration(env);const response=await fetchImpl(endpoint(config,key),{method,redirect:'error',signal:AbortSignal.timeout(5000),headers:{Authorization:`Bearer ${config.serviceKey}`,apikey:config.serviceKey,...(mimeType?{'Content-Type':mimeType}:{}),...(method==='POST'?{'x-upsert':'false'}:{})},...(buffer?{body:buffer}:{})}).catch(()=>{throw new BrandLogoStorageError('STORAGE_UNAVAILABLE');});if(!response.ok){const conflict=response.status===409 || method==='POST' && response.status===400 && await isDuplicateResponse(response);throw new BrandLogoStorageError(conflict?'STORAGE_CONFLICT':'STORAGE_UNAVAILABLE');}return response;}
 async function upload({brandId,revision,buffer,mimeType,mutationId,...dependencies}){const key=objectKey(brandId,revision,mimeType,mutationId);await request('POST',key,{buffer,mimeType,...dependencies});return key;}
 async function read(key,dependencies={}){if(!/^[0-9a-f-]{36}\/\d+(?:-[0-9a-f-]{36})?\.(?:png|jpg|webp|gif)$/i.test(key||''))throw new BrandLogoStorageError('STORAGE_INPUT_INVALID');const response=await request('GET',key,dependencies);const declared=Number(response.headers?.get?.('content-length'));if(Number.isFinite(declared)&&declared>MAX_RESPONSE_BYTES)throw new BrandLogoStorageError('STORAGE_RESPONSE_INVALID');const bytes=Buffer.from(await response.arrayBuffer());if(!bytes.length||bytes.length>MAX_RESPONSE_BYTES)throw new BrandLogoStorageError('STORAGE_RESPONSE_INVALID');return bytes;}
 async function remove(key,dependencies={}){if(!key)return;await request('DELETE',key,dependencies);}
