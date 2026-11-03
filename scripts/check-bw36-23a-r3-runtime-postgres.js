@@ -91,7 +91,7 @@ let groups=0;async function check(name,fn){await fn();console.log('PASS '+name);
       const objects=new Map(),{png}=require('./fixtures/bw36-13r5-local-runtime');
       const storageDependencies={env:{SUPABASE_URL:'https://storage.example.test',SUPABASE_SERVICE_ROLE_KEY:'fictional-fixture-key'},fetchImpl:async(url,init)=>{
         const key=new URL(url).pathname.split('/brand-logos/')[1];assert(key,'Private bucket path');
-        if(init.method==='POST'){assert.equal(init.headers['x-upsert'],'false');objects.set(key,Buffer.from(init.body));return {ok:true,status:200};}
+        if(init.method==='POST'){assert.equal(init.headers['x-upsert'],'false');if(objects.has(key))return new Response(JSON.stringify({statusCode:'409',code:'KeyAlreadyExists',error:'Duplicate'}),{status:400});objects.set(key,Buffer.from(init.body));return {ok:true,status:200};}
         assert.equal(init.method,'GET');const bytes=objects.get(key);assert(bytes);return {ok:true,status:200,headers:{get:()=>String(bytes.length)},arrayBuffer:async()=>bytes};
       }};
       storage.upload=input=>original.upload({...input,...storageDependencies});storage.read=key=>original.read(key,storageDependencies);
@@ -108,6 +108,14 @@ let groups=0;async function check(name,fn){await fn();console.log('PASS '+name);
         const context={account:{},generation:1,brandId:B,workspaceId:W,authorized:true};
         const session=require('../brand-profile-setup').createSession({brand:initial,getContext:()=>context,fetchImpl:transport,requestId:randomUUID,validateBrand:(v,id)=>v?.id===id&&Number.isSafeInteger(v.revision),confirmReview:async()=>true,onSave(){},onLogo(){}});
         assert(await session.chooseFile({name:'fictional-logo.png',type:'image/png',size:png.length},async()=>png.toString('base64')));
+        // Simulate a real database rejection after object creation. Retrying must
+        // verify the retained Supabase object, never overwrite it or falsely succeed.
+        await root.query(`CREATE FUNCTION public.bw42_2_reject_logo() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'disposable logo metadata failure'; END $$;
+          CREATE TRIGGER bw42_2_reject_logo BEFORE UPDATE ON public.brands FOR EACH ROW WHEN (NEW.logo_revision IS DISTINCT FROM OLD.logo_revision) EXECUTE FUNCTION public.bw42_2_reject_logo()`);
+        try {
+          assert.equal(await session.upload(),false);assert(session.state.fileData);
+          assert.equal(objects.size,1);assert.equal((await row()).logo_revision,before.logo_revision);assert.equal(await count(),n);
+        } finally {await root.query('DROP TRIGGER bw42_2_reject_logo ON public.brands; DROP FUNCTION public.bw42_2_reject_logo()');}
         assert(await session.upload(),session.state.message);assert.equal(objects.size,1);assert.equal(session.state.file,null);
         const saved=await row();assert.equal(saved.logo_revision,before.logo_revision+1);assert.deepEqual(saved.brand_core,before.brand_core);assert.equal(saved.revision,before.revision);assert.equal(await count(),n+1);
         assert.equal(session.state.brand.logo_revision,saved.logo_revision);assert.deepEqual(objects.get(saved.logo_object_path),png);

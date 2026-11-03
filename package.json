@@ -6,7 +6,7 @@
   },
   "scripts": {
     "check:bw42": "node scripts/check-bw42-brand-profile-browser.js",
-    "check:bw42:upload": "node scripts/check-bw42-logo-upload.js",
+    "check:bw42:upload": "node scripts/check-bw42-logo-upload.js && node scripts/check-bw42-2-logo-storage-contract.js && node scripts/check-bw42-2-logo-upload-browser.js",
     "check:bw41": "node scripts/check-bw41-visual-browser.js",
     "check:bw40.1": "npm run check:bw40 && node scripts/check-bw40-1-prompt-shortcuts-browser.js",
     "check:bw40": "node scripts/check-bw40-node-references.js && node scripts/check-bw40-node-references-browser.js",
