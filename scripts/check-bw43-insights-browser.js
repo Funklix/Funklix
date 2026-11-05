@@ -10,9 +10,10 @@ const out = 'work/bw43/screenshots';
   const browser = await chromium.launch({executablePath:process.env.CHROMIUM_PATH || '/usr/bin/chromium',args:['--no-sandbox']});
   fs.mkdirSync(out,{recursive:true});
   const results = [];
+  let diagnosticPage=null, diagnosticCase="initial";
   try {
     const f = await require('./fixtures/home-browser')(browser)({prepare(r){r.db.boards[0].name='Northstar Launch';}});
-    const p = f.page;
+    const p = f.page;diagnosticPage=p;
     const original = await p.evaluate(()=>JSON.parse(JSON.stringify(state.nodes)));
     const nodes = await p.evaluate(()=>Array.from({length:13},(_,i)=>({...JSON.parse(JSON.stringify(state.nodes[0])),id:'fictional-'+i,
       type:i===0?'Social Media Posting':i===1?'Landing Page':i===2?'Content':'Idea',
@@ -75,6 +76,7 @@ const out = 'work/bw43/screenshots';
     await p.locator('.insights-methodology').screenshot({path:`${out}/methodology-expanded.png`});
     await p.locator('.insights-methodology summary').click();
     for(const theme of ['light','dark']) for(const language of ['en','de']) for(const collapsed of [false,true]) for(const width of [1672,1440,1150,768,375,320]) {
+      diagnosticCase={theme,language,collapsed,width};
       await p.setViewportSize({width,height:1100});
       await p.evaluate(({theme,language,collapsed})=>{
         document.documentElement.dataset.theme=theme;
@@ -174,5 +176,13 @@ const out = 'work/bw43/screenshots';
     fs.writeFileSync('work/bw43/browser-results.json',JSON.stringify({result:'PASS',matrix:results,checks:'production scores, classification, journey, priority, all findings, multi/zero channels, six original methods/explanations, methodology, refresh, Canvas/Brain handoffs, source ownership, unavailable states, authorization, keyboard, reduced motion, equivalent 200% reflow, no new AI/analytics calls or writes',screenshots:fs.readdirSync(out)},null,2));
     await f.close();
     console.log(`PASS BW-43: ${results.length} theme/language/sidebar/viewport cases; original scores, diagnostics, actions and provenance; screenshots in ${out}.`);
+  } catch(error) {
+    const failure={case:diagnosticCase,message:error.message,stack:error.stack};
+    if(diagnosticPage&&!diagnosticPage.isClosed()) {
+      failure.geometry=await diagnosticPage.evaluate(()=>({innerWidth,innerHeight,active:document.activeElement?.outerHTML?.slice(0,800),view:el.insightsView?.getBoundingClientRect().toJSON(),last:document.querySelector('.insights-methodology summary')?.getBoundingClientRect().toJSON()})).catch(()=>null);
+      await diagnosticPage.screenshot({path:`${out}/failure.png`}).catch(()=>{});
+    }
+    fs.writeFileSync('work/bw43/failure.json',JSON.stringify(failure,null,2));
+    throw error;
   } finally {await browser.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});
