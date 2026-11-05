@@ -8140,6 +8140,7 @@ async function showInsightsFindingOnCanvas(code, explicitId = null, button = nul
     return focusNodeInCanvas(nodeId, { behavior: reduced ? 'auto' : 'smooth', select: true, pulse: !reduced });
   }
   if (button?.disabled) return;
+  const hadFocus = button && document.activeElement === button;
   if (!origin.expected) return unavailable();
   if (button) button.disabled = true;
   message('Checking Canvas reference…');
@@ -8164,7 +8165,13 @@ async function showInsightsFindingOnCanvas(code, explicitId = null, button = nul
     (el.inputs?.title || el.inspectorPanel)?.focus?.({ preventScroll: true });
     if (status) status.textContent = '';
   } catch { if (!current()) return unavailable(); message('Could not open this Canvas reference. Try again.'); }
-  finally { if (button) button.disabled = false; }
+  finally {
+    if (button) {
+      button.disabled = false;
+      if (hadFocus && button.isConnected && document.activeElement === document.body && current()
+        && state.activeView === origin.view && (state.insightsNavigationGeneration || 0) === origin.navigation) button.focus({ preventScroll: true });
+    }
+  }
 }
 function insightsNodeSupportsStage(node, stage) {
   return node.funnelStage === stage || (stage === 'Awareness' && ['Idea', 'Social Media Posting'].includes(node.type))
