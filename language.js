@@ -15,7 +15,7 @@
     "none": "keine",
     "Labels: {values}.": "Bezeichnungen: {values}.",
     "Recognized field values: {values}.": "Erkannte Feldwerte: {values}.",
-    "Canvas links verify saved node identity and access, not content quality. Working edits remain local evidence; new unsaved nodes have no checked destination.": "Canvas-Links prüfen die Identität gespeicherter Nodes und den Zugriff, ohne die Inhaltsqualität zu bewerten. Ungespeicherte Bearbeitungen bleiben lokale Beobachtungen; neue ungespeicherte Nodes haben kein geprüftes Ziel.",
+    "Checked links verify saved node identity and access, not content quality. Public links use local Canvas navigation. Working edits remain local evidence; new unsaved nodes have no checked destination.": "Geprüfte Links bestätigen die Identität gespeicherter Nodes und den Zugriff, ohne die Inhaltsqualität zu bewerten. Öffentliche Links verwenden lokale Canvas-Navigation. Ungespeicherte Bearbeitungen bleiben lokale Beobachtungen; neue ungespeicherte Nodes haben kein geprüftes Ziel.",
     // BW-44: closed system copy; authored field values are never translated.
     "Canvas context": "Canvas-Kontext",
     "Next step": "Nächster Schritt",

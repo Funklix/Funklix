@@ -77,3 +77,7 @@ assert(audience.querySelector('.insights-more-sources'));
 h=render({nodes:[minimal('duplicate','Content',{audience:'A'}),minimal('duplicate','Content',{audience:'B'})]});
 assert.equal(byClass(h,'insights-node-reference').length,0,'Duplicate IDs never become destinations');
 console.log('PASS BW-44 renderer contrasts, unchanged producer bytes, complete findings/order, actual source fields, no fabricated destinations and no snapshot mutation');
+
+// Checked identity claims never include public local navigation; decoration stays silent.
+h=render({publicBoardToken:"public",boardAccess:{canView:true,canEdit:false,reason:"public"}});assert(h.cards.textContent.includes("Public links use local Canvas navigation."));
+assert(byClass(h,"insights-severity-icon").every(n=>n.attributes["aria-hidden"]==="true"));
