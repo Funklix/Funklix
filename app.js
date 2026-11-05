@@ -8105,13 +8105,78 @@ function isCurrentInsightsSnapshot(snapshot, canvasIdentity) {
     && snapshot.canvasIdentity === (canvasIdentity ?? currentInsightsCanvasIdentity());
 }
 
-function showInsightsFindingOnCanvas(code) {
-  const snapshot = state.insightsDiagnosticSnapshot; const finding = snapshot?.findings?.find((item) => item.code === code);
-  if (!state.currentBoardId || state.boardAccess?.canView === false || !isCurrentInsightsSnapshot(snapshot) || !finding) return setSaveStatus(uiText("This insight is no longer current. Refresh AI Insights."));
-  const nodeId = finding.affectedNodeIds.find((id) => state.nodes.some((node) => node.id === id));
-  if (!nodeId) return setSaveStatus(uiText("Affected nodes could not be identified reliably."));
-  const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
-  focusNodeInCanvas(nodeId, { behavior: reduced ? "auto" : "smooth", select: true, pulse: !reduced });
+// A render origin is transient UI state, not an analysis snapshot or authorization token.
+function captureInsightsReferenceOrigin() {
+  const association = state.boardBrandAssociation;
+  return { account: state.user, snapshot: state.insightsDiagnosticSnapshot, view: state.activeView, navigation: state.insightsNavigationGeneration || 0,
+    source: JSON.stringify([state.lastKnownUpdatedAt, state.workspaceCatalog, association, state.isDirty, state.nodes, state.edges]),
+    expected: association?.boardId === state.currentBoardId ? {
+      updated_at: state.lastKnownUpdatedAt,
+      brand_id: association.visibility === 'hidden' ? 'hidden' : association.brandId,
+      workspace_id: association.visibility === 'hidden' ? 'hidden' : association.workspaceId
+    } : null };
+}
+function insightsReferenceOriginCurrent(origin) {
+  return origin?.account === state.user && origin.snapshot === state.insightsDiagnosticSnapshot
+    && isCurrentInsightsSnapshot(origin.snapshot) && state.boardAccess?.canView === true
+    && !state.isBoardLoading && !state.isBoardHydrating && !state.isSaving
+    && state.boardLoadState !== 'loading' && !state.initialServerLoadInFlight && !state.conflictModalOpen
+    && !['loading', 'submitting', 'load-error'].includes(state.boardBrandAssociation?.status)
+    && origin.source === captureInsightsReferenceOrigin().source;
+}
+async function showInsightsFindingOnCanvas(code, explicitId = null, button = null, status = null, origin = captureInsightsReferenceOrigin(), stage = null) {
+  const snapshot = state.insightsDiagnosticSnapshot; const finding = snapshot?.findings?.find(item => item.code === code);
+  const ids = stage ? state.nodes.filter(node => insightsNodeSupportsStage(node, stage)).map(node => node.id) : finding?.affectedNodeIds;
+  const nodeId = explicitId || ids?.find(id => state.nodes.some(node => node.id === id));
+  let navigation = origin.navigation, targetView = origin.view;
+  const current = () => state.activeView === targetView && (state.insightsNavigationGeneration || 0) === navigation && !!state.currentBoardId && state.boardAccess?.canView === true && isCurrentInsightsSnapshot(snapshot) && insightsReferenceOriginCurrent(origin) && (stage ? ['Awareness','Interest','Consideration','Conversion','Retention'].includes(stage) : !!finding)
+    && ids?.includes(nodeId) && state.nodes.filter(node => node.id === nodeId).length === 1;
+  const message = key => { if (status) status.textContent = uiText(key); else setSaveStatus(uiText(key)); };
+  const unavailable = () => message('This reference is unavailable. Only saved nodes have checked destinations. Refresh insights and try again.');
+  if (!current()) return unavailable();
+  // Public navigation remains explicitly local and acquires no checked reference.
+  if (!state.user?.email || state.publicBoardToken) {
+    const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+    return focusNodeInCanvas(nodeId, { behavior: reduced ? 'auto' : 'smooth', select: true, pulse: !reduced });
+  }
+  if (button?.disabled) return;
+  const hadFocus = button && document.activeElement === button;
+  if (!origin.expected) return unavailable();
+  if (button) button.disabled = true;
+  message('Checking Canvas reference…');
+  try {
+    const node = state.nodes.find(node => node.id === nodeId);
+    const response = await fetch('/api/ai-brain/node-reference', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ source: 'insights', board_id: state.currentBoardId, node_id: nodeId, node_type: node.type, expected_scope: origin.expected }) });
+    const data = await response.json();
+    if (!current()) return unavailable();
+    if (response.status === 503) throw new Error('service');
+    if (!response.ok || data.nodeId !== nodeId || !/^[a-f0-9]{64}$/.test(data.scopeRevision || '')) return unavailable();
+    if (document.querySelector('dialog[open]') || el.brandWorkspaceDetail?.open) throw new Error('blocked');
+    if (!Array.from(el.zoomLayer.querySelectorAll('[data-id]')).some(element => element.dataset.id === nodeId)) return unavailable();
+    targetView = 'board';
+    setActiveView('board');
+    navigation = state.insightsNavigationGeneration || 0;
+    await new Promise(resolve => requestAnimationFrame(resolve));
+    if (!current() || state.activeView !== 'board') return unavailable();
+    if (!focusNodeInCanvas(nodeId, { behavior: 'auto', select: true, pulse: false })) return unavailable();
+    await new Promise(resolve => requestAnimationFrame(resolve));
+    if (!current() || state.activeView !== 'board' || state.selectedPrimary !== nodeId || !revealAiBrainEvidenceNode(nodeId)) return unavailable();
+    (el.inputs?.title || el.inspectorPanel)?.focus?.({ preventScroll: true });
+    if (status) status.textContent = '';
+  } catch { if (!current()) return unavailable(); message('Could not open this Canvas reference. Try again.'); }
+  finally {
+    if (button) {
+      button.disabled = false;
+      if (hadFocus && button.isConnected && document.activeElement === document.body && current()
+        && state.activeView === origin.view && (state.insightsNavigationGeneration || 0) === origin.navigation) button.focus({ preventScroll: true });
+    }
+  }
+}
+function insightsNodeSupportsStage(node, stage) {
+  return node.funnelStage === stage || (stage === 'Awareness' && ['Idea', 'Social Media Posting'].includes(node.type))
+    || (stage === 'Interest' && node.type === 'Content')
+    || (stage === 'Conversion' && (node.type === 'Landing Page' || node.goal === 'Conversion' || (node.landingPage?.cta || '').trim()));
 }
 
 function askAiBrainAboutFinding(code) {
@@ -8132,6 +8197,44 @@ function renderInsightsSurface() {
   if (!el.insightsCards) return;
   const t = uiText; const snapshot = isCurrentInsightsSnapshot(state.insightsDiagnosticSnapshot) ? state.insightsDiagnosticSnapshot : null;
   const make = (tag, className, text) => { const node = document.createElement(tag); if (className) node.className = className; if (text !== undefined) node.textContent = text; return node; };
+  const sourceNodes = snapshot?.analysis && isValidInsightsDiagnostic(snapshot.analysis) ? state.nodes : [];
+  const index = new Map();
+  sourceNodes.forEach(node => { if (typeof node.id === 'string') index.set(node.id, index.has(node.id) ? null : node); });
+  const origin = captureInsightsReferenceOrigin();
+  const fieldText = (node, code) => {
+    const fields = [['audience', node.audience], ['tone', node.tone], ['funnelStage', node.funnelStage], ['goal', node.goal],
+      ['landingPage.cta', node.landingPage?.cta], ['landingPage.trust', node.landingPage?.trust],
+      ['social.preview', node.social?.preview], ['social.cta', node.social?.cta]];
+    const allowed = code === 'ICP_VARIATION' ? ['audience'] : code === 'TONE_SHIFTS_HIGH' ? ['tone'] : code === 'TRUST_PROOF_MISSING' ? ['landingPage.trust'] : code?.startsWith('CTA_') ? (node.type === 'Landing Page' ? ['landingPage.cta'] : ['social.preview', 'social.cta']) : ['funnelStage', 'goal', 'landingPage.cta'];
+    return fields.filter(([field, value]) => allowed.includes(field) && (code || (typeof value === 'string' && value.length))).map(([field, value]) => `${field}: “${String(value ?? '').slice(0,160)}”`).join(' · ');
+  };
+  const sourceList = (ids, code, stage = null) => {
+    const list = make('ul', 'insights-node-list');
+    ids.forEach(id => {
+      const node = index.get(id); if (!node) return;
+      const li = make('li'); const label = `${String(node.title||node.type||t('Node')).slice(0,160)} — ${String(node.type).slice(0,80)}`;
+      const open = make('button', 'insights-node-reference', label); open.type = 'button'; open.dataset.insightsNodeId = id; open.setAttribute('aria-label', `${t('Show on Canvas')}: ${label}`);
+      const status = make('span', 'insights-reference-status'); status.setAttribute('role', 'status');
+      open.addEventListener('click', () => showInsightsFindingOnCanvas(code, id, open, status, origin, stage));
+      li.append(open, make('span', 'insights-source-fields', fieldText(node, code)), status); list.append(li);
+    }); return list;
+  };
+  const ctas = sourceNodes.map(node => node.landingPage?.cta || node.social?.preview || '').filter(Boolean);
+  const distinctCtas = new Set(ctas.map(value => value.toLowerCase())).size;
+  const audiences = sourceNodes.map(node => (node.audience || '').trim()).filter(Boolean);
+  const tones = sourceNodes.map(node => (node.tone || '').trim()).filter(Boolean);
+  const pages = sourceNodes.filter(node => node.type === 'Landing Page');
+  const trusted = pages.filter(node => (node.landingPage?.trust || '').trim()).length;
+  const format = (key, values) => t(key).replace(/\{(\w+)\}/g, (_, name) => String(values[name] ?? ''));
+  const labels = values => [...new Set(values)].map(value => JSON.stringify(String(value).slice(0,160))).join(' · ') || t('none');
+  const diagnosticCopy = method => {
+    if (method === 'Canvas readiness formula') return t('Structural score: 40 base + 25 × covered stages / 5 + 10 for any trust field + 10 for two CTA values + 10 for at most one audience label + 5 for at most two tone labels; rounded and clamped to 0–100. Empty labels can earn points. This does not predict campaign outcomes.');
+    if (method === 'Funnel-stage mapping') return format('Covered: {covered}. Missing: {missing}. Coverage = round(covered count / 5 × 100). Explicit stages count as entered, including custom values. Idea and Social Media Posting add Awareness; Content adds Interest; Landing Page, Conversion goal/stage or populated landingPage.cta adds Conversion.', {covered: snapshot.analysis.funnel.coveredStages.map(value => funnelStages.includes(value) ? t(value) : String(value)).join(', ') || t('none'), missing: snapshot.analysis.funnel.missingStages.map(t).join(', ') || t('none')});
+    if (method === 'Distinct audience labels') return format('{count} populated Audience labels, {distinct} distinct. Score: 90 for zero or one distinct label, otherwise 55. Trimmed, case-sensitive labels measure consistency, not strategic audience fit.', {count: audiences.length, distinct: new Set(audiences).size}) + ' ' + format('Labels: {values}.', {values: labels(audiences)});
+    if (method === 'Distinct tone labels') return format('{count} populated Tone labels, {distinct} distinct. Score: 90 for zero or one, 75 for two, otherwise 50. Case-sensitive label differences do not evaluate writing quality.', {count: tones.length, distinct: new Set(tones).size}) + ' ' + format('Labels: {values}.', {values: labels(tones)});
+    if (method === 'Landing Page trust-field presence') return format('{present} of {total} Landing Pages have a populated trust field. Score: 80 if any is populated, otherwise 35. Presence does not verify credibility, proof quality or coverage of every page.', {present: trusted, total: pages.length});
+    return format('{distinct} distinct lowercased values / {count} recognized values. Score = round(distinct / max(count, 1) × 100). Selects landingPage.cta or social.preview on each node without trimming; social.cta is excluded here but accepted by the missing-field finding. This measures diversity, not CTA clarity, complete coverage or conversion effectiveness. An existing CTA opportunity keeps the Good foundation classification independently of the score.', {distinct: distinctCtas, count: ctas.length}) + ' ' + format('Recognized field values: {values}.', {values: labels(ctas)});
+  };
   // Build off-DOM so an exception cannot expose a half-rendered surface.
   const root = make("div", "insights-boundary");
   const sourceState = snapshot?.canvasState === "live_unsaved" ? t("Includes unsaved Canvas changes") : t("Based on the currently loaded saved Canvas");
@@ -8146,7 +8249,7 @@ function renderInsightsSurface() {
   if (unavailableReason) { const status = make("div", "insights-diagnostic-state", t(unavailableReason)); status.setAttribute("role", "status"); overview.append(status); }
   if (!unavailableReason) {
     const a = snapshot.analysis; const panel = make("div", "insights-executive-panel");
-    const readiness = make("article", "insights-readiness"); readiness.dataset.status = scoreStatusKey(a.healthScore).toLowerCase().replace(/\s+/g, "-"); const ring = make("div", "insights-readiness-ring"); ring.style.setProperty("--insights-score", String(a.healthScore)); ring.setAttribute("role", "img"); ring.setAttribute("aria-label", `${t("Campaign readiness")}: ${a.healthScore}/100, ${t(scoreStatusKey(a.healthScore))}`); ring.append(make("strong", "", String(a.healthScore)), make("span", "", "/100")); readiness.append(ring, make("h4", "", t("Campaign readiness")), make("strong", "insights-quality-label", t(scoreStatusKey(a.healthScore))), make("p", "", t("Your campaign structure is mostly complete, with a few areas still worth refining.")));
+    const readiness = make("article", "insights-readiness"); readiness.dataset.status = scoreStatusKey(a.healthScore).toLowerCase().replace(/\s+/g, "-"); const ring = make("div", "insights-readiness-ring"); ring.style.setProperty("--insights-score", String(a.healthScore)); ring.setAttribute("role", "img"); ring.setAttribute("aria-label", `${t("Campaign readiness")}: ${a.healthScore}/100, ${t(scoreStatusKey(a.healthScore))}`); ring.append(make("strong", "", String(a.healthScore)), make("span", "", "/100")); readiness.append(ring, make("h4", "", t("Campaign readiness")), make("strong", "insights-quality-label", t(scoreStatusKey(a.healthScore))), make("p", "", t("A weighted check of Canvas stages and field labels. Review the diagnostics for structural gaps; this score does not measure campaign results.")));
     const attention = make("article", "insights-attention"); attention.append(make("h4", "", t("Needs attention"))); const attentionItems = (Array.isArray(snapshot.findings) ? snapshot.findings : []).filter((finding) => scoreStatusKey(({ ICP_VARIATION:a.icp.consistencyScore, TONE_SHIFTS_HIGH:a.tone.consistencyScore, TRUST_LAYER_MISSING:a.trust.score, CTA_MISSING:a.cta.qualityScore, CTA_VARIATIONS_MISSING:70, FUNNEL_STAGE_GAPS:a.funnel.confidence })[finding.code] ?? 50) !== "Strong").slice(0, 3);
     if (!attentionItems.length) attention.append(make("p", "insights-attention-empty", t("No areas need attention right now."))); else { const list = make("ul", "insights-attention-list"); attentionItems.forEach((finding) => { const li=make("li"); const button=make("button", "", t(finding.title)); button.type="button"; button.addEventListener("click",()=>root.querySelector(`[data-finding-id='${finding.code}']`)?.scrollIntoView({behavior:window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches?"auto":"smooth",block:"center"})); li.append(button); list.append(li); }); attention.append(list); }
     const journey = make("article", "insights-journey-summary"); const covered = new Set(a.funnel.coveredStages); journey.append(make("h4", "", t("Journey summary")), make("strong", "", `${covered.size} ${t("stages covered")} · ${5-covered.size} ${t("stages missing")}`)); const preview=make("div","insights-journey-preview"); funnelStages.forEach(stage=>{const dot=make("span",covered.has(stage)?"is-covered":"is-missing",covered.has(stage)?"✓":"!");dot.title=t(stage);dot.setAttribute("aria-label",`${t(stage)}: ${t(covered.has(stage)?"Covered":"Missing content")}`);preview.append(dot);});journey.append(preview);
@@ -8154,13 +8257,52 @@ function renderInsightsSurface() {
     panel.append(readiness,attention,journey,channels); overview.append(panel);
   }
   const journeySection=section("insights-journey-title","Campaign journey coverage","See which stages of the campaign journey are supported by content in your Canvas.","insights-journey-section");
-  if(!unavailableReason){const covered=new Set(snapshot.analysis.funnel.coveredStages);const list=make("ol","insights-campaign-journey");funnelStages.forEach(stage=>{const present=covered.has(stage);const item=make("li",present?"is-covered":"is-missing");item.setAttribute("aria-label",`${t(stage)}: ${t(present?"Covered":"Missing content")}`);const symbol=make("span","insights-stage-symbol");symbol.dataset.stage=stage;symbol.setAttribute("aria-hidden","true");item.append(symbol,make("span","insights-stage-icon",present?"✓":"!"),make("strong","",t(stage)),make("span","insights-stage-status",t(present?"Covered":"Missing content")));list.append(item);});journeySection.append(list,make("p","insights-journey-disclaimer",t("Canvas content coverage, not measured conversion performance.")));}
+  if(!unavailableReason){const covered=new Set(snapshot.analysis.funnel.coveredStages);const list=make("ol","insights-campaign-journey");funnelStages.forEach(stage=>{const present=covered.has(stage);const item=make("li",present?"is-covered":"is-missing");item.setAttribute("aria-label",`${t(stage)}: ${t(present?"Covered":"Missing content")}`);const symbol=make("span","insights-stage-symbol");symbol.dataset.stage=stage;symbol.setAttribute("aria-hidden","true");item.append(symbol,make("span","insights-stage-icon",present?"✓":"!"),make("strong","",t(stage)),make("span","insights-stage-status",t(present?"Covered":"Missing content")));const sources = state.nodes.filter(node => insightsNodeSupportsStage(node, stage) && index.get(node.id)).map(node => node.id);
+      const context = make('details', 'insights-stage-context'); context.append(make('summary', '', t('Canvas context')));
+      context.append(sources.length ? sourceList(sources, null, stage) : make('p', '', t('No content is recognized for this stage under the current Canvas mapping.')));
+      item.append(context);list.append(item);});journeySection.append(list,make("p","insights-journey-disclaimer",t("Canvas content coverage, not measured conversion performance.")));}
   const opportunities=section("insights-opportunities-title","Opportunities","Focus on the next useful improvements for this Canvas.","insights-opportunities");
-  if(!unavailableReason){if(!(Array.isArray(snapshot.findings)&&snapshot.findings.length))opportunities.append(make("p","insights-diagnostic-state",t("No current findings")));(Array.isArray(snapshot.findings)?snapshot.findings:[]).filter(Boolean).forEach(finding=>{const item=make("article",`insights-finding severity-${finding.severity}`);item.dataset.findingId=finding.code;const severity=t(finding.severity==="critical"?"High priority":finding.severity==="important"?"Worth improving":"Minor improvement");const icon=make("span","insights-severity-icon",finding.severity==="critical"?"!":"↗");icon.setAttribute("aria-hidden","true");item.append(icon,make("span","insights-severity",severity),make("h4","",t(finding.title)),make("p","",t(finding.description)));const validIds=(Array.isArray(finding.affectedNodeIds)?finding.affectedNodeIds:[]).filter(id=>state.nodes.some(node=>node.id===id));if(validIds.length){item.append(make("p","insights-affected-count",`${validIds.length} ${t("Affected nodes")}`));const list=make("ul","insights-node-list");validIds.slice(0,3).forEach(id=>{const node=state.nodes.find(entry=>entry.id===id);list.append(make("li","",`${String(node.title||node.type||t("Node")).slice(0,160)} — ${String(node.type||t("Node")).slice(0,80)}`));});if(validIds.length>3)list.append(make("li","",`+${validIds.length-3} ${t("more")}`));item.append(list);}const actions=make("div","insights-actions");if(validIds.length){const show=make("button","fk-btn fk-btn-secondary",t("Show on Canvas"));show.type="button";show.addEventListener("click",()=>showInsightsFindingOnCanvas(finding.code));actions.append(show);}if(state.user?.email&&state.boardAccess?.canEdit===true&&!state.publicBoardToken){const ask=make("button","fk-btn fk-btn-primary",t("Ask AI Brain"));ask.type="button";ask.addEventListener("click",()=>askAiBrainAboutFinding(finding.code));actions.append(ask);}item.append(actions);opportunities.append(item);});}
+  if (!unavailableReason) {
+    if (!snapshot.findings?.length) opportunities.append(make('p', 'insights-diagnostic-state', t('No current findings')));
+    (Array.isArray(snapshot.findings) ? snapshot.findings : []).filter(Boolean).forEach(finding => {
+      const item = make('article', `insights-finding severity-${finding.severity}`); item.dataset.findingId=finding.code;
+      const validIds = [...new Set(Array.isArray(finding.affectedNodeIds) ? finding.affectedNodeIds : [])].filter(id => index.get(id));
+      const guidance = {
+        CTA_MISSING: ['A recognized CTA field is blank on an eligible Canvas item.', 'A missing next-step field leaves the intended action unspecified.', 'Review the destination and enter an appropriate next step in the relevant CTA field.', 'After editing, Refresh insights checks recognized field presence, not wording effectiveness.'],
+        FUNNEL_STAGE_GAPS: ['Some canonical stages have no recognized Canvas content.', 'Review whether communication for these stages belongs in this campaign.', 'Review the missing stages and deliberately add or map appropriate content; Ask AI Brain for strategic judgment.', 'After editing, Refresh insights checks stage recognition under the same mapping.'],
+        TRUST_PROOF_MISSING: [pages.length ? 'No Landing Page has a populated trust field.' : 'No Landing Page trust field is available in this Canvas.', 'Review whether the campaign needs substantiated proof at its destination.', 'Review available evidence before adding suitable proof to a Landing Page trust field.', 'After editing, Refresh insights checks trust-field presence, not whether the proof is true.'],
+        ICP_VARIATION: ['Populated Audience labels differ across Canvas items.', 'Differences may reflect intentional segmentation; they do not establish a strategic conflict.', 'Review the intended audience for each item before aligning labels. Ask AI Brain for strategic audience judgment.', 'After editing, Refresh insights checks label equality, not audience fit.'],
+        TONE_SHIFTS_HIGH: ['More than two distinct populated Tone labels are present.', 'Review whether these differences reflect deliberate channel or audience choices.', 'Compare the Tone labels and review the intended voice for each item.', 'After editing, Refresh insights checks label diversity, not writing quality.'],
+        CTA_VARIATIONS_MISSING: [ctas.length ? 'Fewer than two distinct analyzer-recognized CTA values are present.' : 'No analyzer-recognized CTA values are present.', 'Review whether different campaign stages need different next steps.', 'Compare landingPage.cta and social.preview values before deciding whether purposeful variation is useful.', 'After editing, Refresh insights checks recognized value diversity, not conversion effectiveness.']
+      }[finding.code];
+      const icon=make('span','insights-severity-icon',finding.severity === 'critical' ? '!' : '↗'); icon.setAttribute('aria-hidden','true');
+      item.append(icon, make('span', 'insights-severity', t(finding.severity === 'critical' ? 'High priority' : finding.severity === 'important' ? 'Worth improving' : 'Minor improvement')), make('h4', '', t(finding.title)));
+      if (guidance) {
+        item.append(make('p', 'insights-observation', t(guidance[0])), make('p', 'insights-why', t(guidance[1])));
+        if (finding.code === 'FUNNEL_STAGE_GAPS') item.append(make('p', 'insights-missing-stages', `${t('Missing content')}: ${snapshot.analysis.funnel.missingStages.map(t).join(', ')}`));
+        if (finding.code === 'CTA_VARIATIONS_MISSING' && !validIds.length) item.append(make('p', '', t('No eligible Landing Page or Social Media Posting nodes are present.')));
+        item.append(make('p', 'insights-next-step', `${t('Next step')}: ${t(guidance[2])}`), make('p', 'insights-verification', t(guidance[3])));
+      } else item.append(make('p', '', t(finding.description)));
+      if(validIds.length) {
+        item.append(make('p', 'insights-affected-count', `${validIds.length} ${t('Affected nodes')}`), sourceList(validIds.slice(0,3), finding.code));
+        if (validIds.length > 3) { const more = make('details', 'insights-more-sources'); more.append(make('summary', '', `+${validIds.length - 3} ${t('more')}`), sourceList(validIds.slice(3), finding.code)); item.append(more); }
+      }
+      const actions = make('div', 'insights-actions');
+      if(validIds.length) {
+        const show = make('button', 'fk-btn fk-btn-secondary', t('Show on Canvas')); show.type = 'button';
+        const status = make('span', 'insights-reference-status'); status.setAttribute('role', 'status');
+        show.addEventListener('click', () => showInsightsFindingOnCanvas(finding.code, null, show, status, origin)); actions.append(show, status);
+      }
+      if (state.user?.email && state.boardAccess?.canEdit === true && !state.publicBoardToken) {
+        const ask = make('button', 'fk-btn fk-btn-primary', t('Ask AI Brain')); ask.type = 'button'; ask.addEventListener('click', () => askAiBrainAboutFinding(finding.code)); actions.append(ask);
+      }
+      item.append(actions); opportunities.append(item);
+    });
+  }
   const diagnostics=section("canvas-diagnostics-title","Canvas Diagnostics","These checks evaluate campaign structure and content. They are not measured campaign results.","insights-diagnostics");
-  if(!unavailableReason){const a=snapshot.analysis;const hasCtaOpportunity=(Array.isArray(snapshot.findings)?snapshot.findings:[]).some(f=>String(f?.code||"").startsWith("CTA_"));const groups=[["Structure and readiness",[["Campaign readiness",a.healthScore,"Canvas readiness formula"]]],["Funnel coverage",[["Funnel-stage coverage",a.funnel.confidence,"Funnel-stage mapping"]]],["Strategy and consistency",[["ICP consistency",a.icp.consistencyScore,"Distinct audience labels"],["Tone consistency",a.tone.consistencyScore,"Distinct tone labels"],["Trust-layer coverage",a.trust.score,"Landing Page trust-field presence"]]],["Content and channels",[["CTA variation among existing CTAs",a.cta.qualityScore,"CTA variation check"]]]];const container=make("div","insights-diagnostic-groups");groups.forEach(([name,values])=>{const group=make("section","insights-diagnostic-group");group.append(make("h4","",t(name)));values.forEach(([name,score,method])=>{let status=scoreStatusKey(score);let copy=status==="Strong"?"This check is complete and consistent in the current Canvas.":status==="Good foundation"?"This area has a good foundation in the current Canvas.":status==="Needs attention"?"Review the related evidence and opportunity.":"Content required for this check is incomplete.";if(name==="CTA variation among existing CTAs"&&hasCtaOpportunity){status="Good foundation";copy="The existing CTA is distinct. Adding more purposeful CTA variations could support different campaign stages.";}const row=make("article",`insights-diagnostic-row status-${status.toLowerCase().replace(/\s+/g,"-")}`);row.append(make("span","insights-diagnostic-icon",status==="Strong"?"✓":status==="Incomplete"?"!":"•"),make("h5","",t(name)),make("div","insights-score",`${score}/100 · ${t(status)}`));const bar=make("span","insights-diagnostic-bar");bar.style.setProperty("--diagnostic-score",`${score}%`);bar.setAttribute("aria-hidden","true");row.append(bar);const details=make("details","insights-calculation");details.append(make("summary","",t("How this is calculated")),make("p","",t(copy)),make("p","",`${t("Scope")}: ${t("Current Board")} · ${t("Method")}: ${t(method)}`));row.append(details);group.append(row);});container.append(group);});diagnostics.append(container);}
+  if(!unavailableReason){const a=snapshot.analysis;const hasCtaOpportunity=(Array.isArray(snapshot.findings)?snapshot.findings:[]).some(f=>String(f?.code||"").startsWith("CTA_"));const groups=[["Structure and readiness",[["Campaign readiness",a.healthScore,"Canvas readiness formula"]]],["Funnel coverage",[["Funnel-stage coverage",a.funnel.confidence,"Funnel-stage mapping"]]],["Strategy and consistency",[["ICP consistency",a.icp.consistencyScore,"Distinct audience labels"],["Tone consistency",a.tone.consistencyScore,"Distinct tone labels"],["Trust-layer coverage",a.trust.score,"Landing Page trust-field presence"]]],["Content and channels",[["CTA variation among existing CTAs",a.cta.qualityScore,"CTA variation check"]]]];const container=make("div","insights-diagnostic-groups");groups.forEach(([name,values])=>{const group=make("section","insights-diagnostic-group");group.append(make("h4","",t(name)));values.forEach(([name,score,method])=>{let status=scoreStatusKey(score);if(name==="CTA variation among existing CTAs"&&hasCtaOpportunity){status="Good foundation";}const row=make("article",`insights-diagnostic-row status-${status.toLowerCase().replace(/\s+/g,"-")}`);row.append(make("span","insights-diagnostic-icon",status==="Strong"?"✓":status==="Incomplete"?"!":"•"),make("h5","",t(name)),make("div","insights-score",`${score}/100 · ${t(status)}`));const bar=make("span","insights-diagnostic-bar");bar.style.setProperty("--diagnostic-score",`${score}%`);bar.setAttribute("aria-hidden","true");row.append(bar);const details=make("details","insights-calculation");details.append(make("summary","",t("How this is calculated")),make("p","",diagnosticCopy(method)),make("p","",`${t("Scope")}: ${t("Current Board")} · ${t("Method")}: ${t(method)}`));row.append(details);group.append(row);});container.append(group);});diagnostics.append(container);}
   const measured=section("measured-performance-title","Measured performance","","insights-disclosure-section");const measuredDetails=make("details","insights-collapsed-disclosure");const measuredSummary=make("summary");measuredSummary.append(make("span","insights-unavailable-icon","—"),make("strong","",t("No analytics data connected")),make("span","",t("Verified metrics can appear here when available.")));measuredDetails.append(measuredSummary,make("p","",t("Campaign results such as reach, engagement, conversions, and revenue will appear here when a verified data source is connected.")));measured.append(measuredDetails);
-  const methodology=section("insights-methodology-title","Data and Methodology","","insights-disclosure-section");const details=make("details","insights-methodology insights-collapsed-disclosure");details.append(make("summary","",t("View data classifications, methods, and limitations")));const classifications=make("dl","insights-classifications");[["Measured","Verified observations from a supported data source."],["Deterministic diagnostic","Repeatable rules applied to the current Canvas."],["Inferred","A conclusion derived from disclosed Canvas rules."],["Simulated","An assumption-based scenario, not a measurement."],["User-entered","Information supplied directly by a user."],["Unavailable","No reliable value is currently available."]].forEach(([term,definition])=>classifications.append(make("dt","",t(term)),make("dd","",t(definition))));const methods=make("ul","insights-method-list");["Canvas readiness formula","Funnel-stage mapping","Platform counting","CTA variation check","Distinct audience labels","Distinct tone labels","Landing Page trust-field presence"].forEach(method=>methods.append(make("li","",t(method))));details.append(classifications,make("h4","",t("Current source")),make("p","",`${t("Current Canvas")} · ${t("Current Board")} · ${sourceState} · ${snapshot?.analyzedAt||""} · ${state.currentBoardName||t("Current Board")} · ${state.nodes.length} ${t("Canvas nodes")}`),make("h4","",t("Diagnostic methods")),methods,make("h4","",t("Assumptions")),make("p","",t("Diagnostics use only the fields and supported node roles present in the current Canvas.")),make("h4","",t("Limitations")),make("p","",t("Canvas diagnostics evaluate the structure and content currently available in Tendra One. They do not measure audience response, media delivery, conversions, revenue, or business impact.")));methodology.append(details);
+  const methodology=section("insights-methodology-title","Data and Methodology","","insights-disclosure-section");const details=make("details","insights-methodology insights-collapsed-disclosure");details.append(make("summary","",t("View data classifications, methods, and limitations")));const classifications=make("dl","insights-classifications");[["Measured","Verified observations from a supported data source."],["Deterministic diagnostic","Repeatable rules applied to the current Canvas."],["Inferred","A conclusion derived from disclosed Canvas rules."],["Simulated","An assumption-based scenario, not a measurement."],["User-entered","Information supplied directly by a user."],["Unavailable","No reliable value is currently available."]].forEach(([term,definition])=>classifications.append(make("dt","",t(term)),make("dd","",t(definition))));const methods=make("ul","insights-method-list");["Canvas readiness formula","Funnel-stage mapping","Platform counting","CTA variation check","Distinct audience labels","Distinct tone labels","Landing Page trust-field presence"].forEach(method=>methods.append(make("li","",t(method))));details.append(classifications,make("h4","",t("Current source")),make("p","",`${t("Current Canvas")} · ${t("Current Board")} · ${sourceState} · ${snapshot?.analyzedAt||""} · ${state.currentBoardName||t("Current Board")} · ${state.nodes.length} ${t("Canvas nodes")}`),make("h4","",t("Diagnostic methods")),methods,make("h4","",t("Assumptions")),make("p","",t("Diagnostics use only the fields and supported node roles present in the current Canvas.")),make("p","",t("Checked links verify saved node identity and access, not content quality. Public links use local Canvas navigation. Working edits remain local evidence; new unsaved nodes have no checked destination.")),make("h4","",t("Limitations")),make("p","",t("Canvas diagnostics evaluate the structure and content currently available in Tendra One. They do not measure audience response, media delivery, conversions, revenue, or business impact.")));methodology.append(details);
   el.insightsCards.replaceChildren(root);
 }
 function isValidInsightsDiagnostic(analysis) {
@@ -19827,6 +19969,7 @@ function setActiveView(view) {
       turn.contentContinuation.context = aiBrainContentLocalContext();
     } else turn.contentProposalInvalid = true;
   }
+  if (state.activeView !== view) state.insightsNavigationGeneration = (state.insightsNavigationGeneration || 0) + 1;
   state.activeView = view;
   renderBrandBoardContextNotice();
   if (typeof homeFoundationController !== 'undefined') homeFoundationController?.sync();

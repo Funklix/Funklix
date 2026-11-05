@@ -26,7 +26,8 @@ function validExpected(value) {
 function publicScope(board) {
   return { updated_at: timestamp(board.updated_at), brand_id: board.brand_id, workspace_id: board.workspace_id };
 }
-async function capture({ boardId, user, db = pool, includeCanvas = false }) {
+async function capture({ boardId, user, db = pool, includeCanvas = false, capability = 'edit' }) {
+  if (!['edit', 'view'].includes(capability)) fail(403, 'proposal_forbidden');
   const lookup = lookupRequestFromVerifiedSession({ verified: true, user });
   if (!lookup.ok) fail(401, 'proposal_unauthorized');
   let client;
@@ -46,7 +47,11 @@ async function capture({ boardId, user, db = pool, includeCanvas = false }) {
     if (!['owner_id', 'owner_email'].every(k => Object.hasOwn(board, k)
       && (board[k] === null || (typeof board[k] === 'string' && board[k].trim().length > 0 && board[k].length <= 320)))) fail(403, 'proposal_forbidden');
     if (board.owner_email !== null && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(board.owner_email.trim())) fail(403, 'proposal_forbidden');
-    if (!access?.canEdit) fail(403, 'proposal_forbidden');
+    if (capability === 'view') {
+      if (!access?.canView || access.publicView) fail(403, 'proposal_forbidden');
+    } else {
+      if (!access?.canEdit) fail(403, 'proposal_forbidden');
+    }
     if (board.id !== boardId || !timestamp(board.updated_at)
       || !['brand_id', 'workspace_id'].every(k => Object.hasOwn(board, k) && (board[k] === null || isBrandId(board[k])))) fail(409, 'proposal_context_changed');
     let workspace = null, membership = null, association = null;

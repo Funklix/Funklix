@@ -12,9 +12,17 @@ const screenshots = process.env.BW37_SCREENSHOT_DIR;
     const f = await open(browser)(), page = f.page;
     let release, fail = false, answer = '## Recommendation\n\nStart with a focused community invitation.\n\n1. **Listen first.** Understand the audience.\n2. Invite a small group.\n\n<img src=x onerror=alert(1)>';
     const requests = [];
+    let requestReady = null;
+    // Browser loading state can precede delivery to the parent route handler.
+    // Await the controllable fixture transport without relaxing any UI assertion.
+    const waitForRelease = () => release ? Promise.resolve() : new Promise((resolve,reject) => {
+      const timer=setTimeout(()=>{requestReady=null;reject(new Error('Advice fixture request did not arrive'));},15000);
+      requestReady=()=>{clearTimeout(timer);requestReady=null;resolve();};
+    });
     await page.route('**/api/ai-brain/advice', async route => {
+      if (!requests.length) await new Promise(resolve=>setTimeout(resolve,300)); // Exercise asynchronous transport arrival.
       const body = route.request().postDataJSON(); requests.push(body);
-      await new Promise(resolve => { release = resolve; });
+      await new Promise(resolve => { release = resolve; requestReady?.(); });
       await route.fulfill({status: fail ? 503 : 200, json: fail ? {error:'Unavailable'} : {answer,context:{response_language:body.response_language,advice_mode:body.advice_mode,canvasNodes:body.canvas_context.nodes.length},disclaimer:'Qualitative advice.'}}).catch(()=>{});
     });
     await page.evaluate(() => setActiveView('ai_brain'));
@@ -48,8 +56,8 @@ const screenshots = process.env.BW37_SCREENSHOT_DIR;
     assert.equal(await learning.locator('li').textContent(),'Customers value a clear, personal invitation.');
     assert.equal(await page.locator('.ai-brain-message .ai-brain-advisor-avatar img').first().getAttribute('src'),avatar,'original approved Avatar in transcript');
     const domain = await page.evaluate(()=>JSON.stringify([state.nodes,state.edges,state.brandCore,state.boardBrandAssociation,state.isDirty]));
-    const submit = async text => { release=null;await question.fill(text);await page.locator('#ai-brain-form [type=submit]').click();await page.waitForFunction(()=>state.aiBrain.status==='loading');assert(release); };
-    const finish = async () => {release();await page.waitForFunction(()=>state.aiBrain.status!=='loading');};
+    const submit = async text => { release=null;await question.fill(text);await page.locator('#ai-brain-form [type=submit]').click();await page.waitForFunction(()=>state.aiBrain.status==='loading');await waitForRelease();assert(release); };
+    const finish = async () => {await waitForRelease();release();await page.waitForFunction(()=>state.aiBrain.status!=='loading');};
     await submit('What should we do next?');
     assert(await page.locator('.is-loading').isVisible());
     const pending = await metrics();assert(pending.top>0);assert(pending.max-pending.top<3,'new question and pending at latest');
@@ -105,6 +113,7 @@ const screenshots = process.env.BW37_SCREENSHOT_DIR;
     await page.setViewportSize({width:375,height:812});
     await page.evaluate(()=>{Object.defineProperty(window.visualViewport,'height',{configurable:true,value:520});window.visualViewport.dispatchEvent(new Event('resize'));});
     await page.waitForFunction(()=>el.aiBrainView.getBoundingClientRect().bottom<=520);
+    await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))); // Native resize/layout observer lifecycle.
     assert(await page.locator('#ai-brain-form [type=submit]').evaluate(n=>n.getBoundingClientRect().bottom<450),'visual viewport keyboard leaves composer above mobile controls');
     await page.evaluate(()=>{delete window.visualViewport.height;window.visualViewport.dispatchEvent(new Event('resize'));});
     assert.equal(await page.evaluate(()=>JSON.stringify([state.nodes,state.edges,state.brandCore,state.boardBrandAssociation,state.isDirty])),domain);
@@ -122,7 +131,9 @@ const screenshots = process.env.BW37_SCREENSHOT_DIR;
     await page.setViewportSize({width:375,height:812});
     await page.evaluate(()=>{state.nodes=[];refreshLastSavedSnapshot();renderAiBrain();Object.defineProperty(window.visualViewport,'height',{configurable:true,value:520});window.visualViewport.dispatchEvent(new Event('resize'));});
     await page.waitForFunction(()=>el.aiBrainView.getBoundingClientRect().bottom<=520);
-    assert(await page.locator('#ai-brain-form [type=submit]').evaluate(n=>n.getBoundingClientRect().bottom<450),'empty-Canvas keyboard composer remains reachable');
+    await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))); // Native resize/layout observer lifecycle.
+    const emptyKeyboard=await page.locator('#ai-brain-form [type=submit]').evaluate(n=>({bottom:n.getBoundingClientRect().bottom,viewport:visualViewport.height,viewBottom:el.aiBrainView.getBoundingClientRect().bottom,width:innerWidth,height:innerHeight,compact:el.aiBrainView.classList.contains('ai-brain-compact-viewport')}));
+    assert(emptyKeyboard.bottom<450,'empty-Canvas keyboard composer remains reachable '+JSON.stringify(emptyKeyboard));
     assert.deepEqual(f.errors,[]);assert.deepEqual(f.writes,[]);
     console.log('PASS unrelated Canvas unaffected, account/Board reset and stale response suppression');
   } finally { await browser.close(); }

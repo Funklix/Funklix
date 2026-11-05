@@ -29,6 +29,30 @@ module.exports = browser => {
     await page.route('**/*',async route=>{
       const q=route.request(),u=new URL(q.url()),method=q.method();assert.equal(u.hostname,'localhost','All transport must be local; no providers');
       if(u.pathname.startsWith('/api/'))f.requests.push({path:u.pathname,method});
+      // BW-44 node navigation now independently validates saved scope. Keep the
+      // provider prohibition; only this exact read-only production route is allowed.
+      if (u.pathname === '/api/ai-brain/node-reference') {
+        assert.equal(method, 'POST');
+        if (!f.referenceSql) {
+          const sql = f.referenceSql = await require('./bw36-20-database').fixture({goals:true,signedSession:true});
+          sql.env.AUTH_SECRET = 'fictional-home-reference-session';
+          sql.onRows = (_sql,result) => ({...result,rowCount:result.rows.length});
+          await sql.pg.query('UPDATE app_identities SET canonical_email=$1',[EMAIL]);
+          await sql.pg.query("INSERT INTO workspaces(id,status,revision) VALUES($1,'active',1)",[W]);
+          await sql.pg.query("INSERT INTO workspace_memberships(workspace_id,identity_id,status,role) VALUES($1,$2,'accepted','viewer')",[W,sql.IDENTITY]);
+          await sql.pg.exec('UPDATE boards SET brand_id=NULL; DELETE FROM brand_members');
+          await sql.pg.query('UPDATE brands SET id=$1,workspace_id=$2 WHERE id=$3',[B,W,sql.BRAND]);
+          await sql.pg.query('UPDATE boards SET id=$1,brand_id=$2,workspace_id=$3',[D,B,W]);
+          await sql.pg.query('UPDATE board_editors SET board_id=$1,email=$2',[D,EMAIL]);
+        }
+        const sql=f.referenceSql, board=r.db.boards.find(board=>board.id===D);
+        await sql.pg.query('UPDATE boards SET canvas_json=$1::jsonb,updated_at=$2',[JSON.stringify(board.canvas_json),board.updated_at]);
+        const auth=sql.load('api/_auth-session.js'), resolver=sql.load('api/ai-brain/node-reference.js');
+        const res={statusCode:200,setHeader(){},status(code){this.statusCode=code;return this;},json(body){this.body=body;return this;}};
+        await resolver({method,body:q.postDataJSON(),headers:{cookie:'funklix_session='+auth.createSessionToken({email:EMAIL})}},res);
+        assert.equal(sql.calls.length,0);assert(sql.queries.every(q=>/^(SELECT|BEGIN|SET LOCAL|COMMIT|ROLLBACK)/.test(q.sql)));
+        return route.fulfill({status:res.statusCode,json:res.body});
+      }
       assert(!(u.pathname.startsWith('/api/') && /\/(?:generate|ai-brain|analytics|learning-advisor)/.test(u.pathname)),'Home must not invoke AI or analytics endpoints: '+u.pathname);
       if(u.pathname.startsWith('/api/')&&method!=='GET'&&!u.pathname.includes('/presence/'))f.writes.push({path:u.pathname,method});
       if(u.pathname==='/api/auth/session')return route.fulfill({json:{user:{email:EMAIL,name:'Alex'}}});
@@ -53,7 +77,7 @@ module.exports = browser => {
     await page.evaluate(()=>{clearAutosaveTimer();stopPresenceLite();stopBoardRefreshPolling();setSidebarCollapsed(false);setActiveView('home');});
     if(analyzed && !root && !noWorkspace) await page.evaluate(()=>{setActiveView('insights');setActiveView('home');});
     if (!root && !noWorkspace && !empty) await page.waitForFunction(()=>homeCampaignInsights()?.status==='ready');
-    f.close=async()=>{assert.deepEqual(f.errors,[]);assert.deepEqual(f.writes,[]);await page.close();};
+    f.close=async()=>{if(f.referenceSql)await f.referenceSql.pg.close();assert.deepEqual(f.errors,[]);assert.deepEqual(f.writes,[]);await page.close();};
     return f;
   }
   return fixture;
