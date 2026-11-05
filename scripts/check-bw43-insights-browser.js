@@ -91,6 +91,10 @@ const out = 'work/bw43/screenshots';
       }
       assert(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'Document overflow');
       if(width>=1440)assert(await p.locator('#insights-view').evaluate((n,collapsed)=>n.clientWidth>innerWidth-(collapsed?100:300),collapsed),'Desktop fills available workspace');
+      await p.locator('.insights-stage-context').evaluateAll(nodes=>nodes.forEach(node=>node.open=true));
+      assert(await p.locator('.insights-campaign-journey').evaluate(n=>n.scrollWidth<=n.clientWidth+1),'Expanded Journey sources reflow');
+      assert(await p.locator('.insights-stage-context .insights-node-list > li').evaluateAll(nodes=>nodes.every(n=>getComputedStyle(n,'::after').display==='none')),'Sources never inherit Journey connector paths');
+      await p.locator('.insights-stage-context').evaluateAll(nodes=>nodes.forEach(node=>node.open=false));
       assert.equal(await p.locator('.insights-readiness-ring strong').textContent(),'90');
       assert.equal(await p.locator('.insights-campaign-journey > li').count(),5);
       assert.equal(await p.locator('.insights-campaign-journey > li').first().getAttribute('aria-label'),language==='de'?'Bekanntheit: Abgedeckt':'Awareness: Covered');

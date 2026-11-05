@@ -47,7 +47,11 @@ async function capture({ boardId, user, db = pool, includeCanvas = false, capabi
     if (!['owner_id', 'owner_email'].every(k => Object.hasOwn(board, k)
       && (board[k] === null || (typeof board[k] === 'string' && board[k].trim().length > 0 && board[k].length <= 320)))) fail(403, 'proposal_forbidden');
     if (board.owner_email !== null && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(board.owner_email.trim())) fail(403, 'proposal_forbidden');
-    if (!(capability === 'view' ? access?.canView && !access.publicView : access?.canEdit)) fail(403, 'proposal_forbidden');
+    if (capability === 'view') {
+      if (!access?.canView || access.publicView) fail(403, 'proposal_forbidden');
+    } else {
+      if (!access?.canEdit) fail(403, 'proposal_forbidden');
+    }
     if (board.id !== boardId || !timestamp(board.updated_at)
       || !['brand_id', 'workspace_id'].every(k => Object.hasOwn(board, k) && (board[k] === null || isBrandId(board[k])))) fail(409, 'proposal_context_changed');
     let workspace = null, membership = null, association = null;

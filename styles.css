@@ -8564,3 +8564,6 @@ html[data-theme="dark"] #insights-view .insights-context span { background: var(
 #insights-view .insights-stage-context .insights-node-list { padding-left:0; list-style:none; }
 #insights-view .insights-verification { font-size:12px; color:var(--muted); }
 #insights-view .insights-finding .insights-why, #insights-view .insights-finding .insights-next-step { margin:5px 0; }
+#insights-view .insights-stage-context { grid-column:1 / -1; width:100%; box-sizing:border-box; }
+#insights-view .insights-stage-context .insights-node-list > li { display:block; width:100%; text-align:left; }
+#insights-view .insights-stage-context .insights-node-list > li::after { display:none; }

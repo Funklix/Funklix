@@ -8194,7 +8194,7 @@ function renderInsightsSurface() {
       ['landingPage.cta', node.landingPage?.cta], ['landingPage.trust', node.landingPage?.trust],
       ['social.preview', node.social?.preview], ['social.cta', node.social?.cta]];
     const allowed = code === 'ICP_VARIATION' ? ['audience'] : code === 'TONE_SHIFTS_HIGH' ? ['tone'] : code === 'TRUST_PROOF_MISSING' ? ['landingPage.trust'] : code?.startsWith('CTA_') ? (node.type === 'Landing Page' ? ['landingPage.cta'] : ['social.preview', 'social.cta']) : ['funnelStage', 'goal', 'landingPage.cta'];
-    return fields.filter(([field]) => allowed.includes(field)).map(([field, value]) => `${field}: “${String(value ?? '').slice(0,160)}”`).join(' · ');
+    return fields.filter(([field, value]) => allowed.includes(field) && (code || (typeof value === 'string' && value.length))).map(([field, value]) => `${field}: “${String(value ?? '').slice(0,160)}”`).join(' · ');
   };
   const sourceList = (ids, code, stage = null) => {
     const list = make('ul', 'insights-node-list');
