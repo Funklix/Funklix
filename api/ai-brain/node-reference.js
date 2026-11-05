@@ -6,6 +6,7 @@ const scope = require('../_ai-brain-proposal-scope');
 const { NODE_TYPES } = require('../_ai-brain-canvas-context');
 const { canonicalType } = require('../_ai-brain-social-evidence');
 const { referenceRevision } = require('../_ai-brain-node-references');
+const { serializeBoardForAccess } = require('../_board-serializer');
 module.exports = async function handler(req, res) {
   res.setHeader?.('Cache-Control', 'private, no-store');
   const fail = status => res.status(status).json({ code: 'node_reference_unavailable' });
@@ -14,10 +15,14 @@ module.exports = async function handler(req, res) {
   const insights = body?.source === 'insights';
   const keys = insights ? ['source', 'board_id', 'node_id', 'node_type', 'expected_scope'] : ['board_id', 'node_id', 'scope_revision'];
   const expected = body?.expected_scope;
+  // Hidden means the existing viewer serializer withheld both associations; it
+  // is never an invented UUID or a claim that either saved association is NULL.
+  const hiddenScope = insights && expected?.brand_id === 'hidden' && expected?.workspace_id === 'hidden';
+  const normalizedExpected = hiddenScope ? scope.publicScope({ updated_at: expected.updated_at, brand_id: null, workspace_id: null }) : expected && scope.publicScope(expected);
   const expectedValid = expected && typeof expected === 'object' && !Array.isArray(expected)
     && Object.keys(expected).length === 3 && ['updated_at', 'brand_id', 'workspace_id'].every(key => Object.hasOwn(expected, key))
     && typeof expected.updated_at === 'string' && expected.updated_at.length <= 40
-    && scope.validExpected(scope.publicScope(expected));
+    && scope.validExpected(normalizedExpected);
   if (!body || typeof body !== 'object' || Array.isArray(body) || Object.keys(body).length !== keys.length
     || !keys.every(key => Object.hasOwn(body, key)) || !isBrandId(body.board_id)
     || typeof body.node_id !== 'string' || !body.node_id.trim() || body.node_id.length > 160
@@ -28,7 +33,17 @@ module.exports = async function handler(req, res) {
   try {
     const valid = data => {
       const nodes = data.board.canvas_json?.nodes;
-      if (insights) scope.assertExpected(data, scope.publicScope(body.expected_scope));
+      if (insights) {
+        if (hiddenScope) {
+          const projected = serializeBoardForAccess(data.board, data.access);
+          if (projected.brand_visibility !== 'hidden' || Object.hasOwn(projected, 'brand_id') || Object.hasOwn(projected, 'workspace_id')) return false;
+          // Keep hidden associations server-side. The saved timestamp is checked
+          // against the client; exact associations remain in both fingerprints.
+          const savedExpected = scope.publicScope(data.board);
+          savedExpected.updated_at = expected.updated_at;
+          scope.assertExpected(data, savedExpected);
+        } else scope.assertExpected(data, normalizedExpected);
+      }
       return (insights || referenceRevision(data, body.node_id) === body.scope_revision) && Array.isArray(nodes)
         && nodes.every(node => node && typeof node.id === 'string' && node.id.length > 0)
         && new Set(nodes.map(node => node.id)).size === nodes.length

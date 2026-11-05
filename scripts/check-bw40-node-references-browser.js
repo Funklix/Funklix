@@ -19,10 +19,15 @@ const REV = '2026-10-29T08:00:00.123Z';
     const p = f.page, boardId = f.r.db.boards[0].id, email = await p.evaluate(() => state.user.email);
     sql.user = { email };
     await sql.pg.query('UPDATE app_identities SET canonical_email=$1', [email]);
+    const savedBoard=f.r.db.boards[0];
+    await sql.pg.exec('UPDATE boards SET brand_id=NULL; DELETE FROM brand_members');
+    await sql.pg.query('UPDATE brands SET id=$1,workspace_id=$2 WHERE id=$3',[savedBoard.brand_id,savedBoard.workspace_id,sql.BRAND]);
+    await sql.pg.query("INSERT INTO workspaces(id,status,revision) VALUES($1,'active',1)",[savedBoard.workspace_id]);
+    await sql.pg.query("INSERT INTO workspace_memberships(workspace_id,identity_id,status,role) VALUES($1,$2,'accepted','viewer')",[savedBoard.workspace_id,sql.IDENTITY]);
     await sql.pg.query('UPDATE board_editors SET board_id=$1,email=$2', [boardId, email]);
-    await sql.pg.query('UPDATE boards SET id=$1,canvas_json=$2::jsonb,updated_at=$3', [boardId, JSON.stringify(f.r.db.boards[0].canvas_json), '2026-10-29T08:00:00.123456Z']);
+    await sql.pg.query('UPDATE boards SET id=$1,brand_id=$2,workspace_id=$3,canvas_json=$4::jsonb,updated_at=$5', [boardId,savedBoard.brand_id,savedBoard.workspace_id,JSON.stringify(savedBoard.canvas_json),'2026-10-29T08:00:00.123456Z']);
     const resolver = sql.load('api/ai-brain/node-reference.js'), auth = sql.load('api/_auth-session.js');
-    let opens = 0, writes = 0, denied = false, serviceUnavailable = false, release = null, started = null;
+    let viewerBoot = false, opens = 0, writes = 0, denied = false, serviceUnavailable = false, release = null, started = null;
     await p.route('**/api/ai-brain/advice', async route => {
       const body = route.request().postDataJSON();
       sql.answer = body.response_language === 'de'
@@ -38,7 +43,11 @@ const REV = '2026-10-29T08:00:00.123Z';
       return route.fulfill({ status: serviceUnavailable ? 503 : denied ? 409 : res.statusCode, json: denied ? { code: 'node_reference_unavailable' } : res.body });
     });
     await p.route('**/api/boards/*', route => {
-      if (route.request().method() === 'GET') return route.fallback();
+      if (route.request().method() === 'GET') {
+        const board=require('../api/_board-serializer').serializeBoardForAccess(f.r.db.boards[0],{role:viewerBoot?'viewer':'editor',canView:true,canEdit:!viewerBoot,canViewBoardBrandCore:!viewerBoot,canViewPresence:false});
+        if(viewerBoot){assert(!Object.hasOwn(board,'brand_id'));assert(!Object.hasOwn(board,'workspace_id'));}
+        return route.fulfill({json:board});
+      }
       writes++; return route.fulfill({ status: 500, json: { error: 'References must not write' } });
     });
     async function boot() {
@@ -134,12 +143,14 @@ const REV = '2026-10-29T08:00:00.123Z';
     assert.equal(await p.evaluate(() => state.activeView), 'ai_brain');
     // BW-44: deterministic Insights cards use this same production resolver.
     async function insights(viewer=false) {
-      await boot();
+      viewerBoot=viewer;
       await sql.pg.exec("UPDATE board_editors SET role='"+(viewer?'viewer':'editor')+"'");
-      await p.evaluate(({brand,viewer}) => {
-        state.boardBrandAssociation.brandId=brand;state.boardBrandAssociation.workspaceId=null;
-        state.boardAccess.canEdit=!viewer;setActiveView('insights');renderCampaignIntelligence();
-      },{brand:sql.BRAND,viewer});
+      await boot();
+      if(viewer){
+        assert.equal(await p.evaluate(()=>state.boardBrandAssociation.brandId),null);
+        assert.equal(await p.evaluate(()=>state.boardBrandAssociation.workspaceId),undefined,'Real viewer payload has no workspace association');
+      }
+      await p.evaluate(()=>{setActiveView('insights');renderCampaignIntelligence();});
     }
     const source = id => p.locator('[data-finding-id="ICP_VARIATION"] [data-insights-node-id="'+id+'"]');
     for (const viewer of [false,true]) for (const language of ['en','de']) for (const theme of ['light','dark']) {
@@ -155,12 +166,18 @@ const REV = '2026-10-29T08:00:00.123Z';
         await p.evaluate(()=>setActiveView('insights'));
       }
     }
+    const association={brand_id:savedBoard.brand_id,workspace_id:savedBoard.workspace_id};
+    savedBoard.brand_id=null;savedBoard.workspace_id=null;
+    await sql.pg.exec('UPDATE boards SET brand_id=NULL,workspace_id=NULL');
+    await insights(true);await source('node-27').click();
+    await p.waitForFunction(()=>state.activeView==='board'&&state.selectedPrimary==='node-27');
+    Object.assign(savedBoard,association);await sql.pg.query('UPDATE boards SET brand_id=$1,workspace_id=$2',[association.brand_id,association.workspace_id]);
     await insights();const reads=opens;
     await p.evaluate(()=>{state.nodes.push({...state.nodes[0],id:'new-unsaved',audience:'New'});state.isDirty=true;renderCampaignIntelligence();});
     await source('new-unsaved').click();
     await p.waitForFunction(()=>Array.from(document.querySelectorAll('.insights-reference-status')).some(n=>/unavailable|nicht verfügbar/.test(n.textContent)));
     assert.equal(opens,reads+1);assert.equal(await p.evaluate(()=>state.activeView),'insights','Unsaved new node cannot acquire persisted destination');
-    for (const mutation of ['account','revision','catalog','association','nodes','edges','saving','hydrating','loading','generation','permission','snapshot']) {
+    for (const mutation of ['account','revision','catalog','association','nodes','edges','saving','hydrating','loading','generation','permission','snapshot','view','leave-return']) {
       await insights();
       const pending=new Promise(resolve=>{started=resolve;});await source('node-27').click();await pending;
       assert.equal(await p.evaluate(()=>state.activeView),'insights','No optimistic navigation while pending');
@@ -177,9 +194,13 @@ const REV = '2026-10-29T08:00:00.123Z';
         if(mutation==='generation')state.boardLoadGeneration++;
         if(mutation==='permission')state.boardAccess.canView=false;
         if(mutation==='snapshot')state.insightsDiagnosticSnapshot=null;
-      },mutation);release();
-      await p.waitForFunction(()=>Array.from(document.querySelectorAll('.insights-reference-status')).some(n=>/unavailable|nicht verfügbar/.test(n.textContent)));
-      assert.equal(await p.evaluate(()=>state.activeView),'insights',mutation);
+        if(mutation==='view')setActiveView('calendar');
+        if(mutation==='leave-return'){setActiveView('calendar');setActiveView('insights');}
+      },mutation);const completed=p.waitForResponse(response=>response.url().endsWith('/api/ai-brain/node-reference'));release();
+      await completed;
+      await p.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+      if(mutation!=='leave-return')await p.waitForFunction(()=>Array.from(document.querySelectorAll('.insights-reference-status')).some(n=>/unavailable|nicht verfügbar/.test(n.textContent)));
+      assert.equal(await p.evaluate(()=>state.activeView),mutation==='view'?'calendar':'insights',mutation);
     }
     await insights();denied=true;await source('node-27').click();
     await p.waitForFunction(()=>Array.from(document.querySelectorAll('.insights-reference-status')).some(n=>/unavailable|nicht verfügbar/.test(n.textContent)));

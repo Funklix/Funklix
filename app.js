@@ -8108,10 +8108,12 @@ function isCurrentInsightsSnapshot(snapshot, canvasIdentity) {
 // A render origin is transient UI state, not an analysis snapshot or authorization token.
 function captureInsightsReferenceOrigin() {
   const association = state.boardBrandAssociation;
-  return { account: state.user, snapshot: state.insightsDiagnosticSnapshot,
+  return { account: state.user, snapshot: state.insightsDiagnosticSnapshot, view: state.activeView, navigation: state.insightsNavigationGeneration || 0,
     source: JSON.stringify([state.lastKnownUpdatedAt, state.workspaceCatalog, association, state.isDirty, state.nodes, state.edges]),
     expected: association?.boardId === state.currentBoardId ? {
-      updated_at: state.lastKnownUpdatedAt, brand_id: association.brandId, workspace_id: association.workspaceId
+      updated_at: state.lastKnownUpdatedAt,
+      brand_id: association.visibility === 'hidden' ? 'hidden' : association.brandId,
+      workspace_id: association.visibility === 'hidden' ? 'hidden' : association.workspaceId
     } : null };
 }
 function insightsReferenceOriginCurrent(origin) {
@@ -8126,7 +8128,8 @@ async function showInsightsFindingOnCanvas(code, explicitId = null, button = nul
   const snapshot = state.insightsDiagnosticSnapshot; const finding = snapshot?.findings?.find(item => item.code === code);
   const ids = stage ? state.nodes.filter(node => insightsNodeSupportsStage(node, stage)).map(node => node.id) : finding?.affectedNodeIds;
   const nodeId = explicitId || ids?.find(id => state.nodes.some(node => node.id === id));
-  const current = () => !!state.currentBoardId && state.boardAccess?.canView === true && isCurrentInsightsSnapshot(snapshot) && insightsReferenceOriginCurrent(origin) && (stage ? ['Awareness','Interest','Consideration','Conversion','Retention'].includes(stage) : !!finding)
+  let navigation = origin.navigation, targetView = origin.view;
+  const current = () => state.activeView === targetView && (state.insightsNavigationGeneration || 0) === navigation && !!state.currentBoardId && state.boardAccess?.canView === true && isCurrentInsightsSnapshot(snapshot) && insightsReferenceOriginCurrent(origin) && (stage ? ['Awareness','Interest','Consideration','Conversion','Retention'].includes(stage) : !!finding)
     && ids?.includes(nodeId) && state.nodes.filter(node => node.id === nodeId).length === 1;
   const message = key => { if (status) status.textContent = uiText(key); else setSaveStatus(uiText(key)); };
   const unavailable = () => message('This reference is unavailable. Only saved nodes have checked destinations. Refresh insights and try again.');
@@ -8150,7 +8153,9 @@ async function showInsightsFindingOnCanvas(code, explicitId = null, button = nul
     if (!response.ok || data.nodeId !== nodeId || !/^[a-f0-9]{64}$/.test(data.scopeRevision || '')) return unavailable();
     if (document.querySelector('dialog[open]') || el.brandWorkspaceDetail?.open) throw new Error('blocked');
     if (!Array.from(el.zoomLayer.querySelectorAll('[data-id]')).some(element => element.dataset.id === nodeId)) return unavailable();
+    targetView = 'board';
     setActiveView('board');
+    navigation = state.insightsNavigationGeneration || 0;
     await new Promise(resolve => requestAnimationFrame(resolve));
     if (!current() || state.activeView !== 'board') return unavailable();
     if (!focusNodeInCanvas(nodeId, { behavior: 'auto', select: true, pulse: false })) return unavailable();
@@ -19956,6 +19961,7 @@ function setActiveView(view) {
       turn.contentContinuation.context = aiBrainContentLocalContext();
     } else turn.contentProposalInvalid = true;
   }
+  if (state.activeView !== view) state.insightsNavigationGeneration = (state.insightsNavigationGeneration || 0) + 1;
   state.activeView = view;
   renderBrandBoardContextNotice();
   if (typeof homeFoundationController !== 'undefined') homeFoundationController?.sync();

@@ -74,6 +74,15 @@ const nodes = [
       assert.equal((await insights(extra)).statusCode, 409);
     await f.pg.exec("UPDATE board_editors SET role='viewer'");
     assert.equal((await insights()).statusCode, 200, 'Authenticated Board viewer can resolve only this deterministic branch');
+    const hidden={updated_at:REV,brand_id:'hidden',workspace_id:'hidden'};
+    assert.equal((await insights({expected_scope:hidden})).statusCode,409,'Brand viewer serialization exposes associations, so cannot claim redaction');
+    await f.pg.exec('DELETE FROM brand_members');
+    assert.equal((await insights({expected_scope:hidden})).statusCode,200,'Real Board viewer can use redacted scope without learning associations');
+    assert.equal((await insights({expected_scope:{...hidden,workspace_id:null}})).statusCode,400,'Partially hidden scope is malformed');
+    assert.equal((await insights({expected_scope:{...hidden,updated_at:'2026-10-30'}})).statusCode,409);
+    await f.pg.exec("UPDATE board_editors SET role='editor'");
+    assert.equal((await insights({expected_scope:hidden})).statusCode,409,'Editor cannot bypass its exact expected association scope');
+    await f.pg.exec("UPDATE board_editors SET role='viewer'");
     assert.equal((await open(ref)).statusCode, 409, 'Original Brain contract remains edit-only');
     const scope = f.load('api/_ai-brain-proposal-scope.js');
     await assert.rejects(() => scope.capture({ boardId: f.BOARD, user: f.user, includeCanvas: true }), /proposal_forbidden/, 'Default capture remains edit-only');
