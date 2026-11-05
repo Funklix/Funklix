@@ -35,7 +35,8 @@ Legacy DOM IDs remain. Opportunity source presentation is unchanged.
   public isolation, EN/DE, keyboard and lifecycle/authorization regressions.
 - Existing BW-43 suite passes all 48 cases and native 200% zoom.
 - BW-36.6 advances only its whole-file CSS fingerprint for the authorized scoped
-  styling. All immutable SQL/auth/sidebar/toolbar fingerprints and assertions remain.
+  styling; BW-36.7R3 advances its dependent test-file fingerprint. All immutable
+  SQL/auth/sidebar/toolbar fingerprints and assertions remain.
 - Browser script integrity, app/test syntax, BW-28.3.1 producer/renderer contrasts,
   BW-28.1 and BW-25.1 translations pass locally.
 - The old missing-finding-IDs assertion now checks finding buttons specifically:
