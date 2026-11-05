@@ -8567,3 +8567,29 @@ html[data-theme="dark"] #insights-view .insights-context span { background: var(
 #insights-view .insights-stage-context { grid-column:1 / -1; width:100%; box-sizing:border-box; }
 #insights-view .insights-stage-context .insights-node-list > li { display:block; width:100%; text-align:left; }
 #insights-view .insights-stage-context .insights-node-list > li::after { display:none; }
+
+/* BW-44.2: native stage disclosures share the Journey width; no overlay or state mirror. */
+#insights-view .insights-journey-contexts { display:grid; gap:8px; padding-top:14px; border-top:1px solid var(--insights-line); }
+#insights-view .insights-journey-contexts .insights-stage-context { border:1px solid var(--insights-line); border-radius:16px; background:var(--insights-lilac); color:var(--insights-ink); font-size:.8rem; }
+#insights-view .insights-journey-contexts summary { min-height:44px; box-sizing:border-box; padding:12px 16px; border-radius:16px; line-height:1.5; overflow-wrap:anywhere; }
+#insights-view .insights-journey-contexts summary strong { margin-inline-end:12px; font-size:.85rem; }
+#insights-view .insights-journey-contexts summary span { color:var(--insights-muted); }
+#insights-view .insights-journey-contexts summary:hover { background:color-mix(in srgb, var(--insights-accent) 8%, transparent); }
+#insights-view .insights-journey-contexts .insights-node-list { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr)); gap:12px; margin:0; padding:0 14px 14px; }
+#insights-view .insights-journey-contexts .insights-node-list > li { box-sizing:border-box; min-width:0; padding:14px; border:1px solid var(--insights-line); border-radius:12px; background:var(--insights-card); }
+#insights-view .insights-journey-contexts .insights-node-reference { display:grid; gap:5px; width:100%; max-width:100%; border:0; border-radius:8px; padding:4px; background:transparent; color:var(--insights-ink); line-height:1.45; }
+#insights-view .insights-journey-contexts .insights-node-reference:hover { background:var(--insights-lilac); }
+#insights-view .insights-journey-contexts .insights-node-reference:focus-visible { outline:3px solid var(--insights-accent); outline-offset:3px; }
+#insights-view .insights-context-type { color:var(--insights-muted); font-size:.72rem; }
+#insights-view .insights-context-title { font-size:.9rem; font-weight:700; }
+#insights-view .insights-context-open { color:var(--insights-muted); font-size:.75rem; margin-top:3px; text-decoration:underline; text-underline-offset:3px; }
+#insights-view .insights-journey-contexts .insights-source-fields { margin:8px 4px 0; color:var(--insights-muted); line-height:1.5; }
+#insights-view .insights-journey-contexts .insights-source-fields:empty,
+#insights-view .insights-journey-contexts .insights-reference-status:empty { display:none; }
+#insights-view .insights-journey-contexts .insights-reference-status { margin:8px 4px 0; color:var(--insights-ink); line-height:1.5; }
+#insights-view .insights-journey-contexts .insights-stage-context > p { margin:0; padding:0 16px 16px; color:var(--insights-muted); line-height:1.5; }
+@media (max-width:600px) {
+  #insights-view .insights-journey-contexts .insights-node-list { grid-template-columns:minmax(0,1fr); padding:0 10px 10px; gap:10px; }
+  #insights-view .insights-journey-contexts summary { padding:12px; }
+  #insights-view .insights-journey-contexts summary span { display:block; padding-inline-start:16px; }
+}

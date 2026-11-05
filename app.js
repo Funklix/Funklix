@@ -8216,6 +8216,11 @@ function renderInsightsSurface() {
       const open = make('button', 'insights-node-reference', label); open.type = 'button'; open.dataset.insightsNodeId = id; open.setAttribute('aria-label', `${t('Show on Canvas')}: ${label}`);
       const status = make('span', 'insights-reference-status'); status.setAttribute('role', 'status');
       open.addEventListener('click', () => showInsightsFindingOnCanvas(code, id, open, status, origin, stage));
+      if (stage) {
+        open.replaceChildren(make('span', 'insights-context-type', String(node.type).slice(0,80)),
+          make('strong', 'insights-context-title', String(node.title||node.type||t('Node')).slice(0,160)),
+          make('span', 'insights-context-open', t('Show on Canvas')));
+      }
       li.append(open, make('span', 'insights-source-fields', fieldText(node, code)), status); list.append(li);
     }); return list;
   };
@@ -8257,10 +8262,11 @@ function renderInsightsSurface() {
     panel.append(readiness,attention,journey,channels); overview.append(panel);
   }
   const journeySection=section("insights-journey-title","Campaign journey coverage","See which stages of the campaign journey are supported by content in your Canvas.","insights-journey-section");
-  if(!unavailableReason){const covered=new Set(snapshot.analysis.funnel.coveredStages);const list=make("ol","insights-campaign-journey");funnelStages.forEach(stage=>{const present=covered.has(stage);const item=make("li",present?"is-covered":"is-missing");item.setAttribute("aria-label",`${t(stage)}: ${t(present?"Covered":"Missing content")}`);const symbol=make("span","insights-stage-symbol");symbol.dataset.stage=stage;symbol.setAttribute("aria-hidden","true");item.append(symbol,make("span","insights-stage-icon",present?"✓":"!"),make("strong","",t(stage)),make("span","insights-stage-status",t(present?"Covered":"Missing content")));const sources = state.nodes.filter(node => insightsNodeSupportsStage(node, stage) && index.get(node.id)).map(node => node.id);
-      const context = make('details', 'insights-stage-context'); context.append(make('summary', '', t('Canvas context')));
+  if(!unavailableReason){const covered=new Set(snapshot.analysis.funnel.coveredStages);const list=make("ol","insights-campaign-journey");const contexts=make("div","insights-journey-contexts");funnelStages.forEach(stage=>{const present=covered.has(stage);const item=make("li",present?"is-covered":"is-missing");item.setAttribute("aria-label",`${t(stage)}: ${t(present?"Covered":"Missing content")}`);const symbol=make("span","insights-stage-symbol");symbol.dataset.stage=stage;symbol.setAttribute("aria-hidden","true");item.append(symbol,make("span","insights-stage-icon",present?"✓":"!"),make("strong","",t(stage)),make("span","insights-stage-status",t(present?"Covered":"Missing content")));const sources = state.nodes.filter(node => insightsNodeSupportsStage(node, stage) && index.get(node.id)).map(node => node.id);
+      const context = make('details', 'insights-stage-context'); context.dataset.stage = stage;
+      const summary = make('summary'); summary.append(make('strong', '', t(stage)), make('span', '', t('Canvas context'))); context.append(summary);
       context.append(sources.length ? sourceList(sources, null, stage) : make('p', '', t('No content is recognized for this stage under the current Canvas mapping.')));
-      item.append(context);list.append(item);});journeySection.append(list,make("p","insights-journey-disclaimer",t("Canvas content coverage, not measured conversion performance.")));}
+      contexts.append(context);list.append(item);});journeySection.append(list,contexts,make("p","insights-journey-disclaimer",t("Canvas content coverage, not measured conversion performance.")));}
   const opportunities=section("insights-opportunities-title","Opportunities","Focus on the next useful improvements for this Canvas.","insights-opportunities");
   if (!unavailableReason) {
     if (!snapshot.findings?.length) opportunities.append(make('p', 'insights-diagnostic-state', t('No current findings')));

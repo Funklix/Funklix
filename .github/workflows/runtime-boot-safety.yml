@@ -476,6 +476,15 @@ jobs:
           JS
       - name: Check BW-43 Insights scores, existing actions, themes and responsive layout
         run: npm run check:bw43
+      - name: Check BW-44.2 Journey context responsive panels and checked navigation
+        run: node scripts/check-bw44-2-journey-context-browser.js
+      - name: Preserve BW-44.2 fictional Journey screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bw44-2-browser-postgres-${{ matrix.postgres }}
+          path: work/bw44-2/
+          retention-days: 7
       - name: Preserve BW-43 fictional application screenshots
         if: always()
         uses: actions/upload-artifact@v4
