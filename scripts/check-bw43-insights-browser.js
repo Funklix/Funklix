@@ -84,6 +84,8 @@ const out = 'work/bw43/screenshots';
         setSidebarCollapsed(collapsed);renderInsightsSurface();el.insightsView.scrollTop=0;
       },{theme,language,collapsed});
       await p.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));
+      // Measure final layout, not an intermediate frame of the existing 180ms shell transition.
+      await p.evaluate(()=>Promise.all(document.getAnimations().filter(a=>a.effect?.target?.matches?.('.app-shell,#left-sidebar')).map(a=>a.finished.catch(()=>{}))));
       for(const selector of ['#insights-view','.insights-boundary','.insights-executive-panel','.insights-campaign-journey','.insights-diagnostics']) {
         assert(await p.locator(selector).evaluate(n=>n.scrollWidth<=n.clientWidth+1),`${selector} overflow: ${theme}/${language}/${collapsed}/${width}`);
       }
