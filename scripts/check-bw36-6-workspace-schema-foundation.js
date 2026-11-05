@@ -1,3 +1,4 @@
+// BW-44.2 advances only the full CSS fingerprint for scoped Journey panels; all assertions and SQL/auth/sidebar pins remain.
 // BW-43 advances only the full CSS fingerprint for the approved scoped Insights addition; all assertions and SQL/auth/sidebar pins remain.
 // BW-36.19R2 updates only the pinned tokenizer inventory and the two corresponding test-file fingerprints.
 // R5R2 updates only the approved logo/Avatar separation and dependent test fingerprints; historical SQL/auth remain pinned.
@@ -143,7 +144,7 @@ test('current Brand, Board, shares, tokens and membership policies are not cut o
 test('UI, BW-36.4 sidebar, compact bar and Canvas toolbar baselines are unchanged', () => {
   const expected = {
     'brand-sidebar.js': '42cd9ca38505a7e4755b888c494c73440a457e57bcc495059f9746bba02d1efb',
-    'styles.css': 'aaa278486e2f7d3254713aaced6c46c7f74c79a555e4d7172f07e77d03bee900',
+    'styles.css': '922153d153063db88345982b015964a7d4d9c8e3e93cd91ec6e9634e13f70509',
     'scripts/check-bw36-4-simplified-brand-sidebar.js': '5617fb7227f1a5f2ce9efe4ecda660c6b2c89a822ec70585c8fd5088a6003e4b',
     'scripts/check-bw36-2-compact-non-canvas-context-bar.js': '326a63061ce9381c4d3554c9d8f8d1fe20a04407514b8a05d793ee386948a034',
     'scripts/check-bw36-1r1-canvas-toolbar-visibility-and-funnel-footer.js': '230385a667a2b548d096848af5c24943d0e0047cde61faef47b6c69c5d42812e'

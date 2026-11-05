@@ -17,7 +17,7 @@ const order=["insights-page-header","insights-overview","insights-journey-sectio
 h=render();h.state.insightsDiagnosticSnapshot.findings=[];h.sandbox.renderInsightsSurface();assert(byClass(h,"insights-attention-empty").length);
 h=render();h.state.insightsDiagnosticSnapshot.analysis.platformDistribution.counts={};h.sandbox.renderInsightsSurface();assert(byClass(h,"insights-channel-empty").length);
 h=render();h.state.insightsDiagnosticSnapshot.analysis.funnel.coveredStages=["Awareness"];h.sandbox.renderInsightsSurface();assert.equal(byClass(h,"insights-campaign-journey")[0].children.length,5);
-h=render();h.state.insightsDiagnosticSnapshot={...h.state.insightsDiagnosticSnapshot,findings:h.state.insightsDiagnosticSnapshot.findings.map(f=>({...f,affectedNodeIds:undefined}))};h.sandbox.renderInsightsSurface();assert(!h.cards.all().some(x=>x.textContent==="Show on Canvas"));
+h=render();h.state.insightsDiagnosticSnapshot={...h.state.insightsDiagnosticSnapshot,findings:h.state.insightsDiagnosticSnapshot.findings.map(f=>({...f,affectedNodeIds:undefined}))};h.sandbox.renderInsightsSurface();assert(byClass(h,"insights-finding").every(f=>!f.all().some(x=>x.tagName==="BUTTON"&&x.textContent==="Show on Canvas")),"Findings without affected IDs never get navigation actions; Journey sources are independent");
 h=render({publicBoardToken:"public",boardAccess:{canView:true,canEdit:false,reason:"public"}});assert(!h.cards.all().some(x=>x.textContent==="Ask AI Brain"));
 h=render({uiLanguage:"de"});assert(h.cards.textContent.includes("DE:Executive health overview"));
 for(const theme of ["light","dark"]){h=render({resolvedTheme:theme});assert(byClass(h,"insights-boundary").length);}
