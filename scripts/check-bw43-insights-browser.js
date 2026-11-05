@@ -7,16 +7,6 @@ const fs = require('node:fs');
 const {chromium} = require('playwright-core');
 const out = 'work/bw43/screenshots';
 (async () => {
-  // Temporary CI diagnosis: the existing always-uploaded BW-43 artifact keeps
-  // the exact workspace failure when the connected job-log reader is unavailable.
-  if (process.env.CI) {
-    fs.mkdirSync('work/bw43',{recursive:true});
-    for(let attempt=1;attempt<=3;attempt++) {
-      const result=require('node:child_process').spawnSync(process.execPath,['scripts/check-bw37-1a-r1-workspace.js'],{encoding:'utf8',maxBuffer:524288,timeout:120000});
-      fs.appendFileSync('work/bw43/workspace-diagnostic.log',`Attempt ${attempt}\n${result.stdout||''}${result.stderr||''}\n`);
-      assert.equal(result.status,0,'Existing workspace regression; exact trace is in workspace-diagnostic.log');
-    }
-  }
   const browser = await chromium.launch({executablePath:process.env.CHROMIUM_PATH || '/usr/bin/chromium',args:['--no-sandbox']});
   fs.mkdirSync(out,{recursive:true});
   const results = [];
