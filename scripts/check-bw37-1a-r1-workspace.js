@@ -113,6 +113,7 @@ const screenshots = process.env.BW37_SCREENSHOT_DIR;
     await page.setViewportSize({width:375,height:812});
     await page.evaluate(()=>{Object.defineProperty(window.visualViewport,'height',{configurable:true,value:520});window.visualViewport.dispatchEvent(new Event('resize'));});
     await page.waitForFunction(()=>el.aiBrainView.getBoundingClientRect().bottom<=520);
+    await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))); // Native resize/layout observer lifecycle.
     assert(await page.locator('#ai-brain-form [type=submit]').evaluate(n=>n.getBoundingClientRect().bottom<450),'visual viewport keyboard leaves composer above mobile controls');
     await page.evaluate(()=>{delete window.visualViewport.height;window.visualViewport.dispatchEvent(new Event('resize'));});
     assert.equal(await page.evaluate(()=>JSON.stringify([state.nodes,state.edges,state.brandCore,state.boardBrandAssociation,state.isDirty])),domain);
@@ -130,7 +131,9 @@ const screenshots = process.env.BW37_SCREENSHOT_DIR;
     await page.setViewportSize({width:375,height:812});
     await page.evaluate(()=>{state.nodes=[];refreshLastSavedSnapshot();renderAiBrain();Object.defineProperty(window.visualViewport,'height',{configurable:true,value:520});window.visualViewport.dispatchEvent(new Event('resize'));});
     await page.waitForFunction(()=>el.aiBrainView.getBoundingClientRect().bottom<=520);
-    assert(await page.locator('#ai-brain-form [type=submit]').evaluate(n=>n.getBoundingClientRect().bottom<450),'empty-Canvas keyboard composer remains reachable');
+    await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))); // Native resize/layout observer lifecycle.
+    const emptyKeyboard=await page.locator('#ai-brain-form [type=submit]').evaluate(n=>({bottom:n.getBoundingClientRect().bottom,viewport:visualViewport.height,viewBottom:el.aiBrainView.getBoundingClientRect().bottom,width:innerWidth,height:innerHeight,compact:el.aiBrainView.classList.contains('ai-brain-compact-viewport')}));
+    assert(emptyKeyboard.bottom<450,'empty-Canvas keyboard composer remains reachable '+JSON.stringify(emptyKeyboard));
     assert.deepEqual(f.errors,[]);assert.deepEqual(f.writes,[]);
     console.log('PASS unrelated Canvas unaffected, account/Board reset and stale response suppression');
   } finally { await browser.close(); }
