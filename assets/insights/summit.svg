@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="240" viewBox="0 0 640 240" fill="none">
+<!-- Decorative landscape; no campaign data or reward semantics. -->
+<defs>
+ <linearGradient id="mountain" x1="420" y1="115" x2="340" y2="260" gradientUnits="userSpaceOnUse"><stop stop-color="#e1d4fc"/><stop offset="1" stop-color="#9674c6"/></linearGradient>
+ <linearGradient id="rock" x1="355" y1="150" x2="475" y2="245" gradientUnits="userSpaceOnUse"><stop stop-color="#fbe0c9"/><stop offset=".48" stop-color="#c0a2e4"/><stop offset="1" stop-color="#8261b1"/></linearGradient>
+ <linearGradient id="body" x1="340" y1="67" x2="380" y2="140" gradientUnits="userSpaceOnUse"><stop stop-color="#7d69b7"/><stop offset=".5" stop-color="#302349"/><stop offset="1" stop-color="#47345f"/></linearGradient>
+ <linearGradient id="lens" x1="330" y1="95" x2="366" y2="123" gradientUnits="userSpaceOnUse"><stop stop-color="#c9bafa"/><stop offset=".48" stop-color="#fff0dc"/><stop offset="1" stop-color="#b09bf0"/></linearGradient>
+</defs>
+<path d="m0 214 71-37 55 21 58-47 67 44 84-61 89 57 75-31 61 28 80-23v75H0Z" fill="#e8ddf8"/>
+<path d="m90 240 89-50 44 13 83-44 67 31 71-50 82 54 49-20 65 33v33Z" fill="#d4c0ef"/>
+<path d="m213 240 70-70 79-27 62 8 47 51 73 38Z" fill="url(#mountain)"/>
+<path d="m283 170 44 12 35-39-5 43 44 28-33 26H213Z" fill="#b89ad7"/>
+<path d="m357 186 26-33 41-2 18 36 29 15-28 38h-75l33-26Z" fill="url(#rock)"/>
+<path d="m281 170 17-101" stroke="#5c427d" stroke-width="4" stroke-linecap="round"/>
+<path d="m300 69 54 7-9 17 3 16-55-8Z" fill="#8551e4"/>
+<circle cx="321" cy="83" r="4" fill="#eee6ff"/><circle cx="316" cy="89" r="4" fill="#eee6ff"/><circle cx="326" cy="90" r="4" fill="#eee6ff"/>
+<g transform="rotate(-14 395 120)">
+ <path d="m351 93 23-9 41 15 36-3 14 39-24 13-29-16-39 9Z" fill="url(#body)"/>
+ <ellipse cx="375" cy="115" rx="29" ry="35" fill="#3a294f" stroke="#8a71ae" stroke-width="5"/>
+ <ellipse cx="375" cy="115" rx="19" ry="25" fill="url(#lens)" stroke="#211b39" stroke-width="5"/>
+ <ellipse cx="442" cy="125" rx="23" ry="29" fill="#43315b" stroke="#9a7fb9" stroke-width="4"/>
+ <ellipse cx="442" cy="125" rx="15" ry="21" fill="url(#lens)" stroke="#211b39" stroke-width="4"/>
+ <path d="m402 110 14 3" stroke="#aa91ce" stroke-width="5" stroke-linecap="round"/>
+</g>
+</svg>

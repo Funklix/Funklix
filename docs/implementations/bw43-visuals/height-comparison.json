@@ -1,0 +1,72 @@
+[
+  {
+    "baseline": false,
+    "height": 1605,
+    "width": 1180,
+    "sections": [
+      {
+        "class": "insights-page-header",
+        "height": 179.03125
+      },
+      {
+        "class": "insights-section insights-overview",
+        "height": 221.765625
+      },
+      {
+        "class": "insights-section insights-journey-section",
+        "height": 314.75
+      },
+      {
+        "class": "insights-section insights-opportunities",
+        "height": 285.28125
+      },
+      {
+        "class": "insights-section insights-diagnostics",
+        "height": 587.46875
+      },
+      {
+        "class": "insights-section insights-disclosure-section",
+        "height": 158.34375
+      },
+      {
+        "class": "insights-section insights-disclosure-section",
+        "height": 158.34375
+      }
+    ]
+  },
+  {
+    "baseline": true,
+    "height": 2239,
+    "width": 1180,
+    "sections": [
+      {
+        "class": "insights-page-header",
+        "height": 143
+      },
+      {
+        "class": "insights-section insights-overview",
+        "height": 351.1875
+      },
+      {
+        "class": "insights-section insights-journey-section",
+        "height": 214.703125
+      },
+      {
+        "class": "insights-section insights-opportunities",
+        "height": 264.84375
+      },
+      {
+        "class": "insights-section insights-diagnostics",
+        "height": 901.1875
+      },
+      {
+        "class": "insights-section insights-disclosure-section",
+        "height": 98
+      },
+      {
+        "class": "insights-section insights-disclosure-section",
+        "height": 98
+      }
+    ]
+  }
+]
