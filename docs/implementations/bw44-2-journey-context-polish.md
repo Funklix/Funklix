@@ -27,6 +27,8 @@ Legacy DOM IDs remain. Opportunity source presentation is unchanged.
 - Every displayed Journey reference opens its own persisted ID, original Board
   and visible Inspector, including duplicate node titles and keyboard activation.
   The fixture executes the real checked-reference route with disposable SQL.
+- Empty reference status regions remain rendered before their first message,
+  preserving the existing live announcement semantics without an empty spacing gap.
 - Pending, 403, 409, 503 and stale-during-request targets remain in Insights.
   Fixture assertions prohibit inference and application writes.
 - Native Chromium 200% browser zoom verified through DPR and halved CSS viewport,

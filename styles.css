@@ -8584,9 +8584,9 @@ html[data-theme="dark"] #insights-view .insights-context span { background: var(
 #insights-view .insights-context-title { font-size:.9rem; font-weight:700; }
 #insights-view .insights-context-open { color:var(--insights-muted); font-size:.75rem; margin-top:3px; text-decoration:underline; text-underline-offset:3px; }
 #insights-view .insights-journey-contexts .insights-source-fields { margin:8px 4px 0; color:var(--insights-muted); line-height:1.5; }
-#insights-view .insights-journey-contexts .insights-source-fields:empty,
-#insights-view .insights-journey-contexts .insights-reference-status:empty { display:none; }
-#insights-view .insights-journey-contexts .insights-reference-status { margin:8px 4px 0; color:var(--insights-ink); line-height:1.5; }
+#insights-view .insights-journey-contexts .insights-source-fields:empty { display:none; }
+#insights-view .insights-journey-contexts .insights-reference-status { color:var(--insights-ink); line-height:1.5; }
+#insights-view .insights-journey-contexts .insights-reference-status:not(:empty) { margin:8px 4px 0; }
 #insights-view .insights-journey-contexts .insights-stage-context > p { margin:0; padding:0 16px 16px; color:var(--insights-muted); line-height:1.5; }
 @media (max-width:600px) {
   #insights-view .insights-journey-contexts .insights-node-list { grid-template-columns:minmax(0,1fr); padding:0 10px 10px; gap:10px; }

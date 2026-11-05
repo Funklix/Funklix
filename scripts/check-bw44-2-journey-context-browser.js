@@ -52,6 +52,7 @@ async function noOverflow(p) {
       assert(await stage(p,'Awareness').evaluate(n=>n.open));
       assert(await stage(p,'Awareness').locator('summary').evaluate(n=>getComputedStyle(n).outlineStyle!=='none'));
       await noOverflow(p);
+      assert(await stage(p,'Awareness').locator('.insights-reference-status').evaluateAll(ns=>ns.every(n=>n.getAttribute('role')==='status'&&getComputedStyle(n).display!=='none'&&getComputedStyle(n).visibility==='visible')),'Empty live status regions remain rendered before their first message');
       const rects=await stage(p,'Awareness').locator('.insights-node-list > li').evaluateAll(ns=>ns.map(n=>n.getBoundingClientRect().toJSON()));
       if(width>=1024) assert.equal(rects[0].y,rects[1].y,'Desktop uses multiple columns');
       if(width<=375) assert(rects[1].y>rects[0].y,'Mobile uses one column');
