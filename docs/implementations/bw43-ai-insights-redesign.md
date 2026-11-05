@@ -24,6 +24,7 @@ Readiness appears prominently above and compactly in Diagnostics because those s
 | `assets/insights/summit.svg` | Small authored decorative vector; no remote asset or generated image dependency |
 | `scripts/check-bw43-insights-browser.js` | Actual application/engine/render/actions; fictional Canvas fixtures; 40 combinations of themes, languages, navigation and viewport sizes |
 | `scripts/check-bw43-native-zoom.js` | Actual Chromium 200% browser zoom through its local Settings API, disposable profile, reflow and keyboard checks |
+| `scripts/check-bw36-6-workspace-schema-foundation.js` | Advances the exact full-file CSS fingerprint for the approved scoped visual addition; every assertion and other pin stays unchanged |
 | `package.json` | `check:bw43` registration; no dependency added |
 | `.github/workflows/runtime-boot-safety.yml` | Adds the new acceptance checks and fictional screenshot artifact to both existing PostgreSQL versions; no prior check removed or weakened |
 | `docs/implementations/bw43-insights-inventory.md` | Complete pre-edit audit |
@@ -40,7 +41,7 @@ Checks cover real scores and classifications; original priority/order; all diagn
 
 Native zoom is verified independently from pinch scaling: actual 1440px browser window, 720px CSS viewport, DPR 2, visualViewport.scale 1. It checks disclosure access and reflow, then deletes its disposable browser profile. No application setting changes.
 
-Local existing regressions pass: BW-25 baseline and dynamic translations; BW-28 architecture (86 contracts), UX/handoff (39), premium presentation and runtime rendering (46); shared BW-36.21B2 Home/Insights/Brain (30 groups, including 20,000-node source parity). Complete Runtime Boot Safety results for PostgreSQL **17.6** and **18.4** are recorded in the PR's checks and final validation report. The workflow retains all existing Insights, Canvas, AI Brain, Profile and boot checks.
+Local existing regressions pass: BW-25 baseline and dynamic translations; BW-28 architecture (86 contracts), UX/handoff (39), premium presentation and runtime rendering (46); shared BW-36.21B2 Home/Insights/Brain (30 groups, including 20,000-node source parity). The first full matrix found the historical whole-file CSS fingerprint, which necessarily changes with this approved redesign. Its expected digest was advanced, retaining the full hash assertion and all SQL/auth/sidebar pins. Original CSS bytes are unchanged, with only the scoped BW-43 block appended. Complete Runtime Boot Safety results for PostgreSQL **17.6** and **18.4** are recorded in the PR's checks and final validation report. The workflow retains all existing Insights, Canvas, AI Brain, Profile and boot checks.
 
 Height comparison uses the same fictional 13-node Canvas, 1440×1100 viewport and original `origin/main` app/CSS versus the redesign: **2239 → 1605px**, about **28.3% shorter**. This is a desktop comparison for that fixture; actual height varies with findings, channel names, localization and disclosures. No essential data is hidden to achieve the reduction.
 
