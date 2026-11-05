@@ -11,27 +11,38 @@ module.exports = async function handler(req, res) {
   const fail = status => res.status(status).json({ code: 'node_reference_unavailable' });
   const body = req.body;
   if (req.method !== 'POST') return fail(405);
-  if (!body || Object.keys(body).length !== 3 || !isBrandId(body.board_id)
+  const insights = body?.source === 'insights';
+  const keys = insights ? ['source', 'board_id', 'node_id', 'node_type', 'expected_scope'] : ['board_id', 'node_id', 'scope_revision'];
+  const expected = body?.expected_scope;
+  const expectedValid = expected && typeof expected === 'object' && !Array.isArray(expected)
+    && Object.keys(expected).length === 3 && ['updated_at', 'brand_id', 'workspace_id'].every(key => Object.hasOwn(expected, key))
+    && typeof expected.updated_at === 'string' && expected.updated_at.length <= 40
+    && scope.validExpected(scope.publicScope(expected));
+  if (!body || typeof body !== 'object' || Array.isArray(body) || Object.keys(body).length !== keys.length
+    || !keys.every(key => Object.hasOwn(body, key)) || !isBrandId(body.board_id)
     || typeof body.node_id !== 'string' || !body.node_id.trim() || body.node_id.length > 160
-    || typeof body.scope_revision !== 'string' || !/^[a-f0-9]{64}$/.test(body.scope_revision)) return fail(400);
+    || (insights ? !NODE_TYPES.has(body.node_type) || canonicalType(body.node_type) !== body.node_type || !expectedValid
+      : typeof body.scope_revision !== 'string' || !/^[a-f0-9]{64}$/.test(body.scope_revision))) return fail(400);
   const user = getSessionUser(req);
   if (!user?.email) return fail(401);
   try {
     const valid = data => {
       const nodes = data.board.canvas_json?.nodes;
-      return referenceRevision(data, body.node_id) === body.scope_revision && Array.isArray(nodes)
+      if (insights) scope.assertExpected(data, scope.publicScope(body.expected_scope));
+      return (insights || referenceRevision(data, body.node_id) === body.scope_revision) && Array.isArray(nodes)
         && nodes.every(node => node && typeof node.id === 'string' && node.id.length > 0)
         && new Set(nodes.map(node => node.id)).size === nodes.length
-        && nodes.filter(node => node.id === body.node_id && NODE_TYPES.has(canonicalType(node.type))).length === 1;
+        && nodes.filter(node => node.id === body.node_id && NODE_TYPES.has(canonicalType(node.type))
+          && (!insights || canonicalType(node.type) === body.node_type)).length === 1;
     };
-    const data = await scope.capture({ boardId: body.board_id, user, includeCanvas: true });
+    const data = await scope.capture({ boardId: body.board_id, user, includeCanvas: true, capability: insights ? 'view' : 'edit' });
     if (!valid(data)) return fail(409);
     const currentUser = getSessionUser(req);
     scope.assertActor(data, currentUser);
-    const current = await scope.capture({ boardId: body.board_id, user: currentUser, includeCanvas: true });
+    const current = await scope.capture({ boardId: body.board_id, user: currentUser, includeCanvas: true, capability: insights ? 'view' : 'edit' });
     scope.assertActor(data, getSessionUser(req));
     if (current.fingerprint !== data.fingerprint || !valid(current)) return fail(409);
-    return res.status(200).json({ nodeId: body.node_id, scopeRevision: body.scope_revision });
+    return res.status(200).json({ nodeId: body.node_id, scopeRevision: insights ? referenceRevision(current, body.node_id) : body.scope_revision });
   } catch (error) { return fail(error instanceof scope.ProposalScopeError && error.status !== 503 ? 409 : 503); }
 };
 module.exports = require('../_write-maintenance').withMaintenanceResponse(module.exports);

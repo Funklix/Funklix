@@ -12,7 +12,7 @@ const REV = '2026-10-29T08:00:00.123Z';
       r.db.boards[0].updated_at = REV;
       r.db.boards[0].canvas_json.nodes = ['node-27', '7b910c24-8bda-42fb-b4a8-497f12c62c39', 'node-C'].map((id, i) => ({
         id, type: i ? 'Landing Page' : 'Content', title: 'Workshop invitation', content: 'Join our fictional community workshop.',
-        status: 'Draft', position: { x: 180 + i * 600, y: 240 }, images: [], tags: [], postits: [], variants: [], reactions: {},
+        audience: i ? 'Visitors' : 'Members', status: 'Draft', position: { x: 180 + i * 600, y: 240 }, images: [], tags: [], postits: [], variants: [], reactions: {},
         social: { platform: '', caption: '', hashtags: [] }, landingPage: { headerClaim: 'Make together', cta: '', trust: '' }
       }));
     } });
@@ -22,7 +22,7 @@ const REV = '2026-10-29T08:00:00.123Z';
     await sql.pg.query('UPDATE board_editors SET board_id=$1,email=$2', [boardId, email]);
     await sql.pg.query('UPDATE boards SET id=$1,canvas_json=$2::jsonb,updated_at=$3', [boardId, JSON.stringify(f.r.db.boards[0].canvas_json), '2026-10-29T08:00:00.123456Z']);
     const resolver = sql.load('api/ai-brain/node-reference.js'), auth = sql.load('api/_auth-session.js');
-    let opens = 0, writes = 0, denied = false, release = null, started = null;
+    let opens = 0, writes = 0, denied = false, serviceUnavailable = false, release = null, started = null;
     await p.route('**/api/ai-brain/advice', async route => {
       const body = route.request().postDataJSON();
       sql.answer = body.response_language === 'de'
@@ -35,7 +35,7 @@ const REV = '2026-10-29T08:00:00.123Z';
       if (started) { started(); started = null; await new Promise(resolve => { release = resolve; }); }
       const res = { statusCode: 200, setHeader() {}, status(code) { this.statusCode = code; return this; }, json(body) { this.body = body; return this; } };
       await resolver({ method: 'POST', body: route.request().postDataJSON(), headers: { cookie: 'funklix_session=' + auth.createSessionToken(sql.user) } }, res);
-      return route.fulfill({ status: denied ? 409 : res.statusCode, json: denied ? { code: 'node_reference_unavailable' } : res.body });
+      return route.fulfill({ status: serviceUnavailable ? 503 : denied ? 409 : res.statusCode, json: denied ? { code: 'node_reference_unavailable' } : res.body });
     });
     await p.route('**/api/boards/*', route => {
       if (route.request().method() === 'GET') return route.fallback();
@@ -132,6 +132,75 @@ const REV = '2026-10-29T08:00:00.123Z';
     await p.evaluate(() => { state.boardLoadGeneration++; }); release();
     await p.waitForFunction(() => state.aiBrain.messages.at(-1).nodeReferences.unavailable);
     assert.equal(await p.evaluate(() => state.activeView), 'ai_brain');
+    // BW-44: deterministic Insights cards use this same production resolver.
+    async function insights(viewer=false) {
+      await boot();
+      await sql.pg.exec("UPDATE board_editors SET role='"+(viewer?'viewer':'editor')+"'");
+      await p.evaluate(({brand,viewer}) => {
+        state.boardBrandAssociation.brandId=brand;state.boardBrandAssociation.workspaceId=null;
+        state.boardAccess.canEdit=!viewer;setActiveView('insights');renderCampaignIntelligence();
+      },{brand:sql.BRAND,viewer});
+    }
+    const source = id => p.locator('[data-finding-id="ICP_VARIATION"] [data-insights-node-id="'+id+'"]');
+    for (const viewer of [false,true]) for (const language of ['en','de']) for (const theme of ['light','dark']) {
+      await insights(viewer);await p.setViewportSize({width:language==='de'?375:1440,height:1000});
+      await p.evaluate(({language,theme})=>{state.uiLanguage=window.FunklixLanguage.setUiLanguage(language);document.documentElement.dataset.theme=theme;renderInsightsSurface();},{language,theme});
+      assert.equal(await p.locator('.insights-actions .fk-btn-primary').count(),viewer?0:await p.evaluate(()=>state.insightsDiagnosticSnapshot.findings.length));
+      for (const id of ['node-27','7b910c24-8bda-42fb-b4a8-497f12c62c39']) {
+        const before=await stable(), inference=sql.calls.length, reads=opens;
+        await source(id).focus();await p.keyboard.press(language==='de'?'Space':'Enter');
+        await p.waitForFunction(id=>state.activeView==='board'&&state.selectedPrimary===id&&document.activeElement===el.inputs.title,id);
+        assert.equal(await p.evaluate(()=>el.inputs.title.value),'Workshop invitation');
+        assert.equal(await stable(),before);assert.equal(sql.calls.length,inference);assert.equal(opens,reads+1);
+        await p.evaluate(()=>setActiveView('insights'));
+      }
+    }
+    await insights();const reads=opens;
+    await p.evaluate(()=>{state.nodes.push({...state.nodes[0],id:'new-unsaved',audience:'New'});state.isDirty=true;renderCampaignIntelligence();});
+    await source('new-unsaved').click();
+    await p.waitForFunction(()=>Array.from(document.querySelectorAll('.insights-reference-status')).some(n=>/unavailable|nicht verfügbar/.test(n.textContent)));
+    assert.equal(opens,reads+1);assert.equal(await p.evaluate(()=>state.activeView),'insights','Unsaved new node cannot acquire persisted destination');
+    for (const mutation of ['account','revision','catalog','association','nodes','edges','saving','hydrating','loading','generation','permission','snapshot']) {
+      await insights();
+      const pending=new Promise(resolve=>{started=resolve;});await source('node-27').click();await pending;
+      assert.equal(await p.evaluate(()=>state.activeView),'insights','No optimistic navigation while pending');
+      await p.evaluate(mutation=>{
+        if(mutation==='account')state.user={...state.user};
+        if(mutation==='revision')state.lastKnownUpdatedAt='2026-11-01';
+        if(mutation==='catalog')state.workspaceCatalog.generation++;
+        if(mutation==='association')state.boardBrandAssociation.brandId=null;
+        if(mutation==='nodes')state.nodes[0].title='Changed';
+        if(mutation==='edges')state.edges.push({id:'changed'});
+        if(mutation==='saving')state.isSaving=true;
+        if(mutation==='hydrating')state.isBoardHydrating=true;
+        if(mutation==='loading')state.isBoardLoading=true;
+        if(mutation==='generation')state.boardLoadGeneration++;
+        if(mutation==='permission')state.boardAccess.canView=false;
+        if(mutation==='snapshot')state.insightsDiagnosticSnapshot=null;
+      },mutation);release();
+      await p.waitForFunction(()=>Array.from(document.querySelectorAll('.insights-reference-status')).some(n=>/unavailable|nicht verfügbar/.test(n.textContent)));
+      assert.equal(await p.evaluate(()=>state.activeView),'insights',mutation);
+    }
+    await insights();denied=true;await source('node-27').click();
+    await p.waitForFunction(()=>Array.from(document.querySelectorAll('.insights-reference-status')).some(n=>/unavailable|nicht verfügbar/.test(n.textContent)));
+    assert.equal(await p.evaluate(()=>state.activeView),'insights');denied=false;
+    await insights();serviceUnavailable=true;await source('node-27').click();
+    await p.waitForFunction(()=>Array.from(document.querySelectorAll('.insights-reference-status')).some(n=>/Try again|erneut/.test(n.textContent)));
+    assert.equal(await p.evaluate(()=>state.activeView),'insights');assert.equal(await source('node-27').isEnabled(),true);
+    serviceUnavailable=false;await source('node-27').click();
+    await p.waitForFunction(()=>state.selectedPrimary==='node-27'&&state.activeView==='board');
+    await insights();
+    const selectedBefore=await p.evaluate(()=>state.selectedPrimary);
+    await p.evaluate(()=>{window.bw44NativeRaf=requestAnimationFrame;window.bw44FrameChanged=false;window.requestAnimationFrame=fn=>window.bw44NativeRaf(time=>{if(state.activeView==='board'&&!window.bw44FrameChanged){window.bw44FrameChanged=true;state.isSaving=true;}fn(time);});});
+    await source('node-27').click();
+    await p.waitForFunction(()=>Array.from(document.querySelectorAll('.insights-reference-status')).some(n=>/unavailable|nicht verfügbar/.test(n.textContent)));
+    assert.equal(await p.evaluate(()=>state.selectedPrimary),selectedBefore,'Frame lifecycle change prevents selection');
+    await p.evaluate(()=>{window.requestAnimationFrame=window.bw44NativeRaf;state.isSaving=false;});
+    await insights();
+    const prior=opens;await p.evaluate(()=>{state.publicBoardToken='fictional-public';state.boardAccess.canEdit=false;renderInsightsSurface();});
+    await source('node-27').click();await p.waitForFunction(()=>state.selectedPrimary==='node-27'&&state.activeView==='board');
+    assert.equal(opens,prior,'Public context acquires no checked references');
+    console.log('PASS BW-44 authenticated editor/viewer exact-ID Insights navigation, EN/DE, Light/Dark, keyboard, unsaved new ID, pending lifecycle changes and public isolation');
     assert.equal(writes, 0); assert.equal(f.errors.length, 0);
     assert(sql.queries.every(q => /^(SELECT|BEGIN|SET LOCAL|COMMIT|ROLLBACK)/.test(q.sql)));
     console.log('PASS BW-40 browser production Advice/resolver + Canvas/Inspector; EN/DE, light/dark, desktop/mobile, keyboard, duplicates, similar titles, stale/deleted/wrong Board/Workspace/revoked/pending scope, no inference on click or writes');
