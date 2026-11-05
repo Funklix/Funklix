@@ -74,7 +74,7 @@ const out = 'work/bw43/screenshots';
     assert((await p.locator('.insights-methodology').innerText()).includes('They do not measure audience response'));
     await p.locator('.insights-methodology').screenshot({path:`${out}/methodology-expanded.png`});
     await p.locator('.insights-methodology summary').click();
-    for(const theme of ['light','dark']) for(const language of ['en','de']) for(const collapsed of [false,true]) for(const width of [1440,1150,768,375,320]) {
+    for(const theme of ['light','dark']) for(const language of ['en','de']) for(const collapsed of [false,true]) for(const width of [1672,1440,1150,768,375,320]) {
       await p.setViewportSize({width,height:1100});
       await p.evaluate(({theme,language,collapsed})=>{
         document.documentElement.dataset.theme=theme;
@@ -86,11 +86,12 @@ const out = 'work/bw43/screenshots';
         assert(await p.locator(selector).evaluate(n=>n.scrollWidth<=n.clientWidth+1),`${selector} overflow: ${theme}/${language}/${collapsed}/${width}`);
       }
       assert(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'Document overflow');
+      if(width>=1440)assert(await p.locator('#insights-view').evaluate((n,collapsed)=>n.clientWidth>innerWidth-(collapsed?100:300),collapsed),'Desktop fills available workspace');
       assert.equal(await p.locator('.insights-readiness-ring strong').textContent(),'90');
       assert.equal(await p.locator('.insights-campaign-journey li').count(),5);
       assert.equal(await p.locator('.insights-campaign-journey li').first().getAttribute('aria-label'),language==='de'?'Bekanntheit: Abgedeckt':'Awareness: Covered');
       assert.equal(await p.locator('.insights-refresh').textContent(),language==='de'?'Erkenntnisse aktualisieren':'Refresh insights');
-      if(language==='en'&&collapsed&&((width===1440)||theme==='light'&&[768,375,320].includes(width))) await shot(`insights-${theme}-${width}`);
+      if(language==='en'&&collapsed&&(([1672,1440].includes(width))||theme==='light'&&[768,375,320].includes(width))) await shot(`insights-${theme}-${width}`);
       if(language==='de'&&theme==='dark'&&collapsed&&width===375) await shot('insights-dark-de-375');
       await p.locator('.insights-methodology summary').focus();
       assert(await p.locator('.insights-methodology summary').evaluate(n=>{const r=n.getBoundingClientRect();return n.contains(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2));}),'Last disclosure remains clear of navigation');

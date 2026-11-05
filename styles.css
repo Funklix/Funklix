@@ -8345,6 +8345,7 @@ body { min-width: 320px; }
 
 /* BW-43: scoped Canvas progress dashboard. Decorations carry no analytics data. */
 #insights-view {
+  max-width: none; width: 100%; min-width: 0; margin: 0; box-sizing: border-box;
   --insights-accent: var(--fk-color-primary-action);
   --insights-lilac: #f0e8ff;
   --insights-ivory: #fffaf4;

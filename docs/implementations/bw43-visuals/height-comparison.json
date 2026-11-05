@@ -1,8 +1,8 @@
 [
   {
     "baseline": false,
-    "height": 1605,
-    "width": 1180,
+    "height": 1604,
+    "width": 1288,
     "sections": [
       {
         "class": "insights-page-header",
@@ -10,7 +10,7 @@
       },
       {
         "class": "insights-section insights-overview",
-        "height": 221.765625
+        "height": 219.96875
       },
       {
         "class": "insights-section insights-journey-section",
