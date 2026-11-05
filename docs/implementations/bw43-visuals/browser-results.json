@@ -1,0 +1,315 @@
+{
+  "result": "PASS",
+  "matrix": [
+    {
+      "theme": "light",
+      "language": "en",
+      "collapsed": false,
+      "width": 1672
+    },
+    {
+      "theme": "light",
+      "language": "en",
+      "collapsed": false,
+      "width": 1440
+    },
+    {
+      "theme": "light",
+      "language": "en",
+      "collapsed": false,
+      "width": 1150
+    },
+    {
+      "theme": "light",
+      "language": "en",
+      "collapsed": false,
+      "width": 768
+    },
+    {
+      "theme": "light",
+      "language": "en",
+      "collapsed": false,
+      "width": 375
+    },
+    {
+      "theme": "light",
+      "language": "en",
+      "collapsed": false,
+      "width": 320
+    },
+    {
+      "theme": "light",
+      "language": "en",
+      "collapsed": true,
+      "width": 1672
+    },
+    {
+      "theme": "light",
+      "language": "en",
+      "collapsed": true,
+      "width": 1440
+    },
+    {
+      "theme": "light",
+      "language": "en",
+      "collapsed": true,
+      "width": 1150
+    },
+    {
+      "theme": "light",
+      "language": "en",
+      "collapsed": true,
+      "width": 768
+    },
+    {
+      "theme": "light",
+      "language": "en",
+      "collapsed": true,
+      "width": 375
+    },
+    {
+      "theme": "light",
+      "language": "en",
+      "collapsed": true,
+      "width": 320
+    },
+    {
+      "theme": "light",
+      "language": "de",
+      "collapsed": false,
+      "width": 1672
+    },
+    {
+      "theme": "light",
+      "language": "de",
+      "collapsed": false,
+      "width": 1440
+    },
+    {
+      "theme": "light",
+      "language": "de",
+      "collapsed": false,
+      "width": 1150
+    },
+    {
+      "theme": "light",
+      "language": "de",
+      "collapsed": false,
+      "width": 768
+    },
+    {
+      "theme": "light",
+      "language": "de",
+      "collapsed": false,
+      "width": 375
+    },
+    {
+      "theme": "light",
+      "language": "de",
+      "collapsed": false,
+      "width": 320
+    },
+    {
+      "theme": "light",
+      "language": "de",
+      "collapsed": true,
+      "width": 1672
+    },
+    {
+      "theme": "light",
+      "language": "de",
+      "collapsed": true,
+      "width": 1440
+    },
+    {
+      "theme": "light",
+      "language": "de",
+      "collapsed": true,
+      "width": 1150
+    },
+    {
+      "theme": "light",
+      "language": "de",
+      "collapsed": true,
+      "width": 768
+    },
+    {
+      "theme": "light",
+      "language": "de",
+      "collapsed": true,
+      "width": 375
+    },
+    {
+      "theme": "light",
+      "language": "de",
+      "collapsed": true,
+      "width": 320
+    },
+    {
+      "theme": "dark",
+      "language": "en",
+      "collapsed": false,
+      "width": 1672
+    },
+    {
+      "theme": "dark",
+      "language": "en",
+      "collapsed": false,
+      "width": 1440
+    },
+    {
+      "theme": "dark",
+      "language": "en",
+      "collapsed": false,
+      "width": 1150
+    },
+    {
+      "theme": "dark",
+      "language": "en",
+      "collapsed": false,
+      "width": 768
+    },
+    {
+      "theme": "dark",
+      "language": "en",
+      "collapsed": false,
+      "width": 375
+    },
+    {
+      "theme": "dark",
+      "language": "en",
+      "collapsed": false,
+      "width": 320
+    },
+    {
+      "theme": "dark",
+      "language": "en",
+      "collapsed": true,
+      "width": 1672
+    },
+    {
+      "theme": "dark",
+      "language": "en",
+      "collapsed": true,
+      "width": 1440
+    },
+    {
+      "theme": "dark",
+      "language": "en",
+      "collapsed": true,
+      "width": 1150
+    },
+    {
+      "theme": "dark",
+      "language": "en",
+      "collapsed": true,
+      "width": 768
+    },
+    {
+      "theme": "dark",
+      "language": "en",
+      "collapsed": true,
+      "width": 375
+    },
+    {
+      "theme": "dark",
+      "language": "en",
+      "collapsed": true,
+      "width": 320
+    },
+    {
+      "theme": "dark",
+      "language": "de",
+      "collapsed": false,
+      "width": 1672
+    },
+    {
+      "theme": "dark",
+      "language": "de",
+      "collapsed": false,
+      "width": 1440
+    },
+    {
+      "theme": "dark",
+      "language": "de",
+      "collapsed": false,
+      "width": 1150
+    },
+    {
+      "theme": "dark",
+      "language": "de",
+      "collapsed": false,
+      "width": 768
+    },
+    {
+      "theme": "dark",
+      "language": "de",
+      "collapsed": false,
+      "width": 375
+    },
+    {
+      "theme": "dark",
+      "language": "de",
+      "collapsed": false,
+      "width": 320
+    },
+    {
+      "theme": "dark",
+      "language": "de",
+      "collapsed": true,
+      "width": 1672
+    },
+    {
+      "theme": "dark",
+      "language": "de",
+      "collapsed": true,
+      "width": 1440
+    },
+    {
+      "theme": "dark",
+      "language": "de",
+      "collapsed": true,
+      "width": 1150
+    },
+    {
+      "theme": "dark",
+      "language": "de",
+      "collapsed": true,
+      "width": 768
+    },
+    {
+      "theme": "dark",
+      "language": "de",
+      "collapsed": true,
+      "width": 375
+    },
+    {
+      "theme": "dark",
+      "language": "de",
+      "collapsed": true,
+      "width": 320
+    }
+  ],
+  "checks": "production scores, classification, journey, priority, all findings, multi/zero channels, six original methods/explanations, methodology, refresh, Canvas/Brain handoffs, source ownership, unavailable states, authorization, keyboard, reduced motion, equivalent 200% reflow, no new AI/analytics calls or writes",
+  "screenshots": [
+    "diagnostics-compact.png",
+    "diagnostics-expanded.png",
+    "insights-200-percent-equivalent.png",
+    "insights-dark-1440.png",
+    "insights-dark-1672.png",
+    "insights-dark-de-375.png",
+    "insights-light-1440.png",
+    "insights-light-1672.png",
+    "insights-light-320.png",
+    "insights-light-375.png",
+    "insights-light-768.png",
+    "insights-light-desktop.png",
+    "insights-native-200-percent.png",
+    "journey-light.png",
+    "measured-performance-empty.png",
+    "methodology-expanded.png",
+    "multiple-channels.png",
+    "multiple-opportunities.png",
+    "no-opportunities.png"
+  ]
+}

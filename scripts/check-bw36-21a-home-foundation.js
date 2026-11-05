@@ -137,9 +137,10 @@ async function browserChecks() {
       if (!large && width !== 768) {
         await page.screenshot({ path: path.join(screenshots, `home-${width}-${theme}-${language}.png`), fullPage: true });
         if (width < 400) {
-          await home(page).locator('.home-board-card').first().scrollIntoViewIfNeeded();
+          // Screenshot setup must not hold an ElementHandle across a legitimate Home rerender.
+          await home(page).locator('.home-board-card').first().evaluate(node => node.scrollIntoView({ block: 'start', behavior: 'instant' }));
           await page.screenshot({ path: path.join(screenshots, `boards-${width}-${theme}-${language}.png`), fullPage: true });
-          await home(page).locator('h1').scrollIntoViewIfNeeded();
+          await home(page).locator('h1').evaluate(node => node.scrollIntoView({ block: 'start', behavior: 'instant' }));
         }
       }
     }
