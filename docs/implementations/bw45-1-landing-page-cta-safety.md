@@ -34,7 +34,7 @@ Mixed Landing Page/Social fixtures preserve Awareness plus Conversion and all or
 
 - `app.js`: one nullish fallback in `buildInsightsFindings`.
 - `scripts/check-bw28-3-1-insights-runtime-rendering.js`: optional/mixed/valid/malformed regressions and the specifically authorized finding-builder digest.
-- `scripts/check-bw36-21b2-home-insights-brain.js`: real-browser shared Home/Insights regression. Two existing exception fixtures now use `{cta:42}` instead of `{}` because an empty Landing Page object is valid after this repair; every original failure-isolation assertion remains.
+- `scripts/check-bw36-21b2-home-insights-brain.js`: real-browser shared Home/Insights regression. Three existing exception fixtures now use `{cta:42}` instead of `{}` because an empty Landing Page object is valid after this repair; every original failure-isolation assertion remains.
 - This implementation document.
 
 Only the fixed expected SHA-256 for `buildInsightsFindings` changes:

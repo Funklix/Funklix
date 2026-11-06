@@ -307,7 +307,7 @@ async function main() {
       await p.evaluate(()=>{
         const original=analyzeCampaign;window.b2Calculations=0;
         analyzeCampaign=(...args)=>{window.b2Calculations++;return original(...args);};
-        state.isDirty=true;state.nodes.find(n=>n.id==='landing').landingPage={};state.insightsDiagnosticSnapshot=null;refreshDashboardIfVisible();
+        state.isDirty=true;state.nodes.find(n=>n.id==='landing').landingPage={cta:42};state.insightsDiagnosticSnapshot=null;refreshDashboardIfVisible();
       });
       await finishAnalysis(p);
       assert.equal(await p.evaluate(()=>homeCampaignInsights().status),'error');
