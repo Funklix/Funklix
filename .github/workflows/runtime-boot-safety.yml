@@ -476,9 +476,9 @@ jobs:
           JS
       - name: Check BW-43 Insights scores, existing actions, themes and responsive layout
         run: npm run check:bw43
-      - name: Check BW-44.2 Journey context responsive panels and checked navigation
+      - name: Check BW-44.2/BW-44.3 selectable Journey, shared context and checked navigation
         run: node scripts/check-bw44-2-journey-context-browser.js
-      - name: Preserve BW-44.2 fictional Journey screenshots
+      - name: Preserve BW-44.2/BW-44.3 fictional Journey screenshots
         if: always()
         uses: actions/upload-artifact@v4
         with:

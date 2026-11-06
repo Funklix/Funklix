@@ -8129,7 +8129,7 @@ async function showInsightsFindingOnCanvas(code, explicitId = null, button = nul
   const ids = stage ? state.nodes.filter(node => insightsNodeSupportsStage(node, stage)).map(node => node.id) : finding?.affectedNodeIds;
   const nodeId = explicitId || ids?.find(id => state.nodes.some(node => node.id === id));
   let navigation = origin.navigation, targetView = origin.view;
-  const current = () => state.activeView === targetView && (state.insightsNavigationGeneration || 0) === navigation && !!state.currentBoardId && state.boardAccess?.canView === true && isCurrentInsightsSnapshot(snapshot) && insightsReferenceOriginCurrent(origin) && (stage ? ['Awareness','Interest','Consideration','Conversion','Retention'].includes(stage) : !!finding)
+  const current = () => (!button || button.isConnected) && state.activeView === targetView && (state.insightsNavigationGeneration || 0) === navigation && !!state.currentBoardId && state.boardAccess?.canView === true && isCurrentInsightsSnapshot(snapshot) && insightsReferenceOriginCurrent(origin) && (stage ? ['Awareness','Interest','Consideration','Conversion','Retention'].includes(stage) : !!finding)
     && ids?.includes(nodeId) && state.nodes.filter(node => node.id === nodeId).length === 1;
   const message = key => { if (status) status.textContent = uiText(key); else setSaveStatus(uiText(key)); };
   const unavailable = () => message('This reference is unavailable. Only saved nodes have checked destinations. Refresh insights and try again.');
@@ -8262,11 +8262,48 @@ function renderInsightsSurface() {
     panel.append(readiness,attention,journey,channels); overview.append(panel);
   }
   const journeySection=section("insights-journey-title","Campaign journey coverage","See which stages of the campaign journey are supported by content in your Canvas.","insights-journey-section");
-  if(!unavailableReason){const covered=new Set(snapshot.analysis.funnel.coveredStages);const list=make("ol","insights-campaign-journey");const contexts=make("div","insights-journey-contexts");funnelStages.forEach(stage=>{const present=covered.has(stage);const item=make("li",present?"is-covered":"is-missing");item.setAttribute("aria-label",`${t(stage)}: ${t(present?"Covered":"Missing content")}`);const symbol=make("span","insights-stage-symbol");symbol.dataset.stage=stage;symbol.setAttribute("aria-hidden","true");item.append(symbol,make("span","insights-stage-icon",present?"✓":"!"),make("strong","",t(stage)),make("span","insights-stage-status",t(present?"Covered":"Missing content")));const sources = state.nodes.filter(node => insightsNodeSupportsStage(node, stage) && index.get(node.id)).map(node => node.id);
-      const context = make('details', 'insights-stage-context'); context.dataset.stage = stage;
-      const summary = make('summary'); summary.append(make('strong', '', t(stage)), make('span', '', t('Canvas context'))); context.append(summary);
-      context.append(sources.length ? sourceList(sources, null, stage) : make('p', '', t('No content is recognized for this stage under the current Canvas mapping.')));
-      contexts.append(context);list.append(item);});journeySection.append(list,contexts,make("p","insights-journey-disclaimer",t("Canvas content coverage, not measured conversion performance.")));}
+  if (!unavailableReason) {
+    const covered = new Set(snapshot.analysis.funnel.coveredStages);
+    const list = make('ol', 'insights-campaign-journey');
+    const contexts = make('div', 'insights-journey-contexts');
+    const detail = make('section', 'insights-stage-context');
+    detail.id = 'insights-journey-detail'; detail.hidden = true;
+    detail.setAttribute('role', 'region');
+    contexts.append(detail);
+    let selected = null;
+    const controls = [];
+    funnelStages.forEach(stage => {
+      const present = covered.has(stage);
+      const label = `${t(stage)}: ${t(present ? 'Covered' : 'Missing content')}`;
+      const item = make('li', present ? 'is-covered' : 'is-missing');
+      item.setAttribute('aria-label', label);
+      const symbol = make('span', 'insights-stage-symbol');
+      symbol.dataset.stage = stage; symbol.setAttribute('aria-hidden', 'true');
+      const control = make('button', 'insights-stage-select');
+      control.type = 'button'; control.id = `insights-stage-${stage.toLowerCase()}`;
+      control.dataset.stage = stage; control.setAttribute('aria-label', label);
+      control.setAttribute('aria-controls', detail.id); control.setAttribute('aria-expanded', 'false');
+      controls.push(control);
+      control.addEventListener('click', () => {
+        selected = selected === stage ? null : stage;
+        controls.forEach(button => button.setAttribute('aria-expanded', String(button === control && selected !== null)));
+        // Removed cards invalidate in-flight reference navigation. No state, analysis or transport changes.
+        detail.replaceChildren(); detail.hidden = selected === null;
+        if (selected === null) return;
+        detail.dataset.stage = stage;
+        detail.setAttribute('aria-labelledby', control.id);
+        const heading = make('h4', 'insights-stage-context-heading');
+        heading.append(make('strong', '', t(stage)), make('span', '', t(present ? 'Covered' : 'Missing content')));
+        const sources = state.nodes.filter(node => insightsNodeSupportsStage(node, stage) && index.get(node.id)).map(node => node.id);
+        detail.append(heading, sources.length ? sourceList(sources, null, stage)
+          : make('p', '', t('No content is recognized for this stage under the current Canvas mapping.')));
+      });
+      item.append(symbol, make('span', 'insights-stage-icon', present?"✓":"!"),
+        make('strong', '', t(stage)), make('span', 'insights-stage-status', t(present ? 'Covered' : 'Missing content')), control);
+      list.append(item);
+    });
+    journeySection.append(list, contexts, make('p', 'insights-journey-disclaimer', t('Canvas content coverage, not measured conversion performance.')));
+  }
   const opportunities=section("insights-opportunities-title","Opportunities","Focus on the next useful improvements for this Canvas.","insights-opportunities");
   if (!unavailableReason) {
     if (!snapshot.findings?.length) opportunities.append(make('p', 'insights-diagnostic-state', t('No current findings')));
