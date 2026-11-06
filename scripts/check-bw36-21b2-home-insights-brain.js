@@ -64,16 +64,45 @@ async function main() {
       }
       await f.close();
     });
+    await check('BW-45.1 optional Landing Page CTA keeps Home and Insights on the same available analysis',async()=>{
+      const f=await fixture(),p=f.page;
+      for(const mode of ['absent','null-object','empty-object','missing-property','null-cta','empty','whitespace','valid']) {
+        await p.evaluate(mode=>{
+          const lp=state.nodes.find(n=>n.type==='Landing Page');
+          if(mode==='absent')delete lp.landingPage;
+          else lp.landingPage=mode==='null-object'?null:mode==='empty-object'?{}:mode==='missing-property'?{trust:''}:{trust:'',cta:mode==='null-cta'?null:mode==='empty'?'':mode==='whitespace'?'   ':'Join'};
+          detectDirtyFromSnapshot();clearAutosaveTimer();
+        },mode);
+        const before=await snapshot(p);
+        await recalculate(p);
+        const result=await p.evaluate(()=>({home:homeCampaignInsights(),raw:state.insightsDiagnosticSnapshot,expected:analyzeCampaign(state.nodes,state.edges,state.brandCore),id:state.nodes.find(n=>n.type==='Landing Page').id}));
+        assert.equal(result.home.status,'ready',mode);assert.deepEqual(result.raw.analysis,result.expected,mode);
+        const missing=result.raw.findings.find(f=>f.code==='CTA_MISSING');
+        if(mode==='valid')assert(!missing?.affectedNodeIds.includes(result.id));
+        else {assert.equal(missing.severity,'important');assert(missing.affectedNodeIds.includes(result.id));}
+        for(const finding of result.home.findings) {
+          const raw=result.raw.findings.find(f=>f.code===finding.code);
+          for(const field of ['code','title','description','severity','affectedNodeIds'])assert.deepEqual(finding[field],raw[field],mode+': '+field);
+        }
+        await p.evaluate(()=>{setActiveView('insights');clearAutosaveTimer();});
+        assert.equal(await p.locator('.insights-calculation').count(),6,mode);
+        assert.deepEqual(await p.evaluate(()=>state.insightsDiagnosticSnapshot.analysis),result.expected,mode);
+        await p.evaluate(()=>{setActiveView('home');clearAutosaveTimer();});
+        assert.equal(await snapshot(p),before,mode+' preserves Canvas and provenance');
+        assert.deepEqual(f.writes,[]);
+      }
+      await f.close();
+    });
     await check('actual diagnostic exception and malformed snapshot are isolated from other Home modules',async()=>{
       const f=await fixture(),p=f.page;
-      await p.evaluate(()=>{state.nodes.find(n=>n.type==='Landing Page').landingPage={};detectDirtyFromSnapshot();clearAutosaveTimer();renderCampaignIntelligence();refreshDashboardIfVisible();});
+      await p.evaluate(()=>{state.nodes.find(n=>n.type==='Landing Page').landingPage={cta:42};detectDirtyFromSnapshot();clearAutosaveTimer();renderCampaignIntelligence();refreshDashboardIfVisible();});
       assert.equal(await p.evaluate(()=>state.insightsDiagnosticSnapshot.analysis),null);
       assert((await insights(p).innerText()).includes('could not be calculated'));assert.equal(await action(p,'brain').count(),1);
       await p.evaluate(()=>{state.nodes.find(n=>n.type==='Landing Page').landingPage.cta='';detectDirtyFromSnapshot();clearAutosaveTimer();renderCampaignIntelligence();state.insightsDiagnosticSnapshot.findings=[{code:'TRUST_PROOF_MISSING'}];refreshDashboardIfVisible();});
       assert((await insights(p).innerText()).includes('could not be calculated'));assert.equal(await action(p,'brain').count(),1);
       assert.equal(await p.locator('[data-home-module="responsibilities"]').count(),1);
       // A deterministic diagnostic exception must not prevent Brain navigation.
-      await p.evaluate(()=>{state.nodes.find(n=>n.type==='Landing Page').landingPage={};});
+      await p.evaluate(()=>{state.nodes.find(n=>n.type==='Landing Page').landingPage={cta:42};});
       await action(p,'brain').click();assert.equal(await p.evaluate(()=>state.activeView),'ai_brain');
       assert.equal(await p.locator('#ai-brain-question').count(),1);assert.equal(await p.locator('#ai-brain-question').inputValue(),'');
       await f.close();
