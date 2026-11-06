@@ -26,6 +26,7 @@ Screenshot evidence is generated from the running production app under `work/bw4
 - `app.js`: stage selection, one shared region, removed-button pending guard.
 - `styles.css`: appended scoped selector and region rules; original CSS byte-exact prefix retained.
 - `scripts/check-bw44-2-journey-context-browser.js`: preserves card/navigation regressions and updates disclosure assertions for exclusive stage selection, adding pending lifecycle and unlimited-card coverage.
+- `scripts/check-bw32-2-3-linkedin-connection-state.js`: pins all existing projection assertions to the fixture clock; its fixed token expiry reached the real execution date and failed both CI jobs. No production LinkedIn change.
 - `scripts/check-bw43-insights-browser.js`: opens/collapses sources using the stage button rather than the removed native details property; existing assertions retained.
 - `.github/workflows/runtime-boot-safety.yml`: labels the existing suite/artifact step for BW-44.3; both complete PostgreSQL jobs remain.
 - `docs/implementations/bw44-3-interactive-journey.md`: implementation, evidence and limits.
