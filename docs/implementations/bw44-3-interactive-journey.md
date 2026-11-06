@@ -17,6 +17,8 @@ The exact persisted-ID handler and server resolver remain in use. The handler ad
 - BW-40.1/BW-44.1 signed navigation, deleted/wrong Board/Workspace/revoked access, keyboard/EN/DE/Light/Dark; BW-43 48 layouts and native zoom; BW-26/BW-28, runtime renderer, translation and browser integrity checks pass locally.
 - Runtime Boot Safety runs on the PR for PostgreSQL 17.6 and 18.4. Consult the PR checks for the exact final-commit outcome.
 
+Committed screenshots: [desktop Light/EN](bw44-3-visuals/desktop-light-en.png), [375px Dark/DE](bw44-3-visuals/mobile-dark-de.png), [native 200% zoom](bw44-3-visuals/native-200-percent.png).
+
 Screenshot evidence is generated from the running production app under `work/bw44-2/screenshots/` and uploaded by both existing Runtime Boot Safety jobs. No production data or providers are used. Browser coverage is Chromium; no manual screen-reader or other-engine pass.
 
 ## Changed files
@@ -27,3 +29,9 @@ Screenshot evidence is generated from the running production app under `work/bw4
 - `scripts/check-bw43-insights-browser.js`: opens/collapses sources using the stage button rather than the removed native details property; existing assertions retained.
 - `.github/workflows/runtime-boot-safety.yml`: labels the existing suite/artifact step for BW-44.3; both complete PostgreSQL jobs remain.
 - `docs/implementations/bw44-3-interactive-journey.md`: implementation, evidence and limits.
+
+- `docs/implementations/bw44-3-visuals/desktop-light-en.png`
+- `docs/implementations/bw44-3-visuals/mobile-dark-de.png`
+- `docs/implementations/bw44-3-visuals/native-200-percent.png`
+
+Review: original CSS remains byte-exact before the scoped additions; existing producer hash assertions pass. No legacy IDs are removed, no duplicate focusable context remains, and no server/navigation resolver is added. Full CI remains subject to the pending approval of the whole-file CSS fingerprint and its dependent test-file fingerprint; those edits have not been made.
