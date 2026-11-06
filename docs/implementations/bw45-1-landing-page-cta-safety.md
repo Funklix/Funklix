@@ -2,7 +2,7 @@
 
 ## Scope and correction
 
-Base: `e775e6770bf67bcee0f421e56553e5022cb3b726`, latest merged main including PR #855. Implementation follows the immediate BW-45.1 boundary in [the approved audit](../audits/bw45-insights-quality-strategic-intelligence.md).
+PR: [#856](https://github.com/Funklix/Funklix/pull/856), created and verified non-draft. Base: `e775e6770bf67bcee0f421e56553e5022cb3b726`, latest merged main including PR #855. Implementation follows the immediate BW-45.1 boundary in [the approved audit](../audits/bw45-insights-quality-strategic-intelligence.md).
 
 `buildInsightsFindings` selected `node.landingPage?.cta` and called `.trim()` on the result. An absent Landing Page object, missing CTA property or null CTA therefore threw after `analyzeCampaign` succeeded. The unchanged global diagnostic handler then stored `analysis: null`, hiding all Insights diagnostics.
 
@@ -51,6 +51,10 @@ The new production-path regression first failed against unchanged main at `Avail
 The Home browser extension exercises eight optional/valid forms, compares the shared snapshot to the actual analyzer, checks the Home finding projection against the same source fields, renders all six Insights calculations, and verifies unchanged Canvas/provenance. Its fixture prohibits provider endpoints and asserts zero writes. Original account/access, source-freshness, cancellation, navigation and 20,000-node checks remain.
 
 Local focused and complete Runtime Boot Safety results are recorded in the PR description after execution. Local matrix execution uses disposable official PostgreSQL 17.6 and 18.4 containers, all workflow run commands and original assertions. The local browser setup uses available system Chromium; hosted CI executes the workflow's matched Playwright Chromium installation. Checkout and artifact upload are hosted infrastructure actions rather than local tests. Local runner continues after individual failures to report all checks.
+
+The focused BW-25 baseline/translations, BW-28 architecture/UX/avatar/runtime, BW-40 real resolver/authorization and browser navigation, BW-40.1 shortcuts, and native zoom checks pass. BW-44.3 passes all 20 responsive cases after recovering local disk space. BW-42's unchanged rerun also passes all 40 visual combinations and its upload/storage checks after the same recovery.
+
+BW-43 reproduces the audit's `Expanded Journey sources reflow` assertion. The focused run and isolated unchanged rerun fail; a separate checkout created with `git archive` from untouched base `e775e67` also fails the same assertion. The patch failure was at light/EN/expanded sidebar/320px; the baseline failure was at dark/EN/expanded sidebar/375px. This demonstrates an inherited narrow-viewport failure in this local Chromium environment, without establishing its root cause. No visual code, test assertion or CI configuration was changed to make it pass.
 
 Hosted CI results must be read separately from this PR's GitHub Actions checks; local success does not establish hosted success. Exact head commit, workflow links and any failures/reruns are reported with delivery. No merge or manual deployment is performed.
 
