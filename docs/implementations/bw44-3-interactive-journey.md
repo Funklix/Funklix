@@ -13,8 +13,8 @@ The exact persisted-ID handler and server resolver remain in use. The handler ad
 - Production app in Chromium, fictional persisted fixture data: 20 Light/Dark × EN/DE × 1440/1024/768/375/320 cases; desktop grid/mobile single column, long fields, Enter/Space, focus and reduced motion, no horizontal overflow.
 - Native browser 200% zoom verified using devicePixelRatio and CSS viewport.
 - Every displayed persisted source (including identical titles) opens its exact Canvas node and Inspector through the real checked-reference SQL route.
-- Pending, 403, 409, 503 and stale-during-request cases; stage switching, collapse, Refresh and Board change during pending validation; no old feedback or navigation; ten cards with no display limit.
-- BW-40.1/BW-44.1 signed navigation, deleted/wrong Board/Workspace/revoked access, keyboard/EN/DE/Light/Dark; BW-43 48 layouts and native zoom; BW-26/BW-28, runtime renderer, translation and browser integrity checks pass locally.
+- Pending, 403, 409, 503 and stale-during-request cases; stage switching, collapse, Refresh and Board change during pending validation; no old feedback or navigation; ten persisted cards with no display limit; every missing stage on a persisted unmapped-node fixture; existing empty-Canvas diagnostics.
+- BW-40.1/BW-44.1 signed navigation, deleted/wrong Board/Workspace/revoked access, keyboard/EN/DE/Light/Dark; BW-43 48 layouts and native zoom; BW-26/BW-28/BW-28.1/BW-28.3, runtime renderer, translation and browser integrity checks pass locally.
 - Runtime Boot Safety runs on the PR for PostgreSQL 17.6 and 18.4. Consult the PR checks for the exact final-commit outcome.
 
 Committed screenshots: [desktop Light/EN](bw44-3-visuals/desktop-light-en.png), [375px Dark/DE](bw44-3-visuals/mobile-dark-de.png), [native 200% zoom](bw44-3-visuals/native-200-percent.png).

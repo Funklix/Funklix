@@ -126,10 +126,11 @@ async function noOverflow(p) {
     await p.route('**/api/ai-brain/node-reference',async route=>{started();await held;await route.fallback();});
     const button=await reset();await button.click();await pending;
     assert(await button.isDisabled());assert((await stage(p,'Awareness').innerText()).includes('Checking Canvas reference'));
-    await p.evaluate(()=>{state.nodes[0].title+=' changed';});release();
+    await p.evaluate(()=>{window.bw44Revision=state.lastKnownUpdatedAt;state.lastKnownUpdatedAt='changed';});release();
     await p.waitForFunction(()=>Array.from(document.querySelectorAll('.insights-stage-context .insights-reference-status')).some(n=>/unavailable/.test(n.textContent)));
     assert.equal(await p.evaluate(()=>state.activeView),'insights');
     await p.unroute('**/api/ai-brain/node-reference');
+    await p.evaluate(()=>{state.lastKnownUpdatedAt=window.bw44Revision;});
     // Selection, collapse, Refresh and Board changes cancel detached pending sources.
     for(const action of ['switch','collapse','refresh','board']) {
       const button=await reset();
@@ -161,13 +162,38 @@ async function noOverflow(p) {
       await p.unroute('**/api/ai-brain/node-reference');
       if(action==='board') await p.evaluate(()=>{state.currentBoardId=window.bw44BoardId;renderCampaignIntelligence();});
     }
-    // All cards remain accessible beyond any three-card preview.
-    await p.evaluate(()=>{state.nodes.push(...Array.from({length:7},(_,i)=>({...state.nodes[0],id:'extra-'+i})));renderCampaignIntelligence();});
-    await select(p,'Awareness').click();
-    assert.equal(await stage(p,'Awareness').locator('button').count(),10);
-    assert.equal(await p.locator('.insights-stage-context').count(),1);
     assert.deepEqual(f.errors,[]);assert.deepEqual(f.writes,[]);
     await f.close();
+    // Persisted fixtures keep the real autosave watcher active throughout.
+    const many=await require('./fixtures/home-browser')(browser)({prepare:r=>{
+      prepare(r);const nodes=r.db.boards[0].canvas_json.nodes;
+      nodes.push(...Array.from({length:7},(_,i)=>({...nodes[0],id:'extra-'+i})));
+    }});
+    await many.page.evaluate(()=>setActiveView('insights'));
+    await select(many.page,'Awareness').click();
+    assert.equal(await stage(many.page,'Awareness').locator('button').count(),10);
+    assert.equal(await many.page.locator('.insights-stage-context').count(),1);
+    await many.close();
+    const empty=await require('./fixtures/home-browser')(browser)({prepare:r=>{prepare(r);r.db.boards[0].canvas_json.nodes=[{...r.db.boards[0].canvas_json.nodes[0],type:'Email Campaign'}];}});
+    await empty.page.evaluate(()=>setActiveView('insights'));
+    assert(await empty.page.locator('.insights-stage-context').isHidden(),'No recognized stages initially collapsed');
+    const transportBefore=empty.requests.length;
+    for(const name of ['Awareness','Interest','Consideration','Conversion','Retention']) {
+      await select(empty.page,name).click();
+      assert(await stage(empty.page,name).locator('p').isVisible(),'Missing context for '+name);
+      assert.equal(await stage(empty.page,name).locator('button').count(),0);
+      assert.equal(await empty.page.locator('.insights-stage-select[aria-expanded="true"]').count(),1);
+      assert.equal(await select(empty.page,name).getAttribute('aria-controls'),'insights-journey-detail');
+      assert.equal(await stage(empty.page,name).getAttribute('aria-labelledby'),await select(empty.page,name).getAttribute('id'));
+      assert.equal(await empty.page.locator('.insights-stage-context').count(),1);
+    }
+    assert.equal(empty.requests.length,transportBefore,'Stage selection makes no API calls');
+    await empty.close();
+    const blank=await require('./fixtures/home-browser')(browser)({empty:true});
+    await blank.page.evaluate(()=>setActiveView('insights'));
+    assert.equal(await blank.page.locator('.insights-stage-select').count(),0,'Existing empty-Canvas diagnostics retained');
+    assert((await blank.page.locator('.insights-diagnostic-state').innerText()).includes('This Canvas is empty'));
+    await blank.close();
     fs.writeFileSync(`${out}/results.json`,JSON.stringify({result:'PASS',matrix,exactIdReferences:targets,checks:'single shared panel and native stage controls, keyboard, one/many/no nodes, long titles/goals, EN/DE, reduced motion, read-only, SQL exact-ID Canvas and Inspector navigation, pending/403/409/503/stale reference'},null,2));
   } finally {await browser.close();}
   // Actual browser 200% zoom, using only a disposable profile.

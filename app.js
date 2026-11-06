@@ -8298,7 +8298,7 @@ function renderInsightsSurface() {
         detail.append(heading, sources.length ? sourceList(sources, null, stage)
           : make('p', '', t('No content is recognized for this stage under the current Canvas mapping.')));
       });
-      item.append(symbol, make('span', 'insights-stage-icon', present ? '✓' : '!'),
+      item.append(symbol, make('span', 'insights-stage-icon', present?"✓":"!"),
         make('strong', '', t(stage)), make('span', 'insights-stage-status', t(present ? 'Covered' : 'Missing content')), control);
       list.append(item);
     });
