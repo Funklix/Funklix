@@ -39,7 +39,7 @@ assert.equal(require('node:crypto').createHash('sha256').update(functionSource('
 assert.equal(require('node:crypto').createHash('sha256').update(functionSource('captureInsightsDiagnostic')).digest('hex'), '0875e97f27d160be5d9fec0ca065ed0a28f9cfb67fe8199923b204942a719048', 'BW-44 preserves captureInsightsDiagnostic byte-for-byte');
 assert.equal(require('node:crypto').createHash('sha256').update(functionSource('currentInsightsIdentity')).digest('hex'), '9bcf9e1dd51cf39f9d677154bbb8dfcb0395256f4efdf27ff1faea6589bedcf0', 'BW-44 preserves currentInsightsIdentity byte-for-byte');
 assert.equal(require('node:crypto').createHash('sha256').update(functionSource('currentInsightsCanvasIdentity')).digest('hex'), '4c1a2fe9aaf560452e8b1a8317384590262110b14624665454db9038f1f77a45', 'BW-44 preserves currentInsightsCanvasIdentity byte-for-byte');
-assert.equal(require('node:crypto').createHash('sha256').update(functionSource('buildInsightsFindings')).digest('hex'), '9384e4154e2c50832449abfc029391384dcbf5aa96439c15acd5f6010e24d191', 'BW-44 preserves buildInsightsFindings byte-for-byte');
+assert.equal(require('node:crypto').createHash('sha256').update(functionSource('buildInsightsFindings')).digest('hex'), '28e1b35c3aaa37c0b7b1751972d7014b01d5ad73372918005476fdfd6f531563', 'BW-45.1 authorizes only the nullish Landing Page CTA fallback');
 assert.equal(require('node:crypto').createHash('sha256').update(functionSource('isCurrentInsightsSnapshot')).digest('hex'), '02327c0bd1a2b2b62558cb3d6441340823debcb418dbddb5c436a0ae2721f311', 'BW-44 preserves isCurrentInsightsSnapshot byte-for-byte');
 assert.equal(require('node:crypto').createHash('sha256').update(functionSource('askAiBrainAboutFinding')).digest('hex'), '628b0d10ef79ff7fd2458fd93d44faed048b09f8b8fbce641fc19532b05859c7', 'BW-44 preserves askAiBrainAboutFinding byte-for-byte');
 
@@ -81,3 +81,56 @@ console.log('PASS BW-44 renderer contrasts, unchanged producer bytes, complete f
 // Checked identity claims never include public local navigation; decoration stays silent.
 h=render({publicBoardToken:"public",boardAccess:{canView:true,canEdit:false,reason:"public"}});assert(h.cards.textContent.includes("Public links use local Canvas navigation."));
 assert(byClass(h,"insights-severity-icon").every(n=>n.attributes["aria-hidden"]==="true"));
+
+// BW-45.1: absent optional Landing Page CTA restores the full production path.
+const ctaScores = a => [a.healthScore,a.funnel.confidence,a.icp.consistencyScore,a.tone.consistencyScore,a.trust.score,a.cta.qualityScore];
+const optionalCtas = [
+  ['no landingPage object', {}],
+  ['null landingPage object', {landingPage:null}],
+  ['empty landingPage object', {landingPage:{}}],
+  ['missing cta property', {landingPage:{trust:''}}],
+  ['undefined cta', {landingPage:{cta:undefined,trust:''}}],
+  ['null cta', {landingPage:{cta:null,trust:''}}],
+  ['empty cta', {landingPage:{cta:'',trust:''}}],
+  ['whitespace cta', {landingPage:{cta:'   ',trust:''}}],
+  ['valid cta', {landingPage:{cta:'Join',trust:''}}]
+];
+for (const [name,fields] of optionalCtas) for (const mixed of [false,true]) {
+  const lp={id:'actual-landing-id',type:'Landing Page',title:'Same title',...fields};
+  const nodes=mixed ? [lp,minimal('actual-social-id','Social Media Posting',{social:{preview:'Read',cta:'Join',platform:'LinkedIn'}})] : [lp];
+  const before=structuredClone(nodes),test=harness({nodes}),calls=[];
+  const forbidden=name=>(...args)=>{calls.push(name);throw Error('Unexpected side effect: '+name);};
+  for (const boundary of ['fetch','saveCampaignCanvasState','scheduleAutosave','createNode','reviewNode','generateCampaign']) test.sandbox[boundary]=forbidden(boundary);
+  test.sandbox.localStorage={setItem:forbidden('localStorage.setItem')};
+  test.sandbox.setActiveView('insights');
+  const snapshot=test.state.insightsDiagnosticSnapshot;
+  assert(snapshot?.analysis,'Available analysis: '+name);
+  assert.deepEqual(JSON.parse(JSON.stringify(snapshot.analysis)),JSON.parse(JSON.stringify(test.sandbox.analyzeCampaign(nodes,[],{}))),'Original analyzer result: '+name);
+  assert.deepEqual(ctaScores(snapshot.analysis),[mixed && ['valid cta','whitespace cta'].includes(name)?75:mixed?65:60,mixed?40:20,90,90,35,mixed||['whitespace cta','valid cta'].includes(name)?100:0],name);
+  const missing=snapshot.findings.find(f=>f.code==='CTA_MISSING');
+  if(name==='valid cta') assert.equal(missing,undefined);
+  else {assert(missing,name);assert.equal(missing.severity,'important');assert.deepEqual(Array.from(missing.affectedNodeIds),['actual-landing-id']);}
+  for(const section of ['insights-overview-title','insights-journey-title','insights-opportunities-title','canvas-diagnostics-title','insights-methodology-title']) assert(byId(test,section),name+': '+section);
+  assert.equal(byClass(test,'insights-calculation').length,6);
+  const analysisBefore=JSON.stringify(snapshot.analysis);
+  test.cards.querySelector('.insights-refresh').listeners.click();
+  assert.equal(JSON.stringify(test.state.insightsDiagnosticSnapshot.analysis),analysisBefore,'Refresh parity: '+name);
+  assert.deepEqual(nodes,before,'No field is filled, normalized or changed: '+name);
+  assert.equal(test.state.isDirty,false);assert.deepEqual(test.state.aiBrain.messages,[]);assert.deepEqual(calls,[]);
+}
+// Social preview still wins, including whitespace; native fallback is unchanged.
+for(const [preview,cta,missing,score] of [['Read','Join',false,100],['   ','Join',true,100],['','Join',false,0],['','',true,0]]) {
+  const test=render({nodes:[minimal('social','Social Media Posting',{social:{preview,cta}})]});
+  assert.equal(!!test.state.insightsDiagnosticSnapshot.findings.find(f=>f.code==='CTA_MISSING'),missing);
+  assert.equal(test.state.insightsDiagnosticSnapshot.analysis.cta.qualityScore,score);
+}
+// Unrelated malformed values still fail closed; no coercion to positive evidence.
+for(const value of [42,{},[],false,0]) {
+  const nodes=[minimal('malformed','Landing Page',{landingPage:{cta:value,trust:''}})],before=structuredClone(nodes),test=render({nodes});
+  assert.equal(test.state.insightsDiagnosticSnapshot.analysis,null,'Malformed CTA remains unavailable: '+JSON.stringify(value));
+  assert(byClass(test,'insights-diagnostic-state').length);assert.deepEqual(nodes,before);
+}
+const malformedAudience=render({nodes:[minimal('malformed-audience','Idea',{audience:42})]});
+assert.equal(malformedAudience.state.insightsDiagnosticSnapshot.analysis,null);
+assert.equal(render({nodes:[]}).state.insightsDiagnosticSnapshot,null,'Empty Canvas contract');
+console.log('PASS BW-45.1 optional Landing Page CTA, exact IDs, scores, rendering/refresh, immutability, zero side effects, Social precedence and malformed-input controls');
