@@ -194,6 +194,39 @@ async function noOverflow(p) {
     assert.equal(await blank.page.locator('.insights-stage-select').count(),0,'Existing empty-Canvas diagnostics retained');
     assert((await blank.page.locator('.insights-diagnostic-state').innerText()).includes('This Canvas is empty'));
     await blank.close();
+    // BW-45.2: full canonical coverage plus Custom, duplicate titles and live edits.
+    const canonicalFixture=await require('./fixtures/home-browser')(browser)({prepare:r=>{
+      prepare(r);const base=r.db.boards[0].canvas_json.nodes[0];
+      r.db.boards[0].canvas_json.nodes=['Awareness','Interest','Consideration','Conversion','Retention','Custom'].map((funnelStage,i)=>({...base,id:'canonical-'+i,type:funnelStage==='Conversion'?'Landing Page':'Email Campaign',title:'Same fictional title',funnelStage,goal:'',landingPage:{cta:'',trust:''}}));
+    }});
+    const cp=canonicalFixture.page;
+    await cp.evaluate(()=>setActiveView('insights'));
+    assert.equal(await cp.evaluate(()=>state.insightsDiagnosticSnapshot.analysis.funnel.confidence),100);
+    assert.equal(await cp.evaluate(()=>state.insightsDiagnosticSnapshot.analysis.healthScore),80);
+    assert.equal(await cp.locator('.insights-campaign-journey > li.is-covered').count(),5);
+    for(const [i,name] of ['Awareness','Interest','Consideration','Conversion','Retention'].entries()) {
+      await select(cp,name).click();
+      const cards=stage(cp,name).locator('[data-insights-node-id]');
+      assert.equal(await cards.count(),1);assert.equal(await cards.first().getAttribute('data-insights-node-id'),'canonical-'+i);
+    }
+    await select(cp,'Retention').click();await select(cp,'Retention').click();
+    await stage(cp,'Retention').locator('[data-insights-node-id="canonical-4"]').click();
+    await cp.waitForFunction(()=>state.activeView==='board'&&state.selectedPrimary==='canonical-4');
+    assert.equal(await cp.locator('#node-title').inputValue(),'Same fictional title');
+    await cp.evaluate(()=>{state.nodes.find(n=>n.id==='canonical-4').funnelStage='Custom';detectDirtyFromSnapshot();clearAutosaveTimer();setActiveView('insights');});
+    await cp.locator('.insights-refresh').click();
+    assert.equal(await cp.evaluate(()=>state.insightsDiagnosticSnapshot.analysis.funnel.confidence),80);
+    assert.equal(await cp.evaluate(()=>state.insightsDiagnosticSnapshot.analysis.healthScore),75);
+    assert.equal(await cp.evaluate(()=>state.insightsDiagnosticSnapshot.canvasState),'live_unsaved');
+    await select(cp,'Retention').click();
+    assert.equal(await stage(cp,'Retention').locator('[data-insights-node-id]').count(),0);
+    assert.deepEqual(await cp.evaluate(()=>state.insightsDiagnosticSnapshot.findings.find(f=>f.code==='FUNNEL_STAGE_GAPS').missingElements),['Retention']);
+    assert.equal(await cp.evaluate(()=>state.nodes.filter(n=>n.funnelStage==='Custom').length),2);
+    await cp.evaluate(()=>setActiveView('home'));
+    await cp.waitForFunction(()=>homeCampaignInsights()?.status==='ready');
+    assert.equal(await cp.evaluate(()=>state.insightsDiagnosticSnapshot.analysis.funnel.confidence),80);
+    assert.deepEqual(await cp.evaluate(()=>homeCampaignInsights().findings.find(f=>f.code==='FUNNEL_STAGE_GAPS').affectedNodeIds),[]);
+    assert.deepEqual(canonicalFixture.writes,[]);await canonicalFixture.close();
     fs.writeFileSync(`${out}/results.json`,JSON.stringify({result:'PASS',matrix,exactIdReferences:targets,checks:'single shared panel and native stage controls, keyboard, one/many/no nodes, long titles/goals, EN/DE, reduced motion, read-only, SQL exact-ID Canvas and Inspector navigation, pending/403/409/503/stale reference'},null,2));
   } finally {await browser.close();}
   // Actual browser 200% zoom, using only a disposable profile.
