@@ -6193,7 +6193,7 @@ function analyzeCampaign(nodes, edges, brandCore) {
     if (n.type === "Landing Page" || n.goal === "Conversion" || n.funnelStage === "Conversion" || (n.landingPage?.cta || "").trim()) out.push("Conversion");
     return out;
   });
-  const coveredStages = [...new Set(derivedStages.filter(Boolean))];
+  const coveredStages = [...new Set(derivedStages.filter((stage) => stages.includes(stage)))];
   const missingStages = stages.filter((s) => !coveredStages.includes(s));
   const socialNodes = nodes.filter((n) => n.type === "Social Media Posting");
   const ctas = nodes.map((n) => n.landingPage?.cta || n.social?.preview || "").filter(Boolean);
@@ -8234,7 +8234,7 @@ function renderInsightsSurface() {
   const labels = values => [...new Set(values)].map(value => JSON.stringify(String(value).slice(0,160))).join(' · ') || t('none');
   const diagnosticCopy = method => {
     if (method === 'Canvas readiness formula') return t('Structural score: 40 base + 25 × covered stages / 5 + 10 for any trust field + 10 for two CTA values + 10 for at most one audience label + 5 for at most two tone labels; rounded and clamped to 0–100. Empty labels can earn points. This does not predict campaign outcomes.');
-    if (method === 'Funnel-stage mapping') return format('Covered: {covered}. Missing: {missing}. Coverage = round(covered count / 5 × 100). Explicit stages count as entered, including custom values. Idea and Social Media Posting add Awareness; Content adds Interest; Landing Page, Conversion goal/stage or populated landingPage.cta adds Conversion.', {covered: snapshot.analysis.funnel.coveredStages.map(value => funnelStages.includes(value) ? t(value) : String(value)).join(', ') || t('none'), missing: snapshot.analysis.funnel.missingStages.map(t).join(', ') || t('none')});
+    if (method === 'Funnel-stage mapping') return format('Covered: {covered}. Missing: {missing}. Coverage = round(covered count / 5 × 100). Only exact canonical stage values count. Custom values stay unchanged and do not add a stage; existing type, goal and CTA inference still applies. Idea and Social Media Posting add Awareness; Content adds Interest; Landing Page, Conversion goal/stage or populated landingPage.cta adds Conversion.', {covered: snapshot.analysis.funnel.coveredStages.map(value => funnelStages.includes(value) ? t(value) : String(value)).join(', ') || t('none'), missing: snapshot.analysis.funnel.missingStages.map(t).join(', ') || t('none')});
     if (method === 'Distinct audience labels') return format('{count} populated Audience labels, {distinct} distinct. Score: 90 for zero or one distinct label, otherwise 55. Trimmed, case-sensitive labels measure consistency, not strategic audience fit.', {count: audiences.length, distinct: new Set(audiences).size}) + ' ' + format('Labels: {values}.', {values: labels(audiences)});
     if (method === 'Distinct tone labels') return format('{count} populated Tone labels, {distinct} distinct. Score: 90 for zero or one, 75 for two, otherwise 50. Case-sensitive label differences do not evaluate writing quality.', {count: tones.length, distinct: new Set(tones).size}) + ' ' + format('Labels: {values}.', {values: labels(tones)});
     if (method === 'Landing Page trust-field presence') return format('{present} of {total} Landing Pages have a populated trust field. Score: 80 if any is populated, otherwise 35. Presence does not verify credibility, proof quality or coverage of every page.', {present: trusted, total: pages.length});

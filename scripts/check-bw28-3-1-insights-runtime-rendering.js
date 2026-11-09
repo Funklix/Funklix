@@ -7,7 +7,7 @@ class Element{constructor(tag){this.tagName=tag.toUpperCase();this.children=[];t
 function matches(x,sel){if(sel.startsWith("#"))return x.id===sel.slice(1);if(sel.startsWith("."))return x.className.split(/\s+/).includes(sel.slice(1));if(sel.startsWith("[data-finding-id="))return x.dataset.findingId===sel.match(/['"]([^'"]+)/)?.[1];return x.tagName===sel.toUpperCase();}
 const document={createElement:t=>new Element(t)};
 const fixture=Array.from({length:30},(_,i)=>({id:`node-${i+1}`,type:i%6===0?"Landing Page":i%3===0?"Social Media Posting":"Content",title:i===0?'<img src=x onerror="boom">':`Campaign node ${i+1}`,content:`Safe content ${i}`,audience:i%4?"Executive":"Leader",tone:i%5?"Professional":"Direct",funnelStage:["Awareness","Interest","Consideration","Conversion","Retention"][i%5],social:i%3===0?{platform:i%2?"Instagram":"LinkedIn",preview:i%6?"Learn more":""}:undefined,landingPage:i%6===0?{cta:i?"Start now":"",trust:i%12?"Customer proof":""}:undefined}));
-function harness(overrides={}){const cards=new Element("div"),noop=new Element("div");const state={activeView:"board",nodes:fixture.map(n=>structuredClone(n)),edges:[],brandCore:{},currentBoardId:"board-1",currentBoardName:"Runtime Board",boardLoadGeneration:7,boardLoadState:"ready",isBoardLoading:false,isDirty:false,boardAccess:{canView:true,canEdit:true,reason:"member"},user:{email:"editor@example.com"},publicBoardToken:null,uiLanguage:"en",appMode:"campaign",aiBrain:{messages:[]},...overrides};const el={insightsCards:cards,insightsView:noop,aiBrainView:noop,dashboardView:noop,canvas:noop,boardListView:noop,calendarView:noop,boardsLibraryView:noop,brandCoreWorkspace:noop,homeNavButton:noop,campaignCanvasNavButton:noop,boardsNavButton:noop,brandCoreButton:noop,aiBrainNavButton:noop,insightsNavButton:noop,canvasTopbar:noop,inspectorPanel:noop,cycleViewButton:noop};let brainRenders=0;const sandbox={brandProfilePage:null,state,el,document,console,Intl,Date,Set,Map,Object,Array,Number,String,JSON,structuredClone,uiText:s=>state.uiLanguage==="de"?`DE:${s}`:s,renderCompactContextBar(){},renderBrandBoardContextNotice(){},renderAiBrain:()=>brainRenders++,showInsightsFindingOnCanvas(){},askAiBrainAboutFinding(){},renderDashboardHero(){},renderDashboardContinueWorking(){},renderDashboardBrandEvolution(){},renderDashboardSuggestedOpportunities(){},renderDashboardTodaysFocus(){},updateListView(){},renderCalendarView(){},renderBrandCoreTiles(){},renderBrandCoreEditor(){},renderCampaignCanvasFromStateIfNeeded(){}};vm.createContext(sandbox);sandbox.INSIGHTS_SEVERITY_RANK={critical:0,important:1,opportunity:2,information:3};sandbox.INSIGHTS_CATEGORY_RANK={structure:0,funnel:1,strategy:2,content:3};vm.runInContext(["analyzeCampaign","currentInsightsIdentity","currentInsightsCanvasIdentity","buildInsightsFindings","captureInsightsDiagnostic","isCurrentInsightsSnapshot","isValidInsightsDiagnostic","captureInsightsReferenceOrigin","insightsNodeSupportsStage","renderInsightsSurface","calculateInsightsDiagnostic","renderCampaignIntelligence","setActiveView"].map(functionSource).join("\n"),sandbox,{filename:"app.js-production-insights-runtime"});return {sandbox,state,cards,get brainRenders(){return brainRenders;}};}
+function harness(overrides={}){const cards=new Element("div"),noop=new Element("div");const state={activeView:"board",nodes:fixture.map(n=>structuredClone(n)),edges:[],brandCore:{},currentBoardId:"board-1",currentBoardName:"Runtime Board",boardLoadGeneration:7,boardLoadState:"ready",isBoardLoading:false,isDirty:false,boardAccess:{canView:true,canEdit:true,reason:"member"},user:{email:"editor@example.com"},publicBoardToken:null,uiLanguage:"en",appMode:"campaign",aiBrain:{messages:[]},...overrides};const el={insightsCards:cards,insightsView:noop,aiBrainView:noop,dashboardView:noop,canvas:noop,boardListView:noop,calendarView:noop,boardsLibraryView:noop,brandCoreWorkspace:noop,homeNavButton:noop,campaignCanvasNavButton:noop,boardsNavButton:noop,brandCoreButton:noop,aiBrainNavButton:noop,insightsNavButton:noop,canvasTopbar:noop,inspectorPanel:noop,cycleViewButton:noop};let brainRenders=0;const sandbox={brandProfilePage:null,state,el,document,console,Intl,Date,Set,Map,Object,Array,Number,String,JSON,structuredClone,uiText:s=>state.uiLanguage==="de"?`DE:${s}`:s,renderCompactContextBar(){},renderBrandBoardContextNotice(){},renderAiBrain:()=>brainRenders++,showInsightsFindingOnCanvas(){},askAiBrainAboutFinding(){},renderDashboardHero(){},renderDashboardContinueWorking(){},renderDashboardBrandEvolution(){},renderDashboardSuggestedOpportunities(){},renderDashboardTodaysFocus(){},updateListView(){},renderCalendarView(){},renderBrandCoreTiles(){},renderBrandCoreEditor(){},renderCampaignCanvasFromStateIfNeeded(){}};vm.createContext(sandbox);sandbox.INSIGHTS_SEVERITY_RANK={critical:0,important:1,opportunity:2,information:3};sandbox.INSIGHTS_CATEGORY_RANK={structure:0,funnel:1,strategy:2,content:3};vm.runInContext(["analyzeCampaign","simulatorCanvasContext","currentInsightsIdentity","currentInsightsCanvasIdentity","buildInsightsFindings","captureInsightsDiagnostic","isCurrentInsightsSnapshot","isValidInsightsDiagnostic","captureInsightsReferenceOrigin","insightsNodeSupportsStage","renderInsightsSurface","calculateInsightsDiagnostic","renderCampaignIntelligence","setActiveView"].map(functionSource).join("\n"),sandbox,{filename:"app.js-production-insights-runtime"});return {sandbox,state,cards,get brainRenders(){return brainRenders;}};}
 const byClass=(h,c)=>h.cards.querySelectorAll(`.${c}`),byId=(h,id)=>h.cards.querySelector(`#${id}`);
 function render(overrides={}){const h=harness(overrides),before=JSON.stringify(h.state.nodes);assert.doesNotThrow(()=>h.sandbox.setActiveView("insights"));assert.equal(JSON.stringify(h.state.nodes),before,"Canvas is immutable");assert.equal(h.state.isDirty,false,"render does not dirty Canvas");return h;}
 let h=render();
@@ -34,7 +34,7 @@ assert(!/fetch\(|saveCampaignCanvasState\(|scheduleAutosave\(|localStorage\.setI
 console.log("BW-28.3.1 production Insights runtime rendering checks passed (46 contracts).");
 
 // BW-44 acceptance: preserve the authoritative producers and handoff exactly.
-assert.equal(require('node:crypto').createHash('sha256').update(functionSource('analyzeCampaign')).digest('hex'), '4b94ff14b905fe4dbd1c30d01d81c9981698bf3199e1ab9d69b9647ae2443558', 'BW-44 preserves analyzeCampaign byte-for-byte');
+assert.equal(require('node:crypto').createHash('sha256').update(functionSource('analyzeCampaign')).digest('hex'), '628dd9d9f3dcd52bac2d17289ee0c377b7f5b5ade357837b792f011df4bde217', 'BW-45.2 authorizes only canonical derived-stage membership');
 assert.equal(require('node:crypto').createHash('sha256').update(functionSource('calculateInsightsDiagnostic')).digest('hex'), '4509a8cd6060e198906ac941b680288005d404aa1ec01361676013a52cbaae38', 'BW-44 preserves calculateInsightsDiagnostic byte-for-byte');
 assert.equal(require('node:crypto').createHash('sha256').update(functionSource('captureInsightsDiagnostic')).digest('hex'), '0875e97f27d160be5d9fec0ca065ed0a28f9cfb67fe8199923b204942a719048', 'BW-44 preserves captureInsightsDiagnostic byte-for-byte');
 assert.equal(require('node:crypto').createHash('sha256').update(functionSource('currentInsightsIdentity')).digest('hex'), '9bcf9e1dd51cf39f9d677154bbb8dfcb0395256f4efdf27ff1faea6589bedcf0', 'BW-44 preserves currentInsightsIdentity byte-for-byte');
@@ -54,7 +54,7 @@ const contrasts = [
   ['whitespace CTA', [minimal('a','Landing Page',{landingPage:{cta:'   ',trust:''}})], [60,20,90,90,35,100]],
   ['native social CTA only', [minimal('a','Social Media Posting',{social:{cta:'Join',preview:'',platform:'LinkedIn'}})], [60,20,90,90,35,0]],
   ['recognized social preview', [minimal('a','Social Media Posting',{social:{cta:'',preview:'Join',platform:'LinkedIn'}})], [60,20,90,90,35,100]],
-  ['custom stage remains unnormalized', [minimal('a','Idea',{funnelStage:'Custom'})], [65,40,90,90,35,0]],
+  ['custom stage remains unnormalized', [minimal('a','Idea',{funnelStage:'Custom'})], [60,20,90,90,35,0]],
   ['same channel posts', [minimal('a','Social Media Posting',{social:{preview:'Join',platform:'LinkedIn'}}),minimal('b','Social Media Posting',{social:{preview:'Read',platform:'LinkedIn'}})], [70,20,90,90,35,100]]
 ];
 for (const [name,nodes,scores] of contrasts) {
@@ -134,3 +134,80 @@ const malformedAudience=render({nodes:[minimal('malformed-audience','Idea',{audi
 assert.equal(malformedAudience.state.insightsDiagnosticSnapshot.analysis,null);
 assert.equal(render({nodes:[]}).state.insightsDiagnosticSnapshot,null,'Empty Canvas contract');
 console.log('PASS BW-45.1 optional Landing Page CTA, exact IDs, scores, rendering/refresh, immutability, zero side effects, Social precedence and malformed-input controls');
+
+// BW-45.2: run the actual shared analyzer, snapshot, finding builder and renderer.
+const canonical = ['Awareness','Interest','Consideration','Conversion','Retention'];
+const explicit = stage => minimal('stage-'+stage,'Email Campaign',{funnelStage:stage});
+const funnelCases = [
+  ['empty',[],[],55],
+  ['inferred Idea',[minimal('idea')],['Awareness'],60],
+  ['inferred Content',[minimal('content','Content')],['Interest'],60],
+  ['inferred Landing Page',[minimal('lp','Landing Page')],['Conversion'],60],
+  ['all canonical',canonical.map(explicit),canonical,80],
+  ['all plus Custom',[...canonical.map(explicit),explicit('Custom')],canonical,80],
+  ['Custom only',[explicit('Custom')],[],55],
+  ['repeated',[explicit('Retention'),{...explicit('Retention'),id:'second'}],['Retention'],60],
+  ['mixed explicit and inferred',[explicit('Retention'),minimal('content','Content')],['Retention','Interest'],65],
+  ['Custom on inferred type',[minimal('idea','Idea',{funnelStage:'Custom'})],['Awareness'],60],
+  ['empty and missing',[minimal('idea','Idea',{funnelStage:''}),minimal('content','Content')],['Awareness','Interest'],65],
+  ['case and whitespace remain exact',['awareness',' Awareness','Awareness ','RETENTION',' ','custom'].map(explicit),[],55],
+  // Existing explicit roles and independent type/goal/CTA roles accumulate.
+  ['explicit canonical with inferred type',[minimal('idea','Idea',{funnelStage:'Retention'})],['Retention','Awareness'],65],
+  ['Custom with goal',[minimal('goal','Email Campaign',{funnelStage:'Custom',goal:'Conversion'})],['Conversion'],60],
+  ['Custom with CTA',[minimal('cta','Email Campaign',{funnelStage:'Custom',landingPage:{cta:'Join',trust:''}})],['Conversion'],60]
+];
+for (const [name,nodes,expected,readiness] of funnelCases) {
+  const test=harness({nodes}), before=structuredClone(nodes), calls=[];
+  for(const boundary of ['fetch','saveCampaignCanvasState','scheduleAutosave','createNode','generateCampaign']) test.sandbox[boundary]=()=>{calls.push(boundary);throw Error(boundary);};
+  const a=test.sandbox.analyzeCampaign(nodes,[],{}), f=a.funnel;
+  assert.deepEqual(Array.from(f.coveredStages),expected,name);
+  assert.deepEqual(test.sandbox.simulatorCanvasContext().coveredStages,f.coveredStages,'Shared simulator context: '+name);
+  assert.deepEqual(Array.from(f.missingStages),canonical.filter(s=>!expected.includes(s)),name);
+  assert.equal(f.confidence,expected.length*20,name);assert.equal(a.healthScore,readiness,name);
+  assert.equal(f.coveredStages.length+f.missingStages.length,5);
+  assert.equal(new Set([...f.coveredStages,...f.missingStages]).size,5);
+  for(const stage of canonical) assert.equal(nodes.some(n=>!!test.sandbox.insightsNodeSupportsStage(n,stage)),expected.includes(stage),'Journey source consistency: '+name+' / '+stage);
+  test.sandbox.setActiveView('insights');
+  if(nodes.length) {
+    const snapshot=test.state.insightsDiagnosticSnapshot;
+    assert.equal(snapshot.canvasState,'loaded_saved');assert.equal(snapshot.analysis.funnel.confidence,f.confidence);
+    const finding=snapshot.findings.find(f=>f.code==='FUNNEL_STAGE_GAPS');
+    if(expected.length===5) assert.equal(finding,undefined);
+    else {
+      assert.deepEqual(Array.from(finding.missingElements),canonical.filter(s=>!expected.includes(s)));
+      assert.deepEqual(Array.from(finding.currentValues),expected);
+      assert.deepEqual(Array.from(finding.affectedNodeIds),[],'Missing stages have no fabricated sources');
+      assert.equal(finding.severity,5-expected.length>=3?'important':'opportunity');
+      assert.equal(finding.evidence[0],`Covered stages: ${expected.join(', ') || 'none'}.`);
+    }
+    assert(byClass(test,'insights-journey-summary')[0].textContent.includes(`${expected.length} stages covered · ${5-expected.length} stages missing`));
+    const items=byClass(test,'insights-campaign-journey')[0].children;
+    canonical.forEach((stage,i)=>assert.equal(items[i].className,expected.includes(stage)?'is-covered':'is-missing'));
+    test.state.isDirty=true;test.cards.querySelector('.insights-refresh').listeners.click();
+    assert.equal(test.state.insightsDiagnosticSnapshot.canvasState,'live_unsaved');
+    assert.deepEqual(test.state.insightsDiagnosticSnapshot.analysis,a);
+  }
+  assert.deepEqual(nodes,before,name+' preserves every stored field');assert.deepEqual(calls,[]);
+}
+// Every subset, duplicates and an extra unknown satisfy the partition invariants.
+for(let mask=0;mask<32;mask++) {
+  const nodes=canonical.filter((_,i)=>mask&(1<<i)).flatMap((stage,i)=>[explicit(stage),{...explicit(stage),id:'duplicate-stage-'+i}]);
+  nodes.push(explicit('Custom'));
+  const test=harness({nodes}),a=test.sandbox.analyzeCampaign(nodes,[],{}),f=a.funnel;
+  assert.equal(f.coveredStages.length+f.missingStages.length,5);assert(f.confidence>=0&&f.confidence<=100);
+  assert.equal(new Set(f.coveredStages).size,f.coveredStages.length);
+  assert(f.coveredStages.every(s=>canonical.includes(s)&&!f.missingStages.includes(s)));
+  const withoutCustom=test.sandbox.analyzeCampaign(nodes.slice(0,-1),[],{});
+  assert.deepEqual(a,withoutCustom,'Custom cannot change any valid canonical result');
+}
+const lifecycle=harness({nodes:[explicit('Custom')]});lifecycle.sandbox.setActiveView('insights');
+const stale=lifecycle.state.insightsDiagnosticSnapshot;
+lifecycle.state.nodes[0].funnelStage='Retention';lifecycle.state.isDirty=true;
+assert.equal(lifecycle.sandbox.isCurrentInsightsSnapshot(stale),false);
+lifecycle.cards.querySelector('.insights-refresh').listeners.click();
+assert.equal(lifecycle.state.insightsDiagnosticSnapshot.analysis.funnel.confidence,20);
+lifecycle.state.currentBoardId='other-board';lifecycle.state.boardLoadGeneration++;lifecycle.state.nodes=canonical.map(explicit);
+assert.equal(lifecycle.sandbox.isCurrentInsightsSnapshot(stale),false);
+lifecycle.sandbox.calculateInsightsDiagnostic();lifecycle.sandbox.renderInsightsSurface();
+assert.equal(lifecycle.state.insightsDiagnosticSnapshot.analysis.funnel.confidence,100);
+console.log('PASS BW-45.2 canonical fixtures, all 32 subsets, readiness, findings, Journey/source parity, saved/live, edit/Refresh, Board switch and custom-data preservation');
