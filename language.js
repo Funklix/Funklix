@@ -12,6 +12,7 @@
   const STORAGE_KEY = "funklix.languagePreferences.v1";
   const LANGUAGE_NAMES = Object.freeze({ en: "English", de: "German", es: "Spanish" });
   const german = {
+    "Unsupported suggestion fields were excluded.": "Nicht unterstützte Vorschlagsfelder wurden ausgeschlossen.",
     "Module draft — review and edit manually before saving.": "Modulentwurf – vor dem Speichern manuell prüfen und bearbeiten.",
     "Excluded by website access rules": "Durch Website-Zugriffsregeln ausgeschlossen",
     "Website access rules unavailable": "Website-Zugriffsregeln nicht verfügbar",

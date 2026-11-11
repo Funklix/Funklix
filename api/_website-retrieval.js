@@ -54,7 +54,7 @@ function safeError(error) {
   return new WebsiteRetrievalError('retrieval_failed', 'The webpage could not be retrieved.', { cause: error });
 }
 
-function requestOnce(url, addresses, { signal, requestImpl, diagnostics = createDiagnostics() } = {}) {
+function requestOnce(url, addresses, { signal, requestImpl, diagnostics = createDiagnostics(), accept = 'text/html, application/xhtml+xml' } = {}) {
   const selected = addresses[0];
   const transport = requestImpl || (url.protocol === 'https:' ? https.request : http.request);
   return new Promise((resolve, reject) => {
@@ -68,7 +68,7 @@ function requestOnce(url, addresses, { signal, requestImpl, diagnostics = create
       port: url.port || undefined,
       path: `${url.pathname}${url.search}`,
       method: 'GET',
-      headers: { Accept: 'text/html, application/xhtml+xml', 'Accept-Encoding': 'gzip, deflate, br, identity', 'User-Agent': USER_AGENT, Host: url.host },
+      headers: { Accept: accept, 'Accept-Encoding': 'gzip, deflate, br, identity', 'User-Agent': USER_AGENT, Host: url.host },
       lookup: (_hostname, lookupOptions, callback) => {
         const result = { address: selected.address, family: Number(selected.family) };
         if (lookupOptions && typeof lookupOptions === 'object' && lookupOptions.all) callback(null, [result]);
@@ -158,7 +158,8 @@ async function retrieveWebsiteText(input, options = {}) {
       diagnostics.stage = 'address_selection';
       diagnostics.addressSelected = true;
       diagnostics.addressFamily = addresses[0].family;
-      const response = await requestOnce(url, addresses, { signal: controller.signal, requestImpl: options.requestImpl, diagnostics });
+      const accept = options.documentType === 'robots' ? 'text/plain' : options.documentType === 'sitemap' ? 'application/xml, text/xml, application/xhtml+xml' : 'text/html, application/xhtml+xml';
+      const response = await requestOnce(url, addresses, { signal: controller.signal, requestImpl: options.requestImpl, diagnostics, accept });
       const status = Number(response.statusCode || 0);
       if ([301, 302, 303, 307, 308].includes(status)) {
         response.destroy();

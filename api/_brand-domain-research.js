@@ -3,7 +3,7 @@
 const { createHash } = require('crypto');
 const { validateWebsiteUrl } = require('./_website-url-policy');
 const { retrieveWebsiteText } = require('./_website-retrieval');
-const { extractBrandProjection, attribute, readTag, decodeEntities, evidenceScore, MAX_PROVIDER_CONTEXT } = require('./_html-text-extractor');
+const { extractBrandProjection, attribute, readTag, decodeEntities, evidenceScore, MAX_PROVIDER_CONTEXT, MAX_PARSED_NODES } = require('./_html-text-extractor');
 const RESEARCH_MS = 20000; // Shared retrieval deadline, including robots and submitted page.
 const MAX_EVIDENCE_BYTES = 12 * 1024 * 1024;
 const MAX_LEDGER_BYTES = 512 * 1024;
@@ -12,22 +12,31 @@ const publicUrl = input => { const u = new URL(input); u.search = ''; u.hash = '
 const digest = text => createHash('sha256').update(text).digest('hex');
 const restricted = url => /(?:^|\/)(?:login|logout|signin|signup|account|admin|checkout|cart|wp-admin|auth)(?:\/|$)/i.test(url.pathname);
 function links(html) {
-  const found = [], lower=html.toLowerCase(); let index = 0;
-  // Use the bounded HTML scanner, not regex over scripts or commented markup.
-  while (index < html.length) {
-    if (html.startsWith('<!--', index)) { const end = html.indexOf('-->', index + 4); index = end < 0 ? html.length : end + 3; continue; }
-    if (html[index] !== '<') { index++; continue; }
-    const tag = readTag(html, index); index = tag.end;
-    const name = tag.raw.match(/^\s*([a-z][\w:-]*)/i)?.[1]?.toLowerCase();
-    if (['script','style','template','noscript'].includes(name)) { const end = lower.indexOf(`</${name}`, index); index = end < 0 ? html.length : end; continue; }
-    if(name==='meta' && /^(robots|funklix-website-text)$/i.test(attribute(tag.raw,'name')) && /(?:nofollow|none)/i.test(attribute(tag.raw,'content'))) return [];
-    if (name === 'a' && !/nofollow/i.test(attribute(tag.raw, 'rel'))) {
-      const end = lower.indexOf('</a', index);
-      found.push({ href: attribute(tag.raw,'href'), label: safeText(decodeEntities(html.slice(index,end < 0 ? index : end).replace(/<[^>]*>/g,' '))) });
+  const found = [], lower=html.toLowerCase(); let index=0, nodes=0, anchor=null;
+  const finish=()=>{if(anchor) anchor.entry.label=safeText(decodeEntities(anchor.parts.join(' ')));anchor=null;};
+  // Visit each text/tag span once, including malformed/unclosed anchors. Never
+  // search the rest of the document separately for every anchor's closing tag.
+  while(index<html.length) {
+    if(html.startsWith('<!--',index)) {const end=html.indexOf('-->',index+4);index=end<0?html.length:end+3;continue;}
+    if(html[index]!=='<') {
+      const end=html.indexOf('<',index), stop=end<0?html.length:end;
+      if(anchor) anchor.parts.push(html.slice(index,stop));index=stop;continue;
     }
-    if (name === 'link' && /sitemap/i.test(attribute(tag.raw,'rel'))) found.push({href:attribute(tag.raw,'href'), sitemap:true});
+    const tag=readTag(html,index);index=tag.end;
+    if(++nodes>MAX_PARSED_NODES) {const error=new Error('Navigation parse boundary reached.');error.code='parse_limit';throw error;}
+    const closing=/^\s*\//.test(tag.raw), name=tag.raw.match(/^\s*\/?\s*([a-z][\w:-]*)/i)?.[1]?.toLowerCase();
+    if(closing) {if(name==='a') finish();continue;}
+    if(['script','style','template','noscript'].includes(name)) {const end=lower.indexOf(`</${name}`,index);index=end<0?html.length:end;continue;}
+    if(name==='meta' && /^(robots|funklix-website-text)$/i.test(attribute(tag.raw,'name')) && /(?:nofollow|none)/i.test(attribute(tag.raw,'content'))) return [];
+    if(name==='a') {
+      finish();
+      if(!/nofollow/i.test(attribute(tag.raw,'rel'))) {
+        const entry={href:attribute(tag.raw,'href'),label:''};found.push(entry);anchor={entry,parts:[]};
+      }
+    }
+    if(name==='link' && /sitemap/i.test(attribute(tag.raw,'rel'))) found.push({href:attribute(tag.raw,'href'),sitemap:true});
   }
-  return found;
+  finish();return found;
 }
 // Linear wildcard matcher (no source-controlled regular expressions).
 function robotsMatch(pattern,path) {
@@ -73,10 +82,26 @@ function robotsPolicy(text) {
   };
 }
 function sitemapEntries(xml) {
-  if (/<!DOCTYPE|<!ENTITY/i.test(xml)) { const error=new Error('Unsafe XML'); error.code='unsafe_xml'; throw error; }
-  if (!/<(?:\w+:)?(?:urlset|sitemapindex)\b/i.test(xml)) { const error=new Error('Invalid sitemap'); error.code='invalid_sitemap'; throw error; }
-  const sitemap=/<(?:\w+:)?sitemapindex\b/i.test(xml);
-  return [...xml.matchAll(/<(?:\w+:)?loc\b[^>]*>((?:<!\[CDATA\[[\s\S]*?\]\]>|[^<])*)<\/(?:\w+:)?loc\s*>/gi)].map(m=>({href:decodeEntities(m[1].trim().replace(/^<!\[CDATA\[([\s\S]*)\]\]>$/,'$1')),sitemap}));
+  if(/<!DOCTYPE|<!ENTITY/i.test(xml)) {const error=new Error('Unsafe XML');error.code='unsafe_xml';throw error;}
+  const entries=[];let index=0,nodes=0,root=null,current=null;
+  while(index<xml.length) {
+    if(xml.startsWith('<!--',index)) {const end=xml.indexOf('-->',index+4);index=end<0?xml.length:end+3;continue;}
+    if(xml.startsWith('<![CDATA[',index)) {
+      const end=xml.indexOf(']]>',index+9);if(current)current.push(xml.slice(index+9,end<0?xml.length:end));index=end<0?xml.length:end+3;continue;
+    }
+    if(xml[index]!=='<') {const end=xml.indexOf('<',index),stop=end<0?xml.length:end;if(current)current.push(xml.slice(index,stop));index=stop;continue;}
+    const tag=readTag(xml,index);index=tag.end;
+    if(++nodes>MAX_PARSED_NODES) {const error=new Error('Sitemap parse boundary reached.');error.code='parse_limit';throw error;}
+    const name=tag.raw.match(/^\s*\/?\s*([a-z][\w:-]*)/i)?.[1]?.toLowerCase().split(':').pop();
+    const closing=/^\s*\//.test(tag.raw);
+    if(!closing && ['urlset','sitemapindex'].includes(name) && !root) root=name;
+    if(name==='loc') {
+      if(closing && current) {const href=decodeEntities(current.join('')).trim();if(href)entries.push({href,sitemap:root==='sitemapindex'});current=null;}
+      else if(!closing) current=[];
+    }
+  }
+  if(!root) {const error=new Error('Invalid sitemap');error.code='invalid_sitemap';throw error;}
+  return entries;
 }
 async function researchDomain(input, dependencies={}) {
   const retrieve=dependencies.retrieveWebsiteText || retrieveWebsiteText;
@@ -148,8 +173,8 @@ async function researchDomain(input, dependencies={}) {
         add(target.href,link.sitemap?'sitemap':'page','navigation',link.label);
       }
       const hash=digest(page.internalHtml || '');item.contentHash=hash;
-      const projection=extractBrandProjection(page.internalHtml || '');
-      item.extraction='extracted';item.title=safeText(projection.title);item.extractedUnits=projection.evidenceUnits.length + projection.evidenceMetadata.length + (projection.title ? 1 : 0);
+      const projection=extractBrandProjection(page.internalHtml || '',{allowMetadataOnly:true});
+      item.extraction='extracted';item.evidenceKind=projection.evidenceUnits.length?'visible_text':'metadata_only';item.title=safeText(projection.title);item.extractedUnits=projection.evidenceUnits.length + projection.evidenceMetadata.length + (projection.title ? 1 : 0);
       // Retain source aliases, but do not spend context again on identical text.
       const textHash=digest([projection.title,...projection.evidenceMetadata,...projection.evidenceUnits].join('\n'));
       if(contents.has(textHash)) {item.duplicateOf=contents.get(textHash);item.processing='duplicate';continue;}

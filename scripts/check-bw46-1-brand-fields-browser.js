@@ -30,6 +30,7 @@ async function characterizeKnownDefects(){
    core.brandAssets={domain:'https://northstar.example/',colors:['#123456'],typography:'User sans',references:['User reference'],future:'keep'};
    core.future={nested:{keep:true}};
   }});
+  f.r.suggestions.unsupportedFixtureField='Never persist this value';
   const p=f.page; p.setDefaultTimeout(45000); await p.emulateMedia({reducedMotion:'reduce'});
   const key=k=>p.locator(`[data-profile-key="${k}"]`),results=[];
   const snapshot=clone(f.r.db.boards[0]), original=clone(f.r.db.brands[0]);
@@ -41,6 +42,8 @@ async function characterizeKnownDefects(){
   });
   await key('Analyze website').click();await p.waitForFunction(()=>!brandProfileController.busy());
   assert.equal(await p.evaluate(()=>brandProfileController.state.analysis),'Review website suggestions');
+  assert.equal(f.r.db.brands[0].brand_core.unsupportedFixtureField,undefined);
+  assert(await p.evaluate(()=>brandProfileController.state.research.rejectedFields.some(f=>f.field==='unsupportedFixtureField')));
   for(const k of ['personas','brandDNA','customTiles','brandAssets','future']) assert.deepEqual(f.r.db.brands[0].brand_core[k],beforeAI[k],k+' preserved during analysis');
   // A conflicting website proposal has acceptance controls but no value editor.
   assert.equal(await key('proposal-personas').count(),1);
@@ -155,7 +158,7 @@ async function characterizeKnownDefects(){
   await key('Overview').click();await key('Website').fill('https://northstar.example/');await key('Analyze website').click();await p.waitForFunction(()=>!brandProfileController.busy());
   for(const theme of ['light','dark'])for(const language of ['en','de']){
    await p.evaluate(({theme,language})=>{document.documentElement.dataset.theme=theme;state.uiLanguage=language;brandProfileController.render();},{theme,language});
-   const details=p.locator('.guided-brand-profile details').filter({hasText:language==='de'?'Abdeckung der Website-Recherche':'Website research coverage'});await details.locator('summary').click();assert(await details.isVisible());assert.equal(await details.locator('script,iframe').count(),0);
+   const details=p.locator('.guided-brand-profile details').filter({hasText:language==='de'?'Abdeckung der Website-Recherche':'Website research coverage'});await details.locator('summary').click();assert(await details.isVisible());assert((await details.textContent()).includes(language==='de'?'Nicht unterstützte Vorschlagsfelder wurden ausgeschlossen.':'Unsupported suggestion fields were excluded.'));assert((await details.textContent()).includes('→ https://example.test/'));assert.equal(await details.locator('script,iframe').count(),0);
   }
   fs.mkdirSync('work/bw46-1',{recursive:true});fs.writeFileSync('work/bw46-1/field-results.json',JSON.stringify(results,null,2));
   assert.deepEqual(f.errors,[]);await p.close();

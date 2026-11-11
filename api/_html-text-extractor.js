@@ -95,10 +95,11 @@ function extractBrandProjection(html, options = {}) {
   }
   flush();
   const bounded = stableBound(units, limits.maxTextLength);
-  if (!bounded.text) { const error = new Error('No readable webpage text was found.'); error.code = 'empty_content'; throw error; }
-  const sections = bounded.text.split('\n').slice(0, limits.maxSections);
+  if (!bounded.text && !(options.allowMetadataOnly && evidenceMetadata.length)) { const error = new Error('No readable webpage text was found.'); error.code = 'empty_content'; throw error; }
+  const boundedSections = bounded.text ? bounded.text.split('\n') : [];
+  const sections = boundedSections.slice(0, limits.maxSections);
   const context = stableBound([...metadata, ...sections], limits.maxProviderContext);
-  return { title: stableBound(titleParts.map(decodeEntities), limits.maxTitleLength).text, text: sections.join('\n'), sections, metadata, assets, providerContext: context.text, truncated: bounded.truncated || sections.length < bounded.text.split('\n').length || context.truncated, parsedNodes: nodes, evidenceUnits: units, evidenceMetadata, duplicateCount: bounded.duplicateCount, omittedCount: bounded.omittedCount + Math.max(0, bounded.text.split('\n').length - sections.length) };
+  return { title: stableBound(titleParts.map(decodeEntities), limits.maxTitleLength).text, text: sections.join('\n'), sections, metadata, assets, providerContext: context.text, truncated: bounded.truncated || sections.length < boundedSections.length || context.truncated, parsedNodes: nodes, evidenceUnits: units, evidenceMetadata, duplicateCount: bounded.duplicateCount, omittedCount: bounded.omittedCount + Math.max(0, boundedSections.length - sections.length) };
 }
 
 function extractHtmlText(html, options) { const value = extractBrandProjection(html, options); return { title: value.title, text: value.text, truncated: value.truncated }; }

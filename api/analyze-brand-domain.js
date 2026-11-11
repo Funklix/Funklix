@@ -17,6 +17,7 @@ function normalizeDomainUrl(value) {
 
 const object = value => value && typeof value === 'object' && !Array.isArray(value);
 const text = (value, max=50000) => typeof value === 'string' && value.length <= max;
+const hasSuggestion = value => typeof value==='string' ? !!value.trim() : Array.isArray(value) ? value.some(hasSuggestion) : object(value) ? Object.values(value).some(hasSuggestion) : false;
 const list = value => Array.isArray(value) && value.length <= 100 && value.every(v=>text(v,5000));
 const VALIDATORS = {
   brandCore:text, valueProposition:text, toneOfVoice:list, messagingPillars:list, contentGuidelines:list, keywords:list,
@@ -33,7 +34,7 @@ function validSuggestions(value) {
 function groundedFields(suggestions, grounding, research) {
   const fields={};
   for(const key of Object.keys(VALIDATORS)) {
-    const value=suggestions[key], present=value!==undefined && JSON.stringify(value).replace(/[{}[\]"\s:,]/g,'').length>0;
+    const value=suggestions[key], present=hasSuggestion(value);
     const raw=object(grounding?.[key])?grounding[key]:{};
     const evidence=Array.isArray(raw.evidence)?raw.evidence.filter(e=>object(e) && typeof e.sourceId==='string' && text(e.excerpt,300) && e.excerpt.trim()
       && research.selectedEvidence.some(unit=>unit.sourceId===e.sourceId && unit.excerpt.includes(e.excerpt))).map(e=>({sourceId:e.sourceId,excerpt:e.excerpt})):[];
@@ -75,7 +76,7 @@ SOURCE_RECORDS_JSON:
 ${providerContext}`;
   const controller = new AbortController();
   const cancel=()=>controller.abort();if(dependencies.signal?.aborted) cancel();dependencies.signal?.addEventListener('abort',cancel,{once:true});
-  const timer=setTimeout(()=>controller.abort(),30000);
+  const timer=setTimeout(()=>controller.abort(),dependencies.providerTimeoutMs ?? 30000);
   try {
   const aiRes = await providerFetch('https://api.openai.com/v1/chat/completions', {
     signal: controller.signal, method: 'POST', headers: { Authorization: `Bearer ${dependencies.apiKey || process.env.OPENAI_API_KEY}`, 'Content-Type': 'application/json' },
@@ -87,6 +88,12 @@ ${providerContext}`;
   const first = rawText.indexOf('{'); const last = rawText.lastIndexOf('}'); let parsed;
   try { parsed = JSON.parse(first >= 0 && last > first ? rawText.slice(first, last + 1) : ''); } catch { const error = new Error('The analysis provider returned an invalid response.'); error.code = 'invalid_analysis_response'; throw error; }
   const grounding=parsed?._grounding, modules=parsed?._modules; if (object(parsed)) {delete parsed._grounding;delete parsed._modules;}
+  if(object(parsed)) {
+    const unsupported=Object.keys(parsed).filter(key=>!Object.hasOwn(VALIDATORS,key));
+    if(unsupported.some(key=>['__proto__','prototype','constructor'].includes(key))) {const error=new Error('Invalid provider structure.');error.code='invalid_analysis_response';throw error;}
+    research.rejectedFields=unsupported.map(key=>({field:safeText(key).slice(0,100),reason:'unsupported_field'}));
+    parsed=Object.fromEntries(Object.entries(parsed).filter(([key])=>Object.hasOwn(VALIDATORS,key)));
+  }
   if (!validSuggestions(parsed)) { const error = new Error('The analysis provider returned an invalid response.'); error.code = 'invalid_analysis_response'; throw error; }
   parsed=JSON.parse(JSON.stringify(parsed),(_key,value)=>typeof value==='string'?safeText(value):value);
   research.fields=groundedFields(parsed,grounding,research);
@@ -119,8 +126,8 @@ ${providerContext}`;
   return { suggestions: parsed, logoDiscovery, source: { url: normalized, sections: research.selectedEvidence.length, truncated: research.state==='partial' }, research };
   } catch(error) {
     for(const source of research.sources) if(source.processing==='prepared') source.processing='provider_failed';
-    if(controller.signal.aborted) error.code=dependencies.signal?.aborted?'request_cancelled':'provider_timeout';
-    error.research=research;throw error;
+    const failure=controller.signal.aborted ? Object.assign(new Error('Website analysis was interrupted.'),{code:dependencies.signal?.aborted?'request_cancelled':'provider_timeout'}) : error;
+    failure.research=research;throw failure;
   } finally { clearTimeout(timer); dependencies.signal?.removeEventListener('abort',cancel); }
 }
 
