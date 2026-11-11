@@ -76,7 +76,7 @@ function documentFixture() { const doc = { createElement: tag => new Element(tag
 function loadBoundary(file, overrides, env = {}) {
   const location = path.resolve(__dirname, '..', file), requireFile = createRequire(location), module = { exports: {} };
   const localRequire = name => { if (Object.hasOwn(overrides, name)) return overrides[name]; if (name === 'pg') throw new Error('Real database forbidden'); return requireFile(name); };
-  vm.runInNewContext(fs.readFileSync(location, 'utf8'), { module, exports: module.exports, require: localRequire, Buffer, URL, process: { env }, fetch: globalThis.fetch, console: { error() {} } }, { filename: file });
+  vm.runInNewContext(fs.readFileSync(location, 'utf8'), { module, exports: module.exports, require: localRequire, Buffer, URL, AbortController, setTimeout, clearTimeout, process: { env }, fetch: globalThis.fetch, console: { error() {} } }, { filename: file });
   return module.exports;
 }
 async function checkLogoBoundary() {
@@ -131,7 +131,7 @@ async function checkAnalyzer() {
   let providers = 0, discoveries = 0;
   const html = '<title>Brand</title><h1>A useful brand for a clear audience</h1><p>' + 'Evidence of products and benefits. '.repeat(30) + '</p><script type="application/ld+json">{"@type":"Organization","logo":"/logo.png"}</script>';
   const deps = { previewLogo: true, retrieveWebsiteText: async () => ({ source: { url: 'https://example.com/' }, internalHtml: html }),
-    fetch: async () => { providers++; return response({ choices: [{ message: { content: JSON.stringify({ ...suggestions, contentGuidelines: [], brandAssets: {} }) } }] }); },
+    fetch: async () => { providers++; return response({ choices: [{ message: { content: JSON.stringify(Object.fromEntries(Object.entries({ ...suggestions, contentGuidelines: [], brandAssets: {} }).filter(([key])=>key!=='unknown'))) } }] }); },
     discoverLogo: async (_url, injected) => { discoveries++; assert.equal((await injected.retrieveWebsiteText()).internalHtml, html); assert.equal(injected.logoOnly, true); return { status: 'found', candidate: { url: candidate.candidate_url }, image: { buffer: png, mimeType: 'image/png' } }; }
   };
   let result = await analyzer.analyzeBrandDomain('example.com', deps);

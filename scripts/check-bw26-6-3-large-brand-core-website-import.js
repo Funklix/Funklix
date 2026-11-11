@@ -22,7 +22,7 @@ function validAnalysis() { return { brandCore:'Purpose-led industrial partner', 
   assert(projection.providerContext.length <= 1000 && projection.sections.length <= 60);
   const units = '<h1>First complete block</h1><p>Second complete block has more words</p><p>Third block</p>';
   const bounded = extractBrandProjection(units, { maxTextLength: 42, maxProviderContext: 42 });
-  assert.strictEqual(bounded.text, 'First complete block'); assert.strictEqual(bounded.truncated, true);
+  assert.strictEqual(bounded.text, 'First complete block\nThird block'); assert.strictEqual(bounded.truncated, true);
   assert.throws(() => extractBrandProjection('<div>x</div>'.repeat(20), { maxParsedNodes: 3 }), e => e.code === 'parse_limit');
   assert.throws(() => extractBrandProjection('<script>x</script>'), e => e.code === 'empty_content');
   const small = '<title>Small</title><h1>Hello brand</h1><p>Useful copy remains.</p>';

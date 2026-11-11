@@ -34,16 +34,26 @@ function readTag(html, start) {
   return { raw: html.slice(start + 1), end: html.length };
 }
 
+// Continue past oversized units; duplicates and omissions have different meanings.
 function stableBound(units, maxLength) {
-  const kept = []; let size = 0;
+  const kept = [], seen = new Set(); let size = 0, duplicateCount = 0, omittedCount = 0;
   for (const unit of units) {
     const value = String(unit || '').replace(/\s+/g, ' ').trim();
-    if (!value || kept.includes(value)) continue;
+    if (!value) continue;
+    if (seen.has(value)) { duplicateCount++; continue; }
+    seen.add(value);
     const extra = value.length + (kept.length ? 1 : 0);
-    if (size + extra > maxLength) break;
+    if (size + extra > maxLength) { omittedCount++; continue; }
     kept.push(value); size += extra;
   }
-  return { text: kept.join('\n'), truncated: kept.length < units.filter((unit) => String(unit || '').trim()).length };
+  return { text: kept.join('\n'), truncated: omittedCount > 0, duplicateCount, omittedCount };
+}
+
+const RELEVANCE = /about|company|founder|team|mission|vision|values|product|service|feature|pricing|customer|industry|case study|testimonial|faq|contact|story|press|news|blog|resource|editorial|insight|guide|über uns|gründer|leistung|produkt|kunden|werte|unternehmen|kontakt|preise|zielgruppe|angebot|presse|artikel/i;
+function evidenceScore(text) { return (text.match(new RegExp(RELEVANCE.source, 'gi')) || []).length; }
+function evidenceUnits(text) {
+  // Segment long blocks so a large opening paragraph cannot starve later evidence.
+  return String(text).match(/[^]{1,800}(?:\s|$)|[^]{1,800}/g)?.map(s => s.trim()).filter(Boolean) || [];
 }
 
 function extractBrandProjection(html, options = {}) {
@@ -56,9 +66,9 @@ function extractBrandProjection(html, options = {}) {
     maxAssets: options.maxAssets ?? MAX_ASSETS,
     maxProviderContext: options.maxProviderContext ?? MAX_PROVIDER_CONTEXT
   };
-  const source = String(html || ''); const units = []; const titleParts = []; const metadata = []; const assets = [];
+  const source = String(html || ''); const units = []; const titleParts = []; const metadata = []; const evidenceMetadata = []; const assets = [];
   const stack = []; let excludedDepth = 0; let inTitle = false; let index = 0; let nodes = 0; let buffer = '';
-  const flush = () => { const value = decodeEntities(buffer).replace(/\s+/g, ' ').trim(); buffer = ''; if (value && units.length < limits.maxSections * 4) units.push(value); };
+  const flush = () => { const value = decodeEntities(buffer).replace(/\s+/g, ' ').trim(); buffer = ''; if (value) units.push(...evidenceUnits(value)); };
   while (index < source.length) {
     if (source.startsWith('<!--', index)) { const end = source.indexOf('-->', index + 4); index = end < 0 ? source.length : end + 3; continue; }
     if (source[index] !== '<') { const end = source.indexOf('<', index); const text = source.slice(index, end < 0 ? source.length : end); if (!excludedDepth) buffer += ` ${text}`; if (inTitle) titleParts.push(text); index = end < 0 ? source.length : end; continue; }
@@ -77,7 +87,7 @@ function extractBrandProjection(html, options = {}) {
     const excluded = EXCLUDED.has(name) || hidden || noisy || excludedDepth > 0;
     if (BLOCKS.has(name) && !excludedDepth) flush();
     if (name === 'title') inTitle = true;
-    if (name === 'meta' && metadata.length < limits.maxMetadata) { const key = attribute(tag.raw, 'name') || attribute(tag.raw, 'property'); const content = attribute(tag.raw, 'content'); if (key && content && /description|og:title|og:description|twitter:title|twitter:description/i.test(key)) metadata.push(`${key}: ${content}`); }
+    if (name === 'meta') { const key = attribute(tag.raw, 'name') || attribute(tag.raw, 'property'); const content = attribute(tag.raw, 'content'); if (key && content && /description|og:title|og:description|twitter:title|twitter:description/i.test(key)) { evidenceMetadata.push(`${key}: ${content}`); if(metadata.length < limits.maxMetadata) metadata.push(`${key}: ${content}`); } }
     if (name === 'link' && /(?:^|\s)(canonical|icon|apple-touch-icon)(?:\s|$)/i.test(attribute(tag.raw, 'rel')) && assets.length < limits.maxAssets) assets.push({ type: 'link', rel: attribute(tag.raw, 'rel'), url: attribute(tag.raw, 'href') });
     if (name === 'img' && assets.length < limits.maxAssets) { const src = attribute(tag.raw, 'src'); const alt = attribute(tag.raw, 'alt'); if (src && !/^data:/i.test(src) && (alt || /logo|brand/i.test(src))) assets.push({ type: 'image', url: src, alt }); }
     const selfClosing = /\/\s*$/.test(tag.raw) || ['br', 'hr', 'img', 'input', 'meta', 'link'].includes(name);
@@ -88,9 +98,9 @@ function extractBrandProjection(html, options = {}) {
   if (!bounded.text) { const error = new Error('No readable webpage text was found.'); error.code = 'empty_content'; throw error; }
   const sections = bounded.text.split('\n').slice(0, limits.maxSections);
   const context = stableBound([...metadata, ...sections], limits.maxProviderContext);
-  return { title: stableBound(titleParts, limits.maxTitleLength).text, text: sections.join('\n'), sections, metadata, assets, providerContext: context.text, truncated: bounded.truncated || sections.length < bounded.text.split('\n').length || context.truncated, parsedNodes: nodes };
+  return { title: stableBound(titleParts.map(decodeEntities), limits.maxTitleLength).text, text: sections.join('\n'), sections, metadata, assets, providerContext: context.text, truncated: bounded.truncated || sections.length < bounded.text.split('\n').length || context.truncated, parsedNodes: nodes, evidenceUnits: units, evidenceMetadata, duplicateCount: bounded.duplicateCount, omittedCount: bounded.omittedCount + Math.max(0, bounded.text.split('\n').length - sections.length) };
 }
 
 function extractHtmlText(html, options) { const value = extractBrandProjection(html, options); return { title: value.title, text: value.text, truncated: value.truncated }; }
 
-module.exports = { extractHtmlText, extractBrandProjection, stableBound, MAX_TITLE_LENGTH, MAX_TEXT_LENGTH, MAX_PARSED_NODES, MAX_SECTIONS, MAX_METADATA, MAX_ASSETS, MAX_PROVIDER_CONTEXT };
+module.exports = { extractHtmlText, extractBrandProjection, stableBound, MAX_TITLE_LENGTH, MAX_TEXT_LENGTH, MAX_PARSED_NODES, MAX_SECTIONS, MAX_METADATA, MAX_ASSETS, MAX_PROVIDER_CONTEXT, attribute, readTag, decodeEntities, evidenceScore, evidenceUnits };

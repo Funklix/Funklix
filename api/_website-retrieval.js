@@ -140,6 +140,7 @@ async function retrieveWebsiteText(input, options = {}) {
   options.signal?.addEventListener('abort', cancel, { once: true });
   try {
     let url = validateWebsiteUrl(input);
+    if (options.signal?.aborted) controller.abort(options.signal.reason);
     const visited = new Set();
     for (let redirects = 0; ; redirects += 1) {
       Object.assign(diagnostics, {
@@ -147,6 +148,8 @@ async function retrieveWebsiteText(input, options = {}) {
         socketStarted: false, socketConnected: false, tlsStarted: false, tlsCompleted: false,
         headersReceived: false, boundedBytesReceived: 0
       });
+      if (options.allowedOrigin && url.origin !== options.allowedOrigin) throw new WebsiteRetrievalError('out_of_scope', 'The source redirects outside the research site.');
+      if (options.isAllowed && !options.isAllowed(url)) throw new WebsiteRetrievalError('source_restricted', 'The source is excluded by the retrieval policy.');
       if (visited.has(url.href)) throw new WebsiteRetrievalError('redirect_loop', 'The webpage redirect loop could not be followed.');
       visited.add(url.href);
       diagnostics.stage = 'dns_lookup';
@@ -166,10 +169,15 @@ async function retrieveWebsiteText(input, options = {}) {
         diagnostics.redirectCount = redirects + 1;
         continue;
       }
-      if (status < 200 || status >= 300) { response.destroy(); throw new WebsiteRetrievalError('http_error', 'The webpage did not return a successful response.'); }
+      if (status < 200 || status >= 300) { response.destroy(); const error = new WebsiteRetrievalError('http_error', 'The webpage did not return a successful response.'); error.httpStatus = status; throw error; }
       const type = String(response.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
-      if (!['text/html', 'application/xhtml+xml'].includes(type)) { response.destroy(); throw new WebsiteRetrievalError('unsupported_content_type', 'Only HTML webpages are supported.'); }
+      const types = options.documentType === 'robots' ? ['text/plain'] : options.documentType === 'sitemap' ? ['application/xml', 'text/xml', 'application/xhtml+xml'] : ['text/html', 'application/xhtml+xml'];
+      if (!types.includes(type)) { response.destroy(); throw new WebsiteRetrievalError('unsupported_content_type', 'Only HTML webpages are supported.'); }
       const html = await readBounded(response, options.maxResponseBytes ?? MAX_RESPONSE_BYTES, options.maxDecompressedBytes ?? MAX_DECOMPRESSED_BYTES, diagnostics);
+      if (options.documentType) return { source: { url: url.href }, internalDocument: html };
+      // Analysis needs navigation even on a script-only/empty page. The public
+      // specific-page extractor retains its original empty-content behavior.
+      if (options.includeHtml && options.allowEmpty) return { source: { url: url.href }, internalHtml: html, internalPolicy: { nofollow: /(?:nofollow|none)/i.test(String(response.headers['x-robots-tag'] || '')) } };
       diagnostics.stage = 'extraction';
       const extracted = extractHtmlText(html, options.extractionOptions);
       const result = { status: 'success', source: { url: url.href, title: extracted.title }, content: { text: extracted.text, truncated: extracted.truncated } };
