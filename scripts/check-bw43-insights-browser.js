@@ -26,11 +26,51 @@ const out = 'work/bw43/screenshots';
       state.currentBoardName='Northstar Launch';state.isDirty=dirty;
       refreshLastSavedSnapshot();renderCampaignIntelligence();clearAutosaveTimer();
     },{value,dirty});
+    const assertAttention = async () => {
+      const expected=await p.evaluate(()=>state.insightsDiagnosticSnapshot?.findings || []);
+      assert.deepEqual(await p.locator('.insights-attention-list button').allTextContents(),
+        await p.evaluate(fs=>fs.slice(0,3).map(f=>uiText(f.title)),expected),'Attention follows current ranked findings');
+      assert.deepEqual(await p.locator('.insights-finding').evaluateAll(ns=>ns.map(n=>n.dataset.findingId)),expected.map(f=>f.code),'All Opportunities remain');
+    };
     const retained = () => p.evaluate(()=>JSON.stringify({nodes:state.nodes,edges:state.edges,core:state.brandCore,
       saved:state.lastSavedSnapshot,dirty:state.isDirty,board:state.currentBoardId,association:state.boardBrandAssociation,revision:state.lastKnownUpdatedAt}));
     const shot = async name => p.screenshot({path:`${out}/${name}.png`});
     await p.evaluate(()=>{setActiveView('insights');setSidebarCollapsed(true);});
     await apply(nodes);
+    // BW-45.3: real native keyboard activation and stale detached-button controls.
+    diagnosticCase='BW-45.3 Attention';
+    await p.emulateMedia({reducedMotion:'reduce'});
+    const attentionNodes=nodes.slice(0,5).map((n,i)=>({...n,type:'Landing Page',title:'Same title',
+      funnelStage:['Awareness','Interest','Consideration','Conversion','Retention'][i],
+      audience:i?'Teams':'Founders',tone:['Clear','Direct','Warm'][i%3],
+      landingPage:{cta:i?'Action '+i:'',trust:''}}));
+    await apply(attentionNodes);await assertAttention();
+    assert.equal(await p.evaluate(()=>state.insightsDiagnosticSnapshot.analysis.cta.qualityScore),100);
+    assert.equal(await p.evaluate(()=>state.insightsDiagnosticSnapshot.analysis.trust.score),35);
+    await p.evaluate(()=>{window.bw45Scroll=[];window.bw45NativeScroll=Element.prototype.scrollIntoView;
+      Element.prototype.scrollIntoView=function(options){window.bw45Scroll.push({id:this.dataset.findingId,options});};
+      window.bw45OldAttention=document.querySelector('.insights-attention-list button');});
+    const leading=await p.evaluate(()=>state.insightsDiagnosticSnapshot.findings.slice(0,3).map(f=>f.code));
+    assert(leading.includes('CTA_MISSING'));assert(leading.includes('TRUST_PROOF_MISSING'));
+    for(let i=0;i<leading.length;i++) for(const key of ['Enter','Space']) {
+      await p.locator('.insights-attention-list button').nth(i).focus();await p.keyboard.press(key);
+      assert.equal(await p.evaluate(()=>window.bw45Scroll.at(-1).id),leading[i],'Native keyboard reveals exact card');
+    }
+    await p.evaluate(()=>{Element.prototype.scrollIntoView=window.bw45NativeScroll;});
+    await p.locator('.insights-attention-list button').first().focus();await p.keyboard.press('Enter');
+    await p.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));
+    assert(await p.locator(`[data-finding-id="${leading[0]}"]`).evaluate(n=>{
+      const r=n.getBoundingClientRect(),v=el.insightsView.getBoundingClientRect();return r.top<v.bottom&&r.bottom>v.top;
+    }),'Intended Opportunity is revealed inside the scrollable view');
+    await p.evaluate(()=>{Element.prototype.scrollIntoView=function(options){window.bw45Scroll.push({id:this.dataset.findingId,options});};});
+    await p.evaluate(()=>{state.nodes[0].landingPage.cta='Fixed';renderCampaignIntelligence();window.bw45Scroll=[];window.bw45OldAttention.click();});
+    assert.deepEqual(await p.evaluate(()=>window.bw45Scroll),[],'Refresh rejects stale button');await assertAttention();
+    await p.evaluate(()=>{window.bw45Board=state.currentBoardId;window.bw45OldAttention=document.querySelector('.insights-attention-list button');
+      state.currentBoardId='fictional-attention-board';state.boardLoadGeneration++;renderCampaignIntelligence();window.bw45OldAttention.click();});
+    assert.deepEqual(await p.evaluate(()=>window.bw45Scroll),[],'Board switch rejects stale button');await assertAttention();
+    await p.evaluate(()=>{state.currentBoardId=window.bw45Board;state.boardLoadGeneration++;Element.prototype.scrollIntoView=window.bw45NativeScroll;});
+    console.log('PASS BW-45.3 native Attention Enter/Space, exact current card reveal, CTA=100/trust=35 and stale Refresh/Board controls');
+    await p.emulateMedia({reducedMotion:'no-preference'});await apply(nodes);
     const before=await retained();
     const a=await p.evaluate(()=>state.insightsDiagnosticSnapshot.analysis);
     assert.equal(a.healthScore,90);assert.equal(a.funnel.confidence,60);
@@ -104,6 +144,7 @@ const out = 'work/bw43/screenshots';
       await p.locator('.insights-methodology summary').focus();
       assert(await p.locator('.insights-methodology summary').evaluate(n=>{const r=n.getBoundingClientRect();return n.contains(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2));}),'Last disclosure remains clear of navigation');
       await p.evaluate(()=>document.activeElement?.blur());
+      await assertAttention();
       results.push({theme,language,collapsed,width});
     }
     assert.equal(await retained(),before,'Layout/localization never changes Canvas or saved provenance');

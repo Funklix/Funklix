@@ -211,3 +211,53 @@ assert.equal(lifecycle.sandbox.isCurrentInsightsSnapshot(stale),false);
 lifecycle.sandbox.calculateInsightsDiagnostic();lifecycle.sandbox.renderInsightsSurface();
 assert.equal(lifecycle.state.insightsDiagnosticSnapshot.analysis.funnel.confidence,100);
 console.log('PASS BW-45.2 canonical fixtures, all 32 subsets, readiness, findings, Journey/source parity, saved/live, edit/Refresh, Board switch and custom-data preservation');
+
+// BW-45.3: Attention is the leading ranked engine findings, never a score filter.
+const attentionButtons = test => byClass(test,'insights-attention-list').flatMap(list=>list.querySelectorAll('button'));
+const attentionBase = canonical.map((stage,i)=>minimal('attention-'+i,'Landing Page',{
+  funnelStage:stage, landingPage:{cta:'Action '+i,trust:'Fictional proof'}
+}));
+const attentionCases = [
+  ['empty Canvas', [], null],
+  ['no findings', attentionBase, 0],
+  ['one / high CTA score', attentionBase.map((n,i)=>i===0?{...n,landingPage:{...n.landingPage,cta:''}}:n), 1],
+  ['two / actual trust code', attentionBase.map((n,i)=>({...n,landingPage:{cta:i?'Action '+i:'',trust:''}})), 2],
+  ['three / audience variation', attentionBase.map((n,i)=>({...n,audience:i?'Teams':'Founders',landingPage:{cta:i?'Action '+i:'',trust:''}})), 3],
+  ['five / mixed severity and zero/multiple affected IDs', attentionBase.map((n,i)=>({...n,funnelStage:'Conversion',audience:i?'Teams':'Founders',tone:['Clear','Direct','Warm'][i%3],landingPage:{cta:i>1?'Action '+i:'',trust:''}})), 5],
+  ['tone variation', attentionBase.map((n,i)=>({...n,tone:['Clear','Direct','Warm'][i%3]})), 1],
+  ['funnel gaps / zero affected nodes', attentionBase.map(n=>({...n,funnelStage:'Conversion'})), 1],
+  ['CTA beside other findings', [minimal('populated','Landing Page',{landingPage:{cta:'Join',trust:'Fictional proof'}}),minimal('missing','Landing Page')], 2]
+];
+for(const [name,nodes,count] of attentionCases) for(const uiLanguage of ['en','de']) for(const resolvedTheme of ['light','dark']) {
+  const test=render({nodes,uiLanguage,resolvedTheme}),snapshot=test.state.insightsDiagnosticSnapshot;
+  if(count===null) {assert.equal(snapshot,null);assert.equal(attentionButtons(test).length,0);continue;}
+  assert.equal(snapshot.findings.length,count,name);
+  const before=JSON.stringify(snapshot),scores=JSON.stringify(test.sandbox.analyzeCampaign(nodes,[],{}));
+  assert.equal(JSON.stringify(snapshot.analysis),scores,name+' uses unchanged analyzer');
+  const buttons=attentionButtons(test),leading=Array.from(snapshot.findings).slice(0,3);
+  assert.deepEqual(buttons.map(b=>b.textContent),leading.map(f=>uiLanguage==='de'?'DE:'+f.title:f.title),name+' leading engine order');
+  assert.deepEqual(byClass(test,'insights-finding').map(c=>c.dataset.findingId),Array.from(snapshot.findings,f=>f.code),name+' full Opportunities');
+  buttons.forEach((button,i)=>{
+    assert.equal(button.tagName,'BUTTON');assert.equal(button.type,'button');
+    let scrolled=null;
+    const cards=byClass(test,'insights-finding');cards.forEach(card=>card.scrollIntoView=()=>{scrolled=card.dataset.findingId;});
+    test.sandbox.window={matchMedia:()=>({matches:true})};button.listeners.click();
+    assert.equal(scrolled,leading[i].code,name+' exact current Opportunity');
+  });
+  if(count===0) assert.equal(byClass(test,'insights-attention-empty').length,1);
+  if(name.includes('high CTA')) {assert.equal(snapshot.analysis.cta.qualityScore,100);assert.equal(leading[0].code,'CTA_MISSING');}
+  if(name.includes('actual trust')) {assert.equal(snapshot.analysis.trust.score,35);assert(leading.some(f=>f.code==='TRUST_PROOF_MISSING'));}
+  assert.equal(JSON.stringify(snapshot),before,name+' leaves all findings/evidence/scores unchanged');
+  const staleButton=buttons[0];let staleScrolls=0;
+  byClass(test,'insights-finding').forEach(card=>card.scrollIntoView=()=>staleScrolls++);
+  test.state.nodes=structuredClone(attentionBase);test.state.isDirty=true;
+  test.cards.querySelector('.insights-refresh').listeners.click();
+  staleButton?.listeners.click();assert.equal(staleScrolls,0,'Refresh invalidates old Attention closure');
+  assert.equal(attentionButtons(test).length,0,'Refresh removes resolved findings');
+  test.state.currentBoardId='attention-other-board';test.state.boardLoadGeneration++;test.state.nodes=nodes;
+  test.sandbox.calculateInsightsDiagnostic();test.sandbox.renderInsightsSurface();
+  staleButton?.listeners.click();assert.equal(staleScrolls,0,'Board switch invalidates old Attention closure');
+  assert.deepEqual(attentionButtons(test).map(b=>b.textContent),leading.map(f=>uiLanguage==='de'?'DE:'+f.title:f.title),'New Board uses its own findings');
+}
+assert(!functionSource('renderInsightsSurface').includes('TRUST_LAYER_MISSING'),'No obsolete trust-code mapping');
+console.log('PASS BW-45.3 leading findings for 0/1/2/3/5, CTA=100, trust=35, audience/tone/gaps, exact targets, refresh/Board invalidation, EN/DE and themes');
