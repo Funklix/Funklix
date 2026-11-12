@@ -113,7 +113,7 @@ function runtime(options = {}) {
       source = source.replace('WHERE b.id=$1`', 'WHERE b.id=$1 FOR UPDATE`')
         .replace(/:stage==='metadata_update'\?[^;]+;/, ":'UPDATE_FAILED';");
     }
-    vm.runInNewContext(source, { module, exports: module.exports, require: req, process: { env }, Buffer, URL, AbortSignal, setTimeout, clearTimeout, fetch: externalFetch, console: { error: (...v) => logs.push(v), debug: (...v) => logs.push(v), log() {} } }, { filename: relativeName(location) });
+    vm.runInNewContext(source, { module, exports: module.exports, require: req, process: { env }, Buffer, URL, AbortController, AbortSignal, setTimeout, clearTimeout, fetch: externalFetch, console: { error: (...v) => logs.push(v), debug: (...v) => logs.push(v), log() {} } }, { filename: relativeName(location) });
     return module.exports;
   }
   function relativeName(location) { return path.relative(ROOT, location); }

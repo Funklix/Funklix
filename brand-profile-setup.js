@@ -130,7 +130,7 @@
     const state = {
       brand: options.brand, name: options.brand.name, core: clone(options.brand.brand_core),
       website: options.website || options.brand.brand_core?.brandAssets?.domain || options.brand.brand_core?.website || '',
-      section: SECTIONS.includes(options.initialSection) ? SECTIONS.indexOf(options.initialSection) : 0, message: '', analysis: 'Not analyzed', logo: options.brand.logo_url ? 'Logo saved' : 'No logo yet. Initials are shown.',
+      research: null, section: SECTIONS.includes(options.initialSection) ? SECTIONS.indexOf(options.initialSection) : 0, message: '', analysis: 'Not analyzed', logo: options.brand.logo_url ? 'Logo saved' : 'No logo yet. Initials are shown.',
       proposals: clone(options.pendingData?.proposals || {}), candidate: clone(options.pendingData?.candidate || null),
       dnaPreflight: null, dnaDraft: clone(options.pendingData?.dnaDraft || null), avatarDraft: clone(options.pendingData?.avatarDraft || null), avatarDirection: options.pendingData?.avatarDirection || '', file: options.pendingData?.file || null, fileData: options.pendingData?.fileData || null, syncRequired: false, reconciliationWarning: false, pending: '', deferred: false,
       readOnly: options.brand.access?.canEditCanonicalBrand !== true || !['owner','admin','editor'].includes(options.brand.access?.role)
@@ -299,6 +299,7 @@
         state.deferred = false; state.analysis = 'Analyzing website…'; state.message = '';
         const result = await jsonRequest('/api/analyze-brand-domain', 'POST', { domainUrl: domain, brandId: state.brand.id });
         if (!result) return false;
+        state.research = result.payload?.research?.version === 'brand-domain-research/v1' ? result.payload.research : null;
         if (!result.response.ok) {
           const code = result.payload?.error?.code;
           state.analysis = code === 'empty_content' ? 'No usable information found' : 'Analysis failed';
@@ -712,6 +713,33 @@
         const use = button('Use this logo', parent, () => { void session.useLogo(); }); use.disabled ||= s.brand.logo_source === 'uploaded';
       }
     }
+    function researchCoverage(parent) {
+      const r=s.research;
+      if (!r || !r.counts) return;
+      const details=node('details','',parent);
+      node('summary',t('Website research coverage'),details);
+      node('p',t('Selected excerpts were analyzed. Website coverage may be partial.'),details);
+      node('p',t('Source grounding is available for this analysis only and is not retained with saved Brand fields.'),details);
+      node('p',t('Suggestions for empty fields follow the existing automatic save flow. Existing values require review.'),details);
+      for(const [key,label] of Object.entries({discovered:'Discovered',fetched:'Retrieved',extracted:'Extracted',processed:'Processed excerpts',unavailable:'Unavailable',rejected:'Excluded',deferred:'Remaining sources'})) node('p',`${t(label)}: ${Number(r.counts[key]) || 0}`,details);
+      if(r.rejectedFields?.length) node('p',t('Unsupported suggestion fields were excluded.'),details);
+      if(r.remaining?.omittedUnits || r.discoveryOmitted) node('p',t('Additional evidence remains outside this analysis.'),details);
+      const list=node('ul','',details);
+      const labels={pending:'Remaining sources',deferred:'Remaining sources',unavailable:'Unavailable',rejected:'Excluded',fetched:'Retrieved',extracted:'Extracted',not_started:'Not processed',prepared:'Not processed',provider_failed:'Not processed',not_selected:'Not processed',duplicate:'Duplicate content',processed_selected_excerpts:'Processed excerpts'};
+      for(const source of r.sources || []) node('li',`${source.id || ''}: ${source.url}${source.finalUrl && source.finalUrl!==source.url ? ' → '+source.finalUrl : ''} — ${t(labels[source.retrieval] || 'Unavailable')} / ${t(labels[source.extraction] || 'Not processed')} / ${t(labels[source.processing] || 'Not processed')}${source.reason ? ' ('+t(({robots_disallowed:'Excluded by website access rules',robots_unavailable:'Website access rules unavailable',source_restricted:'Restricted source',not_relevant:'Outside brand research topics',out_of_scope:'Outside this website',http_error:'Source could not be retrieved',empty_content:'No readable page content',research_deadline:'Research time boundary reached',evidence_memory:'Evidence preparation boundary reached'})[source.reason] || 'Source could not be processed')+')' : ''}`,list);
+      for(const source of r.documents || []) node('p',`${source.url}: ${t(source.retrieval==='fetched'?'Retrieved':'Unavailable')}`,details);
+      for(const draft of r.moduleSuggestions?.drafts || []) {
+        const row=node('section','',details);node('h4',t(options.moduleDefinition(draft.moduleType)?.label || draft.moduleType),row);
+        node('p',t('Module draft — review and edit manually before saving.'),row);readable(draft.content,row);
+        for(const e of draft.evidence || []) node('p',`${e.sourceId}: ${e.excerpt}`,row);
+      }
+      for(const [path,field] of Object.entries(r.fields || {})) {
+        const key=path.split('/').pop();
+        const row=node('section','',details);node('h4',t(FIELDS[key]?.[1] || key),row);
+        node('p',t({website_supported:'Website-supported suggestion',ai_interpretation:'AI interpretation',missing:'Missing information',conflicting:'Conflicting evidence'}[field.classification] || 'Missing information'),row);
+        for(const e of field.evidence || []) node('p',`${e.sourceId}: ${e.excerpt}`,row);
+      }
+    }
     function render() {
       const focused = doc.activeElement?.dataset?.profileKey;
       options.onBusy?.(!!s.pending || !!s.returning);
@@ -746,7 +774,7 @@
         else node('p', t('No Brand Avatar yet.'), avatarCard);
         button(avatar ? 'Open Brand Avatar' : 'Create Brand Avatar', avatarCard, () => { s.section = 6; render(); });
         textField('Brand name', s.name, section, value => { s.name = value; });
-        textField('Website', s.website, section, value => { s.website = value; s.proposals = {}; s.candidate = null; s.analysis = 'Not analyzed'; });
+        textField('Website', s.website, section, value => { s.website = value; s.proposals = {}; s.candidate = null; s.analysis = 'Not analyzed'; s.research = null; });
         if (!s.readOnly) button('Analyze website', section, () => { void session.analyze(); });
         fields('Foundation', section);
       } else if (SECTIONS[s.section] === 'Review') {
@@ -821,6 +849,7 @@
         node('p', t('Campaign snapshots change only after an explicit campaign update.'), section);
         if (options.hasSnapshot?.()) button('Campaign Brand Snapshot', section, () => options.onSnapshot());
       } else fields(SECTIONS[s.section], section);
+      researchCoverage(container);
       if (s.addedCount) node('p', t('{count} details added from the website.').replace('{count}', s.addedCount), container).setAttribute('role', 'status');
       if (s.autoKeys.length && !s.pending) button('Retry adding website details', container, () => { void session.retryAutomatic(); });
       const feedback = node('p', t(s.pending || s.message), container); feedback.setAttribute('role', 'status'); feedback.setAttribute('aria-live', 'polite');

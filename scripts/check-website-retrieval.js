@@ -46,7 +46,8 @@ assert.strictEqual(theater.content.text.length <= 80, true);
 assert.strictEqual(theater.content.truncated, true);
 assert.strictEqual(JSON.stringify(theater).includes('<html'), false, 'retrieval must return extracted text, never raw HTML');
 
-await assert.rejects(retrieveWebsiteText('https://example.com', { lookup: publicLookup, requestImpl: fakeRequest([response(302, { location: 'http://127.0.0.1/admin' })]) }), (e) => e.code === 'unsafe_destination');
+await assert.rejects(retrieveWebsiteText('https://example.com', { lookup: publicLookup, requestImpl: fakeRequest([response(302, { location: 'https://127.0.0.1/admin' })]) }), (e) => e.code === 'unsafe_destination');
+await assert.rejects(retrieveWebsiteText('https://example.com', { lookup: publicLookup, requestImpl: fakeRequest([response(302, { location: 'http://127.0.0.1/admin' })]) }), (e) => e.code === 'unsupported_scheme');
 await assert.rejects(retrieveWebsiteText('https://example.com', { lookup: publicLookup, maxRedirects: 1, requestImpl: fakeRequest([response(302, { location: '/a' }), response(302, { location: '/b' })]) }), (e) => e.code === 'too_many_redirects');
 await assert.rejects(retrieveWebsiteText('https://example.com', { lookup: publicLookup, requestImpl: fakeRequest([response(302, { location: '/' })]) }), (e) => e.code === 'redirect_loop');
 await assert.rejects(retrieveWebsiteText('https://example.com', { lookup: publicLookup, maxResponseBytes: 5, requestImpl: fakeRequest([response(200, { 'content-type': 'text/html' }, ['123', '456'])]) }), (e) => e.code === 'response_too_large');

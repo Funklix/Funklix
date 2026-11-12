@@ -8,7 +8,7 @@ const fixture = `<!doctype html><html><head><title> Example &amp; Co </title><st
 const first = extractHtmlText(fixture);
 assert.deepStrictEqual(first, extractHtmlText(fixture));
 assert.strictEqual(first.title, 'Example & Co');
-assert.strictEqual(first.text, 'Our Story\nWe solve real problems.\nFirst proof\nSecond proof');
+assert.strictEqual(first.text, 'Menu repeated\nOur Story\nWe solve real problems.\nFirst proof\nSecond proof\nfooter');
 assert(!first.text.includes('bad') && !first.text.includes('evil') && !first.text.includes('secret') && !first.text.includes('<'));
 const bounded = extractHtmlText('<h1>Heading</h1><p>abcdefghij</p>', { maxTextLength: 10 });
 assert.strictEqual(bounded.truncated, true); assert.strictEqual(bounded.text.length <= 10, true);
