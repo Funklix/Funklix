@@ -19,15 +19,28 @@ async function enrich(brand,input,deps={}){
  const keys=input.field?[input.field]:Object.keys(c.validators);
  const base={version:c.VERSION,brandId:brand.id,revision:Number(brand.revision),fields:{},questions:input.field?questions(input.field,input.language):[],origin:input.domainUrl?'website_and_brand_context':'description_and_brand_context'};
  if(input.action==='questions')return base;
- let research=null;let sources=[];
- if(input.domainUrl){const result=await (deps.researchDomain||researchDomain)(input.domainUrl,deps);research=result.research;
-   sources=research.selectedEvidence.map(e=>{const source=research.sources.find(s=>s.id===e.sourceId);return {...e,url:c.url(e.url),originalUrl:c.url(source?.url),retrievedAt:source?.retrievedAt||null,contentHash:source?.contentHash||null,classification:'website_supported',sourceClassification:source?.evidenceKind||'website',origin:'brand-domain-research/v1'};});}
  const description=input.description||'';
+ let research=null;let sources=[];
+ if(input.domainUrl){if(typeof input.domainUrl!=='string')throw failure('INVALID_INPUT');const raw=input.domainUrl.trim(),domainUrl=/^https?:\/\//i.test(raw)?raw:'https://'+raw;let result;try{result=await (deps.researchDomain||researchDomain)(domainUrl,deps);}catch(error){
+   if(!(description.trim()||(input.answers||[]).some(a=>a.answer.trim()))||!['http_error','robots_disallowed','dns_failed','timeout','empty_content'].includes(error.code))throw error;
+   base.sourceIssue=error.code;result={research:error.research||{selectedEvidence:[],sources:[],state:'partial'}};
+ }research=result.research;
+   sources=research.selectedEvidence.map(e=>{const source=research.sources.find(s=>s.id===e.sourceId);return {...e,url:c.url(e.url),originalUrl:c.url(source?.url),retrievedAt:source?.retrievedAt||null,contentHash:source?.contentHash||null,classification:'website_supported',sourceClassification:source?.evidenceKind||'website',origin:'brand-domain-research/v1'};});}
  const answers=(input.answers||[]).filter(a=>a.answer.trim());
  if(description.trim()||answers.length)sources.push({sourceId:'user',classification:'user_provided',origin:'explicit_user_input',excerpt:[description,...answers.map(a=>a.answer)].join('\n')});
+ // Reuse only short citations from accepted, still-current field decisions.
+ // These user-owned records are historical evidence, never fresh verification.
+ const retained=brand.brand_core[c.KEY];
+ if(retained?.version===c.VERSION)for(const [key,record]of Object.entries(retained.fields||{})){
+   if(!record||record.decision!=='accepted'||!c.valid(key,record.value))continue;
+   let current;try{current=c.target(brand.brand_core,key);}catch{continue;}
+   const same=record.value&&typeof record.value==='object'&&!Array.isArray(record.value)?Object.entries(record.value).every(([part,value])=>JSON.stringify(value)===JSON.stringify(current?.[part])):JSON.stringify(current)===JSON.stringify(record.value);
+   if(!same)continue;
+   for(const [index,e]of (Array.isArray(record.evidence)?record.evidence:[]).entries())if(typeof e?.excerpt==='string'&&e.excerpt.trim()&&e.excerpt.length<=300)sources.push({sourceId:'reviewed:'+key+':'+index,excerpt:e.excerpt,url:c.url(e.url),originalUrl:c.url(e.originalUrl),retrievedAt:e.retrievedAt||null,contentHash:e.contentHash||null,classification:'previously_reviewed_evidence',sourceClassification:e.sourceClassification||'historical',origin:'accepted_field_evidence',researchOrigin:e.origin||'historical'});
+ }
  const normalized=normalizeBrandBrainData({...c.publicCore(brand.brand_core),customTiles:(brand.brand_core.customTiles||[]).filter(t=>t.moduleType!=='founder_story')});
  const founder=(brand.brand_core.customTiles||[]).filter(t=>t.moduleType==='founder_story').map(serializeFounderStoryContext).filter(Boolean);
- sources.push({sourceId:'canonical',classification:'existing_brand_context',origin:'authorized_canonical_brand',excerpt:JSON.stringify({name:brand.name,context:normalized,acceptedFounder:founder,approvedDna:brand.brand_core.brandDNA?.userApproved?brand.brand_core.brandDNA:null})});
+ sources.push({sourceId:'canonical',classification:'existing_brand_context',origin:'authorized_canonical_brand',excerpt:JSON.stringify({name:brand.name,context:normalized,acceptedFounder:founder,approvedDna:brand.brand_core.brandDNA?.userApproved?normalized.brandDNA:null})});
  const context=JSON.stringify(sources), originId=createHash('sha256').update(context).digest('hex');
  base.input={description,answers};base.originId=originId;
  const controller=new AbortController(),cancel=()=>controller.abort();deps.signal?.addEventListener('abort',cancel,{once:true});if(deps.signal?.aborted)cancel();
@@ -37,11 +50,11 @@ async function enrich(brand,input,deps={}){
  if(!response.ok)throw failure('PROVIDER_UNAVAILABLE',502);
  const raw=(await response.json())?.choices?.[0]?.message?.content;if(typeof raw!=='string'||raw.length>200000)throw failure('INVALID_AI_OUTPUT',502);
  let parsed;try{parsed=JSON.parse(raw);}catch{throw failure('INVALID_AI_OUTPUT',502);}
- if(!parsed?.fields||Array.isArray(parsed.fields)||Object.keys(parsed).some(k=>k!=='fields'))throw failure('INVALID_AI_OUTPUT',502);
+ if(!parsed?.fields||typeof parsed.fields!=='object'||Array.isArray(parsed.fields)||Object.keys(parsed).some(k=>k!=='fields'))throw failure('INVALID_AI_OUTPUT',502);
  for(const [key,item]of Object.entries(parsed.fields)){
    if(!keys.includes(key)||!item||!c.valid(key,item.value)||!['user_provided','website_supported','ai_interpretation','conflicting','missing'].includes(item.classification)||!Array.isArray(item.evidence))throw failure('INVALID_AI_OUTPUT',502);
    const evidence=item.evidence.filter(e=>typeof e?.sourceId==='string'&&typeof e.excerpt==='string'&&e.excerpt.trim()&&e.excerpt.length<=300&&sources.some(s=>s.sourceId===e.sourceId&&s.excerpt.includes(e.excerpt)))
-     .map(e=>{const s=sources.find(s=>s.sourceId===e.sourceId&&s.excerpt.includes(e.excerpt));return {sourceId:e.sourceId,excerpt:e.excerpt,url:s.url||'',classification:s.classification,sourceClassification:s.sourceClassification||s.classification,origin:s.origin,originalUrl:s.originalUrl||'',retrievedAt:s.retrievedAt||null,contentHash:s.contentHash||null};});
+     .map(e=>{const s=sources.find(s=>s.sourceId===e.sourceId&&s.excerpt.includes(e.excerpt));return {sourceId:e.sourceId,excerpt:e.excerpt,url:s.url||'',classification:s.classification,sourceClassification:s.sourceClassification||s.classification,origin:s.origin,originalUrl:s.originalUrl||'',retrievedAt:s.retrievedAt||null,contentHash:s.contentHash||null,researchOrigin:s.researchOrigin||s.origin};});
    let classification=item.classification;
    const strategic=!['brandCore','personas','brandAssets'].includes(key);
    if(classification!=='conflicting'){
@@ -58,11 +71,13 @@ async function enrich(brand,input,deps={}){
    if(unchanged&&classification!=='conflicting')classification='missing';
    base.fields[key]={value:item.value,classification,evidence,originId,originalValue:originalValue??null,...(unchanged?{reason:'unchanged'}:{})};
  }
- for(const key of keys)if(!base.fields[key])base.fields[key]={classification:'missing',value:null,evidence:[],originId};
- if(research){for(const source of research.sources)if(source.processing==='prepared')source.processing='processed_selected_excerpts';if(research.counts)research.counts.processed=research.sources.filter(s=>s.processing==='processed_selected_excerpts').length;}
+ for(const key of keys){if(!base.fields[key])base.fields[key]={classification:'missing',value:null,evidence:[],originId};
+   if(c.modules.includes(key)&&(brand.brand_core.customTiles||[]).some(t=>t.moduleType===key&&t.moduleData&&Object.keys(t.moduleData).length))base.fields[key]={...base.fields[key],classification:'unavailable',reason:'specialized_module_owner'};
+ }
+ if(research){for(const source of research.sources)if(source.processing==='prepared')source.processing='processed_selected_excerpts';if(research.counts){research.counts.processed=research.sources.filter(s=>s.processing==='processed_selected_excerpts').length;research.state=base.sourceIssue||research.discoveryOmitted||research.remaining?.omittedUnits||research.counts.deferred||research.counts.unavailable||research.documents?.some(d=>d.retrieval!=='fetched')?'partial':'eligible_discovered_sources_processed';}}
  base.research=research;
  return base;
- }catch(error){if(controller.signal.aborted)throw failure(deps.signal?.aborted?'REQUEST_CANCELLED':'PROVIDER_TIMEOUT',504);throw error;}
+ }catch(error){if(research){for(const source of research.sources)if(source.processing==='prepared')source.processing='provider_failed';error.research=research;}if(controller.signal.aborted)throw Object.assign(failure(deps.signal?.aborted?'REQUEST_CANCELLED':'PROVIDER_TIMEOUT',504),{research});throw error;}
  finally{clearTimeout(timer);deps.signal?.removeEventListener('abort',cancel);}
 }
 module.exports={enrich,questions,failure};

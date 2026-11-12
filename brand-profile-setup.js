@@ -359,7 +359,7 @@
         const draft = result.payload;
         if (draft?.version !== enrichment.VERSION || draft.brandId !== state.brand.id || draft.revision !== revision || state.brand.revision !== revision) return false;
         state.enrichment = clone(draft); state.enrichmentEdits = {}; state.enrichmentEditErrors = {}; state.section = SECTIONS.indexOf('Review');
-        state.message = 'Review enrichment suggestions'; return true;
+        state.message = draft.sourceIssue ? 'Website unavailable. Review the description-based draft.' : 'Review enrichment suggestions'; return true;
       });
     }
     function editEnrichment(key, value) {

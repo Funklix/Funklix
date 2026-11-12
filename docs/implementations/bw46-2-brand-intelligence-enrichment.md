@@ -43,3 +43,51 @@ New production-path tests: `check-bw46-2-brand-enrichment.js` and `check-bw46-2-
 The workflow registers both new checks after browser installation, preserving PostgreSQL 17.6 and 18.4 jobs and every existing security assertion. Local and remote results are reported separately in the PR/final delivery. A mock proves transport/contract behavior, not real model semantic accuracy or independent factual truth. No paid inference/customer requests were used. No universal field completeness claim is inferred from the new button or two browser cases.
 
 Publication review: scope is production code, fictional fixtures/tests, field matrix and this implementation document. Attachments, scratch files, logs, screenshots, dependency directories and environment/secret values are excluded. Self-review specifically checked canonical-vs-snapshot boundaries, evidence minimization, robots/conflict compatibility, unchanged special approvals, expected-value/revision protection and lack of automatic generation. External review and full remote CI remain separately observable gates.
+
+
+## Focused local results
+
+Both new suites pass. All 35 existing focused checks pass after the BW-8 comparison rerun. Coverage includes the BW-46.1 eleven domain/source-integrity groups and 28-guided-binding/advanced-field browser ledger; Founder mapping/import/context/archetype and DNA preflight; canonical foundation/writer/browser/conflict; governed Learnings and approved-only Brain; BW-37 Brain profile handoff; guided setup/lifecycle/decisions; BW-42 profile; canonical creation/editing/roles; Insights architecture; URL/retrieval/diagnostics/extractor/route; campaign snapshot isolation/comparison/initialization; BW-40 reference contracts/browser; runtime script integrity and PostgreSQL TLS. The initial comparison failure was an introduced browser-global dependency in the isolated function VM; the production comparison now projects locally and its unchanged suite passes. No assertion was weakened.
+
+The first public PR creation attempt was rejected by automatic approval review, which did not accept uploaded-file authorization as direct chat authorization for this destination. The user subsequently confirmed this exact public non-draft PR publication directly in chat. The implementation branch is published; PR creation and remote PostgreSQL matrix results are reported separately in the delivery. Local PostgreSQL work is reported separately and cannot establish remote CI success.
+
+
+## Final projection and real PostgreSQL review
+
+The production project-creation test was extended with a Brand that already contains private evidence. It reproduced an HTTP 500 because the existing client/server command validator still required byte-for-byte equality with the entire canonical core. The validator now requires exact equality with the canonical snapshot projection excluding only `_profileEvidence`; revision, timestamp, field and ownership checks remain unchanged. BW-11/12/13 source assertions now check that explicit projection while preserving their existing safety assertions. The enriched-Brand creation test passes and proves that new Boards receive no private evidence. Existing creation and profile-lifecycle suites also pass.
+
+The restricted-runtime PostgreSQL suite now calls a dedicated fictional `bw46-2-postgres` fixture through the actual profile controller, signed-session HTTP handlers and protected writer. On PostgreSQL 17.6, all 56 groups pass, including generation without mutation, user-edited adoption, atomic pruning of old input references, rejected/postponed decisions, reload/manual edit/clear, real stale-revision rejection and unchanged saved campaign snapshot. No new SQL function or privilege is introduced. Complete workflow replay and PostgreSQL 18.4 outcomes follow separately; this is not a claim of remote CI success.
+
+
+A mixed-input request can retain its description draft when public research reports an unavailable/denied/empty source; the response and existing status text disclose that gap. Invalid/unsafe destination policy failures still reject before inference. Research processing counters/state reflect the single successful enrichment request; provider-failure evidence is returned only after revalidating current access. The provider-output validator also rejects scalar `fields` payloads. Fictional regressions cover these branches.
+
+
+Field-level requests also reuse short citations from accepted evidence records whose saved value still matches the current field. Rejected/postponed decisions and historical evidence for manually changed values are excluded. Reused quotes are labeled previously reviewed evidence, not fresh website verification; URLs are sanitized again. Entire original private briefs are not serialized for this contextual reuse. A deterministic field-assistance regression checks both useful reuse and omission of the full private input.
+
+
+## Exact scoped file inventory
+
+- `.github/workflows/runtime-boot-safety.yml`
+- `api/_brand-brain-context.js`
+- `api/_brand-enrichment.js`
+- `api/_project-command.js`
+- `api/ai-brain/advice.js`
+- `api/boards/[id].js`
+- `api/discover-brand-dna.js`
+- `api/enrich-brand-profile.js`
+- `app.js`
+- `brand-enrichment-contract.js`
+- `brand-profile-setup.js`
+- `docs/audits/bw46-1-brand-field-integrity-matrix.md`
+- `docs/implementations/bw46-2-brand-intelligence-enrichment.md`
+- `index.html`
+- `language.js`
+- `project-command.js`
+- `scripts/check-bw11-create-board-from-canonical-brand.js`
+- `scripts/check-bw12-canonical-snapshot-provenance.js`
+- `scripts/check-bw13-canonical-to-board-refresh.js`
+- `scripts/check-bw36-23a-r3-runtime-postgres.js`
+- `scripts/check-bw46-1-brand-fields-browser.js`
+- `scripts/check-bw46-2-brand-enrichment-browser.js`
+- `scripts/check-bw46-2-brand-enrichment.js`
+- `scripts/fixtures/bw46-2-postgres.js`

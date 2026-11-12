@@ -66,7 +66,7 @@
       || Object.keys(board.access).some(key => key !== 'role' && key !== 'publicView' && board.access[key] !== true)) fail();
     if (!exact(s,['brand_id','source_revision','source_updated_at','copied_at']) || s.brand_id !== b.id || s.source_revision !== b.revision
       || s.source_updated_at !== b.updated_at || s.copied_at !== board.brand_core_snapshot_copied_at
-      || JSON.stringify(board.brand_core_snapshot) !== JSON.stringify(b.brand_core)) fail();
+      || JSON.stringify(board.brand_core_snapshot) !== JSON.stringify(Object.fromEntries(Object.entries(b.brand_core).filter(([key]) => key !== '_profileEvidence')))) fail();
     const route = payload.setup_required ? `/brands/${b.id}/setup?board=${board.id}` : `/boards/${board.id}`;
     if (payload.next_route !== route) fail();
     return Object.freeze(payload);

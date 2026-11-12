@@ -121,6 +121,9 @@ let groups=0;async function check(name,fn){await fn();console.log('PASS '+name);
         assert.equal(session.state.brand.logo_revision,saved.logo_revision);assert.deepEqual(objects.get(saved.logo_object_path),png);
       }finally{Object.assign(storage,original);}
     });
+  await check('BW-46.2 enrichment controller and evidence atomicity on restricted PostgreSQL',async()=>{
+    await require('./fixtures/bw46-2-postgres')({db,brandId:B,workspaceId:W,email,boardId:board});
+  });
   await check('actual Learning governance authorizes with definer row lock and immutable events',async()=>{
    const learning=require('../api/_brand-learnings');const proposed=await learning.operate({db,user,brandId:B,input:learning.inputRequest({statement:'A bounded runtime observation',expected_brand_revision:String((await db.query('SELECT revision FROM brands WHERE id=$1',[B])).rows[0].revision)},true)});
    assert.equal(proposed.learning.status,'proposed');

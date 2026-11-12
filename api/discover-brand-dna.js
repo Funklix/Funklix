@@ -123,7 +123,7 @@ function parseJsonResponse(text = '') {
 
 function hasMeaningfulBrandData(brandBrainData = {}) {
   if (!brandBrainData || typeof brandBrainData !== 'object') return false;
-  return Object.values(brandBrainData).some((value) => {
+  return Object.values(publicProfileCore(brandBrainData)).some((value) => {
     if (Array.isArray(value)) return value.length > 0;
     if (value && typeof value === 'object') return Object.values(value).some(Boolean);
     return Boolean(cleanText(value, 20));

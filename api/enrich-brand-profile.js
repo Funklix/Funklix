@@ -29,7 +29,11 @@ function createHandler(deps={}){return async(req,res)=>{
    const draft=await enrich(brand,req.body,{...deps,signal:controller.signal});
    await(deps.authorize||authorize)(req.body,user);
    return res.status(200).json(draft);
- }catch(error){const code=error.status?error.code:'ENRICHMENT_FAILED';return res.status(error.status||502).json({code});}
+ }catch(error){
+   let research;
+   if(error.research){try{await(deps.authorize||authorize)(req.body,user);research=error.research;}catch(accessError){error=accessError;}}
+   const code=error.status?error.code:'ENRICHMENT_FAILED';return res.status(error.status||502).json({code,...(research?{research}:{})});
+ }
  finally{req.off?.('aborted',cancel);res.off?.('close',cancel);}
 };}
 module.exports=createHandler();module.exports.createHandler=createHandler;module.exports.authorize=authorize;

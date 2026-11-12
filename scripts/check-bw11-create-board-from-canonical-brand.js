@@ -24,7 +24,7 @@ assert.match(command, /JSON\.stringify\(board\.brand_core_snapshot\)/);
 assert.match(service, /getBrandAccess\(brandId,user/);
 assert.match(service, /access\.canCreateBrandBoards/);
 assert.match(service, /brand\.workspace_id!==workspace\.id/);
-assert.match(service, /JSON\.stringify\(brand\.brand_core\)/);
+assert.match(service, /JSON\.stringify\(publicProfileCore\(brand\.brand_core\)\)/);
 assert.match(service, /brand_core_snapshot_copied_at/);
 assert.match(service, /ROLLBACK/);
 assert.match(app, /state\.currentBoardId = data\.id/);
