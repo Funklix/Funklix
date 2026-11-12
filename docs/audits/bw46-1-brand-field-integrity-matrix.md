@@ -353,3 +353,19 @@ The following table is generated from successful actual guided/advanced form sav
 | `/brand_core/proof/0/evidence` | advanced JSON | pass | pass |
 
 Measured fixture: 227 inspected leaf paths; 28 guided bindings; 203 changed/entered leaves; 164 cleared leaves. These counts include module identity/metadata insertion and preservation checks; they are not a count of independently native product fields.
+
+## BW-46.2 verified changes (base #861)
+
+The original ledger above remains the baseline, with its untested controls and separate-owner qualifications. See [implementation and validation](../implementations/bw46-2-brand-intelligence-enrichment.md). The old website path retains its automatic empty fill and original read-only comparisons (F1). The new explicitly requested enrichment path adds review-before-adoption with editable text/structured proposals for the ten existing native groups and existing mission/vision/values content. No competing persistence editor, Founder/DNA approval or private-document projection is introduced.
+
+| Fields / contract | BW-46.2 result | Remaining qualification |
+|---|---|---|
+| Description, Value Proposition; voice/messaging/guidelines/keywords; personas; rules/examples; colors/typography/references; mission/vision/values | New controller tests exercise every eligible key through review/editable draft, protected acceptance, reload, later manual correction/save and clear/save; all 28 guided bindings remain independently browser-tested | New Review structured proposals use validated JSON editing; dedicated field-level/question controls await BW-46.3. Reviewing an array replaces that array intentionally |
+| Source lineage and explicit decisions | `_profileEvidence` latest per-field record plus referenced original user input persists atomically through the existing protected writer. Accept/reject/postpone and source inspection survive reload | It is user-owned provenance, not independently verified truth; prior snapshots remain in existing protected history. Historical evidence is labeled when manual values change |
+| F2 persona note context loss | Fixed: normalized persona formatting includes distinct note alongside description/summary; production projection regression and existing field-browser check pass | Existing downstream text/list bounds remain |
+| F3 accepted Market Research sourceNotes | Preserved in canonical storage; still omitted from generic accepted-strategy factual projection | Requires deliberate source/provenance consumer design, not conversion into confirmed facts |
+| F4 row removal / F5 specialized canonical Founder UI / F6 DNA generated-draft input binding | Existing ownership and baseline limitations unchanged; F6 defect characterization retained | Separate controls/fixes required; general enrichment cannot claim these are repaired |
+| Offers/proof/optional aliases and audience/product/strategy module content | Existing advanced editor and accepted-module owners retained; not new general enrichment targets | Broader normalized downstream projection and specialized canonical UI remain limited as above |
+| Board snapshots and canonical-only evidence | New project copy and explicit refresh omit private evidence; comparison/confirmation use the same projection; enrichment leaves existing snapshots untouched | Explicit campaign sync remains required; private inputs are not supplied to Board-only users |
+
+These results do not certify every optional alias, arbitrary lifecycle metadata edit, specialized Board input, screen reader path or live model factual accuracy. Shared PostgreSQL/CI protection gates remain distinct from the disposable SQL adapter and browser checks.

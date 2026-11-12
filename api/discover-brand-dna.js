@@ -1,3 +1,4 @@
+const {publicCore: publicProfileCore}=require('../brand-enrichment-contract');
 const { resolveGenerationBrand } = require('./_brand-generation-access');
 const { buildBrandBrainContext } = require('./_brand-brain-context');
 
@@ -204,7 +205,7 @@ Brand Brain source of truth:
 ${brandBrainContext.text}
 
 Raw Brand Brain fields, including any custom tiles or website-derived context:
-${JSON.stringify(brandBrainData || {}, null, 2)}
+${JSON.stringify(publicProfileCore(brandBrainData || {}), null, 2)}
 
 Website/domain context if present:
 ${website || 'none'}

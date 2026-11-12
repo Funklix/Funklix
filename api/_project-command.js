@@ -1,3 +1,4 @@
+const {publicCore: publicProfileCore}=require('../brand-enrichment-contract');
 'use strict';
 const crypto = require('crypto');
 const contract = require('../project-command');
@@ -54,7 +55,7 @@ async function execute({db,user,canonicalEmail,input}) {
       brand_core_source_updated_at,brand_core_snapshot_copied_at,owner_id,owner_email,owner_name,owner_avatar,created_by)
       VALUES ($1,$2,$3,$4::jsonb,$5::jsonb,$6,$7,NOW(),$8,$8,$9,$10,$8)
       RETURNING id,workspace_id,brand_id,name,canvas_json,brand_core_snapshot,brand_core_source_revision,brand_core_source_updated_at,
-        brand_core_snapshot_copied_at,created_at,updated_at`,[workspace.id,brand.id,input.project_name,JSON.stringify(canvas),JSON.stringify(brand.brand_core),Number(brand.revision),brand.updated_at,canonicalEmail,user.name||null,user.avatar||null])).rows[0];
+        brand_core_snapshot_copied_at,created_at,updated_at`,[workspace.id,brand.id,input.project_name,JSON.stringify(canvas),JSON.stringify(publicProfileCore(brand.brand_core)),Number(brand.revision),brand.updated_at,canonicalEmail,user.name||null,user.avatar||null])).rows[0];
     if(!row) reject('INTERNAL_ERROR');
     const ownership=await getBoardAccess(row.id,user,{client,columns:'id,workspace_id,brand_id,owner_email,owner_id'});
     if(ownership.access?.role!=='owner'||ownership.board?.workspace_id!==workspace.id||ownership.board?.brand_id!==brand.id) reject('INTERNAL_ERROR');

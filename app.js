@@ -4223,6 +4223,8 @@ function hasValidBoardSnapshotProvenance(board) {
 }
 
 function compareBrandCoreDocuments(canonical, board) {
+  canonical = { ...canonical }; board = { ...board };
+  delete canonical._profileEvidence; delete board._profileEvidence;
   const result = { canonicalOnly: [], boardOnly: [], different: [] };
   const visit = (left, right, path) => {
     if (Object.is(left, right)) return;
@@ -4481,7 +4483,7 @@ async function submitBoardBrandCoreOperation() {
       && typeof board.updated_at === "string" && !Number.isNaN(Date.parse(board.updated_at)) && board.brand_core_restore_available === true
       && typeof board.brand_core_snapshot_backup_created_at === "string" && !Number.isNaN(Date.parse(board.brand_core_snapshot_backup_created_at))
       && (operation !== "refresh" || (provenance?.sourceRevision === payload.canonical_revision
-        && JSON.stringify(canonicalJson(board.brand_core_snapshot)) === JSON.stringify(canonicalJson(current.canonical.brand_core))));
+        && JSON.stringify(canonicalJson(board.brand_core_snapshot)) === JSON.stringify(canonicalJson(window.BrandEnrichmentContract?.publicCore(current.canonical.brand_core) || current.canonical.brand_core))));
     if (!valid) { current.requiresReload = true; current.operationMessage = "The operation outcome could not be verified. Reload the authoritative Board."; renderBoardBrandCoreComparison(); return; }
     clearAutosaveTimer(); state.isDirty = false; state.lastKnownUpdatedAt = board.updated_at;
     state.authoritativeBoardBrandCore = { boardId: board.id, loadGeneration: current.boardLoadGeneration, value: clonePlainObject(board.brand_core_snapshot), provenance, provenanceValid: true, updatedAt: board.updated_at, restoreAvailable: true, backupCreatedAt: board.brand_core_snapshot_backup_created_at };

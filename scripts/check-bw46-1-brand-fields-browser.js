@@ -15,8 +15,8 @@ async function characterizeKnownDefects(){
  assert.equal(await session.acceptDna(),true);
  assert.equal((await r.request('GET','/api/brands/'+B)).body.brand_core.brandDNA.primaryArchetype,'Hero','F6 characterization: generated draft currently wins over stored-core input binding; separate fix required');
  const context=require('../api/_brand-brain-context').normalizeBrandBrainData({personas:[{name:'Makers',note:'Need affordable repairs'}]});
- assert(!JSON.stringify(context.icp).includes('affordable repairs'),'F2 characterization: note currently absent from normalized campaign audience; separate fix required');
- console.log('CHARACTERIZED existing defects F2 (persona note context) and F6 (DNA draft binding); no defect repair claimed.');
+ assert(JSON.stringify(context.icp).includes('affordable repairs'),'F2 regression: persona note remains in normalized campaign audience');
+ console.log('VERIFIED F2 persona note repair; CHARACTERIZED remaining F6 DNA draft binding defect.');
 }
 (async()=>{
  await characterizeKnownDefects();

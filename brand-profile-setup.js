@@ -6,6 +6,7 @@
 }(typeof globalThis !== 'undefined' ? globalThis : window, function (root) {
   'use strict';
   const writes = typeof module === 'object' && module.exports ? require('./brand-write-contract') : root.BrandWriteContract;
+  const enrichment = typeof module === 'object' && module.exports ? require('./brand-enrichment-contract') : root.BrandEnrichmentContract;
   const clone = value => JSON.parse(JSON.stringify(value));
   const object = value => !!value && typeof value === 'object' && !Array.isArray(value);
   const SECTIONS = ['Overview', 'Brand DNA', 'Audience', 'Voice & Messaging', 'Offers & Proof', 'Brand Assets', 'Brand Avatar', 'Brand Learnings', 'Team and permissions', 'Campaign Sync', 'Review'];
@@ -210,8 +211,13 @@
       state.autoKeys = state.autoKeys.filter(item => item !== key);
       changed();
     }
-    async function canonicalMutation(previous, draft, operation) {
+    async function canonicalMutation(previous, draft, operation, atomicEvidence = false) {
       const command = writes.command(previous, draft, captured.workspaceId, operation);
+      if (atomicEvidence) {
+        const path='/brand_core/'+enrichment.KEY, exists=Object.hasOwn(previous.brand_core,enrichment.KEY);
+        command.changes=command.changes.filter(c=>c.path!==path&&!c.path.startsWith(path+'/'));
+        command.changes.push({path,action:exists?'replace':'add',expected:exists?{exists:true,value:previous.brand_core[enrichment.KEY]}:{exists:false},value:draft.brand_core[enrichment.KEY]});
+      }
       if (operation === 'domain_fill') for (const change of command.changes) change.action = 'fill_empty';
       const result = await writes.submit({ fetchImpl, brandId: previous.id, command, pending: pendingWrite, current,
         confirmReview: options.confirmReview || root.confirm?.bind(root) });
@@ -338,6 +344,44 @@
         state.candidate = validCandidate(result.payload?.logoDiscovery) ? clone(result.payload.logoDiscovery) : null;
         state.logo = state.candidate ? state.brand.logo_source === 'uploaded' ? 'Your uploaded logo has priority. It was kept.' : 'Review the suggested logo' : 'No suitable logo found. Upload your own logo.';
         return true;
+      });
+    }
+    // Explicit BW-46.2 workflow: no empty-field automatic adoption.
+    function enrichProfile(input = {}) {
+      return run('Preparing enrichment draft…', async () => {
+        if (contentDirty()) { state.message = 'Save Brand Profile before enrichment.'; return false; }
+        const revision = state.brand.revision;
+        const result = await jsonRequest('/api/enrich-brand-profile', 'POST', {
+          ...input, action: input.action || 'draft', brandId: state.brand.id, workspaceId: captured.workspaceId,
+          revision, language: options.language?.() || 'en'
+        });
+        if (!result?.response.ok) { state.message = result ? errorText(result.response, 'Enrichment failed. Retry safely.', result.payload) : 'Enrichment failed. Retry safely.'; return false; }
+        const draft = result.payload;
+        if (draft?.version !== enrichment.VERSION || draft.brandId !== state.brand.id || draft.revision !== revision || state.brand.revision !== revision) return false;
+        state.enrichment = clone(draft); state.enrichmentEdits = {}; state.enrichmentEditErrors = {}; state.section = SECTIONS.indexOf('Review');
+        state.message = 'Review enrichment suggestions'; return true;
+      });
+    }
+    function editEnrichment(key, value) {
+      if (!current() || state.readOnly || state.pending || !state.enrichment?.fields?.[key] || !enrichment.valid(key,value)) return false;
+      (state.enrichmentEdits ||= {})[key] = clone(value); return true;
+    }
+    function decideEnrichment(key, decision) {
+      return run('Saving enrichment decision…', async () => {
+        const draft = state.enrichment;
+        if (!draft || draft.revision !== state.brand.revision || contentDirty()) { state.message = 'This proposal is stale. Reload and generate again.'; return false; }
+        const previous = state.brand;
+        const value = Object.hasOwn(state.enrichmentEdits || {},key) ? state.enrichmentEdits[key] : draft.fields[key]?.value;
+        const core = enrichment.adopt(previous.brand_core,draft,key,decision,value,options.createTile);
+        const result = await canonicalMutation(previous,{name:previous.name,brand_core:core},'profile_edit',true);
+        if (!result?.response.ok) { state.message = result ? errorText(result.response,'Enrichment decision could not be saved.',result.payload) : 'Enrichment decision could not be saved.'; return false; }
+        const confirmed = await verifyBrand();
+        if (!confirmed || !writes.equal(confirmed.brand_core,core) || confirmed.revision !== previous.revision + 1) { state.syncRequired=true; return false; }
+        state.brand=confirmed;state.core=editableCore(confirmed.brand_core);baseline=draftSignature();
+        // Carry remaining proposals only across this session's confirmed own mutation.
+        draft.revision=confirmed.revision;delete draft.fields[key];delete state.enrichmentEdits?.[key];
+        try { await onSave(confirmed); } catch { state.reconciliationWarning=true; }
+        state.message='Brand Profile saved';return true;
       });
     }
     // This destination-owned seam deliberately does not use website adoption.
@@ -578,7 +622,7 @@
     function discard() {
       brainDraft = null;
       state.name = state.brand.name; state.core = editableCore(state.brand.brand_core); state.website = state.core.brandAssets?.domain || state.core.website || '';
-      baseline = draftSignature(); state.dirty = false; state.file = null; state.fileData = null; state.candidate = null; state.proposals = {}; state.dnaDraft = null; state.avatarDraft = null; state.avatarDirection = ''; state.dnaPreflight = null;
+      baseline = draftSignature(); state.enrichment = null; state.enrichmentEdits = {}; state.dirty = false; state.file = null; state.fileData = null; state.candidate = null; state.proposals = {}; state.dnaDraft = null; state.avatarDraft = null; state.avatarDirection = ''; state.dnaPreflight = null;
     }
     function refreshContext() {
       const live = getContext();
@@ -586,9 +630,9 @@
       captured.generation = live.generation;
       return true;
     }
-    return { state, current, belongsToAccount(account) { return account === captured.account; }, refreshContext, analyze, save, upload, removeLogo, useLogo, chooseFile, applyProposal, keepProposal, retryAutomatic, reload,
+    return { state, current, belongsToAccount(account) { return account === captured.account; }, refreshContext, analyze, enrichProfile, editEnrichment, decideEnrichment, save, upload, removeLogo, useLogo, chooseFile, applyProposal, keepProposal, retryAutomatic, reload,
       discard, stageValueProposition, requestDna, generateDna, acceptDna, generateAvatar, acceptAvatar, contentDirty,
-      subscribe(fn) { notify = fn; }, invalidate() { alive = false; brainDraft = null; state.file = null; state.fileData = null; state.candidate = null; state.proposals = {}; state.dnaDraft = null; state.avatarDraft = null; state.avatarDirection = ''; state.core = {}; state.website = ''; state.name = ''; },
+      subscribe(fn) { notify = fn; }, invalidate() { alive = false; brainDraft = null; state.enrichment = null; state.enrichmentEdits = {}; state.file = null; state.fileData = null; state.candidate = null; state.proposals = {}; state.dnaDraft = null; state.avatarDraft = null; state.avatarDirection = ''; state.core = {}; state.website = ''; state.name = ''; },
       dirty() { return contentDirty(); }, busy() { return !!state.pending; } };
   }
 
@@ -777,6 +821,7 @@
         textField('Website', s.website, section, value => { s.website = value; s.proposals = {}; s.candidate = null; s.analysis = 'Not analyzed'; s.research = null; });
         if (!s.readOnly) button('Analyze website', section, () => { void session.analyze(); });
         fields('Foundation', section);
+        if (!s.readOnly) button('Prepare enrichment draft', section, () => { void session.enrichProfile({description:s.core.brandCore || '', ...(s.website.trim() ? {domainUrl:s.website} : {})}); });
       } else if (SECTIONS[s.section] === 'Review') {
         const list = node('ul', '', section);
         for (const key of ['Brand Basics', 'Foundation', 'Audience', 'Voice & Messaging', 'Offers & Proof']) {
@@ -786,6 +831,26 @@
           node('li', `${t(key)}: ${t(complete ? 'Provided' : 'Can be completed')}`, list);
         }
         node('p', `${t('Website analysis')}: ${t(s.analysis)}`, section); logo(section);
+        for(const [key,record] of Object.entries(s.brand.brand_core[enrichment.KEY]?.fields || {})) {
+          const history=node('details','',section);node('summary',t(FIELDS[key]?.[1] || key)+' — '+t(record.decision),history);
+          node('p',t(record.classification),history);if(record.decision==='accepted'&&!(object(record.value)?Object.entries(record.value).every(([part,value])=>writes.equal(value,enrichment.target(s.brand.brand_core,key)?.[part])):writes.equal(record.value,enrichment.target(s.brand.brand_core,key))))node('p',t('Historical evidence; the field has changed since acceptance.'),history);if(record.userEdited)node('p',t('Edited by you'),history);
+          for(const e of record.evidence || []){node('p',e.excerpt,history);if(e.url)node('p',e.url,history);}
+        }
+        for (const [key, field] of Object.entries(s.enrichment?.fields || {})) {
+          const proposal=node('section','',section);proposal.className='profile-proposal';node('h4',t(FIELDS[key]?.[1] || key),proposal);
+          node('p',t(field.classification),proposal);node('p',t('Current value'),proposal);readable(enrichment.target(s.brand.brand_core,key),proposal);
+          for (const e of field.evidence || []) { node('p',e.excerpt,proposal); if(e.url)node('p',e.url,proposal); }
+          const adoptable=!['missing','unavailable','conflicting'].includes(field.classification);
+          if (adoptable) {
+            const value=Object.hasOwn(s.enrichmentEdits || {},key)?s.enrichmentEdits[key]:field.value;
+            const editor=textField('Suggested value',typeof value==='string'?value:JSON.stringify(value,null,2),proposal,text=>{
+              try { const parsed=typeof field.value==='string'?text:JSON.parse(text);if(session.editEnrichment(key,parsed)){delete s.enrichmentEditErrors?.[key];editor.setCustomValidity('');}else{(s.enrichmentEditErrors||={})[key]=true;editor.setCustomValidity(t('Enter a valid suggested value.'));} }
+              catch { (s.enrichmentEditErrors||={})[key]=true;editor.setCustomValidity(t('Enter a valid suggested value.')); }
+            },true,'enrichment-'+key);
+            if(!s.readOnly)button('Accept suggestion',proposal,()=>{if(editor.reportValidity()&&!s.enrichmentEditErrors?.[key])void session.decideEnrichment(key,'accepted');},'accept-enrichment-'+key);
+          }
+          if(!s.readOnly){button('Reject suggestion',proposal,()=>{void session.decideEnrichment(key,'rejected');},'reject-enrichment-'+key);button('Complete later',proposal,()=>{void session.decideEnrichment(key,'postponed');},'postpone-enrichment-'+key);}
+        }
         for (const [key, value] of Object.entries(s.proposals)) {
           const proposal = node('section', '', section); proposal.className = 'profile-proposal'; node('h4', t(FIELDS[key][1]), proposal);
           node('p', t('Current value'), proposal); readable(s.brand.brand_core[key], proposal);

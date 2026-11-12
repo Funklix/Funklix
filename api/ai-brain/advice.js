@@ -1,3 +1,4 @@
+const {publicCore: publicProfileCore}=require('../../brand-enrichment-contract');
 'use strict';
 
 const { getSessionUser } = require('../_auth-session');
@@ -138,9 +139,9 @@ module.exports = async function handler(req, res) {
       ? await goalContext.capture({ boardId, user, nodes, revision: req.body.canvas_revision, requireScope: true }) : null;
     const makeContext = () => ({
       board: { id: board.id, name: board.name, updatedAt: board.updated_at },
-      boardBrandCore: plainObject(board.brand_core_snapshot) ? board.brand_core_snapshot : {},
+      boardBrandCore: plainObject(board.brand_core_snapshot) ? publicProfileCore(board.brand_core_snapshot) : {},
       boardBrandCoreProvenance: { revision: board.brand_core_source_revision || null, updatedAt: board.brand_core_source_updated_at || null },
-      canonicalBrandCore: canonical ? { name: canonical.name, revision: Number(canonical.revision), updatedAt: canonical.updated_at, value: canonical.brand_core } : null,
+      canonicalBrandCore: canonical ? { name: canonical.name, revision: Number(canonical.revision), updatedAt: canonical.updated_at, value: publicProfileCore(canonical.brand_core) } : null,
       advisorPersonality: advisorPersonality({ canonical, snapshot: board.brand_core_snapshot }),
       workingCanvas: { nodes, edges, selectedNode, ...(adviceMode !== 'analyze_social_ctas' ? { nodeReferences: nodeReferences.mapping(nodes, goals) } : {}), ...(goals?.sources.length ? { goalSources: goals.sources } : {}) },
       diagnostics,
