@@ -14,7 +14,7 @@ function transport(graph) {
   const req=new EventEmitter();req.end=()=>queueMicrotask(()=>{
    requests.push(options.hostname+options.path);
    assert.equal(options.protocol,'https:');if(options.path==='/robots.txt')assert.equal(options.headers.Accept,'text/plain');if(options.path.endsWith('.xml'))assert(options.headers.Accept.includes('application/xml'));assert(!options.headers.Authorization && !options.headers.Cookie);
-   let entry=graph[options.path] ?? {status:404,body:'missing'};
+   let entry=graph[options.hostname+options.path] ?? graph[options.path] ?? {status:404,body:'missing'};
    if(typeof entry==='string') entry={body:entry};
    const stream=Readable.from([Buffer.from(entry.body || '')]);stream.statusCode=entry.status || 200;
    stream.headers={'content-type':entry.type || 'text/html',...(entry.headers || {})};callback(stream);
@@ -23,7 +23,7 @@ function transport(graph) {
  return {requests,retrieveWebsiteText:(url,options)=>retrieveWebsiteText(url,{...options,lookup:async()=>[{address:'93.184.216.34',family:4}],requestImpl}),noDelay:true};
 }
 let groups=0;
-async function check(name,fn){await fn();console.log('PASS '+name);groups++;}
+async function check(name,fn){if(process.env.BW46_SCENARIO && !name.includes(process.env.BW46_SCENARIO))return;await fn();console.log('PASS '+name);groups++;}
 (async()=>{
  await check('extraction continues after oversized units; duplicates have separate accounting; decoded title',async()=>{
   assert.deepEqual(stableBound(['duplicate','duplicate'],100),{text:'duplicate',truncated:false,duplicateCount:1,omittedCount:0});
@@ -104,6 +104,101 @@ async function check(name,fn){await fn();console.log('PASS '+name);groups++;}
    return {ok:true,json:async()=>({choices:[{message:{content:JSON.stringify({...suggestions(),_grounding:{brandCore:{classification:'conflicting',evidence}}})}}]})};
   }});assert.equal(result.research.fields['/brand_core/brandCore'].classification,'conflicting');assert.equal(result.suggestions.brandCore,'','conflicts cannot enter empty-field auto-fill');
   assert(!validSuggestions({...suggestions(),founderName:'Invented'}));assert(!validSuggestions({...suggestions(),personas:[{name:'Bad',note:42}]}));assert(!validSuggestions({...suggestions(),toneOfVoice:[{}]}));
+ });
+ await check('same-page conflicts retain distinct excerpts and cannot mutate canonical fields',async()=>{
+  const {runtime,B,W,clone}=require('./fixtures/bw36-13r5-local-runtime');
+  for(const mode of ['same-page','cross-page','duplicate','ordinary','unsupported-conflict']) {
+   const first='Our company started in 2001.',second='Our company started in 2002.';
+   const t=transport({'/':`<p>${first}</p>`+(mode==='cross-page'?'<a href="/about">About</a>':mode==='same-page'?`<p>${second}</p>`:''),'/about':`<p>${second}</p>`});let calls=0;
+   const result=await analyzeBrandDomain(ORIGIN,{...t,fetch:async(_url,init)=>{
+    calls++;const units=JSON.parse(JSON.parse(init.body).messages[1].content.split('SOURCE_RECORDS_JSON:\n')[1]);
+    const evidence=units.filter(u=>u.excerpt.includes('started')).map(({sourceId,excerpt})=>({sourceId,excerpt}));
+    if(mode==='duplicate')evidence.push({...evidence[0]});
+    if(mode==='unsupported-conflict')evidence.push({sourceId:'invented',excerpt:'Unsupported claim'});
+    return {ok:true,json:async()=>({choices:[{message:{content:JSON.stringify({...suggestions(),brandCore:'Started in 2001',valueProposition:'',toneOfVoice:[],brandAssets:{...suggestions().brandAssets,colors:['#123456']},_grounding:{brandCore:{classification:mode==='ordinary'?'website_supported':'conflicting',evidence}}})}}]})};
+   }});
+   assert.equal(calls,1);
+   const field=result.research.fields['/brand_core/brandCore'];
+   if(mode==='ordinary')assert.equal(field.classification,'website_supported');
+   else {
+    assert.equal(field.classification,'conflicting',mode+' must fail closed rather than downgrade a reported conflict');
+    assert.equal(result.suggestions.brandCore,'');assert.equal(field.draftValue,'Started in 2001');
+    assert.equal(field.evidence.length,['same-page','cross-page'].includes(mode)?2:1,'duplicate/invalid citations add no independent evidence');
+    assert.equal(new Set(field.evidence.map(e=>e.sourceId)).size,mode==='cross-page'?2:1);
+   }
+   // Actual guided adoption -> protected HTTP handlers -> authoritative readback.
+   for(const initial of ['', 'User approved description']) for(const includeValid of [false,true]) {
+    const r=runtime();r.db.brands[0].brand_core.brandCore=initial;
+    r.db.brands[0].brand_core.brandAssets.domain=ORIGIN+'/';
+    const boards=clone(r.db.boards),before=clone(r.db.brands[0]),response=clone(result);
+    if(!includeValid)response.suggestions.brandAssets.colors=[];
+    const session=require('../brand-profile-setup').createSession({brand:(await r.request('GET','/api/brands/'+B)).body,
+     getContext:()=>({account:'fictional',generation:1,brandId:B,workspaceId:W}),validateBrand:b=>b.id===B&&Number.isSafeInteger(b.revision),confirmReview:async()=>true,
+     fetchImpl:async(url,init={})=>{if(url==='/api/analyze-brand-domain')return {ok:true,status:200,json:async()=>response};const out=await r.request(init.method||'GET',url,init.body?JSON.parse(init.body):undefined,undefined,init.headers);return {ok:out.statusCode<300,status:out.statusCode,json:async()=>out.body};}});
+    assert.equal(await session.analyze(),true);
+    const stored=(await r.request('GET','/api/brands/'+B)).body;
+    assert.equal(stored.brand_core.brandCore,mode==='ordinary'&&!initial?'Started in 2001':initial);
+    assert.deepEqual(clone(r.db.boards),boards,'research never mutates campaign snapshots');
+    for(const request of r.requests.filter(q=>q.method==='PUT')) {
+     assert.equal(request.body.operation,'domain_fill');
+     assert.deepEqual(request.body.changes.map(c=>c.path),[...(mode==='ordinary'&&!initial?['/brand_core/brandCore']:[]),...(includeValid?['/brand_core/brandAssets/colors']:[])],'only eligible suggestions can be adopted');
+    }
+    assert.deepEqual(stored.brand_core.customTiles,before.brand_core.customTiles);
+    assert.deepEqual(stored.brand_core.brandAssets.colors,includeValid?['#123456']:before.brand_core.brandAssets.colors,'unrelated valid suggestions survive');
+    assert.equal(r.requests.filter(q=>q.method==='PUT').length,includeValid||mode==='ordinary'&&!initial?1:0,'conflicts alone trigger zero canonical writes');
+    if(!includeValid&&mode!=='ordinary')assert.deepEqual(clone(r.db.brands[0]),before);
+   }
+  }
+ });
+ await check('redirect destination robots excludes fetched content before extraction and inference',async()=>{
+  const destination='destination.example',marker='DISALLOWED_DESTINATION_SECRET';
+  for(const variant of ['disallowed','disallowed-www','allowed','same-origin','www','robots-failure','robots-missing']) {
+   const denied=variant.startsWith('disallowed'),host=variant==='same-origin'?'northstar.example':variant.includes('www')?'www.northstar.example':destination;
+   const path=variant==='disallowed-www'?'/':'/about',final=`https://${host}${path}`;
+   const graph={
+    'northstar.example/robots.txt':{type:'text/plain',body:'User-agent: *\nAllow: /'},
+    'northstar.example/':{status:302,headers:{location:final}},
+    [host+path]:`<p>${denied?marker:'Allowed destination company.'}</p><a href="/products">Products</a>`,
+    [host+'/products']:'<p>Useful products.</p>'
+   };
+   if(host!=='northstar.example')graph[host+'/robots.txt']=variant==='robots-failure'?{status:503}:variant==='robots-missing'?{status:404}:{type:'text/plain',body:denied?'User-agent: *\nDisallow: '+path:'User-agent: *\nAllow: /'};
+   const t=transport(graph);let calls=0;
+   const run=analyzeBrandDomain(ORIGIN,{...t,fetch:async(_url,init)=>{calls++;assert(!init.body.includes(marker));return {ok:true,json:async()=>({choices:[{message:{content:JSON.stringify(suggestions())}}]})};}});
+   if(denied) {
+    await assert.rejects(run,e=>{
+     assert.equal(e.research.sources[0].reason,'robots_disallowed');assert.equal(e.research.sources[0].retrieval,'rejected');
+     assert.equal(e.research.sources[0].extraction,'not_started');assert.equal(e.research.sources[0].processing,'not_started');
+     assert.equal(e.research.sources[0].finalUrl,final);assert.deepEqual(e.research.selectedEvidence,[]);assert.equal(e.research.counts.processed,0);return true;
+    });assert.equal(calls,0);assert(!t.requests.includes(host+'/products'));
+   } else {
+    const result=await run;assert.equal(calls,1);assert(result.research.selectedEvidence.some(e=>e.url===final));
+    assert.equal(t.requests.includes(host+'/products'),variant!=='robots-failure','unknown policy permits submitted page only');
+   }
+  }
+  // A rejected submitted destination can coexist with useful pages discovered
+  // through its robots sitemap. Neither its URL aliases nor failed inference
+  // may return its already-fetched bytes as partial evidence.
+  const mixed=transport({
+   'northstar.example/robots.txt':{type:'text/plain',body:'User-agent: *\nAllow: /'},
+   'northstar.example/':{status:302,headers:{location:'https://destination.example/about'}},
+   'destination.example/robots.txt':{type:'text/plain',body:'User-agent: *\nDisallow: /about\nSitemap: https://destination.example/sitemap.xml'},
+   'destination.example/about':`<p>${marker}</p><a href="/founder">Founder secret link</a>`,
+   'destination.example/sitemap.xml':{type:'application/xml',body:'<urlset>'+['about','services','products'].map(p=>`<url><loc>https://destination.example/${p}</loc></url>`).join('')+'</urlset>'},
+   'destination.example/services':{status:302,headers:{location:'/about'}},
+   'destination.example/products':'<p>Allowed destination products.</p>'
+  });let mixedCalls=0;
+  await assert.rejects(analyzeBrandDomain(ORIGIN,{...mixed,fetch:async(_url,init)=>{mixedCalls++;assert(!init.body.includes(marker));assert(init.body.includes('Allowed destination products'));return {ok:false};}}),e=>{
+   assert.equal(e.code,'provider_unavailable');assert.equal(e.research.counts.processed,0);
+   assert.equal(e.research.selectedEvidence.length,1);assert(!JSON.stringify(e.research).includes(marker));
+   assert.equal(e.research.sources[0].reason,'robots_disallowed');return true;
+  });assert.equal(mixedCalls,1);assert.equal(mixed.requests.filter(p=>p==='destination.example/about').length,1);assert(!mixed.requests.includes('destination.example/founder'));
+  // Multiple links aliasing a denied final path must not resurrect its content.
+  const t=transport({'/robots.txt':{type:'text/plain',body:'User-agent: *\nDisallow: /private'},'/':'<p>Allowed root company.</p><a href="/about">About</a><a href="/services">Services</a><a href="/private">Products</a><a href="/products">Products</a>',
+   '/about':{status:302,headers:{location:'/private'}},'/services':{status:302,headers:{location:'/private'}},'/private':`<p>${marker}</p>`, '/products':'<p>Allowed repair products.</p>'});let calls=0;
+  const result=await analyzeBrandDomain(ORIGIN,{...t,fetch:async(_url,init)=>{calls++;assert(!init.body.includes(marker));assert(init.body.includes('Allowed repair products'));return {ok:false};}}).catch(e=>{assert.equal(e.code,'provider_unavailable');return e;});
+  assert.equal(calls,1);assert(!t.requests.includes('northstar.example/private'));
+  for(const path of ['/about','/services','/private'])assert(result.research.sources.some(s=>s.url===ORIGIN+path&&s.reason==='robots_disallowed'));
+  assert(!JSON.stringify(result.research).includes(marker));assert.equal(result.research.counts.processed,0);
  });
  await check('provider failure preserves extracted sources; invalid output never becomes a suggestion',async()=>{
   const t=transport({'/':'<p>Independent repair company.</p>'});

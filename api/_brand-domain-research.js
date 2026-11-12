@@ -2,7 +2,7 @@
 // Request-local research only. No credentials, writes, durable jobs or extra inference.
 const { createHash } = require('crypto');
 const { validateWebsiteUrl } = require('./_website-url-policy');
-const { retrieveWebsiteText } = require('./_website-retrieval');
+const { retrieveWebsiteText, WebsiteRetrievalError } = require('./_website-retrieval');
 const { extractBrandProjection, attribute, readTag, decodeEntities, evidenceScore, MAX_PROVIDER_CONTEXT, MAX_PARSED_NODES } = require('./_html-text-extractor');
 const RESEARCH_MS = 20000; // Shared retrieval deadline, including robots and submitted page.
 const MAX_EVIDENCE_BYTES = 12 * 1024 * 1024;
@@ -160,13 +160,25 @@ async function researchDomain(input, dependencies={}) {
     if(fetchedUrls.has(url.href)) {item.retrieval='duplicate_alias';item.aliasOf=fetchedUrls.get(url.href);item.processing='duplicate';continue;}
     let page;
     try {
-      page=await get(url,{...(item.discoveredVia==='submitted'?{}:{allowedOrigin:origin}),isAllowed:u=>!restricted(u)&&(!policy || policy.allowed(u)),...(item.kind==='sitemap'?{documentType:'sitemap'}:{})});
+      page=await get(url,{...(item.discoveredVia==='submitted'?{}:{allowedOrigin:origin}),isAllowed:u=>{
+        if(restricted(u)) return false;
+        // A policy belongs to its origin, not every path in a public redirect
+        // chain. The effective destination is checked again below, before use.
+        if(u.origin===origin && policy && !policy.allowed(u)) throw new WebsiteRetrievalError('robots_disallowed','Robots policy disallows source.');
+        return true;
+      },...(item.kind==='sitemap'?{documentType:'sitemap'}:{})});
       item.retrieval='fetched'; item.finalUrl=publicUrl(page.source.url);item.retrievedAt=new Date().toISOString();
+      const final=validateWebsiteUrl(page.source.url);
+      if(item.discoveredVia==='submitted' && final.origin!==origin) {
+        origin=final.origin;policy=null;await loadPolicy();
+      }
+      // Retrieved bytes are not evidence until the final origin's policy allows
+      // the resource. Reject before discovery, extraction, hash/alias caches,
+      // root-page reuse (including logos), or any partial-result evidence path.
+      if(policy && !policy.allowed(final)) {item.retrieval='rejected';item.reason='robots_disallowed';continue;}
       fetchedUrls.set(page.source.url,item.id);
       if(item.kind==='sitemap') {const entries=sitemapEntries(page.internalDocument || '');item.extraction='parsed';item.discoveredEntries=entries.length;for(const entry of entries) add(entry.href,entry.sitemap?'sitemap':'page','sitemap');continue;}
-      if(!rootWebsite) {rootWebsite=page;const final=new URL(page.source.url);if(final.origin!==origin) {
-        origin=final.origin; policy=null;await loadPolicy();
-      }}
+      if(!rootWebsite) rootWebsite=page;
       if(item.discoveredVia==='submitted') add(origin+'/','page','homepage');
       for(const link of page.internalPolicy?.nofollow ? [] : links(page.internalHtml || '')) {
         let target;try{target=new URL(link.href,page.source.url);}catch{continue;}
@@ -186,7 +198,8 @@ async function researchDomain(input, dependencies={}) {
         evidenceBytes+=cost;item.units.push(safeText(text));
       }
     } catch(error) {
-      if(error.code==='research_deadline' || error.code==='request_cancelled') item.retrieval='deferred';
+      if(error.code==='robots_disallowed') item.retrieval='rejected';
+      else if(error.code==='research_deadline' || error.code==='request_cancelled') item.retrieval='deferred';
       else if(item.retrieval==='fetched') item.extraction='unavailable';else item.retrieval='unavailable';
       item.reason=typeof error.code==='string'?error.code:'retrieval_failed';
       // Keep valid sources when another page fails. Invalid submitted destinations
