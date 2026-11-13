@@ -760,13 +760,18 @@
       const status = !writes.equal(local, current.value) ? 'Unsaved changes' : s.enrichment?.fields?.[key]?.classification === 'conflicting' ? 'Conflicting evidence' : s.enrichment?.fields?.[key] ? 'AI suggestion available' : s.laterFields[key] || record?.decision === 'postponed' ? 'Optional / complete later' : !meaningful(current.value) ? 'Empty' : record?.decision === 'accepted' && writes.equal(record.value, current.value) ? 'User-confirmed' : 'Saved';
       node('p', t(status), parent).className = 'profile-field-status';
       if (s.readOnly || !current.available) return;
-      if (!parent.querySelector('textarea,input')) { button('Advanced options', parent, () => options.onAdvanced(session), 'advanced-'+key); return; }
+      const emptyPersonas = key === 'personas' && Array.isArray(s.core.personas) && !s.core.personas.length;
+      if (!parent.querySelector('textarea,input') && !emptyPersonas) { button('Advanced options', parent, () => options.onAdvanced(session), 'advanced-'+key); return; }
       if (enrichment.modules.includes(key) && (s.core.customTiles || []).some(tile => tile.moduleType === key && tile.moduleData && Object.keys(tile.moduleData).length)) {
         node('p', t('Specialized module. Use its existing editor in Advanced options.'), parent); return;
       }
       const menu = node('details', '', parent); menu.className = 'profile-field-menu'; menu.dataset.disclosure = 'field-assistance:'+key;
       node('summary', t('Field assistance'), menu);
-      button('Write myself', menu, () => { parent.querySelector('textarea,input')?.focus(); }, 'write-'+key);
+      button('Write myself', menu, () => {
+        if (key === 'personas' && Array.isArray(s.core.personas) && !s.core.personas.length) {
+          s.core.personas.push({ name: '', note: '' }); render(); container.querySelector('[data-profile-key="persona-0-name"]')?.focus();
+        } else parent.querySelector('textarea,input')?.focus();
+      }, 'write-'+key);
       button('Suggest with AI', menu, () => { requestEnrichment({ action: 'suggest', field: key }); }, 'suggest-'+key);
       button('Help me figure it out', menu, () => { requestEnrichment({ action: 'questions', field: key }); }, 'questions-'+key);
       button('Complete later', menu, () => { s.laterFields[key] = true; render(); }, 'later-'+key);
@@ -812,10 +817,23 @@
     function openFounderImport() {
       if (s.readOnly || s.pending || !session.current()) return;
       if (session.contentDirty()) { s.message = 'Save Brand Profile before enrichment.'; render(); return; }
-      const tile = session.founderTile(true); if (!tile) { s.message = 'Current value unavailable. Review modules in Advanced options.'; render(); return; }
+      const matches = (s.core.customTiles || []).filter(tile => tile.moduleType === 'founder_story');
+      if (matches.length > 1) { s.message = 'Current value unavailable. Review modules in Advanced options.'; render(); return; }
+      const existing = matches[0], tile = existing || options.createTile('founder_story');
+      // Preview-only until the user applies reviewed facts. Cancel/fetch failure
+      // must not insert an empty canonical module or dirty the profile.
       options.openFounderImport?.(tile, s.researchEntry.founderUrl, {
-        current: () => session.current() && !s.readOnly && !s.pending && session.founderTile() === tile,
-        save: () => session.save(), onSaved: () => { s.section = 0; render(); container.querySelector('.profile-founder>summary')?.focus(); }
+        current: () => session.current() && !s.readOnly && !s.pending && (existing
+          ? session.founderTile() === tile : !(s.core.customTiles || []).some(t => t.moduleType === 'founder_story')),
+        save: async () => {
+          if (!existing) (s.core.customTiles ||= []).push(tile);
+          let saved = false;
+          try { saved = await session.save(); return saved; }
+          finally { if (!existing && !saved) { const index = s.core.customTiles?.indexOf(tile); if (index >= 0) s.core.customTiles.splice(index, 1); } }
+        },
+        onFailure: render,
+        restoreFocus: () => { if (session.current()) container.querySelector('.profile-founder>summary')?.focus(); },
+        onSaved: () => { s.section = 0; render(); container.querySelector('.profile-founder>summary')?.focus(); }
       });
     }
     function founderWorkspace(parent) {

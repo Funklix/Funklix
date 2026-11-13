@@ -91,13 +91,28 @@ const output = 'work/bw46-3/screenshots';
         await key('Discard enrichment draft').click();await key('Overview').click();
         // Reuse actual source import modal and protected canonical save; no campaign write.
         const fields=Object.fromEntries(['founderNameRole','observedProblem','motivation','turningPoint','background','proofPoints','vision'].map(k=>[k,{value:k==='founderNameRole'?'Nova, founder':'Repair waste',evidence:'Repair waste'}]));
-        await p.route('**/api/extract-website-text',r=>r.fulfill({json:{success:true,source:{title:'About'},content:{text:'Repair waste'}}}));
+        let failFounderRetrieval = true;
+        await p.route('**/api/extract-website-text',r=>failFounderRetrieval ? r.fulfill({status:503,json:{success:false,error:{code:'retrieval_failed'}}}) : r.fulfill({json:{success:true,source:{title:'About'},content:{text:'Repair waste'}}}));
         await p.route('**/api/map-founder-story-website',r=>r.fulfill({json:{success:true,fields}}));
         if (!await p.locator('.profile-discovery').evaluate(n=>n.open)) await p.locator('.profile-discovery>summary').click();
         await key('research-founder-import').click();
         assert.equal(await p.locator('[data-founder-story-import-url]').inputValue(),'https://northstar.example/about');
+        assert.equal(await p.evaluate(()=>brandProfileController.contentDirty()),false,'opening an import is preview-only');
+        await p.locator('[data-import-cancel]').click();
+        assert.equal(await p.evaluate(()=>brandProfileController.contentDirty()),false,'cancel cannot dirty a new Founder module');
+        assert.equal(await p.evaluate(()=>brandProfileController.state.core.customTiles.filter(t=>t.moduleType==='founder_story').length),0);
+        await key('research-founder-import').click();await p.locator('[data-import-close]').click();
+        assert.equal(await p.evaluate(()=>brandProfileController.contentDirty()),false,'close cannot insert an empty module');
+        await key('research-founder-import').click();await p.locator('[data-founder-story-import-start]').click();
+        await p.waitForFunction(()=>document.querySelector('[data-founder-story-import-error]')?.textContent.length>0&&!document.querySelector('[data-founder-story-import-start]').disabled);
+        assert.equal(await p.evaluate(()=>brandProfileController.contentDirty()),false,'retrieval failure cannot dirty the profile');
+        await p.locator('[data-import-cancel]').click();failFounderRetrieval=false;
+        await key('research-founder-import').click();
         await p.locator('[data-founder-story-import-start]').click();await p.locator('[data-import-apply]').waitFor();
-        await p.locator('[data-import-apply]').click();await p.locator('.founder-story-import-modal').waitFor({state:'detached'});
+        f.r.db.failPut=true;await p.locator('[data-import-apply]').click();await p.waitForFunction(()=>!brandProfileController.busy()&&!document.querySelector('[data-import-apply]').disabled);
+        assert.equal(await p.evaluate(()=>brandProfileController.contentDirty()),false,'failed adoption removes only the unsaved new tile');
+        assert.equal(f.r.db.brands[0].brand_core.customTiles.filter(t=>t.moduleType==='founder_story').length,0,'failed adoption persists no empty module');
+        f.r.db.failPut=false;await p.locator('[data-import-apply]').click();await p.locator('.founder-story-import-modal').waitFor({state:'detached'});
         assert(await p.locator('.profile-founder>summary').evaluate(n=>document.activeElement===n),'canonical import restores focus to Founder workspace');
         let tile=f.r.db.brands[0].brand_core.customTiles.find(t=>t.moduleType==='founder_story');
         assert.equal(tile.moduleData.founderStory.founderNameRole,'Nova, founder');assert.equal(tile.moduleData.founderStoryLifecycle.status,'draft');
@@ -161,6 +176,29 @@ const output = 'work/bw46-3/screenshots';
       assert(await viewer.page.locator('.guided-brand-profile input,.guided-brand-profile textarea').evaluateAll(nodes=>nodes.every(n=>n.disabled)));
       console.log('PASS BW-46.3 actual canonical viewer: no research/AI/import/save actions; all content inputs read-only');
     } finally {await viewer.close();}
+    const audience=await require('./fixtures/home-browser')(browser)({empty:true});
+    try {
+      const p=audience.page,key=k=>p.locator(`[data-profile-key="${k}"]`);let calls=0;
+      const snapshot=clone(audience.r.db.boards);
+      const handler=audience.r.load('api/enrich-brand-profile.js').createHandler({getSessionUser:()=>({email:EMAIL}),fetch:async()=>{
+        calls++;return {ok:true,json:async()=>({choices:[{message:{content:JSON.stringify({fields:{personas:{value:[{name:'Workshop owners',note:'Need repair clarity'}],classification:'ai_interpretation',evidence:[{sourceId:'canonical',excerpt:'Canvas Brand X'}]}}})}}]})};
+      }});
+      await p.route('**/api/enrich-brand-profile',async route=>{const res={statusCode:200,setHeader(){},status(code){this.statusCode=code;return this;},json(body){this.body=clone(body);return this;}};await handler({method:'POST',body:route.request().postDataJSON()},res);await route.fulfill({status:res.statusCode,json:res.body});});
+      await p.evaluate(()=>openRegularBrandProfile());await p.waitForFunction(()=>brandProfileController&&canonicalBrandDetail.status==='ready');
+      await key('Audience').click();await p.locator('[data-field="personas"] .profile-field-menu>summary').click();
+      for(const action of ['write-personas','suggest-personas','questions-personas','later-personas'])assert.equal(await key(action).count(),1,'empty audiences expose '+action);
+      await key('later-personas').click();assert.equal(await p.evaluate(()=>brandProfileController.contentDirty()),false);
+      await key('write-personas').click();assert(await key('persona-0-name').evaluate(n=>document.activeElement===n),'manual action creates and focuses a real row');
+      await key('discard-profile-changes').click();assert.equal(await p.evaluate(()=>brandProfileController.state.core.personas.length),0);
+      await key('questions-personas').click();await p.waitForFunction(()=>!brandProfileController.busy());
+      assert.equal(calls,0,'empty-audience questions require no inference');assert.equal(await p.evaluate(()=>brandProfileController.contentDirty()),false);
+      assert.equal(await key('answer-personas').count(),1);await key('close-questions').click();
+      const before=clone(audience.r.db.brands[0]);await key('suggest-personas').click();await p.waitForFunction(()=>!brandProfileController.busy());
+      assert.equal(calls,1);assert.deepEqual(clone(audience.r.db.brands[0]),before,'empty-audience AI prepares only a draft');
+      await key('enrichment-personas').fill('[{"name":"Reviewed audience","note":"Reviewed need"}]');await key('accept-enrichment-personas').click();await p.waitForFunction(()=>!brandProfileController.busy());
+      assert.equal(audience.r.db.brands[0].brand_core.personas[0].name,'Reviewed audience');assert.deepEqual(clone(audience.r.db.boards),snapshot);
+      audience.writes.length=0;console.log('PASS BW-46.3 empty Audience: all four actions, actual manual focus, optional questions without inference/dirty state, explicit AI review/adoption and snapshot isolation');
+    } finally {audience.writes.length=0;await audience.close();}
     const legacy=await require('./fixtures/home-browser')(browser)({empty:true,prepare(r){r.db.brands[0].brand_core.brandAssets.domain='';r.db.brands[0].brand_core.website='https://legacy.example/';}});
     try {
       const p=legacy.page,key=k=>p.locator(`[data-profile-key="${k}"]`);const snapshot=clone(legacy.r.db.boards);

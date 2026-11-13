@@ -10228,6 +10228,7 @@ function closeFounderStoryWebsiteImport(controller, { restoreFocus = true } = {}
   controller.overlay?.remove();
   if (activeFounderStoryWebsiteImport === controller) activeFounderStoryWebsiteImport = null;
   if (restoreFocus && controller.returnFocus?.isConnected) controller.returnFocus.focus();
+  else if (restoreFocus) controller.canonical?.restoreFocus?.();
   controller.draft = null;
   controller.abortController = null;
 }
@@ -10309,7 +10310,7 @@ function renderFounderStoryWebsiteImportReview(controller, fields) {
       latest.tile.moduleData = { ...latest.tile.moduleData, founderStoryImport: { status: "confirmed_source_facts", confirmedAt: new Date().toISOString() }, founderStoryLifecycle: { status: "draft" } };
       applyButton.disabled = true;
       const saved = await controller.canonical.save();
-      if (!saved) { latest.tile.moduleData = previousData; applyButton.disabled = false; error.textContent = uiText("Founder facts could not be saved. Your inputs are retained."); applyButton.focus(); return; }
+      if (!saved) { latest.tile.moduleData = previousData; applyButton.disabled = false; error.textContent = uiText("Founder facts could not be saved. Your inputs are retained."); controller.canonical.onFailure?.(); applyButton.focus(); return; }
       closeFounderStoryWebsiteImport(controller);
       controller.canonical.onSaved(); return;
     }
