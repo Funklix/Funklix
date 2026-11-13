@@ -161,5 +161,21 @@ const output = 'work/bw46-3/screenshots';
       assert(await viewer.page.locator('.guided-brand-profile input,.guided-brand-profile textarea').evaluateAll(nodes=>nodes.every(n=>n.disabled)));
       console.log('PASS BW-46.3 actual canonical viewer: no research/AI/import/save actions; all content inputs read-only');
     } finally {await viewer.close();}
+    const legacy=await require('./fixtures/home-browser')(browser)({empty:true,prepare(r){r.db.brands[0].brand_core.brandAssets.domain='';r.db.brands[0].brand_core.website='https://legacy.example/';}});
+    try {
+      const p=legacy.page,key=k=>p.locator(`[data-profile-key="${k}"]`);const snapshot=clone(legacy.r.db.boards);
+      await p.evaluate(()=>openRegularBrandProfile());await p.waitForFunction(()=>brandProfileController && canonicalBrandDetail.status==='ready');
+      assert.equal(await key('Website').inputValue(),'https://legacy.example/');await key('Website').fill('');
+      await key('Confirm and save Brand Profile').click();await p.waitForFunction(()=>!brandProfileController.busy());
+      assert.equal(legacy.r.db.brands[0].brand_core.website,'','explicit clear also clears existing legacy fallback');
+      assert.equal(await p.evaluate(()=>brandProfileController.contentDirty()),false);
+      await p.reload();await p.waitForFunction(()=>state.workspaceCatalog.status==='ready'&&!state.isBoardLoading&&!state.isBoardHydrating);
+      await p.evaluate(()=>{clearAutosaveTimer();stopPresenceLite();stopBoardRefreshPolling();openRegularBrandProfile();});await p.waitForFunction(()=>brandProfileController && canonicalBrandDetail.status==='ready');
+      assert.equal(await key('Website').inputValue(),'','fresh browser session cannot resurrect the legacy URL');
+      await key('Website').fill('https://corrected.example/');await key('Confirm and save Brand Profile').click();await p.waitForFunction(()=>!brandProfileController.busy());
+      await key('Reload latest Brand').click();await p.waitForFunction(()=>!brandProfileController.busy());assert.equal(await key('Website').inputValue(),'https://corrected.example/');
+      assert.deepEqual(clone(legacy.r.db.boards),snapshot);legacy.writes.length=0;
+      console.log('PASS BW-46.3 legacy Website: explicit clear, clean confirmed state, fresh browser reload, subsequent edit/save/reload and campaign isolation');
+    } finally {legacy.writes.length=0;await legacy.close();}
   } finally {await browser.close();}
 })().catch(error=>{console.error(error);process.exitCode=1;});

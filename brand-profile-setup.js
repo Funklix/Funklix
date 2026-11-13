@@ -485,6 +485,8 @@
         const unchangedBrainWebsite = brainDraft && normalizedWebsite(state.website)
           === normalizedWebsite(state.brand.brand_core?.brandAssets?.domain || state.brand.brand_core?.website || '');
         if (!unchangedBrainWebsite && (object(core.brandAssets) || domain)) core.brandAssets = { ...(object(core.brandAssets) ? core.brandAssets : {}), domain };
+        const websiteChanged = normalizedWebsite(state.website) !== normalizedWebsite(state.brand.brand_core?.brandAssets?.domain || state.brand.brand_core?.website || '');
+        if (websiteChanged && !domain && typeof core.website === 'string') core.website = '';
         const revision = state.brand.revision;
         // UI defaults are presentation; unchanged defaults never become write intent.
         const editableBaseline = editableCore(state.brand.brand_core);
@@ -696,7 +698,7 @@
 
   function mount(container, options) {
     const session = createSession(options), s = session.state, doc = container.ownerDocument;
-    let fileInput = null, lastFocusKey = null;
+    let fileInput = null, lastFocusKey = null, hasRendered = false;
     const learnings = root.FunklixBrandLearnings?.create({ brand: s.brand, workspaceId:options.getContext().workspaceId, document: doc, language: options.language, fetchImpl: options.fetchImpl, current: session.current });
     const t = key => root.FunklixLanguage.t(key, options.language());
     function node(tag, text, parent) { const n = doc.createElement(tag); if (text) n.textContent = text; if (parent) parent.append(n); return n; }
@@ -762,7 +764,7 @@
       if (enrichment.modules.includes(key) && (s.core.customTiles || []).some(tile => tile.moduleType === key && tile.moduleData && Object.keys(tile.moduleData).length)) {
         node('p', t('Specialized module. Use its existing editor in Advanced options.'), parent); return;
       }
-      const menu = node('details', '', parent); menu.className = 'profile-field-menu';
+      const menu = node('details', '', parent); menu.className = 'profile-field-menu'; menu.dataset.disclosure = 'field-assistance:'+key;
       node('summary', t('Field assistance'), menu);
       button('Write myself', menu, () => { parent.querySelector('textarea,input')?.focus(); }, 'write-'+key);
       button('Suggest with AI', menu, () => { requestEnrichment({ action: 'suggest', field: key }); }, 'suggest-'+key);
@@ -771,8 +773,14 @@
     }
     function researchEntry(parent) {
       if (s.readOnly) return;
-      const entry = node('details', '', parent); entry.className = 'profile-discovery';
-      entry.open = !confirmedValue(s.brand.brand_core.brandCore) && !confirmedValue(s.brand.brand_core.valueProposition);
+      const entry = node('details', '', parent); entry.className = 'profile-discovery'; entry.dataset.disclosure = 'research-entry';
+      const core = s.brand.brand_core, assets = core.brandAssets || {};
+      const populated = Object.keys(FIELDS).filter(key => key !== 'brandAssets').some(key => confirmedValue(core[key]))
+        || confirmedValue([assets.colors, assets.typography, assets.references, core.brandDNA]) || !!s.brand.logo_url
+        || (Array.isArray(core.customTiles) && core.customTiles.some(tile => confirmedValue(tile.content) || confirmedValue(tile.moduleData?.founderStory)));
+      // A creation-time website alone still gets the invitation. Other saved
+      // profile content, including Foundation/Founder/DNA, comes first on return.
+      entry.open = !populated;
       node('summary', t(entry.open ? "Let's build your brand ✨" : 'Enrich your Brand Profile'), entry);
       node('p', t('Start with your website or tell us about your business. You can refine everything later.'), entry);
       const form = node('form', '', entry); form.className = 'profile-discovery-form';
@@ -811,7 +819,7 @@
       });
     }
     function founderWorkspace(parent) {
-      const details = node('details', '', parent); details.className = 'profile-founder';
+      const details = node('details', '', parent); details.className = 'profile-founder'; details.dataset.disclosure = 'founder-workspace';
       node('summary', t('Founder Story — facts and narrative'), details);
       node('p', t('Optional. Accepted facts and narrative support Brand DNA; plain text alone does not complete this dependency.'), details);
       const tiles = (s.core.customTiles || []).filter(t => t.moduleType === 'founder_story');
@@ -921,7 +929,7 @@
     function researchCoverage(parent) {
       const r=s.research;
       if (!r || !r.counts) return;
-      const details=node('details','',parent); details.className = 'profile-research-results'; details.open = true;
+      const details=node('details','',parent); details.className = 'profile-research-results'; details.dataset.disclosure = 'research-coverage'; details.open = true;
       node('summary',t('Website research coverage'),details);
       node('p',t('Selected excerpts were analyzed. Website coverage may be partial.'),details);
       if (s.enrichment) node('p',t('Suggestions stay drafts until you explicitly accept them. Reviewed evidence is saved with your decision.'),details);
@@ -948,7 +956,8 @@
     function render() {
       const focused = doc.activeElement?.dataset?.profileKey || (s.pending ? lastFocusKey : null);
       if (focused) lastFocusKey = focused;
-      const expanded = new Map([...container.querySelectorAll('details[data-disclosure]')].map(n => [n.dataset.disclosure, n.open]));
+      const expanded = hasRendered ? new Map([...container.querySelectorAll('details[data-disclosure]')].map(n => [n.dataset.disclosure, n.open])) : new Map();
+      hasRendered = true;
       options.onBusy?.(!!s.pending || !!s.returning);
       container.replaceChildren(); container.classList.add('guided-brand-profile'); container.setAttribute('aria-busy', String(!!s.pending));
       const header = node('section', '', container); header.className = 'profile-header';
@@ -963,12 +972,12 @@
       const ring = node('span', '', completion); ring.className = 'profile-completion-ring'; ring.setAttribute('aria-hidden', 'true'); ring.style.setProperty('--profile-progress', `${complete / 7 * 100}%`);
       if (s.readOnly) node('p', t('Your access is read-only'), container);
       const nav = node('nav', '', container); nav.setAttribute('aria-label', t('Brand Profile sections'));
-      const navBrowser = node('details', '', nav); navBrowser.className = 'profile-nav-browser'; navBrowser.open = !root.innerWidth || root.innerWidth > 768;
+      const navBrowser = node('details', '', nav); navBrowser.className = 'profile-nav-browser'; navBrowser.dataset.disclosure = 'navigation-browser'; navBrowser.open = !root.innerWidth || root.innerWidth > 768;
       node('summary', t('Brand Profile sections'), navBrowser);
       const groups = [ ['Overview', [0]], ['Brand Foundation', []], ['Audience & Positioning', [2,4]], ['Voice & Messaging', [3]], ['Brand Identity & AI', [1,5,6]], ['Knowledge & Workspace', [7,8,9,10]] ];
       const destinations = new Map();
       for (const [label, indices] of groups) {
-        const group = node('details', '', navBrowser); group.className = 'profile-nav-group'; group.open = true;
+        const group = node('details', '', navBrowser); group.className = 'profile-nav-group'; group.dataset.disclosure = 'navigation-group:'+label; group.open = true;
         node('summary', t(label), group);
         if (!indices.length) {
           const link = node('a', t('Foundation & Founder Story'), group); link.href = '#profile-foundation'; link.dataset.profileKey = 'foundation-navigation';
@@ -997,7 +1006,7 @@
         textField('Brand name', s.name, section, value => { s.name = value; });
         textField('Website', s.website, section, value => { s.website = value; s.proposals = {}; s.candidate = null; s.analysis = 'Not analyzed'; s.research = null; });
         if (!s.readOnly) {
-          const legacy = node('details', '', section); legacy.className = 'profile-legacy-research';
+          const legacy = node('details', '', section); legacy.className = 'profile-legacy-research'; legacy.dataset.disclosure = 'legacy-website-tools';
           node('summary', t('Legacy website tools'), legacy);
           node('p', t('Legacy website analysis may save empty fields automatically. Use Research my brand for reviewed drafts.'), legacy);
           button('Analyze website', legacy, () => { void session.analyze(); });
@@ -1018,7 +1027,7 @@
         }
         node('p', `${t('Website analysis')}: ${t(s.analysis)}`, section); logo(section);
         for(const [key,record] of Object.entries(s.brand.brand_core[enrichment.KEY]?.fields || {})) {
-          const history=node('details','',section);node('summary',enrichmentLabel(key)+' — '+t(record.decision),history);
+          const history=node('details','',section);history.dataset.disclosure='evidence:'+key;node('summary',enrichmentLabel(key)+' — '+t(record.decision),history);
           const current = enrichmentCurrent(key);
           node('p',t(record.classification),history);
           if (!current.available) node('p',t('Current value unavailable. Review modules in Advanced options.'),history);
@@ -1142,7 +1151,7 @@
       if (options.hasSnapshot?.()) button('Campaign Brand Snapshot', actions, () => options.onSnapshot());
       button('Advanced options', actions, () => options.onAdvanced(session));
       [...container.querySelectorAll('details')].forEach((n, i) => {
-        n.dataset.disclosure = n.className + ':' + (n.closest('[data-field]')?.dataset.field || n.querySelector('summary')?.textContent || i);
+        n.dataset.disclosure ||= n.className + ':' + (n.closest('[data-field]')?.dataset.field || n.querySelector('summary')?.textContent || i);
         if (expanded.has(n.dataset.disclosure)) n.open = expanded.get(n.dataset.disclosure);
         if (n.className === 'profile-nav-browser' && root.innerWidth > 768) n.open = true;
       });
