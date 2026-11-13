@@ -73,22 +73,42 @@ Persona removal (F4) now removes exactly the selected row from the local draft, 
 
 ## Accessibility, localization and deterministic evidence
 
-EN/DE uses `FunklixLanguage` including new onboarding, assistance, status and Founder copy. URL/description controls have visible labels; the primary URL has an explanatory description. Native form Enter submission, native disclosures, >=44px actions, visible focus, section-heading focus, modal Tab containment/Escape, status announcements and read-only controls are retained or added. Browser reflow covers 320/375/720/768/desktop CSS widths, both themes, reduced motion and forced colors. 720px models equivalent 200% reflow, not native browser zoom certification. Screen-reader semantics are inspected/tested through the DOM; no claim of a human screen-reader session is made.
+EN/DE uses `FunklixLanguage` including new onboarding, assistance, status and Founder copy. URL/description controls have visible labels; the primary URL has an explanatory description. Native form Enter submission, native disclosures, >=44px actions, visible focus, section-heading focus, modal Tab containment/Escape and focus return to the Founder workspace after import, status announcements and read-only controls are retained or added. Browser reflow covers 320/375/720/768/desktop CSS widths, both themes, reduced motion and forced colors. 720px models equivalent 200% reflow, not native browser zoom certification. Screen-reader semantics are inspected/tested through the DOM; no claim of a human screen-reader session is made.
 
 `node scripts/check-bw46-3-onboarding-browser.js` uses the actual application, production enrichment handler/controller, protected HTTP writer and fictional local fixture. It captures implemented UI in `work/bw46-3/screenshots/`: Start, Research loading, Review, Field assistance, saved Profile in Light/Dark and Mobile. Runtime Boot Safety runs it on both PostgreSQL matrix jobs and uploads these images as `bw46-3-browser-postgres-<version>`. Images are generated application screenshots, never conceptual mockups. No screenshots, dependencies, raw logs, attachments, environment dumps or customer material are committed. The existing BW-42 capture matrix supplements this evidence.
 
 ## Validation results
 
-Final focused, full local workflow replay, baseline comparisons and hosted CI outcomes are recorded below when completed. Current focused results: the new BW-46.3 actual-browser suite passes EN/DE combined research/loading/partial coverage, invalid structured draft validation, edited acceptance/rejection/postponement, optional questions (zero inference), all seven structured Founder field edit/save/reload, imported facts, corrected/accepted narrative, later fact correction, generated DNA correction, persona removal, independent canonical viewer denial, Light/Dark/reflow/keyboard/forced-colors and snapshot isolation. Existing BW-42 passes all 40 locale/theme/sidebar/viewport cases plus all 11 destinations, save/reload, advanced/snapshot access and 200%-equivalent reflow. Existing BW-46.1 field ledger passes all 28 bindings and 227 inspected leaf paths. Guided-profile isolated DOM checks pass with the correct production dependencies.
+Final focused, full local workflow replay, baseline comparisons and hosted CI outcomes are recorded below when completed. Current focused results: the new BW-46.3 actual-browser suite passes EN/DE description-only recovery after empty-input validation, combined research/loading/partial coverage, visible draft-retention guard, invalid structured draft validation, edited acceptance/rejection/postponement, optional questions (zero inference), all seven structured Founder field edit/save/reload, imported facts, corrected/accepted narrative, later fact correction, generated DNA correction, persona removal, independent canonical viewer denial, Light/Dark/reflow/keyboard/forced-colors and snapshot isolation. Existing BW-42 passes all 40 locale/theme/sidebar/viewport cases plus all 11 destinations, save/reload, advanced/snapshot access and 200%-equivalent reflow. Existing BW-46.1 field ledger passes all 28 bindings and 227 inspected leaf paths. Guided-profile isolated DOM checks pass with the correct production dependencies.
 
-Real PostgreSQL 17.6 focused retests pass standard R3 (56 groups), legacy-upgrade R3 (65 groups) and restrictive-graph R3 (54 groups), with the unchanged protected-core legacy installer check also passing. The first full replay exposed an overstrict draft-replacement guard: missing-only suggestions must not prevent a later explicit request. The guard now protects only unresolved actionable/conflicting drafts. A concurrent diagnostic R3 retry interfered with cluster-global role fixtures; the final retests were run sequentially and passed without modifying any SQL/security assertions.
+Real PostgreSQL 17.6 focused retests pass standard R3 (56 groups), legacy-upgrade R3 (65 groups) and restrictive-graph R3 (54 groups), with the unchanged protected-core legacy installer check also passing. The first full replay exposed an overstrict draft-replacement guard: missing-only suggestions must not prevent a later explicit request. The presentation guard now protects only unresolved actionable/conflicting drafts. A subsequent existing API/controller regression also established that this protection must live in the UI bindings, preserving the reusable BW-46.2 controller's explicit-request replacement contract. The final guard is UI-only; no canonical write/revision protection changes. A concurrent diagnostic R3 retry interfered with cluster-global role fixtures; the final retests were run sequentially and passed without modifying any SQL/security assertions.
 
 The BW-43 `Expanded Journey sources reflow` assertion fails at line135 on both this branch and an unchanged checkout of base `2ccc44e`, using the same local Chromium. Its assertion is retained. This is a reproduced baseline failure, not counted as a pass. Full replay continues through other steps.
 
-The disposable SQL browser adapter is distinct from real PostgreSQL. Local replay reuses installed dependencies and system Chromium; hosted CI independently installs its browser and tests PostgreSQL 17.6/18.4. All original security assertions remain intact.
+The disposable SQL browser adapter is distinct from real PostgreSQL. Local replay reuses installed dependencies and system Chromium; 17.6 uses the standard Debian image and 18.4 uses the official Alpine image to fit the disposable environment, so hosted image/browser parity remains a separate CI gate; hosted CI independently installs its browser and tests PostgreSQL 17.6/18.4. All original security assertions remain intact.
 
 ## Publication review and limitations
 
 Scope consists of guided UI/controller/CSS/localization, the existing Founder dialog adapter, fictional browser tests, workflow registration and documentation/matrix updates. No secrets, customer inputs, provider outputs, live paid inference or external website requests are used in tests. Explicitly stage only this inventory; exclude `work/`, `node_modules/` and uploaded files.
 
 Limits: generation semantic quality is not established by mock success; excerpt occurrence is attribution, not entailment. Research remains bounded/request-local. Research website input does not silently update the canonical Website field. Founder import is an explicit separate review action, even when a URL is provided alongside domain/description; accepted imported facts do not approve a narrative automatically. Advanced-only aliases and specialized strategy modules keep their existing editors/qualifications in the matrix. No universal completeness or factual accuracy claim follows from coverage or acceptance. Hosted CI/review is reported separately from local checks.
+
+## Exact scoped file inventory
+
+- `.github/workflows/runtime-boot-safety.yml`
+- `app.js`
+- `brand-profile-setup.css`
+- `brand-profile-setup.js`
+- `language.js`
+- `docs/audits/bw46-1-brand-field-integrity-matrix.md`
+- `docs/implementations/bw46-3-brand-profile-onboarding-ux.md`
+- `scripts/check-bw36-13r4-guided-brand-profile-setup.js`
+- `scripts/check-bw36-13r4r1-brand-profile-entry-and-workspace-actions.js`
+- `scripts/check-bw36-13r5-brand-lifecycle-stability.js`
+- `scripts/check-bw36-13r6-brand-profile-decision-and-deletion-ux.js`
+- `scripts/check-bw46-1-brand-fields-browser.js`
+- `scripts/check-bw46-3-onboarding-browser.js`
+
+Existing Founder website mapping/import lifecycle, Founder-to-DNA context/archetype lifecycle and DNA preflight suites also pass after the final localization/boundary changes. The browser-script integrity check passes all 49 classic scripts; all seven PostgreSQL TLS groups and `git diff --check` pass.
+
+Implementation commit `ef0ddef6d9513bbe3b84911d5def258fca2f1af5` was committed and pushed to the dedicated branch. Exactly one public non-draft PR creation was attempted. Automatic approval review rejected it because it did not accept the uploaded-file authorization as a trusted direct-chat authorization for this exact public destination. A direct chat confirmation has been requested; the rejected PR action is not retried through another tool. No PR URL, hosted CI result, external approval, merge or deployment is claimed while that approval remains pending.

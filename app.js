@@ -10309,7 +10309,7 @@ function renderFounderStoryWebsiteImportReview(controller, fields) {
       latest.tile.moduleData = { ...latest.tile.moduleData, founderStoryImport: { status: "confirmed_source_facts", confirmedAt: new Date().toISOString() }, founderStoryLifecycle: { status: "draft" } };
       applyButton.disabled = true;
       const saved = await controller.canonical.save();
-      if (!saved) { latest.tile.moduleData = previousData; applyButton.disabled = false; error.textContent = uiText("Founder facts could not be saved. Your inputs are retained."); return; }
+      if (!saved) { latest.tile.moduleData = previousData; applyButton.disabled = false; error.textContent = uiText("Founder facts could not be saved. Your inputs are retained."); applyButton.focus(); return; }
       closeFounderStoryWebsiteImport(controller);
       controller.canonical.onSaved(); return;
     }

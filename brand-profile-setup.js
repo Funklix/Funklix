@@ -350,9 +350,6 @@
     function enrichProfile(input = {}) {
       return run('Preparing enrichment draft…', async () => {
         if (contentDirty()) { state.message = 'Save Brand Profile before enrichment.'; return false; }
-        if (input.action !== 'questions' && Object.values(state.enrichment?.fields || {}).some(field => !['missing', 'unavailable'].includes(field.classification))) {
-          state.section = SECTIONS.indexOf('Review'); state.message = 'Review or discard the current draft before generating again.'; return false;
-        }
         const revision = state.brand.revision;
         const result = await jsonRequest('/api/enrich-brand-profile', 'POST', {
           ...input, action: input.action || 'draft', brandId: state.brand.id, workspaceId: captured.workspaceId,
@@ -366,6 +363,7 @@
           state.message = 'Questions are optional. Answer what you can.'; return true;
         }
         state.research = draft.research || null;
+        state.analysis = draft.sourceIssue ? 'Website unavailable. Review the description-based draft.' : input.domainUrl ? 'Review website suggestions' : 'Not analyzed';
         state.questions = null;
         state.enrichment = clone(draft); state.enrichmentEdits = {}; state.enrichmentEditErrors = {}; state.section = SECTIONS.indexOf('Review');
         state.message = draft.sourceIssue ? 'Website unavailable. Review the description-based draft.' : 'Review enrichment suggestions'; return true;
@@ -726,6 +724,14 @@
       try { return { available: true, value: enrichment.target(s.brand.brand_core, key) }; }
       catch { return { available: false, value: null }; }
     }
+    function requestEnrichment(input) {
+      // Preserve the reusable BW-46.2 controller contract. The visible UI asks
+      // users to review/discard actionable drafts before replacing them.
+      if (input.action !== 'questions' && Object.values(s.enrichment?.fields || {}).some(field => !['missing', 'unavailable'].includes(field.classification))) {
+        s.section = SECTIONS.indexOf('Review'); s.message = 'Review or discard the current draft before generating again.'; render(); return;
+      }
+      void session.enrichProfile(input);
+    }
     function fieldActions(key, parent) {
       const current = enrichmentCurrent(key);
       const record = s.brand.brand_core[enrichment.KEY]?.fields?.[key];
@@ -740,8 +746,8 @@
       const menu = node('details', '', parent); menu.className = 'profile-field-menu';
       node('summary', t('Field assistance'), menu);
       button('Write myself', menu, () => { parent.querySelector('textarea,input')?.focus(); }, 'write-'+key);
-      button('Suggest with AI', menu, () => { void session.enrichProfile({ action: 'suggest', field: key }); }, 'suggest-'+key);
-      button('Help me figure it out', menu, () => { void session.enrichProfile({ action: 'questions', field: key }); }, 'questions-'+key);
+      button('Suggest with AI', menu, () => { requestEnrichment({ action: 'suggest', field: key }); }, 'suggest-'+key);
+      button('Help me figure it out', menu, () => { requestEnrichment({ action: 'questions', field: key }); }, 'questions-'+key);
       button('Complete later', menu, () => { s.laterFields[key] = true; render(); }, 'later-'+key);
     }
     function researchEntry(parent) {
@@ -758,7 +764,9 @@
       founder.inputMode = 'url'; founder.placeholder = 'https://example.com/about';
       node('p', t('Optional. Import and review Founder facts separately; you can add them later.'), form);
       button('Review Founder facts', form, () => openFounderImport(), 'research-founder-import');
-      textField('Tell AI about your brand', s.researchEntry.description, form, value => { s.researchEntry.description = value; }, true, 'research-description');
+      const description = textField('Tell AI about your brand', s.researchEntry.description, form, value => { s.researchEntry.description = value; }, true, 'research-description');
+      description.addEventListener('input', () => domain.setCustomValidity(''));
+      founder.addEventListener('input', () => founder.setCustomValidity(''));
       node('p', t('Describe what your company does, who it serves and what makes it special.'), form);
       const submit = button('Research my brand', form, () => {}, 'research-start'); submit.type = 'submit'; submit.className = 'fk-btn fk-btn-primary';
       form.addEventListener('submit', event => {
@@ -769,7 +777,7 @@
         if (!domain.value.trim() && !s.researchEntry.description.trim()) {
           domain.setCustomValidity(t('Add a website or a short description to begin.')); domain.reportValidity(); return;
         }
-        void session.enrichProfile({ description: s.researchEntry.description, ...(domain.value.trim() ? { domainUrl: website(domain.value) } : {}) });
+        requestEnrichment({ description: s.researchEntry.description, ...(domain.value.trim() ? { domainUrl: website(domain.value) } : {}) });
       });
       domain.addEventListener('input', () => domain.setCustomValidity(''));
       if (Object.keys(s.enrichment?.fields || {}).length) button('Review enrichment suggestions', entry, () => { s.section = SECTIONS.indexOf('Review'); render(); });
@@ -780,7 +788,7 @@
       const tile = session.founderTile(true); if (!tile) { s.message = 'Current value unavailable. Review modules in Advanced options.'; render(); return; }
       options.openFounderImport?.(tile, s.researchEntry.founderUrl, {
         current: () => session.current() && !s.readOnly && !s.pending && session.founderTile() === tile,
-        save: () => session.save(), onSaved: () => { s.section = 0; render(); }
+        save: () => session.save(), onSaved: () => { s.section = 0; render(); container.querySelector('.profile-founder>summary')?.focus(); }
       });
     }
     function founderWorkspace(parent) {
@@ -975,7 +983,7 @@
           button('Analyze website', legacy, () => { void session.analyze(); });
         }
         fields('Foundation', section);
-        if (!s.readOnly) button('Prepare enrichment draft', section, () => { void session.enrichProfile({description:s.core.brandCore || '', ...(s.website.trim() ? {domainUrl:s.website} : {})}); });
+        if (!s.readOnly) button('Prepare enrichment draft', section, () => { requestEnrichment({description:s.core.brandCore || '', ...(s.website.trim() ? {domainUrl:s.website} : {})}); });
       } else if (SECTIONS[s.section] === 'Review') {
         if (s.enrichment) {
           node('p', t('Review, correct and accept each suggestion. Acceptance saves that field; other drafts remain optional.'), section);
@@ -1083,7 +1091,7 @@
         node('h4', enrichmentLabel(s.questions.field), guide);
         node('p', t('Questions are optional. Answer what you can.'), guide);
         for (const question of s.questions.items) textField(question.question, s.questions.answers[question.id] || '', guide, value => { s.questions.answers[question.id] = value; }, true, 'answer-'+question.id);
-        button('Prepare my suggestion', guide, () => { void session.enrichProfile({ action: 'suggest', field: s.questions.field, answers: Object.entries(s.questions.answers).map(([id,answer]) => ({id,answer})) }); });
+        button('Prepare my suggestion', guide, () => { requestEnrichment({ action: 'suggest', field: s.questions.field, answers: Object.entries(s.questions.answers).map(([id,answer]) => ({id,answer})) }); });
         button('Complete later', guide, () => { s.questions = null; render(); }, 'close-questions');
       }
       if (s.pending === 'Preparing enrichment draft…') {
