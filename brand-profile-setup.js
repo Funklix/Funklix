@@ -678,6 +678,10 @@
       else if (object(value)) { Object.entries(value).forEach(([key, item]) => { if (meaningful(item)) { const line = node('div', '', parent); node('strong', t({ colors: 'Colors', typography: 'Typography', references: 'References', domain: 'Website', name: 'Name', note: 'Description', description: 'Description', benefit: 'Benefit', evidence: 'Evidence', good: 'Good example', avoid: 'Avoid', dos: 'Do', donts: 'Avoid', toneSignals: 'Tone signals', missionSignals: 'Mission signals', audienceSignals: 'Audience signals', messagingSignals: 'Messaging signals', visualSignals: 'Visual signals' }[key] || key.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/[_-]+/g, ' ')), line); readable(item, line); } }); }
       else if (meaningful(value)) node('p', String(value), parent);
     }
+    function enrichmentCurrent(key) {
+      try { return { available: true, value: enrichment.target(s.brand.brand_core, key) }; }
+      catch { return { available: false, value: null }; }
+    }
     function fields(section, parent) {
       let count = 0;
       for (const [key, [group, label, type]] of Object.entries(FIELDS)) {
@@ -833,14 +837,20 @@
         node('p', `${t('Website analysis')}: ${t(s.analysis)}`, section); logo(section);
         for(const [key,record] of Object.entries(s.brand.brand_core[enrichment.KEY]?.fields || {})) {
           const history=node('details','',section);node('summary',t(FIELDS[key]?.[1] || key)+' — '+t(record.decision),history);
-          node('p',t(record.classification),history);if(record.decision==='accepted'&&!(object(record.value)?Object.entries(record.value).every(([part,value])=>writes.equal(value,enrichment.target(s.brand.brand_core,key)?.[part])):writes.equal(record.value,enrichment.target(s.brand.brand_core,key))))node('p',t('Historical evidence; the field has changed since acceptance.'),history);if(record.userEdited)node('p',t('Edited by you'),history);
+          const current = enrichmentCurrent(key);
+          node('p',t(record.classification),history);
+          if (!current.available) node('p',t('Current value unavailable. Review modules in Advanced options.'),history);
+          else if(record.decision==='accepted'&&!(object(record.value)?Object.entries(record.value).every(([part,value])=>writes.equal(value,current.value?.[part])):writes.equal(record.value,current.value)))node('p',t('Historical evidence; the field has changed since acceptance.'),history);
+          if(record.userEdited)node('p',t('Edited by you'),history);
           for(const e of record.evidence || []){node('p',e.excerpt,history);if(e.url)node('p',e.url,history);}
         }
         for (const [key, field] of Object.entries(s.enrichment?.fields || {})) {
           const proposal=node('section','',section);proposal.className='profile-proposal';node('h4',t(FIELDS[key]?.[1] || key),proposal);
-          node('p',t(field.classification),proposal);node('p',t('Current value'),proposal);readable(enrichment.target(s.brand.brand_core,key),proposal);
+          const current = enrichmentCurrent(key);
+          node('p',t(field.classification),proposal);node('p',t('Current value'),proposal);
+          if (current.available) readable(current.value,proposal); else node('p',t('Current value unavailable. Review modules in Advanced options.'),proposal);
           for (const e of field.evidence || []) { node('p',e.excerpt,proposal); if(e.url)node('p',e.url,proposal); }
-          const adoptable=!['missing','unavailable','conflicting'].includes(field.classification);
+          const adoptable=current.available&&!['missing','unavailable','conflicting'].includes(field.classification);
           if (adoptable) {
             const value=Object.hasOwn(s.enrichmentEdits || {},key)?s.enrichmentEdits[key]:field.value;
             const editor=textField('Suggested value',typeof value==='string'?value:JSON.stringify(value,null,2),proposal,text=>{

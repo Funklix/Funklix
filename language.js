@@ -12,6 +12,7 @@
   const STORAGE_KEY = "funklix.languagePreferences.v1";
   const LANGUAGE_NAMES = Object.freeze({ en: "English", de: "German", es: "Spanish" });
   const german = {
+    "Current value unavailable. Review modules in Advanced options.": "Aktueller Wert nicht verfügbar. Prüfe die Module in den erweiterten Optionen.",
     "Website unavailable. Review the description-based draft.": "Website nicht verfügbar. Prüfe den Entwurf aus deiner Beschreibung.",
     "Enter a valid suggested value.": "Gib einen gültigen Vorschlagswert ein.",
     "Historical evidence; the field has changed since acceptance.": "Historischer Beleg; das Feld wurde seit der Übernahme geändert.",

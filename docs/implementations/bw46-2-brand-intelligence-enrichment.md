@@ -91,3 +91,8 @@ Field-level requests also reuse short citations from accepted evidence records w
 - `scripts/check-bw46-2-brand-enrichment-browser.js`
 - `scripts/check-bw46-2-brand-enrichment.js`
 - `scripts/fixtures/bw46-2-postgres.js`
+
+
+## PR review: ambiguous module rendering
+
+Automated review of `dd3138d` found one P2: duplicate mission/vision/values modules could throw while rendering proposal current values or accepted-evidence history, preventing unrelated suggestions from being reviewed. The actual EN/DE browser fixture was extended with duplicate instances of all three module types and accepted mission evidence; it reproduced the failure (zero editable description proposals instead of one). Both rendering paths now read the target defensively, show a localized unavailable-current-value message and withhold ambiguous adoption. Other proposals and later controls remain functional. The extended browser fixture verifies explicit description editing/adoption, evidence, reload and snapshot isolation alongside these duplicates. No persistence or special-module approval rule is relaxed.
