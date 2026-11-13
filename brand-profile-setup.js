@@ -678,6 +678,9 @@
       else if (object(value)) { Object.entries(value).forEach(([key, item]) => { if (meaningful(item)) { const line = node('div', '', parent); node('strong', t({ colors: 'Colors', typography: 'Typography', references: 'References', domain: 'Website', name: 'Name', note: 'Description', description: 'Description', benefit: 'Benefit', evidence: 'Evidence', good: 'Good example', avoid: 'Avoid', dos: 'Do', donts: 'Avoid', toneSignals: 'Tone signals', missionSignals: 'Mission signals', audienceSignals: 'Audience signals', messagingSignals: 'Messaging signals', visualSignals: 'Visual signals' }[key] || key.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/[_-]+/g, ' ')), line); readable(item, line); } }); }
       else if (meaningful(value)) node('p', String(value), parent);
     }
+    function enrichmentLabel(key) {
+      return t(FIELDS[key]?.[1] || { mission: 'Mission', vision: 'Vision', values: 'Values' }[key] || key);
+    }
     function enrichmentCurrent(key) {
       try { return { available: true, value: enrichment.target(s.brand.brand_core, key) }; }
       catch { return { available: false, value: null }; }
@@ -836,7 +839,7 @@
         }
         node('p', `${t('Website analysis')}: ${t(s.analysis)}`, section); logo(section);
         for(const [key,record] of Object.entries(s.brand.brand_core[enrichment.KEY]?.fields || {})) {
-          const history=node('details','',section);node('summary',t(FIELDS[key]?.[1] || key)+' — '+t(record.decision),history);
+          const history=node('details','',section);node('summary',enrichmentLabel(key)+' — '+t(record.decision),history);
           const current = enrichmentCurrent(key);
           node('p',t(record.classification),history);
           if (!current.available) node('p',t('Current value unavailable. Review modules in Advanced options.'),history);
@@ -845,7 +848,7 @@
           for(const e of record.evidence || []){node('p',e.excerpt,history);if(e.url)node('p',e.url,history);}
         }
         for (const [key, field] of Object.entries(s.enrichment?.fields || {})) {
-          const proposal=node('section','',section);proposal.className='profile-proposal';node('h4',t(FIELDS[key]?.[1] || key),proposal);
+          const proposal=node('section','',section);proposal.className='profile-proposal';node('h4',enrichmentLabel(key),proposal);
           const current = enrichmentCurrent(key);
           node('p',t(field.classification),proposal);node('p',t('Current value'),proposal);
           if (current.available) readable(current.value,proposal); else node('p',t('Current value unavailable. Review modules in Advanced options.'),proposal);

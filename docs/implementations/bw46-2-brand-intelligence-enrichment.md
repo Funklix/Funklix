@@ -100,3 +100,5 @@ Automated review of `dd3138d` found one P2: duplicate mission/vision/values modu
 ## Complete local replay and maintenance integration
 
 All 229 executable workflow blocks were attempted locally on PostgreSQL 17.6, using already-supplied dependencies and system Chromium for the two installation steps. The final maintenance check found the new database-dependent endpoint missing the required central response wrapper; all preceding checks completed successfully. The endpoint now uses the existing `withMaintenanceResponse` boundary, including its handler-factory wrapping, preserving authentication and the shared maintenance result even when errors are translated locally. The unchanged maintenance suite and new enrichment suites pass after this correction. This does not relax any SQL/maintenance assertion. The final-head GitHub PostgreSQL 17.6/18.4 matrix remains the authoritative CI result reported in the PR delivery.
+
+Module proposal/history labels reuse the existing localized Mission/Vision/Values labels rather than exposing internal module keys; the four EN/DE browser cases assert the localized Values/Werte heading.
