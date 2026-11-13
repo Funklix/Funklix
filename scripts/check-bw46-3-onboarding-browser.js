@@ -107,9 +107,26 @@ const output = 'work/bw46-3/screenshots';
         await key('Confirm and save Brand Profile').click();await p.waitForFunction(()=>!brandProfileController.busy());
         await key('Reload latest Brand').click();await p.waitForFunction(()=>!brandProfileController.busy());
         for (const fact of factKeys) assert.equal(await key('founder-'+fact).inputValue(),'Reviewed '+fact,'structured Founder edit/save/reload '+fact);
+        for (const fact of factKeys) await key('founder-'+fact).fill('');
+        await key('Confirm and save Brand Profile').click();await p.waitForFunction(()=>!brandProfileController.busy());
+        await key('Reload latest Brand').click();await p.waitForFunction(()=>!brandProfileController.busy());
+        for (const fact of factKeys) assert.equal(await key('founder-'+fact).inputValue(),'','structured Founder clear/reload '+fact);
+        for (const fact of factKeys) await key('founder-'+fact).fill('Corrected '+fact);
+        await key('Confirm and save Brand Profile').click();await p.waitForFunction(()=>!brandProfileController.busy());
+        await key('Reload latest Brand').click();await p.waitForFunction(()=>!brandProfileController.busy());
+        for (const fact of factKeys) assert.equal(await key('founder-'+fact).inputValue(),'Corrected '+fact,'structured Founder subsequent edit/save/reload '+fact);
+
 
         await p.route('**/api/generate-founder-story',r=>r.fulfill({json:{success:true,narrative:'Nova built a workshop to reduce repair waste.'}}));
         await key('Generate Founder Story').click();await p.waitForFunction(()=>!brandProfileController.busy());
+        await key('founder-motivation').fill('Changed after narrative generation');
+        const beforeStale=clone(f.r.db.brands[0]);await key('Accept Founder Story').click();
+        assert.equal(await p.evaluate(()=>brandProfileController.state.message),'This proposal is stale. Reload and generate again.');
+        assert.deepEqual(clone(f.r.db.brands[0]),beforeStale,'stale Founder draft cannot replace newer manual facts or narrative');
+        await key('Generate Founder Story').click();await p.waitForFunction(()=>!brandProfileController.busy());
+
+        await key('founder-narrative-draft').fill('');await key('Accept Founder Story').click();
+        assert.equal(await key('founder-narrative-draft').evaluate(n=>n.checkValidity()),false,'empty narrative cannot be accepted');
         await key('founder-narrative-draft').fill('Reviewed origin of Northstar Repair.');await key('Accept Founder Story').click();await p.waitForFunction(()=>!brandProfileController.busy());
         tile=f.r.db.brands[0].brand_core.customTiles.find(t=>t.moduleType==='founder_story');assert.equal(tile.content,'Reviewed origin of Northstar Repair.');assert(tile.moduleData.founderStoryLifecycle.acceptedAt);
         await key('founder-motivation').fill('Keep tools useful');await key('Confirm and save Brand Profile').click();await p.waitForFunction(()=>!brandProfileController.busy());

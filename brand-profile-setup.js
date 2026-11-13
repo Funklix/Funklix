@@ -131,7 +131,7 @@
     const state = {
       brand: options.brand, name: options.brand.name, core: clone(options.brand.brand_core),
       website: options.website || options.brand.brand_core?.brandAssets?.domain || options.brand.brand_core?.website || '',
-      research: null, researchEntry: { domain: options.website || options.brand.brand_core?.brandAssets?.domain || options.brand.brand_core?.website || '', description: '', founderUrl: '' }, questions: null, laterFields: {}, founderDraft: null, section: SECTIONS.includes(options.initialSection) ? SECTIONS.indexOf(options.initialSection) : 0, message: '', analysis: 'Not analyzed', logo: options.brand.logo_url ? 'Logo saved' : 'No logo yet. Initials are shown.',
+      research: null, researchEntry: { domain: options.website || options.brand.brand_core?.brandAssets?.domain || options.brand.brand_core?.website || '', description: '', founderUrl: '' }, questions: null, laterFields: {}, founderDraft: null, founderDraftBase: null, section: SECTIONS.includes(options.initialSection) ? SECTIONS.indexOf(options.initialSection) : 0, message: '', analysis: 'Not analyzed', logo: options.brand.logo_url ? 'Logo saved' : 'No logo yet. Initials are shown.',
       proposals: clone(options.pendingData?.proposals || {}), candidate: clone(options.pendingData?.candidate || null),
       dnaPreflight: null, dnaDraft: clone(options.pendingData?.dnaDraft || null), avatarDraft: clone(options.pendingData?.avatarDraft || null), avatarDirection: options.pendingData?.avatarDirection || '', file: options.pendingData?.file || null, fileData: options.pendingData?.fileData || null, syncRequired: false, reconciliationWarning: false, pending: '', deferred: false,
       readOnly: options.brand.access?.canEditCanonicalBrand !== true || !['owner','admin','editor'].includes(options.brand.access?.role)
@@ -190,7 +190,7 @@
       state.pending = kind; changed();
       flight = (async () => {
         try { return await operation(); }
-        catch { if (current()) { if (kind === 'Analyzing website…') state.analysis = 'Analysis failed'; state.message = kind === 'Analyzing website…' ? 'Website analysis failed. Retry or continue manually.' : kind === 'Preparing enrichment draft…' ? 'Enrichment failed. Retry safely.' : kind === 'Uploading logo…' ? 'Logo upload failed. Your file is retained. Retry the upload.' : 'The save was not confirmed. Your inputs are retained. Retry safely.'; } return false; }
+        catch { if (current()) { if (kind === 'Analyzing website…') state.analysis = 'Analysis failed'; state.message = kind === 'Analyzing website…' ? 'Website analysis failed. Retry or continue manually.' : kind === 'Preparing enrichment draft…' ? 'Enrichment failed. Retry safely.' : kind === 'Preparing Founder Story…' ? 'Founder Story could not be prepared. Your inputs are retained.' : kind === 'Uploading logo…' ? 'Logo upload failed. Your file is retained. Retry the upload.' : 'The save was not confirmed. Your inputs are retained. Retry safely.'; } return false; }
         finally { flight = null; state.pending = ''; if (!current()) refreshContext(); changed(); }
       })();
       return flight;
@@ -397,6 +397,16 @@
       if (tiles[0] || !create) return tiles[0] || null;
       const tile = options.createTile('founder_story'); (state.core.customTiles ||= []).push(tile); return tile;
     }
+    function founderSignature(tile) {
+      return stable({ source: tile?.moduleData?.founderStory || {}, narrative: tile?.content || '' });
+    }
+    function stageFounderNarrative() {
+      if (!current() || state.readOnly || state.pending) return false;
+      const tile = founderTile(); if (!tile?.content?.trim()) return false;
+      state.founderDraft = tile.content;
+      state.founderDraftBase = { revision: state.brand.revision, tileId: tile.id, signature: founderSignature(tile) };
+      return true;
+    }
     function generateFounder() {
       return run('Preparing Founder Story…', async () => {
         const tile = founderTile();
@@ -404,22 +414,31 @@
         if (!tile || !options.validateFounder?.(source, { brandName: state.name })?.ok) {
           state.message = 'Add founder identity and at least two story details first.'; return false;
         }
+        const expected = { revision: state.brand.revision, tileId: tile.id, signature: founderSignature(tile) };
         const result = await jsonRequest('/api/generate-founder-story', 'POST', { moduleType: 'founder_story', source,
           brandContext: { brandName: state.name, positioning: state.core.brandCore || '' }, existingNarrative: tile.content || '' });
         if (!result?.response.ok || typeof result.payload?.narrative !== 'string' || !result.payload.narrative.trim() || result.payload.narrative.length > (options.founderNarrativeMax || 6000)) {
           state.message = 'Founder Story could not be prepared. Your inputs are retained.'; return false;
         }
+        if (state.brand.revision !== expected.revision || founderTile()?.id !== expected.tileId || founderSignature(founderTile()) !== expected.signature) {
+          state.message = 'This proposal is stale. Reload and generate again.'; return false;
+        }
+        state.founderDraftBase = expected;
         state.founderDraft = result.payload.narrative; state.message = 'Review the narrative before accepting.'; return true;
       });
     }
     async function acceptFounder() {
       if (!current() || state.readOnly || state.pending || !state.founderDraft?.trim() || state.founderDraft.length > (options.founderNarrativeMax || 6000)) return false;
       const tile = founderTile(); if (!tile || !options.validateFounder?.(tile.moduleData?.founderStory || {}, {brandName: state.name})?.ok) { state.message = 'Add founder identity and at least two story details first.'; changed(); return false; }
+      const base = state.founderDraftBase;
+      if (!base || base.revision !== state.brand.revision || base.tileId !== tile.id || base.signature !== founderSignature(tile)) {
+        state.message = 'This proposal is stale. Reload and generate again.'; changed(); return false;
+      }
       const previous = clone(tile);
       tile.content = state.founderDraft;
       tile.moduleData = { ...tile.moduleData, founderStoryLifecycle: { status: 'accepted', acceptedAt: new Date().toISOString() } };
       const saved = await save();
-      if (saved) state.founderDraft = null;
+      if (saved) { state.founderDraft = null; state.founderDraftBase = null; }
       else Object.assign(tile, previous);
       changed(); return saved;
     }
@@ -661,7 +680,7 @@
     function discard() {
       brainDraft = null;
       state.name = state.brand.name; state.core = editableCore(state.brand.brand_core); state.website = state.core.brandAssets?.domain || state.core.website || '';
-      baseline = draftSignature(); state.enrichment = null; state.enrichmentEdits = {}; state.questions = null; state.founderDraft = null; state.dirty = false; state.file = null; state.fileData = null; state.candidate = null; state.proposals = {}; state.dnaDraft = null; state.avatarDraft = null; state.avatarDirection = ''; state.dnaPreflight = null;
+      baseline = draftSignature(); state.enrichment = null; state.enrichmentEdits = {}; state.questions = null; state.founderDraft = null; state.founderDraftBase = null; state.dirty = false; state.file = null; state.fileData = null; state.candidate = null; state.proposals = {}; state.dnaDraft = null; state.avatarDraft = null; state.avatarDirection = ''; state.dnaPreflight = null;
     }
     function refreshContext() {
       const live = getContext();
@@ -669,9 +688,9 @@
       captured.generation = live.generation;
       return true;
     }
-    return { state, current, belongsToAccount(account) { return account === captured.account; }, refreshContext, founderTile, generateFounder, acceptFounder, analyze, enrichProfile, editEnrichment, decideEnrichment, save, upload, removeLogo, useLogo, chooseFile, applyProposal, keepProposal, retryAutomatic, reload,
+    return { state, current, belongsToAccount(account) { return account === captured.account; }, refreshContext, founderTile, stageFounderNarrative, generateFounder, acceptFounder, analyze, enrichProfile, editEnrichment, decideEnrichment, save, upload, removeLogo, useLogo, chooseFile, applyProposal, keepProposal, retryAutomatic, reload,
       discard, stageValueProposition, requestDna, generateDna, acceptDna, generateAvatar, acceptAvatar, contentDirty,
-      subscribe(fn) { notify = fn; }, invalidate() { alive = false; brainDraft = null; state.questions = null; state.founderDraft = null; state.researchEntry = { domain: '', description: '', founderUrl: '' }; state.enrichment = null; state.enrichmentEdits = {}; state.file = null; state.fileData = null; state.candidate = null; state.proposals = {}; state.dnaDraft = null; state.avatarDraft = null; state.avatarDirection = ''; state.core = {}; state.website = ''; state.name = ''; },
+      subscribe(fn) { notify = fn; }, invalidate() { alive = false; brainDraft = null; state.questions = null; state.founderDraft = null; state.founderDraftBase = null; state.researchEntry = { domain: '', description: '', founderUrl: '' }; state.enrichment = null; state.enrichmentEdits = {}; state.file = null; state.fileData = null; state.candidate = null; state.proposals = {}; state.dnaDraft = null; state.avatarDraft = null; state.avatarDirection = ''; state.core = {}; state.website = ''; state.name = ''; },
       dirty() { return contentDirty(); }, busy() { return !!state.pending; } };
   }
 
@@ -805,11 +824,12 @@
       if (s.readOnly) return;
       button('Review Founder facts', details, openFounderImport, 'founder-import');
       button('Generate Founder Story', details, () => { void session.generateFounder(); });
-      if (!s.founderDraft && tiles[0]?.content?.trim()) button('Accept Founder Story', details, () => { s.founderDraft = tiles[0].content; void session.acceptFounder(); });
+      if (!s.founderDraft && tiles[0]?.content?.trim()) button('Accept Founder Story', details, () => { if (session.stageFounderNarrative()) void session.acceptFounder(); });
       if (s.founderDraft) {
         const narrative = textField('Suggested value', s.founderDraft, details, value => { s.founderDraft = value; }, true, 'founder-narrative-draft'); narrative.maxLength = options.founderNarrativeMax || 6000;
-        button('Accept Founder Story', details, () => { void session.acceptFounder(); });
-        button('Keep current narrative', details, () => { s.founderDraft = null; render(); });
+        button('Accept Founder Story', details, () => { narrative.setCustomValidity(s.founderDraft?.trim() ? '' : t('Enter a Founder Story before accepting.')); if (narrative.reportValidity()) void session.acceptFounder(); });
+        narrative.addEventListener('input', () => narrative.setCustomValidity(''));
+        button('Keep current narrative', details, () => { s.founderDraft = null; s.founderDraftBase = null; render(); });
       }
     }
     function fields(section, parent) {
@@ -1108,7 +1128,7 @@
         button('Confirm and save Brand Profile', actions, () => { void session.save(); });
         button(s.syncRequired || s.reconciliationWarning ? 'Reload saved Brand' : 'Reload latest Brand', actions, () => { void session.reload(); });
       }
-      if (!s.readOnly && s.dirty) button('Discard changes', actions, () => { session.discard(); render(); });
+      if (!s.readOnly && s.dirty) button('Discard profile changes', actions, () => { session.discard(); render(); }, 'discard-profile-changes');
       if (options.hasProject() || SECTIONS[s.section] === 'Review') button(options.hasProject() ? 'Save Brand Profile and continue' : 'Back', actions, async () => {
         if (options.hasProject() && !s.readOnly) {
           if (!await session.save()) return;

@@ -12,6 +12,8 @@
   const STORAGE_KEY = "funklix.languagePreferences.v1";
   const LANGUAGE_NAMES = Object.freeze({ en: "English", de: "German", es: "Spanish" });
   const german = {
+    "Discard profile changes": "Profiländerungen verwerfen",
+    "Enter a Founder Story before accepting.": "Gib vor der Übernahme eine Gründungsgeschichte ein.",
     "Enter one public webpage URL.": "Gib die URL einer öffentlichen Webseite ein.",
     "Select at least one non-empty suggestion to apply.": "Wähle mindestens einen ausgefüllten Vorschlag zur Übernahme aus.",
     "Try import again": "Import erneut versuchen",
