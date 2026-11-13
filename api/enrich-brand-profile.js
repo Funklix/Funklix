@@ -1,6 +1,11 @@
 'use strict';
 const {getSessionUser}=require('./_auth-session');
 const {enrich,failure}=require('./_brand-enrichment');
+// Only existing, fixed retrieval outcomes cross the public error boundary.
+const RETRIEVAL_STATUS={invalid_url:400,unsupported_scheme:400,credentials_not_allowed:400,invalid_host:400,port_not_allowed:400,unsafe_destination:400,
+ dns_failed:502,http_error:502,retrieval_failed:502,timeout:504,request_cancelled:499,empty_content:422,robots_disallowed:422,
+ unsupported_content_type:415,unsupported_encoding:415,invalid_encoding:422,response_too_large:413,decompressed_too_large:413,parse_limit:422,
+ too_many_redirects:502,redirect_loop:502,invalid_redirect:502};
 // Resolve current identity, Workspace and Brand independently before and after inference.
 async function authorize(input,user){
  const {getBrandAccess,isBrandId}=require('./_brand-access');
@@ -32,7 +37,10 @@ function createHandler(deps={}){return async(req,res)=>{
  }catch(error){
    let research;
    if(error.research){try{await(deps.authorize||authorize)(req.body,user);research=error.research;}catch(accessError){error=accessError;}}
-   const code=error.status?error.code:'ENRICHMENT_FAILED';return res.status(error.status||502).json({code,...(research?{research}:{})});
+   const knownRetrieval=Object.hasOwn(RETRIEVAL_STATUS,error.code);
+   const status=error.status||(knownRetrieval?RETRIEVAL_STATUS[error.code]:502);
+   const code=error.status||knownRetrieval?error.code:'ENRICHMENT_FAILED';
+   return res.status(status).json({code,...(research?{research}:{})});
  }
  finally{req.off?.('aborted',cancel);res.off?.('close',cancel);}
 };}

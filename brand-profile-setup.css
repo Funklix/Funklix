@@ -218,3 +218,7 @@ html[data-theme=dark] .guided-brand-profile .profile-header{background:radial-gr
 
 /* Informational website text uses a text token, independently of button accent contrast. */
 .guided-brand-profile .profile-header .profile-website{color:var(--fk-color-text-secondary,var(--fk-color-text-primary))}
+
+/* Research inputs remain separate from the saved canonical website. */
+.guided-brand-profile .profile-website-draft{overflow-wrap:anywhere;color:var(--fk-color-text-primary);font-size:.875rem}
+.guided-brand-profile>.profile-research-status{grid-column:1/-1;overflow-wrap:anywhere}

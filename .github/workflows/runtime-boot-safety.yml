@@ -675,6 +675,10 @@ jobs:
         run: |
           node scripts/check-bw46-2-brand-enrichment.js
           node scripts/check-bw46-2-brand-enrichment-browser.js
+      - name: Check BW-46.4 onboarding failure boundaries and recovery (fictional sources)
+        run: |
+          node scripts/check-bw46-4-onboarding-reliability.js
+          node scripts/check-bw46-4-onboarding-browser.js
       - name: Check BW-46.3 onboarding and field assistance (fictional AI)
         run: node scripts/check-bw46-3-onboarding-browser.js
       - name: Preserve BW-46.3 implemented application evidence
