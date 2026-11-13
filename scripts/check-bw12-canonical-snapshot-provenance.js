@@ -26,7 +26,7 @@ const service = read('api/_project-command.js');
 assert.match(collection, /PROJECT_CREATION_REQUIRED/);
 assert.doesNotMatch(collection, /INSERT INTO boards/);
 assert.match(service, /getBrandAccess\(brandId,user/);
-assert.match(service, /JSON\.stringify\(brand\.brand_core\),Number\(brand\.revision\),brand\.updated_at/);
+assert.match(service, /JSON\.stringify\(publicProfileCore\(brand\.brand_core\)\),Number\(brand\.revision\),brand\.updated_at/);
 assert.match(service, /brand_core_snapshot_copied_at/);
 assert.match(service, /NOW\(\)/);
 assert.doesNotMatch(collection, /req\.body\?\.brand_core_source_|const \{[^}]*brand_core_source_/, 'client provenance is never read');

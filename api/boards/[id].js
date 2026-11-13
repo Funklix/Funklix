@@ -1,3 +1,4 @@
+const {publicCore: publicProfileCore}=require('../../brand-enrichment-contract');
 const { pool, ensureBoardsTable } = require('../_boards-storage');
 const { getBoardAccess, normalizeEmail, refreshOwnEditorIdentity } = require('../_board-access');
 const { getSessionUser } = require('../_auth-session');
@@ -89,7 +90,7 @@ async function performBrandCoreOperation(req, res, id, user) {
           brand_core_source_revision = $3,
           brand_core_source_updated_at = $4,
           brand_core_snapshot_copied_at = NOW(), updated_at = NOW()
-        WHERE id = $1 RETURNING ${BOARD_COLUMNS}`, [id, JSON.stringify(brand.brand_core), brand.revision, brand.updated_at]);
+        WHERE id = $1 RETURNING ${BOARD_COLUMNS}`, [id, JSON.stringify(publicProfileCore(brand.brand_core)), brand.revision, brand.updated_at]);
     } else {
       if (!isPlainObject(board.brand_core_snapshot_backup) || !validTimestamp(board.brand_core_snapshot_backup_created_at)
         || !validProvenance(board.brand_core_backup_source_revision, board.brand_core_backup_source_updated_at, board.brand_core_backup_snapshot_copied_at)) {

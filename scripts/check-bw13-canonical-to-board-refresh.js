@@ -41,7 +41,7 @@ assert.match(html, /Restore previous Board Brand Core/);
 assert.match(app, /comparison\.operationController/);
 assert.match(app, /current\.userEmail[\s\S]*current\.boardId[\s\S]*current\.brandId[\s\S]*current\.boardLoadGeneration/);
 assert.match(app, /network outcome is uncertain/i);
-assert.match(app, /JSON\.stringify\(canonicalJson\(board\.brand_core_snapshot\)\)[\s\S]*canonicalJson\(current\.canonical\.brand_core\)/);
+assert.match(app, /JSON\.stringify\(canonicalJson\(board\.brand_core_snapshot\)\)[\s\S]*canonicalJson\(window\.BrandEnrichmentContract\?\.publicCore\(current\.canonical\.brand_core\) \|\| current\.canonical\.brand_core\)/);
 assert.match(app, /clearAutosaveTimer\(\); state\.isDirty = false/);
 assert.doesNotMatch(app.match(/async function submitBoardBrandCoreOperation[\s\S]*?\n}\n/)[0], /canvas_json|pushState|replaceState|\/api\/brands\//, 'write UI isolates Canvas, navigation, association, and Canonical writes');
 assert.match(app, /no ongoing synchronization is created/);

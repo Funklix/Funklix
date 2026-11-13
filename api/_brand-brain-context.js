@@ -27,6 +27,7 @@ function formatPersona(persona = {}) {
     persona.name || persona.title || persona.segment,
     persona.role || persona.jobTitle,
     persona.description || persona.summary,
+    persona.note && persona.note !== persona.description && persona.note !== persona.summary ? persona.note : "",
     persona.needs ? `Needs: ${persona.needs}` : "",
     persona.painPoints ? `Pain points: ${Array.isArray(persona.painPoints) ? persona.painPoints.join(", ") : persona.painPoints}` : "",
     persona.motivations ? `Motivations: ${Array.isArray(persona.motivations) ? persona.motivations.join(", ") : persona.motivations}` : ""

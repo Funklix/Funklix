@@ -671,6 +671,10 @@ jobs:
           BW36_23_DISPOSABLE: '1'
           BW36_23_TEST_URL: postgres://postgres:disposable-bw36-23-fixture@127.0.0.1:5432/postgres
         run: npm run check:bw36.23a:postgres
+      - name: Check Brand Profile enrichment and evidence
+        run: |
+          node scripts/check-bw46-2-brand-enrichment.js
+          node scripts/check-bw46-2-brand-enrichment-browser.js
       - name: Check BW-46.1 domain research (fictional transports, single mocked inference)
         run: node scripts/check-bw46-1-domain-research.js
       - name: Check BW-46.1 actual Brand field bindings and protected save/reload

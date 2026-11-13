@@ -1,3 +1,4 @@
+const {publicCore: publicProfileCore}=require('../brand-enrichment-contract');
 const { resolveGenerationBrand } = require('./_brand-generation-access');
 const { buildBrandBrainContext } = require('./_brand-brain-context');
 
@@ -122,7 +123,7 @@ function parseJsonResponse(text = '') {
 
 function hasMeaningfulBrandData(brandBrainData = {}) {
   if (!brandBrainData || typeof brandBrainData !== 'object') return false;
-  return Object.values(brandBrainData).some((value) => {
+  return Object.values(publicProfileCore(brandBrainData)).some((value) => {
     if (Array.isArray(value)) return value.length > 0;
     if (value && typeof value === 'object') return Object.values(value).some(Boolean);
     return Boolean(cleanText(value, 20));
@@ -204,7 +205,7 @@ Brand Brain source of truth:
 ${brandBrainContext.text}
 
 Raw Brand Brain fields, including any custom tiles or website-derived context:
-${JSON.stringify(brandBrainData || {}, null, 2)}
+${JSON.stringify(publicProfileCore(brandBrainData || {}), null, 2)}
 
 Website/domain context if present:
 ${website || 'none'}
