@@ -37,3 +37,6 @@ function createHandler(deps={}){return async(req,res)=>{
  finally{req.off?.('aborted',cancel);res.off?.('close',cancel);}
 };}
 module.exports=createHandler();module.exports.createHandler=createHandler;module.exports.authorize=authorize;
+
+// Preserve the central maintenance response boundary for every database-dependent route.
+module.exports = require('./_write-maintenance').withMaintenanceResponse(module.exports);
