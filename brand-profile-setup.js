@@ -179,6 +179,17 @@
       if (code === 'STORAGE_UNAVAILABLE') return 'Logo storage is temporarily unavailable. Your Brand information can still be saved.';
       if (['UNSUPPORTED_FILE', 'FILE_TOO_LARGE'].includes(code)) return 'Choose PNG, JPEG, WebP or GIF, up to 2 MB.';
       if (code === 'DATABASE_UNAVAILABLE') return 'The database is temporarily unavailable. Your inputs are retained. Try again.';
+      const enrichmentErrors = {
+        PROVIDER_UNAVAILABLE: 'The AI provider is temporarily unavailable. Retry, or continue editing manually.',
+        PROVIDER_TIMEOUT: 'The AI provider timed out. Retry, or continue editing manually.',
+        INVALID_AI_OUTPUT: 'The AI response could not be validated. Retry, or continue editing manually.',
+        NO_USABLE_WEBSITE_EVIDENCE: 'No usable website excerpts were selected. Edit the website or add a brand description.',
+        ENRICHMENT_FAILED: 'Draft processing failed. Your inputs are retained. Retry or continue manually.',
+        REQUEST_CANCELLED: 'Research was interrupted. Your inputs are retained. Retry when ready.'
+      };
+      if (enrichmentErrors[code]) return enrichmentErrors[code];
+      if (['empty_content','http_error','dns_failed','timeout','retrieval_failed','unsupported_content_type','robots_disallowed'].includes(code)) return 'Website research was unsuccessful. Edit the website or use a brand description.';
+      if (['invalid_url','unsupported_scheme','unsafe_destination','invalid_host','credentials_not_allowed','port_not_allowed'].includes(code)) return 'Enter a valid public HTTPS website, or continue with a brand description.';
       return fallback;
     }
     function run(kind, operation) {
@@ -190,7 +201,7 @@
       state.pending = kind; changed();
       flight = (async () => {
         try { return await operation(); }
-        catch { if (current()) { if (kind === 'Analyzing website…') state.analysis = 'Analysis failed'; state.message = kind === 'Analyzing website…' ? 'Website analysis failed. Retry or continue manually.' : kind === 'Preparing enrichment draft…' ? 'Enrichment failed. Retry safely.' : kind === 'Preparing Founder Story…' ? 'Founder Story could not be prepared. Your inputs are retained.' : kind === 'Uploading logo…' ? 'Logo upload failed. Your file is retained. Retry the upload.' : 'The save was not confirmed. Your inputs are retained. Retry safely.'; } return false; }
+        catch { if (current()) { if (kind === 'Analyzing website…') state.analysis = 'Analysis failed'; state.message = kind === 'Analyzing website…' ? 'Website analysis failed. Retry or continue manually.' : kind === 'Preparing enrichment draft…' ? 'The research request could not be completed. Your inputs are retained. Retry or continue manually.' : kind === 'Preparing Founder Story…' ? 'Founder Story could not be prepared. Your inputs are retained.' : kind === 'Uploading logo…' ? 'Logo upload failed. Your file is retained. Retry the upload.' : 'The save was not confirmed. Your inputs are retained. Retry safely.'; } return false; }
         finally { flight = null; state.pending = ''; if (!current()) refreshContext(); changed(); }
       })();
       return flight;
@@ -355,9 +366,9 @@
           ...input, action: input.action || 'draft', brandId: state.brand.id, workspaceId: captured.workspaceId,
           revision, language: options.language?.() || 'en'
         });
-        if (!result?.response.ok) { state.research = result?.payload?.research || null; state.message = result ? errorText(result.response, 'Enrichment failed. Retry safely.', result.payload) : 'Enrichment failed. Retry safely.'; return false; }
+        if (!result?.response.ok) { state.analysis = 'Research unsuccessful'; state.research = result?.payload?.research || null; state.message = result ? errorText(result.response, 'The research request could not be completed. Your inputs are retained. Retry or continue manually.', result.payload) : 'The research request could not be completed. Your inputs are retained. Retry or continue manually.'; return false; }
         const draft = result.payload;
-        if (draft?.version !== enrichment.VERSION || draft.brandId !== state.brand.id || draft.revision !== revision || state.brand.revision !== revision) return false;
+        if (draft?.version !== enrichment.VERSION || draft.brandId !== state.brand.id || draft.revision !== revision || state.brand.revision !== revision) { state.analysis = 'Research unsuccessful'; state.message = 'The enrichment response could not be validated. Retry or continue manually.'; return false; }
         if (input.action === 'questions') {
           state.questions = { field: input.field, items: clone(draft.questions || []), answers: {} };
           state.message = 'Questions are optional. Answer what you can.'; return true;
@@ -366,7 +377,7 @@
         state.analysis = draft.sourceIssue ? 'Website unavailable. Review the description-based draft.' : input.domainUrl ? 'Review website suggestions' : 'Not analyzed';
         state.questions = null;
         state.enrichment = clone(draft); state.enrichmentEdits = {}; state.enrichmentEditErrors = {}; state.section = SECTIONS.indexOf('Review');
-        state.message = draft.sourceIssue ? 'Website unavailable. Review the description-based draft.' : 'Review enrichment suggestions'; return true;
+        state.message = draft.sourceIssue ? 'Website unavailable. Review the description-based draft.' : Object.values(draft.fields || {}).some(field => !['missing','unavailable'].includes(field.classification)) ? 'Review enrichment suggestions' : 'No supported suggestions are available. Add a brand description or continue manually.'; return true;
       });
     }
     function editEnrichment(key, value) {
@@ -698,7 +709,7 @@
 
   function mount(container, options) {
     const session = createSession(options), s = session.state, doc = container.ownerDocument;
-    let fileInput = null, lastFocusKey = null, hasRendered = false;
+    let fileInput = null, lastFocusKey = null, hasRendered = false, updateWebsiteDraft = () => {};
     const learnings = root.FunklixBrandLearnings?.create({ brand: s.brand, workspaceId:options.getContext().workspaceId, document: doc, language: options.language, fetchImpl: options.fetchImpl, current: session.current });
     const t = key => root.FunklixLanguage.t(key, options.language());
     function node(tag, text, parent) { const n = doc.createElement(tag); if (text) n.textContent = text; if (parent) parent.append(n); return n; }
@@ -789,7 +800,7 @@
       node('summary', t(entry.open ? "Let's build your brand ✨" : 'Enrich your Brand Profile'), entry);
       node('p', t('Start with your website or tell us about your business. You can refine everything later.'), entry);
       const form = node('form', '', entry); form.className = 'profile-discovery-form';
-      const domain = textField('Your website', s.researchEntry.domain, form, value => { s.researchEntry.domain = value; }, false, 'research-domain');
+      const domain = textField('Your website', s.researchEntry.domain, form, value => { s.researchEntry.domain = value; updateWebsiteDraft(); }, false, 'research-domain');
       domain.type = 'text'; domain.inputMode = 'url'; domain.placeholder = 'https://example.com'; domain.autocomplete = 'url';
       const helper = node('p', t('We research public pages and prepare suggestions for your review.'), form); helper.id = 'profile-research-help'; domain.setAttribute('aria-describedby', helper.id);
       const founder = textField('Founder Story / About Us', s.researchEntry.founderUrl, form, value => { s.researchEntry.founderUrl = value; }, false, 'research-founder-url');
@@ -811,6 +822,11 @@
         }
         requestEnrichment({ description: s.researchEntry.description, ...(domain.value.trim() ? { domainUrl: website(domain.value) } : {}) });
       });
+      button('Use description only', form, () => {
+        if (!s.researchEntry.description.trim()) { description.setCustomValidity(t('Add a short brand description first.')); description.reportValidity(); return; }
+        description.setCustomValidity(''); requestEnrichment({description:s.researchEntry.description});
+      }, 'research-description-only');
+      description.addEventListener('input', () => description.setCustomValidity(''));
       domain.addEventListener('input', () => domain.setCustomValidity(''));
       if (Object.keys(s.enrichment?.fields || {}).length) button('Review enrichment suggestions', entry, () => { s.section = SECTIONS.indexOf('Review'); render(); });
     }
@@ -947,11 +963,16 @@
     function researchCoverage(parent) {
       const r=s.research;
       if (!r || !r.counts) return;
-      const details=node('details','',parent); details.className = 'profile-research-results'; details.dataset.disclosure = 'research-coverage'; details.open = true;
+      const hasSuggestions = !s.enrichment || Object.values(s.enrichment.fields || {}).some(field => !['missing','unavailable'].includes(field.classification));
+      const status=node('p',t(s.pending ? 'Research is running. Suggestions will need your review.' : r.counts.processed > 0 ? hasSuggestions ? 'Website excerpts processed. Review available suggestions.' : 'Website excerpts processed. No supported suggestions were returned.' : 'Website research did not prepare suggestions. Retry or add a brand description.'),parent);
+      status.className = 'profile-research-status'; status.setAttribute('role','status');
+      const details=node('details','',parent); details.className = 'profile-research-results'; details.dataset.disclosure = 'research-coverage'; details.open = false;
       node('summary',t('Website research coverage'),details);
-      node('p',t('Selected excerpts were analyzed. Website coverage may be partial.'),details);
+      node('p',t(r.counts.processed > 0 ? 'Selected excerpts were analyzed. Website coverage may be partial.' : 'No website excerpts were successfully processed. Retrieved sources are listed below.'),details);
       if (s.enrichment) node('p',t('Suggestions stay drafts until you explicitly accept them. Reviewed evidence is saved with your decision.'),details);
-      else { node('p',t('Source grounding is available for this analysis only and is not retained with saved Brand fields.'),details); node('p',t('Suggestions for empty fields follow the existing automatic save flow. Existing values require review.'),details); }
+      else if (r.counts.processed > 0) { node('p',t('Source grounding is available for this analysis only and is not retained with saved Brand fields.'),details); node('p',t('Suggestions for empty fields follow the existing automatic save flow. Existing values require review.'),details); }
+      const processingStage = {provider_request:'Provider request',provider_response:'Provider response',model_json:'Model JSON',model_fields:'Field validation',draft_ready:'Draft prepared'}[r.processing?.stage];
+      if (processingStage) node('p',t(processingStage),details);
       for(const [key,label] of Object.entries({discovered:'Discovered',fetched:'Retrieved',extracted:'Extracted',processed:'Processed excerpts',unavailable:'Unavailable',rejected:'Excluded',deferred:'Remaining sources'})) node('p',`${t(label)}: ${Number(r.counts[key]) || 0}`,details);
       if(r.rejectedFields?.length) node('p',t('Unsupported suggestion fields were excluded.'),details);
       if(r.remaining?.omittedUnits || r.discoveryOmitted) node('p',t('Additional evidence remains outside this analysis.'),details);
@@ -982,7 +1003,15 @@
       const mark = node('div', '', header); mark.className = 'profile-logo'; root.FunklixBrandLogo.render(mark, s.brand, { label: t('Brand logo') });
       const identity = node('div', '', header); identity.className = 'profile-identity'; node('h3', `${t('Brand Profile')} – ${s.brand.name}`, identity);
       const domain = s.brand.brand_core?.brandAssets?.domain || s.brand.brand_core?.website;
-      const site = node('p', domain || t('No website yet'), identity); site.className = 'profile-website';
+      const site = node('p', domain || t('No saved website yet'), identity); site.className = 'profile-website';
+      const draftSite = node('p', '', identity); draftSite.className = 'profile-website-draft';
+      updateWebsiteDraft = () => {
+        const entered = s.researchEntry.domain.trim();
+        draftSite.textContent = entered && normalizedSite(entered) !== normalizedSite(domain || '') ? t('Research website (not saved):') + ' ' + entered : '';
+        draftSite.hidden = !draftSite.textContent;
+      };
+      function normalizedSite(value) { try { return website(value); } catch { return value; } }
+      updateWebsiteDraft();
       node('p', t('These details help shape your future campaigns.'), identity);
       const states = readiness(s.brand);
       const complete = states.filter(r => r.status === 'complete').length;
