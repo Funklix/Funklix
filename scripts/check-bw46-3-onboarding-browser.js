@@ -5,6 +5,9 @@ const fs = require('node:fs');
 const {chromium} = require('playwright-core');
 const {EMAIL, clone} = require('./fixtures/bw36-13r5-local-runtime');
 const output = 'work/bw46-3/screenshots';
+function luminance(color) {
+  return color.match(/[\d.]+/g).slice(0,3).map(Number).map(v=>{v/=255;return v<=.04045?v/12.92:((v+.055)/1.055)**2.4;}).reduce((sum,v,i)=>sum+v*[.2126,.7152,.0722][i],0);
+}
 (async () => {
   fs.mkdirSync(output, {recursive:true});
   const browser = await chromium.launch({executablePath:process.env.CHROMIUM_PATH || '/usr/bin/chromium',args:['--no-sandbox']});
@@ -156,6 +159,10 @@ const output = 'work/bw46-3/screenshots';
         for(const theme of ['light','dark'])for(const width of [1440,768,375,320,720]){
           await p.setViewportSize({width,height:960});await p.evaluate(theme=>{document.documentElement.dataset.theme=theme;brandProfileController.render();},theme);
           assert(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),theme+'/'+width+' document reflow');
+          const colors=await p.locator('.profile-field-menu summary').first().evaluate(n=>({foreground:getComputedStyle(n).color,background:getComputedStyle(n.closest('.profile-field-card')).backgroundColor}));
+          const foreground=luminance(colors.foreground),background=luminance(colors.background);
+          assert((Math.max(foreground,background)+.05)/(Math.min(foreground,background)+.05)>=4.5,'field assistance text contrast '+theme+'/'+width);
+
           for(const selector of ['.guided-brand-profile','.guided-brand-profile nav','.profile-section','.profile-discovery'])assert(await p.locator(selector).evaluate(n=>n.scrollWidth<=n.clientWidth+1),selector+' reflow');
           if(width<=768 && await p.locator('.profile-nav-browser').evaluate(n=>n.open)) await p.locator('.profile-nav-browser>summary').click();
           if(language==='en'&&[1440,375].includes(width))await p.screenshot({path:`${output}/profile-${theme}-${width}.png`,fullPage:true});

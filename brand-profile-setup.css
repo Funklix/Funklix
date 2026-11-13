@@ -183,7 +183,7 @@ html[data-theme=dark] .guided-brand-profile .profile-header{background:radial-gr
 .guided-brand-profile .profile-field-card[data-field=brandCore],.guided-brand-profile .profile-field-card[data-field=personas],.guided-brand-profile .profile-field-card[data-field=brandAssets]{grid-column:1/-1}
 .guided-brand-profile .profile-field-status{margin:10px 0 0;font-size:.8rem;color:var(--fk-color-text-secondary,var(--fk-color-muted))}
 .guided-brand-profile .profile-field-menu{margin-top:6px}
-.guided-brand-profile .profile-field-menu summary{font-size:.875rem;color:var(--profile-accent)}
+.guided-brand-profile .profile-field-menu summary{font-size:.875rem;color:var(--fk-color-heading)}
 .guided-brand-profile .profile-field-menu button{padding:8px 12px;font-size:.875rem;margin:3px;box-shadow:none}
 .guided-brand-profile .profile-founder>.profile-field{margin:16px 0}
 .guided-brand-profile .profile-question-guide{display:grid;gap:12px;grid-column:1/-1;background:var(--fk-color-surface-elevated)}
@@ -215,3 +215,6 @@ html[data-theme=dark] .guided-brand-profile .profile-header{background:radial-gr
   .guided-brand-profile .profile-header .profile-identity{grid-column:2;grid-row:1}
   .guided-brand-profile .profile-completion{grid-column:1/-1;justify-self:start}
 }
+
+/* Informational website text uses a text token, independently of button accent contrast. */
+.guided-brand-profile .profile-header .profile-website{color:var(--fk-color-text-secondary,var(--fk-color-text-primary))}
