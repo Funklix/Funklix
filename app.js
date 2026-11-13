@@ -3401,6 +3401,10 @@ function renderGuidedBrandProfile(detail) {
     onBusy: pending => { if (el.brandWorkspaceDetailClose) el.brandWorkspaceDetailClose.disabled = pending; },
     moduleDefinition: type => getKnowledgeModuleRegistryApi()?.getModuleDefinition(type),
     createTile: type => createBrandCustomTile(getKnowledgeModuleRegistryApi().getModuleDefinition(type).label, '', { moduleType: type }),
+    founderFields: FOUNDER_STORY_FIELD_DEFINITIONS,
+    founderFieldMax: FOUNDER_STORY_IMPORT_MAX_VALUE_LENGTH, founderNarrativeMax: FOUNDER_STORY_GENERATE_MAX_NARRATIVE_LENGTH,
+    validateFounder: validateFounderStoryGenerationInput,
+    openFounderImport: (tile, url, adapter) => openFounderStoryWebsiteImport(tile, document.activeElement, { ...adapter, url }),
     renderDna: (container, dna) => { const view = document.createElement('section'); view.innerHTML = brandDnaResultHtml(normalizeBrandDnaResult(dna)); translateInterface(view); container.append(view); },
     dnaPreflight: core => window.BrandDnaGenerationPreflight.evaluateBrandDnaGenerationPreflight({ state: { brandCore: core }, dependencyEngine: window.KnowledgeModuleDependencyEngine }),
     founderContext: (core, preflight) => window.BrandDnaGenerationPreflight.buildUsableFounderStoryContext({ state: { brandCore: core }, preflight, identityApi: window.KnowledgeModuleIdentity }),
@@ -10205,6 +10209,11 @@ let activeFounderStoryWebsiteImport = null;
 
 function assertFounderStoryWebsiteImportContext(controller) {
   if (!controller || activeFounderStoryWebsiteImport !== controller || controller.closed) return { ok: false, message: "This import was superseded." };
+  if (controller.canonical) {
+    if (!controller.canonical.current()) return { ok: false, message: "The Brand context changed during import." };
+    if (!controller.overlay?.isConnected) return { ok: false, message: "This import is no longer available." };
+    return { ok: true, tile: controller.tile };
+  }
   if ((state.currentBoardId || getBoardIdFromPath() || "") !== controller.boardId) return { ok: false, message: "The Board changed during import." };
   const tile = findFounderStoryTileByStableId(controller.tileId);
   if (!tile || tile !== controller.tile || !isFounderStoryCustomTile(tile)) return { ok: false, message: "This Founder Story is no longer available." };
@@ -10219,12 +10228,13 @@ function closeFounderStoryWebsiteImport(controller, { restoreFocus = true } = {}
   controller.overlay?.remove();
   if (activeFounderStoryWebsiteImport === controller) activeFounderStoryWebsiteImport = null;
   if (restoreFocus && controller.returnFocus?.isConnected) controller.returnFocus.focus();
+  else if (restoreFocus) controller.canonical?.restoreFocus?.();
   controller.draft = null;
   controller.abortController = null;
 }
 
 function getFounderStoryImportError(payload, fallback) {
-  return FOUNDER_STORY_IMPORT_ERROR_MESSAGES[payload?.error?.code] || fallback;
+  return uiText(FOUNDER_STORY_IMPORT_ERROR_MESSAGES[payload?.error?.code] || fallback);
 }
 
 function validateFounderStoryWebsiteImportFields(fields, sourceText) {
@@ -10253,7 +10263,7 @@ function renderFounderStoryWebsiteImportReview(controller, fields) {
   const supported = FOUNDER_STORY_FIELD_DEFINITIONS.filter(({ key }) => fields[key]?.value && fields[key]?.evidence);
   const body = controller.card.querySelector("[data-founder-story-import-body]");
   if (!supported.length) {
-    body.innerHTML = `<p class="bc-import-error" role="status">No supported Founder Story information was found. Your existing content is unchanged.</p>`;
+    body.innerHTML = `<p class="bc-import-error" role="status">${escapeHtml(uiText("No supported Founder Story information was found. Your existing content is unchanged."))}</p>`;
     return;
   }
   controller.draft = Object.fromEntries(supported.map(({ key }) => [key, {
@@ -10264,10 +10274,10 @@ function renderFounderStoryWebsiteImportReview(controller, fields) {
     <div class="founder-story-import-fields">${supported.map((field) => {
       const item = controller.draft[field.key];
       return `<section class="founder-story-import-field" data-import-field="${field.key}">
-        <label class="founder-story-import-select"><input type="checkbox" data-import-select ${item.selected ? "checked" : ""}> Apply ${escapeHtml(field.label)}</label>
-        <p><strong>Current:</strong> ${escapeHtml(current[field.key] || "Empty")}</p>
-        <label>Proposed value<textarea rows="3" maxlength="${FOUNDER_STORY_IMPORT_MAX_VALUE_LENGTH}" data-import-value>${escapeHtml(item.value)}</textarea></label>
-        <p class="founder-story-import-evidence"><strong>Source excerpt:</strong> “${escapeHtml(item.evidence)}”</p>
+        <label class="founder-story-import-select"><input type="checkbox" data-import-select ${item.selected ? "checked" : ""}> ${escapeHtml(uiText("Apply"))} ${escapeHtml(uiText(field.label))}</label>
+        <p><strong>${escapeHtml(uiText("Current value"))}:</strong> ${escapeHtml(current[field.key] || uiText("Empty"))}</p>
+        <label>${escapeHtml(uiText("Suggested value"))}<textarea rows="3" maxlength="${FOUNDER_STORY_IMPORT_MAX_VALUE_LENGTH}" data-import-value>${escapeHtml(item.value)}</textarea></label>
+        <p class="founder-story-import-evidence"><strong>${escapeHtml(uiText("Source excerpt"))}:</strong> “${escapeHtml(item.evidence)}”</p>
       </section>`;
     }).join("")}</div>
     <p class="bc-import-error" data-founder-story-import-error role="alert"></p>
@@ -10288,12 +10298,22 @@ function renderFounderStoryWebsiteImportReview(controller, fields) {
     if (applyButton.disabled) return;
     const latest = assertFounderStoryWebsiteImportContext(controller);
     const error = body.querySelector("[data-founder-story-import-error]");
-    if (!latest.ok) { applyButton.disabled = true; error.textContent = latest.message; return; }
+    if (!latest.ok) { applyButton.disabled = true; error.textContent = uiText(latest.message); return; }
     const selected = Object.entries(controller.draft).filter(([key, item]) => FOUNDER_STORY_FIELD_KEYS.includes(key) && item.selected && item.evidence && item.value.trim());
-    if (!selected.length) { error.textContent = "Select at least one non-empty suggestion to apply."; return; }
+    if (!selected.length) { error.textContent = uiText("Select at least one non-empty suggestion to apply."); return; }
     const next = getFounderStoryModuleData(latest.tile);
     const previous = getFounderStoryModuleData(latest.tile);
     selected.forEach(([key, item]) => { next[key] = item.value.trim().slice(0, FOUNDER_STORY_IMPORT_MAX_VALUE_LENGTH); });
+    if (controller.canonical) {
+      const previousData = JSON.parse(JSON.stringify(latest.tile.moduleData || {}));
+      saveFounderStoryModuleData(latest.tile, next);
+      latest.tile.moduleData = { ...latest.tile.moduleData, founderStoryImport: { status: "confirmed_source_facts", confirmedAt: new Date().toISOString() }, founderStoryLifecycle: { status: "draft" } };
+      applyButton.disabled = true;
+      const saved = await controller.canonical.save();
+      if (!saved) { latest.tile.moduleData = previousData; applyButton.disabled = false; error.textContent = uiText("Founder facts could not be saved. Your inputs are retained."); controller.canonical.onFailure?.(); applyButton.focus(); return; }
+      closeFounderStoryWebsiteImport(controller);
+      controller.canonical.onSaved(); return;
+    }
     saveFounderStoryModuleData(latest.tile, next);
     applyButton.disabled = true;
     applyButton.textContent = "Applying…";
@@ -10313,6 +10333,7 @@ function renderFounderStoryWebsiteImportReview(controller, fields) {
     closeFounderStoryWebsiteImport(controller, { restoreFocus: false });
     renderBrandCoreEditor();
   });
+  if (controller.canonical) translateInterface(body);
   body.querySelector("[data-import-value]")?.focus();
 }
 
@@ -10326,10 +10347,10 @@ async function startFounderStoryWebsiteImport(controller) {
   const button = controller.card.querySelector("[data-founder-story-import-start]");
   const error = controller.card.querySelector("[data-founder-story-import-error]");
   const url = input.value.trim();
-  if (!url) { error.textContent = "Enter one public webpage URL."; return; }
+  if (!url) { error.textContent = uiText("Enter one public webpage URL."); return; }
   controller.inFlight = true;
   controller.abortController = new AbortController();
-  button.disabled = true; button.textContent = "Retrieving…"; error.textContent = "";
+  button.disabled = true; button.textContent = uiText("Retrieving…"); error.textContent = "";
   try {
     const extractionResponse = await fetch("/api/extract-website-text", {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url }), signal: controller.abortController.signal
@@ -10337,7 +10358,7 @@ async function startFounderStoryWebsiteImport(controller) {
     const extraction = await extractionResponse.json().catch(() => ({}));
     if (!extractionResponse.ok || extraction?.success === false) throw Object.assign(new Error(), { payload: extraction, stage: "retrieval" });
     if (!assertFounderStoryWebsiteImportContext(controller).ok) return;
-    button.textContent = "Mapping…";
+    button.textContent = uiText("Mapping…");
     const mappingResponse = await fetch("/api/map-founder-story-website", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ title: extraction?.source?.title || "", text: extraction?.content?.text || "" }), signal: controller.abortController.signal
@@ -10351,12 +10372,12 @@ async function startFounderStoryWebsiteImport(controller) {
   } catch (failure) {
     if (failure?.name === "AbortError" || !assertFounderStoryWebsiteImportContext(controller).ok) return;
     error.textContent = getFounderStoryImportError(failure.payload, failure.stage === "retrieval" ? "That webpage could not be retrieved." : "The AI service could not map this page right now.");
-    button.disabled = false; button.textContent = "Try import again";
+    button.disabled = false; button.textContent = uiText("Try import again");
   } finally { controller.inFlight = false; }
   } finally { workspaceExitOperations.delete(exitOperation); }
 }
 
-function openFounderStoryWebsiteImport(tile, returnFocus) {
+function openFounderStoryWebsiteImport(tile, returnFocus, canonical = null) {
   if (activeFounderStoryWebsiteImport) closeFounderStoryWebsiteImport(activeFounderStoryWebsiteImport, { restoreFocus: false });
   const overlay = document.createElement("div");
   overlay.className = "brand-confirm-modal founder-story-import-modal";
@@ -10369,7 +10390,7 @@ function openFounderStoryWebsiteImport(tile, returnFocus) {
     <label for="founder-story-import-url">Public webpage URL</label><input id="founder-story-import-url" type="url" data-founder-story-import-url placeholder="https://example.com/about">
     <p class="bc-import-error" data-founder-story-import-error role="alert"></p><div class="brand-confirm-actions"><button type="button" class="fk-btn fk-btn-ghost" data-import-cancel>Cancel</button><button type="button" class="fk-btn fk-btn-primary" data-founder-story-import-start>Retrieve and map</button></div></div></div>`;
   document.body.appendChild(overlay);
-  const controller = { tile, tileId: tile.id, boardId: state.currentBoardId || getBoardIdFromPath() || "", token, overlay, card: overlay.querySelector(".brand-confirm-card"), returnFocus, abortController: null, draft: null, inFlight: false, closed: false };
+  const controller = { canonical, tile, tileId: tile.id, boardId: state.currentBoardId || getBoardIdFromPath() || "", token, overlay, card: overlay.querySelector(".brand-confirm-card"), returnFocus, abortController: null, draft: null, inFlight: false, closed: false };
   activeFounderStoryWebsiteImport = controller;
   const close = () => closeFounderStoryWebsiteImport(controller);
   overlay.querySelector("[data-import-close]").addEventListener("click", close);
@@ -10377,6 +10398,17 @@ function openFounderStoryWebsiteImport(tile, returnFocus) {
   overlay.querySelector("[data-founder-story-import-start]").addEventListener("click", () => startFounderStoryWebsiteImport(controller));
   overlay.addEventListener("click", (event) => { if (event.target === overlay) close(); });
   overlay.addEventListener("keydown", (event) => { if (event.key === "Escape") { event.preventDefault(); close(); } });
+  if (canonical) {
+    overlay.querySelector("[data-founder-story-import-url]").value = canonical.url || "";
+    translateInterface(overlay);
+  }
+  overlay.addEventListener('keydown', event => {
+    if (event.key !== 'Tab') return;
+    const controls = [...overlay.querySelectorAll('button,input,textarea')].filter(n => !n.disabled && n.getClientRects().length);
+    const first = controls[0], last = controls[controls.length - 1];
+    if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+    else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+  });
   overlay.querySelector("[data-founder-story-import-url]").focus();
 }
 

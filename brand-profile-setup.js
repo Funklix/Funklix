@@ -131,7 +131,7 @@
     const state = {
       brand: options.brand, name: options.brand.name, core: clone(options.brand.brand_core),
       website: options.website || options.brand.brand_core?.brandAssets?.domain || options.brand.brand_core?.website || '',
-      research: null, section: SECTIONS.includes(options.initialSection) ? SECTIONS.indexOf(options.initialSection) : 0, message: '', analysis: 'Not analyzed', logo: options.brand.logo_url ? 'Logo saved' : 'No logo yet. Initials are shown.',
+      research: null, researchEntry: { domain: options.website || options.brand.brand_core?.brandAssets?.domain || options.brand.brand_core?.website || '', description: '', founderUrl: '' }, questions: null, laterFields: {}, founderDraft: null, founderDraftBase: null, section: SECTIONS.includes(options.initialSection) ? SECTIONS.indexOf(options.initialSection) : 0, message: '', analysis: 'Not analyzed', logo: options.brand.logo_url ? 'Logo saved' : 'No logo yet. Initials are shown.',
       proposals: clone(options.pendingData?.proposals || {}), candidate: clone(options.pendingData?.candidate || null),
       dnaPreflight: null, dnaDraft: clone(options.pendingData?.dnaDraft || null), avatarDraft: clone(options.pendingData?.avatarDraft || null), avatarDirection: options.pendingData?.avatarDirection || '', file: options.pendingData?.file || null, fileData: options.pendingData?.fileData || null, syncRequired: false, reconciliationWarning: false, pending: '', deferred: false,
       readOnly: options.brand.access?.canEditCanonicalBrand !== true || !['owner','admin','editor'].includes(options.brand.access?.role)
@@ -190,7 +190,7 @@
       state.pending = kind; changed();
       flight = (async () => {
         try { return await operation(); }
-        catch { if (current()) { if (kind === 'Analyzing website…') state.analysis = 'Analysis failed'; state.message = kind === 'Analyzing website…' ? 'Website analysis failed. Retry or continue manually.' : kind === 'Uploading logo…' ? 'Logo upload failed. Your file is retained. Retry the upload.' : 'The save was not confirmed. Your inputs are retained. Retry safely.'; } return false; }
+        catch { if (current()) { if (kind === 'Analyzing website…') state.analysis = 'Analysis failed'; state.message = kind === 'Analyzing website…' ? 'Website analysis failed. Retry or continue manually.' : kind === 'Preparing enrichment draft…' ? 'Enrichment failed. Retry safely.' : kind === 'Preparing Founder Story…' ? 'Founder Story could not be prepared. Your inputs are retained.' : kind === 'Uploading logo…' ? 'Logo upload failed. Your file is retained. Retry the upload.' : 'The save was not confirmed. Your inputs are retained. Retry safely.'; } return false; }
         finally { flight = null; state.pending = ''; if (!current()) refreshContext(); changed(); }
       })();
       return flight;
@@ -355,9 +355,16 @@
           ...input, action: input.action || 'draft', brandId: state.brand.id, workspaceId: captured.workspaceId,
           revision, language: options.language?.() || 'en'
         });
-        if (!result?.response.ok) { state.message = result ? errorText(result.response, 'Enrichment failed. Retry safely.', result.payload) : 'Enrichment failed. Retry safely.'; return false; }
+        if (!result?.response.ok) { state.research = result?.payload?.research || null; state.message = result ? errorText(result.response, 'Enrichment failed. Retry safely.', result.payload) : 'Enrichment failed. Retry safely.'; return false; }
         const draft = result.payload;
         if (draft?.version !== enrichment.VERSION || draft.brandId !== state.brand.id || draft.revision !== revision || state.brand.revision !== revision) return false;
+        if (input.action === 'questions') {
+          state.questions = { field: input.field, items: clone(draft.questions || []), answers: {} };
+          state.message = 'Questions are optional. Answer what you can.'; return true;
+        }
+        state.research = draft.research || null;
+        state.analysis = draft.sourceIssue ? 'Website unavailable. Review the description-based draft.' : input.domainUrl ? 'Review website suggestions' : 'Not analyzed';
+        state.questions = null;
         state.enrichment = clone(draft); state.enrichmentEdits = {}; state.enrichmentEditErrors = {}; state.section = SECTIONS.indexOf('Review');
         state.message = draft.sourceIssue ? 'Website unavailable. Review the description-based draft.' : 'Review enrichment suggestions'; return true;
       });
@@ -383,6 +390,57 @@
         try { await onSave(confirmed); } catch { state.reconciliationWarning=true; }
         state.message='Brand Profile saved';return true;
       });
+    }
+    function founderTile(create = false) {
+      const tiles = (state.core.customTiles || []).filter(t => t.moduleType === 'founder_story');
+      if (tiles.length > 1) return null;
+      if (tiles[0] || !create) return tiles[0] || null;
+      const tile = options.createTile('founder_story'); (state.core.customTiles ||= []).push(tile); return tile;
+    }
+    function founderSignature(tile) {
+      return stable({ source: tile?.moduleData?.founderStory || {}, narrative: tile?.content || '' });
+    }
+    function stageFounderNarrative() {
+      if (!current() || state.readOnly || state.pending) return false;
+      const tile = founderTile(); if (!tile?.content?.trim()) return false;
+      state.founderDraft = tile.content;
+      state.founderDraftBase = { revision: state.brand.revision, tileId: tile.id, signature: founderSignature(tile) };
+      return true;
+    }
+    function generateFounder() {
+      return run('Preparing Founder Story…', async () => {
+        const tile = founderTile();
+        const source = tile?.moduleData?.founderStory || {};
+        if (!tile || !options.validateFounder?.(source, { brandName: state.name })?.ok) {
+          state.message = 'Add founder identity and at least two story details first.'; return false;
+        }
+        const expected = { revision: state.brand.revision, tileId: tile.id, signature: founderSignature(tile) };
+        const result = await jsonRequest('/api/generate-founder-story', 'POST', { moduleType: 'founder_story', source,
+          brandContext: { brandName: state.name, positioning: state.core.brandCore || '' }, existingNarrative: tile.content || '' });
+        if (!result?.response.ok || typeof result.payload?.narrative !== 'string' || !result.payload.narrative.trim() || result.payload.narrative.length > (options.founderNarrativeMax || 6000)) {
+          state.message = 'Founder Story could not be prepared. Your inputs are retained.'; return false;
+        }
+        if (state.brand.revision !== expected.revision || founderTile()?.id !== expected.tileId || founderSignature(founderTile()) !== expected.signature) {
+          state.message = 'This proposal is stale. Reload and generate again.'; return false;
+        }
+        state.founderDraftBase = expected;
+        state.founderDraft = result.payload.narrative; state.message = 'Review the narrative before accepting.'; return true;
+      });
+    }
+    async function acceptFounder() {
+      if (!current() || state.readOnly || state.pending || !state.founderDraft?.trim() || state.founderDraft.length > (options.founderNarrativeMax || 6000)) return false;
+      const tile = founderTile(); if (!tile || !options.validateFounder?.(tile.moduleData?.founderStory || {}, {brandName: state.name})?.ok) { state.message = 'Add founder identity and at least two story details first.'; changed(); return false; }
+      const base = state.founderDraftBase;
+      if (!base || base.revision !== state.brand.revision || base.tileId !== tile.id || base.signature !== founderSignature(tile)) {
+        state.message = 'This proposal is stale. Reload and generate again.'; changed(); return false;
+      }
+      const previous = clone(tile);
+      tile.content = state.founderDraft;
+      tile.moduleData = { ...tile.moduleData, founderStoryLifecycle: { status: 'accepted', acceptedAt: new Date().toISOString() } };
+      const saved = await save();
+      if (saved) { state.founderDraft = null; state.founderDraftBase = null; }
+      else Object.assign(tile, previous);
+      changed(); return saved;
     }
     // This destination-owned seam deliberately does not use website adoption.
     // The canonical record establishes baseline before any draft value changes.
@@ -427,6 +485,8 @@
         const unchangedBrainWebsite = brainDraft && normalizedWebsite(state.website)
           === normalizedWebsite(state.brand.brand_core?.brandAssets?.domain || state.brand.brand_core?.website || '');
         if (!unchangedBrainWebsite && (object(core.brandAssets) || domain)) core.brandAssets = { ...(object(core.brandAssets) ? core.brandAssets : {}), domain };
+        const websiteChanged = normalizedWebsite(state.website) !== normalizedWebsite(state.brand.brand_core?.brandAssets?.domain || state.brand.brand_core?.website || '');
+        if (websiteChanged && !domain && typeof core.website === 'string') core.website = '';
         const revision = state.brand.revision;
         // UI defaults are presentation; unchanged defaults never become write intent.
         const editableBaseline = editableCore(state.brand.brand_core);
@@ -622,7 +682,7 @@
     function discard() {
       brainDraft = null;
       state.name = state.brand.name; state.core = editableCore(state.brand.brand_core); state.website = state.core.brandAssets?.domain || state.core.website || '';
-      baseline = draftSignature(); state.enrichment = null; state.enrichmentEdits = {}; state.dirty = false; state.file = null; state.fileData = null; state.candidate = null; state.proposals = {}; state.dnaDraft = null; state.avatarDraft = null; state.avatarDirection = ''; state.dnaPreflight = null;
+      baseline = draftSignature(); state.enrichment = null; state.enrichmentEdits = {}; state.questions = null; state.founderDraft = null; state.founderDraftBase = null; state.dirty = false; state.file = null; state.fileData = null; state.candidate = null; state.proposals = {}; state.dnaDraft = null; state.avatarDraft = null; state.avatarDirection = ''; state.dnaPreflight = null;
     }
     function refreshContext() {
       const live = getContext();
@@ -630,15 +690,15 @@
       captured.generation = live.generation;
       return true;
     }
-    return { state, current, belongsToAccount(account) { return account === captured.account; }, refreshContext, analyze, enrichProfile, editEnrichment, decideEnrichment, save, upload, removeLogo, useLogo, chooseFile, applyProposal, keepProposal, retryAutomatic, reload,
+    return { state, current, belongsToAccount(account) { return account === captured.account; }, refreshContext, founderTile, stageFounderNarrative, generateFounder, acceptFounder, analyze, enrichProfile, editEnrichment, decideEnrichment, save, upload, removeLogo, useLogo, chooseFile, applyProposal, keepProposal, retryAutomatic, reload,
       discard, stageValueProposition, requestDna, generateDna, acceptDna, generateAvatar, acceptAvatar, contentDirty,
-      subscribe(fn) { notify = fn; }, invalidate() { alive = false; brainDraft = null; state.enrichment = null; state.enrichmentEdits = {}; state.file = null; state.fileData = null; state.candidate = null; state.proposals = {}; state.dnaDraft = null; state.avatarDraft = null; state.avatarDirection = ''; state.core = {}; state.website = ''; state.name = ''; },
+      subscribe(fn) { notify = fn; }, invalidate() { alive = false; brainDraft = null; state.questions = null; state.founderDraft = null; state.founderDraftBase = null; state.researchEntry = { domain: '', description: '', founderUrl: '' }; state.enrichment = null; state.enrichmentEdits = {}; state.file = null; state.fileData = null; state.candidate = null; state.proposals = {}; state.dnaDraft = null; state.avatarDraft = null; state.avatarDirection = ''; state.core = {}; state.website = ''; state.name = ''; },
       dirty() { return contentDirty(); }, busy() { return !!state.pending; } };
   }
 
   function mount(container, options) {
     const session = createSession(options), s = session.state, doc = container.ownerDocument;
-    let fileInput = null;
+    let fileInput = null, lastFocusKey = null, hasRendered = false;
     const learnings = root.FunklixBrandLearnings?.create({ brand: s.brand, workspaceId:options.getContext().workspaceId, document: doc, language: options.language, fetchImpl: options.fetchImpl, current: session.current });
     const t = key => root.FunklixLanguage.t(key, options.language());
     function node(tag, text, parent) { const n = doc.createElement(tag); if (text) n.textContent = text; if (parent) parent.append(n); return n; }
@@ -671,7 +731,7 @@
       const input = node(multiline ? 'textarea' : 'input', '', wrap); input.value = value || ''; input.dataset.profileKey = id;
       if (multiline) input.rows = 4;
       input.disabled = s.readOnly || !!s.pending || !!s.returning;
-      input.addEventListener('input', () => { update(input.value); s.dirty = true; }); return input;
+      input.addEventListener('input', () => { update(input.value); s.dirty = true; const status = input.closest('.profile-field-card')?.querySelector('.profile-field-status'); if (status) status.textContent = t('Unsaved changes'); }); return input;
     }
     function readable(value, parent) {
       if (Array.isArray(value)) { const list = node('ul', '', parent); value.forEach(item => readable(item, node('li', '', list))); }
@@ -685,11 +745,126 @@
       try { return { available: true, value: enrichment.target(s.brand.brand_core, key) }; }
       catch { return { available: false, value: null }; }
     }
+    function requestEnrichment(input) {
+      // Preserve the reusable BW-46.2 controller contract. The visible UI asks
+      // users to review/discard actionable drafts before replacing them.
+      if (input.action !== 'questions' && Object.values(s.enrichment?.fields || {}).some(field => !['missing', 'unavailable'].includes(field.classification))) {
+        s.section = SECTIONS.indexOf('Review'); s.message = 'Review or discard the current draft before generating again.'; render(); return;
+      }
+      void session.enrichProfile(input);
+    }
+    function fieldActions(key, parent) {
+      const current = enrichmentCurrent(key);
+      const record = s.brand.brand_core[enrichment.KEY]?.fields?.[key];
+      let local; try { local = enrichment.target(s.core, key); } catch { local = current.value; }
+      const status = !writes.equal(local, current.value) ? 'Unsaved changes' : s.enrichment?.fields?.[key]?.classification === 'conflicting' ? 'Conflicting evidence' : s.enrichment?.fields?.[key] ? 'AI suggestion available' : s.laterFields[key] || record?.decision === 'postponed' ? 'Optional / complete later' : !meaningful(current.value) ? 'Empty' : record?.decision === 'accepted' && writes.equal(record.value, current.value) ? 'User-confirmed' : 'Saved';
+      node('p', t(status), parent).className = 'profile-field-status';
+      if (s.readOnly || !current.available) return;
+      const emptyPersonas = key === 'personas' && Array.isArray(s.core.personas) && !s.core.personas.length;
+      if (!parent.querySelector('textarea,input') && !emptyPersonas) { button('Advanced options', parent, () => options.onAdvanced(session), 'advanced-'+key); return; }
+      if (enrichment.modules.includes(key) && (s.core.customTiles || []).some(tile => tile.moduleType === key && tile.moduleData && Object.keys(tile.moduleData).length)) {
+        node('p', t('Specialized module. Use its existing editor in Advanced options.'), parent); return;
+      }
+      const menu = node('details', '', parent); menu.className = 'profile-field-menu'; menu.dataset.disclosure = 'field-assistance:'+key;
+      node('summary', t('Field assistance'), menu);
+      button('Write myself', menu, () => {
+        if (key === 'personas' && Array.isArray(s.core.personas) && !s.core.personas.length) {
+          s.core.personas.push({ name: '', note: '' }); render(); container.querySelector('[data-profile-key="persona-0-name"]')?.focus();
+        } else parent.querySelector('textarea,input')?.focus();
+      }, 'write-'+key);
+      button('Suggest with AI', menu, () => { requestEnrichment({ action: 'suggest', field: key }); }, 'suggest-'+key);
+      button('Help me figure it out', menu, () => { requestEnrichment({ action: 'questions', field: key }); }, 'questions-'+key);
+      button('Complete later', menu, () => { s.laterFields[key] = true; render(); }, 'later-'+key);
+    }
+    function researchEntry(parent) {
+      if (s.readOnly) return;
+      const entry = node('details', '', parent); entry.className = 'profile-discovery'; entry.dataset.disclosure = 'research-entry';
+      const core = s.brand.brand_core, assets = core.brandAssets || {};
+      const populated = Object.keys(FIELDS).filter(key => key !== 'brandAssets').some(key => confirmedValue(core[key]))
+        || confirmedValue([assets.colors, assets.typography, assets.references, core.brandDNA]) || !!s.brand.logo_url
+        || (Array.isArray(core.customTiles) && core.customTiles.some(tile => confirmedValue(tile.content) || confirmedValue(tile.moduleData?.founderStory)));
+      // A creation-time website alone still gets the invitation. Other saved
+      // profile content, including Foundation/Founder/DNA, comes first on return.
+      entry.open = !populated;
+      node('summary', t(entry.open ? "Let's build your brand ✨" : 'Enrich your Brand Profile'), entry);
+      node('p', t('Start with your website or tell us about your business. You can refine everything later.'), entry);
+      const form = node('form', '', entry); form.className = 'profile-discovery-form';
+      const domain = textField('Your website', s.researchEntry.domain, form, value => { s.researchEntry.domain = value; }, false, 'research-domain');
+      domain.type = 'text'; domain.inputMode = 'url'; domain.placeholder = 'https://example.com'; domain.autocomplete = 'url';
+      const helper = node('p', t('We research public pages and prepare suggestions for your review.'), form); helper.id = 'profile-research-help'; domain.setAttribute('aria-describedby', helper.id);
+      const founder = textField('Founder Story / About Us', s.researchEntry.founderUrl, form, value => { s.researchEntry.founderUrl = value; }, false, 'research-founder-url');
+      founder.inputMode = 'url'; founder.placeholder = 'https://example.com/about';
+      node('p', t('Optional. Import and review Founder facts separately; you can add them later.'), form);
+      button('Review Founder facts', form, () => openFounderImport(), 'research-founder-import');
+      const description = textField('Tell AI about your brand', s.researchEntry.description, form, value => { s.researchEntry.description = value; }, true, 'research-description');
+      description.addEventListener('input', () => domain.setCustomValidity(''));
+      founder.addEventListener('input', () => founder.setCustomValidity(''));
+      node('p', t('Describe what your company does, who it serves and what makes it special.'), form);
+      const submit = button('Research my brand', form, () => {}, 'research-start'); submit.type = 'submit'; submit.className = 'fk-btn fk-btn-primary';
+      form.addEventListener('submit', event => {
+        event.preventDefault(); domain.setCustomValidity(''); founder.setCustomValidity('');
+        for (const input of [domain, founder]) if (input.value.trim()) {
+          try { website(input.value); } catch { input.setCustomValidity(t('Enter a valid public HTTPS website.')); input.reportValidity(); return; }
+        }
+        if (!domain.value.trim() && !s.researchEntry.description.trim()) {
+          domain.setCustomValidity(t('Add a website or a short description to begin.')); domain.reportValidity(); return;
+        }
+        requestEnrichment({ description: s.researchEntry.description, ...(domain.value.trim() ? { domainUrl: website(domain.value) } : {}) });
+      });
+      domain.addEventListener('input', () => domain.setCustomValidity(''));
+      if (Object.keys(s.enrichment?.fields || {}).length) button('Review enrichment suggestions', entry, () => { s.section = SECTIONS.indexOf('Review'); render(); });
+    }
+    function openFounderImport() {
+      if (s.readOnly || s.pending || !session.current()) return;
+      if (session.contentDirty()) { s.message = 'Save Brand Profile before enrichment.'; render(); return; }
+      const matches = (s.core.customTiles || []).filter(tile => tile.moduleType === 'founder_story');
+      if (matches.length > 1) { s.message = 'Current value unavailable. Review modules in Advanced options.'; render(); return; }
+      const existing = matches[0], tile = existing || options.createTile('founder_story');
+      // Preview-only until the user applies reviewed facts. Cancel/fetch failure
+      // must not insert an empty canonical module or dirty the profile.
+      options.openFounderImport?.(tile, s.researchEntry.founderUrl, {
+        current: () => session.current() && !s.readOnly && !s.pending && (existing
+          ? session.founderTile() === tile : !(s.core.customTiles || []).some(t => t.moduleType === 'founder_story')),
+        save: async () => {
+          if (!existing) (s.core.customTiles ||= []).push(tile);
+          let saved = false;
+          try { saved = await session.save(); return saved; }
+          finally { if (!existing && !saved) { const index = s.core.customTiles?.indexOf(tile); if (index >= 0) s.core.customTiles.splice(index, 1); } }
+        },
+        onFailure: render,
+        restoreFocus: () => { if (session.current()) container.querySelector('.profile-founder>summary')?.focus(); },
+        onSaved: () => { s.section = 0; render(); container.querySelector('.profile-founder>summary')?.focus(); }
+      });
+    }
+    function founderWorkspace(parent) {
+      const details = node('details', '', parent); details.className = 'profile-founder'; details.dataset.disclosure = 'founder-workspace';
+      node('summary', t('Founder Story — facts and narrative'), details);
+      node('p', t('Optional. Accepted facts and narrative support Brand DNA; plain text alone does not complete this dependency.'), details);
+      const tiles = (s.core.customTiles || []).filter(t => t.moduleType === 'founder_story');
+      if (tiles.length > 1) { node('p', t('Current value unavailable. Review modules in Advanced options.'), details); return; }
+      for (const field of options.founderFields || []) { const input = textField(field.label, tiles[0]?.moduleData?.founderStory?.[field.key] || '', details, value => {
+        const tile = session.founderTile(true); if (!tile) return;
+        tile.moduleData ||= {}; (tile.moduleData.founderStory ||= {})[field.key] = value;
+        tile.moduleData.founderStoryLifecycle = { status: 'draft' };
+      }, true, 'founder-'+field.key); input.maxLength = options.founderFieldMax || 1600; }
+      if (s.readOnly) return;
+      button('Review Founder facts', details, openFounderImport, 'founder-import');
+      button('Generate Founder Story', details, () => { void session.generateFounder(); });
+      if (!s.founderDraft && tiles[0]?.content?.trim()) button('Accept Founder Story', details, () => { if (session.stageFounderNarrative()) void session.acceptFounder(); });
+      if (s.founderDraft) {
+        const narrative = textField('Suggested value', s.founderDraft, details, value => { s.founderDraft = value; }, true, 'founder-narrative-draft'); narrative.maxLength = options.founderNarrativeMax || 6000;
+        button('Accept Founder Story', details, () => { narrative.setCustomValidity(s.founderDraft?.trim() ? '' : t('Enter a Founder Story before accepting.')); if (narrative.reportValidity()) void session.acceptFounder(); });
+        narrative.addEventListener('input', () => narrative.setCustomValidity(''));
+        button('Keep current narrative', details, () => { s.founderDraft = null; s.founderDraftBase = null; render(); });
+      }
+    }
     function fields(section, parent) {
       let count = 0;
       for (const [key, [group, label, type]] of Object.entries(FIELDS)) {
         if (group !== section) continue;
         count++;
+        const card = node('section', '', parent); card.className = 'profile-field-card'; card.dataset.field = key;
+        const destination = parent; parent = card;
         if (type === 'assets') {
           for (const part of ['colors', 'typography', 'references']) {
             const assets = object(s.core[key]) ? s.core[key] : {};
@@ -702,19 +877,20 @@
           }
         } else if (type === 'personas') {
           node('h4', t(label), parent);
-          if (!Array.isArray(s.core[key])) { readable(s.core[key], parent); continue; }
+          if (!Array.isArray(s.core[key])) { readable(s.core[key], parent); parent = destination; continue; }
           s.core[key].forEach((persona, index) => {
             const card = node('section', '', parent); card.className = 'profile-persona';
             if (object(persona)) {
               textField('Name', persona.name, card, value => { persona.name = value; }, false, `persona-${index}-name`);
               textField('Description', persona.note || persona.description, card, value => { persona[Object.hasOwn(persona, 'description') && !Object.hasOwn(persona, 'note') ? 'description' : 'note'] = value; }, true, `persona-${index}-note`);
+              if (!s.readOnly) button('Remove audience', card, () => { s.core[key].splice(index, 1); render(); }, 'remove-persona-'+index);
               const rest = { ...persona }; delete rest.name; delete rest.note; delete rest.description; readable(rest, card);
             } else readable(persona, card);
           });
           if (!s.readOnly) button('Add audience', parent, () => { s.core[key].push({ name: '', note: '' }); s.dirty = true; render(); });
         } else if (type === 'rules' || type === 'examples') {
           node('h4', t(label), parent);
-          if (!object(s.core[key])) { readable(s.core[key], parent); continue; }
+          if (!object(s.core[key])) { readable(s.core[key], parent); parent = destination; continue; }
           for (const part of type === 'rules' ? ['dos','donts'] : ['good','avoid']) {
             const value = s.core[key]?.[part];
             if ((type === 'rules' && value !== undefined && (!Array.isArray(value) || value.some(item => typeof item !== 'string'))) || (type === 'examples' && value !== undefined && typeof value !== 'string')) { readable(value, parent); continue; }
@@ -726,6 +902,7 @@
         } else if ((type === 'list' && (!Array.isArray(s.core[key]) || s.core[key].some(item => typeof item !== 'string'))) || (type === 'text' && typeof s.core[key] !== 'string')) {
           node('h4', t(label), parent); readable(s.core[key], parent);
         } else textField(label, type === 'list' ? (s.core[key] || []).join('\n') : s.core[key], parent, value => { s.core[key] = type === 'list' ? value.split('\n').map(line => line.trim()).filter(Boolean) : value; }, true);
+        fieldActions(key, card); parent = destination;
       }
       const modules = section === 'Foundation' ? ['mission', 'vision', 'values', 'founder_story'] : section === 'Audience' ? ['audience', 'icp'] : section === 'Offers & Proof' ? ['product_knowledge', 'business_plan', 'pitch_deck', 'whitepaper'] : [];
       for (const type of modules) {
@@ -734,12 +911,15 @@
         const tile = s.core.customTiles?.find(tile => tile.moduleType === type);
         if (section === 'Foundation') {
           count++;
-          textField(definition.label, tile?.content || '', parent, value => {
+          const moduleCard = node('section', '', parent); moduleCard.className = 'profile-field-card';
+          textField(definition.label, tile?.content || '', moduleCard, value => {
             let target = s.core.customTiles?.find(tile => tile.moduleType === type);
             if (!target && value.trim()) { target = options.createTile(type); (s.core.customTiles ||= []).push(target); }
             if (target) target.content = value;
           }, true);
-        } else if (tile && meaningful(tile.content)) { count++; node('h4', t(definition.label), parent); readable(tile.content, parent); }
+          if (enrichment.modules.includes(type)) fieldActions(type, moduleCard);
+          if (type === 'founder_story') founderWorkspace(parent);
+        } else if (tile && meaningful(tile.content)) { count++; node('h4', t(definition.label), parent); readable(tile.content, parent); if (!s.readOnly) button('Edit in Advanced options', parent, () => options.onAdvanced(session), 'advanced-module-'+type); }
       }
       if (section === 'Offers & Proof') for (const [key, label] of [['offers', 'Offers'], ['proof', 'Proof']]) if (meaningful(s.core[key])) { count++; node('h4', t(label), parent); readable(s.core[key], parent); }
       if (section === 'Offers & Proof' && meaningful(s.core.valueProposition)) { count++; node('h4', t('Value Proposition'), parent); readable(s.core.valueProposition, parent); }
@@ -767,11 +947,11 @@
     function researchCoverage(parent) {
       const r=s.research;
       if (!r || !r.counts) return;
-      const details=node('details','',parent);
+      const details=node('details','',parent); details.className = 'profile-research-results'; details.dataset.disclosure = 'research-coverage'; details.open = true;
       node('summary',t('Website research coverage'),details);
       node('p',t('Selected excerpts were analyzed. Website coverage may be partial.'),details);
-      node('p',t('Source grounding is available for this analysis only and is not retained with saved Brand fields.'),details);
-      node('p',t('Suggestions for empty fields follow the existing automatic save flow. Existing values require review.'),details);
+      if (s.enrichment) node('p',t('Suggestions stay drafts until you explicitly accept them. Reviewed evidence is saved with your decision.'),details);
+      else { node('p',t('Source grounding is available for this analysis only and is not retained with saved Brand fields.'),details); node('p',t('Suggestions for empty fields follow the existing automatic save flow. Existing values require review.'),details); }
       for(const [key,label] of Object.entries({discovered:'Discovered',fetched:'Retrieved',extracted:'Extracted',processed:'Processed excerpts',unavailable:'Unavailable',rejected:'Excluded',deferred:'Remaining sources'})) node('p',`${t(label)}: ${Number(r.counts[key]) || 0}`,details);
       if(r.rejectedFields?.length) node('p',t('Unsupported suggestion fields were excluded.'),details);
       if(r.remaining?.omittedUnits || r.discoveryOmitted) node('p',t('Additional evidence remains outside this analysis.'),details);
@@ -792,7 +972,10 @@
       }
     }
     function render() {
-      const focused = doc.activeElement?.dataset?.profileKey;
+      const focused = doc.activeElement?.dataset?.profileKey || (s.pending ? lastFocusKey : null);
+      if (focused) lastFocusKey = focused;
+      const expanded = hasRendered ? new Map([...container.querySelectorAll('details[data-disclosure]')].map(n => [n.dataset.disclosure, n.open])) : new Map();
+      hasRendered = true;
       options.onBusy?.(!!s.pending || !!s.returning);
       container.replaceChildren(); container.classList.add('guided-brand-profile'); container.setAttribute('aria-busy', String(!!s.pending));
       const header = node('section', '', container); header.className = 'profile-header';
@@ -803,11 +986,24 @@
       node('p', t('These details help shape your future campaigns.'), identity);
       const states = readiness(s.brand);
       const complete = states.filter(r => r.status === 'complete').length;
-      const completion = node('p', `${complete}/7 ${t('Complete')}`, header); completion.className = 'profile-completion';
+      const completion = node('p', `${complete}/7 ${t('Complete')}`, header); completion.className = 'profile-completion'; completion.title = t('Profile coverage, not factual verification.');
       const ring = node('span', '', completion); ring.className = 'profile-completion-ring'; ring.setAttribute('aria-hidden', 'true'); ring.style.setProperty('--profile-progress', `${complete / 7 * 100}%`);
       if (s.readOnly) node('p', t('Your access is read-only'), container);
       const nav = node('nav', '', container); nav.setAttribute('aria-label', t('Brand Profile sections'));
-      SECTIONS.forEach((key, index) => { const r = states.find(item => item.section === key) || { status: 'neutral', label: STATUS.neutral }; const b = button(key, nav, () => { s.section = index; render(); container.querySelector('h3[data-section-title]')?.focus(); }); if (key === 'Brand Learnings') { b.textContent = 'Learnings'; b.setAttribute('aria-label', 'Learnings'); } sectionIcon(index, b); b.dataset.readiness = r.status; b.title = `${t(key)}: ${t(r.label)}`; b.setAttribute('aria-label', t(key)); const status = node('span', t(r.label), nav); status.id = `brand-section-status-${index}`; status.hidden = true; b.setAttribute('aria-describedby', status.id); b.dataset.statusIcon = { complete: '✓', partial: '◐', empty: '○', neutral: '–' }[r.status]; b.setAttribute('aria-current', s.section === index ? 'step' : 'false'); });
+      const navBrowser = node('details', '', nav); navBrowser.className = 'profile-nav-browser'; navBrowser.dataset.disclosure = 'navigation-browser'; navBrowser.open = !root.innerWidth || root.innerWidth > 768;
+      node('summary', t('Brand Profile sections'), navBrowser);
+      const groups = [ ['Overview', [0]], ['Brand Foundation', []], ['Audience & Positioning', [2,4]], ['Voice & Messaging', [3]], ['Brand Identity & AI', [1,5,6]], ['Knowledge & Workspace', [7,8,9,10]] ];
+      const destinations = new Map();
+      for (const [label, indices] of groups) {
+        const group = node('details', '', navBrowser); group.className = 'profile-nav-group'; group.dataset.disclosure = 'navigation-group:'+label; group.open = true;
+        node('summary', t(label), group);
+        if (!indices.length) {
+          const link = node('a', t('Foundation & Founder Story'), group); link.href = '#profile-foundation'; link.dataset.profileKey = 'foundation-navigation';
+          link.addEventListener('click', event => { event.preventDefault(); s.section = 0; render(); const founder = container.querySelector('.profile-founder'); founder?.setAttribute('open', ''); founder?.scrollIntoView({block:'nearest'}); container.querySelector('[data-profile-key="Mission"]')?.focus(); });
+        }
+        for (const index of indices) destinations.set(index, group);
+      }
+      SECTIONS.forEach((key, index) => { const r = states.find(item => item.section === key) || { status: 'neutral', label: STATUS.neutral }; const b = button(key, destinations.get(index), () => { s.section = index; render(); container.querySelector('h3[data-section-title]')?.focus(); }); if (key === 'Brand Learnings') { b.textContent = 'Learnings'; b.setAttribute('aria-label', 'Learnings'); } sectionIcon(index, b); b.dataset.readiness = r.status; b.title = `${t(key)}: ${t(r.label)}`; b.setAttribute('aria-label', t(key)); const status = node('span', t(r.label), destinations.get(index)); status.id = `brand-section-status-${index}`; status.hidden = true; b.setAttribute('aria-describedby', status.id); b.dataset.statusIcon = { complete: '✓', partial: '◐', empty: '○', neutral: '–' }[r.status]; b.setAttribute('aria-current', s.section === index ? 'step' : 'false'); });
       const section = node('section', '', container); section.className = 'profile-section';
       const title = node('h3', SECTIONS[s.section] === 'Brand Learnings' ? 'Learnings' : t(SECTIONS[s.section]), section); title.tabIndex = -1; title.dataset.sectionTitle = 'true';
       if (SECTIONS[s.section] === 'Brand Learnings') {
@@ -815,6 +1011,7 @@
         if (learnings) learnings.attach(library);
         else node('p', t('Learnings are temporarily unavailable.'), library);
       } else if (s.section === 0) {
+        researchEntry(section);
         const cards = node('div', '', section); cards.className = 'profile-identity-cards';
         const logoCard = node('section', '', cards); sectionIcon(5, node('h4', t('Brand Logo'), logoCard));
         const official = node('div', '', logoCard); official.className = 'profile-official-logo'; root.FunklixBrandLogo.render(official, s.brand);
@@ -826,10 +1023,19 @@
         button(avatar ? 'Open Brand Avatar' : 'Create Brand Avatar', avatarCard, () => { s.section = 6; render(); });
         textField('Brand name', s.name, section, value => { s.name = value; });
         textField('Website', s.website, section, value => { s.website = value; s.proposals = {}; s.candidate = null; s.analysis = 'Not analyzed'; s.research = null; });
-        if (!s.readOnly) button('Analyze website', section, () => { void session.analyze(); });
+        if (!s.readOnly) {
+          const legacy = node('details', '', section); legacy.className = 'profile-legacy-research'; legacy.dataset.disclosure = 'legacy-website-tools';
+          node('summary', t('Legacy website tools'), legacy);
+          node('p', t('Legacy website analysis may save empty fields automatically. Use Research my brand for reviewed drafts.'), legacy);
+          button('Analyze website', legacy, () => { void session.analyze(); });
+        }
         fields('Foundation', section);
-        if (!s.readOnly) button('Prepare enrichment draft', section, () => { void session.enrichProfile({description:s.core.brandCore || '', ...(s.website.trim() ? {domainUrl:s.website} : {})}); });
+        if (!s.readOnly) button('Prepare enrichment draft', section, () => { requestEnrichment({description:s.core.brandCore || '', ...(s.website.trim() ? {domainUrl:s.website} : {})}); });
       } else if (SECTIONS[s.section] === 'Review') {
+        if (s.enrichment) {
+          node('p', t('Review, correct and accept each suggestion. Acceptance saves that field; other drafts remain optional.'), section);
+          if (!s.readOnly) button('Discard enrichment draft', section, () => { s.enrichment = null; s.enrichmentEdits = {}; s.questions = null; render(); });
+        }
         const list = node('ul', '', section);
         for (const key of ['Brand Basics', 'Foundation', 'Audience', 'Voice & Messaging', 'Offers & Proof']) {
           const complete = key === 'Brand Basics' ? !!s.name.trim() && !!s.website.trim()
@@ -839,7 +1045,7 @@
         }
         node('p', `${t('Website analysis')}: ${t(s.analysis)}`, section); logo(section);
         for(const [key,record] of Object.entries(s.brand.brand_core[enrichment.KEY]?.fields || {})) {
-          const history=node('details','',section);node('summary',enrichmentLabel(key)+' — '+t(record.decision),history);
+          const history=node('details','',section);history.dataset.disclosure='evidence:'+key;node('summary',enrichmentLabel(key)+' — '+t(record.decision),history);
           const current = enrichmentCurrent(key);
           node('p',t(record.classification),history);
           if (!current.available) node('p',t('Current value unavailable. Review modules in Advanced options.'),history);
@@ -884,9 +1090,9 @@
         const dna = s.dnaDraft || s.core.brandDNA || {};
         if (options.renderDna) options.renderDna(section, dna);
         for (const key of ['primaryArchetype', 'secondaryArchetype', 'personality', 'positioning', 'reasoning', 'recommendedVoice', 'recommendedVisualDirection']) {
-          const value = s.core.brandDNA?.[key];
+          const value = dna[key];
           if (value !== undefined && typeof value !== 'string') { node('h4', t({ primaryArchetype: 'Primary archetype', secondaryArchetype: 'Secondary archetype', personality: 'Brand personality', positioning: 'Positioning', reasoning: 'Reasoning', recommendedVoice: 'Recommended voice', recommendedVisualDirection: 'Recommended visual direction' }[key]), section); readable(value, section); continue; }
-          textField({ primaryArchetype: 'Primary archetype', secondaryArchetype: 'Secondary archetype', personality: 'Brand personality', positioning: 'Positioning', reasoning: 'Reasoning', recommendedVoice: 'Recommended voice', recommendedVisualDirection: 'Recommended visual direction' }[key], value, section, text => { (s.core.brandDNA ||= {})[key] = text; }, true, `dna-${key}`);
+          textField({ primaryArchetype: 'Primary archetype', secondaryArchetype: 'Secondary archetype', personality: 'Brand personality', positioning: 'Positioning', reasoning: 'Reasoning', recommendedVoice: 'Recommended voice', recommendedVisualDirection: 'Recommended visual direction' }[key], value, section, text => { if (s.dnaDraft) s.dnaDraft[key] = text; else (s.core.brandDNA ||= {})[key] = text; }, true, `dna-${key}`);
         }
         if (s.core.brandDNA?.signals) { node('h4', t('Brand signals'), section); readable(s.core.brandDNA.signals, section); }
         for (const [key, label] of [['personality', 'Brand personality'], ['positioning', 'Positioning'], ['audiences', 'Audience']]) if (meaningful(s.core[key])) { node('h4', t(label), section); readable(s.core[key], section); }
@@ -927,6 +1133,19 @@
         node('p', t('Campaign snapshots change only after an explicit campaign update.'), section);
         if (options.hasSnapshot?.()) button('Campaign Brand Snapshot', section, () => options.onSnapshot());
       } else fields(SECTIONS[s.section], section);
+      if (s.questions) {
+        const guide = node('section', '', section); guide.className = 'profile-question-guide';
+        node('h4', enrichmentLabel(s.questions.field), guide);
+        node('p', t('Questions are optional. Answer what you can.'), guide);
+        for (const question of s.questions.items) textField(question.question, s.questions.answers[question.id] || '', guide, value => { s.questions.answers[question.id] = value; }, true, 'answer-'+question.id);
+        button('Prepare my suggestion', guide, () => { requestEnrichment({ action: 'suggest', field: s.questions.field, answers: Object.entries(s.questions.answers).map(([id,answer]) => ({id,answer})) }); });
+        button('Complete later', guide, () => { s.questions = null; render(); }, 'close-questions');
+      }
+      if (s.pending === 'Preparing enrichment draft…') {
+        const progress = node('section', '', container); progress.className = 'profile-research-loading'; progress.setAttribute('role', 'status');
+        node('h4', t('Research & prepare'), progress);
+        node('p', t('Preparing your draft. Source totals are available when this request finishes.'), progress);
+      }
       researchCoverage(container);
       if (s.addedCount) node('p', t('{count} details added from the website.').replace('{count}', s.addedCount), container).setAttribute('role', 'status');
       if (s.autoKeys.length && !s.pending) button('Retry adding website details', container, () => { void session.retryAutomatic(); });
@@ -936,6 +1155,7 @@
         button('Confirm and save Brand Profile', actions, () => { void session.save(); });
         button(s.syncRequired || s.reconciliationWarning ? 'Reload saved Brand' : 'Reload latest Brand', actions, () => { void session.reload(); });
       }
+      if (!s.readOnly && s.dirty) button('Discard profile changes', actions, () => { session.discard(); render(); }, 'discard-profile-changes');
       if (options.hasProject() || SECTIONS[s.section] === 'Review') button(options.hasProject() ? 'Save Brand Profile and continue' : 'Back', actions, async () => {
         if (options.hasProject() && !s.readOnly) {
           if (!await session.save()) return;
@@ -948,9 +1168,19 @@
       });
       if (options.hasSnapshot?.()) button('Campaign Brand Snapshot', actions, () => options.onSnapshot());
       button('Advanced options', actions, () => options.onAdvanced(session));
-      if (focused) {
-        const target = [...container.querySelectorAll('[data-profile-key]')].find(n => n.dataset.profileKey === focused);
-        (target || (focused.startsWith('keep-') || focused.startsWith('proposal-') || focused.startsWith('retry-') ? container.querySelector('.profile-proposal button') || title : null))?.focus();
+      [...container.querySelectorAll('details')].forEach((n, i) => {
+        n.dataset.disclosure ||= n.className + ':' + (n.closest('[data-field]')?.dataset.field || n.querySelector('summary')?.textContent || i);
+        if (expanded.has(n.dataset.disclosure)) n.open = expanded.get(n.dataset.disclosure);
+        if (n.className === 'profile-nav-browser' && root.innerWidth > 768) n.open = true;
+      });
+      if (s.pending === 'Preparing enrichment draft…') container.querySelector('.profile-research-loading')?.scrollIntoView({ block: 'nearest' });
+      const restoreKey = focused || (!s.pending ? lastFocusKey : null);
+      if (restoreKey) {
+        const target = [...container.querySelectorAll('[data-profile-key]')].find(n => n.dataset.profileKey === restoreKey);
+        if (s.questions && restoreKey.startsWith('questions-')) container.querySelector('.profile-question-guide textarea')?.focus();
+        else if (target && !target.disabled) target.focus();
+        else if (!s.pending) (container.querySelector('.profile-proposal textarea') || title).focus();
+        if (!s.pending) lastFocusKey = null;
       }
     }
     session.subscribe(render); render();

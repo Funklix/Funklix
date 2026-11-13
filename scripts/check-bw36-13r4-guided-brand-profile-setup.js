@@ -214,7 +214,7 @@ async function checkDialogAndReturn() {
   assert.equal(projected.logo_revision, 1); assert.equal(projected.image_base64, undefined); assert.equal(projected.source, undefined); assert.equal(sidebar, 1); assert.equal(identities, 1); assert.equal(dialogUpdates, 1);
 }
 async function checkProfileUI() {
-  const doc = documentFixture(), root = { FunklixLanguage: language };
+  const doc = documentFixture(), root = { FunklixLanguage: language, BrandEnrichmentContract: require('../brand-enrichment-contract'), BrandWriteContract: writes };
   vm.runInNewContext(fs.readFileSync('brand-logo.js', 'utf8'), { globalThis: root });
   vm.runInNewContext(fs.readFileSync('brand-profile-setup.js', 'utf8'), { globalThis: root, URL });
   const host = doc.createElement('div'); doc.body.append(host);
