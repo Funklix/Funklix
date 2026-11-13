@@ -183,7 +183,7 @@ function luminance(color) {
       assert(await viewer.page.locator('.guided-brand-profile input,.guided-brand-profile textarea').evaluateAll(nodes=>nodes.every(n=>n.disabled)));
       console.log('PASS BW-46.3 actual canonical viewer: no research/AI/import/save actions; all content inputs read-only');
     } finally {await viewer.close();}
-    const audience=await require('./fixtures/home-browser')(browser)({empty:true});
+    const audience=await require('./fixtures/home-browser')(browser)({empty:true,prepare(r){r.db.brands[0].brand_core.brandAssets.domain='';}});
     try {
       const p=audience.page,key=k=>p.locator(`[data-profile-key="${k}"]`);let calls=0;
       const snapshot=clone(audience.r.db.boards);
@@ -203,8 +203,13 @@ function luminance(color) {
       const before=clone(audience.r.db.brands[0]);await key('suggest-personas').click();await p.waitForFunction(()=>!brandProfileController.busy());
       assert.equal(calls,1);assert.deepEqual(clone(audience.r.db.brands[0]),before,'empty-audience AI prepares only a draft');
       await key('enrichment-personas').fill('[{"name":"Reviewed audience","note":"Reviewed need"}]');await key('accept-enrichment-personas').click();await p.waitForFunction(()=>!brandProfileController.busy());
-      assert.equal(audience.r.db.brands[0].brand_core.personas[0].name,'Reviewed audience');assert.deepEqual(clone(audience.r.db.boards),snapshot);
-      audience.writes.length=0;console.log('PASS BW-46.3 empty Audience: all four actions, actual manual focus, optional questions without inference/dirty state, explicit AI review/adoption and snapshot isolation');
+      assert.equal(audience.r.db.brands[0].brand_core.personas[0].name,'Reviewed audience');
+      const beforeRemoval=clone(audience.r.db.brands[0].brand_core);await key('Audience').click();await key('remove-persona-0').click();
+      await key('Confirm and save Brand Profile').click();await p.waitForFunction(()=>!brandProfileController.busy());
+      await key('Reload latest Brand').click();await p.waitForFunction(()=>!brandProfileController.busy());
+      assert.deepEqual(clone(audience.r.db.brands[0].brand_core),{...beforeRemoval,personas:[]},'removing an adopted audience preserves every unrelated nested field and evidence');
+      assert.equal(await key('persona-0-name').count(),0);assert.deepEqual(clone(audience.r.db.boards),snapshot);
+      audience.writes.length=0;console.log('PASS BW-46.3 empty Audience: all four actions, actual manual focus, optional questions without inference/dirty state, explicit AI review/adoption/removal and snapshot isolation');
     } finally {audience.writes.length=0;await audience.close();}
     const legacy=await require('./fixtures/home-browser')(browser)({empty:true,prepare(r){r.db.brands[0].brand_core.brandAssets.domain='';r.db.brands[0].brand_core.website='https://legacy.example/';}});
     try {
