@@ -169,6 +169,7 @@ assert.equal(profile.resolveEntry({ ...base, catalog: { workspaces: [] } }).kind
     assert(requests.filter(r => r.method === 'POST' && /logo/.test(r.path)).every(r => r.path === `/api/brands/${B}/logo`));
     await visible('[data-profile-key="Change logo"]'); await visible('[data-profile-key="Remove logo"]');
     await page.locator('[data-profile-key="Overview"]').click();
+    await page.locator('.profile-legacy-research').evaluate(n=>n.open=true);
     await page.locator('[data-profile-key="Analyze website"]').click();
     await page.waitForFunction(() => !!brandProfileController.state.candidate); await visible('[data-profile-key="Use this logo"]');
     await page.locator('[data-profile-key="Remove logo"]').click();

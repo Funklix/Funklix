@@ -40,7 +40,7 @@ async function characterizeKnownDefects(){
    const res=await f.r.request('POST','/api/analyze-brand-domain',route.request().postDataJSON());
    await route.fulfill({status:res.statusCode,json:res.body});
   });
-  await key('Analyze website').click();await p.waitForFunction(()=>!brandProfileController.busy());
+  await p.locator('.profile-legacy-research').evaluate(n=>n.open=true);await key('Analyze website').click();await p.waitForFunction(()=>!brandProfileController.busy());
   assert.equal(await p.evaluate(()=>brandProfileController.state.analysis),'Review website suggestions');
   assert.equal(f.r.db.brands[0].brand_core.unsupportedFixtureField,undefined);
   assert(await p.evaluate(()=>brandProfileController.state.research.rejectedFields.some(f=>f.field==='unsupportedFixtureField')));
@@ -155,7 +155,7 @@ async function characterizeKnownDefects(){
   }
   assert.deepEqual(f.r.db.boards[0],snapshot,'no canonical save modifies Canvas snapshot');
   // Research coverage is text-only and follows EN/DE plus existing theme styles.
-  await key('Overview').click();await key('Website').fill('https://northstar.example/');await key('Analyze website').click();await p.waitForFunction(()=>!brandProfileController.busy());
+  await key('Overview').click();await key('Website').fill('https://northstar.example/');await p.locator('.profile-legacy-research').evaluate(n=>n.open=true);await key('Analyze website').click();await p.waitForFunction(()=>!brandProfileController.busy());
   for(const theme of ['light','dark'])for(const language of ['en','de']){
    await p.evaluate(({theme,language})=>{document.documentElement.dataset.theme=theme;state.uiLanguage=language;brandProfileController.render();},{theme,language});
    const details=p.locator('.guided-brand-profile details').filter({hasText:language==='de'?'Abdeckung der Website-Recherche':'Website research coverage'});await details.locator('summary').click();assert(await details.isVisible());assert((await details.textContent()).includes(language==='de'?'Nicht unterstützte Vorschlagsfelder wurden ausgeschlossen.':'Unsupported suggestion fields were excluded.'));assert((await details.textContent()).includes('→ https://example.test/'));assert.equal(await details.locator('script,iframe').count(),0);

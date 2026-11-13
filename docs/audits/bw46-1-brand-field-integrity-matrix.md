@@ -369,3 +369,22 @@ The original ledger above remains the baseline, with its untested controls and s
 | Board snapshots and canonical-only evidence | New project copy and explicit refresh omit private evidence; comparison/confirmation use the same projection; enrichment leaves existing snapshots untouched | Explicit campaign sync remains required; private inputs are not supplied to Board-only users |
 
 These results do not certify every optional alias, arbitrary lifecycle metadata edit, specialized Board input, screen reader path or live model factual accuracy. Shared PostgreSQL/CI protection gates remain distinct from the disposable SQL adapter and browser checks.
+
+## BW-46.3 UI verification (base #862)
+
+The baseline ledger and its per-alias qualifications remain above; this section supersedes the specific UI limitations below. See [implemented UX and regression evidence](../implementations/bw46-3-brand-profile-onboarding-ux.md).
+
+| Fields / flow | BW-46.3 change and verification | Qualification |
+|---|---|---|
+| All 28 existing guided bindings | Existing real browser ledger passes manual entry, save/reload, subsequent correction, permitted clearing, nested preservation, viewer denial and campaign isolation | Advanced content/227-leaf ledger retains its original preservation-only and untested metadata labels |
+| Ten native enrichment groups + plain mission/vision/values | Direct manual/AI/question/later actions; existing BW-46.2 editable Review/decisions/evidence remain protected | Incompatible shapes link to Advanced options; ambiguous/specialized modules are not general AI-editable |
+| F1 | New main research entry always prepares reviewable BW-46.2 drafts; real browser edits before adoption, rejects/postpones and reloads | Legacy Analyze website remains in an explicitly labeled compatibility disclosure with its original auto-empty-fill/comparison behavior |
+| F4 `personas[]` | Guided remove-row control edits only the selected row; actual browser saves it through reviewed array replacement | Reviewed replacement intentionally changes the array; unrelated data and campaign snapshots stay unchanged |
+| F5 seven `founderStory` facts | Canonical structured fields and existing website import/review dialog now accessible from Profile; real browser imports facts, edits narrative, explicitly accepts and corrects structured data | Same moduleData/lifecycle; import is not narrative approval; duplicates use Advanced options; legacy plain-content metadata behavior retained |
+| Founder narrative | Existing generation endpoint, editable draft and explicit lifecycle acceptance; subsequent structured correction returns lifecycle to draft | Plain text alone remains insufficient for accepted structured dependency |
+| F6 generated DNA fields | Controls bind to the generated draft before explicit acceptance; actual browser edits Hero → Creator and verifies saved Creator | Existing protected `accept_dna`, optional Founder preflight and Avatar preservation remain authoritative |
+| Field question flow | Localized optional answer UI calls existing questions/suggest contracts; browser asserts no inference for questions, explicit answer-based generation and durable rejection | Session-local answers; no generic chat or automatic re-questioning |
+| New onboarding research | Domain/description combined, aggregate loading, returned partial-source counts, no write until decision, saved evidence, later manual edit/reload, theme/reflow/focus verified in actual EN/DE browser | The original research-domain contract suite covers domain-only/description-only/failure/SSRF/robots cases; mock semantic correctness is not claimed |
+| F2/F3 and advanced aliases | F2 stays fixed by BW-46.2; F3 sourceNotes and advanced-only consumer gaps remain as recorded | No broad data-model or downstream-context rewrite |
+
+`check-bw46-1-brand-fields-browser.js` remains the complete original binding/advanced ledger. Its legacy clicks now explicitly open the retained legacy disclosure; security/storage assertions are unchanged. Its original controller-level F6 characterization is historical setup (it does not simulate typing into a DOM control); the new actual-DOM regression independently verifies the corrected binding. No original untested alias/metadata leaf is relabeled as tested merely because JSONB stores it.

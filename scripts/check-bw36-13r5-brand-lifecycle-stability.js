@@ -120,7 +120,7 @@ async function browserJourney() {
     const clickKey = key => page.locator(`[data-profile-key="${key}"]`).click();
     const ready = () => page.waitForFunction(()=>!!brandProfileController&&canonicalBrandDetail.status==='ready');
     await context(); await page.locator('#brand-core-nav-btn').click(); await ready();
-    await page.locator('[data-profile-key="Website"]').fill('https://example.test/'); await clickKey('Analyze website');
+    await page.locator('[data-profile-key="Website"]').fill('https://example.test/'); await page.locator('.profile-legacy-research').evaluate(n=>n.open=true); await clickKey('Analyze website');
     await page.waitForFunction(()=>brandProfileController.state.analysis==='Review website suggestions'&&!brandProfileController.busy());
     while (await page.locator('[data-profile-key^="proposal-"]').count()) { await page.locator('[data-profile-key^="proposal-"]').first().click(); await page.waitForFunction(()=>!brandProfileController.busy()); }
     await clickKey('Confirm and save Brand Profile');
@@ -129,7 +129,7 @@ async function browserJourney() {
     await page.locator('#home-nav-btn').click(); assert.equal(await page.locator('#brand-leave-dialog').count(),0);
     await page.waitForFunction(()=>state.activeView==='home'); await page.locator('#brand-core-nav-btn').click(); await ready();
     assert.equal(await page.evaluate(()=>brandProfileController.state.core.brandCore),r.suggestions.brandCore);
-    await clickKey('Analyze website'); await page.waitForFunction(()=>!!brandProfileController.state.candidate); await clickKey('Use this logo');
+    await page.locator('.profile-legacy-research').evaluate(n=>n.open=true); await clickKey('Analyze website'); await page.waitForFunction(()=>!!brandProfileController.state.candidate); await clickKey('Use this logo');
     await page.waitForFunction(()=>brandProfileController.state.logo==='Logo saved'); assert.equal(r.db.brands[0].logo_source,'discovered');
     while (await page.locator('[data-profile-key^="proposal-"]').count()) { await page.locator('[data-profile-key^="proposal-"]').first().click(); await page.waitForFunction(()=>!brandProfileController.busy()); }
     await clickKey('Remove logo'); await page.waitForFunction(()=>brandProfileController.state.message==='Logo removed');

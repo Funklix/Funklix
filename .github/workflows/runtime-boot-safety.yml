@@ -675,6 +675,15 @@ jobs:
         run: |
           node scripts/check-bw46-2-brand-enrichment.js
           node scripts/check-bw46-2-brand-enrichment-browser.js
+      - name: Check BW-46.3 onboarding and field assistance (fictional AI)
+        run: node scripts/check-bw46-3-onboarding-browser.js
+      - name: Preserve BW-46.3 implemented application evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bw46-3-browser-postgres-${{ matrix.postgres }}
+          path: work/bw46-3/screenshots/
+          if-no-files-found: ignore
       - name: Check BW-46.1 domain research (fictional transports, single mocked inference)
         run: node scripts/check-bw46-1-domain-research.js
       - name: Check BW-46.1 actual Brand field bindings and protected save/reload
