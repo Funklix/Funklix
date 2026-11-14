@@ -33,6 +33,8 @@ function research(empty=false,conflicting=false){return researchDomain(website,{
      if(mode==='mixed'){fields.personas={value:'malformed',classification:'user_provided',evidence:[]};fields.brandDNA={value:'forbidden',classification:'user_provided',evidence:[]};}
      if(mode==='conflict'){fields.brandCore.classification='conflicting';fields.brandCore.evidence=[{sourceId:'s1',excerpt:'We do not repair tools.'},{sourceId:'user',excerpt:quote}];}
      if(mode==='empty')fields={};
+     const schema=JSON.parse(init.body).response_format.json_schema.schema;
+     fields={...Object.fromEntries(Object.keys(schema.properties.fields.properties).map(key=>[key,null])),...fields};
      fields.mission=null;fields.vision={value:null,classification:'missing',evidence:[]};
      return {ok:true,status:200,json:async()=>({choices:[{finish_reason:mode==='truncated'?'length':'stop',message:{content:JSON.stringify({fields})}}]})};
     }});
