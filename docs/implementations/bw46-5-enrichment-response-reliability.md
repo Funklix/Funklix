@@ -75,3 +75,21 @@ Remaining evidence needed to close the live incident: the original authorized co
 ## Completed focused local validation
 
 All 23 focused suites pass: BW-46.1 research/field browser; BW-46.2 API/browser; BW-46.3 onboarding browser; BW-46.4 API/browser; BW-46.5 API/browser; URL policy/retrieval/retrieval diagnostics/extractor; Founder mapping/import/context/archetype; DNA preflight; protected Brand contract/browser; script integrity; PostgreSQL TLS; maintenance. EN/DE new browser paths and original regression assertions pass. The final added provider-schema-rejection/invalid-input/field-specific-schema checks and strengthened actual-browser contradictory-evidence/empty-evidence checks also pass. Processing-stage text is withheld when authorization deliberately withholds that metadata. `git diff --check` passes. These focused results are distinct from the complete hosted PostgreSQL matrix and cannot establish the original live failure.
+
+## Complete local Runtime Boot Safety replay
+
+| Local database | Final validation result |
+| --- | --- |
+| PostgreSQL 17.6 (Debian 17.6-2.pgdg13+1) | 230/230 validation run blocks pass |
+| PostgreSQL 18.4 (Debian 18.4-1.pgdg13+1) | 230/230 consolidated after the unchanged BW-43 serial retest below |
+
+The two setup blocks reuse installed dependencies and system Chromium; this is a local replay, not a claim of hosted CI success. Production code is frozen at `0b54727`; the final delivery adds documentation only.
+
+The initial 18.4 replay completed every validation block: 229 passed and BW-43 failed its unchanged `Expanded Journey sources reflow` assertion. Its remaining native-zoom subcommand was run separately and passed. Serial A/B control on an exact `git archive b1dea27` and the patch yielded: base PASS / patch FAIL, then base FAIL / patch PASS. Both failures were the same original assertion at line 135; the captured cases were 375px Light/EN (base with collapsed sidebar, patch with expanded sidebar). The final unchanged patch repeat passed all 48 browser cases. This establishes an intermittent failure present on unchanged main, not a verified new enrichment regression or a repaired Journey defect. No test assertion or Journey layout/style was changed. Initial failures remain recorded in the private work ledger rather than being silently waived. The independent hosted browser/matrix outcome remains unknown.
+
+The initial disposable database startup encountered local disk exhaustion during Docker image preparation, before product validation. Only task-created Docker assets were removed; database files then used temporary storage, with one official PostgreSQL image at a time. The replay resumed after changing scheduling: completed passes were retained, unfinished checks were rerun, independent checks ran concurrently, and shared real-PostgreSQL role/transaction fixtures remained serial. No security assertion was removed, waived or weakened. Raw logs and screenshots remain excluded from publication. Hosted Runtime Boot Safety is still gated on creating the authorized public non-draft PR; publication approval status is reported in delivery.
+
+
+## Publication status
+
+Implementation and regression commits are pushed to the dedicated branch. The first public non-draft PR creation attempt was rejected by automatic approval review because it did not accept the uploaded request as direct chat authorization for publishing to `Funklix/Funklix`. Direct authorization for that exact public destination was requested; no response was received during implementation. No PR was created through a workaround, and no merge or manual deployment was performed. Delivery remains **BLOCKED** until that authorization permits creating and verifying exactly one normal PR against main. No PR URL or hosted CI success is claimed.
