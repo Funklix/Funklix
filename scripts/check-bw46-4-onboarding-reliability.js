@@ -46,14 +46,13 @@ async function request(deps,body=input){
  const failures=[
   ['provider_request','PROVIDER_UNAVAILABLE',async()=>({ok:false})],
   ['provider_request','PROVIDER_UNAVAILABLE',async()=>{throw new Error('private provider detail');}],
-  ['provider_response','INVALID_AI_OUTPUT',async()=>({ok:true,json:async()=>{throw new SyntaxError('private response');}})],
-  ['model_json','INVALID_AI_OUTPUT',async()=>({ok:true,json:async()=>({choices:[{message:{content:'not JSON'}}]})})],
-  ['model_fields','INVALID_AI_OUTPUT',model({personas:{value:'invalid',classification:'website_supported',evidence:[]}})],
-  ['model_fields','INVALID_AI_OUTPUT',model({mission:{value:null,classification:'website_supported',evidence:[]}})]
+  ['provider_response','INVALID_PROVIDER_RESPONSE',async()=>({ok:true,json:async()=>{throw new SyntaxError('private response');}})],
+  ['model_json','INVALID_MODEL_JSON',async()=>({ok:true,json:async()=>({choices:[{message:{content:'not JSON'}}]})})]
  ];
  for(const [stage,code,fetch]of failures){
   const r=await request({...transport(graph()),fetch});assert.equal(r.statusCode,502);assert.equal(r.body.code,code);assert.equal(r.body.research.processing.stage,stage);assert.equal(r.body.research.counts.processed,0);assert(r.body.research.selectedEvidence.some(e=>e.excerpt===copy));assert.equal(r.body.research.sources[0].processing,'provider_failed');assert(!JSON.stringify(r.body).includes('private provider'));
  }
+ for(const [key,value]of [['personas','invalid'],['mission',null]]){const r=await request({...transport(graph()),fetch:model({brandCore:supported,[key]:{value,classification:'website_supported',evidence:[]}})});assert.equal(r.statusCode,200);assert.equal(r.body.fields.brandCore.classification,'website_supported');assert.equal(r.body.fields[key].classification,'missing');assert(r.body.diagnostics.fieldIssues.some(i=>i.fieldKey===key&&i.category==='invalid_value'));}
  const empty=graph();empty['/'].body='<meta name="description" content="'+'x'.repeat(20000)+'">';
  const none=await request({...transport(empty),fetch:()=>assert.fail('no selected evidence must not trigger inference')});assert.equal(none.statusCode,422);assert.equal(none.body.code,'NO_USABLE_WEBSITE_EVIDENCE');assert.equal(none.body.research.counts.extracted,1);assert.equal(none.body.research.selectedEvidence.length,0);assert.equal(none.body.research.counts.processed,0);
  for(const [code,status]of [['http_error',502],['robots_disallowed',422],['unsafe_destination',400],['unsupported_scheme',400],['timeout',504],['unrecognized_private_error',502]]){

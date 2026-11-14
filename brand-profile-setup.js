@@ -181,6 +181,17 @@
       if (code === 'DATABASE_UNAVAILABLE') return 'The database is temporarily unavailable. Your inputs are retained. Try again.';
       const enrichmentErrors = {
         PROVIDER_UNAVAILABLE: 'The AI provider is temporarily unavailable. Retry, or continue editing manually.',
+        PROVIDER_SCHEMA_REJECTED: 'The AI service rejected the response schema. Continue manually and contact support.',
+        PROVIDER_NOT_CONFIGURED: 'The AI service is not configured. Continue editing manually and contact support.',
+        PROVIDER_AUTH_FAILED: 'The AI service credentials were rejected. Continue editing manually and contact support.',
+        PROVIDER_RATE_LIMITED: 'The AI service is busy. Retry later or continue editing manually.',
+        PROVIDER_CONTEXT_TOO_LARGE: 'The AI service could not process this much context. Your inputs are retained. Use a shorter description or field assistance.',
+        MODEL_RESPONSE_TRUNCATED: 'The AI response was incomplete. Your inputs are retained. Retry or continue manually.',
+        MODEL_RESPONSE_REFUSED: 'The AI service declined this request. Your inputs are retained. Continue manually.',
+        UNSUPPORTED_MODEL_RESPONSE: 'The AI service returned an unsupported response format. Your inputs are retained.',
+        INVALID_PROVIDER_RESPONSE: 'The AI service returned an unreadable response. Your inputs are retained.',
+        INVALID_MODEL_JSON: 'The AI response could not be validated. Retry, or continue editing manually.',
+        MODEL_RESPONSE_TOO_LARGE: 'The AI response exceeded the processing limit. Your inputs are retained.',
         PROVIDER_TIMEOUT: 'The AI provider timed out. Retry, or continue editing manually.',
         INVALID_AI_OUTPUT: 'The AI response could not be validated. Retry, or continue editing manually.',
         NO_USABLE_WEBSITE_EVIDENCE: 'No usable website excerpts were selected. Edit the website or add a brand description.',
@@ -366,6 +377,7 @@
           ...input, action: input.action || 'draft', brandId: state.brand.id, workspaceId: captured.workspaceId,
           revision, language: options.language?.() || 'en'
         });
+        state.enrichmentDiagnostics = result?.payload?.diagnostics || null;
         if (!result?.response.ok) { state.analysis = 'Research unsuccessful'; state.research = result?.payload?.research || null; state.message = result ? errorText(result.response, 'The research request could not be completed. Your inputs are retained. Retry or continue manually.', result.payload) : 'The research request could not be completed. Your inputs are retained. Retry or continue manually.'; return false; }
         const draft = result.payload;
         if (draft?.version !== enrichment.VERSION || draft.brandId !== state.brand.id || draft.revision !== revision || state.brand.revision !== revision) { state.analysis = 'Research unsuccessful'; state.message = 'The enrichment response could not be validated. Retry or continue manually.'; return false; }
@@ -1176,6 +1188,16 @@
         node('p', t('Preparing your draft. Source totals are available when this request finishes.'), progress);
       }
       researchCoverage(container);
+      if (s.enrichmentDiagnostics) {
+        const d=s.enrichmentDiagnostics, details=node('details','',container);
+        details.className='profile-enrichment-diagnostics';details.dataset.disclosure='enrichment-diagnostics';
+        node('summary',t('Draft processing details'),details);
+        if(d.requestId)node('p',t('Request ID')+': '+d.requestId,details);
+        if(d.validationCategory)node('p',t('Failure category')+': '+d.validationCategory,details);
+        node('p',t('Processing stage')+': '+d.stage,details);
+        const reasons={invalid_value:'Suggestion excluded: invalid field value.',unsupported_field:'Suggestion excluded: unsupported field.',invalid_classification:'Suggestion excluded: invalid classification.',invalid_evidence:'Unsupported citations were excluded; factual suggestions require valid evidence.'};
+        for(const issue of d.fieldIssues||[])node('p',(issue.fieldKey?enrichmentLabel(issue.fieldKey)+': ':'')+t(reasons[issue.category]||'Suggestion excluded: invalid field value.'),details);
+      }
       if (s.addedCount) node('p', t('{count} details added from the website.').replace('{count}', s.addedCount), container).setAttribute('role', 'status');
       if (s.autoKeys.length && !s.pending) button('Retry adding website details', container, () => { void session.retryAutomatic(); });
       const feedback = node('p', t(s.pending || s.message), container); feedback.setAttribute('role', 'status'); feedback.setAttribute('aria-live', 'polite');

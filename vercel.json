@@ -5,6 +5,7 @@
     { "source": "/brands/:id/setup", "destination": "/index.html" }
   ],
   "functions": {
+    "api/enrich-brand-profile.js": { "maxDuration": 90 },
     "api/brands/*/learning-advisor.js": { "maxDuration": 300 }
   }
 }
