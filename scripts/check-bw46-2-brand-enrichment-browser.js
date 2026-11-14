@@ -8,7 +8,7 @@ const {EMAIL,clone}=require('./fixtures/bw36-13r5-local-runtime');
  const f=await require('./fixtures/home-browser')(browser)({empty:true,prepare(r){if(ambiguous){r.db.brands[0].brand_core.customTiles=['mission','vision','values'].flatMap(type=>[1,2].map(n=>({id:'km_fictional_'+type+n,moduleType:type,content:'Duplicate '+type+n})));r.db.brands[0].brand_core._profileEvidence={version:'brand-enrichment/v1',fields:{mission:{decision:'accepted',value:'Earlier mission',classification:'user_provided',originId:'earlier',evidence:[]}},inputs:{earlier:{description:'Earlier mission'}}};}}});
  try{
  const page=f.page;page.setDefaultTimeout(30000);let calls=0;
- const handler=f.r.load('api/enrich-brand-profile.js').createHandler({getSessionUser:()=>({email:EMAIL}),fetch:async()=>{calls++;return {ok:true,json:async()=>({choices:[{message:{content:JSON.stringify({fields:{brandCore:{value:'Tool repair consultancy',classification:'ai_interpretation',evidence:[{sourceId:'canonical',excerpt:'Original positioning'}]}}})}}]})}}});
+ const handler=f.r.load('api/enrich-brand-profile.js').createHandler({getSessionUser:()=>({email:EMAIL}),fetch:async()=>{calls++;return {ok:true,json:async()=>({choices:[{finish_reason:'stop',message:{content:JSON.stringify({fields:{brandCore:{value:'Tool repair consultancy',classification:'ai_interpretation',evidence:[{sourceId:'canonical',excerpt:'Original positioning'}]}}})}}]})}}});
  await page.route('**/api/enrich-brand-profile',async route=>{
  const res={statusCode:200,setHeader(){},status(code){this.statusCode=code;return this},json(body){this.body=clone(body);return this}};
  await handler({method:'POST',body:route.request().postDataJSON()},res);await route.fulfill({status:res.statusCode,json:res.body});});

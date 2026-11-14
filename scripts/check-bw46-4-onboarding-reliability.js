@@ -24,7 +24,7 @@ function transport(graph={}){
 const graph=()=>({'/robots.txt':{type:'text/plain',body:'User-agent: *\nAllow: /'},'/':{body:homepage}});
 const brand={id:'11111111-1111-4111-8111-111111111111',revision:1,name:'Frostspur',brand_core:{brandAssets:{domain:''},customTiles:[]}};
 const supported={value:'Werkzeugreparatur für lokale Werkstätten.',classification:'website_supported',evidence:[{sourceId:'s1',excerpt:copy}]};
-const model=fields=>async()=>({ok:true,json:async()=>({choices:[{message:{content:JSON.stringify({fields})}}]})});
+const model=fields=>async()=>({ok:true,json:async()=>({choices:[{finish_reason:'stop',message:{content:JSON.stringify({fields})}}]})});
 const input={action:'draft',domainUrl:ORIGIN,brandId:brand.id,workspaceId:'22222222-2222-4222-8222-222222222222',revision:1};
 async function request(deps,body=input){
  const res={statusCode:200,setHeader(){},status(n){this.statusCode=n;return this;},json(v){this.body=JSON.parse(JSON.stringify(v));return this;}};
@@ -47,7 +47,7 @@ async function request(deps,body=input){
   ['provider_request','PROVIDER_UNAVAILABLE',async()=>({ok:false})],
   ['provider_request','PROVIDER_UNAVAILABLE',async()=>{throw new Error('private provider detail');}],
   ['provider_response','INVALID_PROVIDER_RESPONSE',async()=>({ok:true,json:async()=>{throw new SyntaxError('private response');}})],
-  ['model_json','INVALID_MODEL_JSON',async()=>({ok:true,json:async()=>({choices:[{message:{content:'not JSON'}}]})})]
+  ['model_json','INVALID_MODEL_JSON',async()=>({ok:true,json:async()=>({choices:[{finish_reason:'stop',message:{content:'not JSON'}}]})})]
  ];
  for(const [stage,code,fetch]of failures){
   const r=await request({...transport(graph()),fetch});assert.equal(r.statusCode,502);assert.equal(r.body.code,code);assert.equal(r.body.research.processing.stage,stage);assert.equal(r.body.research.counts.processed,0);assert(r.body.research.selectedEvidence.some(e=>e.excerpt===copy));assert.equal(r.body.research.sources[0].processing,'provider_failed');assert(!JSON.stringify(r.body).includes('private provider'));

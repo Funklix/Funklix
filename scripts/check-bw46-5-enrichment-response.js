@@ -71,14 +71,16 @@ function matches(s,v){
   ['PROVIDER_UNAVAILABLE',async()=>{throw new Error('private transport');}],
   ['INVALID_PROVIDER_RESPONSE',async()=>({ok:true,status:200,json:async()=>{throw new Error('private body');}})],
   ['UNSUPPORTED_MODEL_RESPONSE',async()=>({ok:true,status:200,json:async()=>({output:[]})})],
+  ['UNSUPPORTED_MODEL_RESPONSE',async()=>({ok:true,status:200,json:async()=>({choices:[{message:{content:JSON.stringify({fields:{brandCore:item()}})}}]})})],
+  ['UNSUPPORTED_MODEL_RESPONSE',async()=>({ok:true,status:200,json:async()=>({choices:[]})})],
   ['UNSUPPORTED_MODEL_RESPONSE',async()=>({ok:true,status:200,json:async()=>({choices:[{finish_reason:'tool_calls',message:{content:null}}]})})],
-  ['INVALID_MODEL_JSON',async()=>({ok:true,status:200,json:async()=>({choices:[{message:{content:'not json'}}]})})],
+  ['INVALID_MODEL_JSON',async()=>({ok:true,status:200,json:async()=>({choices:[{finish_reason:'stop',message:{content:'not json'}}]})})],
   ['MODEL_RESPONSE_TRUNCATED',model({brandCore:item()},'length')],
   ['MODEL_RESPONSE_REFUSED',model({},'content_filter')],
   ['MODEL_RESPONSE_REFUSED',async()=>({ok:true,status:200,json:async()=>({choices:[{finish_reason:'stop',message:{refusal:'private refusal',content:null}}]})})],
   ['UNSUPPORTED_MODEL_RESPONSE',async()=>({ok:true,status:200,json:async()=>({choices:[{finish_reason:'stop',message:{content:[]}}]})})],
-  ['MODEL_RESPONSE_TOO_LARGE',async()=>({ok:true,status:200,json:async()=>({choices:[{message:{content:'x'.repeat(200001)}}]})})],
-  ['INVALID_AI_OUTPUT',async()=>({ok:true,status:200,json:async()=>({choices:[{message:{content:'{"fields":42}'}}]})})]
+  ['MODEL_RESPONSE_TOO_LARGE',async()=>({ok:true,status:200,json:async()=>({choices:[{finish_reason:'stop',message:{content:'x'.repeat(200001)}}]})})],
+  ['INVALID_AI_OUTPUT',async()=>({ok:true,status:200,json:async()=>({choices:[{finish_reason:'stop',message:{content:'{"fields":42}'}}]})})]
  ];
  for(const [code,fetch]of errors){let n=0;const r=await request({fetch:async(...args)=>{n++;return fetch(...args);}});assert.equal(n,1,'never retry');assert.equal(r.statusCode,502);assert.equal(r.body.code,code);assert.equal(r.body.diagnostics.validationCategory,code);assert.equal(r.body.fields,undefined);assert(!JSON.stringify(r.body).includes('private'));assert(!JSON.stringify(r.events).includes(quote));}
  const invalidInput=await request({fetch:()=>assert.fail('invalid input cannot infer')},{...input,description:'x'.repeat(50001)});assert.equal(invalidInput.body.code,'INVALID_DESCRIPTION');

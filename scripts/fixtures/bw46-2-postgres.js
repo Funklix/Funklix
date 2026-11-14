@@ -6,7 +6,7 @@ module.exports=async function({db,brandId,workspaceId,email,boardId}){
  const key='_profileEvidence';
  const {createSessionToken}=require('../../api/_auth-session');
  let description='We repair tools for independent workshops.';
- const enrich=require('../../api/enrich-brand-profile').createHandler({fetch:async()=>({ok:true,json:async()=>({choices:[{message:{content:JSON.stringify({fields:{brandCore:{value:description,classification:'user_provided',evidence:[{sourceId:'user',excerpt:description}]}}})}}]})})});
+ const enrich=require('../../api/enrich-brand-profile').createHandler({fetch:async()=>({ok:true,json:async()=>({choices:[{finish_reason:'stop',message:{content:JSON.stringify({fields:{brandCore:{value:description,classification:'user_provided',evidence:[{sourceId:'user',excerpt:description}]}}})}}]})})});
  const brandHandler=require('../../api/brands/[id]'),preview=require('../../api/brands/[id]/write-preview');
  const transport=async(url,init={})=>{
   const req={method:init.method||'GET',query:{id:brandId},body:init.body&&JSON.parse(init.body),headers:{...Object.fromEntries(Object.entries(init.headers||{}).map(([k,v])=>[k.toLowerCase(),v])),cookie:'funklix_session='+createSessionToken({email})}};

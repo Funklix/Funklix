@@ -6,13 +6,13 @@ const {runtime,B,W,EMAIL,clone}=require('./fixtures/bw36-13r5-local-runtime');
 const {createSession}=require('../brand-profile-setup');
 const fixture=()=>({id:B,revision:1,brand_core:{brandCore:'Repair consultancy',brandDNA:{userApproved:true,primaryArchetype:'Sage'},personas:[{name:'Founders',note:'Need clear operations',unknown:'retain'}],customTiles:[],future:{keep:1}}});
 const description='We are a Hamburg-based consultancy helping owner-led companies improve marketing, sales and operations.';
-const model=fields=>async()=>({ok:true,json:async()=>({choices:[{message:{content:JSON.stringify({fields})}}]})});
+const model=fields=>async()=>({ok:true,json:async()=>({choices:[{finish_reason:'stop',message:{content:JSON.stringify({fields})}}]})});
 const item=(value,classification='user_provided',excerpt='Hamburg-based consultancy',sourceId='user')=>({value,classification,evidence:[{sourceId,excerpt}]});
 (async()=>{
  let calls=0;
  let draft=await enrich(fixture(),{action:'draft',description},{fetch:async(...args)=>{calls++;assert(JSON.parse(args[1].body).messages[1].content.includes(description));return model({brandCore:item('Consultancy in Hamburg')})(...args);}});
  assert.equal(calls,1);assert.equal(draft.fields.brandCore.classification,'user_provided');assert.equal(draft.fields.mission.classification,'missing');assert.equal(draft.input.description,description);
- await assert.rejects(()=>enrich(fixture(),{action:'draft',description},{fetch:async()=>({ok:true,json:async()=>({choices:[{message:{content:'{"fields":42}'}}]})})}));
+ await assert.rejects(()=>enrich(fixture(),{action:'draft',description},{fetch:async()=>({ok:true,json:async()=>({choices:[{finish_reason:'stop',message:{content:'{"fields":42}'}}]})})}));
  const short=await enrich(fixture(),{action:'draft',description:'Tool repair.'},{fetch:model({brandCore:item('Tool repair.','user_provided','Tool repair.')})});assert.equal(short.fields.brandCore.value,'Tool repair.');
  const long=description+' Detailed user evidence.'.repeat(1800);await enrich(fixture(),{action:'draft',description:long},{fetch:async(_url,init)=>{assert(JSON.parse(init.body).messages[1].content.includes(long));return model({})()}});
  const q=await enrich(fixture(),{action:'questions',field:'mission',language:'de'},{fetch:()=>assert.fail('questions must not infer')});assert(q.questions[0].question.includes('Veränderung'));
@@ -26,7 +26,7 @@ const item=(value,classification='user_provided',excerpt='Hamburg-based consulta
  for(const input of [{action:'draft',domainUrl:'https://repair.example/'},{action:'draft',domainUrl:'https://repair.example/',description}]){
  const web=await enrich(fixture(),input,{researchDomain:async()=>({research:clone(site)}),fetch:model({brandCore:item('Tool repairs','website_supported','Our workshop repairs tools.','s1')})});
  assert.equal(web.fields.brandCore.classification,'website_supported');assert.equal(web.fields.brandCore.evidence[0].url,'https://repair.example/about');assert.equal(web.fields.brandCore.evidence[0].sourceClassification,'visible_text');}
- for(const fetch of [async()=>({ok:false}),async()=>({ok:true,json:async()=>({choices:[{message:{content:'invalid'}}]})})])await assert.rejects(()=>enrich(fixture(),{action:'draft',description},{fetch}));
+ for(const fetch of [async()=>({ok:false}),async()=>({ok:true,json:async()=>({choices:[{finish_reason:'stop',message:{content:'invalid'}}]})})])await assert.rejects(()=>enrich(fixture(),{action:'draft',description},{fetch}));
  const excluded=await enrich(fixture(),{action:'draft',description},{fetch:model({brandDNA:item('bad'),brandCore:item('Consultancy in Hamburg')})});assert.equal(excluded.fields.brandDNA,undefined);assert.equal(excluded.fields.brandCore.classification,'user_provided');assert(excluded.diagnostics.fieldIssues.some(i=>i.category==='unsupported_field'));
  const partial=await enrich(fixture(),{action:'draft',description,domainUrl:'https://repair.example/'},{researchDomain:async()=>{throw Object.assign(new Error('unavailable'),{code:'http_error',research:{selectedEvidence:[],sources:[],state:'partial'}})},fetch:model({brandCore:item('Partial consultancy')})});assert.equal(partial.sourceIssue,'http_error');assert.equal(partial.fields.brandCore.classification,'user_provided');
  await assert.rejects(()=>enrich(fixture(),{action:'draft',description,domainUrl:'https://127.0.0.1'},{researchDomain:async()=>{throw Object.assign(new Error('unsafe'),{code:'unsafe_destination'})},fetch:()=>assert.fail('unsafe URL must never reach inference')}));
