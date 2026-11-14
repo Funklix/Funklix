@@ -71,9 +71,10 @@ async function prepare(brand,input,deps){
  }
  stage='provider_response';diagnostics.stage=stage;
  let envelope;try{envelope=await response.json();}catch{throw failure('INVALID_PROVIDER_RESPONSE',502);}
+ const hasMessage=choice=>!!choice?.message&&typeof choice.message==='object'&&!Array.isArray(choice.message);
+ diagnostics.modelResponseReceived=Array.isArray(envelope?.choices)&&envelope.choices.some(hasMessage);
  if(!Array.isArray(envelope?.choices)||envelope.choices.length!==1)throw failure('UNSUPPORTED_MODEL_RESPONSE',502);
  const choice=envelope.choices[0];
- diagnostics.modelResponseReceived=!!choice?.message&&typeof choice.message==='object'&&!Array.isArray(choice.message);
  diagnostics.finishReason=['stop','length','content_filter','tool_calls','function_call'].includes(choice?.finish_reason)?choice.finish_reason:'unknown';
  if(choice?.finish_reason==='length')throw failure('MODEL_RESPONSE_TRUNCATED',502);
  if(choice?.finish_reason==='content_filter'||choice?.message?.refusal)throw failure('MODEL_RESPONSE_REFUSED',502);
