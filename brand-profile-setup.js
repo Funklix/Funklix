@@ -1194,7 +1194,7 @@
         node('summary',t('Draft processing details'),details);
         if(d.requestId)node('p',t('Request ID')+': '+d.requestId,details);
         if(d.validationCategory)node('p',t('Failure category')+': '+d.validationCategory,details);
-        node('p',t('Processing stage')+': '+d.stage,details);
+        if(d.stage)node('p',t('Processing stage')+': '+d.stage,details);
         const reasons={invalid_value:'Suggestion excluded: invalid field value.',unsupported_field:'Suggestion excluded: unsupported field.',invalid_classification:'Suggestion excluded: invalid classification.',invalid_evidence:'Unsupported citations were excluded; factual suggestions require valid evidence.'};
         for(const issue of d.fieldIssues||[])node('p',(issue.fieldKey?enrichmentLabel(issue.fieldKey)+': ':'')+t(reasons[issue.category]||'Suggestion excluded: invalid field value.'),details);
       }

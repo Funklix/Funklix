@@ -10,8 +10,8 @@ const {researchDomain}=require('../api/_brand-domain-research');
 const {EMAIL,clone}=require('./fixtures/bw36-13r5-local-runtime');
 const website='https://repair.example/',quote='We repair tools.';
 const description=quote+' Laurent Krall is the founder. This is unverified user input about his background and personality.';
-function research(empty=false){return researchDomain(website,{noDelay:true,retrieveWebsiteText:(url,options)=>retrieveWebsiteText(url,{...options,lookup:async()=>[{address:'93.184.216.34',family:4}],requestImpl:(opts,callback)=>{
- const req=new EventEmitter();req.end=()=>queueMicrotask(()=>{const robots=opts.path==='/robots.txt',home=opts.path==='/';const response=Readable.from([Buffer.from(robots?'User-agent: *\nAllow: /':home?(empty?'<title>Empty</title>':'<main><p>'+quote+'</p></main>'):'missing')]);response.statusCode=robots||home?200:404;response.headers={'content-type':robots?'text/plain':'text/html'};callback(response);});return req;
+function research(empty=false,conflicting=false){return researchDomain(website,{noDelay:true,retrieveWebsiteText:(url,options)=>retrieveWebsiteText(url,{...options,lookup:async()=>[{address:'93.184.216.34',family:4}],requestImpl:(opts,callback)=>{
+ const req=new EventEmitter();req.end=()=>queueMicrotask(()=>{const robots=opts.path==='/robots.txt',home=opts.path==='/';const response=Readable.from([Buffer.from(robots?'User-agent: *\nAllow: /':home?(empty?'<html><body></body></html>':'<main><p>'+(conflicting?'We do not repair tools.':quote)+'</p></main>'):'missing')]);response.statusCode=robots||home?200:404;response.headers={'content-type':robots?'text/plain':'text/html'};callback(response);});return req;
  }})});}
 (async()=>{
  const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH||'/usr/bin/chromium',args:['--no-sandbox']});
@@ -21,7 +21,7 @@ function research(empty=false){return researchDomain(website,{noDelay:true,retri
    const p=f.page,key=k=>p.locator(`[data-profile-key="${k}"]`);p.setDefaultTimeout(30000);
    const snapshot=clone(f.r.db.boards),saved=clone(f.r.db.brands[0].brand_core);let mode='one',calls=0;const submissions=[],events=[];
    const handler=f.r.load('api/enrich-brand-profile.js').createHandler({getSessionUser:()=>({email:EMAIL}),logDiagnostic:e=>events.push(clone(e)),
-    researchDomain:async()=>{if(mode==='no-site')throw Object.assign(new Error('private site'),{code:'unsupported_content_type'});return research(mode==='empty');},
+    researchDomain:async()=>{if(mode==='no-site')throw Object.assign(new Error('private site'),{code:'unsupported_content_type'});return research(mode==='empty',mode==='conflict');},
     setTimeout:fn=>{if(mode==='timeout'){queueMicrotask(fn);return null;}return setTimeout(fn,30000);},clearTimeout,
     fetch:async(_url,init)=>{
      calls++;assert.equal(JSON.parse(init.body).response_format.type,'json_schema');assert.equal(JSON.parse(init.body).model,'gpt-4.1-mini');
@@ -31,7 +31,7 @@ function research(empty=false){return researchDomain(website,{noDelay:true,retri
      let fields={brandCore:{value:'Tool repair proposal '+calls,classification:'website_supported',evidence:[{sourceId,excerpt:quote}]}};
      if(mode==='multiple'||mode==='mixed')fields.toneOfVoice={value:['Clear','Practical'],classification:'ai_interpretation',evidence:[{sourceId,excerpt:quote}]};
      if(mode==='mixed'){fields.personas={value:'malformed',classification:'user_provided',evidence:[]};fields.brandDNA={value:'forbidden',classification:'user_provided',evidence:[]};}
-     if(mode==='conflict')fields.brandCore.classification='conflicting';
+     if(mode==='conflict'){fields.brandCore.classification='conflicting';fields.brandCore.evidence=[{sourceId:'s1',excerpt:'We do not repair tools.'},{sourceId:'user',excerpt:quote}];}
      if(mode==='empty')fields={};
      fields.mission=null;fields.vision={value:null,classification:'missing',evidence:[]};
      return {ok:true,status:200,json:async()=>({choices:[{finish_reason:mode==='truncated'?'length':'stop',message:{content:JSON.stringify({fields})}}]})};
@@ -71,8 +71,8 @@ function research(empty=false){return researchDomain(website,{noDelay:true,retri
     assert.equal(await key('research-description').inputValue(),description);assert.equal(await key('research-domain').inputValue(),website);
     assert.equal(await key('enrichment-brandCore').count(),0);assert((await p.locator('.profile-enrichment-diagnostics').textContent()).includes(category));
    }
-   mode='conflict';await start(website,description);assert.equal(await key('accept-enrichment-brandCore').count(),0);await reset();
-   mode='empty';await start(website,'');assert.equal(await key('enrichment-brandCore').count(),0);await reset();
+   mode='conflict';await start(website,description);assert.equal(await key('accept-enrichment-brandCore').count(),0);assert.equal(await p.evaluate(()=>brandProfileController.state.enrichment.fields.brandCore.evidence.length),2);await reset();
+   mode='empty';const beforeEmpty=calls;await start(website,'');assert.equal(calls,beforeEmpty,'empty website evidence must not infer');assert.equal(await key('enrichment-brandCore').count(),0);assert.equal(await p.evaluate(()=>brandProfileController.state.research?.selectedEvidence?.length),0);await reset();
    mode='no-site';await start(website,description);assert.equal(await key('enrichment-brandCore').count(),1);assert.equal(await p.evaluate(()=>brandProfileController.state.enrichment.fields.brandCore.classification),'user_provided');
    assert.equal(await p.evaluate(()=>brandProfileController.state.enrichment.input.description),description);
    assert.deepEqual(clone(f.r.db.boards),snapshot);for(const key of ['brandDNA','customTiles'])assert.deepEqual(clone(f.r.db.brands[0].brand_core[key]),saved[key]);
