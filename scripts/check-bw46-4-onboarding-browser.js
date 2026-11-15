@@ -17,9 +17,9 @@ const {EMAIL,clone}=require('./fixtures/bw36-13r5-local-runtime');
   const handler=f.r.load('api/enrich-brand-profile.js').createHandler({getSessionUser:()=>({email:EMAIL}),researchDomain:async()=>({research:clone(research)}),fetch:async()=>{
    calls++;if(release)await release;
    if(mode==='failure')return {ok:false};
-   if(mode==='empty')return {ok:true,json:async()=>({choices:[{message:{content:JSON.stringify({fields:{}})}}]})};
-   if(mode==='invalid')return {ok:true,json:async()=>({choices:[{message:{content:'invalid JSON'}}]})};
-   return {ok:true,json:async()=>({choices:[{message:{content:JSON.stringify({fields:{brandCore:{value:'Tool repair workshop',classification:'website_supported',evidence:[{sourceId:requests.at(-1).domainUrl?'s1':'user',excerpt:'We repair tools.'}]},mission:{value:null,classification:'missing',evidence:[]}}})}}]})};
+   if(mode==='empty')return {ok:true,json:async()=>({choices:[{finish_reason:'stop',message:{content:JSON.stringify({fields:{}})}}]})};
+   if(mode==='invalid')return {ok:true,json:async()=>({choices:[{finish_reason:'stop',message:{content:'invalid JSON'}}]})};
+   return {ok:true,json:async()=>({choices:[{finish_reason:'stop',message:{content:JSON.stringify({fields:{brandCore:{value:'Tool repair workshop',classification:'website_supported',evidence:[{sourceId:requests.at(-1).domainUrl?'s1':'user',excerpt:'We repair tools.'}]},mission:{value:null,classification:'missing',evidence:[]}}})}}]})};
   }});
   await p.route('**/api/enrich-brand-profile',async route=>{requests.push(route.request().postDataJSON());const res={statusCode:200,setHeader(){},status(n){this.statusCode=n;return this;},json(v){this.body=clone(v);return this;}};await handler({method:'POST',body:requests.at(-1)},res);await route.fulfill({status:res.statusCode,json:res.body});});
   await p.evaluate(language=>{state.uiLanguage=FunklixLanguage.setUiLanguage(language);translateInterface();openRegularBrandProfile();},language);await p.waitForFunction(()=>brandProfileController&&canonicalBrandDetail.status==='ready');

@@ -32,7 +32,7 @@ function luminance(color) {
           const prompt=JSON.parse(init.body).messages.map(m=>m.content).join('\n');
           const field=requests.at(-1).field;
           const values=field==='toneOfVoice'?{toneOfVoice:{value:['Clear','Warm'],classification:'ai_interpretation',evidence:[]}}:field==='valueProposition'?{valueProposition:{value:'Keep useful tools working.',classification:'ai_interpretation',evidence:[]}}:{brandCore:{value:'A tool repair workshop.',classification:'user_provided',evidence:[{sourceId:prompt.includes('Repair tools for workshops')?'user':'s1',excerpt:prompt.includes('Repair tools for workshops')?'Repair tools for workshops':'We repair tools for local workshops.'}]},valueProposition:{value:'Useful tools, less waste.',classification:'ai_interpretation',evidence:[{sourceId:'s1',excerpt:'We repair tools for local workshops.'}]}};
-          return {ok:true,json:async()=>({choices:[{message:{content:JSON.stringify({fields:values})}}]})};
+          return {ok:true,json:async()=>({choices:[{finish_reason:'stop',message:{content:JSON.stringify({fields:values})}}]})};
         }});
         await p.route('**/api/enrich-brand-profile',async route=>{
           const body=route.request().postDataJSON();requests.push(body);
@@ -188,7 +188,7 @@ function luminance(color) {
       const p=audience.page,key=k=>p.locator(`[data-profile-key="${k}"]`);let calls=0;
       const snapshot=clone(audience.r.db.boards);
       const handler=audience.r.load('api/enrich-brand-profile.js').createHandler({getSessionUser:()=>({email:EMAIL}),fetch:async()=>{
-        calls++;return {ok:true,json:async()=>({choices:[{message:{content:JSON.stringify({fields:{personas:{value:[{name:'Workshop owners',note:'Need repair clarity'}],classification:'ai_interpretation',evidence:[{sourceId:'canonical',excerpt:'Canvas Brand X'}]}}})}}]})};
+        calls++;return {ok:true,json:async()=>({choices:[{finish_reason:'stop',message:{content:JSON.stringify({fields:{personas:{value:[{name:'Workshop owners',note:'Need repair clarity'}],classification:'ai_interpretation',evidence:[{sourceId:'canonical',excerpt:'Canvas Brand X'}]}}})}}]})};
       }});
       await p.route('**/api/enrich-brand-profile',async route=>{const res={statusCode:200,setHeader(){},status(code){this.statusCode=code;return this;},json(body){this.body=clone(body);return this;}};await handler({method:'POST',body:route.request().postDataJSON()},res);await route.fulfill({status:res.statusCode,json:res.body});});
       await p.evaluate(()=>openRegularBrandProfile());await p.waitForFunction(()=>brandProfileController&&canonicalBrandDetail.status==='ready');

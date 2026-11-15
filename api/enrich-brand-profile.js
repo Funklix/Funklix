@@ -1,11 +1,18 @@
 'use strict';
 const {getSessionUser}=require('./_auth-session');
 const {enrich,failure}=require('./_brand-enrichment');
+const {randomUUID}=require('crypto');
 // Only existing, fixed retrieval outcomes cross the public error boundary.
 const RETRIEVAL_STATUS={invalid_url:400,unsupported_scheme:400,credentials_not_allowed:400,invalid_host:400,port_not_allowed:400,unsafe_destination:400,
  dns_failed:502,http_error:502,retrieval_failed:502,timeout:504,request_cancelled:499,empty_content:422,robots_disallowed:422,
  unsupported_content_type:415,unsupported_encoding:415,invalid_encoding:422,response_too_large:413,decompressed_too_large:413,parse_limit:422,
  too_many_redirects:502,redirect_loop:502,invalid_redirect:502};
+const FAILURE_STATUS={...RETRIEVAL_STATUS,INVALID_INPUT:422,FIELD_REQUIRED:422,INVALID_DESCRIPTION:422,INVALID_ANSWERS:422,
+ INVALID_CONTEXT:400,INPUT_TOO_LARGE:413,PERMISSION_DENIED:403,STALE_UPDATE:409,
+ PROVIDER_NOT_CONFIGURED:503,PROVIDER_UNAVAILABLE:502,PROVIDER_AUTH_FAILED:502,PROVIDER_RATE_LIMITED:502,PROVIDER_CONTEXT_TOO_LARGE:502,PROVIDER_SCHEMA_REJECTED:502,
+ PROVIDER_TIMEOUT:504,REQUEST_CANCELLED:499,INVALID_PROVIDER_RESPONSE:502,UNSUPPORTED_MODEL_RESPONSE:502,
+ MODEL_RESPONSE_TRUNCATED:502,MODEL_RESPONSE_REFUSED:502,MODEL_RESPONSE_TOO_LARGE:502,INVALID_MODEL_JSON:502,INVALID_AI_OUTPUT:502,
+ NO_USABLE_WEBSITE_EVIDENCE:422,ENRICHMENT_FAILED:502,TENDRA_WRITE_MAINTENANCE:503};
 // Resolve current identity, Workspace and Brand independently before and after inference.
 async function authorize(input,user){
  const {getBrandAccess,isBrandId}=require('./_brand-access');
@@ -23,24 +30,31 @@ async function authorize(input,user){
  return brand;
 }
 function createHandler(deps={}){return async(req,res)=>{
+ const requestId=randomUUID();
+ const diagnostics={requestId,stage:'authorization',websiteEvidenceSent:false,modelResponseReceived:false,fieldIssues:[]};
+ res.setHeader('X-Request-ID',requestId);
  res.setHeader('Cache-Control','private, no-store');
  if(req.method!=='POST')return res.status(405).json({code:'METHOD_NOT_ALLOWED'});
  const user=(deps.getSessionUser||getSessionUser)(req);if(!user?.email)return res.status(401).json({code:'AUTHENTICATION_REQUIRED'});
  const controller=new AbortController(),cancel=()=>controller.abort();req.once?.('aborted',cancel);res.once?.('close',cancel);
+ let authorized=false;
+ const record=(code,metadata)=>{try{(deps.logDiagnostic||((event)=>console.info('brand_enrichment',JSON.stringify(event))))({requestId,code,...metadata});}catch{ /* Diagnostics never interrupt a draft. */ }};
  try{
    if(Buffer.byteLength(JSON.stringify(req.body||{}))>1024*1024)throw failure('INPUT_TOO_LARGE',413);
    const brand=await(deps.authorize||authorize)(req.body,user);
-   if(req.body.action!=='questions'&&!deps.fetch&&!process.env.OPENAI_API_KEY)throw failure('PROVIDER_UNAVAILABLE',503);
-   const draft=await enrich(brand,req.body,{...deps,signal:controller.signal});
+   authorized=true;
+   const draft=await enrich(brand,req.body,{...deps,diagnostics,signal:controller.signal});
    await(deps.authorize||authorize)(req.body,user);
+   record('DRAFT_READY',diagnostics);
    return res.status(200).json(draft);
  }catch(error){
    let research;
-   if(error.research){try{await(deps.authorize||authorize)(req.body,user);research=error.research;}catch(accessError){error=accessError;}}
-   const knownRetrieval=Object.hasOwn(RETRIEVAL_STATUS,error.code);
-   const status=error.status||(knownRetrieval?RETRIEVAL_STATUS[error.code]:502);
-   const code=error.status||knownRetrieval?error.code:'ENRICHMENT_FAILED';
-   return res.status(status).json({code,...(research?{research}:{})});
+   if(authorized){try{await(deps.authorize||authorize)(req.body,user);research=error.research;}catch(accessError){error=accessError;authorized=false;}}
+   const code=Object.hasOwn(FAILURE_STATUS,error.code)?error.code:'ENRICHMENT_FAILED';
+   const status=FAILURE_STATUS[code];
+   const metadata=authorized?{...diagnostics,validationCategory:code}:{requestId};
+   record(code,metadata);
+   return res.status(status).json({code,diagnostics:metadata,...(research?{research}:{})});
  }
  finally{req.off?.('aborted',cancel);res.off?.('close',cancel);}
 };}
