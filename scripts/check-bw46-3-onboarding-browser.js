@@ -70,9 +70,9 @@ function luminance(color) {
         assert.equal(await key('enrichment-brandCore').count(),1,'existing draft remains editable after replacement is deferred');
         await key('enrichment-brandCore').fill('My reviewed repair workshop');
         if(language==='en')await p.screenshot({path:output+'/review-light.png',fullPage:true});
-        await key('accept-enrichment-brandCore').click();await p.waitForFunction(()=>!brandProfileController.busy());
+        await key('accept-enrichment-brandCore').click();await p.waitForFunction(()=>{document.querySelector('.brand-suggestion-dialog[open] .fk-btn-primary')?.click();return !brandProfileController.busy();});
         assert.equal(f.r.db.brands[0].brand_core.brandCore,'My reviewed repair workshop');
-        await key('postpone-enrichment-valueProposition').click();await p.waitForFunction(()=>!brandProfileController.busy());
+        await key('postpone-enrichment-valueProposition').click();await p.waitForFunction(()=>{document.querySelector('.brand-suggestion-dialog[open] .fk-btn-primary')?.click();return !brandProfileController.busy();});
         assert.equal(f.r.db.brands[0].brand_core._profileEvidence.fields.valueProposition.decision,'postponed');
         await key('Discard enrichment draft').click();await key('Overview').click();
         await key('Reload latest Brand').click();await p.waitForFunction(()=>!brandProfileController.busy());
@@ -87,9 +87,9 @@ function luminance(color) {
         if(language==='en')await p.screenshot({path:output+'/field-assistance.png',fullPage:true});
         await key('Prepare my suggestion').click();await p.waitForFunction(()=>!brandProfileController.busy());
         assert.equal(requests.at(-1).answers.length,1);assert.equal(calls,3);
-        await key('enrichment-toneOfVoice').fill('invalid JSON');assert.equal(await key('enrichment-toneOfVoice').evaluate(n=>n.checkValidity()),false,'invalid structured edit cannot be adopted');
-        await key('enrichment-toneOfVoice').fill('["Calm", "Helpful"]');
-        await key('reject-enrichment-toneOfVoice').click();await p.waitForFunction(()=>!brandProfileController.busy());
+        await p.locator('[data-disclosure="proposal-edit:toneOfVoice"]>summary').click();await key('enrichment-toneOfVoice-0').fill('x'.repeat(5001));assert.equal(await key('accept-enrichment-toneOfVoice').isDisabled(),true,'invalid structured edit cannot be adopted');assert.equal(await p.locator('.profile-proposal-error:visible').count(),1);
+        await key('enrichment-toneOfVoice-0').fill('Calm');await key('enrichment-toneOfVoice-1').fill('Helpful');
+        await key('reject-enrichment-toneOfVoice').click();await p.waitForFunction(()=>{document.querySelector('.brand-suggestion-dialog[open] .fk-btn-primary')?.click();return !brandProfileController.busy();});
         assert.equal(f.r.db.brands[0].brand_core._profileEvidence.fields.toneOfVoice.decision,'rejected');
         await key('Discard enrichment draft').click();await key('Overview').click();
         // Reuse actual source import modal and protected canonical save; no campaign write.
@@ -202,7 +202,7 @@ function luminance(color) {
       assert.equal(await key('answer-personas').count(),1);await key('close-questions').click();
       const before=clone(audience.r.db.brands[0]);await key('suggest-personas').click();await p.waitForFunction(()=>!brandProfileController.busy());
       assert.equal(calls,1);assert.deepEqual(clone(audience.r.db.brands[0]),before,'empty-audience AI prepares only a draft');
-      await key('enrichment-personas').fill('[{"name":"Reviewed audience","note":"Reviewed need"}]');await key('accept-enrichment-personas').click();await p.waitForFunction(()=>!brandProfileController.busy());
+      await p.locator('[data-disclosure="proposal-edit:personas"]>summary').click();await key('enrichment-personas-0-name').fill('Reviewed audience');await key('enrichment-personas-0-note').fill('Reviewed need');await key('accept-enrichment-personas').click();await p.waitForFunction(()=>{document.querySelector('.brand-suggestion-dialog[open] .fk-btn-primary')?.click();return !brandProfileController.busy();});
       assert.equal(audience.r.db.brands[0].brand_core.personas[0].name,'Reviewed audience');
       const beforeRemoval=clone(audience.r.db.brands[0].brand_core);await key('Audience').click();await key('remove-persona-0').click();
       await key('Confirm and save Brand Profile').click();await p.waitForFunction(()=>!brandProfileController.busy());

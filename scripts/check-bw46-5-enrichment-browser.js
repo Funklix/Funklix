@@ -44,7 +44,7 @@ function research(empty=false,conflicting=false){return researchDomain(website,{
    });
    await p.evaluate(language=>{state.uiLanguage=FunklixLanguage.setUiLanguage(language);translateInterface();openRegularBrandProfile();},language);await p.waitForFunction(()=>brandProfileController&&canonicalBrandDetail.status==='ready');
    assert.equal(calls,0);
-   const idle=()=>p.waitForFunction(()=>!brandProfileController.busy());
+   const idle=()=>p.waitForFunction(()=>{document.querySelector('.brand-suggestion-dialog[open] .fk-btn-primary')?.click();return !brandProfileController.busy();});
    async function start(domain,text){
     if(!await p.locator('.profile-discovery').evaluate(n=>n.open))await p.locator('.profile-discovery>summary').click();
     await key('research-domain').fill(domain);await key('research-description').fill(text);await key('research-start').click();await idle();

@@ -222,3 +222,34 @@ html[data-theme=dark] .guided-brand-profile .profile-header{background:radial-gr
 /* Research inputs remain separate from the saved canonical website. */
 .guided-brand-profile .profile-website-draft{overflow-wrap:anywhere;color:var(--fk-color-text-primary);font-size:.875rem}
 .guided-brand-profile>.profile-research-status{grid-column:1/-1;overflow-wrap:anywhere}
+
+/* BW-46.6: typed review editors and scoped protected confirmation. */
+.guided-brand-profile .profile-review-header{grid-column:1/-1;padding:16px;border:1px solid var(--profile-border);border-radius:14px;background:var(--profile-soft)}
+.guided-brand-profile .profile-review-counts{font-size:.875rem;margin:0 0 12px}
+.guided-brand-profile .profile-enrichment-proposal{grid-column:1/-1;padding:18px;display:grid;gap:10px}
+.guided-brand-profile .profile-enrichment-proposal :is(h4,p,ul){margin-block:0 6px}
+.guided-brand-profile .profile-proposal-comparison{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;overflow-wrap:anywhere}
+.guided-brand-profile .profile-suggestion-kind{font-size:.8125rem;color:var(--fk-color-text-secondary)}
+.profile-review-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.guided-brand-profile .profile-review-actions button{width:auto;min-height:44px;margin:0}
+.guided-brand-profile .profile-proposal-editor{display:grid;gap:12px}
+.guided-brand-profile .profile-proposal-editor textarea{min-height:80px}
+.guided-brand-profile .profile-proposal-editor fieldset{min-width:0;margin:0;padding:10px;border:1px solid var(--profile-border);border-radius:10px}
+.guided-brand-profile .profile-list-row{display:flex;align-items:end;gap:6px;margin-bottom:8px;flex-wrap:wrap}
+.guided-brand-profile .profile-list-row .profile-field{flex:1 1 180px;margin:0}
+.guided-brand-profile .profile-list-row button{font-size:.75rem;min-height:44px;padding:6px 8px}
+.guided-brand-profile .profile-proposal [hidden]{display:none!important}
+.guided-brand-profile .profile-proposal blockquote{margin:8px 0;padding-inline-start:12px;border-inline-start:3px solid var(--profile-border);overflow-wrap:anywhere}
+.brand-suggestion-dialog{box-sizing:border-box;width:min(640px,calc(100vw - 24px));max-height:calc(100dvh - 24px);overflow:auto;padding:24px;border:1px solid var(--fk-color-border-default);border-radius:18px;background:var(--fk-color-surface-elevated);color:var(--fk-color-text-primary);font:inherit;overflow-wrap:anywhere}
+.brand-suggestion-dialog::backdrop{background:rgb(0 0 0 / .5)}
+.brand-suggestion-dialog>section{border-top:1px solid var(--fk-color-border-default);padding-block:10px}
+.brand-suggestion-dialog h2{font-size:1.25rem}.brand-suggestion-dialog h3{font-size:1rem}
+.brand-suggestion-dialog button{min-height:44px}.brand-suggestion-dialog :focus-visible{outline:3px solid var(--fk-color-focus-ring);outline-offset:3px}
+@media(max-width:600px){.guided-brand-profile .profile-proposal-comparison{grid-template-columns:1fr}.guided-brand-profile .profile-review-actions button{flex:1 1 auto}.brand-suggestion-dialog{padding:16px}}
+@media(forced-colors:active){.brand-suggestion-dialog,.guided-brand-profile .profile-review-header,.guided-brand-profile .profile-proposal-editor fieldset{border:1px solid CanvasText;background:Canvas;color:CanvasText}}
+.brand-suggestion-dialog[open]{display:grid;grid-template-rows:auto auto minmax(0,1fr) auto;max-height:calc(100dvh - 24px);overflow:hidden}
+.brand-suggestion-dialog .profile-confirm-changes{overflow:auto;overscroll-behavior:contain;min-height:0}
+.brand-suggestion-dialog .profile-confirm-changes>section{border-top:1px solid var(--fk-color-border-default);padding-block:10px}
+.brand-suggestion-dialog strong{display:block}.brand-suggestion-dialog h2{margin:0}
+.brand-suggestion-dialog :is(p,ul){margin-block:6px 12px}
+.guided-brand-profile .profile-review-skipped[hidden]{display:none!important}

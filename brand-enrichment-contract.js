@@ -38,5 +38,35 @@
     const used=new Set(Object.values(evidence.fields).map(f=>f.originId));for(const id of Object.keys(evidence.inputs))if(!used.has(id))delete evidence.inputs[id];
     next[KEY]=evidence;safe(next);return next;
   }
-  return Object.freeze({VERSION,KEY,modules,validators,valid,target,publicCore,url,adopt});
+  const populated=v=>typeof v==='string'?!!v.trim():Array.isArray(v)?v.some(populated):object(v)&&Object.values(v).some(populated);
+  // Stable field order, one in-memory candidate, no persistence or inference here.
+  function plan(core,draft,{revision,authorized=true,edits={},errors={},createTile}={}) {
+    const accepted=[],excluded=[];let next=clone(core);
+    for(const key of Object.keys(draft?.fields || {}).sort()) {
+      const proposal=draft.fields[key],value=Object.hasOwn(edits,key)?edits[key]:proposal?.value;
+      let reason='';
+      if(!authorized)reason='Editing permission required';
+      else if(draft.version!==VERSION||draft.revision!==revision)reason='Proposal is stale';
+      else if(!Object.hasOwn(validators,key))reason='Use the existing editor in Advanced options';
+      else if(proposal?.classification==='conflicting')reason='Conflicting information';
+      else if(proposal?.classification==='missing')reason='Needs more information';
+      else if(proposal?.classification==='unavailable')reason=proposal.reason==='specialized_module_owner'?'Specialized module. Use its existing editor in Advanced options.':'Current value unavailable';
+      else if(!['user_provided','website_supported','ai_interpretation'].includes(proposal?.classification))reason='Unsupported suggestion';
+      else if(errors[key])reason='Enter a valid suggested value.';
+      else if(value===undefined||value===null||!populated(value))reason='Needs more information';
+      else {
+        try {
+          if(!valid(key,value))reason='Use the existing editor in Advanced options';
+          else {
+            const current=target(core,key);
+            if(current!=null&&(typeof value==='string'?typeof current!=='string':Array.isArray(value)?!Array.isArray(current):!object(current)))reason='Use the existing editor in Advanced options';
+            else {next=adopt(next,draft,key,'accepted',value,createTile);accepted.push(key);}
+          }
+        } catch(e) {reason=e.code==='SPECIALIZED_MODULE_OWNER'?'Specialized module. Use its existing editor in Advanced options.':e.code==='AMBIGUOUS_MODULE'?'Current value unavailable. Review modules in Advanced options.':'Unsupported suggestion';}
+      }
+      if(reason)excluded.push({key,reason});
+    }
+    return {core:next,accepted,excluded};
+  }
+  return Object.freeze({VERSION,KEY,modules,validators,valid,target,publicCore,url,adopt,plan});
 });
