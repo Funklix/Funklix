@@ -679,6 +679,17 @@ jobs:
         run: |
           node scripts/check-bw46-4-onboarding-reliability.js
           node scripts/check-bw46-4-onboarding-browser.js
+      - name: Check BW-46.6 typed review and atomic bulk acceptance
+        run: |
+          node scripts/check-bw46-6-brand-review.js
+          node scripts/check-bw46-6-brand-review-browser.js
+      - name: Preserve BW-46.6 review screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bw46-6-browser-postgres-${{ matrix.postgres }}
+          path: work/bw46-6/screenshots/
+          if-no-files-found: ignore
       - name: Check BW-46.5 enrichment response reliability
         run: |
           node scripts/check-bw46-5-enrichment-response.js

@@ -101,7 +101,7 @@
       const preview = await response.json();
       if (!response.ok) return { response, payload: preview };
       const details = preview.changes.map(c => c.path + '\n' + JSON.stringify(c.expected) + '\n→ ' + (c.action === 'remove' ? '(remove)' : JSON.stringify(c.value))).join('\n\n');
-      if (!confirmReview || !await confirmReview('Review these Brand changes:\n\n' + details)) throw new Error('REVIEW_CANCELLED');
+      if (!confirmReview || !await confirmReview('Review these Brand changes:\n\n' + details, preview)) throw new Error('REVIEW_CANCELLED');
       if (!current()) throw new Error('CONTEXT_CHANGED');
       token = preview.review_token; if (pending) pending.token = token;
     }

@@ -128,6 +128,7 @@
     let pendingLogo = null;
     let acceptanceOperation = null;
     let brainDraft = null;
+    const enrichmentTiles = new WeakMap();
     const state = {
       brand: options.brand, name: options.brand.name, core: clone(options.brand.brand_core),
       website: options.website || options.brand.brand_core?.brandAssets?.domain || options.brand.brand_core?.website || '',
@@ -233,7 +234,7 @@
       state.autoKeys = state.autoKeys.filter(item => item !== key);
       changed();
     }
-    async function canonicalMutation(previous, draft, operation, atomicEvidence = false) {
+    async function canonicalMutation(previous, draft, operation, atomicEvidence = false, review = null) {
       const command = writes.command(previous, draft, captured.workspaceId, operation);
       if (atomicEvidence) {
         const path='/brand_core/'+enrichment.KEY, exists=Object.hasOwn(previous.brand_core,enrichment.KEY);
@@ -242,7 +243,7 @@
       }
       if (operation === 'domain_fill') for (const change of command.changes) change.action = 'fill_empty';
       const result = await writes.submit({ fetchImpl, brandId: previous.id, command, pending: pendingWrite, current,
-        confirmReview: options.confirmReview || root.confirm?.bind(root) });
+        confirmReview: review && options.confirmEnrichmentReview ? (message, preview) => options.confirmEnrichmentReview(preview, { ...review, previous, command }) : options.confirmReview || root.confirm?.bind(root) });
       if (!current()) return null;
       return result;
     }
@@ -393,23 +394,50 @@
       });
     }
     function editEnrichment(key, value) {
-      if (!current() || state.readOnly || state.pending || !state.enrichment?.fields?.[key] || !enrichment.valid(key,value)) return false;
-      (state.enrichmentEdits ||= {})[key] = clone(value); return true;
+      if (!current() || state.readOnly || state.pending || !state.enrichment?.fields?.[key]) return false;
+      let valid=false;try { valid=enrichment.valid(key,value); } catch { /* unsafe shape */ }
+      (state.enrichmentEditErrors ||= {})[key]=!valid;
+      if (value !== undefined) (state.enrichmentEdits ||= {})[key] = clone(value);
+      return valid;
     }
-    function decideEnrichment(key, decision) {
+    function createEnrichmentTile(type) {
+      let tiles=enrichmentTiles.get(state.enrichment);
+      if(!tiles){tiles=new Map();enrichmentTiles.set(state.enrichment,tiles);}
+      if(!tiles.has(type))tiles.set(type,options.createTile?.(type));
+      const tile=tiles.get(type);return tile?clone(tile):undefined;
+    }
+    function enrichmentPlan() {
+      return enrichment.plan(state.brand.brand_core,state.enrichment,{revision:state.brand.revision,
+        authorized:current()&&!state.readOnly&&state.brand.access?.canEditCanonicalBrand===true&&['owner','admin','editor'].includes(state.brand.access?.role),
+        edits:state.enrichmentEdits,errors:state.enrichmentEditErrors,createTile:createEnrichmentTile});
+    }
+    function decideEnrichment(key, decision) { return saveEnrichment([{key,decision}]); }
+    function acceptAllEnrichment() { return saveEnrichment(null); }
+    function saveEnrichment(decisions) {
       return run('Saving enrichment decision…', async () => {
         const draft = state.enrichment;
         if (!draft || draft.revision !== state.brand.revision || contentDirty()) { state.message = 'This proposal is stale. Reload and generate again.'; return false; }
-        const previous = state.brand;
-        const value = Object.hasOwn(state.enrichmentEdits || {},key) ? state.enrichmentEdits[key] : draft.fields[key]?.value;
-        const core = enrichment.adopt(previous.brand_core,draft,key,decision,value,options.createTile);
-        const result = await canonicalMutation(previous,{name:previous.name,brand_core:core},'profile_edit',true);
+        const previous = state.brand, plan=enrichmentPlan();
+        let core=previous.brand_core;
+        const selected=decisions || plan.accepted.map(key=>({key,decision:'accepted'}));
+        if (!selected.length) { state.message='No eligible suggestions. Review the items needing attention.'; return false; }
+        if (!decisions) core=plan.core;
+        for (const {key,decision} of decisions || []) {
+          if (decision==='accepted'&&!plan.accepted.includes(key)) { state.message=plan.excluded.find(item=>item.key===key)?.reason || 'Enter a valid suggested value.'; return false; }
+          const value=Object.hasOwn(state.enrichmentEdits || {},key)?state.enrichmentEdits[key]:draft.fields[key]?.value;
+          core=enrichment.adopt(core,draft,key,decision,value,createEnrichmentTile);
+        }
+        const result = await canonicalMutation(previous,{name:previous.name,brand_core:core},'profile_edit',true,
+          {keys:selected.map(item=>item.key),decisions:selected,excluded:plan.excluded});
         if (!result?.response.ok) { state.message = result ? errorText(result.response,'Enrichment decision could not be saved.',result.payload) : 'Enrichment decision could not be saved.'; return false; }
         const confirmed = await verifyBrand();
-        if (!confirmed || !writes.equal(confirmed.brand_core,core) || confirmed.revision !== previous.revision + 1) { state.syncRequired=true; return false; }
+        if (!confirmed || !writes.equal(confirmed.brand_core,core) || confirmed.name!==previous.name || confirmed.revision !== previous.revision + 1) {
+          state.syncRequired=true;state.message='Brand Profile saved on the server. Reload saved Brand to synchronize. Your inputs are retained.';return false;
+        }
         state.brand=confirmed;state.core=editableCore(confirmed.brand_core);baseline=draftSignature();
-        // Carry remaining proposals only across this session's confirmed own mutation.
-        draft.revision=confirmed.revision;delete draft.fields[key];delete state.enrichmentEdits?.[key];
+        // Only this confirmed own mutation can carry the remaining proposals forward.
+        draft.revision=confirmed.revision;
+        for(const {key} of selected) {delete draft.fields[key];delete state.enrichmentEdits?.[key];delete state.enrichmentEditErrors?.[key];}
         try { await onSave(confirmed); } catch { state.reconciliationWarning=true; }
         state.message='Brand Profile saved';return true;
       });
@@ -713,14 +741,15 @@
       captured.generation = live.generation;
       return true;
     }
-    return { state, current, belongsToAccount(account) { return account === captured.account; }, refreshContext, founderTile, stageFounderNarrative, generateFounder, acceptFounder, analyze, enrichProfile, editEnrichment, decideEnrichment, save, upload, removeLogo, useLogo, chooseFile, applyProposal, keepProposal, retryAutomatic, reload,
+    return { state, current, belongsToAccount(account) { return account === captured.account; }, refreshContext, founderTile, stageFounderNarrative, generateFounder, acceptFounder, analyze, enrichProfile, editEnrichment, decideEnrichment, enrichmentPlan, acceptAllEnrichment, save, upload, removeLogo, useLogo, chooseFile, applyProposal, keepProposal, retryAutomatic, reload,
       discard, stageValueProposition, requestDna, generateDna, acceptDna, generateAvatar, acceptAvatar, contentDirty,
       subscribe(fn) { notify = fn; }, invalidate() { alive = false; brainDraft = null; state.questions = null; state.founderDraft = null; state.founderDraftBase = null; state.researchEntry = { domain: '', description: '', founderUrl: '' }; state.enrichment = null; state.enrichmentEdits = {}; state.file = null; state.fileData = null; state.candidate = null; state.proposals = {}; state.dnaDraft = null; state.avatarDraft = null; state.avatarDirection = ''; state.core = {}; state.website = ''; state.name = ''; },
       dirty() { return contentDirty(); }, busy() { return !!state.pending; } };
   }
 
   function mount(container, options) {
-    const session = createSession(options), s = session.state, doc = container.ownerDocument;
+    const doc = container.ownerDocument;
+    const session = createSession({...options,confirmEnrichmentReview: (preview, review) => confirmEnrichmentReview(preview,review)}), s = session.state;
     let fileInput = null, lastFocusKey = null, hasRendered = false, updateWebsiteDraft = () => {};
     const learnings = root.FunklixBrandLearnings?.create({ brand: s.brand, workspaceId:options.getContext().workspaceId, document: doc, language: options.language, fetchImpl: options.fetchImpl, current: session.current });
     const t = key => root.FunklixLanguage.t(key, options.language());
@@ -767,6 +796,105 @@
     function enrichmentCurrent(key) {
       try { return { available: true, value: enrichment.target(s.brand.brand_core, key) }; }
       catch { return { available: false, value: null }; }
+    }
+    const classificationLabel = key => t({ai_interpretation:'AI suggestion',website_supported:'Website-supported',user_provided:'Based on your description',conflicting:'Conflicting information',missing:'Needs more information',unavailable:'Current value unavailable'}[key] || 'Unsupported suggestion');
+    function sourceDetails(field,parent,key) {
+      if (!field.evidence?.length) return;
+      const details=node('details','',parent);details.dataset.disclosure='proposal-sources:'+key;
+      node('summary',t('View sources'),details);
+      for(const e of field.evidence) {
+        const quote=node('blockquote',e.excerpt,details);
+        node('p',t({explicit_user_input:'Based on your description',authorized_canonical_brand:'Saved value',accepted_field_evidence:'Previously reviewed evidence'}[e.origin] || (e.url?'Website evidence':'User-provided information')),quote);
+        if(e.url) { const url=enrichment.url(e.url);if(url){const link=node('a',url,quote);link.href=url;link.target='_blank';link.rel='noopener noreferrer';} }
+      }
+    }
+    // One native modal, scoped to enrichment only. The writer retains the server token.
+    function confirmEnrichmentReview(preview,review) {
+      if(!session.current()||!preview?.review_token||!Array.isArray(preview.changes)||!writes.equal(preview.changes,review.command.changes))return Promise.resolve(false);
+      const after=writes.apply(review.previous,{...review.command,changes:preview.changes}).brand_core;
+      return new Promise(resolve=>{
+        const focus=doc.activeElement,dialog=node('dialog','',doc.body);dialog.className='brand-suggestion-dialog';
+        const title=node('h2',t('Review Brand Profile changes'),dialog);title.id='brand-suggestion-review-title';dialog.setAttribute('aria-labelledby',title.id);
+        node('p',review.decisions.every(item=>item.decision==='accepted')?(review.keys.length===1?t('1 suggestion will be saved'):review.keys.length+' '+t('suggestions will be saved')):t('Your review decision will be saved.'),dialog);
+        const changes=node('div','',dialog);changes.className='profile-confirm-changes';changes.tabIndex=0;changes.setAttribute('role','region');changes.setAttribute('aria-labelledby',title.id);
+        for(const key of review.keys) {
+          const row=node('section','',changes);node('h3',enrichmentLabel(key),row);
+          node('strong',t('Saved value'),row);
+          try {const value=enrichment.target(review.previous.brand_core,key);if(meaningful(value))readable(value,row);else node('p',t('Empty'),row);} catch {node('p',t('Current value unavailable'),row);}
+          const decision=review.decisions.find(item=>item.key===key)?.decision;
+          if(decision!=='accepted')node('p',t(decision),row);
+          node('strong',t('After confirmation'),row);try {const value=enrichment.target(after,key);if(meaningful(value))readable(value,row);else node('p',t('Empty'),row);} catch {node('p',t('Current value unavailable'),row);}
+        }
+        if(review.excluded.length) {const details=node('details','',changes);node('summary',t('Skipped suggestions')+' ('+review.excluded.length+')',details);for(const item of review.excluded)node('p',enrichmentLabel(item.key)+': '+t(item.reason),details);}
+        const actions=node('div','',dialog);actions.className='profile-review-actions';
+        const close=value=>{root.clearInterval(contextWatch);dialog.close();dialog.remove();if(focus?.isConnected)focus.focus();resolve(value);};
+        const cancel=node('button',t('Cancel'),actions);cancel.type='button';cancel.addEventListener('click',()=>close(false));
+        const confirm=node('button',t('Confirm changes'),actions);confirm.type='button';confirm.className='fk-btn fk-btn-primary';confirm.addEventListener('click',()=>close(session.current()&&!s.readOnly));
+        dialog.addEventListener('cancel',event=>{event.preventDefault();close(false);});
+        dialog.addEventListener('keydown',event=>{
+          if(event.key!=='Tab')return;
+          const focusable=[...dialog.querySelectorAll('button,summary,a[href],[tabindex="0"]')].filter(n=>!n.disabled&&n.getClientRects().length);
+          const next=event.shiftKey&&doc.activeElement===focusable[0]?focusable.at(-1):!event.shiftKey&&doc.activeElement===focusable.at(-1)?focusable[0]:null;
+          if(next){event.preventDefault();next.focus();}
+        });
+        const contextWatch=root.setInterval(()=>{if(!session.current()||s.readOnly)close(false);},100);
+        dialog.showModal();cancel.focus();
+      });
+    }
+    function proposalShape(key,value) {
+      const type=FIELDS[key]?.[2] || (enrichment.modules.includes(key)?'text':null);
+      const list=v=>Array.isArray(v)&&v.every(item=>typeof item==='string');
+      if(type==='text')return typeof value==='string';
+      if(type==='list')return list(value);
+      if(type==='personas')return Array.isArray(value)&&value.every(p=>object(p)&&Object.keys(p).every(k=>['name','note'].includes(k))&&typeof p.name==='string'&&typeof p.note==='string');
+      if(!object(value))return false;
+      if(type==='rules')return Object.keys(value).every(k=>['dos','donts'].includes(k))&&list(value.dos)&&list(value.donts);
+      if(type==='examples')return Object.keys(value).every(k=>['good','avoid'].includes(k))&&typeof value.good==='string'&&typeof value.avoid==='string';
+      return type==='assets'&&Object.entries(value).every(([key,item])=>['colors','typography','references'].includes(key)&&(key==='typography'?typeof item==='string':list(item)));
+    }
+    function proposalEditor(key,value,parent,onChange) {
+      // Shapes already validated by the shared adoption contract; no JSON parser UI.
+      const wrap=node('div','',parent);wrap.className='profile-proposal-editor';
+      const update=next=>{value=next;onChange(next);};
+      const input=(label,text,change,id,multi=true)=>textField(label,text,wrap,change,multi,id);
+      function list(label,items,change,id) {
+        const group=node('fieldset','',wrap);node('legend',t(label),group);
+        const draw=()=>{
+          group.querySelectorAll(':scope > :not(legend)').forEach(n=>n.remove());
+          items.forEach((item,index)=>{
+            const row=node('div','',group);row.className='profile-list-row';
+            const field=textField(t(label)+' '+(index+1),item,row,text=>{items[index]=text;change(items.slice());},false,id+'-'+index);
+            field.setAttribute('aria-label',t(label)+' '+(index+1));
+            for(const [label,offset] of [['Move up',-1],['Move down',1]]) {
+              const move=button(label,row,()=>{[items[index],items[index+offset]]=[items[index+offset],items[index]];change(items.slice());draw();group.querySelector('[data-profile-key="'+id+'-'+(index+offset)+'"]')?.focus();},id+'-'+index+'-'+offset);
+              move.disabled ||= s.readOnly||index+offset<0||index+offset>=items.length;
+            }
+            const remove=button('Remove item',row,()=>{items.splice(index,1);change(items.slice());draw();group.querySelector('input,button')?.focus();},id+'-remove-'+index);remove.disabled ||=s.readOnly;
+          });
+          const add=button('Add item',group,()=>{items.push('');change(items.slice());draw();group.querySelector('[data-profile-key="'+id+'-'+(items.length-1)+'"]')?.focus();},id+'-add');add.disabled ||=s.readOnly;
+        };draw();
+      }
+      const type=FIELDS[key]?.[2] || 'text',id='enrichment-'+key;
+      if(type!=='text')wrap.dataset.profileKey=id;
+      if(type==='text')input('Suggested value',value,update,id);
+      else if(type==='list')list('Suggested value',value.slice(),update,id);
+      else if(type==='personas') {
+        const draw=()=>{
+          wrap.replaceChildren();
+          value.forEach((persona,index)=>{
+            input('Name',persona.name,text=>{value[index]={...value[index],name:text};update(value.slice());},id+'-'+index+'-name',false);
+            input('Description',persona.note,text=>{value[index]={...value[index],note:text};update(value.slice());},id+'-'+index+'-note');
+            button('Remove audience',wrap,()=>{value.splice(index,1);update(value.slice());draw();},id+'-remove-'+index).disabled ||=s.readOnly;
+          });
+          button('Add audience',wrap,()=>{value.push({name:'',note:''});update(value.slice());draw();wrap.querySelector('input')?.focus();},id+'-add').disabled ||=s.readOnly;
+        };draw();
+      } else for(const part of type==='rules'?['dos','donts']:type==='examples'?['good','avoid']:Object.keys(value)) {
+        const label={dos:'Do',donts:'Avoid',good:'Good example',avoid:'Avoid',colors:'Colors',typography:'Typography',references:'References'}[part];
+        const change=item=>update({...value,[part]:item});
+        if(Array.isArray(value[part]))list(label,value[part].slice(),change,id+'-'+part);
+        else input(label,value[part],change,id+'-'+part);
+      }
+      return wrap;
     }
     function requestEnrichment(input) {
       // Preserve the reusable BW-46.2 controller contract. The visible UI asks
@@ -1074,43 +1202,75 @@
         if (!s.readOnly) button('Prepare enrichment draft', section, () => { requestEnrichment({description:s.core.brandCore || '', ...(s.website.trim() ? {domainUrl:s.website} : {})}); });
       } else if (SECTIONS[s.section] === 'Review') {
         if (s.enrichment) {
-          node('p', t('Review, correct and accept each suggestion. Acceptance saves that field; other drafts remain optional.'), section);
+          node('p', t('Review and edit suggestions, then accept individually or save eligible suggestions together.'), section);
           if (!s.readOnly) button('Discard enrichment draft', section, () => { s.enrichment = null; s.enrichmentEdits = {}; s.questions = null; render(); });
         }
-        const list = node('ul', '', section);
+        const savedReview=s.enrichment?node('details','',section):section;
+        if(s.enrichment){savedReview.dataset.disclosure='saved-profile-review';node('summary',t('Saved profile and previous reviews'),savedReview);}
+        const list = node('ul', '', savedReview);
         for (const key of ['Brand Basics', 'Foundation', 'Audience', 'Voice & Messaging', 'Offers & Proof']) {
           const complete = key === 'Brand Basics' ? !!s.name.trim() && !!s.website.trim()
             : key === 'Offers & Proof' ? meaningful(s.core.valueProposition) || s.core.customTiles?.some(tile => ['product_knowledge','business_plan','pitch_deck','whitepaper'].includes(tile.moduleType) && meaningful(tile.content))
             : Object.entries(FIELDS).filter(([, [group]]) => group === key).some(([field]) => meaningful(s.core[field]));
           node('li', `${t(key)}: ${t(complete ? 'Provided' : 'Can be completed')}`, list);
         }
-        node('p', `${t('Website analysis')}: ${t(s.analysis)}`, section); logo(section);
+        node('p', `${t('Website analysis')}: ${t(s.analysis)}`, savedReview); logo(savedReview);
         for(const [key,record] of Object.entries(s.brand.brand_core[enrichment.KEY]?.fields || {})) {
-          const history=node('details','',section);history.dataset.disclosure='evidence:'+key;node('summary',enrichmentLabel(key)+' — '+t(record.decision),history);
+          const history=node('details','',savedReview);history.dataset.disclosure='evidence:'+key;node('summary',enrichmentLabel(key)+' — '+t(record.decision),history);
           const current = enrichmentCurrent(key);
-          node('p',t(record.classification),history);
+          node('p',classificationLabel(record.classification),history);
           if (!current.available) node('p',t('Current value unavailable. Review modules in Advanced options.'),history);
           else if(record.decision==='accepted'&&!(object(record.value)?Object.entries(record.value).every(([part,value])=>writes.equal(value,current.value?.[part])):writes.equal(record.value,current.value)))node('p',t('Historical evidence; the field has changed since acceptance.'),history);
           if(record.userEdited)node('p',t('Edited by you'),history);
           for(const e of record.evidence || []){node('p',e.excerpt,history);if(e.url)node('p',e.url,history);}
         }
-        for (const [key, field] of Object.entries(s.enrichment?.fields || {})) {
-          const proposal=node('section','',section);proposal.className='profile-proposal';node('h4',enrichmentLabel(key),proposal);
-          const current = enrichmentCurrent(key);
-          node('p',t(field.classification),proposal);node('p',t('Current value'),proposal);
-          if (current.available) readable(current.value,proposal); else node('p',t('Current value unavailable. Review modules in Advanced options.'),proposal);
-          for (const e of field.evidence || []) { node('p',e.excerpt,proposal); if(e.url)node('p',e.url,proposal); }
-          const adoptable=current.available&&!['missing','unavailable','conflicting'].includes(field.classification);
-          if (adoptable) {
-            const value=Object.hasOwn(s.enrichmentEdits || {},key)?s.enrichmentEdits[key]:field.value;
-            const editor=textField('Suggested value',typeof value==='string'?value:JSON.stringify(value,null,2),proposal,text=>{
-              try { const parsed=typeof field.value==='string'?text:JSON.parse(text);if(session.editEnrichment(key,parsed)){delete s.enrichmentEditErrors?.[key];editor.setCustomValidity('');}else{(s.enrichmentEditErrors||={})[key]=true;editor.setCustomValidity(t('Enter a valid suggested value.'));} }
-              catch { (s.enrichmentEditErrors||={})[key]=true;editor.setCustomValidity(t('Enter a valid suggested value.')); }
-            },true,'enrichment-'+key);
-            if(!s.readOnly)button('Accept suggestion',proposal,()=>{if(editor.reportValidity()&&!s.enrichmentEditErrors?.[key])void session.decideEnrichment(key,'accepted');},'accept-enrichment-'+key);
-          }
-          if(!s.readOnly){button('Reject suggestion',proposal,()=>{void session.decideEnrichment(key,'rejected');},'reject-enrichment-'+key);button('Complete later',proposal,()=>{void session.decideEnrichment(key,'postponed');},'postpone-enrichment-'+key);}
+        const plan=session.enrichmentPlan();
+        const refreshEligibility=()=>{
+          const latest=session.enrichmentPlan(),items=Object.values(s.enrichment?.fields || {}),total=items.length,available=items.filter(field=>!['missing','unavailable'].includes(field.classification)&&meaningful(field.value)).length;
+          const summary=section.querySelector('.profile-review-counts');
+          if(summary)summary.textContent=total+' '+t('Review items')+' · '+available+' '+t('Available suggestions')+' · '+latest.accepted.length+' '+t('Eligible for acceptance')+' · '+latest.excluded.length+' '+t('Needs attention')+' · '+Object.keys(s.brand.brand_core[enrichment.KEY]?.fields || {}).length+' '+t('Already reviewed');
+          const skipped=section.querySelector('.profile-review-skipped');
+          if(skipped){skipped.hidden=!latest.excluded.length;skipped.replaceChildren();node('summary',t('Skipped suggestions')+' ('+latest.excluded.length+')',skipped);for(const item of latest.excluded)node('p',enrichmentLabel(item.key)+': '+t(item.reason),skipped);}
+          const bulk=section.querySelector('[data-profile-key="accept-all-enrichment"]');
+          if(bulk){bulk.textContent=t('Accept all suggestions')+' ('+latest.accepted.length+')';bulk.disabled=s.readOnly||!!s.pending||!latest.accepted.length||session.contentDirty();bulk.title=latest.accepted.length?t('Save eligible suggestions together'):t('No eligible suggestions. Review the items needing attention.');}
+          for(const [key] of Object.entries(s.enrichment?.fields || {})) {const accept=section.querySelector('[data-profile-key="accept-enrichment-'+key+'"]');if(accept)accept.disabled=s.readOnly||!!s.pending||!latest.accepted.includes(key)||session.contentDirty();}
+        };
+        if(s.enrichment) {
+          const header=node('section','',section);header.className='profile-review-header';section.insertBefore(header,section.children[1] || null);
+          node('p','',header).className='profile-review-counts';
+          const bulk=button('Accept all suggestions',header,()=>{void session.acceptAllEnrichment();},'accept-all-enrichment');bulk.className='fk-btn fk-btn-primary';
+          const skipped=node('details','',header);skipped.className='profile-review-skipped';skipped.dataset.disclosure='review-skipped';
         }
+        for (const [key, field] of Object.entries(s.enrichment?.fields || {})) {
+          const attention=['missing','unavailable'].includes(field.classification);
+          const proposal=node(attention?'details':'section','',section);proposal.className='profile-proposal profile-enrichment-proposal';proposal.dataset.field=key;
+          if(attention){proposal.dataset.disclosure='proposal-attention:'+key;node('summary',enrichmentLabel(key)+' — '+classificationLabel(field.classification),proposal);}
+          node('h4',enrichmentLabel(key),proposal);node('p',classificationLabel(field.classification),proposal).className='profile-suggestion-kind';
+          const comparison=node('div','',proposal);comparison.className='profile-proposal-comparison';
+          const saved=node('div','',comparison);node('strong',t('Saved value'),saved);
+          const current=enrichmentCurrent(key);
+          if(current.available&&meaningful(current.value))readable(current.value,saved);else node('p',t(current.available?'Empty':'Current value unavailable. Review modules in Advanced options.'),saved);
+          const suggested=node('div','',comparison);node('strong',t('Suggested value'),suggested);readable(Object.hasOwn(s.enrichmentEdits || {},key)?s.enrichmentEdits[key]:field.value,suggested);
+          sourceDetails(field,proposal,key);
+          const value=Object.hasOwn(s.enrichmentEdits || {},key)?s.enrichmentEdits[key]:field.value;
+          const supported=proposalShape(key,value);
+          const adoptable=current.available&&!['missing','unavailable','conflicting'].includes(field.classification)&&supported&&!plan.excluded.some(item=>item.key===key&&['Specialized module. Use its existing editor in Advanced options.','Use the existing editor in Advanced options'].includes(item.reason));
+          if(adoptable) {
+            const editor=node('details','',proposal);editor.open=typeof value==='string';editor.dataset.disclosure='proposal-edit:'+key;node('summary',t('Edit suggestion'),editor);
+            const error=node('p',t('Enter a valid suggested value.'),editor);error.className='profile-proposal-error';error.setAttribute('role','alert');error.hidden=!s.enrichmentEditErrors?.[key];
+            proposalEditor(key,clone(value),editor,next=>{error.hidden=session.editEnrichment(key,next);suggested.replaceChildren();node('strong',t('Suggested value'),suggested);readable(next,suggested);refreshEligibility();});
+          }
+          const excluded=plan.excluded.find(item=>item.key===key);
+          if(excluded)node('p',t(excluded.reason),proposal);
+          const actions=node('div','',proposal);actions.className='profile-review-actions';
+          if(!s.readOnly) {
+            if(adoptable){const accept=button('Accept suggestion',actions,()=>{void session.decideEnrichment(key,'accepted');},'accept-enrichment-'+key);accept.className='fk-btn fk-btn-primary';}
+            if(!supported||!current.available||['Specialized module. Use its existing editor in Advanced options.','Use the existing editor in Advanced options'].includes(excluded?.reason))button('Edit in Advanced options',actions,()=>options.onAdvanced(session),'advanced-enrichment-'+key);
+            button('Reject suggestion',actions,()=>{void session.decideEnrichment(key,'rejected');},'reject-enrichment-'+key);
+            button('Complete later',actions,()=>{void session.decideEnrichment(key,'postponed');},'postpone-enrichment-'+key);
+          }
+        }
+        refreshEligibility();
         for (const [key, value] of Object.entries(s.proposals)) {
           const proposal = node('section', '', section); proposal.className = 'profile-proposal'; node('h4', t(FIELDS[key][1]), proposal);
           node('p', t('Current value'), proposal); readable(s.brand.brand_core[key], proposal);
