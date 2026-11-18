@@ -8,8 +8,13 @@ const {createHash}=require('crypto');
 const {responseFormat}=require('./_brand-enrichment-schema');
 const meaningful=v=>typeof v==='string'?!!v.trim():Array.isArray(v)?v.some(meaningful):v&&typeof v==='object'?Object.values(v).some(meaningful):false;
 function failure(code,status=422){return Object.assign(new Error(code),{code,status});}
-function questions(field,language){
- const de=language==='de';const q={mission:de?'Welche Veränderung möchtest du für deine Kunden bewirken?':'What change do you want to create for customers?',personas:de?'Wer trifft üblicherweise die Kaufentscheidung?':'Who typically makes the buying decision?',valueProposition:de?'Welches konkrete Kundenergebnis ist am wichtigsten?':'Which concrete customer outcome matters most?',vision:de?'Welche Zukunft möchtest du mit deinem Unternehmen erreichen?':'What future do you want your company to help create?',values:de?'Welche Prinzipien bestimmen eure Entscheidungen?':'Which principles guide your decisions?'};
+function questions(field,language,{existing=false}={}){
+ const de=language==='de';
+ if(existing){
+  const refine={toneOfVoice:['Welche Eigenschaft eurer bisherigen Stimme soll stärker hervortreten?','Which characteristic of your existing voice should stand out more?'],valueProposition:['Welches Kundenergebnis soll stärker im Vordergrund stehen?','Which customer outcome should receive more emphasis?'],personas:['Welche bestehende Kundengruppe oder Kaufentscheidung soll präziser beschrieben werden?','Which existing customer segment or buying decision should be described more precisely?']};
+  return [{id:field,question:refine[field]?.[de?0:1]||(de?'Was möchtest du am bestehenden Inhalt dieses Feldes präzisieren?':'What would you like to clarify in the existing content of this field?')}];
+ }
+ const q={mission:de?'Welche Veränderung möchtest du für deine Kunden bewirken?':'What change do you want to create for customers?',personas:de?'Wer trifft üblicherweise die Kaufentscheidung?':'Who typically makes the buying decision?',valueProposition:de?'Welches konkrete Kundenergebnis ist am wichtigsten?':'Which concrete customer outcome matters most?',vision:de?'Welche Zukunft möchtest du mit deinem Unternehmen erreichen?':'What future do you want your company to help create?',values:de?'Welche Prinzipien bestimmen eure Entscheidungen?':'Which principles guide your decisions?'};
  const other={brandCore:['Was bietet dein Unternehmen an und für wen?','What does your company offer, and for whom?'],toneOfVoice:['Soll eure Kommunikation eher technisch, persönlich, hochwertig oder nahbar wirken?','Should your communication feel more technical, personal, premium or approachable?'],messagingPillars:['Welche Kernbotschaften sollen Kunden behalten?','Which key messages should customers remember?'],contentGuidelines:['Welche Regeln soll eure Kommunikation befolgen?','Which rules should your communications follow?'],keywords:['Welche Begriffe beschreiben eure Arbeit?','Which terms describe your work?'],dosAndDonts:['Was soll eure Kommunikation tun oder vermeiden?','What should your communications do or avoid?'],brandVoiceExamples:['Welche Formulierung passt zu euch, welche nicht?','Which wording fits your brand, and which does not?'],brandAssets:['Welche Farben, Schriften oder visuellen Referenzen nutzt ihr?','Which colors, typography or visual references do you use?']};
  return [{id:field,question:q[field]||other[field]?.[de?0:1]}];
 }
@@ -31,7 +36,7 @@ async function prepare(brand,input,deps){
  const base={version:c.VERSION,brandId:brand.id,revision:Number(brand.revision),fields:{},questions:[],origin:input.domainUrl?'website_and_brand_context':'description_and_brand_context'};
  Object.assign(base,{requestedSection:input.section||null,targetFields:keys,language,unsupportedFields:input.section==='brand_identity'?['founder_story','brand_dna']:[],missingFields:[]});
  if(input.action==='questions'){let current;try{current=c.target(brand.brand_core,input.field);}catch{}
-  base.questions=meaningful(current)?[]:questions(input.field,language);return base;}
+  base.questions=questions(input.field,language,{existing:meaningful(current)});return base;}
  diagnostics.stage='provider_configuration';
  if(!deps.fetch&&!deps.apiKey&&!process.env.OPENAI_API_KEY)throw failure('PROVIDER_NOT_CONFIGURED',503);
  const description=input.description||'';
