@@ -40,7 +40,7 @@ async function run(input={},fields={},b=brand(),inspect=()=>{}){
  for(const language of ['de','en']){
   const valid=language==='de'?['Erkläre die Technik und die Vorteile für unsere Kunden.']:['Explain the technology and the benefits for our customers.'];
   const foreign=language==='de'?['We are the partner for your customers and their needs.']:['Wir sind der Partner für unsere Kunden und ihre Bedürfnisse.'];
-  const d=await run({language,section:'voice_messaging',targetFields:['contentGuidelines','toneOfVoice','dosAndDonts']},{contentGuidelines:item(valid),toneOfVoice:item(['North Star International','The House of the Future','HVAC','IoT','R290','B2B','Frostwerk Beispieltechnik']),dosAndDonts:item({dos:foreign,donts:[]})});
+  const d=await run({language,section:'voice_messaging',targetFields:['contentGuidelines','toneOfVoice','dosAndDonts']},{contentGuidelines:item(valid),toneOfVoice:item(['North Star International','The House of the Future','Do It For You','HVAC','IoT','R290','B2B','Frostwerk Beispieltechnik']),dosAndDonts:item({dos:foreign,donts:[]})});
   assert.equal(d.fields.contentGuidelines.classification,'ai_interpretation');assert.equal(d.fields.toneOfVoice.classification,'ai_interpretation');assert.equal(d.fields.dosAndDonts.classification,'unavailable');assert(d.diagnostics.fieldIssues.some(i=>i.category==='language_mismatch'&&i.fieldKey==='dosAndDonts'));
   assert(q.mismatch({good:valid[0],avoid:foreign[0]},language));
  }

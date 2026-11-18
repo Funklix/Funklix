@@ -166,7 +166,11 @@ function mismatch(value,language,names=[]){
  const other=language==='de'?'en':'de';
  return strings(value).some(raw=>{
   let text=raw;for(const name of names.filter(n=>typeof n==='string'&&n.trim()))text=text.split(name).join(' ');
-  const tokens=text.toLowerCase().match(/\p{L}+/gu)||[];
+  const originalTokens=text.match(/\p{L}+/gu)||[];
+  // Short title-cased labels may be international product/font/reference names.
+  // Treat them as ambiguous rather than rejecting a name as foreign prose.
+  if(originalTokens.length<=8&&originalTokens.every(w=>/^\p{Lu}/u.test(w)))return false;
+  const tokens=originalTokens.map(w=>w.toLowerCase());
   const requested=tokens.filter(w=>words[language].has(w)).length,foreign=tokens.filter(w=>words[other].has(w)).length;
   return tokens.some(w=>clauses[other].has(w))&&foreign>=3&&foreign>=requested+3&&foreign/Math.max(tokens.length,1)>=0.2;
  });
