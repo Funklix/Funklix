@@ -1265,7 +1265,7 @@
           const actions=node('div','',proposal);actions.className='profile-review-actions';
           if(!s.readOnly) {
             if(adoptable){const accept=button('Accept suggestion',actions,()=>{void session.decideEnrichment(key,'accepted');},'accept-enrichment-'+key);accept.className='fk-btn fk-btn-primary';}
-            if(!supported||!current.available||['Specialized module. Use its existing editor in Advanced options.','Use the existing editor in Advanced options'].includes(excluded?.reason))button('Edit in Advanced options',actions,()=>options.onAdvanced(session),'advanced-enrichment-'+key);
+            if(field.reason==='quality_review_required'||!supported||!current.available||['Specialized module. Use its existing editor in Advanced options.','Use the existing editor in Advanced options'].includes(excluded?.reason))button('Edit in Advanced options',actions,()=>options.onAdvanced(session),'advanced-enrichment-'+key);
             button('Reject suggestion',actions,()=>{void session.decideEnrichment(key,'rejected');},'reject-enrichment-'+key);
             button('Complete later',actions,()=>{void session.decideEnrichment(key,'postponed');},'postpone-enrichment-'+key);
           }
@@ -1355,7 +1355,7 @@
         if(d.requestId)node('p',t('Request ID')+': '+d.requestId,details);
         if(d.validationCategory)node('p',t('Failure category')+': '+d.validationCategory,details);
         if(d.stage)node('p',t('Processing stage')+': '+d.stage,details);
-        const reasons={invalid_value:'Suggestion excluded: invalid field value.',unsupported_field:'Suggestion excluded: unsupported field.',invalid_classification:'Suggestion excluded: invalid classification.',invalid_evidence:'Unsupported citations were excluded; factual suggestions require valid evidence.'};
+        const reasons={invalid_value:'Suggestion excluded: invalid field value.',unsupported_field:'Suggestion excluded: unsupported field.',invalid_classification:'Suggestion excluded: invalid classification.',invalid_evidence:'Unsupported citations were excluded; factual suggestions require valid evidence.',language_mismatch:'Suggestion withheld: output language differs. Edit manually or explicitly generate again.',field_purpose_review:'Suggestion withheld: review whether it serves this field.',claim_grounding_review:'Suggestion withheld: a quantified claim needs supporting evidence.'};
         for(const issue of d.fieldIssues||[])node('p',(issue.fieldKey?enrichmentLabel(issue.fieldKey)+': ':'')+t(reasons[issue.category]||'Suggestion excluded: invalid field value.'),details);
       }
       if (s.addedCount) node('p', t('{count} details added from the website.').replace('{count}', s.addedCount), container).setAttribute('role', 'status');
