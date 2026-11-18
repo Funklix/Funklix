@@ -62,7 +62,7 @@ async function prepare(brand,input,deps){
  // is used as authority. Unapproved DNA must not leak through archetype/signals.
  const core=c.publicCore(brand.brand_core);
  const normalized=normalizeBrandBrainData({...core,brandDNA:core.brandDNA?.userApproved===true?core.brandDNA:{},customTiles:(core.customTiles||[]).filter(t=>
-  ['market_research','business_plan'].includes(t.moduleType)||c.modules.includes(t.moduleType)&&!(t.moduleData&&Object.keys(t.moduleData).length))});
+  ['market_research','business_plan'].includes(t.moduleType)||[...c.modules,'product_knowledge','competitor_research','custom'].includes(t.moduleType)&&!(t.moduleData&&Object.keys(t.moduleData).length))});
  const founderTiles=(core.customTiles||[]).filter(t=>t.moduleType==='founder_story');
  const founder=founderTiles.length===1?[serializeFounderStoryContext(founderTiles[0])].filter(Boolean):[];
  sources.push({sourceId:'canonical',classification:'existing_brand_context',origin:'authorized_canonical_brand',excerpt:JSON.stringify({name:brand.name,context:normalized,acceptedFounder:founder,approvedDna:brand.brand_core.brandDNA?.userApproved===true?normalized.brandDNA:null})});
