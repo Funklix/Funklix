@@ -679,6 +679,10 @@ jobs:
         run: |
           node scripts/check-bw46-4-onboarding-reliability.js
           node scripts/check-bw46-4-onboarding-browser.js
+      - name: Check BW-47.1 section intelligence and quality boundaries (mocked inference)
+        run: |
+          node scripts/check-bw47-1-brand-intelligence.js
+          node scripts/check-bw47-1-brand-intelligence-browser.js
       - name: Check BW-46.6 typed review and atomic bulk acceptance
         run: |
           node scripts/check-bw46-6-brand-review.js

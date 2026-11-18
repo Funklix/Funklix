@@ -11,6 +11,13 @@
     brandAssets:v=>object(v)&&Object.keys(v).every(k=>['colors','typography','references'].includes(k))&&Object.entries(v).every(([k,x])=>k==='typography'?text(x,5000):list(x)),
     mission:text,vision:text,values:text};
   const modules=['mission','vision','values'];
+  // Generation scopes only: specialized Founder/DNA owners are never targets.
+  const sections=Object.freeze({
+    brand_foundation:Object.freeze(['brandCore','valueProposition','mission','vision','values']),
+    audience_offers:Object.freeze(['personas']),
+    voice_messaging:Object.freeze(['toneOfVoice','messagingPillars','contentGuidelines','keywords','dosAndDonts','brandVoiceExamples']),
+    brand_identity:Object.freeze(['brandAssets'])
+  });
   const clone=v=>JSON.parse(JSON.stringify(v));
   function fail(code='INVALID_ENRICHMENT'){throw Object.assign(new Error(code),{code});}
   function safe(value){if(value&&typeof value==='object')for(const k of Object.keys(value)){if(['__proto__','constructor','prototype'].includes(k))fail();safe(value[k]);}}
@@ -50,7 +57,7 @@
       else if(!Object.hasOwn(validators,key))reason='Use the existing editor in Advanced options';
       else if(proposal?.classification==='conflicting')reason='Conflicting information';
       else if(proposal?.classification==='missing')reason='Needs more information';
-      else if(proposal?.classification==='unavailable')reason=proposal.reason==='specialized_module_owner'?'Specialized module. Use its existing editor in Advanced options.':'Current value unavailable';
+      else if(proposal?.classification==='unavailable')reason=proposal.reason==='quality_review_required'?'Review this suggestion manually in Advanced options.':proposal.reason==='specialized_module_owner'?'Specialized module. Use its existing editor in Advanced options.':'Current value unavailable';
       else if(!['user_provided','website_supported','ai_interpretation'].includes(proposal?.classification))reason='Unsupported suggestion';
       else if(errors[key])reason='Enter a valid suggested value.';
       else if(value===undefined||value===null||!populated(value))reason='Needs more information';
@@ -68,5 +75,5 @@
     }
     return {core:next,accepted,excluded};
   }
-  return Object.freeze({VERSION,KEY,modules,validators,valid,target,publicCore,url,adopt,plan});
+  return Object.freeze({VERSION,KEY,modules,sections,validators,valid,target,publicCore,url,adopt,plan});
 });

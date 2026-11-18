@@ -1,0 +1,45 @@
+{
+  "name": "Frostwerk Beispieltechnik",
+  "description": "Frostwerk Beispieltechnik installiert und wartet Kälte- und Klimaanlagen. Das Unternehmen bietet individuelle technische Lösungen, einen Notdienst, erfahrene Servicemitarbeiter, hochwertige Geräte und kundenorientierte Unterstützung.",
+  "expected": {
+    "brandCore": "Describe confirmed refrigeration and air-conditioning services; no invented location, founding date or certifications.",
+    "valueProposition": "Connect supported installation and maintenance to customer needs; no invented leadership or savings.",
+    "mission": "Present purpose, only when explicitly supplied; otherwise missing with an optional question.",
+    "vision": "Future ambition only when supplied; never fabricate a confirmed aspiration.",
+    "values": "Proposed organizational principles, classified ai_interpretation; never verified values without evidence.",
+    "personas": "Only evidence-supported buyers/segments; technical services alone do not prove a household or B2B audience.",
+    "toneOfVoice": "Consistent communication characteristics, not experienced staff or quality equipment.",
+    "messagingPillars": "Supported customer takeaways, no unsupported superiority or guarantees.",
+    "contentGuidelines": "Actionable editorial rules, not promotional company statements.",
+    "keywords": "Relevant search/topic terms, not invented products or certifications.",
+    "dosAndDonts": "Actionable communication behaviors in the correct positive/negative lists.",
+    "brandVoiceExamples": "Concrete good/avoid communication examples without adding company facts.",
+    "brandAssets": "Only supplied visual identity facts; no invented colors or fonts."
+  },
+  "bad": {
+    "contentGuidelines": [
+      "Wir sind Ihr zuverlässiger Partner für Klimaanlagen.",
+      "Wir bieten die besten Geräte."
+    ],
+    "toneOfVoice": [
+      "Erfahrene Servicemitarbeiter",
+      "Hochwertige Geräte"
+    ],
+    "messagingPillars": [
+      "Wir garantieren 80 Prozent weniger Energiekosten."
+    ]
+  },
+  "good": {
+    "contentGuidelines": [
+      "Erkläre technische Zusammenhänge verständlich.",
+      "Belege Aussagen über Geräte mit verfügbaren Nachweisen."
+    ],
+    "toneOfVoice": [
+      "Sachlich und verständlich",
+      "Professionell und nahbar"
+    ],
+    "messagingPillars": [
+      "Individuelle Lösungen für Kälte- und Klimaanlagen."
+    ]
+  }
+}
