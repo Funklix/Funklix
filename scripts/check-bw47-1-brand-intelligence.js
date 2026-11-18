@@ -45,6 +45,7 @@ async function run(input={},fields={},b=brand(),inspect=()=>{}){
   assert(q.mismatch({good:valid[0],avoid:foreign[0]},language));
  }
  assert.equal(q.mismatch('The House of the Future entwickelt Technik für unsere Kunden.','de',['The House of the Future']),false);
+ const mixedGuidelines=await run({action:'suggest',field:'contentGuidelines'},{contentGuidelines:item([f.good.contentGuidelines[0],f.bad.contentGuidelines[0]])});assert.equal(mixedGuidelines.fields.contentGuidelines.classification,'unavailable','advertising copy among valid editorial rules still requires review');
  const mixed=await run({section:'voice_messaging',targetFields:['toneOfVoice','contentGuidelines','keywords']},{toneOfVoice:item(f.good.toneOfVoice),contentGuidelines:item(f.bad.contentGuidelines),keywords:{value:7,classification:'ai_interpretation',evidence:[]}});assert.equal(mixed.fields.toneOfVoice.classification,'ai_interpretation');assert.equal(mixed.fields.contentGuidelines.classification,'unavailable');assert.equal(mixed.fields.keywords.classification,'missing');
  const b=brand();b.brand_core.brandDNA={userApproved:false,primaryArchetype:'UNACCEPTED_DNA',signals:{draft:'SECRET_DRAFT'}};
  b.brand_core.customTiles=[{moduleType:'mission',content:'Accepted foundation purpose'},{moduleType:'founder_story',content:'UNACCEPTED_FOUNDER',moduleData:{founderStory:{founderNameRole:'draft'}}},{moduleType:'values',content:'UNACCEPTED_MODULE',moduleData:{draft:{content:'UNACCEPTED'}}},{moduleType:'market_research',moduleData:{marketResearch:{draft:{content:'UNACCEPTED_RESEARCH'}}}}];

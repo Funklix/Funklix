@@ -176,7 +176,7 @@ function assess(key,value,{language,sources,name}={}){
  if(mismatch(value,language,[name]))issues.push('language_mismatch');
  // Narrow recognizable patterns are review flags, never semantic certainty.
  const entries=strings(value).filter(s=>s.trim());
- if(key==='contentGuidelines'&&entries.length&&entries.every(s=>/^(?:wir (?:sind|bieten|haben)|we (?:are|offer|have))\b/i.test(s.trim())))issues.push('field_purpose_review');
+ if(key==='contentGuidelines'&&entries.length&&entries.some(s=>/^(?:wir (?:sind|bieten|haben)|we (?:are|offer|have))\b/i.test(s.trim())))issues.push('field_purpose_review');
  if(key==='toneOfVoice'&&entries.length&&entries.every(s=>/^(?:(?:erfahrene|erfahrenes|hochwertige|hochwertiges)\s+(?:servicemitarbeiter|mitarbeiter|geräte|ausstattung)|(?:experienced|quality|high-quality)\s+(?:staff|equipment|service staff))\.?$/i.test(s.trim())))issues.push('field_purpose_review');
  // Unseen quantified claims require human review. Matching source text does not
  // prove entailment; broader unsupported claims remain a qualitative limitation.
