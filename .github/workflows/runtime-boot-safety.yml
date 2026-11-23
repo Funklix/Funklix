@@ -683,6 +683,10 @@ jobs:
         run: |
           node scripts/check-bw47-1-brand-intelligence.js
           node scripts/check-bw47-1-brand-intelligence-browser.js
+      - name: Check BW-47.1 R1 improvement outcomes and saved evidence (mocked inference)
+        run: |
+          node scripts/check-bw47-1-r1-brand-ai.js
+          node scripts/check-bw47-1-r1-brand-ai-browser.js
       - name: Check BW-46.6 typed review and atomic bulk acceptance
         run: |
           node scripts/check-bw46-6-brand-review.js

@@ -13,6 +13,18 @@
   const LANGUAGE_NAMES = Object.freeze({ en: "English", de: "German", es: "Spanish" });
   const german = {
     "Review items": "Prüfpunkte",
+    "Improve with AI": "Mit KI verbessern",
+    "Saved value unchanged": "Gespeicherter Wert unverändert",
+    "No supported improvement found": "Keine fundierte Verbesserung gefunden",
+    "No value was generated": "Es wurde kein Wert erstellt",
+    "No usable evidence for this suggestion": "Keine verwertbaren Belege für diesen Vorschlag",
+    "The generated field could not be validated": "Der erstellte Feldinhalt konnte nicht geprüft werden",
+    "Suggestion needs manual review": "Vorschlag muss manuell geprüft werden",
+    "No suggestions are ready to accept. See the generation results.": "Es gibt keine übernehmbaren Vorschläge. Sieh dir die Ergebnisse an.",
+    "Other generation results": "Weitere Ergebnisse",
+    "Generated draft": "Erstellter Entwurf",
+    "Edit saved field": "Gespeichertes Feld bearbeiten",
+    "Save your profile edits before deciding on suggestions.": "Speichere deine Profiländerungen, bevor du über Vorschläge entscheidest.",
     "Saved profile and previous reviews": "Gespeichertes Profil und bisherige Prüfungen",
     "1 suggestion will be saved": "1 Vorschlag wird gespeichert",
     "Your review decision will be saved.": "Deine Prüfentscheidung wird gespeichert.",

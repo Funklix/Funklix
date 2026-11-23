@@ -390,7 +390,12 @@
         state.analysis = draft.sourceIssue ? 'Website unavailable. Review the description-based draft.' : input.domainUrl ? 'Review website suggestions' : 'Not analyzed';
         state.questions = null;
         state.enrichment = clone(draft); state.enrichmentEdits = {}; state.enrichmentEditErrors = {}; state.section = SECTIONS.indexOf('Review');
-        state.message = draft.sourceIssue ? 'Website unavailable. Review the description-based draft.' : Object.values(draft.fields || {}).some(field => !['missing','unavailable'].includes(field.classification)) ? 'Review enrichment suggestions' : 'No supported suggestions are available. Add a brand description or continue manually.'; return true;
+        const fields = Object.values(draft.fields || {});
+        if (draft.sourceIssue) state.message = 'Website unavailable. Review the description-based draft.';
+        else if (fields.some(enrichment.isReviewItem)) state.message = 'Review enrichment suggestions';
+        else if (fields.length === 1 && ['unchanged', 'no_improvement'].includes(enrichment.outcome(fields[0]))) state.message = enrichment.outcomeLabels[enrichment.outcome(fields[0])];
+        else state.message = 'No suggestions are ready to accept. See the generation results.';
+        return true;
       });
     }
     function editEnrichment(key, value) {
@@ -409,14 +414,15 @@
     function enrichmentPlan() {
       return enrichment.plan(state.brand.brand_core,state.enrichment,{revision:state.brand.revision,
         authorized:current()&&!state.readOnly&&state.brand.access?.canEditCanonicalBrand===true&&['owner','admin','editor'].includes(state.brand.access?.role),
-        edits:state.enrichmentEdits,errors:state.enrichmentEditErrors,createTile:createEnrichmentTile});
+        dirty:contentDirty(),edits:state.enrichmentEdits,errors:state.enrichmentEditErrors,createTile:createEnrichmentTile});
     }
     function decideEnrichment(key, decision) { return saveEnrichment([{key,decision}]); }
     function acceptAllEnrichment() { return saveEnrichment(null); }
     function saveEnrichment(decisions) {
       return run('Saving enrichment decision…', async () => {
         const draft = state.enrichment;
-        if (!draft || draft.revision !== state.brand.revision || contentDirty()) { state.message = 'This proposal is stale. Reload and generate again.'; return false; }
+        if (!draft || draft.revision !== state.brand.revision) { state.message = 'This proposal is stale. Reload and generate again.'; return false; }
+        if (contentDirty()) { state.message = 'Save your profile edits before deciding on suggestions.'; return false; }
         const previous = state.brand, plan=enrichmentPlan();
         let core=previous.brand_core;
         const selected=decisions || plan.accepted.map(key=>({key,decision:'accepted'}));
@@ -428,7 +434,7 @@
           core=enrichment.adopt(core,draft,key,decision,value,createEnrichmentTile);
         }
         const result = await canonicalMutation(previous,{name:previous.name,brand_core:core},'profile_edit',true,
-          {keys:selected.map(item=>item.key),decisions:selected,excluded:plan.excluded});
+          {keys:selected.map(item=>item.key),decisions:selected,excluded:plan.excluded.filter(({key})=>enrichment.isReviewItem(draft.fields[key]))});
         if (!result?.response.ok) { state.message = result ? errorText(result.response,'Enrichment decision could not be saved.',result.payload) : 'Enrichment decision could not be saved.'; return false; }
         const confirmed = await verifyBrand();
         if (!confirmed || !writes.equal(confirmed.brand_core,core) || confirmed.name!==previous.name || confirmed.revision !== previous.revision + 1) {
@@ -798,6 +804,19 @@
       catch { return { available: false, value: null }; }
     }
     const classificationLabel = key => t({ai_interpretation:'AI suggestion',website_supported:'Website-supported',user_provided:'Based on your description',conflicting:'Conflicting information',missing:'Needs more information',unavailable:'Current value unavailable'}[key] || 'Unsupported suggestion');
+    function outcomeLabel(field) {
+      const label=enrichment.outcomeLabels[enrichment.outcome(field)];
+      return label?t(label):classificationLabel(field.classification);
+    }
+    const diagnosticLabels = {
+      invalid_value:'Suggestion excluded: invalid field value.',
+      unsupported_field:'Suggestion excluded: unsupported field.',
+      invalid_classification:'Suggestion excluded: invalid classification.',
+      invalid_evidence:'Unsupported citations were excluded; factual suggestions require valid evidence.',
+      language_mismatch:'Suggestion withheld: output language differs. Edit manually or explicitly generate again.',
+      field_purpose_review:'Suggestion withheld: review whether it serves this field.',
+      claim_grounding_review:'Suggestion withheld: a quantified claim needs supporting evidence.'
+    };
     function sourceDetails(field,parent,key) {
       if (!field.evidence?.length) return;
       const details=node('details','',parent);details.dataset.disclosure='proposal-sources:'+key;
@@ -899,7 +918,7 @@
     function requestEnrichment(input) {
       // Preserve the reusable BW-46.2 controller contract. The visible UI asks
       // users to review/discard actionable drafts before replacing them.
-      if (input.action !== 'questions' && Object.values(s.enrichment?.fields || {}).some(field => !['missing', 'unavailable'].includes(field.classification))) {
+      if (input.action !== 'questions' && s.enrichment?.revision===s.brand.revision && Object.values(s.enrichment.fields || {}).some(enrichment.isReviewItem)) {
         s.section = SECTIONS.indexOf('Review'); s.message = 'Review or discard the current draft before generating again.'; render(); return;
       }
       void session.enrichProfile(input);
@@ -908,8 +927,18 @@
       const current = enrichmentCurrent(key);
       const record = s.brand.brand_core[enrichment.KEY]?.fields?.[key];
       let local; try { local = enrichment.target(s.core, key); } catch { local = current.value; }
-      const status = !writes.equal(local, current.value) ? 'Unsaved changes' : s.enrichment?.fields?.[key]?.classification === 'conflicting' ? 'Conflicting evidence' : s.enrichment?.fields?.[key] ? 'AI suggestion available' : s.laterFields[key] || record?.decision === 'postponed' ? 'Optional / complete later' : !meaningful(current.value) ? 'Empty' : record?.decision === 'accepted' && writes.equal(record.value, current.value) ? 'User-confirmed' : 'Saved';
+      const accepted = enrichment.acceptedRecord(record);
+      const hasSavedValue = meaningful(current.value);
+      const changed = (meaningful(local) || hasSavedValue) && !writes.equal(local, current.value);
+      const status = changed ? 'Unsaved changes' : !current.available ? 'Current value unavailable' :
+        hasSavedValue ? (accepted && enrichment.sameValue(key, accepted.value, current.value) ? 'User-confirmed' : 'Saved') :
+        s.laterFields[key] || record?.decision === 'postponed' ? 'Optional / complete later' : 'Empty';
       node('p', t(status), parent).className = 'profile-field-status';
+      const result = s.enrichment?.fields?.[key];
+      if (result) {
+        const label = enrichment.isSuggestion(result) ? t(s.enrichment.revision===s.brand.revision?'AI suggestion available':'Proposal is stale') : outcomeLabel(result);
+        node('p', label, parent).className = 'profile-field-result';
+      }
       if (s.readOnly || !current.available) return;
       const emptyPersonas = key === 'personas' && Array.isArray(s.core.personas) && !s.core.personas.length;
       if (!parent.querySelector('textarea,input') && !emptyPersonas) { button('Advanced options', parent, () => options.onAdvanced(session), 'advanced-'+key); return; }
@@ -923,7 +952,10 @@
           s.core.personas.push({ name: '', note: '' }); render(); container.querySelector('[data-profile-key="persona-0-name"]')?.focus();
         } else parent.querySelector('textarea,input')?.focus();
       }, 'write-'+key);
-      button('Suggest with AI', menu, () => { requestEnrichment({ action: 'suggest', field: key }); }, 'suggest-'+key);
+      const canImprove = enrichment.improvementValue(key,current.value)!==null;
+      button(canImprove ? 'Improve with AI' : 'Suggest with AI', menu, () => {
+        requestEnrichment({ action: 'suggest', field: key, ...(canImprove ? { intent: 'improve' } : {}) });
+      }, 'suggest-'+key);
       button('Help me figure it out', menu, () => { requestEnrichment({ action: 'questions', field: key }); }, 'questions-'+key);
       button('Complete later', menu, () => { s.laterFields[key] = true; render(); }, 'later-'+key);
     }
@@ -1014,6 +1046,16 @@
         button('Keep current narrative', details, () => { s.founderDraft = null; s.founderDraftBase = null; render(); });
       }
     }
+    function editSavedField(key) {
+      const group = FIELDS[key]?.[0] || 'Foundation';
+      s.section = group === 'Foundation' ? 0 : SECTIONS.indexOf(group==='Brand Basics'?'Brand Assets':group);
+      render();
+      const card = [...container.querySelectorAll('.profile-field-card[data-field]')].find(node => node.dataset.field === key);
+      const input = card?.querySelector('textarea, input, [data-profile-key="Add audience"]');
+      if (input) input.focus();
+      else if (key==='personas' && card?.querySelector('summary')) card.querySelector('summary').focus();
+      else options.onAdvanced(session);
+    }
     function fields(section, parent) {
       let count = 0;
       for (const [key, [group, label, type]] of Object.entries(FIELDS)) {
@@ -1067,7 +1109,7 @@
         const tile = s.core.customTiles?.find(tile => tile.moduleType === type);
         if (section === 'Foundation') {
           count++;
-          const moduleCard = node('section', '', parent); moduleCard.className = 'profile-field-card';
+          const moduleCard = node('section', '', parent); moduleCard.className = 'profile-field-card'; moduleCard.dataset.field = type;
           textField(definition.label, tile?.content || '', moduleCard, value => {
             let target = s.core.customTiles?.find(tile => tile.moduleType === type);
             if (!target && value.trim()) { target = options.createTile(type); (s.core.customTiles ||= []).push(target); }
@@ -1103,7 +1145,7 @@
     function researchCoverage(parent) {
       const r=s.research;
       if (!r || !r.counts) return;
-      const hasSuggestions = !s.enrichment || Object.values(s.enrichment.fields || {}).some(field => !['missing','unavailable'].includes(field.classification));
+      const hasSuggestions = !s.enrichment || Object.values(s.enrichment.fields || {}).some(enrichment.isSuggestion);
       const status=node('p',t(s.pending ? 'Research is running. Suggestions will need your review.' : r.counts.processed > 0 ? hasSuggestions ? 'Website excerpts processed. Review available suggestions.' : 'Website excerpts processed. No supported suggestions were returned.' : 'Website research did not prepare suggestions. Retry or add a brand description.'),parent);
       status.className = 'profile-research-status'; status.setAttribute('role','status');
       const details=node('details','',parent); details.className = 'profile-research-results'; details.dataset.disclosure = 'research-coverage'; details.open = false;
@@ -1202,11 +1244,16 @@
         if (!s.readOnly) button('Prepare enrichment draft', section, () => { requestEnrichment({description:s.core.brandCore || '', ...(s.website.trim() ? {domainUrl:s.website} : {})}); });
       } else if (SECTIONS[s.section] === 'Review') {
         if (s.enrichment) {
-          node('p', t('Review and edit suggestions, then accept individually or save eligible suggestions together.'), section);
+          if(Object.values(s.enrichment.fields || {}).some(enrichment.isSuggestion))node('p',t('Review and edit suggestions, then accept individually or save eligible suggestions together.'),section);
           if (!s.readOnly) button('Discard enrichment draft', section, () => { s.enrichment = null; s.enrichmentEdits = {}; s.questions = null; render(); });
         }
-        const savedReview=s.enrichment?node('details','',section):section;
-        if(s.enrichment){savedReview.dataset.disclosure='saved-profile-review';node('summary',t('Saved profile and previous reviews'),savedReview);}
+        const records=Object.entries(s.brand.brand_core[enrichment.KEY]?.fields || {});
+        const savedReview=s.enrichment?node('details','',null):section;
+        if(s.enrichment){
+          savedReview.dataset.disclosure='saved-profile-review';
+          savedReview.className='profile-review-history';
+          node('summary',t('Saved profile and previous reviews')+(records.length?' · '+records.length+' '+t('Already reviewed'):''),savedReview);
+        }
         const list = node('ul', '', savedReview);
         for (const key of ['Brand Basics', 'Foundation', 'Audience', 'Voice & Messaging', 'Offers & Proof']) {
           const complete = key === 'Brand Basics' ? !!s.name.trim() && !!s.website.trim()
@@ -1215,25 +1262,49 @@
           node('li', `${t(key)}: ${t(complete ? 'Provided' : 'Can be completed')}`, list);
         }
         node('p', `${t('Website analysis')}: ${t(s.analysis)}`, savedReview); logo(savedReview);
-        for(const [key,record] of Object.entries(s.brand.brand_core[enrichment.KEY]?.fields || {})) {
-          const history=node('details','',savedReview);history.dataset.disclosure='evidence:'+key;node('summary',enrichmentLabel(key)+' — '+t(record.decision),history);
-          const current = enrichmentCurrent(key);
-          node('p',classificationLabel(record.classification),history);
-          if (!current.available) node('p',t('Current value unavailable. Review modules in Advanced options.'),history);
-          else if(record.decision==='accepted'&&!(object(record.value)?Object.entries(record.value).every(([part,value])=>writes.equal(value,current.value?.[part])):writes.equal(record.value,current.value)))node('p',t('Historical evidence; the field has changed since acceptance.'),history);
+        function renderPastReview(key,record,id) {
+          const history=node('details','',savedReview);
+          history.dataset.disclosure=id;
+          node('summary',enrichmentLabel(key)+' — '+t(record.decision),history);
+          const current=enrichmentCurrent(key);
+          node('p',outcomeLabel(record),history);
+          if(!current.available)node('p',t('Current value unavailable. Review modules in Advanced options.'),history);
+          else if(record.decision==='accepted'){
+            node('p',t(enrichment.sameValue(key,record.value,current.value)?'User-confirmed':'Historical evidence; the field has changed since acceptance.'),history);
+            readable(record.value,history);
+          }
           if(record.userEdited)node('p',t('Edited by you'),history);
-          for(const e of record.evidence || []){node('p',e.excerpt,history);if(e.url)node('p',e.url,history);}
+          sourceDetails(record,history,id);
+        }
+        for(const [key,record] of records){
+          renderPastReview(key,record,'evidence:'+key);
+          const accepted=enrichment.acceptedRecord(record);
+          if(accepted&&accepted!==record)renderPastReview(key,accepted,'accepted-evidence:'+key);
         }
         const plan=session.enrichmentPlan();
+        const fields=Object.entries(s.enrichment?.fields || {});
+        const reviewFields=fields.filter(([,field])=>enrichment.isReviewItem(field));
+        const otherFields=fields.filter(([,field])=>!enrichment.isReviewItem(field));
         const refreshEligibility=()=>{
-          const latest=session.enrichmentPlan(),items=Object.values(s.enrichment?.fields || {}),total=items.length,available=items.filter(field=>!['missing','unavailable'].includes(field.classification)&&meaningful(field.value)).length;
+          const latest=session.enrichmentPlan();
+          const attention=latest.excluded.filter(({key})=>enrichment.isReviewItem(s.enrichment.fields[key]));
+          const available=reviewFields.filter(([,field])=>enrichment.isSuggestion(field)).length;
           const summary=section.querySelector('.profile-review-counts');
-          if(summary)summary.textContent=total+' '+t('Review items')+' · '+available+' '+t('Available suggestions')+' · '+latest.accepted.length+' '+t('Eligible for acceptance')+' · '+latest.excluded.length+' '+t('Needs attention')+' · '+Object.keys(s.brand.brand_core[enrichment.KEY]?.fields || {}).length+' '+t('Already reviewed');
+          if(summary)summary.textContent=reviewFields.length+' '+t('Review items')+' · '+available+' '+t('Available suggestions')+' · '+latest.accepted.length+' '+t('Eligible for acceptance')+' · '+attention.length+' '+t('Needs attention');
           const skipped=section.querySelector('.profile-review-skipped');
-          if(skipped){skipped.hidden=!latest.excluded.length;skipped.replaceChildren();node('summary',t('Skipped suggestions')+' ('+latest.excluded.length+')',skipped);for(const item of latest.excluded)node('p',enrichmentLabel(item.key)+': '+t(item.reason),skipped);}
+          if(skipped){skipped.hidden=!attention.length;skipped.replaceChildren();node('summary',t('Skipped suggestions')+' ('+attention.length+')',skipped);for(const item of attention)node('p',enrichmentLabel(item.key)+': '+t(item.reason),skipped);}
           const bulk=section.querySelector('[data-profile-key="accept-all-enrichment"]');
-          if(bulk){bulk.textContent=t('Accept all suggestions')+' ('+latest.accepted.length+')';bulk.disabled=s.readOnly||!!s.pending||!latest.accepted.length||session.contentDirty();bulk.title=latest.accepted.length?t('Save eligible suggestions together'):t('No eligible suggestions. Review the items needing attention.');}
-          for(const [key] of Object.entries(s.enrichment?.fields || {})) {const accept=section.querySelector('[data-profile-key="accept-enrichment-'+key+'"]');if(accept)accept.disabled=s.readOnly||!!s.pending||!latest.accepted.includes(key)||session.contentDirty();}
+          if(bulk){bulk.textContent=t('Accept all suggestions')+' ('+latest.accepted.length+')';bulk.disabled=s.readOnly||!!s.pending||!latest.accepted.length;bulk.title=latest.accepted.length?t('Save eligible suggestions together'):t('No eligible suggestions. Review the items needing attention.');}
+          for(const [key] of reviewFields) {
+            const accept=section.querySelector('[data-profile-key="accept-enrichment-'+key+'"]');
+            if(accept)accept.disabled=s.readOnly||!!s.pending||!latest.accepted.includes(key);
+            const feedback=section.querySelector('[data-field="'+key+'"] .profile-proposal-exclusion');
+            if(feedback){
+              const reason=latest.excluded.find(item=>item.key===key)?.reason;
+              feedback.textContent=reason?t(reason):'';
+              feedback.hidden=!reason;
+            }
+          }
         };
         if(s.enrichment) {
           const header=node('section','',section);header.className='profile-review-header';section.insertBefore(header,section.children[1] || null);
@@ -1241,35 +1312,57 @@
           const bulk=button('Accept all suggestions',header,()=>{void session.acceptAllEnrichment();},'accept-all-enrichment');bulk.className='fk-btn fk-btn-primary';
           const skipped=node('details','',header);skipped.className='profile-review-skipped';skipped.dataset.disclosure='review-skipped';
         }
-        for (const [key, field] of Object.entries(s.enrichment?.fields || {})) {
-          const attention=['missing','unavailable'].includes(field.classification);
-          const proposal=node(attention?'details':'section','',section);proposal.className='profile-proposal profile-enrichment-proposal';proposal.dataset.field=key;
-          if(attention){proposal.dataset.disclosure='proposal-attention:'+key;node('summary',enrichmentLabel(key)+' — '+classificationLabel(field.classification),proposal);}
-          node('h4',enrichmentLabel(key),proposal);node('p',classificationLabel(field.classification),proposal).className='profile-suggestion-kind';
+        function renderDraftField([key,field],parent,standalone=false) {
+          const result=enrichment.outcome(field);
+          const suggestion=enrichment.isSuggestion(field);
+          const collapsible=!suggestion&&result!=='conflicting'&&!standalone;
+          const proposal=node(collapsible?'details':'section','',parent);proposal.className='profile-proposal profile-enrichment-proposal';proposal.dataset.field=key;
+          if(collapsible){proposal.dataset.disclosure='proposal-attention:'+key;node('summary',enrichmentLabel(key)+' — '+outcomeLabel(field),proposal);}
+          node('h4',enrichmentLabel(key),proposal);
+          if(!collapsible)node('p',outcomeLabel(field),proposal).className='profile-suggestion-kind';
           const comparison=node('div','',proposal);comparison.className='profile-proposal-comparison';
           const saved=node('div','',comparison);node('strong',t('Saved value'),saved);
           const current=enrichmentCurrent(key);
-          if(current.available&&meaningful(current.value))readable(current.value,saved);else node('p',t(current.available?'Empty':'Current value unavailable. Review modules in Advanced options.'),saved);
-          const suggested=node('div','',comparison);node('strong',t('Suggested value'),suggested);readable(Object.hasOwn(s.enrichmentEdits || {},key)?s.enrichmentEdits[key]:field.value,suggested);
-          sourceDetails(field,proposal,key);
+          const accepted=enrichment.acceptedRecord(s.brand.brand_core[enrichment.KEY]?.fields?.[key]);
+          if(current.available&&meaningful(current.value)){
+            if(accepted&&enrichment.sameValue(key,accepted.value,current.value))node('p',t('User-confirmed'),saved);
+            readable(current.value,saved);
+          }else node('p',t(current.available?'Empty':'Current value unavailable. Review modules in Advanced options.'),saved);
           const value=Object.hasOwn(s.enrichmentEdits || {},key)?s.enrichmentEdits[key]:field.value;
+          const suggested=meaningful(field.value)&&!['unchanged','no_improvement','no_value_generated'].includes(result)?node('div','',comparison):null;
+          if(suggested){node('strong',t(suggestion?'Suggested value':'Generated draft'),suggested);readable(value,suggested);}
+          sourceDetails(field,proposal,key);
+          for(const issue of field.qualityIssues || [])if(diagnosticLabels[issue])node('p',t(diagnosticLabels[issue]),proposal);
+          for(const issue of s.enrichmentDiagnostics?.fieldIssues || [])if(result==='invalid_field'&&issue.fieldKey===key&&diagnosticLabels[issue.category])node('p',t(diagnosticLabels[issue.category]),proposal);
           const supported=proposalShape(key,value);
-          const adoptable=current.available&&!['missing','unavailable','conflicting'].includes(field.classification)&&supported&&!plan.excluded.some(item=>item.key===key&&['Specialized module. Use its existing editor in Advanced options.','Use the existing editor in Advanced options'].includes(item.reason));
+          const excluded=plan.excluded.find(item=>item.key===key);
+          const needsAdvanced=['specialized_module_unavailable','current_value_unavailable'].includes(result)||['Specialized module. Use its existing editor in Advanced options.','Use the existing editor in Advanced options'].includes(excluded?.reason);
+          const adoptable=current.available&&suggestion&&supported&&!needsAdvanced;
           if(adoptable) {
             const editor=node('details','',proposal);editor.open=typeof value==='string';editor.dataset.disclosure='proposal-edit:'+key;node('summary',t('Edit suggestion'),editor);
             const error=node('p',t('Enter a valid suggested value.'),editor);error.className='profile-proposal-error';error.setAttribute('role','alert');error.hidden=!s.enrichmentEditErrors?.[key];
             proposalEditor(key,clone(value),editor,next=>{error.hidden=session.editEnrichment(key,next);suggested.replaceChildren();node('strong',t('Suggested value'),suggested);readable(next,suggested);refreshEligibility();});
           }
-          const excluded=plan.excluded.find(item=>item.key===key);
-          if(excluded)node('p',t(excluded.reason),proposal);
+          if(suggestion)node('p','',proposal).className='profile-proposal-exclusion';
           const actions=node('div','',proposal);actions.className='profile-review-actions';
           if(!s.readOnly) {
             if(adoptable){const accept=button('Accept suggestion',actions,()=>{void session.decideEnrichment(key,'accepted');},'accept-enrichment-'+key);accept.className='fk-btn fk-btn-primary';}
-            if(field.reason==='quality_review_required'||!supported||!current.available||['Specialized module. Use its existing editor in Advanced options.','Use the existing editor in Advanced options'].includes(excluded?.reason))button('Edit in Advanced options',actions,()=>options.onAdvanced(session),'advanced-enrichment-'+key);
-            button('Reject suggestion',actions,()=>{void session.decideEnrichment(key,'rejected');},'reject-enrichment-'+key);
-            button('Complete later',actions,()=>{void session.decideEnrichment(key,'postponed');},'postpone-enrichment-'+key);
+            if(!suggestion&&!needsAdvanced)button('Edit saved field',actions,()=>editSavedField(key),'edit-saved-enrichment-'+key);
+            if(result==='quality_withheld'||needsAdvanced||suggestion&&!supported)button('Edit in Advanced options',actions,()=>options.onAdvanced(session),'advanced-enrichment-'+key);
+            if(enrichment.isReviewItem(field)){
+              button('Reject suggestion',actions,()=>{void session.decideEnrichment(key,'rejected');},'reject-enrichment-'+key);
+              button('Complete later',actions,()=>{void session.decideEnrichment(key,'postponed');},'postpone-enrichment-'+key);
+            }
           }
         }
+        for(const entry of reviewFields)renderDraftField(entry,section,fields.length===1);
+        if(otherFields.length===1&&fields.length===1)renderDraftField(otherFields[0],section,true);
+        else if(otherFields.length){
+          const details=node('details','',section);details.className='profile-generation-results';details.dataset.disclosure='generation-results';
+          node('summary',t('Other generation results')+' ('+otherFields.length+')',details);
+          for(const entry of otherFields)renderDraftField(entry,details);
+        }
+        if(s.enrichment)section.append(savedReview);
         refreshEligibility();
         for (const [key, value] of Object.entries(s.proposals)) {
           const proposal = node('section', '', section); proposal.className = 'profile-proposal'; node('h4', t(FIELDS[key][1]), proposal);
@@ -1339,7 +1432,10 @@
         node('h4', enrichmentLabel(s.questions.field), guide);
         node('p', t('Questions are optional. Answer what you can.'), guide);
         for (const question of s.questions.items) textField(question.question, s.questions.answers[question.id] || '', guide, value => { s.questions.answers[question.id] = value; }, true, 'answer-'+question.id);
-        button('Prepare my suggestion', guide, () => { requestEnrichment({ action: 'suggest', field: s.questions.field, answers: Object.entries(s.questions.answers).map(([id,answer]) => ({id,answer})) }); });
+        button('Prepare my suggestion', guide, () => {
+          const field=s.questions.field, current=enrichmentCurrent(field);
+          requestEnrichment({ action: 'suggest', field, ...(enrichment.improvementValue(field,current.value)!==null?{intent:'improve'}:{}), answers: Object.entries(s.questions.answers).map(([id,answer]) => ({id,answer})) });
+        });
         button('Complete later', guide, () => { s.questions = null; render(); }, 'close-questions');
       }
       if (s.pending === 'Preparing enrichment draft…') {
@@ -1355,8 +1451,7 @@
         if(d.requestId)node('p',t('Request ID')+': '+d.requestId,details);
         if(d.validationCategory)node('p',t('Failure category')+': '+d.validationCategory,details);
         if(d.stage)node('p',t('Processing stage')+': '+d.stage,details);
-        const reasons={invalid_value:'Suggestion excluded: invalid field value.',unsupported_field:'Suggestion excluded: unsupported field.',invalid_classification:'Suggestion excluded: invalid classification.',invalid_evidence:'Unsupported citations were excluded; factual suggestions require valid evidence.',language_mismatch:'Suggestion withheld: output language differs. Edit manually or explicitly generate again.',field_purpose_review:'Suggestion withheld: review whether it serves this field.',claim_grounding_review:'Suggestion withheld: a quantified claim needs supporting evidence.'};
-        for(const issue of d.fieldIssues||[])node('p',(issue.fieldKey?enrichmentLabel(issue.fieldKey)+': ':'')+t(reasons[issue.category]||'Suggestion excluded: invalid field value.'),details);
+        for(const issue of d.fieldIssues||[])node('p',(issue.fieldKey?enrichmentLabel(issue.fieldKey)+': ':'')+t(diagnosticLabels[issue.category]||diagnosticLabels.invalid_value),details);
       }
       if (s.addedCount) node('p', t('{count} details added from the website.').replace('{count}', s.addedCount), container).setAttribute('role', 'status');
       if (s.autoKeys.length && !s.pending) button('Retry adding website details', container, () => { void session.retryAutomatic(); });

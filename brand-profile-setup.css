@@ -253,3 +253,8 @@ html[data-theme=dark] .guided-brand-profile .profile-header{background:radial-gr
 .brand-suggestion-dialog strong{display:block}.brand-suggestion-dialog h2{margin:0}
 .brand-suggestion-dialog :is(p,ul){margin-block:6px 12px}
 .guided-brand-profile .profile-review-skipped[hidden]{display:none!important}
+
+.guided-brand-profile .profile-field-result{margin:4px 0 0;font-size:.8rem;color:var(--fk-color-text-primary)}
+.guided-brand-profile .profile-generation-results,.guided-brand-profile .profile-review-history{padding:12px;border:1px solid var(--profile-border);border-radius:12px}
+.guided-brand-profile .profile-generation-results>.profile-proposal,.guided-brand-profile .profile-review-history>details{margin-top:8px}
+.guided-brand-profile .profile-proposal-exclusion[hidden]{display:none}

@@ -12,10 +12,10 @@ const shapes={brandCore:text,valueProposition:text,mission:text,vision:text,valu
 // require invented values for missing colors, typography or references.
 const assets={colors:list,typography:text,references:list},parts=Object.keys(assets);
 shapes.brandAssets={anyOf:Array.from({length:7},(_,i)=>object(Object.fromEntries(parts.filter((_,j)=>(i+1)&(1<<j)).map(k=>[k,assets[k]]))))};
-function responseFormat(keys=Object.keys(c.validators)){
+function responseFormat(keys=Object.keys(c.validators),improvementFields=[]){
  const properties=Object.fromEntries(keys.map(key=>[key,{anyOf:[{type:'null'},object({
   value:{anyOf:[shapes[key],{type:'null'}]},
-  classification:{type:'string',enum:['user_provided','website_supported','ai_interpretation','conflicting','missing']},
+  classification:{type:'string',enum:['user_provided','website_supported','ai_interpretation','conflicting','missing',...(improvementFields.includes(key)?['no_improvement']:[])]},
   evidence:{type:'array',items:object({sourceId:text,excerpt:text})}
  })]}]));
  return {type:'json_schema',json_schema:{name:'brand_profile_draft',strict:true,schema:object({fields:object(properties)})}};
