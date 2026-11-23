@@ -163,6 +163,7 @@ async function run(input, fields, current = brand, inspect = () => {}) {
   }, withMessaging, body => {
     const prompt = body.messages.at(-1).content;
     assert(prompt.includes('English'));
+    assert(prompt.includes('Keep evidence excerpts verbatim in the original source language'));
     assert(prompt.includes('actionable editorial instructions'));
     assert(prompt.includes('memorable takeaways'));
   });
