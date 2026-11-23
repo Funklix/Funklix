@@ -59,3 +59,14 @@ The local replay uses the workflow's shell blocks with fail-fast and pipefail wi
 The BW-43 Expanded Journey sources reflow assertion fails on this branch and the exact `8c765bc` base in the same local Chromium at `scripts/check-bw43-insights-browser.js:135`. The native 200% zoom command passes separately on both replay checkouts.
 
 Both versions passed the final isolated R3 standard (57 groups), completed upgrade (66 groups plus 74 installer and protection groups) and restrictive graph (55 groups) checks. An early 17.6 attempt retained the older private brief alongside the accepted citations and correctly failed the existing pruning assertion. The production change retains the acceptance and citations while pruning the superseded brief. The unchanged assertions pass after that correction. Two 18.4 replay steps that require Git's tracked-file inventory passed when rerun from the actual Git worktree.
+
+| Runtime workflow accounting | PostgreSQL 17.6 | PostgreSQL 18.4 |
+| --- | ---: | ---: |
+| Original run blocks attempted in the first replay | 234 | 234 |
+| Passing executable blocks in the first replay | 228 | 228 |
+| Failing executable blocks in the first replay | 4 | 4 |
+| Supplied setup equivalents | 2 | 2 |
+| Passing executable blocks after retests, including the new R1 block | 232 | 232 |
+| Remaining unchanged-base BW-43 reflow failure | 1 | 1 |
+
+The 17.6 conversational Advisor run initially timed out at its Create button. The same unchanged check passed serially. The 18.4 Home Campaign Insights run initially exceeded its 1,000 ms first-render assertion by 16.4 ms and passed all 31 groups serially. The initial failures remain visible in the replay ledger. All 15 focused BW-46 and BW-47 regression scripts passed. The added R1 workflow block also passed in the final validation for each matrix entry. All inference in the enrichment checks was mocked.
