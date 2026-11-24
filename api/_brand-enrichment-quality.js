@@ -157,6 +157,16 @@ function scope(input){
  return input.field?[input.field]:Object.keys(c.validators);
 }
 function instructions(keys){return JSON.stringify(Object.fromEntries(keys.map(k=>[k,specs[k]])));}
+const improvementCriteria=Object.freeze({
+ toneOfVoice:'Make voice characteristics more usable in customer communication. Distinguish how the brand speaks from attributes of staff, equipment or service availability.',
+ contentGuidelines:'Turn confirmed communication preferences into actionable editorial instructions. Specify what a writer should do in a real situation without inserting advertising copy.',
+ messagingPillars:'Give customers distinct and memorable takeaways connected to supported services and needs. Preserve what already works and avoid invented advantages.',
+ valueProposition:'Clarify the supported offer and how it helps the customer achieve a relevant outcome. Preserve material limits and avoid promises the sources do not support.',
+ personas:'Refine known audiences or buying decisions using direct evidence. Omit assumed segments, roles, motivations and demographics.'
+});
+function improvementInstructions(keys){
+ return JSON.stringify(Object.fromEntries(keys.map(key=>[key,improvementCriteria[key]||'Make the saved value more useful for its specified field purpose using confirmed details.'])));
+}
 function strings(value){return typeof value==='string'?[value]:Array.isArray(value)?value.flatMap(strings):value&&typeof value==='object'?Object.values(value).flatMap(strings):[];}
 const words={en:new Set('the and we our your you with for are is to of that this should do not use explain claims customers their'.split(' ')),de:new Set('der die das und wir unser unsere unserer ihr ihre sie mit für sind ist zu von dass diese soll sollen nicht verwenden erkläre kunden aussagen'.split(' '))};
 const clauses={en:new Set('are is should do use explain'.split(' ')),de:new Set('sind ist soll sollen verwenden erkläre'.split(' '))};
@@ -190,4 +200,4 @@ function assess(key,value,{language,sources,name}={}){
  }
  return issues;
 }
-module.exports={specs,scope,instructions,assess,mismatch};
+module.exports={specs,scope,instructions,improvementInstructions,assess,mismatch};

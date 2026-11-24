@@ -25,11 +25,63 @@
   function target(core,key){if(!modules.includes(key))return core[key];const tiles=(core.customTiles||[]).filter(t=>t.moduleType===key);if(tiles.length>1)fail('AMBIGUOUS_MODULE');return tiles[0]?.content;}
   function publicCore(core){const result={...core};delete result[KEY];return result;}
   function url(value){try{const u=new URL(value);if(u.protocol!=='https:'||u.username||u.password||u.port&&u.port!=='443')return '';u.search='';u.hash='';return u.href;}catch{return '';}}
+  const populated=v=>typeof v==='string'?!!v.trim():Array.isArray(v)?v.some(populated):object(v)&&Object.values(v).some(populated);
+  const outcomeLabels=Object.freeze({
+    no_value_generated:'No value was generated',
+    no_usable_evidence:'No usable evidence for this suggestion',
+    invalid_field:'The generated field could not be validated',
+    unchanged:'Saved value unchanged',
+    no_improvement:'No supported improvement found',
+    quality_withheld:'Suggestion needs manual review',
+    specialized_module_unavailable:'Specialized module. Use its existing editor in Advanced options.',
+    current_value_unavailable:'Current value unavailable',
+    conflicting:'Conflicting information'
+  });
+  function outcome(field){
+    if(!field)return 'invalid_field';
+    if(field.reason==='unchanged')return 'unchanged';
+    if(field.outcome)return field.outcome;
+    if(field.classification==='unavailable'){
+      if(field.reason==='quality_review_required')return 'quality_withheld';
+      if(field.reason==='specialized_module_owner')return 'specialized_module_unavailable';
+      return 'current_value_unavailable';
+    }
+    if(field.classification==='missing')return 'no_value_generated';
+    if(field.classification==='conflicting')return 'conflicting';
+    return 'suggestion';
+  }
+  const isSuggestion=field=>outcome(field)==='suggestion'&&['user_provided','website_supported','ai_interpretation'].includes(field.classification)&&populated(field.value);
+  function isReviewItem(field){
+    return isSuggestion(field)||['conflicting','quality_withheld','no_usable_evidence','current_value_unavailable'].includes(outcome(field))||
+      outcome(field)==='specialized_module_unavailable'&&populated(field.value);
+  }
+  function equalValue(left,right){
+    if(typeof left==='string'&&typeof right==='string')return left.trim().replace(/\s+/g,' ')===right.trim().replace(/\s+/g,' ');
+    if(Array.isArray(left)&&Array.isArray(right))return left.length===right.length&&left.every((entry,i)=>equalValue(entry,right[i]));
+    if(object(left)&&object(right))return Object.keys(left).length===Object.keys(right).length&&Object.entries(left).every(([key,value])=>Object.hasOwn(right,key)&&equalValue(value,right[key]));
+    return left===right;
+  }
+  function sameValue(key,value,current){
+    if(!populated(value))return false;
+    return key==='brandAssets'&&object(value)&&object(current)
+      ? Object.entries(value).every(([part,entry])=>equalValue(entry,current[part]))
+      : equalValue(value,current);
+  }
+  function improvementValue(key,current){
+    const value=key==='brandAssets'&&object(current)
+      ? Object.fromEntries(Object.entries(current).filter(([part])=>['colors','typography','references'].includes(part)))
+      : current;
+    try {return populated(value)&&valid(key,value)?value:null;}catch{return null;}
+  }
+  function acceptedRecord(record){
+    if(record?.decision==='accepted')return record;
+    if(record?.previousAcceptance?.decision==='accepted')return record.previousAcceptance;
+  }
   // Decisions and claim lineage are user-controlled records, not verification credentials.
   function adopt(core,draft,key,decision,value,createTile){
     if(draft?.version!==VERSION||!Object.hasOwn(validators,key)||!['accepted','rejected','postponed'].includes(decision))fail();
-    const proposal=draft.fields?.[key];if(!proposal)fail();
-    if(decision==='accepted'&&(['conflicting','missing','unavailable'].includes(proposal.classification)||!valid(key,value)))fail();
+    const proposal=draft.fields?.[key];if(!proposal||['unchanged','no_improvement'].includes(outcome(proposal)))fail();
+    if(decision==='accepted'&&(!isSuggestion(proposal)||!valid(key,value)||!populated(value)||sameValue(key,value,target(core,key))))fail();
     const next=clone(core);
     if(decision==='accepted'){
       if(modules.includes(key)){
@@ -39,25 +91,27 @@
       }else next[key]=object(next[key])&&object(value)?{...next[key],...clone(value)}:clone(value);
     }
     const evidence=object(next[KEY])&&next[KEY].version===VERSION?next[KEY]:{version:VERSION,fields:{},inputs:{}};
+    const previousAcceptance=decision==='accepted'?undefined:acceptedRecord(evidence.fields[key]);
     evidence.fields[key]={...clone(proposal),decision,proposedValue:clone(proposal.value),value:decision==='accepted'?clone(value):clone(proposal.value),
-      userEdited:decision==='accepted'&&JSON.stringify(value)!==JSON.stringify(proposal.value),origin:draft.origin,revision:draft.revision};
+      userEdited:decision==='accepted'&&JSON.stringify(value)!==JSON.stringify(proposal.value),origin:draft.origin,revision:draft.revision,
+      ...(previousAcceptance?{previousAcceptance}:{})};
     evidence.inputs ||= {};evidence.inputs[draft.originId]=clone(draft.input||{});
-    const used=new Set(Object.values(evidence.fields).map(f=>f.originId));for(const id of Object.keys(evidence.inputs))if(!used.has(id))delete evidence.inputs[id];
+    // A prior acceptance keeps its citations, without extending retention of the old brief.
+    const used=new Set(Object.values(evidence.fields).map(f=>f.originId));
+    for(const id of Object.keys(evidence.inputs))if(!used.has(id))delete evidence.inputs[id];
     next[KEY]=evidence;safe(next);return next;
   }
-  const populated=v=>typeof v==='string'?!!v.trim():Array.isArray(v)?v.some(populated):object(v)&&Object.values(v).some(populated);
   // Stable field order, one in-memory candidate, no persistence or inference here.
-  function plan(core,draft,{revision,authorized=true,edits={},errors={},createTile}={}) {
+  function plan(core,draft,{revision,authorized=true,dirty=false,edits={},errors={},createTile}={}) {
     const accepted=[],excluded=[];let next=clone(core);
     for(const key of Object.keys(draft?.fields || {}).sort()) {
       const proposal=draft.fields[key],value=Object.hasOwn(edits,key)?edits[key]:proposal?.value;
       let reason='';
       if(!authorized)reason='Editing permission required';
       else if(draft.version!==VERSION||draft.revision!==revision)reason='Proposal is stale';
+      else if(dirty)reason='Save your profile edits before deciding on suggestions.';
       else if(!Object.hasOwn(validators,key))reason='Use the existing editor in Advanced options';
-      else if(proposal?.classification==='conflicting')reason='Conflicting information';
-      else if(proposal?.classification==='missing')reason='Needs more information';
-      else if(proposal?.classification==='unavailable')reason=proposal.reason==='quality_review_required'?'Review this suggestion manually in Advanced options.':proposal.reason==='specialized_module_owner'?'Specialized module. Use its existing editor in Advanced options.':'Current value unavailable';
+      else if(proposal&&outcome(proposal)!=='suggestion')reason=outcomeLabels[outcome(proposal)]||'Unsupported suggestion';
       else if(!['user_provided','website_supported','ai_interpretation'].includes(proposal?.classification))reason='Unsupported suggestion';
       else if(errors[key])reason='Enter a valid suggested value.';
       else if(value===undefined||value===null||!populated(value))reason='Needs more information';
@@ -67,6 +121,7 @@
           else {
             const current=target(core,key);
             if(current!=null&&(typeof value==='string'?typeof current!=='string':Array.isArray(value)?!Array.isArray(current):!object(current)))reason='Use the existing editor in Advanced options';
+            else if(sameValue(key,value,current))reason=outcomeLabels.unchanged;
             else {next=adopt(next,draft,key,'accepted',value,createTile);accepted.push(key);}
           }
         } catch(e) {reason=e.code==='SPECIALIZED_MODULE_OWNER'?'Specialized module. Use its existing editor in Advanced options.':e.code==='AMBIGUOUS_MODULE'?'Current value unavailable. Review modules in Advanced options.':'Unsupported suggestion';}
@@ -75,5 +130,5 @@
     }
     return {core:next,accepted,excluded};
   }
-  return Object.freeze({VERSION,KEY,modules,sections,validators,valid,target,publicCore,url,adopt,plan});
+  return Object.freeze({VERSION,KEY,modules,sections,validators,valid,target,publicCore,url,outcome,outcomeLabels,isSuggestion,isReviewItem,sameValue,improvementValue,acceptedRecord,adopt,plan});
 });
