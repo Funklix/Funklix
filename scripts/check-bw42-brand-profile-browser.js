@@ -87,8 +87,6 @@ const {png} = require('./fixtures/bw36-13r5-local-runtime');
     const gate=new Promise(resolve=>{release=resolve;});
     await p.route('**/api/brands/'+brandId,async route=>{await gate;await route.fallback();});
     await p.evaluate(()=>{canonicalBrandReader.retire();void openRegularBrandProfile();});
-    await p.waitForFunction(()=>brandProfileController && canonicalBrandDetail.status==='ready');
-    await openFullBrandProfile(p);
     try {
       await p.waitForFunction(()=>canonicalBrandDetail.status==='loading');
       assert(await p.locator('#brand-workspace-detail-title').evaluate(n=>n.getBoundingClientRect().width>10&&getComputedStyle(n).clipPath==='none'),'Loading title remains visible');
