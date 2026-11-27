@@ -1,4 +1,5 @@
 'use strict';
+const {openFullBrandProfile}=require('./home-browser');
 const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
 const {advisorRuntime}=require('./bw36-19-advisor-runtime');
 const {B,W,EMAIL,clone}=require('./bw36-13r5-local-runtime');
@@ -28,7 +29,7 @@ async function browserChecks({canvas,expectedThreads=1,hydrationCanvases=[]}={})
    state.boardAccess={canView:true,canEdit:true,canViewBoardBrandCore:true};state.isDirty=false;setActiveView('home');setSidebarCollapsed(false);renderWorkspaceSidebar();
   },{catalog:base.catalog(),W,B,EMAIL});
   await page.locator('#brand-core-nav-btn').click();await page.waitForFunction(()=>!!brandProfileController&&canonicalBrandDetail.status==='ready');
-  await page.locator('[data-profile-key="Brand Learnings"]').click();
+  await openFullBrandProfile(page, 'Brand Learnings');
   if(canvas) {
    for(const historical of hydrationCanvases) {
     const restored=await page.evaluate(canvas=>{applyCampaignState(canvas,'Synthetic historical Board',{memoryOnly:true});return serializeState();},historical);
