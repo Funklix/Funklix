@@ -615,6 +615,7 @@
       if (writes.equal(fresh.brand_core.valueProposition, input.value)) return false;
       brainDraft = { revision: input.revision, expected: clone(input.expected), revalidate: input.revalidate };
       state.core.valueProposition = input.value;
+      state.builder = null;
       state.section = 0;
       changed();
       return true;
@@ -1118,7 +1119,7 @@
         },
         onFailure: render,
         restoreFocus: () => { if (session.current()) container.querySelector('.profile-founder>summary')?.focus(); },
-        onSaved: () => { s.section = 0; render(); container.querySelector('.profile-founder>summary')?.focus(); }
+        onSaved: () => { goToProfile(0); container.querySelector('.profile-founder>summary')?.focus(); }
       });
     }
     function founderWorkspace(parent) {
