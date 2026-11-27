@@ -82,3 +82,10 @@ module.exports = browser => {
   }
   return fixture;
 };
+
+// Compatibility suites reach the same full editor a returning user can open.
+module.exports.openFullBrandProfile = async (page, section = 'Overview') => {
+  const menu = page.locator('.profile-nav-browser');
+  if (!await menu.evaluate(node => node.open)) await menu.locator(':scope > summary').click();
+  await page.locator(`.profile-legacy-nav [data-profile-key="${section}"]`).click();
+};

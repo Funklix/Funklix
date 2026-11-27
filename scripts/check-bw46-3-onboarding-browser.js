@@ -1,4 +1,5 @@
 'use strict';
+const { openFullBrandProfile } = require('./fixtures/home-browser');
 // Real application, protected controller and HTTP handlers; fictional research and AI only.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -41,6 +42,7 @@ function luminance(color) {
         });
         await p.evaluate(language=>{state.uiLanguage=FunklixLanguage.setUiLanguage(language);translateInterface();openRegularBrandProfile();},language);
         await p.waitForFunction(()=>brandProfileController && canonicalBrandDetail.status==='ready');
+        await openFullBrandProfile(p);
         assert.equal(calls,0);assert.equal(await p.locator('.profile-nav-group').count(),6);assert.equal(await p.locator('nav button[data-readiness]').count(),11);
         assert(await p.locator('.profile-discovery').evaluate(n=>n.open),'new Brand invitation open');
         const saved=clone(f.r.db.brands[0]), snapshot=clone(f.r.db.boards);
@@ -192,6 +194,7 @@ function luminance(color) {
       }});
       await p.route('**/api/enrich-brand-profile',async route=>{const res={statusCode:200,setHeader(){},status(code){this.statusCode=code;return this;},json(body){this.body=clone(body);return this;}};await handler({method:'POST',body:route.request().postDataJSON()},res);await route.fulfill({status:res.statusCode,json:res.body});});
       await p.evaluate(()=>openRegularBrandProfile());await p.waitForFunction(()=>brandProfileController&&canonicalBrandDetail.status==='ready');
+      await openFullBrandProfile(p);
       await key('Audience').click();await p.locator('[data-field="personas"] .profile-field-menu>summary').click();
       for(const action of ['write-personas','suggest-personas','questions-personas','later-personas'])assert.equal(await key(action).count(),1,'empty audiences expose '+action);
       await key('later-personas').click();assert.equal(await p.evaluate(()=>brandProfileController.contentDirty()),false);
@@ -215,12 +218,14 @@ function luminance(color) {
     try {
       const p=legacy.page,key=k=>p.locator(`[data-profile-key="${k}"]`);const snapshot=clone(legacy.r.db.boards);
       await p.evaluate(()=>openRegularBrandProfile());await p.waitForFunction(()=>brandProfileController && canonicalBrandDetail.status==='ready');
+        await openFullBrandProfile(p);
       assert.equal(await key('Website').inputValue(),'https://legacy.example/');await key('Website').fill('');
       await key('Confirm and save Brand Profile').click();await p.waitForFunction(()=>!brandProfileController.busy());
       assert.equal(legacy.r.db.brands[0].brand_core.website,'','explicit clear also clears existing legacy fallback');
       assert.equal(await p.evaluate(()=>brandProfileController.contentDirty()),false);
       await p.reload();await p.waitForFunction(()=>state.workspaceCatalog.status==='ready'&&!state.isBoardLoading&&!state.isBoardHydrating);
       await p.evaluate(()=>{clearAutosaveTimer();stopPresenceLite();stopBoardRefreshPolling();openRegularBrandProfile();});await p.waitForFunction(()=>brandProfileController && canonicalBrandDetail.status==='ready');
+        await openFullBrandProfile(p);
       assert.equal(await key('Website').inputValue(),'','fresh browser session cannot resurrect the legacy URL');
       await key('Website').fill('https://corrected.example/');await key('Confirm and save Brand Profile').click();await p.waitForFunction(()=>!brandProfileController.busy());
       await key('Reload latest Brand').click();await p.waitForFunction(()=>!brandProfileController.busy());assert.equal(await key('Website').inputValue(),'https://corrected.example/');

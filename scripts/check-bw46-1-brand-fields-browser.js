@@ -1,4 +1,5 @@
 'use strict';
+const { openFullBrandProfile } = require('./fixtures/home-browser');
 // Actual forms -> protected HTTP handlers -> disposable SQL adapter -> reload.
 // SQL authorization/history is separately exercised by the PostgreSQL suites.
 const assert=require('node:assert/strict'),fs=require('node:fs');
@@ -35,6 +36,7 @@ async function checkControllerCompatibility(){
   const key=k=>p.locator(`[data-profile-key="${k}"]`),results=[];
   const snapshot=clone(f.r.db.boards[0]), original=clone(f.r.db.brands[0]);
   await p.evaluate(()=>openRegularBrandProfile());await p.waitForFunction(()=>brandProfileController&&canonicalBrandDetail.status==='ready');
+   await openFullBrandProfile(p);
   const beforeAI=clone(f.r.db.brands[0].brand_core);
   await p.route('**/api/analyze-brand-domain',async route=>{
    const res=await f.r.request('POST','/api/analyze-brand-domain',route.request().postDataJSON());

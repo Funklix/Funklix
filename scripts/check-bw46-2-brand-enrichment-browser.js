@@ -1,4 +1,5 @@
 'use strict';
+const { openFullBrandProfile } = require('./fixtures/home-browser');
 const assert=require('node:assert/strict');
 const {chromium}=require('playwright-core');
 const {EMAIL,clone}=require('./fixtures/bw36-13r5-local-runtime');
@@ -13,6 +14,7 @@ const {EMAIL,clone}=require('./fixtures/bw36-13r5-local-runtime');
  const res={statusCode:200,setHeader(){},status(code){this.statusCode=code;return this},json(body){this.body=clone(body);return this}};
  await handler({method:'POST',body:route.request().postDataJSON()},res);await route.fulfill({status:res.statusCode,json:res.body});});
  await page.evaluate(language=>{state.uiLanguage=window.FunklixLanguage.setUiLanguage(language);translateInterface();openRegularBrandProfile()},language);await page.waitForFunction(()=>brandProfileController&&canonicalBrandDetail.status==='ready');
+   await openFullBrandProfile(page);
  const key=k=>page.locator(`[data-profile-key="${k}"]`);
  assert.equal(await key('Prepare enrichment draft').textContent(),language==='de'?'Anreicherung vorbereiten':'Prepare enrichment draft');assert.equal(calls,0,'opening does not infer');const before=clone(f.r.db.brands[0].brand_core),snapshot=clone(f.r.db.boards);
  await key('Prepare enrichment draft').click();await page.waitForFunction(()=>{document.querySelector('.brand-suggestion-dialog[open] .fk-btn-primary')?.click();return !brandProfileController.busy();});assert.equal(calls,1);assert.deepEqual(clone(f.r.db.brands[0].brand_core),before);

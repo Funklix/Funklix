@@ -1,4 +1,5 @@
 'use strict';
+const { openFullBrandProfile } = require('./fixtures/home-browser');
 // Actual application submission/controller/parser, safe research engine, protected
 // writer and authoritative reload. Only website transport and model are mocked.
 const assert=require('node:assert/strict');
@@ -43,6 +44,7 @@ function research(empty=false,conflicting=false){return researchDomain(website,{
     await handler({method:'POST',body:submissions.at(-1)},res);await route.fulfill({status:res.statusCode,json:res.body});
    });
    await p.evaluate(language=>{state.uiLanguage=FunklixLanguage.setUiLanguage(language);translateInterface();openRegularBrandProfile();},language);await p.waitForFunction(()=>brandProfileController&&canonicalBrandDetail.status==='ready');
+   await openFullBrandProfile(p);
    assert.equal(calls,0);
    const idle=()=>p.waitForFunction(()=>{document.querySelector('.brand-suggestion-dialog[open] .fk-btn-primary')?.click();return !brandProfileController.busy();});
    async function start(domain,text){

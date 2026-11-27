@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 'use strict';
+const { openFullBrandProfile } = require('./fixtures/home-browser');
 const assert = require('node:assert/strict'), fs = require('node:fs'), path = require('node:path');
 let chromium;
 try { ({ chromium } = require('playwright-core')); } catch { ({ chromium } = require('/opt/codex/runtimes/cua/lib/node_modules/playwright-core')); }
@@ -95,10 +96,10 @@ async function dom() {
     const key=k=>page.locator(`[data-profile-key="${k}"]`), ready=()=>page.waitForFunction(()=>!!brandProfileController&&canonicalBrandDetail.status==='ready'&&!brandProfileController.busy());
     await page.locator('#brand-core-nav-btn').click();await ready(); const writes=r.requests.filter(q=>q.method==='PUT').length;
     await page.locator('#home-nav-btn').click();assert.equal(await page.locator('#brand-leave-dialog').count(),0);assert.equal(await page.evaluate(()=>state.activeView),'home');assert.equal(r.requests.filter(q=>q.method==='PUT').length,writes);
-    await page.locator('#brand-core-nav-btn').click();await ready();await page.locator('.profile-legacy-research').evaluate(n=>n.open=true);await key('Analyze website').click();await ready();
+    await page.locator('#brand-core-nav-btn').click();await ready();await openFullBrandProfile(page);await page.locator('.profile-legacy-research').evaluate(n=>n.open=true);await key('Analyze website').click();await ready();
     assert(await page.getByText(/details added from the website\./).isVisible());assert(await page.locator('.profile-proposal').filter({hasText:'Brand description'}).isVisible());assert(await page.getByText('Original positioning',{exact:true}).isVisible());assert(await page.getByText(r.suggestions.brandCore,{exact:true}).isVisible());
     await page.locator('#home-nav-btn').click();assert.equal(await page.locator('#brand-leave-dialog').count(),0);
-    await page.locator('#brand-core-nav-btn').click();await ready();await key('Review').click();assert(await key('keep-brandCore').isVisible());const kept=r.requests.filter(q=>q.method==='PUT').length;await key('keep-brandCore').click();assert.equal(await page.locator('.profile-proposal').count(),0);assert.equal(r.requests.filter(q=>q.method==='PUT').length,kept);
+    await page.locator('#brand-core-nav-btn').click();await ready();await openFullBrandProfile(page, 'Review');assert(await key('keep-brandCore').isVisible());const kept=r.requests.filter(q=>q.method==='PUT').length;await key('keep-brandCore').click();assert.equal(await page.locator('.profile-proposal').count(),0);assert.equal(r.requests.filter(q=>q.method==='PUT').length,kept);
     await key('Overview').click();await page.locator('.profile-legacy-research').evaluate(n=>n.open=true);await key('Analyze website').click();await ready(); r.db.failPut=true;
     await key('proposal-brandCore').click();await ready();assert(await key('retry-brandCore').isVisible());assert.equal(await key('proposal-brandCore').getAttribute('aria-pressed'),'true');assert(await page.locator('.profile-proposal [role=alert]').isVisible());
     const decisionURL=page.url(), refetches=calls.filter(c=>/^\/api\/(workspaces\/catalog|boards)/.test(c.path)).length;

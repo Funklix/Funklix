@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 'use strict';
+const { openFullBrandProfile } = require('./fixtures/home-browser');
 const assert = require('node:assert/strict'), fs = require('node:fs'), path = require('node:path');
 const { runtime, W, B, D, EMAIL, png, clone } = require('./fixtures/bw36-13r5-local-runtime');
 const profile = require('../brand-profile-setup');
@@ -65,7 +66,8 @@ async function browserJourney() {
     assert.equal(r.requests.find(x=>x.method==='DELETE').path,`/api/brands/${M}`);assert.deepEqual(clone(r.db.brands[0]),before);assert.deepEqual(clone(r.db.boards),snapshot);assert.equal(await page.evaluate(()=>state.session.brandId),B);assert.equal(await page.evaluate(()=>state.activeView),'home');
     await page.locator('#workspace-brand-manage').click();await page.getByRole('menuitem',{name:'Delete Brand',exact:true}).click();assert(!(await page.locator('#brand-delete-submit').isVisible()));await page.waitForFunction(()=>document.querySelector('#brand-delete-feedback').textContent.includes('1 project.'));assert.deepEqual(clone(r.db.boards),snapshot);await page.locator('#brand-delete-cancel').click();
     await page.locator('#brand-core-nav-btn').click();await page.waitForFunction(B=>brandProfileController?.state.brand.id===B,B);
-    const key=k=>page.locator(`[data-profile-key="${k}"]`);assert.equal(r.requests.filter(x=>/generate-brand-avatar|discover-brand-dna/.test(x.path)).length,0);
+    const key=k=>page.locator(`[data-profile-key="${k}"]`);
+    await openFullBrandProfile(page);assert.equal(r.requests.filter(x=>/generate-brand-avatar|discover-brand-dna/.test(x.path)).length,0);
     await key('Brand DNA').click();assert(await key('dna-primaryArchetype').isVisible());await key('dna-positioning').fill('Reviewed positioning');await key('Confirm and save Brand Profile').click();await page.waitForFunction(()=>!brandProfileController.dirty());
     await key('Generate Brand DNA').click();
     if (await key('Continue anyway').count()) await key('Continue anyway').click();
@@ -76,7 +78,7 @@ async function browserJourney() {
     await key('Brand Assets').click();await page.locator('[data-profile-key=file]').setInputFiles({name:'logo.png',mimeType:'image/png',buffer:png});await key('Upload logo').click();await page.waitForFunction(()=>brandProfileController.state.logo==='Logo saved');await key('Confirm and save Brand Profile').click();await page.waitForFunction(()=>!brandProfileController.busy());await page.locator('#home-nav-btn').click();assert.equal(await page.locator('#brand-leave-dialog').count(),0);
     assert.equal(await page.locator('#workspace-brand-avatar img').getAttribute('src'),`/api/brands/${B}/logo?revision=1`);
     await page.reload();await page.waitForFunction(()=>typeof state!=='undefined'&&workspaceSidebarController);await context();await page.locator('#brand-core-nav-btn').click();await page.waitForFunction(B=>brandProfileController?.state.brand.id===B,B);
-    assert.equal(await page.locator('.profile-logo img').getAttribute('src'),`/api/brands/${B}/logo?revision=1`);assert.equal(await page.evaluate(()=>brandProfileController.state.core.brandDNA.positioning),'Reviewed positioning');await key('Brand Avatar').click();assert.equal(await page.locator('.profile-brand-avatar').getAttribute('src'),'https://example.test/generated-avatar.png');
+    assert.equal(await page.locator('.profile-logo img').getAttribute('src'),`/api/brands/${B}/logo?revision=1`);assert.equal(await page.evaluate(()=>brandProfileController.state.core.brandDNA.positioning),'Reviewed positioning');await openFullBrandProfile(page, 'Brand Avatar');assert.equal(await page.locator('.profile-brand-avatar').getAttribute('src'),'https://example.test/generated-avatar.png');
     for(const theme of ['light','dark'])for(const width of [320,375,768,1440,720]){await page.setViewportSize({width,height:width===720?450:900});await page.evaluate(theme=>document.documentElement.dataset.theme=theme,theme);assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await key('Brand DNA').click();await page.keyboard.press('Tab');assert(await page.evaluate(()=>!!document.activeElement));}
     await page.evaluate(()=>{state.uiLanguage='de';brandProfileController.render();});assert(await page.getByRole('button',{name:'Markenavatar',exact:true}).isVisible());await page.emulateMedia({forcedColors:'active',reducedMotion:'reduce'});assert(await page.locator('.guided-brand-profile').isVisible());assert.deepEqual(errors,[]);assert.equal(native,0);assert.deepEqual(clone(r.db.boards),snapshot);
     console.log('R5R2 Chromium: Appics selected/markmans row-target deletion without Board/reload; immutable confirmation; authoritative associated-Board block; structured DNA edits; explicit Avatar review/save; distinct logo; durable reload/sidebar/clean leave; EN/DE, desktop/mobile, themes, keyboard, reflow, forced colors/reduced motion. Mocked I/O only.');

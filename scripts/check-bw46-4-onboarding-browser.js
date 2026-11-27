@@ -1,4 +1,5 @@
 'use strict';
+const { openFullBrandProfile } = require('./fixtures/home-browser');
 // Actual application and enrichment handler. All source/model responses are fictional.
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
@@ -23,6 +24,7 @@ const {EMAIL,clone}=require('./fixtures/bw36-13r5-local-runtime');
   }});
   await p.route('**/api/enrich-brand-profile',async route=>{requests.push(route.request().postDataJSON());const res={statusCode:200,setHeader(){},status(n){this.statusCode=n;return this;},json(v){this.body=clone(v);return this;}};await handler({method:'POST',body:requests.at(-1)},res);await route.fulfill({status:res.statusCode,json:res.body});});
   await p.evaluate(language=>{state.uiLanguage=FunklixLanguage.setUiLanguage(language);translateInterface();openRegularBrandProfile();},language);await p.waitForFunction(()=>brandProfileController&&canonicalBrandDetail.status==='ready');
+   await openFullBrandProfile(p);
   assert.equal(calls,0);await key('research-domain').fill('frostspur.example');
   assert((await p.locator('.profile-website').textContent()).includes(language==='de'?'Noch keine Website gespeichert':'No saved website yet'));
   assert((await p.locator('.profile-website-draft').textContent()).includes('frostspur.example'));assert((await p.locator('.profile-website-draft').textContent()).includes(language==='de'?'nicht gespeichert':'not saved'));

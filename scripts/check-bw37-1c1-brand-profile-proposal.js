@@ -288,6 +288,7 @@ async function browserChecks() {
     assert.equal(await p.evaluate(()=>state.activeView),'brand-profile');assert(await p.evaluate(()=>brandProfileController.contentDirty()));
     assert.equal(await p.evaluate(()=>brandProfileController.state.core.valueProposition),'An edited proposal for independent makers.');
     assert.equal(f.writes.length,0);assert.equal(JSON.stringify(f.r.db.brands),before);assert.equal(calls,1);
+    assert.equal(await p.locator('[data-profile-key="Value Proposition"]').inputValue(), 'An edited proposal for independent makers.');
     // BW-42-R1: exercise the actual staged return state against the full CSS cascade.
     for (const theme of ['light','dark']) for (const language of ['en','de']) for (const width of [1440,768,375,320]) {
       await p.setViewportSize({width,height:940});

@@ -192,6 +192,8 @@ function fixture() {
       try {
         await p.waitForFunction(() => document.querySelector('[data-avatar-state=ready]'));
         await p.locator('#brand-core-nav-btn').click(); await p.waitForFunction(() => !!brandProfileController);
+        await p.locator('[data-profile-key="builder-brand_foundation"]').click();
+        await p.locator('[data-disclosure="builder-edit:brandCore"] > summary').click();
         await p.locator('[data-profile-key="Brand description"]').fill('Local description');
         f.r.db.brands[0].revision++; f.r.db.brands[0].name = 'Remote name';
         await p.evaluate(async () => { if (await brandProfileController.save()) throw Error('Expected conflict'); });

@@ -90,12 +90,12 @@
       || object(c.expected.value) || /(?:approved|status|type|image|url|asset|logo)/i.test(c.path);
   }
   // The pending holder belongs to one captured account/Brand/Workspace session.
-  async function submit({ fetchImpl, brandId, command, pending, current = () => true, confirmReview = globalThis.confirm?.bind(globalThis) }) {
+  async function submit({ fetchImpl, brandId, command, pending, current = () => true, requireReview = false, confirmReview = globalThis.confirm?.bind(globalThis) }) {
     const signature = stable(command);
     if (pending?.command && stable({ ...pending.command, mutation_id: command.mutation_id }) === signature) command = pending.command;
     else if (pending) { pending.command = command; pending.token = null; }
     let token = pending?.token;
-    if (!token && command.changes.some(destructive)) {
+    if (!token && (requireReview || command.changes.some(destructive))) {
       const response = await fetchImpl(`/api/brands/${brandId}/write-preview`, { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(command) });
       if (!current()) throw new Error('CONTEXT_CHANGED');
       const preview = await response.json();

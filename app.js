@@ -3360,12 +3360,20 @@ function reconcileConfirmedBrand(confirmed) {
 function retainPendingBrandProfile() {
   const profile = brandProfileController?.state;
   if (!profile || !brandProfileController.belongsToAccount(state.user)) return;
-  if (profile.file || profile.candidate || profile.dnaDraft || profile.avatarDraft || profile.avatarDirection || Object.keys(profile.proposals).length) {
-    pendingBrandProfileData.set(profile.brand.id, { account: state.user, file: profile.file, fileData: profile.fileData,
+  if (profile.readOnly) { pendingBrandProfileData.delete(profile.brand.id); return; }
+  const hasSuggestions = Object.keys(profile.enrichment?.fields || {}).length;
+  if (profile.file || profile.candidate || profile.dnaDraft || profile.avatarDraft || profile.avatarDirection || Object.keys(profile.proposals).length
+      || hasSuggestions || profile.research || Object.keys(profile.questionByField).length || Object.keys(profile.laterFields).length) {
+    pendingBrandProfileData.set(profile.brand.id, { account: state.user, workspaceId: profile.brand.workspace_id, file: profile.file, fileData: profile.fileData,
       candidate: profile.candidate ? clonePlainObject(profile.candidate) : null, proposals: clonePlainObject(profile.proposals),
       proposalChoices: clonePlainObject(profile.proposalChoices), proposalErrors: clonePlainObject(profile.proposalErrors),
       autoKeys: profile.autoKeys.slice(), autoValues: clonePlainObject(profile.autoValues),
-      dnaDraft: profile.dnaDraft, avatarDraft: profile.avatarDraft, avatarDirection: profile.avatarDirection });
+      dnaDraft: profile.dnaDraft, avatarDraft: profile.avatarDraft, avatarDirection: profile.avatarDirection,
+      enrichment: hasSuggestions ? clonePlainObject(profile.enrichment) : null,
+      enrichmentEdits: clonePlainObject(profile.enrichmentEdits), enrichmentEditErrors: clonePlainObject(profile.enrichmentEditErrors),
+      research: profile.research ? clonePlainObject(profile.research) : null,
+      laterFields: clonePlainObject(profile.laterFields), questionByField: clonePlainObject(profile.questionByField)
+    });
   } else pendingBrandProfileData.delete(profile.brand.id);
 }
 
@@ -3380,7 +3388,15 @@ function renderGuidedBrandProfile(detail) {
     // A catalog refresh/stale interval must not replace the user's local draft.
     brandProfileController.refreshContext();
     const role = state.workspaceCatalog.value?.workspaces.flatMap(w => w.brands).find(b => b.id === detail.brandId)?.role;
-    if (state.workspaceCatalog.status === 'ready' && role) brandProfileController.state.readOnly = !['owner', 'admin', 'editor'].includes(role);
+    if (state.workspaceCatalog.status === 'ready' && role) {
+      brandProfileController.state.readOnly = !['owner', 'admin', 'editor'].includes(role);
+      if (brandProfileController.state.readOnly) {
+        brandProfileController.clearEnrichment();
+        brandProfileController.state.questionByField = {};
+        brandProfileController.state.research = null;
+        pendingBrandProfileData.delete(detail.brandId);
+      }
+    }
     brandProfileController.render(); return;
   }
   brandProfileController?.invalidate();
@@ -3389,9 +3405,10 @@ function renderGuidedBrandProfile(detail) {
   if (!workspace || state.workspaceCatalog.status !== 'ready') {
     el.brandWorkspaceDetailStatus.textContent = uiText('Workspace or Brand context is no longer available.'); return;
   }
+  const pendingProfile = pendingBrandProfileData.get(brand.id);
   brandProfileController = window.FunklixBrandProfileSetup.mount(el.brandWorkspaceDetailContent, {
-    pendingData: pendingBrandProfileData.get(brand.id)?.account === state.user ? pendingBrandProfileData.get(brand.id) : null,
-    initialSection: canonicalBrandDetail.initialSection,
+    pendingData: brand.access?.canEditCanonicalBrand === true && pendingProfile?.account === state.user && pendingProfile?.workspaceId === workspace.id ? pendingProfile : null,
+    initialSection: canonicalBrandDetail.initialSection, initialBuilder: canonicalBrandDetail.initialBuilder,
     brand, website: projectSetupContext?.website || '', language: () => state.uiLanguage,
     getContext: () => ({ account: state.user, generation: state.workspaceCatalog.generation, brandId: canonicalBrandDetail.brandId,
       workspaceId: state.workspaceCatalog.activeWorkspaceId,
@@ -3419,7 +3436,12 @@ function renderGuidedBrandProfile(detail) {
     hasProject: () => !!projectSetupContext && projectSetupContext.account === state.user && projectSetupContext.generation === state.workspaceCatalog.generation,
     onContinue: continueBrandProfileProject,
     onAdvanced: controller => {
-      const advance = () => { retainPendingBrandProfile(); controller.invalidate(); brandProfileController = null; brandProfileAdvanced = true; renderCanonicalBrandDetail(); };
+      const advance = () => {
+        canonicalBrandDetail.initialBuilder = controller.state.builder;
+        canonicalBrandDetail.initialSection = controller.state.builder ? null : window.FunklixBrandProfileSetup.SECTIONS[controller.state.section];
+        retainPendingBrandProfile();
+        controller.invalidate(); brandProfileController = null; brandProfileAdvanced = true; renderCanonicalBrandDetail();
+      };
       if (guardBrandProfileLeave(advance)) advance();
     }
   });

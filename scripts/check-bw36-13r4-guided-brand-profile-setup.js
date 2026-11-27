@@ -220,7 +220,7 @@ async function checkProfileUI() {
   const host = doc.createElement('div'); doc.body.append(host);
   for (const viewer of [false, true]) {
     const fixture = makeSession({ brand: { ...clone(brand), access: { role: viewer ? 'viewer' : 'owner', canEditCanonicalBrand: !viewer } } });
-    const mounted = root.FunklixBrandProfileSetup.mount(host, { ...fixture.options, language: () => 'de', hasProject: () => true, onContinue() {}, onAdvanced() {}, moduleDefinition: registry.getModuleDefinition, createTile: type => ({ id: 'module-fixture', title: type, content: '', moduleType: type }) });
+    const mounted = root.FunklixBrandProfileSetup.mount(host, { ...fixture.options, initialSection: 'Overview', language: () => 'de', hasProject: () => true, onContinue() {}, onAdvanced() {}, moduleDefinition: registry.getModuleDefinition, createTile: type => ({ id: 'module-fixture', title: type, content: '', moduleType: type }) });
     assert(host.textContent.includes(language.t('Overview','de'))); assert(host.textContent.includes('Marken-DNA')); assert(!host.textContent.includes('Canonical')); assert(!host.textContent.includes('$.')); assert(!host.textContent.includes('"preserve"'));
     const buttons = host.querySelectorAll('button').map(n => n.textContent);
     assert.equal(buttons.includes('Markenmaterialien'), true); assert.equal(buttons.includes('Website analysieren'), !viewer); assert.equal(buttons.includes('Markenprofil bestätigen und speichern'), !viewer);

@@ -73,6 +73,12 @@
       : current;
     try {return populated(value)&&valid(key,value)?value:null;}catch{return null;}
   }
+  function compatibleTarget(key,current){
+    if(current==null)return true;
+    const ownedParts={brandAssets:['colors','typography','references'],dosAndDonts:['dos','donts'],brandVoiceExamples:['good','avoid']};
+    const value=ownedParts[key]&&object(current)?Object.fromEntries(Object.entries(current).filter(([part])=>ownedParts[key].includes(part))):current;
+    return valid(key,value);
+  }
   function acceptedRecord(record){
     if(record?.decision==='accepted')return record;
     if(record?.previousAcceptance?.decision==='accepted')return record.previousAcceptance;
@@ -80,6 +86,7 @@
   // Decisions and claim lineage are user-controlled records, not verification credentials.
   function adopt(core,draft,key,decision,value,createTile){
     if(draft?.version!==VERSION||!Object.hasOwn(validators,key)||!['accepted','rejected','postponed'].includes(decision))fail();
+    const provenance=draft.fieldInputs?.[key] || draft;
     const proposal=draft.fields?.[key];if(!proposal||['unchanged','no_improvement'].includes(outcome(proposal)))fail();
     if(decision==='accepted'&&(!isSuggestion(proposal)||!valid(key,value)||!populated(value)||sameValue(key,value,target(core,key))))fail();
     const next=clone(core);
@@ -93,18 +100,18 @@
     const evidence=object(next[KEY])&&next[KEY].version===VERSION?next[KEY]:{version:VERSION,fields:{},inputs:{}};
     const previousAcceptance=decision==='accepted'?undefined:acceptedRecord(evidence.fields[key]);
     evidence.fields[key]={...clone(proposal),decision,proposedValue:clone(proposal.value),value:decision==='accepted'?clone(value):clone(proposal.value),
-      userEdited:decision==='accepted'&&JSON.stringify(value)!==JSON.stringify(proposal.value),origin:draft.origin,revision:draft.revision,
+      userEdited:decision==='accepted'&&JSON.stringify(value)!==JSON.stringify(proposal.value),origin:provenance.origin,revision:draft.revision,
       ...(previousAcceptance?{previousAcceptance}:{})};
-    evidence.inputs ||= {};evidence.inputs[draft.originId]=clone(draft.input||{});
+    evidence.inputs ||= {};evidence.inputs[provenance.originId]=clone(provenance.input||{});
     // A prior acceptance keeps its citations, without extending retention of the old brief.
     const used=new Set(Object.values(evidence.fields).map(f=>f.originId));
     for(const id of Object.keys(evidence.inputs))if(!used.has(id))delete evidence.inputs[id];
     next[KEY]=evidence;safe(next);return next;
   }
   // Stable field order, one in-memory candidate, no persistence or inference here.
-  function plan(core,draft,{revision,authorized=true,dirty=false,edits={},errors={},createTile}={}) {
+  function plan(core,draft,{revision,authorized=true,dirty=false,edits={},errors={},createTile,targetFields}={}) {
     const accepted=[],excluded=[];let next=clone(core);
-    for(const key of Object.keys(draft?.fields || {}).sort()) {
+    for(const key of Object.keys(draft?.fields || {}).filter(key=>!targetFields||targetFields.includes(key)).sort()) {
       const proposal=draft.fields[key],value=Object.hasOwn(edits,key)?edits[key]:proposal?.value;
       let reason='';
       if(!authorized)reason='Editing permission required';
@@ -120,7 +127,7 @@
           if(!valid(key,value))reason='Use the existing editor in Advanced options';
           else {
             const current=target(core,key);
-            if(current!=null&&(typeof value==='string'?typeof current!=='string':Array.isArray(value)?!Array.isArray(current):!object(current)))reason='Use the existing editor in Advanced options';
+            if(!compatibleTarget(key,current))reason='Use the existing editor in Advanced options';
             else if(sameValue(key,value,current))reason=outcomeLabels.unchanged;
             else {next=adopt(next,draft,key,'accepted',value,createTile);accepted.push(key);}
           }
@@ -130,5 +137,5 @@
     }
     return {core:next,accepted,excluded};
   }
-  return Object.freeze({VERSION,KEY,modules,sections,validators,valid,target,publicCore,url,outcome,outcomeLabels,isSuggestion,isReviewItem,sameValue,improvementValue,acceptedRecord,adopt,plan});
+  return Object.freeze({VERSION,KEY,modules,sections,validators,valid,target,publicCore,url,outcome,outcomeLabels,isSuggestion,isReviewItem,sameValue,improvementValue,compatibleTarget,acceptedRecord,adopt,plan});
 });

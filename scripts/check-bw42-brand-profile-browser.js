@@ -1,4 +1,5 @@
 'use strict';
+const { openFullBrandProfile } = require('./fixtures/home-browser');
 // Run the actual application and controllers; only transport/SQL/storage use local fixtures.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -17,6 +18,7 @@ const {png} = require('./fixtures/bw36-13r5-local-runtime');
     await p.route('**/api/brands/*/logo?*',r=>r.fulfill({contentType:'image/png',body:png}));
     await p.evaluate(()=>{openRegularBrandProfile();});
     await p.waitForFunction(()=>brandProfileController && canonicalBrandDetail.status==='ready');
+    await openFullBrandProfile(p);
     assert.equal(await p.locator('.guided-brand-profile nav button').count(),11);
     const original=await p.evaluate(()=>JSON.stringify(brandProfileController.state.core));
     const states = [];

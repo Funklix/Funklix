@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 'use strict';
+const { openFullBrandProfile } = require('./fixtures/home-browser');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -87,7 +88,7 @@ assert.equal(profile.resolveEntry({ ...base, catalog: { workspaces: [] } }).kind
       }, { data, board, selection, status, publicToken, W, D });
       if (status === 'ready') await page.waitForFunction(() => document.getElementById('home-foundation')?.getAttribute('aria-busy') !== 'true');
     }
-    async function visible(selector) { if (selector.includes('guided-brand-profile input[type=file]')) await page.locator('[data-profile-key="Brand Assets"]').click(); await page.locator(selector).waitFor({ state: 'visible' }); assert(await page.locator(selector).isVisible(), selector); }
+    async function visible(selector) { if (selector.includes('guided-brand-profile input[type=file]')) await openFullBrandProfile(page, 'Brand Assets'); await page.locator(selector).waitFor({ state: 'visible' }); assert(await page.locator(selector).isVisible(), selector); }
     async function menuOpen() {
       const before = requests.length; await page.locator('#workspace-context-manage').click();
       await visible('#workspace-context-menu'); assert.equal(await page.locator('#workspace-context-menu').count(), 1);

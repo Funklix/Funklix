@@ -10,6 +10,29 @@
   const clone = value => JSON.parse(JSON.stringify(value));
   const object = value => !!value && typeof value === 'object' && !Array.isArray(value);
   const SECTIONS = ['Overview', 'Brand DNA', 'Audience', 'Voice & Messaging', 'Offers & Proof', 'Brand Assets', 'Brand Avatar', 'Brand Learnings', 'Team and permissions', 'Campaign Sync', 'Review'];
+  const BUILDER = [
+    ['discover', 'Discover', 'Start with your website or a short description.', 0],
+    ['brand_foundation', 'Foundation', 'Define what you do, why it matters and what guides you.', 0],
+    ['audience_offers', 'Audience & Offers', 'Clarify who you serve and what you offer them.', 2],
+    ['voice_messaging', 'Voice & Messaging', 'Shape how your brand sounds and what it says.', 3],
+    ['brand_identity', 'Brand Identity', 'Shape your visual identity and explore your brand story.', 5],
+    ['review', 'Review & Continue', 'Review drafts or continue with what you have saved.', 10]
+  ];
+  const FIELD_HELP = {
+    brandCore: 'Explain what your brand does and who it serves.',
+    valueProposition: 'Describe the outcome customers get from choosing you.',
+    mission: 'Describe the change you work toward today.',
+    vision: 'Describe the future you want to help create.',
+    values: 'Name the principles that guide your decisions.',
+    personas: 'Capture who uses or buys what you offer, and what matters to them.',
+    toneOfVoice: 'Describe how your brand should sound.',
+    messagingPillars: 'Capture the main ideas your audience should remember.',
+    contentGuidelines: 'Give writers practical guidance for everyday decisions.',
+    keywords: 'List terms your team uses to describe your work.',
+    dosAndDonts: 'Give examples of what to do and what to avoid.',
+    brandVoiceExamples: 'Show what sounds like your brand in practice.',
+    brandAssets: 'Keep your colors, typography and visual references together.'
+  };
   const FIELDS = Object.freeze({
     brandAssets: ['Brand Basics', 'Brand assets', 'assets'],
     brandCore: ['Foundation', 'Brand description', 'text'],
@@ -129,10 +152,13 @@
     let acceptanceOperation = null;
     let brainDraft = null;
     const enrichmentTiles = new WeakMap();
+    const initialStep = BUILDER.find(([id]) => id === options.initialBuilder);
     const state = {
       brand: options.brand, name: options.brand.name, core: clone(options.brand.brand_core),
       website: options.website || options.brand.brand_core?.brandAssets?.domain || options.brand.brand_core?.website || '',
-      research: null, researchEntry: { domain: options.website || options.brand.brand_core?.brandAssets?.domain || options.brand.brand_core?.website || '', description: '', founderUrl: '' }, questions: null, laterFields: {}, founderDraft: null, founderDraftBase: null, section: SECTIONS.includes(options.initialSection) ? SECTIONS.indexOf(options.initialSection) : 0, message: '', analysis: 'Not analyzed', logo: options.brand.logo_url ? 'Logo saved' : 'No logo yet. Initials are shown.',
+      builder: initialStep?.[0] || (options.initialSection ? null : 'discover'), editField: null,
+      research: clone(options.pendingData?.research || null), researchEntry: { domain: options.website || options.brand.brand_core?.brandAssets?.domain || options.brand.brand_core?.website || '', description: '', founderUrl: '' }, questions: null, questionByField: clone(options.pendingData?.questionByField || {}), laterFields: clone(options.pendingData?.laterFields || {}),
+      enrichment: clone(options.pendingData?.enrichment || null), enrichmentEdits: clone(options.pendingData?.enrichmentEdits || {}), enrichmentEditErrors: clone(options.pendingData?.enrichmentEditErrors || {}), founderDraft: null, founderDraftBase: null, section: initialStep?.[3] ?? Math.max(0, SECTIONS.indexOf(options.initialSection)), message: '', analysis: 'Not analyzed', logo: options.brand.logo_url ? 'Logo saved' : 'No logo yet. Initials are shown.',
       proposals: clone(options.pendingData?.proposals || {}), candidate: clone(options.pendingData?.candidate || null),
       dnaPreflight: null, dnaDraft: clone(options.pendingData?.dnaDraft || null), avatarDraft: clone(options.pendingData?.avatarDraft || null), avatarDirection: options.pendingData?.avatarDirection || '', file: options.pendingData?.file || null, fileData: options.pendingData?.fileData || null, syncRequired: false, reconciliationWarning: false, pending: '', deferred: false,
       readOnly: options.brand.access?.canEditCanonicalBrand !== true || !['owner','admin','editor'].includes(options.brand.access?.role)
@@ -242,7 +268,7 @@
         command.changes.push({path,action:exists?'replace':'add',expected:exists?{exists:true,value:previous.brand_core[enrichment.KEY]}:{exists:false},value:draft.brand_core[enrichment.KEY]});
       }
       if (operation === 'domain_fill') for (const change of command.changes) change.action = 'fill_empty';
-      const result = await writes.submit({ fetchImpl, brandId: previous.id, command, pending: pendingWrite, current,
+      const result = await writes.submit({ fetchImpl, brandId: previous.id, command, pending: pendingWrite, current, requireReview: !!review?.section,
         confirmReview: review && options.confirmEnrichmentReview ? (message, preview) => options.confirmEnrichmentReview(preview, { ...review, previous, command }) : options.confirmReview || root.confirm?.bind(root) });
       if (!current()) return null;
       return result;
@@ -370,7 +396,9 @@
       });
     }
     // Explicit BW-46.2 workflow: no empty-field automatic adoption.
-    function enrichProfile(input = {}) {
+    function enrichProfile(input = {}, { guided = false, discovery = false } = {}) {
+      const sectionRequest = guided && !discovery;
+      const failed = sectionRequest ? 'Suggestions could not be prepared. Try again or continue editing.' : 'The research request could not be completed. Your inputs are retained. Retry or continue manually.';
       return run('Preparing enrichment draft…', async () => {
         if (contentDirty()) { state.message = 'Save Brand Profile before enrichment.'; return false; }
         const revision = state.brand.revision;
@@ -379,17 +407,64 @@
           revision, language: options.language?.() || 'en'
         });
         state.enrichmentDiagnostics = result?.payload?.diagnostics || null;
-        if (!result?.response.ok) { state.analysis = 'Research unsuccessful'; state.research = result?.payload?.research || null; state.message = result ? errorText(result.response, 'The research request could not be completed. Your inputs are retained. Retry or continue manually.', result.payload) : 'The research request could not be completed. Your inputs are retained. Retry or continue manually.'; return false; }
+        if (!result?.response.ok) {
+          if (!sectionRequest) {
+            state.analysis = 'Research unsuccessful';
+            state.research = result?.payload?.research || null;
+          }
+          state.message = result ? errorText(result.response, failed, result.payload) : failed;
+          return false;
+        }
         const draft = result.payload;
-        if (draft?.version !== enrichment.VERSION || draft.brandId !== state.brand.id || draft.revision !== revision || state.brand.revision !== revision) { state.analysis = 'Research unsuccessful'; state.message = 'The enrichment response could not be validated. Retry or continue manually.'; return false; }
+        if (draft?.version !== enrichment.VERSION || draft.brandId !== state.brand.id || draft.revision !== revision || state.brand.revision !== revision) {
+          if (!sectionRequest) state.analysis = 'Research unsuccessful';
+          state.message = 'The enrichment response could not be validated. Retry or continue manually.';
+          return false;
+        }
         if (input.action === 'questions') {
-          state.questions = { field: input.field, items: clone(draft.questions || []), answers: {} };
+          const guide = { field: input.field, language: draft.language, items: clone(draft.questions || []), answers: state.questionByField[input.field]?.answers || {} };
+          if (guided) state.questionByField[input.field] = guide;
+          state.questions = guide;
           state.message = 'Questions are optional. Answer what you can.'; return true;
         }
-        state.research = draft.research || null;
-        state.analysis = draft.sourceIssue ? 'Website unavailable. Review the description-based draft.' : input.domainUrl ? 'Review website suggestions' : 'Not analyzed';
+        if (input.domainUrl || !guided || discovery) {
+          state.research = draft.research || null;
+          state.analysis = draft.sourceIssue ? 'Website unavailable. Review the description-based draft.' : input.domainUrl ? 'Review website suggestions' : 'Not analyzed';
+        }
         state.questions = null;
-        state.enrichment = clone(draft); state.enrichmentEdits = {}; state.enrichmentEditErrors = {}; state.section = SECTIONS.indexOf('Review');
+        if (guided) {
+          const previous = state.enrichment?.revision === revision ? state.enrichment : null;
+          if (!previous) {
+            state.enrichmentEdits = {};
+            state.enrichmentEditErrors = {};
+          }
+          const fieldInputs = { ...previous?.fieldInputs };
+          for (const key of Object.keys(previous?.fields || {})) {
+            fieldInputs[key] ||= { origin: previous.origin, originId: previous.originId, input: previous.input };
+          }
+          for (const key of Object.keys(draft.fields || {})) {
+            fieldInputs[key] = { origin: draft.origin, originId: draft.originId, input: draft.input };
+            delete state.enrichmentEdits[key];
+            delete state.enrichmentEditErrors[key];
+            delete state.laterFields[key];
+          }
+          for (const item of draft.questions || []) {
+            const guide = state.questionByField[item.id];
+            if (!guide) state.questionByField[item.id] = { field: item.id, language: draft.language, items: [clone(item)], answers: {} };
+          }
+          state.enrichment = { ...draft, research: state.research, fields: { ...previous?.fields, ...draft.fields }, fieldInputs };
+          if (discovery) {
+            const next = BUILDER.find(([id]) => enrichment.sections[id]?.some(key => enrichment.isReviewItem(draft.fields?.[key])));
+            state.builder = next?.[0] || 'brand_foundation';
+            state.section = next?.[3] ?? 0;
+          }
+        } else {
+          state.enrichment = clone(draft);
+          state.enrichmentEdits = {};
+          state.enrichmentEditErrors = {};
+          state.builder = null;
+          state.section = SECTIONS.indexOf('Review');
+        }
         const fields = Object.values(draft.fields || {});
         if (draft.sourceIssue) state.message = 'Website unavailable. Review the description-based draft.';
         else if (fields.some(enrichment.isReviewItem)) state.message = 'Review enrichment suggestions';
@@ -411,19 +486,29 @@
       if(!tiles.has(type))tiles.set(type,options.createTile?.(type));
       const tile=tiles.get(type);return tile?clone(tile):undefined;
     }
-    function enrichmentPlan() {
+    function enrichmentPlan(section) {
       return enrichment.plan(state.brand.brand_core,state.enrichment,{revision:state.brand.revision,
         authorized:current()&&!state.readOnly&&state.brand.access?.canEditCanonicalBrand===true&&['owner','admin','editor'].includes(state.brand.access?.role),
-        dirty:contentDirty(),edits:state.enrichmentEdits,errors:state.enrichmentEditErrors,createTile:createEnrichmentTile});
+        dirty:contentDirty(),edits:state.enrichmentEdits,errors:state.enrichmentEditErrors,createTile:createEnrichmentTile,targetFields:enrichment.sections[section]});
     }
     function decideEnrichment(key, decision) { return saveEnrichment([{key,decision}]); }
     function acceptAllEnrichment() { return saveEnrichment(null); }
-    function saveEnrichment(decisions) {
+    function acceptSectionEnrichment(section) {
+      if (state.builder !== section || !Object.hasOwn(enrichment.sections, section)) return Promise.resolve(false);
+      return saveEnrichment(null, section);
+    }
+    function clearEnrichment() {
+      state.enrichment = null;
+      state.enrichmentEdits = {};
+      state.enrichmentEditErrors = {};
+      state.questions = null;
+    }
+    function saveEnrichment(decisions, section) {
       return run('Saving enrichment decision…', async () => {
         const draft = state.enrichment;
         if (!draft || draft.revision !== state.brand.revision) { state.message = 'This proposal is stale. Reload and generate again.'; return false; }
         if (contentDirty()) { state.message = 'Save your profile edits before deciding on suggestions.'; return false; }
-        const previous = state.brand, plan=enrichmentPlan();
+        const previous = state.brand, plan=enrichmentPlan(section);
         let core=previous.brand_core;
         const selected=decisions || plan.accepted.map(key=>({key,decision:'accepted'}));
         if (!selected.length) { state.message='No eligible suggestions. Review the items needing attention.'; return false; }
@@ -433,8 +518,15 @@
           const value=Object.hasOwn(state.enrichmentEdits || {},key)?state.enrichmentEdits[key]:draft.fields[key]?.value;
           core=enrichment.adopt(core,draft,key,decision,value,createEnrichmentTile);
         }
-        const result = await canonicalMutation(previous,{name:previous.name,brand_core:core},'profile_edit',true,
-          {keys:selected.map(item=>item.key),decisions:selected,excluded:plan.excluded.filter(({key})=>enrichment.isReviewItem(draft.fields[key]))});
+        let result;
+        try {
+          result = await canonicalMutation(previous,{name:previous.name,brand_core:core},'profile_edit',true,
+            {section,keys:selected.map(item=>item.key),decisions:selected,excluded:section ? plan.excluded : plan.excluded.filter(({key})=>enrichment.isReviewItem(draft.fields[key]))});
+        } catch (error) {
+          if (error.message !== 'REVIEW_CANCELLED') throw error;
+          state.message = 'Review canceled. Your drafts are retained.';
+          return false;
+        }
         if (!result?.response.ok) { state.message = result ? errorText(result.response,'Enrichment decision could not be saved.',result.payload) : 'Enrichment decision could not be saved.'; return false; }
         const confirmed = await verifyBrand();
         if (!confirmed || !writes.equal(confirmed.brand_core,core) || confirmed.name!==previous.name || confirmed.revision !== previous.revision + 1) {
@@ -443,7 +535,12 @@
         state.brand=confirmed;state.core=editableCore(confirmed.brand_core);baseline=draftSignature();
         // Only this confirmed own mutation can carry the remaining proposals forward.
         draft.revision=confirmed.revision;
-        for(const {key} of selected) {delete draft.fields[key];delete state.enrichmentEdits?.[key];delete state.enrichmentEditErrors?.[key];}
+        for (const { key } of selected) {
+          delete draft.fields[key];
+          delete draft.fieldInputs?.[key];
+          delete state.enrichmentEdits[key];
+          delete state.enrichmentEditErrors[key];
+        }
         try { await onSave(confirmed); } catch { state.reconciliationWarning=true; }
         state.message='Brand Profile saved';return true;
       });
@@ -518,6 +615,7 @@
       if (writes.equal(fresh.brand_core.valueProposition, input.value)) return false;
       brainDraft = { revision: input.revision, expected: clone(input.expected), revalidate: input.revalidate };
       state.core.valueProposition = input.value;
+      state.builder = null;
       state.section = 0;
       changed();
       return true;
@@ -739,7 +837,7 @@
     function discard() {
       brainDraft = null;
       state.name = state.brand.name; state.core = editableCore(state.brand.brand_core); state.website = state.core.brandAssets?.domain || state.core.website || '';
-      baseline = draftSignature(); state.enrichment = null; state.enrichmentEdits = {}; state.questions = null; state.founderDraft = null; state.founderDraftBase = null; state.dirty = false; state.file = null; state.fileData = null; state.candidate = null; state.proposals = {}; state.dnaDraft = null; state.avatarDraft = null; state.avatarDirection = ''; state.dnaPreflight = null;
+      baseline = draftSignature(); clearEnrichment(); state.questionByField = {}; state.founderDraft = null; state.founderDraftBase = null; state.dirty = false; state.file = null; state.fileData = null; state.candidate = null; state.proposals = {}; state.dnaDraft = null; state.avatarDraft = null; state.avatarDirection = ''; state.dnaPreflight = null;
     }
     function refreshContext() {
       const live = getContext();
@@ -747,9 +845,9 @@
       captured.generation = live.generation;
       return true;
     }
-    return { state, current, belongsToAccount(account) { return account === captured.account; }, refreshContext, founderTile, stageFounderNarrative, generateFounder, acceptFounder, analyze, enrichProfile, editEnrichment, decideEnrichment, enrichmentPlan, acceptAllEnrichment, save, upload, removeLogo, useLogo, chooseFile, applyProposal, keepProposal, retryAutomatic, reload,
+    return { state, current, belongsToAccount(account) { return account === captured.account; }, refreshContext, founderTile, stageFounderNarrative, generateFounder, acceptFounder, analyze, enrichProfile, editEnrichment, decideEnrichment, enrichmentPlan, acceptAllEnrichment, acceptSectionEnrichment, clearEnrichment, save, upload, removeLogo, useLogo, chooseFile, applyProposal, keepProposal, retryAutomatic, reload,
       discard, stageValueProposition, requestDna, generateDna, acceptDna, generateAvatar, acceptAvatar, contentDirty,
-      subscribe(fn) { notify = fn; }, invalidate() { alive = false; brainDraft = null; state.questions = null; state.founderDraft = null; state.founderDraftBase = null; state.researchEntry = { domain: '', description: '', founderUrl: '' }; state.enrichment = null; state.enrichmentEdits = {}; state.file = null; state.fileData = null; state.candidate = null; state.proposals = {}; state.dnaDraft = null; state.avatarDraft = null; state.avatarDirection = ''; state.core = {}; state.website = ''; state.name = ''; },
+      subscribe(fn) { notify = fn; }, invalidate() { alive = false; brainDraft = null; state.questions = null; state.questionByField = {}; state.founderDraft = null; state.founderDraftBase = null; state.researchEntry = { domain: '', description: '', founderUrl: '' }; state.enrichment = null; state.enrichmentEdits = {}; state.file = null; state.fileData = null; state.candidate = null; state.proposals = {}; state.dnaDraft = null; state.avatarDraft = null; state.avatarDirection = ''; state.core = {}; state.website = ''; state.name = ''; },
       dirty() { return contentDirty(); }, busy() { return !!state.pending; } };
   }
 
@@ -789,7 +887,7 @@
       const input = node(multiline ? 'textarea' : 'input', '', wrap); input.value = value || ''; input.dataset.profileKey = id;
       if (multiline) input.rows = 4;
       input.disabled = s.readOnly || !!s.pending || !!s.returning;
-      input.addEventListener('input', () => { update(input.value); s.dirty = true; const status = input.closest('.profile-field-card')?.querySelector('.profile-field-status'); if (status) status.textContent = t('Unsaved changes'); }); return input;
+      input.addEventListener('input', () => { update(input.value); s.dirty = true; const status = input.closest('.profile-builder-field')?.querySelector('.profile-builder-status') || input.closest('.profile-field-card')?.querySelector('.profile-field-status'); if (status) status.textContent = t('Unsaved changes'); }); return input;
     }
     function readable(value, parent) {
       if (Array.isArray(value)) { const list = node('ul', '', parent); value.forEach(item => readable(item, node('li', '', list))); }
@@ -915,13 +1013,13 @@
       }
       return wrap;
     }
-    function requestEnrichment(input) {
+    function requestEnrichment(input, transition) {
       // Preserve the reusable BW-46.2 controller contract. The visible UI asks
       // users to review/discard actionable drafts before replacing them.
       if (input.action !== 'questions' && s.enrichment?.revision===s.brand.revision && Object.values(s.enrichment.fields || {}).some(enrichment.isReviewItem)) {
-        s.section = SECTIONS.indexOf('Review'); s.message = 'Review or discard the current draft before generating again.'; render(); return;
+        s.builder = transition?.guided ? 'review' : null; s.section = SECTIONS.indexOf('Review'); s.message = 'Review or discard the current draft before generating again.'; render(); return;
       }
-      void session.enrichProfile(input);
+      void session.enrichProfile(input, transition);
     }
     function fieldActions(key, parent) {
       const current = enrichmentCurrent(key);
@@ -959,7 +1057,7 @@
       button('Help me figure it out', menu, () => { requestEnrichment({ action: 'questions', field: key }); }, 'questions-'+key);
       button('Complete later', menu, () => { s.laterFields[key] = true; render(); }, 'later-'+key);
     }
-    function researchEntry(parent) {
+    function researchEntry(parent, guided = false) {
       if (s.readOnly) return;
       const entry = node('details', '', parent); entry.className = 'profile-discovery'; entry.dataset.disclosure = 'research-entry';
       const core = s.brand.brand_core, assets = core.brandAssets || {};
@@ -968,7 +1066,7 @@
         || (Array.isArray(core.customTiles) && core.customTiles.some(tile => confirmedValue(tile.content) || confirmedValue(tile.moduleData?.founderStory)));
       // A creation-time website alone still gets the invitation. Other saved
       // profile content, including Foundation/Founder/DNA, comes first on return.
-      entry.open = !populated;
+      entry.open = guided || !populated;
       node('summary', t(entry.open ? "Let's build your brand ✨" : 'Enrich your Brand Profile'), entry);
       node('p', t('Start with your website or tell us about your business. You can refine everything later.'), entry);
       const form = node('form', '', entry); form.className = 'profile-discovery-form';
@@ -992,15 +1090,15 @@
         if (!domain.value.trim() && !s.researchEntry.description.trim()) {
           domain.setCustomValidity(t('Add a website or a short description to begin.')); domain.reportValidity(); return;
         }
-        requestEnrichment({ description: s.researchEntry.description, ...(domain.value.trim() ? { domainUrl: website(domain.value) } : {}) });
+        requestEnrichment({ description: s.researchEntry.description, ...(domain.value.trim() ? { domainUrl: website(domain.value) } : {}) }, { guided, discovery: guided });
       });
       button('Use description only', form, () => {
         if (!s.researchEntry.description.trim()) { description.setCustomValidity(t('Add a short brand description first.')); description.reportValidity(); return; }
-        description.setCustomValidity(''); requestEnrichment({description:s.researchEntry.description});
+        description.setCustomValidity(''); requestEnrichment({description:s.researchEntry.description}, { guided, discovery: guided });
       }, 'research-description-only');
       description.addEventListener('input', () => description.setCustomValidity(''));
       domain.addEventListener('input', () => domain.setCustomValidity(''));
-      if (Object.keys(s.enrichment?.fields || {}).length) button('Review enrichment suggestions', entry, () => { s.section = SECTIONS.indexOf('Review'); render(); });
+      if (Object.keys(s.enrichment?.fields || {}).length) button('Review enrichment suggestions', entry, () => { if (guided) goToBuilder('review'); else { s.section = SECTIONS.indexOf('Review'); render(); } });
     }
     function openFounderImport() {
       if (s.readOnly || s.pending || !session.current()) return;
@@ -1021,7 +1119,7 @@
         },
         onFailure: render,
         restoreFocus: () => { if (session.current()) container.querySelector('.profile-founder>summary')?.focus(); },
-        onSaved: () => { s.section = 0; render(); container.querySelector('.profile-founder>summary')?.focus(); }
+        onSaved: () => { goToProfile(0); container.querySelector('.profile-founder>summary')?.focus(); }
       });
     }
     function founderWorkspace(parent) {
@@ -1047,6 +1145,7 @@
       }
     }
     function editSavedField(key) {
+      if (s.builder) { s.editField = key; goToBuilder(sectionForField(key), false); focusSavedEditor(key); return; }
       const group = FIELDS[key]?.[0] || 'Foundation';
       s.section = group === 'Foundation' ? 0 : SECTIONS.indexOf(group==='Brand Basics'?'Brand Assets':group);
       render();
@@ -1056,10 +1155,10 @@
       else if (key==='personas' && card?.querySelector('summary')) card.querySelector('summary').focus();
       else options.onAdvanced(session);
     }
-    function fields(section, parent) {
+    function fields(section, parent, only = null) {
       let count = 0;
       for (const [key, [group, label, type]] of Object.entries(FIELDS)) {
-        if (group !== section) continue;
+        if (group !== section || only && key !== only) continue;
         count++;
         const card = node('section', '', parent); card.className = 'profile-field-card'; card.dataset.field = key;
         const destination = parent; parent = card;
@@ -1100,10 +1199,11 @@
         } else if ((type === 'list' && (!Array.isArray(s.core[key]) || s.core[key].some(item => typeof item !== 'string'))) || (type === 'text' && typeof s.core[key] !== 'string')) {
           node('h4', t(label), parent); readable(s.core[key], parent);
         } else textField(label, type === 'list' ? (s.core[key] || []).join('\n') : s.core[key], parent, value => { s.core[key] = type === 'list' ? value.split('\n').map(line => line.trim()).filter(Boolean) : value; }, true);
-        fieldActions(key, card); parent = destination;
+        if (!only) fieldActions(key, card); parent = destination;
       }
       const modules = section === 'Foundation' ? ['mission', 'vision', 'values', 'founder_story'] : section === 'Audience' ? ['audience', 'icp'] : section === 'Offers & Proof' ? ['product_knowledge', 'business_plan', 'pitch_deck', 'whitepaper'] : [];
       for (const type of modules) {
+        if (only && type !== only) continue;
         const definition = options.moduleDefinition(type);
         if (!definition) continue;
         const tile = s.core.customTiles?.find(tile => tile.moduleType === type);
@@ -1115,13 +1215,13 @@
             if (!target && value.trim()) { target = options.createTile(type); (s.core.customTiles ||= []).push(target); }
             if (target) target.content = value;
           }, true);
-          if (enrichment.modules.includes(type)) fieldActions(type, moduleCard);
+          if (!only && enrichment.modules.includes(type)) fieldActions(type, moduleCard);
           if (type === 'founder_story') founderWorkspace(parent);
         } else if (tile && meaningful(tile.content)) { count++; node('h4', t(definition.label), parent); readable(tile.content, parent); if (!s.readOnly) button('Edit in Advanced options', parent, () => options.onAdvanced(session), 'advanced-module-'+type); }
       }
       if (section === 'Offers & Proof') for (const [key, label] of [['offers', 'Offers'], ['proof', 'Proof']]) if (meaningful(s.core[key])) { count++; node('h4', t(label), parent); readable(s.core[key], parent); }
       if (section === 'Offers & Proof' && meaningful(s.core.valueProposition)) { count++; node('h4', t('Value Proposition'), parent); readable(s.core.valueProposition, parent); }
-      if (!count) node('p', t('No information in this section yet. Existing knowledge modules remain available in advanced options.'), parent);
+      if (!count && !only) node('p', t('No information in this section yet. Existing knowledge modules remain available in advanced options.'), parent);
     }
     function logo(parent) {
       const status = node('p', t(s.logo), parent); status.setAttribute('role', 'status');
@@ -1174,13 +1274,285 @@
         for(const e of field.evidence || []) node('p',`${e.sourceId}: ${e.excerpt}`,row);
       }
     }
+    function renderDraftField([key,field],parent,standalone,plan,refreshEligibility,inContext=false) {
+      const result=enrichment.outcome(field);
+      const suggestion=enrichment.isSuggestion(field);
+      const collapsible=!suggestion&&result!=='conflicting'&&!standalone;
+      const proposal=node(collapsible?'details':'section','',parent);proposal.className='profile-proposal profile-enrichment-proposal';proposal.dataset.field=key;
+      if(collapsible){proposal.dataset.disclosure='proposal-attention:'+key;node('summary',enrichmentLabel(key)+' — '+outcomeLabel(field),proposal);}
+      if (!inContext) node('h4',enrichmentLabel(key),proposal);
+      if (!collapsible) {
+        const contextualLabel = inContext && (result === 'no_improvement' || result === 'unchanged') ? 'Keep your saved value'
+          : inContext && suggestion && meaningful(enrichmentCurrent(key).value) ? 'Improvement suggested' : null;
+        node('p', contextualLabel ? t(contextualLabel) : outcomeLabel(field), proposal).className = 'profile-suggestion-kind';
+      }
+      const comparison=node('div','',proposal);comparison.className='profile-proposal-comparison';
+      const current=enrichmentCurrent(key);
+      const accepted=enrichment.acceptedRecord(s.brand.brand_core[enrichment.KEY]?.fields?.[key]);
+      if (!inContext) {
+        const saved=node('div','',comparison);node('strong',t('Saved value'),saved);
+        if(current.available&&meaningful(current.value)){
+          if(accepted&&enrichment.sameValue(key,accepted.value,current.value))node('p',t('User-confirmed'),saved);
+          readable(current.value,saved);
+        }else node('p',t(current.available?'Empty':'Current value unavailable. Review modules in Advanced options.'),saved);
+      }
+      const value=Object.hasOwn(s.enrichmentEdits || {},key)?s.enrichmentEdits[key]:field.value;
+      const suggested=meaningful(field.value)&&!['unchanged','no_improvement','no_value_generated'].includes(result)?node('div','',comparison):null;
+      if(suggested){node('strong',t(suggestion?'Suggested value':'Generated draft'),suggested);readable(value,suggested);}
+      sourceDetails(field,proposal,key);
+      for(const issue of field.qualityIssues || [])if(diagnosticLabels[issue])node('p',t(diagnosticLabels[issue]),proposal);
+      for(const issue of s.enrichmentDiagnostics?.fieldIssues || [])if(result==='invalid_field'&&issue.fieldKey===key&&diagnosticLabels[issue.category])node('p',t(diagnosticLabels[issue.category]),proposal);
+      const supported=proposalShape(key,value);
+      const excluded=plan.excluded.find(item=>item.key===key);
+      const needsAdvanced=['specialized_module_unavailable','current_value_unavailable'].includes(result)||['Specialized module. Use its existing editor in Advanced options.','Use the existing editor in Advanced options'].includes(excluded?.reason);
+      const adoptable=current.available&&suggestion&&supported&&!needsAdvanced;
+      if(adoptable) {
+        const editor=node('details','',proposal);editor.open=!inContext&&typeof value==='string';editor.dataset.disclosure='proposal-edit:'+key;node('summary',t('Edit suggestion'),editor);
+        const error=node('p',t('Enter a valid suggested value.'),editor);error.className='profile-proposal-error';error.setAttribute('role','alert');error.hidden=!s.enrichmentEditErrors?.[key];
+        proposalEditor(key,clone(value),editor,next=>{error.hidden=session.editEnrichment(key,next);suggested.replaceChildren();node('strong',t('Suggested value'),suggested);readable(next,suggested);refreshEligibility();});
+      }
+      if(suggestion)node('p','',proposal).className='profile-proposal-exclusion';
+      const actions=node('div','',proposal);actions.className='profile-review-actions';
+      if(!s.readOnly) {
+        if(adoptable){const accept=button('Accept suggestion',actions,()=>{void session.decideEnrichment(key,'accepted');},'accept-enrichment-'+key);accept.className='fk-btn fk-btn-primary';}
+        if(!inContext&&!suggestion&&!needsAdvanced)button('Edit saved field',actions,()=>editSavedField(key),'edit-saved-enrichment-'+key);
+        if(result==='quality_withheld'||needsAdvanced||suggestion&&!supported)button('Edit in Advanced options',actions,()=>options.onAdvanced(session),'advanced-enrichment-'+key);
+        if(enrichment.isReviewItem(field)){
+          const reject = button('Reject suggestion',actions,()=>{void session.decideEnrichment(key,'rejected');},'reject-enrichment-'+key);
+          const postpone = button('Complete later',actions,()=>{void session.decideEnrichment(key,'postponed');},'postpone-enrichment-'+key);
+          reject.disabled ||= s.enrichment.revision !== s.brand.revision;
+          postpone.disabled ||= s.enrichment.revision !== s.brand.revision;
+        }
+      }
+    }
+    function sectionForField(key) {
+      return Object.keys(enrichment.sections).find(section => enrichment.sections[section].includes(key));
+    }
+    function goToBuilder(step, focus = true) {
+      s.builder = step;
+      s.section = BUILDER.find(([id]) => id === step)[3];
+      s.questions = null;
+      s.message = '';
+      render();
+      if (focus) container.querySelector('[data-section-title]')?.focus();
+    }
+    function goToProfile(index) {
+      s.builder = null;
+      s.section = index;
+      s.questions = null;
+      render();
+      container.querySelector('[data-section-title]')?.focus();
+    }
+    function focusSavedEditor(key) {
+      const editor = container.querySelector('[data-disclosure="builder-edit:'+key+'"]');
+      if (editor) {
+        editor.open = true;
+        editor.querySelector('textarea,input,button')?.focus();
+      }
+    }
+    function savedBuilderValue(key, current) {
+      if (key !== 'brandAssets' || !object(current.value)) return current.value;
+      return Object.fromEntries(['colors', 'typography', 'references'].filter(part => Object.hasOwn(current.value, part)).map(part => [part, current.value[part]]));
+    }
+    function generatorAvailable(key, current) {
+      if (!current.available) return false;
+      if (enrichment.modules.includes(key) && (s.brand.brand_core.customTiles || []).some(tile =>
+        tile.moduleType === key && tile.moduleData && Object.keys(tile.moduleData).length)) return false;
+      try { return enrichment.compatibleTarget(key, current.value); }
+      catch { return false; }
+    }
+    function renderBuilderNavigation(parent) {
+      const nav = node('nav', '', parent);
+      nav.className = 'profile-builder-nav';
+      nav.setAttribute('aria-label', t('Guided Brand Builder'));
+      BUILDER.forEach(([step, label, , index]) => {
+        const entry = button(label, nav, () => goToBuilder(step), 'builder-'+step);
+        entry.setAttribute('aria-current', s.builder === step ? 'step' : 'false');
+        sectionIcon(step === 'brand_foundation' ? 4 : index, entry);
+        const fields = enrichment.sections[step];
+        if (!fields) return;
+        const saved = fields.filter(key => confirmedValue(savedBuilderValue(key, enrichmentCurrent(key)))).length;
+        const drafts = fields.filter(key => s.enrichment?.revision === s.brand.revision && enrichment.isSuggestion(s.enrichment.fields[key])).length;
+        const counts = node('small', [saved ? saved+' '+t(saved === 1 ? 'saved field' : 'saved fields') : '', drafts ? drafts+' '+t(drafts === 1 ? 'draft suggestion' : 'draft suggestions') : ''].filter(Boolean).join(' · '), entry);
+        counts.hidden = !saved && !drafts;
+      });
+    }
+    function renderBuilderQuestion(key, parent, scope, canImprove) {
+      const guide = s.questionByField[key];
+      if (s.questions?.field !== key || !guide) return;
+      const panel = node('section', '', parent);
+      panel.className = 'profile-question-guide';
+      node('p', t('Questions are optional. Answer what you can.'), panel);
+      for (const question of guide.items) {
+        textField(question.question, guide.answers[question.id] || '', panel, value => {
+          guide.answers[question.id] = value;
+          submit.disabled = !Object.values(guide.answers).some(answer => answer.trim());
+        }, true, 'answer-'+question.id);
+      }
+      const submit = button('Prepare my suggestion', panel, () => {
+        const answers = Object.entries(guide.answers).filter(([, answer]) => answer.trim()).map(([id, answer]) => ({ id, answer }));
+        void session.enrichProfile({ ...scope, action: 'suggest', field: key, ...(canImprove ? { intent: 'improve' } : {}), answers }, { guided: true });
+      });
+      submit.disabled ||= !Object.values(guide.answers).some(answer => answer.trim());
+      button('Skip question', panel, () => {
+        s.questions = null;
+        s.laterFields[key] = true;
+        render();
+        container.querySelector('[data-profile-key="questions-'+key+'"]')?.focus();
+      }, 'skip-question-'+key);
+    }
+    function renderBuilderFields(step, section) {
+      const toolbar = node('div', '', section);
+      toolbar.className = 'profile-builder-tools';
+      if (s.pending === 'Preparing enrichment draft…') {
+        const progress = node('p', t(s.pending), toolbar);
+        progress.setAttribute('role', 'status');
+      }
+      const keys = enrichment.sections[step];
+      const current = Object.fromEntries(keys.map(key => [key, enrichmentCurrent(key)]));
+      const generatable = keys.filter(key => generatorAvailable(key, current[key]));
+      const activeDraft = s.enrichment?.revision === s.brand.revision ? s.enrichment : null;
+      const results = keys.filter(key => s.enrichment?.fields[key]);
+      const targets = generatable.filter(key => !enrichment.isReviewItem(activeDraft?.fields[key]));
+      if (!s.readOnly && generatable.length) {
+        const generate = button('Generate suggestions for this section', toolbar, () => {
+          void session.enrichProfile({ action: 'draft', section: step, targetFields: targets, intent: 'improve' }, { guided: true });
+        }, 'generate-section-enrichment');
+        generate.className = 'fk-btn fk-btn-primary';
+        generate.disabled ||= !targets.length;
+        if (targets.length !== generatable.length) node('p', t('Current drafts stay available while you work on other fields.'), toolbar);
+      }
+      const plan = session.enrichmentPlan(step);
+      const hasReview = results.some(key => enrichment.isReviewItem(s.enrichment.fields[key]));
+      const bulk = !s.readOnly && hasReview ? button('Accept section suggestions', toolbar, () => {
+        void session.acceptSectionEnrichment(step);
+      }, 'accept-section-enrichment') : null;
+      const skipped = node('details', '', toolbar);
+      skipped.className = 'profile-review-skipped';
+      skipped.dataset.disclosure = 'builder-skipped:'+step;
+      const skippedSummary = node('summary', '', skipped);
+      const exclusions = node('ul', '', skipped);
+      function refreshEligibility() {
+        const latest = session.enrichmentPlan(step);
+        if (bulk) {
+          bulk.textContent = t('Accept section suggestions')+' ('+latest.accepted.length+')';
+          bulk.disabled = s.readOnly || !!s.pending || !latest.accepted.length;
+        }
+        skipped.hidden = s.readOnly || !hasReview || !latest.excluded.length;
+        skippedSummary.textContent = t('Skipped suggestions')+' ('+latest.excluded.length+')';
+        exclusions.replaceChildren();
+        for (const {key, reason} of latest.excluded) node('li', enrichmentLabel(key)+' · '+t(reason), exclusions);
+        for (const key of results) {
+          const accept = section.querySelector('[data-profile-key="accept-enrichment-'+key+'"]');
+          if (accept) accept.disabled = s.readOnly || !!s.pending || !latest.accepted.includes(key);
+          const feedback = section.querySelector('.profile-enrichment-proposal[data-field="'+key+'"] .profile-proposal-exclusion');
+          if (feedback) {
+            const reason = latest.excluded.find(item => item.key === key)?.reason;
+            feedback.textContent = reason ? t(reason) : '';
+            feedback.hidden = !reason;
+          }
+        }
+      }
+      const cards = node('div', '', section);
+      cards.className = 'profile-builder-fields';
+      for (const key of keys) {
+        const card = node('article', '', cards);
+        card.className = 'profile-builder-field';
+        card.dataset.builderField = key;
+        const heading = node('div', '', card);
+        heading.className = 'profile-builder-field-heading';
+        const fieldTitle = node('h4', enrichmentLabel(key), heading);
+        fieldTitle.id = 'profile-builder-field-'+key;
+        card.setAttribute('aria-labelledby', fieldTitle.id);
+        const value = savedBuilderValue(key, current[key]);
+        const populated = confirmedValue(value);
+        const record = s.brand.brand_core[enrichment.KEY]?.fields?.[key];
+        const accepted = enrichment.acceptedRecord(record);
+        const field = s.enrichment?.fields[key];
+        const deferred = s.laterFields[key] || record?.decision === 'postponed';
+        const status = !current[key].available ? 'Current value unavailable'
+          : populated ? accepted && enrichment.sameValue(key, accepted.value, current[key].value) ? 'User-confirmed' : 'Saved'
+          : deferred ? 'Deferred for later' : 'Empty and optional';
+        node('span', t(status), heading).className = 'profile-builder-status';
+        node('p', t(FIELD_HELP[key]), card).className = 'profile-builder-description';
+        let local;
+        try { local = savedBuilderValue(key, { value: enrichment.target(s.core, key) }); } catch { local = value; }
+        if (s.dirty && !writes.equal(local, value) && (meaningful(local) || meaningful(value))) node('p', t('Unsaved changes'), card);
+        if (populated) {
+          const saved = node('div', '', card);
+          saved.className = 'profile-builder-saved';
+          readable(value, saved);
+        }
+        if (deferred && populated) node('p', t('Deferred for later'), card);
+        if (accepted) sourceDetails(accepted, card, 'builder-saved:'+key);
+        if (!s.readOnly && current[key].available && (generatable.includes(key) || !enrichment.modules.includes(key))) {
+          const edit = node('details', '', card);
+          edit.dataset.disclosure = 'builder-edit:'+key;
+          edit.open = s.editField === key;
+          node('summary', t(populated ? 'Edit saved field' : 'Write myself'), edit);
+          fields(FIELDS[key]?.[0] || 'Foundation', edit, key);
+          button('Confirm and save Brand Profile', edit, () => { void session.save(); }, 'builder-save-'+key);
+        }
+        if (field && (enrichment.isReviewItem(field) || activeDraft && ['unchanged','no_improvement','invalid_field'].includes(enrichment.outcome(field)))) {
+          renderDraftField([key,field], card, true, plan, refreshEligibility, true);
+        }
+        if (enrichment.isReviewItem(field) && !activeDraft) node('p', t('Proposal is stale'), card);
+        if (s.readOnly) continue;
+        const actions = node('div', '', card);
+        actions.className = 'profile-review-actions';
+        if (!generatable.includes(key)) {
+          button('Edit in Advanced options', actions, () => options.onAdvanced(session), 'builder-advanced-'+key);
+          continue;
+        }
+        const scope = { section: step, targetFields: [key] };
+        const canImprove = enrichment.improvementValue(key, current[key].value) !== null;
+        const pendingSuggestion = enrichment.isSuggestion(activeDraft?.fields[key]);
+        if (!pendingSuggestion) button(canImprove ? 'Improve with AI' : 'Suggest with AI', actions, () => {
+          void session.enrichProfile({ ...scope, action: 'suggest', field: key, ...(canImprove ? { intent: 'improve' } : {}) }, { guided: true });
+        }, 'suggest-'+key);
+        const question = s.questionByField[key];
+        const label = pendingSuggestion ? 'Refine with AI' : question && !deferred ? 'Answer an optional question' : 'Help me figure it out';
+        button(label, actions, () => {
+          if (s.questionByField[key]?.language === options.language()) { s.questions = s.questionByField[key]; render(); }
+          else void session.enrichProfile({ ...scope, action: 'questions', field: key }, { guided: true });
+        }, 'questions-'+key);
+        if (!field && !deferred) button('Complete later', actions, () => { s.laterFields[key] = true; render(); }, 'later-'+key);
+        renderBuilderQuestion(key, card, scope, canImprove);
+      }
+      s.editField = null;
+      refreshEligibility();
+      if (step === 'audience_offers' || step === 'brand_identity') renderBuilderDestinations(step, section);
+    }
+    function renderBuilderDestinations(step, section) {
+      const panel = node('aside', '', section);
+      panel.className = 'profile-builder-destinations';
+      node('h4', t('Specialized workflows'), panel);
+      const links = node('div', '', panel);
+      links.className = 'profile-review-actions';
+      if (step === 'audience_offers') {
+        button('Audience', links, () => goToProfile(2), 'builder-open-audience');
+        button('Offers & Proof', links, () => goToProfile(4), 'builder-open-offers');
+        button('Advanced options', links, () => options.onAdvanced(session), 'builder-open-knowledge');
+      } else {
+        button('Founder Story', links, () => {
+          goToProfile(0);
+          const founder = container.querySelector('.profile-founder');
+          if (founder) {
+            founder.open = true;
+            founder.querySelector('summary')?.focus();
+          }
+        }, 'builder-open-founder');
+        for (const index of [1,5,6]) button(SECTIONS[index], links, () => goToProfile(index), 'builder-open-'+index);
+      }
+    }
     function render() {
       const focused = doc.activeElement?.dataset?.profileKey || (s.pending ? lastFocusKey : null);
       if (focused) lastFocusKey = focused;
       const expanded = hasRendered ? new Map([...container.querySelectorAll('details[data-disclosure]')].map(n => [n.dataset.disclosure, n.open])) : new Map();
       hasRendered = true;
       options.onBusy?.(!!s.pending || !!s.returning);
-      container.replaceChildren(); container.classList.add('guided-brand-profile'); container.setAttribute('aria-busy', String(!!s.pending));
+      container.replaceChildren(); container.classList.add('guided-brand-profile');
+      container.classList.toggle('profile-builder-active', !!s.builder); container.setAttribute('aria-busy', String(!!s.pending));
       const header = node('section', '', container); header.className = 'profile-header';
       const mark = node('div', '', header); mark.className = 'profile-logo'; root.FunklixBrandLogo.render(mark, s.brand, { label: t('Brand logo') });
       const identity = node('div', '', header); identity.className = 'profile-identity'; node('h3', `${t('Brand Profile')} – ${s.brand.name}`, identity);
@@ -1194,15 +1566,23 @@
       };
       function normalizedSite(value) { try { return website(value); } catch { return value; } }
       updateWebsiteDraft();
-      node('p', t('These details help shape your future campaigns.'), identity);
+      node('p', t(s.builder ? 'Guided Brand Builder' : 'These details help shape your future campaigns.'), identity);
+      if (!s.builder) button('Guided Brand Builder', identity, () => goToBuilder('discover'), 'open-guided-builder');
       const states = readiness(s.brand);
       const complete = states.filter(r => r.status === 'complete').length;
-      const completion = node('p', `${complete}/7 ${t('Complete')}`, header); completion.className = 'profile-completion'; completion.title = t('Profile coverage, not factual verification.');
-      const ring = node('span', '', completion); ring.className = 'profile-completion-ring'; ring.setAttribute('aria-hidden', 'true'); ring.style.setProperty('--profile-progress', `${complete / 7 * 100}%`);
+      if (!s.builder) {
+        const completion = node('p', `${complete}/7 ${t('Complete')}`, header); completion.className = 'profile-completion'; completion.title = t('Profile coverage, not factual verification.');
+        const ring = node('span', '', completion); ring.className = 'profile-completion-ring'; ring.setAttribute('aria-hidden', 'true'); ring.style.setProperty('--profile-progress', `${complete / 7 * 100}%`);
+      }
       if (s.readOnly) node('p', t('Your access is read-only'), container);
-      const nav = node('nav', '', container); nav.setAttribute('aria-label', t('Brand Profile sections'));
-      const navBrowser = node('details', '', nav); navBrowser.className = 'profile-nav-browser'; navBrowser.dataset.disclosure = 'navigation-browser'; navBrowser.open = !root.innerWidth || root.innerWidth > 768;
-      node('summary', t('Brand Profile sections'), navBrowser);
+      const sidebar = s.builder ? node('aside', '', container) : container;
+      if (s.builder) {
+        sidebar.className = 'profile-builder-sidebar';
+        renderBuilderNavigation(sidebar);
+      }
+      const nav = node('nav', '', sidebar); nav.className = 'profile-legacy-nav'; nav.setAttribute('aria-label', t('Brand Profile sections'));
+      const navBrowser = node('details', '', nav); navBrowser.className = 'profile-nav-browser'; navBrowser.dataset.disclosure = 'navigation-browser'; navBrowser.open = !s.builder && (!root.innerWidth || root.innerWidth > 768);
+      node('summary', t(s.builder ? 'Full Brand Profile' : 'Brand Profile sections'), navBrowser);
       const groups = [ ['Overview', [0]], ['Brand Foundation', []], ['Audience & Positioning', [2,4]], ['Voice & Messaging', [3]], ['Brand Identity & AI', [1,5,6]], ['Knowledge & Workspace', [7,8,9,10]] ];
       const destinations = new Map();
       for (const [label, indices] of groups) {
@@ -1210,14 +1590,21 @@
         node('summary', t(label), group);
         if (!indices.length) {
           const link = node('a', t('Foundation & Founder Story'), group); link.href = '#profile-foundation'; link.dataset.profileKey = 'foundation-navigation';
-          link.addEventListener('click', event => { event.preventDefault(); s.section = 0; render(); const founder = container.querySelector('.profile-founder'); founder?.setAttribute('open', ''); founder?.scrollIntoView({block:'nearest'}); container.querySelector('[data-profile-key="Mission"]')?.focus(); });
+          link.addEventListener('click', event => { event.preventDefault(); goToProfile(0); const founder = container.querySelector('.profile-founder'); founder?.setAttribute('open', ''); founder?.scrollIntoView({block:'nearest'}); container.querySelector('[data-profile-key="Mission"]')?.focus(); });
         }
         for (const index of indices) destinations.set(index, group);
       }
-      SECTIONS.forEach((key, index) => { const r = states.find(item => item.section === key) || { status: 'neutral', label: STATUS.neutral }; const b = button(key, destinations.get(index), () => { s.section = index; render(); container.querySelector('h3[data-section-title]')?.focus(); }); if (key === 'Brand Learnings') { b.textContent = 'Learnings'; b.setAttribute('aria-label', 'Learnings'); } sectionIcon(index, b); b.dataset.readiness = r.status; b.title = `${t(key)}: ${t(r.label)}`; b.setAttribute('aria-label', t(key)); const status = node('span', t(r.label), destinations.get(index)); status.id = `brand-section-status-${index}`; status.hidden = true; b.setAttribute('aria-describedby', status.id); b.dataset.statusIcon = { complete: '✓', partial: '◐', empty: '○', neutral: '–' }[r.status]; b.setAttribute('aria-current', s.section === index ? 'step' : 'false'); });
+      SECTIONS.forEach((key, index) => { const r = states.find(item => item.section === key) || { status: 'neutral', label: STATUS.neutral }; const b = button(key, destinations.get(index), () => goToProfile(index)); if (key === 'Brand Learnings') { b.textContent = 'Learnings'; b.setAttribute('aria-label', 'Learnings'); } sectionIcon(index, b); b.dataset.readiness = r.status; b.title = `${t(key)}: ${t(r.label)}`; b.setAttribute('aria-label', t(key)); const status = node('span', t(r.label), destinations.get(index)); status.id = `brand-section-status-${index}`; status.hidden = true; b.setAttribute('aria-describedby', status.id); b.dataset.statusIcon = { complete: '✓', partial: '◐', empty: '○', neutral: '–' }[r.status]; b.setAttribute('aria-current', !s.builder && s.section === index ? 'step' : 'false'); });
       const section = node('section', '', container); section.className = 'profile-section';
-      const title = node('h3', SECTIONS[s.section] === 'Brand Learnings' ? 'Learnings' : t(SECTIONS[s.section]), section); title.tabIndex = -1; title.dataset.sectionTitle = 'true';
-      if (SECTIONS[s.section] === 'Brand Learnings') {
+      const step = BUILDER.find(([id]) => id === s.builder);
+      const title = node('h3', step ? t(step[1]) : SECTIONS[s.section] === 'Brand Learnings' ? 'Learnings' : t(SECTIONS[s.section]), section); title.tabIndex = -1; title.dataset.sectionTitle = 'true';
+      if (step) node('p', t(step[2]), section).className = 'profile-builder-description';
+      if (s.builder === 'discover') {
+        researchEntry(section, true);
+        if (!s.readOnly) node('p', t('Accepted website evidence is available to later suggestions.'), section).className = 'profile-builder-description';
+      } else if (step && Object.hasOwn(enrichment.sections, step[0])) {
+        renderBuilderFields(step[0], section);
+      } else if (SECTIONS[s.section] === 'Brand Learnings') {
         const library = node('div', '', section);
         if (learnings) learnings.attach(library);
         else node('p', t('Learnings are temporarily unavailable.'), library);
@@ -1245,7 +1632,7 @@
       } else if (SECTIONS[s.section] === 'Review') {
         if (s.enrichment) {
           if(Object.values(s.enrichment.fields || {}).some(enrichment.isSuggestion))node('p',t('Review and edit suggestions, then accept individually or save eligible suggestions together.'),section);
-          if (!s.readOnly) button('Discard enrichment draft', section, () => { s.enrichment = null; s.enrichmentEdits = {}; s.questions = null; render(); });
+          if (!s.readOnly) button('Discard enrichment draft', section, () => { session.clearEnrichment(); render(); });
         }
         const records=Object.entries(s.brand.brand_core[enrichment.KEY]?.fields || {});
         const savedReview=s.enrichment?node('details','',null):section;
@@ -1312,55 +1699,12 @@
           const bulk=button('Accept all suggestions',header,()=>{void session.acceptAllEnrichment();},'accept-all-enrichment');bulk.className='fk-btn fk-btn-primary';
           const skipped=node('details','',header);skipped.className='profile-review-skipped';skipped.dataset.disclosure='review-skipped';
         }
-        function renderDraftField([key,field],parent,standalone=false) {
-          const result=enrichment.outcome(field);
-          const suggestion=enrichment.isSuggestion(field);
-          const collapsible=!suggestion&&result!=='conflicting'&&!standalone;
-          const proposal=node(collapsible?'details':'section','',parent);proposal.className='profile-proposal profile-enrichment-proposal';proposal.dataset.field=key;
-          if(collapsible){proposal.dataset.disclosure='proposal-attention:'+key;node('summary',enrichmentLabel(key)+' — '+outcomeLabel(field),proposal);}
-          node('h4',enrichmentLabel(key),proposal);
-          if(!collapsible)node('p',outcomeLabel(field),proposal).className='profile-suggestion-kind';
-          const comparison=node('div','',proposal);comparison.className='profile-proposal-comparison';
-          const saved=node('div','',comparison);node('strong',t('Saved value'),saved);
-          const current=enrichmentCurrent(key);
-          const accepted=enrichment.acceptedRecord(s.brand.brand_core[enrichment.KEY]?.fields?.[key]);
-          if(current.available&&meaningful(current.value)){
-            if(accepted&&enrichment.sameValue(key,accepted.value,current.value))node('p',t('User-confirmed'),saved);
-            readable(current.value,saved);
-          }else node('p',t(current.available?'Empty':'Current value unavailable. Review modules in Advanced options.'),saved);
-          const value=Object.hasOwn(s.enrichmentEdits || {},key)?s.enrichmentEdits[key]:field.value;
-          const suggested=meaningful(field.value)&&!['unchanged','no_improvement','no_value_generated'].includes(result)?node('div','',comparison):null;
-          if(suggested){node('strong',t(suggestion?'Suggested value':'Generated draft'),suggested);readable(value,suggested);}
-          sourceDetails(field,proposal,key);
-          for(const issue of field.qualityIssues || [])if(diagnosticLabels[issue])node('p',t(diagnosticLabels[issue]),proposal);
-          for(const issue of s.enrichmentDiagnostics?.fieldIssues || [])if(result==='invalid_field'&&issue.fieldKey===key&&diagnosticLabels[issue.category])node('p',t(diagnosticLabels[issue.category]),proposal);
-          const supported=proposalShape(key,value);
-          const excluded=plan.excluded.find(item=>item.key===key);
-          const needsAdvanced=['specialized_module_unavailable','current_value_unavailable'].includes(result)||['Specialized module. Use its existing editor in Advanced options.','Use the existing editor in Advanced options'].includes(excluded?.reason);
-          const adoptable=current.available&&suggestion&&supported&&!needsAdvanced;
-          if(adoptable) {
-            const editor=node('details','',proposal);editor.open=typeof value==='string';editor.dataset.disclosure='proposal-edit:'+key;node('summary',t('Edit suggestion'),editor);
-            const error=node('p',t('Enter a valid suggested value.'),editor);error.className='profile-proposal-error';error.setAttribute('role','alert');error.hidden=!s.enrichmentEditErrors?.[key];
-            proposalEditor(key,clone(value),editor,next=>{error.hidden=session.editEnrichment(key,next);suggested.replaceChildren();node('strong',t('Suggested value'),suggested);readable(next,suggested);refreshEligibility();});
-          }
-          if(suggestion)node('p','',proposal).className='profile-proposal-exclusion';
-          const actions=node('div','',proposal);actions.className='profile-review-actions';
-          if(!s.readOnly) {
-            if(adoptable){const accept=button('Accept suggestion',actions,()=>{void session.decideEnrichment(key,'accepted');},'accept-enrichment-'+key);accept.className='fk-btn fk-btn-primary';}
-            if(!suggestion&&!needsAdvanced)button('Edit saved field',actions,()=>editSavedField(key),'edit-saved-enrichment-'+key);
-            if(result==='quality_withheld'||needsAdvanced||suggestion&&!supported)button('Edit in Advanced options',actions,()=>options.onAdvanced(session),'advanced-enrichment-'+key);
-            if(enrichment.isReviewItem(field)){
-              button('Reject suggestion',actions,()=>{void session.decideEnrichment(key,'rejected');},'reject-enrichment-'+key);
-              button('Complete later',actions,()=>{void session.decideEnrichment(key,'postponed');},'postpone-enrichment-'+key);
-            }
-          }
-        }
-        for(const entry of reviewFields)renderDraftField(entry,section,fields.length===1);
-        if(otherFields.length===1&&fields.length===1)renderDraftField(otherFields[0],section,true);
+        for(const entry of reviewFields)renderDraftField(entry,section,fields.length===1,plan,refreshEligibility);
+        if(otherFields.length===1&&fields.length===1)renderDraftField(otherFields[0],section,true,plan,refreshEligibility);
         else if(otherFields.length){
           const details=node('details','',section);details.className='profile-generation-results';details.dataset.disclosure='generation-results';
           node('summary',t('Other generation results')+' ('+otherFields.length+')',details);
-          for(const entry of otherFields)renderDraftField(entry,details);
+          for(const entry of otherFields)renderDraftField(entry,details,false,plan,refreshEligibility);
         }
         if(s.enrichment)section.append(savedReview);
         refreshEligibility();
@@ -1427,7 +1771,17 @@
         node('p', t('Campaign snapshots change only after an explicit campaign update.'), section);
         if (options.hasSnapshot?.()) button('Campaign Brand Snapshot', section, () => options.onSnapshot());
       } else fields(SECTIONS[s.section], section);
-      if (s.questions) {
+      if (step) {
+        const index = BUILDER.indexOf(step);
+        const progression = node('div', '', section);
+        progression.className = 'profile-builder-progression';
+        if (index > 0) button('Back', progression, () => goToBuilder(BUILDER[index-1][0]), 'builder-back');
+        if (index < BUILDER.length-1) {
+          const next = button('Continue', progression, () => goToBuilder(BUILDER[index+1][0]), 'builder-continue');
+          next.className = 'fk-btn fk-btn-primary';
+        }
+      }
+      if (s.questions && !step) {
         const guide = node('section', '', section); guide.className = 'profile-question-guide';
         node('h4', enrichmentLabel(s.questions.field), guide);
         node('p', t('Questions are optional. Answer what you can.'), guide);
@@ -1438,7 +1792,7 @@
         });
         button('Complete later', guide, () => { s.questions = null; render(); }, 'close-questions');
       }
-      if (s.pending === 'Preparing enrichment draft…') {
+      if (s.pending === 'Preparing enrichment draft…' && (!s.builder || s.builder === 'discover')) {
         const progress = node('section', '', container); progress.className = 'profile-research-loading'; progress.setAttribute('role', 'status');
         node('h4', t('Research & prepare'), progress);
         node('p', t('Preparing your draft. Source totals are available when this request finishes.'), progress);
@@ -1455,14 +1809,15 @@
       }
       if (s.addedCount) node('p', t('{count} details added from the website.').replace('{count}', s.addedCount), container).setAttribute('role', 'status');
       if (s.autoKeys.length && !s.pending) button('Retry adding website details', container, () => { void session.retryAutomatic(); });
-      const feedback = node('p', t(s.pending || s.message), container); feedback.setAttribute('role', 'status'); feedback.setAttribute('aria-live', 'polite');
+      const inlinePending = step && enrichment.sections[step[0]] && s.pending === 'Preparing enrichment draft…';
+      const feedback = node('p', inlinePending ? '' : t(s.pending || s.message), container); feedback.className = 'profile-feedback'; feedback.setAttribute('role', 'status'); feedback.setAttribute('aria-live', 'polite');
       const actions = node('div', '', container); actions.className = 'profile-actions';
       if (!s.readOnly) {
         button('Confirm and save Brand Profile', actions, () => { void session.save(); });
         button(s.syncRequired || s.reconciliationWarning ? 'Reload saved Brand' : 'Reload latest Brand', actions, () => { void session.reload(); });
       }
       if (!s.readOnly && s.dirty) button('Discard profile changes', actions, () => { session.discard(); render(); }, 'discard-profile-changes');
-      if (options.hasProject() || SECTIONS[s.section] === 'Review') button(options.hasProject() ? 'Save Brand Profile and continue' : 'Back', actions, async () => {
+      if (options.hasProject() || SECTIONS[s.section] === 'Review') button(options.hasProject() ? 'Save Brand Profile and continue' : s.builder === 'review' ? 'Continue to workspace' : 'Back', actions, async () => {
         if (options.hasProject() && !s.readOnly) {
           if (!await session.save()) return;
           // Optional unuploaded files/suggestions stay in the account's memory cache.
@@ -1477,9 +1832,9 @@
       [...container.querySelectorAll('details')].forEach((n, i) => {
         n.dataset.disclosure ||= n.className + ':' + (n.closest('[data-field]')?.dataset.field || n.querySelector('summary')?.textContent || i);
         if (expanded.has(n.dataset.disclosure)) n.open = expanded.get(n.dataset.disclosure);
-        if (n.className === 'profile-nav-browser' && root.innerWidth > 768) n.open = true;
+        if (n.className === 'profile-nav-browser' && !s.builder && root.innerWidth > 768) n.open = true;
       });
-      if (s.pending === 'Preparing enrichment draft…') container.querySelector('.profile-research-loading')?.scrollIntoView({ block: 'nearest' });
+      if (s.pending === 'Preparing enrichment draft…' && (!s.builder || s.builder === 'discover')) container.querySelector('.profile-research-loading')?.scrollIntoView({ block: 'nearest' });
       const restoreKey = focused || (!s.pending ? lastFocusKey : null);
       if (restoreKey) {
         const target = [...container.querySelectorAll('[data-profile-key]')].find(n => n.dataset.profileKey === restoreKey);
