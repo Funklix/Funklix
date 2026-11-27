@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 'use strict';
+const { openFullBrandProfile } = require('./fixtures/home-browser');
 const assert = require('node:assert/strict');
 const fs = require('node:fs'), path = require('node:path');
 let chromium;
@@ -118,7 +119,10 @@ async function browserJourney() {
       },{catalog:r.catalog(),W,B,EMAIL});
     }
     const clickKey = key => page.locator(`[data-profile-key="${key}"]`).click();
-    const ready = () => page.waitForFunction(()=>!!brandProfileController&&canonicalBrandDetail.status==='ready');
+    const ready = async () => {
+      await page.waitForFunction(()=>!!brandProfileController&&canonicalBrandDetail.status==='ready');
+      if (await page.locator('.profile-builder-active').count()) await openFullBrandProfile(page);
+    };
     await context(); await page.locator('#brand-core-nav-btn').click(); await ready();
     await page.locator('[data-profile-key="Website"]').fill('https://example.test/'); await page.locator('.profile-legacy-research').evaluate(n=>n.open=true); await clickKey('Analyze website');
     await page.waitForFunction(()=>brandProfileController.state.analysis==='Review website suggestions'&&!brandProfileController.busy());

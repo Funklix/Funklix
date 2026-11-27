@@ -1,4 +1,5 @@
 'use strict';
+const { openFullBrandProfile } = require('./fixtures/home-browser');
 // Actual application and protected server handlers. Fictional provider, no paid calls.
 const assert=require('node:assert/strict'),fs=require('node:fs');
 const {chromium}=require('playwright-core');
@@ -15,6 +16,7 @@ const samples={brandCore:'Workshop repair experts',valueProposition:'Keep tools 
    const handler=f.r.load('api/enrich-brand-profile.js').createHandler({getSessionUser:()=>({email:EMAIL}),fetch:async()=>{calls++;return {ok:true,json:async()=>({choices:[{finish_reason:'stop',message:{content:JSON.stringify({fields:Object.fromEntries(Object.entries(samples).map(([key,value])=>[key,{value,classification:key==='brandCore'?'conflicting':'ai_interpretation',evidence:[{sourceId:'user',excerpt:'Fictional workshop description'}]}]))})}}]})};}});
    await p.route('**/api/enrich-brand-profile',async route=>{const res={statusCode:200,setHeader(){},status(n){this.statusCode=n;return this;},json(v){this.body=clone(v);return this;}};await handler({method:'POST',body:route.request().postDataJSON()},res);await route.fulfill({status:res.statusCode,json:res.body});});
    await p.evaluate(language=>{state.uiLanguage=FunklixLanguage.setUiLanguage(language);translateInterface();openRegularBrandProfile();},language);await p.waitForFunction(()=>brandProfileController&&canonicalBrandDetail.status==='ready');
+   await openFullBrandProfile(p);
    await p.evaluate(()=>{brandProfileController.state.researchEntry.description='Fictional workshop description';});
    // Use production controller generation; rendered controls own every subsequent edit/decision.
    assert(await p.evaluate(()=>brandProfileController.enrichProfile({description:'Fictional workshop description'})));

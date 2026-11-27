@@ -1,4 +1,5 @@
 'use strict';
+const { openFullBrandProfile } = require('./fixtures/home-browser');
 const assert=require('node:assert/strict');
 const {chromium}=require('playwright-core');
 const {png,B}=require('./fixtures/bw36-13r5-local-runtime');
@@ -20,7 +21,7 @@ const {png,B}=require('./fixtures/bw36-13r5-local-runtime');
       for(const entry of catalog.workspaces[0].brands){const b=f.r.db.brands.find(b=>b.id===entry.id);Object.assign(entry,{name:b.name,revision:b.revision,logo_revision:b.logo_revision,logo_url:b.logo_object_path?`/api/brands/${b.id}/logo?revision=${b.logo_revision}`:null});}
       return route.fulfill({json:catalog});
     });
-    async function open(){await p.evaluate(()=>{void openRegularBrandProfile();});await p.waitForFunction(()=>brandProfileController&&canonicalBrandDetail.status==='ready');await key('Brand Assets').click();}
+    async function open(){await p.evaluate(()=>{void openRegularBrandProfile();});await p.waitForFunction(()=>brandProfileController&&canonicalBrandDetail.status==='ready');await openFullBrandProfile(p, 'Brand Assets');}
     async function idle(){await p.waitForFunction(()=>!brandProfileController.busy());}
     async function image(){await p.waitForFunction(()=>{const img=document.querySelector('.profile-header .profile-logo img');return img?.complete&&img.naturalWidth>0;});}
     await open();

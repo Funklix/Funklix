@@ -258,3 +258,147 @@ html[data-theme=dark] .guided-brand-profile .profile-header{background:radial-gr
 .guided-brand-profile .profile-generation-results,.guided-brand-profile .profile-review-history{padding:12px;border:1px solid var(--profile-border);border-radius:12px}
 .guided-brand-profile .profile-generation-results>.profile-proposal,.guided-brand-profile .profile-review-history>details{margin-top:8px}
 .guided-brand-profile .profile-proposal-exclusion[hidden]{display:none}
+
+/* Guided Brand Builder uses the profile's existing colors and dialog shell. */
+.guided-brand-profile.profile-builder-active {
+  grid-template-columns: minmax(190px, 236px) minmax(0, 1fr);
+  align-items: start;
+}
+.profile-builder-active > :not(.profile-builder-sidebar):not(.profile-section) {
+  grid-column: 1 / -1;
+}
+.profile-builder-sidebar {
+  grid-column: 1;
+  grid-row: 2;
+  min-width: 0;
+  display: grid;
+  gap: 12px;
+}
+.guided-brand-profile .profile-builder-nav {
+  display: grid;
+  gap: 4px;
+  padding: 8px;
+  border: 1px solid var(--profile-border);
+  border-radius: 18px;
+  background: var(--fk-color-surface-elevated);
+}
+.guided-brand-profile .profile-builder-nav button {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 2px 10px;
+  margin: 0;
+  padding: 10px;
+  border: 1px solid transparent;
+}
+.guided-brand-profile .profile-builder-nav button[aria-current=step] {
+  border-color: var(--profile-border);
+  box-shadow: inset 3px 0 var(--profile-accent);
+}
+.profile-builder-nav small {
+  grid-column: 2;
+  font-size: .75rem;
+  font-weight: 500;
+  color: var(--fk-color-text-secondary);
+}
+.profile-builder-active .profile-legacy-nav {
+  display: block;
+}
+.profile-builder-active .profile-legacy-nav .profile-nav-browser {
+  padding: 0 12px;
+  border: 1px solid var(--profile-border);
+  border-radius: 14px;
+}
+.guided-brand-profile .profile-builder-sidebar .profile-nav-browser > summary {
+  display: list-item;
+  font-size: .875rem;
+}
+.profile-builder-active .profile-section > .profile-builder-description {
+  margin-top: -12px;
+}
+.profile-builder-tools, .profile-builder-progression {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.profile-builder-progression {
+  justify-content: space-between;
+  padding-top: 16px;
+  border-top: 1px solid var(--profile-border);
+}
+.profile-builder-progression > :only-child {
+  margin-inline-start: auto;
+}
+.profile-builder-tools .profile-review-skipped, .profile-builder-tools p {
+  flex: 1 0 100%;
+}
+.profile-builder-fields {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+.profile-builder-field, .profile-builder-destinations {
+  min-width: 0;
+  padding: clamp(14px, 2vw, 20px);
+  border: 1px solid var(--profile-border);
+  border-radius: 16px;
+  background: var(--fk-color-surface-elevated);
+}
+.profile-builder-field {
+  display: grid;
+  gap: 8px;
+}
+.profile-builder-field h4 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+.profile-builder-field-heading {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 6px 12px;
+}
+.profile-builder-status {
+  padding: 3px 9px;
+  font-size: .75rem;
+  border: 1px solid var(--profile-border);
+  border-radius: 999px;
+  background: var(--profile-soft);
+}
+.profile-builder-description {
+  color: var(--fk-color-text-secondary);
+}
+.profile-builder-saved {
+  padding-inline-start: 12px;
+  border-inline-start: 3px solid var(--profile-border);
+  white-space: pre-wrap;
+}
+.guided-brand-profile .profile-builder-saved p:last-child {
+  margin-bottom: 0;
+}
+.profile-builder-field .profile-enrichment-proposal {
+  padding: 14px;
+  background: var(--profile-soft);
+}
+.profile-builder-field .profile-proposal-comparison {
+  grid-template-columns: minmax(0, 1fr);
+}
+.profile-builder-field > details > summary {
+  width: fit-content;
+}
+.profile-builder-field > details > .profile-field-card {
+  padding: 12px;
+}
+.profile-builder-field > details > button {
+  margin-top: 10px;
+}
+@media (max-width: 768px) {
+  .guided-brand-profile.profile-builder-active { grid-template-columns: minmax(0, 1fr); }
+  .profile-builder-sidebar { grid-row: auto; }
+  .guided-brand-profile .profile-builder-nav { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 360px) {
+  .guided-brand-profile .profile-builder-nav { grid-template-columns: minmax(0, 1fr); }
+}

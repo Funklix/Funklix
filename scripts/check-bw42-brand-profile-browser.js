@@ -1,4 +1,5 @@
 'use strict';
+const { openFullBrandProfile } = require('./fixtures/home-browser');
 // Run the actual application and controllers; only transport/SQL/storage use local fixtures.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -17,6 +18,7 @@ const {png} = require('./fixtures/bw36-13r5-local-runtime');
     await p.route('**/api/brands/*/logo?*',r=>r.fulfill({contentType:'image/png',body:png}));
     await p.evaluate(()=>{openRegularBrandProfile();});
     await p.waitForFunction(()=>brandProfileController && canonicalBrandDetail.status==='ready');
+    await openFullBrandProfile(p);
     assert.equal(await p.locator('.guided-brand-profile nav button').count(),11);
     const original=await p.evaluate(()=>JSON.stringify(brandProfileController.state.core));
     const states = [];
@@ -85,6 +87,8 @@ const {png} = require('./fixtures/bw36-13r5-local-runtime');
     const gate=new Promise(resolve=>{release=resolve;});
     await p.route('**/api/brands/'+brandId,async route=>{await gate;await route.fallback();});
     await p.evaluate(()=>{canonicalBrandReader.retire();void openRegularBrandProfile();});
+    await p.waitForFunction(()=>brandProfileController && canonicalBrandDetail.status==='ready');
+    await openFullBrandProfile(p);
     try {
       await p.waitForFunction(()=>canonicalBrandDetail.status==='loading');
       assert(await p.locator('#brand-workspace-detail-title').evaluate(n=>n.getBoundingClientRect().width>10&&getComputedStyle(n).clipPath==='none'),'Loading title remains visible');

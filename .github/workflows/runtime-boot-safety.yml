@@ -687,6 +687,15 @@ jobs:
         run: |
           node scripts/check-bw47-1-r1-brand-ai.js
           node scripts/check-bw47-1-r1-brand-ai-browser.js
+      - name: Check BW-47.2 Guided Brand Builder (mocked inference)
+        run: node scripts/check-bw47-2-guided-brand-builder-browser.js
+      - name: Preserve BW-47.2 Guided Brand Builder screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bw47-2-guided-brand-builder-postgres-${{ matrix.postgres }}
+          path: work/bw47-2/screenshots/
+          if-no-files-found: ignore
       - name: Check BW-46.6 typed review and atomic bulk acceptance
         run: |
           node scripts/check-bw46-6-brand-review.js

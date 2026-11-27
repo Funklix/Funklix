@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 'use strict';
+const { openFullBrandProfile } = require('./fixtures/home-browser');
 const assert = require('node:assert/strict'), fs = require('node:fs'), path = require('node:path');
 const { runtime, W, B, EMAIL, png, clone } = require('./fixtures/bw36-13r5-local-runtime');
 const profile = require('../brand-profile-setup');
@@ -121,7 +122,10 @@ async function browserJourney(runtimeOptions) {
       // Fetch and validate the production-shaped Workspace catalog on each application boot.
       await page.evaluate(async ({ W }) => { const value = window.FunklixWorkspaceCatalog.validate(await (await fetch('/api/workspaces/catalog')).json()); state.workspaceCatalog = { ...state.workspaceCatalog, identity: state.user.email, value, status: 'ready', activeWorkspaceId: W }; state.brandCatalog = { ...state.brandCatalog, status: 'success', entries: value.workspaces[0].brands }; setActiveView('home'); setSidebarCollapsed(false); renderWorkspaceSidebar(); }, { W });
     }
-    const ready = () => page.waitForFunction(B => brandProfileController?.state.brand.id === B && canonicalBrandDetail.status === 'ready', B);
+    const ready = async () => {
+      await page.waitForFunction(B => brandProfileController?.state.brand.id === B && canonicalBrandDetail.status === 'ready', B);
+      if (await page.locator('.profile-builder-active').count()) await openFullBrandProfile(page);
+    };
     const key = k => page.locator(`[data-profile-key="${k}"]`);
     await page.goto('http://localhost/'); await page.waitForFunction(() => typeof state !== 'undefined' && workspaceSidebarController); await context();
     await page.locator('#brand-core-nav-btn').click(); await ready();

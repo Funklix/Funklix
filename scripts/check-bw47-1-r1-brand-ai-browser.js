@@ -1,4 +1,5 @@
 'use strict';
+const { openFullBrandProfile } = require('./fixtures/home-browser');
 const assert = require('node:assert/strict');
 const { chromium } = require('playwright-core');
 const { EMAIL, clone } = require('./fixtures/bw36-13r5-local-runtime');
@@ -66,6 +67,8 @@ const record = (value, sourceId = 's1', quote = excerpt, classification = 'ai_in
         await route.fulfill({ status: res.statusCode, json: res.body });
       });
       await p.evaluate(() => { state.uiLanguage = FunklixLanguage.setUiLanguage('de'); translateInterface(); openRegularBrandProfile(); });
+      await p.waitForFunction(() => brandProfileController && canonicalBrandDetail.status === 'ready');
+      await openFullBrandProfile(p);
       await p.waitForFunction(() => brandProfileController && canonicalBrandDetail.status === 'ready');
       assert.equal(calls, 0);
       if (!await p.locator('.profile-discovery').evaluate(n => n.open)) await p.locator('.profile-discovery > summary').click();
